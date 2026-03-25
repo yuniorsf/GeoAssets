@@ -1,9 +1,13 @@
 @using GeoAssets.Core.Interfaces
 @using GeoAssets.Core.Services
+@using GeoAssets.Core.Diagnostics
+@using System.Diagnostics
+@using Microsoft.Extensions.Logging
 @inject IStorageService Storage
-@inject AssetService AssetSvc
+@inject IAssetService AssetSvc
 @inject IMapInterop MapInterop
 @inject IAssetRepository Repository
+@inject ILogger<ImportExportPanel> Logger
 
 <div class="sidebar-section">
     <h6>Importar / Exportar</h6>
@@ -78,29 +82,68 @@
 
     private async Task ImportFile(InputFileChangeEventArgs e)
     {
+        var pipelineSw = Stopwatch.StartNew();
+
+        // Parent span covers the entire import pipeline.
+        using var pipeline = ImportDiagnostics.ActivitySource
+            .StartActivity("import.pipeline", ActivityKind.Internal);
+        pipeline?.SetTag("file.name",       e.File.Name)
+                 .SetTag("file.size_bytes", e.File.Size);
+
+        Logger.LogInformation("Import started — file: {FileName} ({FileSizeBytes} B)",
+            e.File.Name, e.File.Size);
         try
         {
             using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
             using var reader = new System.IO.StreamReader(stream);
             var json = await reader.ReadToEndAsync();
 
+            ImportDiagnostics.PayloadBytes.Record(json.Length,
+                new KeyValuePair<string, object?>("file.name", e.File.Name));
+
             await AssetSvc.ImportAsync(json);
 
-            // Re-render all features on the map
-            await MapInterop.RenderAllFeaturesAsync(MapDivId, Repository.GetAll());
-
-            // Fit map to all features
             var allFeatures = Repository.GetAll();
+
+            await MapInterop.RenderAllFeaturesAsync(MapDivId, allFeatures);
+
+            // ── Fit map ───────────────────────────────────────────────────────
             if (allFeatures.Count > 0)
             {
                 var bbox = ComputeBbox(allFeatures);
                 await MapInterop.FitBoundsAsync(MapDivId, bbox);
             }
 
+            // ── Pipeline summary ──────────────────────────────────────────────
+            pipelineSw.Stop();
+            pipeline?.SetTag("feature.count",    allFeatures.Count)
+                     .SetTag("total_duration_ms", pipelineSw.ElapsedMilliseconds);
+
+            ImportDiagnostics.ImportDurationMs.Record(pipelineSw.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("outcome", "success"));
+            ImportDiagnostics.ImportCount.Add(1,
+                new KeyValuePair<string, object?>("outcome", "success"));
+            ImportDiagnostics.FeatureImportCount.Add(allFeatures.Count);
+
+            Logger.LogInformation(
+                "Import pipeline complete — {FileName}: {FeatureCount} features, {TotalMs} ms total",
+                e.File.Name, allFeatures.Count, pipelineSw.ElapsedMilliseconds);
+
             _message = $"{e.File.Name} importado ({allFeatures.Count} activos).";
         }
         catch (Exception ex)
         {
+            pipelineSw.Stop();
+            pipeline?.SetStatus(ActivityStatusCode.Error, ex.Message)
+                     .AddException(ex);
+
+            ImportDiagnostics.ImportCount.Add(1,
+                new KeyValuePair<string, object?>("outcome", "failure"));
+
+            Logger.LogError(ex,
+                "Import failed — {FileName} after {ElapsedMs} ms",
+                e.File.Name, pipelineSw.ElapsedMilliseconds);
+
             _message = $"Error al importar: {ex.Message}";
         }
     }

@@ -7,7 +7,7 @@ namespace GeoAssets.Core.Services;
 /// Orchestrates the repository and storage: loads on startup, auto-saves on mutation
 /// with 500ms debounce to avoid excessive I/O.
 /// </summary>
-public sealed class AssetService : IAsyncDisposable
+public sealed class AssetService : IAssetService
 {
     private readonly IAssetRepository _repository;
     private readonly IStorageService _storage;
