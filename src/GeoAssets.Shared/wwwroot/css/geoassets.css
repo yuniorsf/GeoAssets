@@ -364,6 +364,29 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     gap: 8px;
 }
 
+.btn-xs {
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+}
+
+.clear-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--danger) 12%, var(--panel-bg));
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.clear-confirm-actions {
+    display: flex;
+    gap: 6px;
+}
+
 /* ─── Empty State ────────────────────────────────────────────────────────── */
 
 .empty-state {

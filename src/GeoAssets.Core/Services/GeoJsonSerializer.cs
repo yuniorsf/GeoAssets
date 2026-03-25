@@ -58,6 +58,9 @@ public sealed class GeoGeometryConverter : JsonConverter<GeoGeometry>
             "Point"      => JsonSerializer.Deserialize<GeoPoint>(json, innerOptions),
             "LineString" => JsonSerializer.Deserialize<GeoLineString>(json, innerOptions),
             "Polygon"    => JsonSerializer.Deserialize<GeoPolygon>(json, innerOptions),
+            // MultiPolygon, MultiLineString, MultiPoint, GeometryCollection, etc.
+            // — preserve verbatim so Leaflet can render them correctly.
+            _ when type is not null => new GeoRawGeometry(type, json),
             _            => null
         };
     }
@@ -77,6 +80,9 @@ public sealed class GeoGeometryConverter : JsonConverter<GeoGeometry>
                 break;
             case GeoPolygon poly:
                 JsonSerializer.Serialize(writer, poly, innerOptions);
+                break;
+            case GeoRawGeometry raw:
+                writer.WriteRawValue(raw.RawJson);
                 break;
         }
     }

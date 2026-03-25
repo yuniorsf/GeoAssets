@@ -196,7 +196,10 @@ window.GeoAssets = (function () {
         const layer = state.featureLayers.get(featureId);
         if (!layer) return;
         if (layer.getBounds) {
-            state.map.fitBounds(layer.getBounds(), { maxZoom: 16, padding: [20, 20] });
+            const bounds = layer.getBounds();
+            if (bounds.isValid()) {
+                state.map.fitBounds(bounds, { maxZoom: 16, padding: [20, 20] });
+            }
         } else {
             // Try to get center from the geoJSON layer children
             const layers = [];
