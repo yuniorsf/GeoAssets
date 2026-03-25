@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoAssets</title>
+    <base href="/" />
+
+    <!-- Content Security Policy for MAUI BlazorWebView -->
+    <!-- Allow OSM tile images and CDN scripts -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;
+                   img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.openstreetmap.org;
+                   script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com;
+                   style-src 'self' 'unsafe-inline' https://unpkg.com;
+                   connect-src 'self' https://*.tile.openstreetmap.org;" />
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
+
+    <!-- Leaflet-Geoman CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css" />
+
+    <!-- GeoAssets styles -->
+    <link rel="stylesheet" href="_content/GeoAssets.Shared/css/geoassets.css" />
+</head>
+
+<body>
+    <div id="app">Cargando...</div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+
+    <!-- Leaflet-Geoman -->
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.min.js"></script>
+
+    <!-- GeoAssets interop -->
+    <script src="_content/GeoAssets.Shared/js/geoassets.js"></script>
+
+    <!-- Blazor MAUI runtime -->
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script>
+        Blazor.start({
+            webView: { contentRoot: '/' }
+        });
+    </script>
+</body>
+
+</html>

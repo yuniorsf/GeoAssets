@@ -1,0 +1,36 @@
+@if (Visible)
+{
+    <div class="map-context-menu-backdrop" @onclick="HandleClose"></div>
+    <div class="map-context-menu" style="left: @(X)px; top: @(Y)px" @onclick:stopPropagation="true">
+        <button class="ctx-item" @onclick="HandleEdit">
+            <span class="ctx-icon">✏️</span> Propiedades
+        </button>
+        @if (ShowSave)
+        {
+            <button class="ctx-item" @onclick="HandleSave">
+                <span class="ctx-icon">💾</span> Guardar
+            </button>
+        }
+        <div class="ctx-separator"></div>
+        <button class="ctx-item ctx-danger" @onclick="HandleDelete">
+            <span class="ctx-icon">🗑️</span> Eliminar
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public double X { get; set; }
+    [Parameter] public double Y { get; set; }
+    [Parameter] public bool ShowSave { get; set; }
+
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task HandleEdit()   { await OnEdit.InvokeAsync();   await OnClose.InvokeAsync(); }
+    private async Task HandleSave()   { await OnSave.InvokeAsync();   await OnClose.InvokeAsync(); }
+    private async Task HandleDelete() { await OnDelete.InvokeAsync(); await OnClose.InvokeAsync(); }
+    private async Task HandleClose()  { await OnClose.InvokeAsync(); }
+}

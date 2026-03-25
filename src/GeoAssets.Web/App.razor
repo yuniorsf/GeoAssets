@@ -1,0 +1,30 @@
+@using GeoAssets.Shared.Pages
+@using GeoAssets.Web.Shared
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly"
+            AdditionalAssemblies="@(new[] { typeof(GeoAssets.Shared.Pages.Index).Assembly })">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData">
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+                <Authorizing>
+                    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#11111b;color:#cdd6f4;font-family:system-ui">
+                        <p>Verificando autenticación…</p>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <p style="text-align:center;margin-top:2rem;color:#cdd6f4">Página no encontrada.</p>
+        </NotFound>
+    </Router>
+
+    <!-- Session timeout overlay (shown app-wide when inactivity warning triggers) -->
+    <SessionTimeoutOverlay />
+
+    <!-- Attaches JS activity listeners + starts session monitoring -->
+    <SessionActivityTracker />
+</CascadingAuthenticationState>

@@ -1,0 +1,117 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="login-root">
+
+    <div class="login-card">
+
+        <!-- Logo -->
+        <div class="login-logo">🗺️</div>
+        <h1 class="login-title">GeoAssets</h1>
+        <p class="login-subtitle">Gestión de activos geoespaciales</p>
+
+        <hr class="login-divider" />
+
+        <!-- Info -->
+        <p class="login-description">
+            Inicia sesión con tu cuenta organizacional de Microsoft para acceder
+            al sistema de gestión de activos GIS.
+        </p>
+
+        <!-- Sign-in button -->
+        <button class="login-btn" @onclick="SignIn">
+            <svg class="ms-logo" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+                <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            Ingresar con Microsoft
+        </button>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="login-error">⚠️ @_errorMessage</div>
+        }
+
+        <p class="login-footer">
+            El acceso está restringido a usuarios autorizados.<br />
+            Contacta al administrador si necesitas acceso.
+        </p>
+    </div>
+
+</div>
+
+<style>
+    .login-root {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: #11111b;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+    .login-card {
+        background: #1e1e2e;
+        border: 1px solid #313244;
+        border-radius: 16px;
+        padding: 2.5rem 3rem;
+        width: 100%;
+        max-width: 420px;
+        text-align: center;
+        box-shadow: 0 24px 64px rgba(0,0,0,.5);
+    }
+    .login-logo   { font-size: 3.5rem; margin-bottom: .5rem; }
+    .login-title  { color: #cdd6f4; font-size: 1.8rem; font-weight: 700; margin: 0 0 .25rem; }
+    .login-subtitle { color: #6c7086; font-size: .9rem; margin: 0 0 1.5rem; }
+    .login-divider  { border: none; border-top: 1px solid #313244; margin: 0 0 1.5rem; }
+    .login-description { color: #a6adc8; font-size: .9rem; line-height: 1.6; margin-bottom: 1.75rem; }
+    .login-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        width: 100%;
+        padding: .8rem 1.5rem;
+        background: #89b4fa;
+        color: #11111b;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background .15s;
+    }
+    .login-btn:hover  { background: #b4d0fb; }
+    .login-btn:active { background: #74a8fa; }
+    .ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
+    .login-error  { color: #f38ba8; font-size: .85rem; margin-top: 1rem; }
+    .login-footer { color: #45475a; font-size: .78rem; margin-top: 1.75rem; line-height: 1.5; }
+</style>
+
+@code {
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // If already authenticated, redirect to home
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+            Nav.NavigateTo("/");
+    }
+
+    private void SignIn()
+    {
+        try
+        {
+            Nav.NavigateToLogin("authentication/login");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error al iniciar sesión: {ex.Message}";
+        }
+    }
+}

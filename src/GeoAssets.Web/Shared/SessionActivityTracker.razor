@@ -1,0 +1,41 @@
+@* Attaches JS user-activity listeners and starts the session timeout service. *@
+@* Place once inside App.razor so it is active for the entire application lifetime. *@
+
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject SessionTimeoutService SessionTimeout
+@inject NavigationManager Nav
+
+@code {
+    private DotNetObjectReference<SessionActivityTracker>? _ref;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _ref = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("sessionActivity.init", _ref);
+
+        SessionTimeout.OnTimeout += HandleTimeout;
+        SessionTimeout.Start();
+    }
+
+    /// <summary>Called from JavaScript whenever the user interacts with the page.</summary>
+    [JSInvokable]
+    public void OnUserActivity() => SessionTimeout.RecordActivity();
+
+    private void HandleTimeout()
+        => Nav.NavigateToLogout("authentication/logout");
+
+    public async ValueTask DisposeAsync()
+    {
+        SessionTimeout.OnTimeout -= HandleTimeout;
+
+        if (_ref is not null)
+        {
+            try { await JS.InvokeVoidAsync("sessionActivity.dispose"); } catch { }
+            _ref.Dispose();
+        }
+    }
+}

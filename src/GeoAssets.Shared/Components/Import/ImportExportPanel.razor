@@ -1,0 +1,91 @@
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Services
+@inject IStorageService Storage
+@inject AssetService AssetSvc
+@inject IMapInterop MapInterop
+@inject IAssetRepository Repository
+
+<div class="sidebar-section">
+    <h6>Importar / Exportar</h6>
+    <div class="import-export-panel">
+        <button class="btn btn-outline btn-sm" @onclick="Export">
+            ⬇ Exportar GeoJSON
+        </button>
+
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;text-align:center">
+            ⬆ Importar GeoJSON
+            <InputFile OnChange="ImportFile" accept=".geojson,.json" style="display:none" />
+        </label>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <p style="font-size:0.78rem;color:var(--text-secondary);margin:4px 0">@_message</p>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
+
+    private string _message = string.Empty;
+
+    private async Task Export()
+    {
+        try
+        {
+            var json = await AssetSvc.ExportAsync();
+            await Storage.SaveExportFileAsync(json, "geoassets-export.geojson");
+            _message = "Exportado correctamente.";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error al exportar: {ex.Message}";
+        }
+    }
+
+    private async Task ImportFile(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            await AssetSvc.ImportAsync(json);
+
+            // Re-render all features on the map
+            await MapInterop.RenderAllFeaturesAsync(MapDivId, Repository.GetAll());
+
+            // Fit map to all features
+            var allFeatures = Repository.GetAll();
+            if (allFeatures.Count > 0)
+            {
+                var bbox = ComputeBbox(allFeatures);
+                await MapInterop.FitBoundsAsync(MapDivId, bbox);
+            }
+
+            _message = $"{e.File.Name} importado ({allFeatures.Count} activos).";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error al importar: {ex.Message}";
+        }
+    }
+
+    private static double[] ComputeBbox(IReadOnlyList<GeoAssets.Core.Models.GeoFeature> features)
+    {
+        var bboxes = features
+            .Where(f => f.Geometry is not null)
+            .Select(f => f.Geometry!.GetBoundingBox())
+            .ToList();
+
+        if (bboxes.Count == 0) return [0, 0, 0, 0];
+
+        return [
+            bboxes.Min(b => b[0]),
+            bboxes.Min(b => b[1]),
+            bboxes.Max(b => b[2]),
+            bboxes.Max(b => b[3])
+        ];
+    }
+}

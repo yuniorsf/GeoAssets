@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Examples</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\src\GeoAssets.Commands\GeoAssets.Commands.csproj" />
+    <ProjectReference Include="..\src\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj" />
+    <ProjectReference Include="..\plugins\commands\GeoAssets.Plugin.Hydrology\GeoAssets.Plugin.Hydrology.csproj" />
+    <ProjectReference Include="..\src\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+  </ItemGroup>
+
+</Project>
