@@ -52,14 +52,8 @@ public sealed class AssetService : IAssetService
         foreach (var t in imported.Metadata.AssetTypes.Where(t => !t.IsBuiltIn))
             _repository.AddAssetType(t);
 
-        // Merge features (add or update by id)
-        foreach (var feature in imported.Features)
-        {
-            if (_repository.GetById(feature.Id) is not null)
-                _repository.Update(feature);
-            else
-                _repository.Add(feature);
-        }
+        // Merge features — single CollectionChanged at the end
+        _repository.AddRange(imported.Features);
     }
 
     /// <summary>
