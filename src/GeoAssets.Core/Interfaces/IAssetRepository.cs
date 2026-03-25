@@ -61,6 +61,13 @@ public interface IAssetRepository
 
     void Add(GeoFeature feature);
     void Update(GeoFeature feature);
+
+    /// <summary>
+    /// Merges <paramref name="features"/> into the repository (add-or-update semantics)
+    /// and fires <see cref="CollectionChanged"/> exactly once when done.
+    /// </summary>
+    void AddRange(IEnumerable<GeoFeature> features);
+
     void Delete(string id);
     void Clear();
     void LoadAll(IEnumerable<GeoFeature> features);

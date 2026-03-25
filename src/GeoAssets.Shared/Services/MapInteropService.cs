@@ -36,11 +36,20 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         return _js.InvokeVoidAsync($"{Ns}.renderFeature", divId, json).AsTask();
     }
 
-    public Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features)
+    public async Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features)
     {
-        var items = features.Select(SerializeWithColor);
-        var json  = $"[{string.Join(",", items)}]";
-        return _js.InvokeVoidAsync($"{Ns}.renderAllFeatures", divId, json).AsTask();
+        const int BatchSize = 5;
+
+        var list = features.ToList();
+        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+
+        for (int i = 0; i < list.Count; i += BatchSize)
+        {
+            var batch = list.GetRange(i, Math.Min(BatchSize, list.Count - i));
+            var json  = $"[{string.Join(",", batch.Select(SerializeWithColor))}]";
+            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, json);
+            await Task.Delay(1); // yield to the browser event loop between batches
+        }
     }
 
     public Task RemoveFeatureAsync(string divId, string featureId) =>

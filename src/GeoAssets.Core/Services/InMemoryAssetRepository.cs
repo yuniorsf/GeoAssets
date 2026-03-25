@@ -51,6 +51,17 @@ public sealed class InMemoryAssetRepository : IAssetRepository
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void AddRange(IEnumerable<GeoFeature> features)
+    {
+        foreach (var feature in features)
+        {
+            if (_features.ContainsKey(feature.Id))
+                feature.Properties.UpdatedAt = DateTime.UtcNow;
+            _features[feature.Id] = feature;
+        }
+        CollectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Delete(string id)
     {
         if (_features.Remove(id))

@@ -54,6 +54,7 @@ public sealed class ObservableAssetRepository(
 
     public void Add(GeoFeature feature)                => inner.Add(feature);
     public void Update(GeoFeature feature)             => inner.Update(feature);
+    public void AddRange(IEnumerable<GeoFeature> features) => inner.AddRange(features);
     public void Delete(string id)                      => inner.Delete(id);
     public void Clear()                                => inner.Clear();
     public void LoadAll(IEnumerable<GeoFeature> features) => inner.LoadAll(features);

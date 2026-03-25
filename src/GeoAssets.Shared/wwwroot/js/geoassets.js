@@ -150,6 +150,11 @@ window.GeoAssets = (function () {
         (features || []).forEach(f => renderFeature(divId, f));
     }
 
+    function renderFeatureBatch(divId, featuresJson) {
+        const features = typeof featuresJson === 'string' ? JSON.parse(featuresJson) : featuresJson;
+        (features || []).forEach(f => renderFeature(divId, f));
+    }
+
     function removeFeature(divId, featureId) {
         const state = _maps[divId];
         if (!state) return;
@@ -266,6 +271,7 @@ window.GeoAssets = (function () {
         disableDraw,
         renderFeature,
         renderAllFeatures,
+        renderFeatureBatch,
         removeFeature,
         clearAllFeatures,
         setLayerVisibility,
