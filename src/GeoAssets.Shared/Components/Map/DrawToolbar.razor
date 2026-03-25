@@ -1,0 +1,63 @@
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models.Geometry
+@inject IMapInterop MapInterop
+
+<div class="draw-toolbar">
+    <span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px">Dibujar:</span>
+
+    <button class="draw-btn @(_active == GeometryType.Point ? "active" : "")"
+            @onclick="() => ToggleMode(GeometryType.Point)"
+            title="Añadir punto">
+        📍 Punto
+    </button>
+
+    <button class="draw-btn @(_active == GeometryType.LineString ? "active" : "")"
+            @onclick="() => ToggleMode(GeometryType.LineString)"
+            title="Trazar línea">
+        〰️ Línea
+    </button>
+
+    <button class="draw-btn @(_active == GeometryType.Polygon ? "active" : "")"
+            @onclick="() => ToggleMode(GeometryType.Polygon)"
+            title="Dibujar polígono">
+        ⬡ Polígono
+    </button>
+
+    @if (_active.HasValue)
+    {
+        <button class="draw-btn cancel" @onclick="Cancel" title="Cancelar dibujo">✕ Cancelar</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
+    [Parameter] public EventCallback<GeometryType?> OnDrawModeChanged { get; set; }
+
+    private GeometryType? _active;
+
+    private async Task ToggleMode(GeometryType mode)
+    {
+        if (_active == mode)
+        {
+            await Cancel();
+            return;
+        }
+
+        _active = mode;
+        await MapInterop.EnableDrawModeAsync(MapDivId, mode);
+        await OnDrawModeChanged.InvokeAsync(mode);
+    }
+
+    private async Task Cancel()
+    {
+        _active = null;
+        await MapInterop.DisableDrawModeAsync(MapDivId);
+        await OnDrawModeChanged.InvokeAsync(null);
+    }
+
+    public void ResetMode()
+    {
+        _active = null;
+        StateHasChanged();
+    }
+}

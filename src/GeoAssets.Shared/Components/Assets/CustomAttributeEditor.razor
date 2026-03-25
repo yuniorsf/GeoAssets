@@ -1,0 +1,63 @@
+@using GeoAssets.Core.Models
+
+<div class="form-group">
+    <label>Atributos personalizados</label>
+
+    @foreach (var key in _keys.ToList())
+    {
+        <div class="attr-row">
+            <input class="form-control"
+                   placeholder="Clave"
+                   value="@key"
+                   @onchange="e => RenameKey(key, e.Value?.ToString() ?? key)" />
+            <input class="form-control"
+                   placeholder="Valor"
+                   value="@(Attributes.TryGetValue(key, out var v) ? v : string.Empty)"
+                   @onchange="e => SetValue(key, e.Value?.ToString() ?? string.Empty)" />
+            <button class="btn-icon" @onclick="() => RemoveKey(key)" title="Eliminar">✕</button>
+        </div>
+    }
+
+    <button class="btn btn-outline btn-sm" @onclick="AddAttribute" type="button">
+        + Añadir atributo
+    </button>
+</div>
+
+@code {
+    [Parameter] public Dictionary<string, string> Attributes { get; set; } = [];
+
+    private List<string> _keys = [];
+
+    protected override void OnParametersSet()
+    {
+        _keys = [.. Attributes.Keys];
+    }
+
+    private void AddAttribute()
+    {
+        var key = $"campo_{_keys.Count + 1}";
+        Attributes[key] = string.Empty;
+        _keys.Add(key);
+    }
+
+    private void RenameKey(string oldKey, string newKey)
+    {
+        if (string.IsNullOrWhiteSpace(newKey) || newKey == oldKey) return;
+        var value = Attributes.TryGetValue(oldKey, out var v) ? v : string.Empty;
+        Attributes.Remove(oldKey);
+        Attributes[newKey] = value;
+        var idx = _keys.IndexOf(oldKey);
+        if (idx >= 0) _keys[idx] = newKey;
+    }
+
+    private void SetValue(string key, string value)
+    {
+        Attributes[key] = value;
+    }
+
+    private void RemoveKey(string key)
+    {
+        Attributes.Remove(key);
+        _keys.Remove(key);
+    }
+}

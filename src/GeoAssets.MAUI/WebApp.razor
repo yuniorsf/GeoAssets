@@ -1,0 +1,11 @@
+@using GeoAssets.Shared.Pages
+
+<Router AppAssembly="@typeof(WebApp).Assembly"
+        AdditionalAssemblies="@(new[] { typeof(GeoAssets.Shared.Pages.Index).Assembly })">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" />
+    </Found>
+    <NotFound>
+        <p>Página no encontrada.</p>
+    </NotFound>
+</Router>

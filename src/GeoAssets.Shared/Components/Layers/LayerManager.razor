@@ -1,0 +1,81 @@
+@using GeoAssets.Core.Models
+@using GeoAssets.Core.Interfaces
+@inject IAssetRepository Repository
+@inject IMapInterop MapInterop
+
+<div class="sidebar-section">
+    <h6>Capas</h6>
+    <div class="asset-list">
+        @foreach (var type in Repository.GetAssetTypes())
+        {
+            var isVisible = _visibility.TryGetValue(type.Id, out var v) ? v : true;
+            <div class="layer-row">
+                <input type="checkbox"
+                       checked="@isVisible"
+                       @onchange="e => ToggleLayer(type, (bool)(e.Value ?? true))" />
+                <span class="asset-color-dot" style="background:@type.Color"></span>
+                <span style="font-size:0.87rem;flex:1">@type.Name</span>
+                @if (!type.IsBuiltIn)
+                {
+                    <button class="btn-icon" @onclick="() => DeleteType(type)" title="Eliminar tipo">✕</button>
+                }
+            </div>
+        }
+    </div>
+
+    @if (_addingNew)
+    {
+        <div class="attr-row" style="margin-top:8px">
+            <input class="form-control"
+                   placeholder="Nombre del tipo"
+                   @bind="_newTypeName" />
+            <input type="color" @bind="_newTypeColor" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
+            <button class="btn btn-primary btn-sm" @onclick="SaveNewType" type="button">✓</button>
+            <button class="btn btn-secondary btn-sm" @onclick="() => _addingNew = false" type="button">✕</button>
+        </div>
+    }
+    else
+    {
+        <button class="btn btn-outline btn-sm" style="margin-top:8px" @onclick="() => _addingNew = true" type="button">
+            + Nuevo tipo
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
+
+    private readonly Dictionary<Guid, bool> _visibility = [];
+    private bool _addingNew;
+    private string _newTypeName = string.Empty;
+    private string _newTypeColor = "#89b4fa";
+
+    protected override void OnInitialized()
+    {
+        foreach (var t in Repository.GetAssetTypes())
+            _visibility[t.Id] = true;
+    }
+
+    private async Task ToggleLayer(AssetType type, bool visible)
+    {
+        _visibility[type.Id] = visible;
+        await MapInterop.SetLayerVisibilityAsync(MapDivId, type.Id.ToString(), visible);
+    }
+
+    private void SaveNewType()
+    {
+        if (string.IsNullOrWhiteSpace(_newTypeName)) return;
+        var newType = new AssetType { Name = _newTypeName.Trim(), Color = _newTypeColor };
+        Repository.AddAssetType(newType);
+        _visibility[newType.Id] = true;
+        _newTypeName = string.Empty;
+        _newTypeColor = "#89b4fa";
+        _addingNew = false;
+    }
+
+    private void DeleteType(AssetType type)
+    {
+        Repository.DeleteAssetType(type.Id);
+        _visibility.Remove(type.Id);
+    }
+}

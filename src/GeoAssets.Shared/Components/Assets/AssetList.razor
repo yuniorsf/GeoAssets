@@ -1,0 +1,124 @@
+@using GeoAssets.Core.Models
+@using GeoAssets.Core.Interfaces
+@implements IDisposable
+@inject IAssetRepository Repository
+
+<div class="sidebar-section">
+    <h6>Activos (@_filtered.Count)</h6>
+    <SearchBar Query="@_searchQuery" OnSearch="OnSearch" />
+</div>
+
+<div class="sidebar-section">
+    <select class="form-control" style="font-size:0.82rem" @onchange="OnTypeFilter">
+        <option value="">— Todos los tipos —</option>
+        @foreach (var t in Repository.GetAssetTypes())
+        {
+            <option value="@t.Id">@t.Name</option>
+        }
+    </select>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_filtered.Count == 0)
+    {
+        <div class="empty-state">
+            <p>Sin activos.<br />Usa las herramientas de dibujo para añadir.</p>
+        </div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var feature in _filtered)
+            {
+                var color = GetColor(feature.Properties.AssetTypeId);
+                <div class="asset-list-item @(SelectedFeatureId == feature.Id ? "selected" : "")"
+                     @onclick="() => SelectFeature(feature)">
+                    <span class="asset-color-dot" style="background:@color"></span>
+                    <span class="asset-name">@(string.IsNullOrEmpty(feature.Properties.Name) ? "(sin nombre)" : feature.Properties.Name)</span>
+                    <span class="asset-geom-icon">@GeometryIcon(feature)</span>
+                    <button class="btn-icon" title="Eliminar"
+                            @onclick:stopPropagation="true"
+                            @onclick="() => RequestDelete(feature)">🗑</button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<ConfirmDialog Visible="_deleteConfirmVisible"
+               Title="Eliminar activo"
+               Message="@($"¿Eliminar «{_pendingDelete?.Properties.Name}»? Esta acción no se puede deshacer.")"
+               OnConfirm="ConfirmDelete"
+               OnCancel="CancelDelete" />
+
+@code {
+    [Parameter] public string? SelectedFeatureId { get; set; }
+    [Parameter] public EventCallback<GeoFeature> OnFeatureSelected { get; set; }
+    [Parameter] public EventCallback<GeoFeature> OnFeatureDeleted { get; set; }
+
+    private List<GeoFeature> _filtered = [];
+    private string _searchQuery = string.Empty;
+    private string _typeFilter = string.Empty;
+    private bool _deleteConfirmVisible;
+    private GeoFeature? _pendingDelete;
+
+    protected override void OnInitialized()
+    {
+        Repository.FeatureAdded   += OnChanged;
+        Repository.FeatureUpdated += OnChanged;
+        Repository.FeatureDeleted += OnDeleted;
+        RefreshList();
+    }
+
+    private void OnChanged(object? _, GeoFeature __) { RefreshList(); InvokeAsync(StateHasChanged); }
+    private void OnDeleted(object? _, string __)     { RefreshList(); InvokeAsync(StateHasChanged); }
+
+    private void RefreshList()
+    {
+        var all = string.IsNullOrEmpty(_searchQuery)
+            ? Repository.GetAll()
+            : Repository.Search(_searchQuery);
+
+        _filtered = string.IsNullOrEmpty(_typeFilter)
+            ? [.. all]
+            : [.. all.Where(f => f.Properties.AssetTypeId == _typeFilter)];
+    }
+
+    private void OnSearch(string query)    { _searchQuery = query;  RefreshList(); }
+    private void OnTypeFilter(ChangeEventArgs e) { _typeFilter = e.Value?.ToString() ?? string.Empty; RefreshList(); }
+
+    private async Task SelectFeature(GeoFeature f) => await OnFeatureSelected.InvokeAsync(f);
+
+    private void RequestDelete(GeoFeature f) { _pendingDelete = f; _deleteConfirmVisible = true; }
+    private void CancelDelete()             { _pendingDelete = null; _deleteConfirmVisible = false; }
+
+    private async Task ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        Repository.Delete(_pendingDelete.Id);
+        await OnFeatureDeleted.InvokeAsync(_pendingDelete);
+        _pendingDelete = null;
+        _deleteConfirmVisible = false;
+    }
+
+    private string GetColor(string assetTypeId)
+    {
+        var t = Repository.GetAssetTypes().FirstOrDefault(x => x.Id.ToString() == assetTypeId);
+        return t?.Color ?? "#3388ff";
+    }
+
+    private static string GeometryIcon(GeoFeature f) => f.Geometry switch
+    {
+        Core.Models.Geometry.GeoPoint      => "📍",
+        Core.Models.Geometry.GeoLineString => "〰️",
+        Core.Models.Geometry.GeoPolygon    => "⬡",
+        _                                  => "?"
+    };
+
+    public void Dispose()
+    {
+        Repository.FeatureAdded   -= OnChanged;
+        Repository.FeatureUpdated -= OnChanged;
+        Repository.FeatureDeleted -= OnDeleted;
+    }
+}

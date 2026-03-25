@@ -1,0 +1,71 @@
+@page "/authentication/{action}"
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+<RemoteAuthenticatorView Action="@Action">
+
+    <LoggingIn>
+        <div class="auth-state-screen">
+            <div class="auth-state-icon">🔐</div>
+            <p>Iniciando sesión…</p>
+            <div class="auth-spinner"></div>
+        </div>
+    </LoggingIn>
+
+    <CompletingLoggingIn>
+        <div class="auth-state-screen">
+            <div class="auth-state-icon">✅</div>
+            <p>Verificando credenciales…</p>
+            <div class="auth-spinner"></div>
+        </div>
+    </CompletingLoggingIn>
+
+    <LogOut>
+        <div class="auth-state-screen">
+            <div class="auth-state-icon">👋</div>
+            <p>Cerrando sesión…</p>
+        </div>
+    </LogOut>
+
+    <CompletingLogOut>
+        <div class="auth-state-screen">
+            <div class="auth-state-icon">🔒</div>
+            <p>Sesión cerrada correctamente.</p>
+        </div>
+    </CompletingLogOut>
+
+    <LogOutSucceeded>
+        <div class="auth-state-screen">
+            <div class="auth-state-icon">✔️</div>
+            <p>Ha cerrado sesión. <a href="login">Iniciar sesión nuevamente</a></p>
+        </div>
+    </LogOutSucceeded>
+
+</RemoteAuthenticatorView>
+
+<style>
+    .auth-state-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background: #11111b;
+        color: #cdd6f4;
+        font-family: system-ui, sans-serif;
+        gap: 1rem;
+    }
+    .auth-state-icon { font-size: 3rem; }
+    .auth-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #313244;
+        border-top-color: #89b4fa;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+    .auth-state-screen a { color: #89b4fa; }
+</style>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+}
