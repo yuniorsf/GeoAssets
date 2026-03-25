@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Plugin.Hydrology</RootNamespace>
+    <!-- Plugin DLL naming convention required by GeoPluginContainer's DirectoryCatalog -->
+    <AssemblyName>GeoAssets.Plugin.Hydrology</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Only references the slim contracts project — not GeoAssets.Core directly.
+       This is the key plugin boundary: external authors ship only against Contracts. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\GeoAssets.Commands\GeoAssets.Commands.csproj" />
+  </ItemGroup>
+
+</Project>

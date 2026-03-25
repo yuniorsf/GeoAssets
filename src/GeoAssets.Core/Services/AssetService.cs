@@ -62,6 +62,16 @@ public sealed class AssetService : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Removes all features from the repository and immediately persists
+    /// the empty state so the map stays blank on next load.
+    /// </summary>
+    public async Task ClearAllAsync(CancellationToken ct = default)
+    {
+        _repository.Clear();
+        await _storage.SaveAsync(BuildCollection(), "default", ct);
+    }
+
     private void OnCollectionChanged(object? sender, EventArgs e)
     {
         // Debounce: cancel previous pending save and start a new one

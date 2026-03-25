@@ -17,6 +17,23 @@
             <InputFile OnChange="ImportFile" accept=".geojson,.json" style="display:none" />
         </label>
 
+        @if (_confirmingClear)
+        {
+            <div class="clear-confirm">
+                <span>¿Eliminar todos los activos?</span>
+                <div class="clear-confirm-actions">
+                    <button class="btn btn-danger btn-xs" @onclick="ConfirmClear">Sí, limpiar</button>
+                    <button class="btn btn-outline btn-xs" @onclick="() => _confirmingClear = false">Cancelar</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <button class="btn btn-danger btn-sm" @onclick="() => _confirmingClear = true">
+                ✕ Limpiar mapa
+            </button>
+        }
+
         @if (!string.IsNullOrEmpty(_message))
         {
             <p style="font-size:0.78rem;color:var(--text-secondary);margin:4px 0">@_message</p>
@@ -27,7 +44,23 @@
 @code {
     [Parameter] public string MapDivId { get; set; } = "geoassets-map";
 
-    private string _message = string.Empty;
+    private string _message        = string.Empty;
+    private bool   _confirmingClear = false;
+
+    private async Task ConfirmClear()
+    {
+        _confirmingClear = false;
+        try
+        {
+            await AssetSvc.ClearAllAsync();
+            await MapInterop.ClearAllFeaturesAsync(MapDivId);
+            _message = "Mapa limpiado.";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error al limpiar: {ex.Message}";
+        }
+    }
 
     private async Task Export()
     {
@@ -47,7 +80,7 @@
     {
         try
         {
-            using var stream = e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
             using var reader = new System.IO.StreamReader(stream);
             var json = await reader.ReadToEndAsync();
 
