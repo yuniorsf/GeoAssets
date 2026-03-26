@@ -94,16 +94,16 @@
             e.File.Name, e.File.Size);
         try
         {
-            using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
-            using var reader = new System.IO.StreamReader(stream);
-            var json = await reader.ReadToEndAsync();
+            using Stream? stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+            using StreamReader? reader = new System.IO.StreamReader(stream);
+            string? json = await reader.ReadToEndAsync();
 
             ImportDiagnostics.PayloadBytes.Record(json.Length,
-                new KeyValuePair<string, object?>("file.name", e.File.Name));
+                new KeyValuePair<string, object?>(key: "file.name", e.File.Name));
 
             await AssetSvc.ImportAsync(json);
 
-            var allFeatures = Repository.GetAll();
+            IReadOnlyList<GeoFeature>? allFeatures = Repository.GetAll();
 
             await MapInterop.RenderAllFeaturesAsync(MapDivId, allFeatures);
 
