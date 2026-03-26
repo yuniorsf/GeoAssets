@@ -41,6 +41,8 @@ builder.Services.AddScoped<IAuthNavigationService, MsalAuthNavigationService>();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddScoped<AppInsightsService>();
+builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppInsightsService>());
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
 builder.Services.AddSingleton<InMemoryAssetRepository>();
