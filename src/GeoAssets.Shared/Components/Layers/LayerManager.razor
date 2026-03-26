@@ -1,10 +1,11 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Models
 @using GeoAssets.Core.Interfaces
 @inject IAssetRepository Repository
 @inject IMapInterop MapInterop
 
 <div class="sidebar-section">
-    <h6>Capas</h6>
+    <h6>@L["map.layers"]</h6>
     <div class="asset-list">
         @foreach (var type in Repository.GetAssetTypes())
         {
@@ -17,7 +18,7 @@
                 <span style="font-size:0.87rem;flex:1">@type.Name</span>
                 @if (!type.IsBuiltIn)
                 {
-                    <button class="btn-icon" @onclick="() => DeleteType(type)" title="Eliminar tipo">✕</button>
+                    <button class="btn-icon" @onclick="() => DeleteType(type)" title="@L["map.layers.deleteType"]">✕</button>
                 }
             </div>
         }
@@ -27,7 +28,7 @@
     {
         <div class="attr-row" style="margin-top:8px">
             <input class="form-control"
-                   placeholder="Nombre del tipo"
+                   placeholder="@L["map.layers.typePlaceholder"]"
                    @bind="_newTypeName" />
             <input type="color" @bind="_newTypeColor" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
             <button class="btn btn-primary btn-sm" @onclick="SaveNewType" type="button">✓</button>
@@ -37,7 +38,7 @@
     else
     {
         <button class="btn btn-outline btn-sm" style="margin-top:8px" @onclick="() => _addingNew = true" type="button">
-            + Nuevo tipo
+            @L["map.layers.newType"]
         </button>
     }
 </div>

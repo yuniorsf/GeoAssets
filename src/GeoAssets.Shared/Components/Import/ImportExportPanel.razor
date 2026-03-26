@@ -1,3 +1,4 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Interfaces
 @using GeoAssets.Core.Services
 @using GeoAssets.Shared.Services
@@ -12,31 +13,31 @@
 @inject IAnalyticsService Analytics
 
 <div class="sidebar-section">
-    <h6>Importar / Exportar</h6>
+    <h6>@L["import.section"]</h6>
     <div class="import-export-panel">
         <button class="btn btn-outline btn-sm" @onclick="Export">
-            ⬇ Exportar GeoJSON
+            @L["import.export"]
         </button>
 
         <label class="btn btn-secondary btn-sm" style="cursor:pointer;text-align:center">
-            ⬆ Importar GeoJSON
+            @L["import.import"]
             <InputFile OnChange="ImportFile" accept=".geojson,.json" style="display:none" />
         </label>
 
         @if (_confirmingClear)
         {
             <div class="clear-confirm">
-                <span>¿Eliminar todos los activos?</span>
+                <span>@L["import.clearConfirm"]</span>
                 <div class="clear-confirm-actions">
-                    <button class="btn btn-danger btn-xs" @onclick="ConfirmClear">Sí, limpiar</button>
-                    <button class="btn btn-outline btn-xs" @onclick="() => _confirmingClear = false">Cancelar</button>
+                    <button class="btn btn-danger btn-xs" @onclick="ConfirmClear">@L["import.clearYes"]</button>
+                    <button class="btn btn-outline btn-xs" @onclick="() => _confirmingClear = false">@L["import.clearCancel"]</button>
                 </div>
             </div>
         }
         else
         {
             <button class="btn btn-danger btn-sm" @onclick="() => _confirmingClear = true">
-                ✕ Limpiar mapa
+                @L["import.clearMap"]
             </button>
         }
 
@@ -60,11 +61,11 @@
         {
             await AssetSvc.ClearAllAsync();
             await MapInterop.ClearAllFeaturesAsync(MapDivId);
-            _message = "Mapa limpiado.";
+            _message = L["import.clearSuccess"];
         }
         catch (Exception ex)
         {
-            _message = $"Error al limpiar: {ex.Message}";
+            _message = L.GetString("import.errorClear", ex.Message);
         }
     }
 
@@ -74,11 +75,11 @@
         {
             var json = await AssetSvc.ExportAsync();
             await Storage.SaveExportFileAsync(json, "geoassets-export.geojson");
-            _message = "Exportado correctamente.";
+            _message = L["import.exportSuccess"];
         }
         catch (Exception ex)
         {
-            _message = $"Error al exportar: {ex.Message}";
+            _message = L.GetString("import.errorExport", ex.Message);
         }
     }
 
@@ -132,14 +133,14 @@
                 e.File.Name, allFeatures.Count, pipelineSw.ElapsedMilliseconds);
 
             Analytics.TrackEvent("import.completed", new {
-                fileName     = e.File.Name,
+                fileName      = e.File.Name,
                 fileSizeBytes = e.File.Size,
-                featureCount = allFeatures.Count,
-                totalMs      = pipelineSw.ElapsedMilliseconds,
-                outcome      = "success"
+                featureCount  = allFeatures.Count,
+                totalMs       = pipelineSw.ElapsedMilliseconds,
+                outcome       = "success"
             });
 
-            _message = $"{e.File.Name} importado ({allFeatures.Count} activos).";
+            _message = L.GetString("import.successMsg", e.File.Name, allFeatures.Count);
         }
         catch (Exception ex)
         {
@@ -155,12 +156,12 @@
                 e.File.Name, pipelineSw.ElapsedMilliseconds);
 
             Analytics.TrackException(ex.Message, new {
-                fileName = e.File.Name,
+                fileName  = e.File.Name,
                 elapsedMs = pipelineSw.ElapsedMilliseconds,
                 outcome   = "failure"
             });
 
-            _message = $"Error al importar: {ex.Message}";
+            _message = L.GetString("import.errorImport", ex.Message);
         }
     }
 

@@ -1,5 +1,8 @@
 @using GeoAssets.Shared.Pages
 @using GeoAssets.Web.Shared
+@using GeoAssets.Shared.Localization
+@inject BlazorCultureService CultureService
+@inject HttpJsonStringLocalizer Localizer
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly"
@@ -28,3 +31,13 @@
     <!-- Attaches JS activity listeners + starts session monitoring -->
     <SessionActivityTracker />
 </CascadingAuthenticationState>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve culture from localStorage / browser and load the first JSON file
+        // before any component renders so there is no flash of untranslated keys.
+        await CultureService.InitAsync();
+        await Localizer.LoadAsync(CultureService.CurrentCulture);
+    }
+}

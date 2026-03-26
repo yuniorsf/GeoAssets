@@ -1,0 +1,41 @@
+{
+  "app.title": "GeoAssets",
+  "app.loading": "Carregando GeoAssets...",
+  "app.error": "Ocorreu um erro.",
+  "app.reload": "Recarregar",
+
+  "nav.language": "Idioma",
+
+  "import.section": "Importar / Exportar",
+  "import.export": "⬇ Exportar GeoJSON",
+  "import.import": "⬆ Importar GeoJSON",
+  "import.clearMap": "✕ Limpar mapa",
+  "import.clearConfirm": "Excluir todos os ativos?",
+  "import.clearYes": "Sim, limpar",
+  "import.clearCancel": "Cancelar",
+  "import.successMsg": "{0} importado ({1} ativos).",
+  "import.clearSuccess": "Mapa limpo.",
+  "import.exportSuccess": "Exportado com sucesso.",
+  "import.errorImport": "Erro ao importar: {0}",
+  "import.errorExport": "Erro ao exportar: {0}",
+  "import.errorClear": "Erro ao limpar: {0}",
+
+  "assets.title": "Ativos",
+  "assets.search": "Buscar ativos...",
+  "assets.noResults": "Sem resultados",
+  "assets.delete": "Excluir",
+  "assets.save": "Salvar",
+  "assets.cancel": "Cancelar",
+  "assets.name": "Nome",
+  "assets.description": "Descrição",
+  "assets.type": "Tipo",
+  "assets.properties": "Propriedades",
+
+  "map.layers": "Camadas",
+  "map.layers.deleteType": "Excluir tipo",
+  "map.layers.typePlaceholder": "Nome do tipo",
+  "map.layers.newType": "+ Novo tipo",
+  "map.draw.point": "Ponto",
+  "map.draw.line": "Linha",
+  "map.draw.polygon": "Polígono"
+}

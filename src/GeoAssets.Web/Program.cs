@@ -2,6 +2,7 @@ using Blazored.LocalStorage;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Web;
@@ -40,7 +41,15 @@ builder.Services.AddScoped<SessionTimeoutService>();
 builder.Services.AddScoped<IAuthNavigationService, MsalAuthNavigationService>();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddBlazoredLocalStorage();
+
+// ── Localization ──────────────────────────────────────────────────────────────
+builder.Services.AddGeoAssetsLocalization(opts =>
+{
+    opts.DefaultCulture    = "es";
+    opts.SupportedCultures = ["es", "en", "pt"];
+});
 builder.Services.AddScoped<AppInsightsService>();
 builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppInsightsService>());
 

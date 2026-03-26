@@ -1,0 +1,23 @@
+@using GeoAssets.Core.Localization
+@inject ICultureService Culture
+
+<div class="language-switcher">
+    <label class="language-switcher-label">@Culture.CurrentCulture.TwoLetterISOLanguageName.ToUpperInvariant()</label>
+    <div class="language-switcher-options">
+        @foreach (var c in Culture.SupportedCultures)
+        {
+            var culture = c;
+            var active  = culture.Name == Culture.CurrentCulture.Name;
+            <button class="lang-btn @(active ? "lang-btn--active" : "")"
+                    disabled="@active"
+                    @onclick="() => SelectAsync(culture.TwoLetterISOLanguageName)">
+                @culture.TwoLetterISOLanguageName.ToUpperInvariant()
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private Task SelectAsync(string cultureName) =>
+        Culture.SetCultureAsync(cultureName);
+}
