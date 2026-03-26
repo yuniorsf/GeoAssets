@@ -30,6 +30,35 @@
   "assets.description": "Description",
   "assets.type": "Type",
   "assets.properties": "Properties",
+  "assets.allTypes": "— All types —",
+  "assets.empty": "No assets. Use the drawing tools to add some.",
+  "assets.noName": "(no name)",
+  "assets.deleteTitle": "Delete asset",
+  "assets.deleteConfirm": "Delete «{0}»? This action cannot be undone.",
+
+  "search.clear": "Clear",
+
+  "attrs.title": "Custom attributes",
+  "attrs.keyPlaceholder": "Key",
+  "attrs.valuePlaceholder": "Value",
+  "attrs.addAttribute": "+ Add attribute",
+
+  "draw.label": "Draw:",
+  "draw.point.title": "Add point",
+  "draw.line.title": "Draw line",
+  "draw.polygon.title": "Draw polygon",
+  "draw.cancel": "✕ Cancel",
+  "draw.cancel.title": "Cancel drawing",
+
+  "form.newAsset": "New asset",
+  "form.editAsset": "Edit asset",
+  "form.namePlaceholder": "Asset name",
+  "form.type": "Type / Category",
+  "form.descriptionPlaceholder": "Optional description",
+  "form.geometry": "Geometry",
+
+  "app.signOut": "Sign out",
+  "app.defaultUser": "User",
 
   "map.layers": "Layers",
   "map.layers.deleteType": "Delete type",

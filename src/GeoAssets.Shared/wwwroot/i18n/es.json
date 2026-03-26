@@ -30,6 +30,35 @@
   "assets.description": "Descripción",
   "assets.type": "Tipo",
   "assets.properties": "Propiedades",
+  "assets.allTypes": "— Todos los tipos —",
+  "assets.empty": "Sin activos. Usa las herramientas de dibujo para añadir.",
+  "assets.noName": "(sin nombre)",
+  "assets.deleteTitle": "Eliminar activo",
+  "assets.deleteConfirm": "¿Eliminar «{0}»? Esta acción no se puede deshacer.",
+
+  "search.clear": "Limpiar",
+
+  "attrs.title": "Atributos personalizados",
+  "attrs.keyPlaceholder": "Clave",
+  "attrs.valuePlaceholder": "Valor",
+  "attrs.addAttribute": "+ Añadir atributo",
+
+  "draw.label": "Dibujar:",
+  "draw.point.title": "Añadir punto",
+  "draw.line.title": "Trazar línea",
+  "draw.polygon.title": "Dibujar polígono",
+  "draw.cancel": "✕ Cancelar",
+  "draw.cancel.title": "Cancelar dibujo",
+
+  "form.newAsset": "Nuevo activo",
+  "form.editAsset": "Editar activo",
+  "form.namePlaceholder": "Nombre del activo",
+  "form.type": "Tipo / Categoría",
+  "form.descriptionPlaceholder": "Descripción opcional",
+  "form.geometry": "Geometría",
+
+  "app.signOut": "Cerrar sesión",
+  "app.defaultUser": "Usuario",
 
   "map.layers": "Capas",
   "map.layers.deleteType": "Eliminar tipo",

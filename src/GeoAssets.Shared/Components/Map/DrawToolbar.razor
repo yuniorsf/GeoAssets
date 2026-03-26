@@ -1,31 +1,32 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Interfaces
 @using GeoAssets.Core.Models.Geometry
 @inject IMapInterop MapInterop
 
 <div class="draw-toolbar">
-    <span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px">Dibujar:</span>
+    <span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px">@L["draw.label"]</span>
 
     <button class="draw-btn @(_active == GeometryType.Point ? "active" : "")"
             @onclick="() => ToggleMode(GeometryType.Point)"
-            title="Añadir punto">
-        📍 Punto
+            title="@L["draw.point.title"]">
+        📍 @L["map.draw.point"]
     </button>
 
     <button class="draw-btn @(_active == GeometryType.LineString ? "active" : "")"
             @onclick="() => ToggleMode(GeometryType.LineString)"
-            title="Trazar línea">
-        〰️ Línea
+            title="@L["draw.line.title"]">
+        〰️ @L["map.draw.line"]
     </button>
 
     <button class="draw-btn @(_active == GeometryType.Polygon ? "active" : "")"
             @onclick="() => ToggleMode(GeometryType.Polygon)"
-            title="Dibujar polígono">
-        ⬡ Polígono
+            title="@L["draw.polygon.title"]">
+        ⬡ @L["map.draw.polygon"]
     </button>
 
     @if (_active.HasValue)
     {
-        <button class="draw-btn cancel" @onclick="Cancel" title="Cancelar dibujo">✕ Cancelar</button>
+        <button class="draw-btn cancel" @onclick="Cancel" title="@L["draw.cancel.title"]">@L["draw.cancel"]</button>
     }
 </div>
 

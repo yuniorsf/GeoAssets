@@ -1,25 +1,26 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Models
 
 <div class="form-group">
-    <label>Atributos personalizados</label>
+    <label>@L["attrs.title"]</label>
 
     @foreach (var key in _keys.ToList())
     {
         <div class="attr-row">
             <input class="form-control"
-                   placeholder="Clave"
+                   placeholder="@L["attrs.keyPlaceholder"]"
                    value="@key"
                    @onchange="e => RenameKey(key, e.Value?.ToString() ?? key)" />
             <input class="form-control"
-                   placeholder="Valor"
+                   placeholder="@L["attrs.valuePlaceholder"]"
                    value="@(Attributes.TryGetValue(key, out var v) ? v : string.Empty)"
                    @onchange="e => SetValue(key, e.Value?.ToString() ?? string.Empty)" />
-            <button class="btn-icon" @onclick="() => RemoveKey(key)" title="Eliminar">✕</button>
+            <button class="btn-icon" @onclick="() => RemoveKey(key)" title="@L["assets.delete"]">✕</button>
         </div>
     }
 
     <button class="btn btn-outline btn-sm" @onclick="AddAttribute" type="button">
-        + Añadir atributo
+        @L["attrs.addAttribute"]
     </button>
 </div>
 

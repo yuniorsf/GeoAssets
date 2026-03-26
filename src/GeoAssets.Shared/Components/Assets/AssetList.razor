@@ -1,16 +1,17 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Models
 @using GeoAssets.Core.Interfaces
 @implements IDisposable
 @inject IAssetRepository Repository
 
 <div class="sidebar-section">
-    <h6>Activos (@_filtered.Count)</h6>
+    <h6>@L["assets.title"] (@_filtered.Count)</h6>
     <SearchBar Query="@_searchQuery" OnSearch="OnSearch" />
 </div>
 
 <div class="sidebar-section">
     <select class="form-control" style="font-size:0.82rem" @onchange="OnTypeFilter">
-        <option value="">— Todos los tipos —</option>
+        <option value="">@L["assets.allTypes"]</option>
         @foreach (var t in Repository.GetAssetTypes())
         {
             <option value="@t.Id">@t.Name</option>
@@ -22,7 +23,7 @@
     @if (_filtered.Count == 0)
     {
         <div class="empty-state">
-            <p>Sin activos.<br />Usa las herramientas de dibujo para añadir.</p>
+            <p>@L["assets.empty"]</p>
         </div>
     }
     else
@@ -34,9 +35,9 @@
                 <div class="asset-list-item @(SelectedFeatureId == feature.Id ? "selected" : "")"
                      @onclick="() => SelectFeature(feature)">
                     <span class="asset-color-dot" style="background:@color"></span>
-                    <span class="asset-name">@(string.IsNullOrEmpty(feature.Properties.Name) ? "(sin nombre)" : feature.Properties.Name)</span>
+                    <span class="asset-name">@(string.IsNullOrEmpty(feature.Properties.Name) ? L["assets.noName"] : feature.Properties.Name)</span>
                     <span class="asset-geom-icon">@GeometryIcon(feature)</span>
-                    <button class="btn-icon" title="Eliminar"
+                    <button class="btn-icon" title="@L["assets.delete"]"
                             @onclick:stopPropagation="true"
                             @onclick="() => RequestDelete(feature)">🗑</button>
                 </div>
@@ -46,8 +47,9 @@
 </div>
 
 <ConfirmDialog Visible="_deleteConfirmVisible"
-               Title="Eliminar activo"
-               Message="@($"¿Eliminar «{_pendingDelete?.Properties.Name}»? Esta acción no se puede deshacer.")"
+               Title="@L["assets.deleteTitle"]"
+               Message="@L.GetString("assets.deleteConfirm", _pendingDelete?.Properties.Name ?? L["assets.noName"])"
+               ConfirmLabel="@L["assets.delete"]"
                OnConfirm="ConfirmDelete"
                OnCancel="CancelDelete" />
 
@@ -115,10 +117,11 @@
         _                                  => "?"
     };
 
-    public void Dispose()
+    public override void Dispose()
     {
         Repository.FeatureAdded   -= OnChanged;
         Repository.FeatureUpdated -= OnChanged;
         Repository.FeatureDeleted -= OnDeleted;
+        base.Dispose();
     }
 }
