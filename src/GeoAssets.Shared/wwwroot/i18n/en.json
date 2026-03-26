@@ -1,0 +1,41 @@
+{
+  "app.title": "GeoAssets",
+  "app.loading": "Loading GeoAssets...",
+  "app.error": "An error has occurred.",
+  "app.reload": "Reload",
+
+  "nav.language": "Language",
+
+  "import.section": "Import / Export",
+  "import.export": "⬇ Export GeoJSON",
+  "import.import": "⬆ Import GeoJSON",
+  "import.clearMap": "✕ Clear map",
+  "import.clearConfirm": "Delete all assets?",
+  "import.clearYes": "Yes, clear",
+  "import.clearCancel": "Cancel",
+  "import.successMsg": "{0} imported ({1} assets).",
+  "import.clearSuccess": "Map cleared.",
+  "import.exportSuccess": "Exported successfully.",
+  "import.errorImport": "Import error: {0}",
+  "import.errorExport": "Export error: {0}",
+  "import.errorClear": "Clear error: {0}",
+
+  "assets.title": "Assets",
+  "assets.search": "Search assets...",
+  "assets.noResults": "No results",
+  "assets.delete": "Delete",
+  "assets.save": "Save",
+  "assets.cancel": "Cancel",
+  "assets.name": "Name",
+  "assets.description": "Description",
+  "assets.type": "Type",
+  "assets.properties": "Properties",
+
+  "map.layers": "Layers",
+  "map.layers.deleteType": "Delete type",
+  "map.layers.typePlaceholder": "Type name",
+  "map.layers.newType": "+ New type",
+  "map.draw.point": "Point",
+  "map.draw.line": "Line",
+  "map.draw.polygon": "Polygon"
+}

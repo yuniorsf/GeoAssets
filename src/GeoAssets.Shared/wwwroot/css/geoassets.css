@@ -480,3 +480,40 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     .map-area { min-height: 50vh; }
     .properties-panel { position: fixed; right: 0; left: 0; bottom: 0; top: auto; width: auto; border-radius: 12px 12px 0 0; max-height: 60vh; }
 }
+
+/* ── Language switcher ────────────────────────────────────────────────────── */
+.language-switcher {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.language-switcher-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+}
+.language-switcher-options {
+    display: flex;
+    gap: 2px;
+}
+.lang-btn {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 2px 5px;
+    transition: border-color .15s, color .15s;
+}
+.lang-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.lang-btn--active {
+    border-color: var(--accent);
+    color: var(--accent);
+    cursor: default;
+}
