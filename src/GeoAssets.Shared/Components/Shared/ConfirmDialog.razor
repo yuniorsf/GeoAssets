@@ -1,3 +1,5 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
 @if (Visible)
 {
     <div class="dialog-backdrop" @onclick="OnBackdropClick">
@@ -5,7 +7,7 @@
             <h6>@Title</h6>
             <p>@Message</p>
             <div class="dialog-actions">
-                <button class="btn btn-secondary btn-sm" @onclick="Cancel">Cancelar</button>
+                <button class="btn btn-secondary btn-sm" @onclick="Cancel">@L["assets.cancel"]</button>
                 <button class="btn btn-danger btn-sm" @onclick="Confirm">@ConfirmLabel</button>
             </div>
         </div>
@@ -14,9 +16,9 @@
 
 @code {
     [Parameter] public bool Visible { get; set; }
-    [Parameter] public string Title { get; set; } = "Confirmar";
-    [Parameter] public string Message { get; set; } = "¿Está seguro?";
-    [Parameter] public string ConfirmLabel { get; set; } = "Eliminar";
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public string ConfirmLabel { get; set; } = string.Empty;
     [Parameter] public EventCallback OnConfirm { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 

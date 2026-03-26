@@ -1,5 +1,6 @@
 @page "/"
 @attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using GeoAssets.Core.Interfaces
@@ -42,7 +43,7 @@
                 <span class="sidebar-footer-avatar">👤</span>
                 <span class="sidebar-footer-name">@_userDisplayName</span>
             </div>
-            <button class="sidebar-footer-logout" title="Cerrar sesión" @onclick="SignOut">
+            <button class="sidebar-footer-logout" title="@L["app.signOut"]" @onclick="SignOut">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -95,8 +96,9 @@
 
 <!-- Delete confirmation triggered from context menu -->
 <ConfirmDialog Visible="_showDeleteConfirm"
-               Title="Eliminar activo"
-               Message="@($"¿Eliminar «{_pendingDeleteName}»? Esta acción no se puede deshacer.")"
+               Title="@L["assets.deleteTitle"]"
+               Message="@L.GetString("assets.deleteConfirm", _pendingDeleteName)"
+               ConfirmLabel="@L["assets.delete"]"
                OnConfirm="ConfirmContextDelete"
                OnCancel="() => { _showDeleteConfirm = false; StateHasChanged(); }" />
 
@@ -134,7 +136,7 @@
         _userDisplayName = user.FindFirst("name")?.Value
                         ?? user.FindFirst("preferred_username")?.Value
                         ?? user.Identity?.Name
-                        ?? "Usuario";
+                        ?? L["app.defaultUser"];
     }
 
     private void SignOut() => AuthNav.NavigateToLogout();
@@ -209,7 +211,7 @@
         if (feature is null) return;
         _pendingDeleteId   = feature.Id;
         _pendingDeleteName = string.IsNullOrEmpty(feature.Properties.Name)
-            ? "(sin nombre)"
+            ? L["assets.noName"]
             : feature.Properties.Name;
         _showDeleteConfirm = true;
         StateHasChanged();

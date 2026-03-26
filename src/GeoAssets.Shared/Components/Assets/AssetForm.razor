@@ -1,3 +1,4 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Models
 @using GeoAssets.Core.Interfaces
 @inject IAssetRepository Repository
@@ -5,20 +6,20 @@
 @if (Feature is not null)
 {
     <div>
-        <h5>@(IsNew ? "Nuevo activo" : "Editar activo")</h5>
+        <h5>@(IsNew ? L["form.newAsset"] : L["form.editAsset"])</h5>
 
         <EditForm Model="@Feature.Properties" OnValidSubmit="HandleSave">
             <DataAnnotationsValidator />
 
             <div class="form-group">
-                <label>Nombre</label>
+                <label>@L["assets.name"]</label>
                 <InputText class="form-control"
                            @bind-Value="Feature.Properties.Name"
-                           placeholder="Nombre del activo" />
+                           placeholder="@L["form.namePlaceholder"]" />
             </div>
 
             <div class="form-group">
-                <label>Tipo / Categoría</label>
+                <label>@L["form.type"]</label>
                 <InputSelect class="form-control" @bind-Value="Feature.Properties.AssetTypeId">
                     @foreach (var t in Repository.GetAssetTypes())
                     {
@@ -28,15 +29,15 @@
             </div>
 
             <div class="form-group">
-                <label>Descripción</label>
+                <label>@L["assets.description"]</label>
                 <InputTextArea class="form-control"
                                @bind-Value="Feature.Properties.Description"
                                rows="3"
-                               placeholder="Descripción opcional" />
+                               placeholder="@L["form.descriptionPlaceholder"]" />
             </div>
 
             <div class="form-group">
-                <label>Geometría</label>
+                <label>@L["form.geometry"]</label>
                 <input class="form-control" readonly
                        value="@GeometryLabel" />
             </div>
@@ -44,8 +45,8 @@
             <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
 
             <div class="form-actions">
-                <button class="btn btn-primary" type="submit">Guardar</button>
-                <button class="btn btn-secondary" type="button" @onclick="Cancel">Cancelar</button>
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
             </div>
         </EditForm>
     </div>
@@ -59,9 +60,9 @@
 
     private string GeometryLabel => Feature?.Geometry switch
     {
-        Core.Models.Geometry.GeoPoint      => "Punto",
-        Core.Models.Geometry.GeoLineString => "Línea",
-        Core.Models.Geometry.GeoPolygon    => "Polígono",
+        Core.Models.Geometry.GeoPoint      => L["map.draw.point"],
+        Core.Models.Geometry.GeoLineString => L["map.draw.line"],
+        Core.Models.Geometry.GeoPolygon    => L["map.draw.polygon"],
         _                                  => "—"
     };
 

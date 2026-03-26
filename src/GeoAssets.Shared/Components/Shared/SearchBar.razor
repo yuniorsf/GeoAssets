@@ -1,14 +1,15 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using System.Timers
 
 <div class="search-bar">
     <span>🔍</span>
     <input type="text"
-           placeholder="Buscar activos..."
+           placeholder="@L["assets.search"]"
            value="@Query"
            @oninput="OnInput" />
     @if (!string.IsNullOrEmpty(Query))
     {
-        <button class="btn-icon" @onclick="Clear" title="Limpiar">✕</button>
+        <button class="btn-icon" @onclick="Clear" title="@L["search.clear"]">✕</button>
     }
 </div>
 
@@ -42,5 +43,9 @@
         await OnSearch.InvokeAsync(Query);
     }
 
-    public void Dispose() => _debounce?.Dispose();
+    public override void Dispose()
+    {
+        _debounce?.Dispose();
+        base.Dispose();
+    }
 }
