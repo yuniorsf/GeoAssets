@@ -1,5 +1,6 @@
 @using GeoAssets.Core.Interfaces
 @using GeoAssets.Core.Services
+@using GeoAssets.Shared.Services
 @using GeoAssets.Core.Diagnostics
 @using System.Diagnostics
 @using Microsoft.Extensions.Logging
@@ -8,6 +9,7 @@
 @inject IMapInterop MapInterop
 @inject IAssetRepository Repository
 @inject ILogger<ImportExportPanel> Logger
+@inject IAnalyticsService Analytics
 
 <div class="sidebar-section">
     <h6>Importar / Exportar</h6>
@@ -129,6 +131,14 @@
                 "Import pipeline complete — {FileName}: {FeatureCount} features, {TotalMs} ms total",
                 e.File.Name, allFeatures.Count, pipelineSw.ElapsedMilliseconds);
 
+            Analytics.TrackEvent("import.completed", new {
+                fileName     = e.File.Name,
+                fileSizeBytes = e.File.Size,
+                featureCount = allFeatures.Count,
+                totalMs      = pipelineSw.ElapsedMilliseconds,
+                outcome      = "success"
+            });
+
             _message = $"{e.File.Name} importado ({allFeatures.Count} activos).";
         }
         catch (Exception ex)
@@ -143,6 +153,12 @@
             Logger.LogError(ex,
                 "Import failed — {FileName} after {ElapsedMs} ms",
                 e.File.Name, pipelineSw.ElapsedMilliseconds);
+
+            Analytics.TrackException(ex.Message, new {
+                fileName = e.File.Name,
+                elapsedMs = pipelineSw.ElapsedMilliseconds,
+                outcome   = "failure"
+            });
 
             _message = $"Error al importar: {ex.Message}";
         }

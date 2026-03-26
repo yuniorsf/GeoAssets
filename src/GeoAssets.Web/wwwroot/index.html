@@ -36,6 +36,27 @@
         <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;float:right">✕</span>
     </div>
 
+    <!-- Application Insights JS SDK — direct load -->
+    <script src="https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js"></script>
+    <script>
+        var ai = new Microsoft.ApplicationInsights.ApplicationInsights({ config: {
+            connectionString: "InstrumentationKey=08a1c244-ebba-4ac8-b93d-c1266b769538;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=3250dc94-5c9c-4b7c-a235-588949102704",
+            enableAutoRouteTracking: true
+        }});
+        ai.loadAppInsights();
+        ai.trackPageView();
+        window.appInsights = ai;
+
+        // C#-callable helpers (called via IJSRuntime from AppInsightsService)
+        window.appInsightsInterop = {
+            trackEvent:     function (name, props)              { ai.trackEvent({ name: name }, props); },
+            trackTrace:     function (message, severity, props) { ai.trackTrace({ message: message, severityLevel: severity }, props); },
+            trackException: function (message, props)           { ai.trackException({ exception: new Error(message) }, props); },
+            trackMetric:    function (name, value, props)       { ai.trackMetric({ name: name, average: value }, props); },
+            setUser:        function (userId)                   { ai.setAuthenticatedUserContext(userId); }
+        };
+    </script>
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
