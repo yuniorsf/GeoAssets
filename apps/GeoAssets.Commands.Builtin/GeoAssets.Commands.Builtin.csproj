@@ -4,12 +4,11 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>GeoAssets.Provider.Observable</RootNamespace>
+    <RootNamespace>GeoAssets.Commands.Builtin</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ObservableDecoratorBase lives in Shared -->
-    <ProjectReference Include="..\..\apps\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Commands\GeoAssets.Commands.csproj" />
   </ItemGroup>
 
 </Project>

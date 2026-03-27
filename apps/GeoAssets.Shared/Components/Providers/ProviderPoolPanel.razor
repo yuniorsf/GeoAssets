@@ -1,0 +1,431 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.Extensions.Logging
+@inject IProviderPool Pool
+@inject IMapInterop MapInterop
+@inject IStorageService Storage
+@inject IAnalyticsService Analytics
+@inject ILogger<ProviderPoolPanel> Logger
+@inject IServiceProvider ServiceProvider
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["pool.title"]</h6>
+        <span style="display:flex;gap:4px">
+            <button class="btn-icon" title="@L["pool.newCollection"]" @onclick="StartAdd">＋</button>
+            @foreach (var factory in _externalFactories)
+            {
+                var f = factory;
+                <button class="btn-icon" title="@L.GetString("pool.connectExternal", f.ProviderName)"
+                        @onclick="() => StartConnect(f.ProviderName)">🔌</button>
+            }
+        </span>
+    </div>
+
+    <div class="pool-list">
+        @foreach (var entry in Pool.All)
+        {
+            var e   = entry;
+            var dot = e.IsEnabled ? "var(--success)" : "var(--text-secondary)";
+            var msg = _messages.TryGetValue(e.Id, out var m) ? m : string.Empty;
+
+            <div class="pool-entry">
+                <div class="layer-row">
+                    <span class="asset-color-dot" style="background:@dot;flex-shrink:0"></span>
+
+                    @if (_editingId == e.Id)
+                    {
+                        <input class="form-control pool-name-input"
+                               value="@_editingName"
+                               @onchange="ev => _editingName = ev.Value?.ToString() ?? e.Name"
+                               @onblur="() => CommitRename(e)"
+                               @onkeydown="ev => HandleRenameKey(ev, e)" />
+                    }
+                    else
+                    {
+                        <span class="pool-entry-name @(e.IsActive ? "pool-entry-active" : "")"
+                              @ondblclick="() => StartRename(e)">
+                            @e.Name@(e.IsActive ? $" {L["pool.active"]}" : "")
+                        </span>
+                    }
+
+                    <span class="pool-entry-actions">
+                        <!-- Export -->
+                        <button class="btn-icon" title="@L["import.export"]"
+                                @onclick="() => ExportEntryAsync(e)">📤</button>
+
+                        <!-- Import -->
+                        <label class="btn-icon" style="cursor:pointer" title="@L["import.import"]">
+                            📥
+                            <InputFile OnChange="ev => ImportFileAsync(ev, e)"
+                                       accept=".geojson,.json" style="display:none" />
+                        </label>
+
+                        <!-- Show / Hide -->
+                        <button class="btn-icon" title="@(e.IsEnabled ? L["pool.disable"] : L["pool.enable"])"
+                                @onclick="() => ToggleEnabledAsync(e)">
+                            @(e.IsEnabled ? "👁" : "🚫")
+                        </button>
+
+                        @if (!e.IsActive)
+                        {
+                            <button class="btn-icon" title="@L["pool.setActive"]"
+                                    @onclick="() => SetActiveAsync(e)">⭐</button>
+                            <button class="btn-icon btn-icon--danger" title="@L["pool.delete"]"
+                                    @onclick="() => RemoveEntryAsync(e)">✕</button>
+                        }
+                    </span>
+                </div>
+
+                @if (!string.IsNullOrEmpty(msg))
+                {
+                    <p class="pool-entry-msg">@msg</p>
+                }
+            </div>
+        }
+    </div>
+
+    @if (_addingNew)
+    {
+        <div class="attr-row" style="margin-top:8px">
+            <input class="form-control" placeholder="@L["pool.namePlaceholder"]"
+                   @bind="_newName" @onkeydown="HandleAddKey" />
+            <button class="btn btn-primary btn-sm" @onclick="CommitAdd" type="button">✓</button>
+            <button class="btn btn-secondary btn-sm" @onclick="CancelAdd" type="button">✕</button>
+        </div>
+    }
+
+    @if (_connectingProvider is not null)
+    {
+        <div class="pool-connect-dialog">
+            <p class="pool-connect-title">@L.GetString("pool.connectExternal", _connectingProvider)</p>
+            <input class="form-control" placeholder="@L["pool.connStrPlaceholder"]"
+                   @bind="_connName" style="margin-bottom:6px" />
+
+            @if (_isLocalForm)
+            {
+                <div style="display:flex;gap:4px;margin-bottom:4px">
+                    <input class="form-control" placeholder="@L["pool.pg.host"]" @bind="_pgHost" style="flex:1" />
+                    <input class="form-control" placeholder="@L["pool.pg.port"]" @bind="_pgPort" style="width:68px" />
+                </div>
+                <input class="form-control" placeholder="@L["pool.pg.database"]" @bind="_pgDb"
+                       style="margin-bottom:4px" />
+                <input class="form-control" placeholder="@L["pool.pg.username"]" @bind="_pgUser"
+                       style="margin-bottom:4px" />
+                <input type="password" class="form-control" placeholder="@L["pool.pg.password"]" @bind="_pgPass"
+                       style="margin-bottom:4px" />
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer">
+                    <input type="checkbox" @bind="_pgDisableSsl" />
+                    @L["pool.pg.disableSsl"]
+                </label>
+            }
+            else
+            {
+                <textarea class="form-control pool-connstr-input"
+                          placeholder="@(_connectingProvider == "REST" ? L["pool.rest.urlHint"] : L["pool.connStrHint"])"
+                          @bind="_connStr" rows="3"></textarea>
+            }
+
+            @if (!string.IsNullOrEmpty(_connError))
+            {
+                <p class="pool-entry-msg" style="color:var(--danger)">@_connError</p>
+            }
+            <div class="attr-row" style="margin-top:8px;justify-content:flex-end">
+                <button class="btn btn-secondary btn-sm" @onclick="CancelConnect" type="button">@L["assets.cancel"]</button>
+                <button class="btn btn-primary btn-sm" @onclick="CommitConnectAsync" type="button"
+                        disabled="@_connecting">
+                    @(_connecting ? L["pool.connecting"] : L["pool.connect"])
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
+
+    private readonly Dictionary<Guid, string> _messages = [];
+    private bool   _addingNew;
+    private string _newName     = string.Empty;
+    private Guid?  _editingId;
+    private string _editingName = string.Empty;
+
+    // External provider connect state
+    private IReadOnlyList<IExternalProviderFactory> _externalFactories = [];
+    private string? _connectingProvider;
+    private string  _connName  = string.Empty;
+    private string  _connStr   = string.Empty;
+    private string  _connError = string.Empty;
+    private bool    _connecting;
+
+    // Structured PostgreSQL local-DB form
+    private string _pgHost       = "localhost";
+    private string _pgPort       = "5432";
+    private string _pgDb         = string.Empty;
+    private string _pgUser       = string.Empty;
+    private string _pgPass       = string.Empty;
+    private bool   _pgDisableSsl = true;
+
+    private bool _isLocalForm => _connectingProvider == "PostgreSQL";
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        Pool.Changed += OnPoolChanged;
+
+        // Discover registered external factories (e.g. PostgreSQL) — optional
+        _externalFactories = ServiceProvider
+            .GetService(typeof(IEnumerable<IExternalProviderFactory>)) is IEnumerable<IExternalProviderFactory> factories
+            ? [.. factories]
+            : [];
+    }
+
+    private void OnPoolChanged(object? _, EventArgs __) =>
+        InvokeAsync(StateHasChanged);
+
+    public override void Dispose()
+    {
+        Pool.Changed -= OnPoolChanged;
+        base.Dispose();
+    }
+
+    // ── Show / Hide ───────────────────────────────────────────────────────────
+
+    private async Task ToggleEnabledAsync(ProviderEntry entry)
+    {
+        if (entry.IsEnabled)
+        {
+            Pool.Disable(entry.Id);
+            foreach (var f in entry.Provider.GetAll())
+                await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+        }
+        else
+        {
+            Pool.Enable(entry.Id);
+            foreach (var f in entry.Provider.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+        }
+    }
+
+    // ── Set active workspace ──────────────────────────────────────────────────
+
+    private async Task SetActiveAsync(ProviderEntry entry)
+    {
+        Pool.SetActive(entry.Id);
+        await MapInterop.ClearAllFeaturesAsync(MapDivId);
+        foreach (var e in Pool.All.Where(e => e.IsEnabled))
+            foreach (var f in e.Provider.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    private async Task ExportEntryAsync(ProviderEntry entry)
+    {
+        _messages[entry.Id] = string.Empty;
+        try
+        {
+            var collection = new GeoFeatureCollection
+            {
+                Features = [.. entry.Provider.GetAll()],
+                Metadata = new GeoFeatureCollectionMetadata
+                {
+                    Name       = entry.Name,
+                    AssetTypes = [.. entry.Provider.GetAssetTypes()]
+                }
+            };
+            var json     = await Storage.ExportToStringAsync(collection);
+            var safeName = entry.Name.ToLowerInvariant().Replace(" ", "-");
+            await Storage.SaveExportFileAsync(json, $"{safeName}-export.geojson");
+
+            _messages[entry.Id] = L["import.exportSuccess"];
+            Logger.LogInformation("Export — collection: {Name}, features: {Count}",
+                entry.Name, collection.Features.Count);
+        }
+        catch (Exception ex)
+        {
+            _messages[entry.Id] = L.GetString("import.errorExport", ex.Message);
+            Logger.LogError(ex, "Export failed — collection: {Name}", entry.Name);
+        }
+    }
+
+    // ── Import ────────────────────────────────────────────────────────────────
+
+    private async Task ImportFileAsync(InputFileChangeEventArgs ev, ProviderEntry entry)
+    {
+        _messages[entry.Id] = string.Empty;
+        try
+        {
+            using var stream = ev.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            var imported = await Storage.ImportFromStringAsync(json);
+
+            foreach (var t in imported.Metadata.AssetTypes.Where(t => !t.IsBuiltIn))
+                entry.Provider.AddAssetType(t);
+
+            entry.Provider.AddRange(imported.Features);
+
+            if (entry.IsEnabled)
+                foreach (var f in imported.Features)
+                    await MapInterop.RenderFeatureAsync(MapDivId, f);
+
+            _messages[entry.Id] = L.GetString("import.successMsg", ev.File.Name, imported.Features.Count);
+
+            Logger.LogInformation("Import — collection: {Name}, file: {File}, features: {Count}",
+                entry.Name, ev.File.Name, imported.Features.Count);
+
+            Analytics.TrackEvent("import.completed", new
+            {
+                fileName     = ev.File.Name,
+                featureCount = imported.Features.Count,
+                collection   = entry.Name,
+                isActive     = entry.IsActive,
+                outcome      = "success"
+            });
+        }
+        catch (Exception ex)
+        {
+            _messages[entry.Id] = L.GetString("import.errorImport", ex.Message);
+            Logger.LogError(ex, "Import failed — collection: {Name}, file: {File}",
+                entry.Name, ev.File.Name);
+            Analytics.TrackException(ex.Message, new
+            {
+                fileName   = ev.File.Name,
+                collection = entry.Name,
+                outcome    = "failure"
+            });
+        }
+    }
+
+    // ── Add ───────────────────────────────────────────────────────────────────
+
+    private void StartAdd()   { _addingNew = true; _newName = string.Empty; }
+    private void CancelAdd()  { _addingNew = false; _newName = string.Empty; }
+
+    private void CommitAdd()
+    {
+        if (!string.IsNullOrWhiteSpace(_newName))
+            Pool.Add(_newName.Trim());
+        _addingNew = false;
+        _newName   = string.Empty;
+    }
+
+    private void HandleAddKey(KeyboardEventArgs ev)
+    {
+        if (ev.Key == "Enter")  CommitAdd();
+        if (ev.Key == "Escape") CancelAdd();
+    }
+
+    // ── Rename ────────────────────────────────────────────────────────────────
+
+    private void StartRename(ProviderEntry entry)
+    {
+        _editingId   = entry.Id;
+        _editingName = entry.Name;
+    }
+
+    private void CommitRename(ProviderEntry entry)
+    {
+        if (!string.IsNullOrWhiteSpace(_editingName))
+            Pool.Rename(entry.Id, _editingName.Trim());
+        _editingId = null;
+    }
+
+    private void HandleRenameKey(KeyboardEventArgs ev, ProviderEntry entry)
+    {
+        if (ev.Key == "Enter")  CommitRename(entry);
+        if (ev.Key == "Escape") _editingId = null;
+    }
+
+    // ── Remove ────────────────────────────────────────────────────────────────
+
+    private async Task RemoveEntryAsync(ProviderEntry entry)
+    {
+        if (entry.IsActive) return;
+        foreach (var f in entry.Provider.GetAll())
+            await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+        _messages.Remove(entry.Id);
+        Pool.Remove(entry.Id);
+    }
+
+    // ── External provider connect ─────────────────────────────────────────────
+
+    private void StartConnect(string providerName)
+    {
+        _connectingProvider = providerName;
+        _connName           = providerName;
+        _connStr            = string.Empty;
+        _connError          = string.Empty;
+        _connecting         = false;
+        _pgHost       = "localhost";
+        _pgPort       = "5432";
+        _pgDb         = string.Empty;
+        _pgUser       = string.Empty;
+        _pgPass       = string.Empty;
+        _pgDisableSsl = true;
+    }
+
+    private void CancelConnect()
+    {
+        _connectingProvider = null;
+        _connError          = string.Empty;
+    }
+
+    private async Task CommitConnectAsync()
+    {
+        if (_isLocalForm)
+        {
+            if (string.IsNullOrWhiteSpace(_pgDb))
+            {
+                _connError = L["pool.pg.dbRequired"];
+                return;
+            }
+            _connStr = $"Host={_pgHost.Trim()};Port={_pgPort.Trim()};Database={_pgDb.Trim()};" +
+                       $"Username={_pgUser.Trim()};Password={_pgPass};" +
+                       (_pgDisableSsl ? "SSL Mode=Disable;" : string.Empty);
+        }
+        else if (string.IsNullOrWhiteSpace(_connStr))
+        {
+            _connError = L["pool.connStrRequired"];
+            return;
+        }
+
+        var factory = _externalFactories.FirstOrDefault(f => f.ProviderName == _connectingProvider);
+        if (factory is null) return;
+
+        _connecting = true;
+        _connError  = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            IAssetProvider repo;
+            if (factory is IAsyncProviderFactory asyncFactory)
+                repo = await asyncFactory.CreateAsync(_connStr.Trim());
+            else
+                repo = await Task.Run(() => factory.Create(_connStr.Trim()));
+            var name  = string.IsNullOrWhiteSpace(_connName) ? factory.ProviderName : _connName.Trim();
+            var entry = Pool.AddExternal(name, repo);
+
+            // Render all features from the connected repo
+            foreach (var f in repo.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+
+            Logger.LogInformation("External repository connected — provider: {Provider}, name: {Name}, features: {Count}",
+                factory.ProviderName, name, repo.GetAll().Count);
+
+            _connectingProvider = null;
+        }
+        catch (Exception ex)
+        {
+            _connError  = L.GetString("pool.connectError", ex.Message);
+            Logger.LogError(ex, "External repository connection failed — provider: {Provider}", _connectingProvider);
+        }
+        finally
+        {
+            _connecting = false;
+        }
+    }
+}

@@ -9,10 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\apps\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj" />
     <ProjectReference Include="..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="..\core\GeoAssets.Commands\GeoAssets.Commands.csproj" />
-    <ProjectReference Include="..\core\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj" />
     <ProjectReference Include="..\plugins\commands\GeoAssets.Plugin.Hydrology\GeoAssets.Plugin.Hydrology.csproj" />
     <ProjectReference Include="..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
   </ItemGroup>

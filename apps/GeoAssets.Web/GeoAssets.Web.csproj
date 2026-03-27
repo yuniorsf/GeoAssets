@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Web</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly"          Version="9.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.4" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Authentication.WebAssembly.Msal"            Version="9.0.4" />
+    <PackageReference Include="Blazored.LocalStorage"                                Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Active\GeoAssets.Provider.Active.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Observable\GeoAssets.Provider.Observable.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
+  </ItemGroup>
+
+</Project>

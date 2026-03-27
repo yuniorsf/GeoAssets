@@ -1,4 +1,3 @@
-using GeoAssets.Examples.Commands;
 using GeoAssets.Examples.Spatial;
 using GeoAssets.Examples.Topology;
 using GeoAssets.Examples.Workflow;
@@ -13,7 +12,7 @@ var examples = new (string Title, Func<Task> Run)[]
     ("02 · Hydraulic Network — BFS routing, connected components, ancestors",   () => { HydraulicNetwork.Run(); return Task.CompletedTask; }),
     ("03 · Road Graph        — bidirectional edges, shortest path, cycle check", () => { RoadGraph.Run();        return Task.CompletedTask; }),
     ("04 · Spatial Queries   — NTS within / intersects / nearby / buffer",      () => { SpatialQueries.Run();   return Task.CompletedTask; }),
-    ("05 · MEF Plugin Commands — command dispatch, built-in + external plugin", PluginCommands.RunAsync),
+    // ("05 · MEF Plugin Commands — command dispatch, built-in + external plugin", PluginCommands.RunAsync),
     ("06 · Custom Selection Strategy — layer-filter + network-impact background process", CustomSelectionStrategy.RunAsync),
 };
 
