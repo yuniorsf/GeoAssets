@@ -37,7 +37,7 @@ builder.Services.Configure<SessionConfig>(opts =>
     builder.Configuration.GetSection("Session").Bind(opts));
 builder.Services.AddScoped<SessionTimeoutService>();
 
-// ── Auth navigation (MSAL logout/login wrappers) ─────────────────────────────
+// ── Auth navigation (MSAL logout/login wrappers) ─────────────────────────────G
 builder.Services.AddScoped<IAuthNavigationService, MsalAuthNavigationService>();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
@@ -54,9 +54,15 @@ builder.Services.AddScoped<AppInsightsService>();
 builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppInsightsService>());
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
-builder.Services.AddSingleton<InMemoryAssetRepository>();
+
+// Repository pool — each entry owns an independent InMemoryAssetRepository.
+// The active entry is the editable workspace for all UI components.
+builder.Services.AddSingleton<IRepositoryPool, InMemoryRepositoryPool>();
+
+// Proxy follows the active pool entry; wrapped by the observable decorator.
+builder.Services.AddSingleton<ActiveRepositoryProxy>();
 builder.Services.AddSingleton<IAssetRepository>(sp => new ObservableAssetRepository(
-    sp.GetRequiredService<InMemoryAssetRepository>(),
+    sp.GetRequiredService<ActiveRepositoryProxy>(),
     sp.GetRequiredService<ILogger<ObservableAssetRepository>>()));
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();

@@ -333,6 +333,62 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 
 .search-bar input::placeholder { color: var(--text-secondary); }
 
+/* ─── Repository Pool Panel ─────────────────────────────────────────────── */
+
+.section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.section-header-row h6 { margin: 0; }
+
+.pool-entry-name {
+    flex: 1;
+    font-size: 0.87rem;
+    cursor: default;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pool-entry-name:hover   { color: var(--accent); }
+.pool-entry-active       { font-weight: 600; }
+
+.pool-entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.pool-name-input {
+    flex: 1;
+    font-size: 0.82rem;
+    padding: 1px 4px;
+    height: 24px;
+}
+
+.btn-icon--danger { color: var(--danger); }
+.btn-icon--danger:hover { background: color-mix(in srgb, var(--danger) 15%, transparent); }
+
+.pool-list { display: flex; flex-direction: column; gap: 2px; }
+
+.pool-entry {
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 4px 6px;
+    background: color-mix(in srgb, var(--panel-bg) 80%, transparent);
+}
+
+.pool-entry-msg {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin: 2px 0 0;
+    padding-left: 16px;
+}
+
 /* ─── Layer Manager ──────────────────────────────────────────────────────── */
 
 .layer-row {
@@ -357,6 +413,16 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 .attr-row .form-control { padding: 5px 8px; }
 
 /* ─── Import / Export Panel ─────────────────────────────────────────────── */
+
+.pool-active-label {
+    font-size: 0.73rem;
+    color: var(--accent);
+    margin: -4px 0 6px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 .import-export-panel {
     display: flex;

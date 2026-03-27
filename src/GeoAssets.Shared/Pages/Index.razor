@@ -8,9 +8,9 @@
 @using GeoAssets.Core.Models.Geometry
 @using GeoAssets.Core.Services
 @using GeoAssets.Shared.Components.Assets
-@using GeoAssets.Shared.Components.Import
 @using GeoAssets.Shared.Components.Layers
 @using GeoAssets.Shared.Components.Map
+@using GeoAssets.Shared.Components.Repositories
 @using GeoAssets.Shared.Components.Shared
 @implements IAsyncDisposable
 @inject IAssetRepository Repository
@@ -29,13 +29,13 @@
             <h1>GeoAssets</h1>
         </div>
 
+        <RepositoryPoolPanel MapDivId="@_mapDivId" />
+
         <LayerManager MapDivId="@_mapDivId" />
 
         <AssetList SelectedFeatureId="@_selectedFeature?.Id"
                    OnFeatureSelected="OnFeatureSelected"
                    OnFeatureDeleted="OnFeatureDeletedFromList" />
-
-        <ImportExportPanel MapDivId="@_mapDivId" />
 
         <!-- Sidebar footer — user info + logout -->
         <div class="sidebar-footer">

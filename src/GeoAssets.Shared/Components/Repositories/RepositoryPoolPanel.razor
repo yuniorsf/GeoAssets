@@ -1,0 +1,274 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.Extensions.Logging
+@inject IRepositoryPool Pool
+@inject IMapInterop MapInterop
+@inject IStorageService Storage
+@inject IAnalyticsService Analytics
+@inject ILogger<RepositoryPoolPanel> Logger
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["pool.title"]</h6>
+        <button class="btn-icon" title="@L["pool.newCollection"]" @onclick="StartAdd">＋</button>
+    </div>
+
+    <div class="pool-list">
+        @foreach (var entry in Pool.All)
+        {
+            var e   = entry;
+            var dot = e.IsEnabled ? "var(--success)" : "var(--text-secondary)";
+            var msg = _messages.TryGetValue(e.Id, out var m) ? m : string.Empty;
+
+            <div class="pool-entry">
+                <div class="layer-row">
+                    <span class="asset-color-dot" style="background:@dot;flex-shrink:0"></span>
+
+                    @if (_editingId == e.Id)
+                    {
+                        <input class="form-control pool-name-input"
+                               value="@_editingName"
+                               @onchange="ev => _editingName = ev.Value?.ToString() ?? e.Name"
+                               @onblur="() => CommitRename(e)"
+                               @onkeydown="ev => HandleRenameKey(ev, e)" />
+                    }
+                    else
+                    {
+                        <span class="pool-entry-name @(e.IsActive ? "pool-entry-active" : "")"
+                              @ondblclick="() => StartRename(e)">
+                            @e.Name@(e.IsActive ? $" {L["pool.active"]}" : "")
+                        </span>
+                    }
+
+                    <span class="pool-entry-actions">
+                        <!-- Export -->
+                        <button class="btn-icon" title="@L["import.export"]"
+                                @onclick="() => ExportEntryAsync(e)">📤</button>
+
+                        <!-- Import -->
+                        <label class="btn-icon" style="cursor:pointer" title="@L["import.import"]">
+                            📥
+                            <InputFile OnChange="ev => ImportFileAsync(ev, e)"
+                                       accept=".geojson,.json" style="display:none" />
+                        </label>
+
+                        <!-- Show / Hide -->
+                        <button class="btn-icon" title="@(e.IsEnabled ? L["pool.disable"] : L["pool.enable"])"
+                                @onclick="() => ToggleEnabledAsync(e)">
+                            @(e.IsEnabled ? "👁" : "🚫")
+                        </button>
+
+                        @if (!e.IsActive)
+                        {
+                            <button class="btn-icon" title="@L["pool.setActive"]"
+                                    @onclick="() => SetActiveAsync(e)">⭐</button>
+                            <button class="btn-icon btn-icon--danger" title="@L["pool.delete"]"
+                                    @onclick="() => RemoveEntryAsync(e)">✕</button>
+                        }
+                    </span>
+                </div>
+
+                @if (!string.IsNullOrEmpty(msg))
+                {
+                    <p class="pool-entry-msg">@msg</p>
+                }
+            </div>
+        }
+    </div>
+
+    @if (_addingNew)
+    {
+        <div class="attr-row" style="margin-top:8px">
+            <input class="form-control" placeholder="@L["pool.namePlaceholder"]"
+                   @bind="_newName" @onkeydown="HandleAddKey" />
+            <button class="btn btn-primary btn-sm" @onclick="CommitAdd" type="button">✓</button>
+            <button class="btn btn-secondary btn-sm" @onclick="CancelAdd" type="button">✕</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
+
+    private readonly Dictionary<Guid, string> _messages = [];
+    private bool   _addingNew;
+    private string _newName     = string.Empty;
+    private Guid?  _editingId;
+    private string _editingName = string.Empty;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        Pool.Changed += OnPoolChanged;
+    }
+
+    private void OnPoolChanged(object? _, EventArgs __) =>
+        InvokeAsync(StateHasChanged);
+
+    public override void Dispose()
+    {
+        Pool.Changed -= OnPoolChanged;
+        base.Dispose();
+    }
+
+    // ── Show / Hide ───────────────────────────────────────────────────────────
+
+    private async Task ToggleEnabledAsync(RepositoryEntry entry)
+    {
+        if (entry.IsEnabled)
+        {
+            Pool.Disable(entry.Id);
+            foreach (var f in entry.Repository.GetAll())
+                await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+        }
+        else
+        {
+            Pool.Enable(entry.Id);
+            foreach (var f in entry.Repository.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+        }
+    }
+
+    // ── Set active workspace ──────────────────────────────────────────────────
+
+    private async Task SetActiveAsync(RepositoryEntry entry)
+    {
+        Pool.SetActive(entry.Id);
+        await MapInterop.ClearAllFeaturesAsync(MapDivId);
+        foreach (var e in Pool.All.Where(e => e.IsEnabled))
+            foreach (var f in e.Repository.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    private async Task ExportEntryAsync(RepositoryEntry entry)
+    {
+        _messages[entry.Id] = string.Empty;
+        try
+        {
+            var collection = new GeoFeatureCollection
+            {
+                Features = [.. entry.Repository.GetAll()],
+                Metadata = new GeoFeatureCollectionMetadata
+                {
+                    Name       = entry.Name,
+                    AssetTypes = [.. entry.Repository.GetAssetTypes()]
+                }
+            };
+            var json     = await Storage.ExportToStringAsync(collection);
+            var safeName = entry.Name.ToLowerInvariant().Replace(" ", "-");
+            await Storage.SaveExportFileAsync(json, $"{safeName}-export.geojson");
+
+            _messages[entry.Id] = L["import.exportSuccess"];
+            Logger.LogInformation("Export — collection: {Name}, features: {Count}",
+                entry.Name, collection.Features.Count);
+        }
+        catch (Exception ex)
+        {
+            _messages[entry.Id] = L.GetString("import.errorExport", ex.Message);
+            Logger.LogError(ex, "Export failed — collection: {Name}", entry.Name);
+        }
+    }
+
+    // ── Import ────────────────────────────────────────────────────────────────
+
+    private async Task ImportFileAsync(InputFileChangeEventArgs ev, RepositoryEntry entry)
+    {
+        _messages[entry.Id] = string.Empty;
+        try
+        {
+            using var stream = ev.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            var imported = await Storage.ImportFromStringAsync(json);
+
+            foreach (var t in imported.Metadata.AssetTypes.Where(t => !t.IsBuiltIn))
+                entry.Repository.AddAssetType(t);
+
+            entry.Repository.AddRange(imported.Features);
+
+            if (entry.IsEnabled)
+                foreach (var f in imported.Features)
+                    await MapInterop.RenderFeatureAsync(MapDivId, f);
+
+            _messages[entry.Id] = L.GetString("import.successMsg", ev.File.Name, imported.Features.Count);
+
+            Logger.LogInformation("Import — collection: {Name}, file: {File}, features: {Count}",
+                entry.Name, ev.File.Name, imported.Features.Count);
+
+            Analytics.TrackEvent("import.completed", new
+            {
+                fileName     = ev.File.Name,
+                featureCount = imported.Features.Count,
+                collection   = entry.Name,
+                isActive     = entry.IsActive,
+                outcome      = "success"
+            });
+        }
+        catch (Exception ex)
+        {
+            _messages[entry.Id] = L.GetString("import.errorImport", ex.Message);
+            Logger.LogError(ex, "Import failed — collection: {Name}, file: {File}",
+                entry.Name, ev.File.Name);
+            Analytics.TrackException(ex.Message, new
+            {
+                fileName   = ev.File.Name,
+                collection = entry.Name,
+                outcome    = "failure"
+            });
+        }
+    }
+
+    // ── Add ───────────────────────────────────────────────────────────────────
+
+    private void StartAdd()   { _addingNew = true; _newName = string.Empty; }
+    private void CancelAdd()  { _addingNew = false; _newName = string.Empty; }
+
+    private void CommitAdd()
+    {
+        if (!string.IsNullOrWhiteSpace(_newName))
+            Pool.Add(_newName.Trim());
+        _addingNew = false;
+        _newName   = string.Empty;
+    }
+
+    private void HandleAddKey(KeyboardEventArgs ev)
+    {
+        if (ev.Key == "Enter")  CommitAdd();
+        if (ev.Key == "Escape") CancelAdd();
+    }
+
+    // ── Rename ────────────────────────────────────────────────────────────────
+
+    private void StartRename(RepositoryEntry entry)
+    {
+        _editingId   = entry.Id;
+        _editingName = entry.Name;
+    }
+
+    private void CommitRename(RepositoryEntry entry)
+    {
+        if (!string.IsNullOrWhiteSpace(_editingName))
+            Pool.Rename(entry.Id, _editingName.Trim());
+        _editingId = null;
+    }
+
+    private void HandleRenameKey(KeyboardEventArgs ev, RepositoryEntry entry)
+    {
+        if (ev.Key == "Enter")  CommitRename(entry);
+        if (ev.Key == "Escape") _editingId = null;
+    }
+
+    // ── Remove ────────────────────────────────────────────────────────────────
+
+    private async Task RemoveEntryAsync(RepositoryEntry entry)
+    {
+        if (entry.IsActive) return;
+        foreach (var f in entry.Repository.GetAll())
+            await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+        _messages.Remove(entry.Id);
+        Pool.Remove(entry.Id);
+    }
+}
