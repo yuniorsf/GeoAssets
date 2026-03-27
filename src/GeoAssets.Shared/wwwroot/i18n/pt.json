@@ -7,6 +7,7 @@
   "nav.language": "Idioma",
 
   "import.section": "Importar / Exportar",
+  "import.activeCollection": "Coleção: {0}",
   "import.export": "⬇ Exportar GeoJSON",
   "import.import": "⬆ Importar GeoJSON",
   "import.clearMap": "✕ Limpar mapa",
@@ -59,6 +60,17 @@
 
   "app.signOut": "Sair",
   "app.defaultUser": "Usuário",
+
+  "pool.title": "Coleções",
+  "pool.newCollection": "+ Nova coleção",
+  "pool.namePlaceholder": "Nome da coleção",
+  "pool.open": "Abrir no mapa",
+  "pool.close": "Fechar do mapa",
+  "pool.enable": "Mostrar",
+  "pool.disable": "Ocultar",
+  "pool.setActive": "Definir como espaço de trabalho",
+  "pool.delete": "Excluir coleção",
+  "pool.active": "★",
 
   "map.layers": "Camadas",
   "map.layers.deleteType": "Excluir tipo",
