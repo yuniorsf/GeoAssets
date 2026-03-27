@@ -78,5 +78,13 @@
   "map.layers.newType": "+ New type",
   "map.draw.point": "Point",
   "map.draw.line": "Line",
-  "map.draw.polygon": "Polygon"
+  "map.draw.polygon": "Polygon",
+
+  "pool.connectExternal": "Connect {0}",
+  "pool.connStrPlaceholder": "Connection name",
+  "pool.connStrHint": "Host=...;Database=...;Username=...;Password=...",
+  "pool.connStrRequired": "Connection string is required.",
+  "pool.connect": "Connect",
+  "pool.connecting": "Connecting…",
+  "pool.connectError": "Connection failed: {0}"
 }

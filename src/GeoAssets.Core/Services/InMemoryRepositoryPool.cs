@@ -43,6 +43,20 @@ public sealed class InMemoryRepositoryPool : IRepositoryPool
         return entry;
     }
 
+    public RepositoryEntry AddExternal(string name, IAssetRepository repository)
+    {
+        var entry = new RepositoryEntry
+        {
+            Name       = name,
+            IsOpen     = true,
+            IsEnabled  = true,
+            Repository = repository
+        };
+        _entries.Add(entry);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return entry;
+    }
+
     public void SetActive(Guid id)
     {
         foreach (var e in _entries) e.IsActive = e.Id == id;

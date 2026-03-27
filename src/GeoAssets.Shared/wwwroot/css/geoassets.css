@@ -389,6 +389,30 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     padding-left: 16px;
 }
 
+.pool-connect-dialog {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel-bg) 90%, var(--accent));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pool-connect-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0;
+}
+
+.pool-connstr-input {
+    font-size: 0.75rem;
+    resize: vertical;
+    min-height: 56px;
+}
+
 /* ─── Layer Manager ──────────────────────────────────────────────────────── */
 
 .layer-row {

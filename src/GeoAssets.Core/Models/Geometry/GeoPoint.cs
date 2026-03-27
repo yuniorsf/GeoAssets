@@ -43,12 +43,16 @@ public sealed class GeoPoint : GeoGeometry
 
     // ── Coordinates (JSON + convenience) ─────────────────────────────────────
 
-    /// <summary>[longitude, latitude] — RFC 7946 §3.1.2. Setting rebuilds the NTS point in WGS-84.</summary>
+    /// <summary>
+    /// [X, Y] position in the geometry's CRS.
+    /// For WGS-84 this is [longitude, latitude]; for projected CRS it is [easting, northing] (or similar).
+    /// Setting rebuilds the NTS point preserving the current SRID.
+    /// </summary>
     [JsonPropertyName("coordinates")]
     public double[] Coordinates
     {
         get => [_point.X, _point.Y];
-        set => _point = GeoFactory.Wgs84.CreatePoint(new NtsCoordinate(value[0], value[1]));
+        set => _point = GeoFactory.For(_point.SRID).CreatePoint(new NtsCoordinate(value[0], value[1]));
     }
 
     [JsonIgnore] public double Longitude => _point.X;
