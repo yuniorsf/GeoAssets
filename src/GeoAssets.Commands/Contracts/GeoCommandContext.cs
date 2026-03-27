@@ -6,7 +6,7 @@ namespace GeoAssets.Commands.Contracts;
 /// Passed to every handler execution — provides access to core GIS services
 /// without coupling handlers to specific implementations.
 /// </summary>
-public sealed class GeoCommandContext(IAssetRepository repository)
+public sealed class GeoCommandContext(IAssetProvider repository)
 {
-    public IAssetRepository Repository { get; } = repository;
+    public IAssetProvider Repository { get; } = repository;
 }

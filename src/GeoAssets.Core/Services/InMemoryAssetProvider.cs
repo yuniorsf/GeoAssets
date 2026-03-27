@@ -4,7 +4,7 @@ using GeoAssets.Core.Models.Geometry;
 
 namespace GeoAssets.Core.Services;
 
-public sealed class InMemoryAssetRepository : IAssetRepository
+public sealed class InMemoryAssetProvider : IAssetProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];

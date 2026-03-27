@@ -55,7 +55,7 @@ public static class HydraulicNetwork
 
         // ── 3. Load into repository ──────────────────────────────────────────────
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
         foreach (var f in new[] { embalse, bomba, colector, barrioNorte, barrioSur,
                                    cisterna, tanqueElevado, zonaIndustrial })
             repo.Add(f);

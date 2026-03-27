@@ -7,15 +7,15 @@ using Microsoft.Extensions.Logging;
 namespace GeoAssets.Shared.Services.Observability;
 
 /// <summary>
-/// Observable decorator for <see cref="IAssetRepository"/>.
+/// Observable decorator for <see cref="IAssetProvider"/>.
 /// Instruments <see cref="GetAll"/> with an OpenTelemetry span,
 /// a duration metric, and structured logging; all other members are
 /// forwarded to the inner repository without overhead.
 /// </summary>
-public sealed class ObservableAssetRepository(
-    IAssetRepository inner,
-    ILogger<ObservableAssetRepository> logger)
-    : ObservableDecoratorBase<ObservableAssetRepository>(logger), IAssetRepository
+public sealed class ObservableAssetProvider(
+    IAssetProvider inner,
+    ILogger<ObservableAssetProvider> logger)
+    : ObservableDecoratorBase<ObservableAssetProvider>(logger), IAssetProvider
 {
     // ── Instrumented ─────────────────────────────────────────────────────────
 

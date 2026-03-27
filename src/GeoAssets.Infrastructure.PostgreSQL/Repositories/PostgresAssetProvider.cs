@@ -11,16 +11,16 @@ using NetTopologySuite.Geometries;
 namespace GeoAssets.Infrastructure.PostgreSQL.Repositories;
 
 /// <summary>
-/// PostgreSQL + PostGIS implementation of <see cref="IAssetRepository"/>.
+/// PostgreSQL + PostGIS implementation of <see cref="IAssetProvider"/>.
 /// Each instance owns its own <see cref="GeoAssetsDbContext"/> (scoped to one
 /// logical collection / repository pool entry).
 /// Topology and spatial graph queries fall back to the NTS-backed helpers from
 /// <see cref="GeoAssets.Core.Services.TopoGraph"/>.
 /// </summary>
-public sealed class PostgresAssetRepository : IAssetRepository, IAsyncDisposable
+public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 {
     private readonly GeoAssetsDbContext _db;
-    private readonly ILogger<PostgresAssetRepository> _logger;
+    private readonly ILogger<PostgresAssetProvider> _logger;
 
     // In-memory cache — rebuilt on first use and after writes
     private Dictionary<string, GeoFeature>? _cache;
@@ -33,7 +33,7 @@ public sealed class PostgresAssetRepository : IAssetRepository, IAsyncDisposable
     public event EventHandler<string>? FeatureDeleted;
     public event EventHandler? CollectionChanged;
 
-    public PostgresAssetRepository(GeoAssetsDbContext db, ILogger<PostgresAssetRepository> logger)
+    public PostgresAssetProvider(GeoAssetsDbContext db, ILogger<PostgresAssetProvider> logger)
     {
         _db     = db;
         _logger = logger;
@@ -274,7 +274,7 @@ public sealed class PostgresAssetRepository : IAssetRepository, IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PostgresAssetRepository: SaveChanges failed");
+            _logger.LogError(ex, "PostgresAssetProvider: SaveChanges failed");
             throw;
         }
     }

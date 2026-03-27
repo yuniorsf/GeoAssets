@@ -2,7 +2,7 @@ namespace GeoAssets.Core.Interfaces;
 
 /// <summary>
 /// Implemented by infrastructure providers (PostgreSQL, SQLite, Azure Cosmos …)
-/// that can produce an <see cref="IAssetRepository"/> from a connection string.
+/// that can produce an <see cref="IAssetProvider"/> from a connection string.
 /// Register in DI; <c>RepositoryPoolPanel</c> discovers all registrations automatically.
 /// </summary>
 public interface IExternalRepositoryFactory
@@ -11,8 +11,8 @@ public interface IExternalRepositoryFactory
     string ProviderName { get; }
 
     /// <summary>
-    /// Creates and connects a new <see cref="IAssetRepository"/> instance.
+    /// Creates and connects a new <see cref="IAssetProvider"/> instance.
     /// Implementations may apply schema migrations before returning.
     /// </summary>
-    IAssetRepository Create(string connectionString);
+    IAssetProvider Create(string connectionString);
 }

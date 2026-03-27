@@ -5,24 +5,24 @@ using GeoAssets.Core.Models.Geometry;
 namespace GeoAssets.Core.Services;
 
 /// <summary>
-/// <see cref="IAssetRepository"/> proxy that transparently delegates to whichever
+/// <see cref="IAssetProvider"/> proxy that transparently delegates to whichever
 /// entry is currently <see cref="IRepositoryPool.Active"/>.
 ///
 /// When the active entry changes, the proxy re-wires its internal subscriptions
 /// and fires <see cref="CollectionChanged"/> so all UI consumers (AssetList, AssetForm, etc.)
 /// refresh without knowing a switch occurred.
 /// </summary>
-public sealed class ActiveRepositoryProxy : IAssetRepository
+public sealed class ActiveAssetProvider : IAssetProvider
 {
     private readonly IRepositoryPool _pool;
-    private IAssetRepository _current;
+    private IAssetProvider _current;
 
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;
     public event EventHandler<string>?     FeatureDeleted;
     public event EventHandler?             CollectionChanged;
 
-    public ActiveRepositoryProxy(IRepositoryPool pool)
+    public ActiveAssetProvider(IRepositoryPool pool)
     {
         _pool    = pool;
         _current = pool.Active.Repository;
@@ -40,7 +40,7 @@ public sealed class ActiveRepositoryProxy : IAssetRepository
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void Subscribe(IAssetRepository repo)
+    private void Subscribe(IAssetProvider repo)
     {
         repo.FeatureAdded      += OnFeatureAdded;
         repo.FeatureUpdated    += OnFeatureUpdated;
@@ -48,7 +48,7 @@ public sealed class ActiveRepositoryProxy : IAssetRepository
         repo.CollectionChanged += OnCollectionChanged;
     }
 
-    private void Unsubscribe(IAssetRepository repo)
+    private void Unsubscribe(IAssetProvider repo)
     {
         repo.FeatureAdded      -= OnFeatureAdded;
         repo.FeatureUpdated    -= OnFeatureUpdated;

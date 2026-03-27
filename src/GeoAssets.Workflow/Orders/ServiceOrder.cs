@@ -43,7 +43,7 @@ public sealed class ServiceOrder : IServiceOrder
     /// Stable IDs of the features attached to this order.
     /// Populated when loading from a repository that does not hydrate full
     /// <see cref="GeoFeature"/> objects (e.g. the EF repository without an
-    /// <c>IAssetRepository</c>).  Otherwise derived from <see cref="Features"/>.
+    /// <c>IAssetProvider</c>).  Otherwise derived from <see cref="Features"/>.
     /// </summary>
     public string[] FeatureIds { get; set; } = [];
 

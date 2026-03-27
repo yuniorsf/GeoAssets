@@ -21,7 +21,7 @@ public static class WorkflowEFCoreServiceExtensions
     ///       o.UseSqlServer(configuration.GetConnectionString("Workflow")));
     /// </code>
     ///
-    /// If an <see cref="IAssetRepository"/> is already registered in the container it
+    /// If an <see cref="IAssetProvider"/> is already registered in the container it
     /// will be injected automatically to hydrate features on order load.
     /// </summary>
     public static IServiceCollection AddWorkflowPersistence(
@@ -33,7 +33,7 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IServiceOrderRepository>(sp =>
             new EFServiceOrderRepository(
                 sp.GetRequiredService<ServiceOrderDbContext>(),
-                sp.GetService<IAssetRepository>()));
+                sp.GetService<IAssetProvider>()));
 
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
 

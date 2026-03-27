@@ -10,7 +10,7 @@ namespace GeoAssets.Workflow.Selection;
 public interface IFeatureSelectionContext
 {
     /// <summary>The full asset repository — strategies query it to resolve features.</summary>
-    IAssetRepository Repository { get; }
+    IAssetProvider Repository { get; }
 
     /// <summary>
     /// The order being populated. Useful for strategies that inspect

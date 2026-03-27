@@ -15,10 +15,10 @@ namespace GeoAssets.Shared.Services;
 public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 {
     private readonly IJSRuntime _js;
-    private readonly IAssetRepository _repo;
+    private readonly IAssetProvider _repo;
     private const string Ns = "GeoAssets"; // window.GeoAssets
 
-    public MapInteropService(IJSRuntime js, IAssetRepository repo)
+    public MapInteropService(IJSRuntime js, IAssetProvider repo)
     {
         _js = js;
         _repo = repo;

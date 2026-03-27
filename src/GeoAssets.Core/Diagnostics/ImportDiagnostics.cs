@@ -49,7 +49,7 @@ public static class ImportDiagnostics
     public static readonly Histogram<double> GetAllDurationMs =
         _meter.CreateHistogram<double>(
             "geoassets.repository.getall_duration_ms", "ms",
-            "Duration of IAssetRepository.GetAll.");
+            "Duration of IAssetProvider.GetAll.");
 
     /// <summary>Duration of the <c>MapInterop.RenderAllFeaturesAsync</c> JS interop call, in milliseconds.</summary>
     public static readonly Histogram<double> RenderDurationMs =

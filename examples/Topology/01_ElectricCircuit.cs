@@ -44,7 +44,7 @@ public static class ElectricCircuit
 
         // ── 3. Load into repository ──────────────────────────────────────────────
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
         foreach (var f in new[] { generator, transformer, cableA, junction, loadFactory, loadHospital })
             repo.Add(f);
 

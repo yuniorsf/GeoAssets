@@ -55,15 +55,15 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
 
-// Repository pool — each entry owns an independent InMemoryAssetRepository.
+// Repository pool — each entry owns an independent InMemoryAssetProvider.
 // The active entry is the editable workspace for all UI components.
 builder.Services.AddSingleton<IRepositoryPool, InMemoryRepositoryPool>();
 
 // Proxy follows the active pool entry; wrapped by the observable decorator.
-builder.Services.AddSingleton<ActiveRepositoryProxy>();
-builder.Services.AddSingleton<IAssetRepository>(sp => new ObservableAssetRepository(
-    sp.GetRequiredService<ActiveRepositoryProxy>(),
-    sp.GetRequiredService<ILogger<ObservableAssetRepository>>()));
+builder.Services.AddSingleton<ActiveAssetProvider>();
+builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
+    sp.GetRequiredService<ActiveAssetProvider>(),
+    sp.GetRequiredService<ILogger<ObservableAssetProvider>>()));
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();
 

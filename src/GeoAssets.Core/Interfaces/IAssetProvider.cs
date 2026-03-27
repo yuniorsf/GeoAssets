@@ -3,7 +3,7 @@ using GeoAssets.Core.Models.Geometry;
 
 namespace GeoAssets.Core.Interfaces;
 
-public interface IAssetRepository
+public interface IAssetProvider
 {
     GeoFeature? GetById(string id);
     IReadOnlyList<GeoFeature> GetAll();

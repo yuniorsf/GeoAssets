@@ -6,7 +6,7 @@ namespace GeoAssets.Workflow.Selection;
 /// <summary>Default concrete implementation of <see cref="IFeatureSelectionContext"/>.</summary>
 public sealed class FeatureSelectionContext : IFeatureSelectionContext
 {
-    public IAssetRepository             Repository       { get; init; } = null!;
+    public IAssetProvider             Repository       { get; init; } = null!;
     public IServiceOrder?               TargetOrder      { get; init; }
     public IServiceOrderRepository?     OrderRepository  { get; init; }
     public IReadOnlyDictionary<string, object> Parameters { get; init; } =

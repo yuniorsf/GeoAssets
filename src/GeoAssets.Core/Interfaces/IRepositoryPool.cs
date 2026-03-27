@@ -17,9 +17,9 @@ public interface IRepositoryPool
 
     /// <summary>
     /// Wraps an externally created repository (e.g. PostgreSQL-backed) in a pool entry.
-    /// Use this to connect any <see cref="IAssetRepository"/> implementation to the map.
+    /// Use this to connect any <see cref="IAssetProvider"/> implementation to the map.
     /// </summary>
-    RepositoryEntry AddExternal(string name, IAssetRepository repository);
+    RepositoryEntry AddExternal(string name, IAssetProvider repository);
 
     /// <summary>Makes the given entry the active workspace; opens and enables it if needed.</summary>
     void SetActive(Guid id);

@@ -8,7 +8,7 @@ namespace GeoAssets.Workflow.Persistence;
 /// <summary>
 /// EF Core implementation of <see cref="IServiceOrderRepository"/>.
 ///
-/// Features are stored as a JSON array of IDs. Pass an <see cref="IAssetRepository"/>
+/// Features are stored as a JSON array of IDs. Pass an <see cref="IAssetProvider"/>
 /// to hydrate full <see cref="GeoAssets.Core.Models.GeoFeature"/> objects on load;
 /// when omitted, <see cref="ServiceOrder.Features"/> will be empty and IDs are
 /// still accessible via <see cref="ServiceOrder.FeatureIds"/>.
@@ -16,9 +16,9 @@ namespace GeoAssets.Workflow.Persistence;
 public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDisposable
 {
     private readonly ServiceOrderDbContext _db;
-    private readonly IAssetRepository?    _assets;
+    private readonly IAssetProvider?    _assets;
 
-    public EFServiceOrderRepository(ServiceOrderDbContext db, IAssetRepository? assets = null)
+    public EFServiceOrderRepository(ServiceOrderDbContext db, IAssetProvider? assets = null)
     {
         _db     = db;
         _assets = assets;

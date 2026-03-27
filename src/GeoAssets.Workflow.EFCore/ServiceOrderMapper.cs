@@ -11,7 +11,7 @@ namespace GeoAssets.Workflow.Persistence;
 /// Converts between the domain <see cref="ServiceOrder"/> and the EF entity
 /// <see cref="ServiceOrderRecord"/> (plus its children).
 ///
-/// Features are stored as a JSON array of IDs. Pass an <see cref="IAssetRepository"/>
+/// Features are stored as a JSON array of IDs. Pass an <see cref="IAssetProvider"/>
 /// to <see cref="ToDomain"/> to hydrate them; otherwise <see cref="ServiceOrder.Features"/>
 /// will be empty and the IDs are available via <see cref="ServiceOrder.FeatureIds"/>.
 /// </summary>
@@ -89,7 +89,7 @@ internal static class ServiceOrderMapper
     public static ServiceOrder ToDomain(
         ServiceOrderRecord record,
         IReadOnlyList<string> childIds,
-        IAssetRepository? assets = null)
+        IAssetProvider? assets = null)
     {
         var featureIds = DeserializeOrDefault<string[]>(record.FeatureIdsJson, []);
         var attributes = DeserializeOrDefault<Dictionary<string, string>>(record.AttributesJson, []);

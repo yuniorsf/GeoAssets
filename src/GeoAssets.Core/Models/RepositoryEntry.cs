@@ -4,7 +4,7 @@ namespace GeoAssets.Core.Models;
 
 /// <summary>
 /// Represents one named collection in the repository pool.
-/// Each entry owns an independent <see cref="IAssetRepository"/> and carries
+/// Each entry owns an independent <see cref="IAssetProvider"/> and carries
 /// its display state (open on map, visible, active for editing).
 /// </summary>
 public sealed class RepositoryEntry
@@ -21,5 +21,5 @@ public sealed class RepositoryEntry
     /// <summary>This is the editable workspace; all writes from the UI target this entry.</summary>
     public bool IsActive  { get; set; }
 
-    public IAssetRepository Repository { get; init; } = null!;
+    public IAssetProvider Repository { get; init; } = null!;
 }

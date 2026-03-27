@@ -52,7 +52,7 @@ public static class RoadGraph
 
         // ── 3. Load into repository ──────────────────────────────────────────────
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
         foreach (var f in new[] { centro, universidad, hospital, aeropuerto, zonaFranca, puerto })
             repo.Add(f);
 

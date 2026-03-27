@@ -33,7 +33,7 @@ public static class SpatialQueries
         var monument  = PointFeature("Monumento",         (-69.91,  18.47)); // inside park
         var station   = PointFeature("Estación Metro",    (-69.87,  18.47)); // far from park
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
         foreach (var f in new[] { parkBoundary, mainRoad, hospital, school, monument, station })
             repo.Add(f);
 

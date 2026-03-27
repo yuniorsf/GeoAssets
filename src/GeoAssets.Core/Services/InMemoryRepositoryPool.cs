@@ -6,7 +6,7 @@ namespace GeoAssets.Core.Services;
 /// <summary>
 /// In-memory implementation of <see cref="IRepositoryPool"/>.
 /// Creates one default active entry on construction; additional entries
-/// each own an independent <see cref="InMemoryAssetRepository"/>.
+/// each own an independent <see cref="InMemoryAssetProvider"/>.
 /// </summary>
 public sealed class InMemoryRepositoryPool : IRepositoryPool
 {
@@ -22,7 +22,7 @@ public sealed class InMemoryRepositoryPool : IRepositoryPool
             IsOpen     = true,
             IsEnabled  = true,
             IsActive   = true,
-            Repository = new InMemoryAssetRepository()
+            Repository = new InMemoryAssetProvider()
         });
     }
 
@@ -36,14 +36,14 @@ public sealed class InMemoryRepositoryPool : IRepositoryPool
             Name       = name,
             IsOpen     = true,
             IsEnabled  = true,
-            Repository = new InMemoryAssetRepository()
+            Repository = new InMemoryAssetProvider()
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
         return entry;
     }
 
-    public RepositoryEntry AddExternal(string name, IAssetRepository repository)
+    public RepositoryEntry AddExternal(string name, IAssetProvider repository)
     {
         var entry = new RepositoryEntry
         {

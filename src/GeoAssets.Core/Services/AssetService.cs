@@ -9,12 +9,12 @@ namespace GeoAssets.Core.Services;
 /// </summary>
 public sealed class AssetService : IAssetService
 {
-    private readonly IAssetRepository _repository;
+    private readonly IAssetProvider _repository;
     private readonly IStorageService _storage;
     private CancellationTokenSource _saveCts = new();
     private string _collectionName = "Mis Activos GIS";
 
-    public AssetService(IAssetRepository repository, IStorageService storage)
+    public AssetService(IAssetProvider repository, IStorageService storage)
     {
         _repository = repository;
         _storage = storage;

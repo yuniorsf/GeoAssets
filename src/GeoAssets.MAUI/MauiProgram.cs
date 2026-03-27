@@ -27,7 +27,7 @@ public static class MauiProgram
 #endif
 
         // GeoAssets services
-        builder.Services.AddSingleton<IAssetRepository, InMemoryAssetRepository>();
+        builder.Services.AddSingleton<IAssetProvider, InMemoryAssetProvider>();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
         builder.Services.AddScoped<IMapInterop, MapInteropService>();
         builder.Services.AddScoped<AssetService>();

@@ -7,17 +7,17 @@ using Microsoft.Extensions.Logging;
 namespace GeoAssets.Infrastructure.PostgreSQL;
 
 /// <summary>
-/// Creates <see cref="IAssetRepository"/> instances backed by PostgreSQL + PostGIS.
+/// Creates <see cref="IAssetProvider"/> instances backed by PostgreSQL + PostGIS.
 /// Each call to <see cref="Create"/> opens a new <see cref="GeoAssetsDbContext"/>
 /// pointing at the supplied connection string and applies any pending migrations automatically.
 /// </summary>
 public interface IPostgresRepositoryFactory
 {
     /// <summary>
-    /// Builds a connected <see cref="PostgresAssetRepository"/> for the given connection string.
+    /// Builds a connected <see cref="PostgresAssetProvider"/> for the given connection string.
     /// Throws on invalid connection strings or unreachable hosts.
     /// </summary>
-    IAssetRepository Create(string connectionString);
+    IAssetProvider Create(string connectionString);
 }
 
 public sealed class PostgresRepositoryFactory(ILoggerFactory loggerFactory)
@@ -25,18 +25,18 @@ public sealed class PostgresRepositoryFactory(ILoggerFactory loggerFactory)
 {
     public string ProviderName => "PostgreSQL";
 
-    public IAssetRepository Create(string connectionString)
+    public IAssetProvider Create(string connectionString)
     {
         var options = new DbContextOptionsBuilder<GeoAssetsDbContext>()
             .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
             .Options;
 
         var db     = new GeoAssetsDbContext(options);
-        var logger = loggerFactory.CreateLogger<PostgresAssetRepository>();
+        var logger = loggerFactory.CreateLogger<PostgresAssetProvider>();
 
         // Apply any pending migrations (idempotent)
         db.Database.Migrate();
 
-        return new PostgresAssetRepository(db, logger);
+        return new PostgresAssetProvider(db, logger);
     }
 }

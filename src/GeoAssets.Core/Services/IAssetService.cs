@@ -1,7 +1,7 @@
 namespace GeoAssets.Core.Services;
 
 /// <summary>
-/// Application-level facade over <see cref="IAssetRepository"/> and
+/// Application-level facade over <see cref="IAssetProvider"/> and
 /// <see cref="GeoAssets.Core.Interfaces.IStorageService"/>.
 ///
 /// Concrete implementation: <see cref="AssetService"/>.
