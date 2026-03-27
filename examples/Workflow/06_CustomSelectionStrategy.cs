@@ -25,6 +25,7 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.InMemory;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Selection;
 using GeoAssets.Workflow.Selection.Strategies;
@@ -37,7 +38,7 @@ public static class CustomSelectionStrategy
     {
         // ── 1. Preparar el repositorio con dos capas de activos ──────────────
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
 
         // Capa eléctrica
         var subestacion   = Node("Subestación",          -66.90, 10.50, "electrica");

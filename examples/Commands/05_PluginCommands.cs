@@ -21,6 +21,7 @@ using GeoAssets.Commands.Contracts;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.InMemory;
 using GeoAssets.Plugin.Hydrology;
 
 namespace GeoAssets.Examples.Commands;
@@ -42,7 +43,7 @@ public static class PluginCommands
         Connect(valve1, tank,     "water-flow", 0.5);
         Connect(tank,   district, "water-flow", 0.3);
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
         foreach (var f in new[] { pump, valve1, valve2, tank, district })
             repo.Add(f);
 

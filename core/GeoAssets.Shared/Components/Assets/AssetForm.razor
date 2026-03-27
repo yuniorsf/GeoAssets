@@ -1,0 +1,86 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Models
+@using GeoAssets.Core.Interfaces
+@inject IAssetProvider Repository
+
+@if (Feature is not null)
+{
+    <div>
+        <h5>@(IsNew ? L["form.newAsset"] : L["form.editAsset"])</h5>
+
+        <EditForm Model="@Feature.Properties" OnValidSubmit="HandleSave">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>@L["assets.name"]</label>
+                <InputText class="form-control"
+                           @bind-Value="Feature.Properties.Name"
+                           placeholder="@L["form.namePlaceholder"]" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["form.type"]</label>
+                <InputSelect class="form-control" @bind-Value="Feature.Properties.AssetTypeId">
+                    @foreach (var t in Repository.GetAssetTypes())
+                    {
+                        <option value="@t.Id.ToString()">@t.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>@L["assets.description"]</label>
+                <InputTextArea class="form-control"
+                               @bind-Value="Feature.Properties.Description"
+                               rows="3"
+                               placeholder="@L["form.descriptionPlaceholder"]" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["form.geometry"]</label>
+                <input class="form-control" readonly
+                       value="@GeometryLabel" />
+            </div>
+
+            <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public GeoFeature? Feature { get; set; }
+    [Parameter] public bool IsNew { get; set; }
+    [Parameter] public EventCallback<GeoFeature> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string GeometryLabel => Feature?.Geometry switch
+    {
+        Core.Models.Geometry.GeoPoint      => L["map.draw.point"],
+        Core.Models.Geometry.GeoLineString => L["map.draw.line"],
+        Core.Models.Geometry.GeoPolygon    => L["map.draw.polygon"],
+        _                                  => "—"
+    };
+
+    private async Task HandleSave()
+    {
+        if (Feature is null) return;
+        Feature.Properties.UpdatedAt = DateTime.UtcNow;
+
+        if (IsNew)
+            Repository.Add(Feature);
+        else
+            Repository.Update(Feature);
+
+        await OnSave.InvokeAsync(Feature);
+    }
+
+    /// <summary>Allows a parent component to programmatically submit the form (e.g. from a context menu).</summary>
+    public Task SaveAsync() => HandleSave();
+
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+}

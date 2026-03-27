@@ -21,6 +21,7 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.InMemory;
 
 namespace GeoAssets.Examples.Topology;
 
@@ -52,7 +53,7 @@ public static class RoadGraph
 
         // ── 3. Load into repository ──────────────────────────────────────────────
 
-        var repo = new InMemoryAssetRepository();
+        var repo = new InMemoryAssetProvider();
         foreach (var f in new[] { centro, universidad, hospital, aeropuerto, zonaFranca, puerto })
             repo.Add(f);
 

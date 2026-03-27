@@ -1,0 +1,241 @@
+@page "/"
+@attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models
+@using GeoAssets.Core.Models.Geometry
+@using GeoAssets.Core.Services
+@using GeoAssets.Shared.Components.Assets
+@using GeoAssets.Shared.Components.Layers
+@using GeoAssets.Shared.Components.Map
+@using GeoAssets.Shared.Components.Repositories
+@using GeoAssets.Shared.Components.Shared
+@implements IAsyncDisposable
+@inject IAssetProvider Repository
+@inject AssetService AssetSvc
+@inject IMapInterop MapInterop
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IAuthNavigationService AuthNav
+
+<div class="geoassets-app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <span style="font-size:1.4rem">🗺️</span>
+            <h1>GeoAssets</h1>
+        </div>
+
+        <RepositoryPoolPanel MapDivId="@_mapDivId" />
+
+        <LayerManager MapDivId="@_mapDivId" />
+
+        <AssetList SelectedFeatureId="@_selectedFeature?.Id"
+                   OnFeatureSelected="OnFeatureSelected"
+                   OnFeatureDeleted="OnFeatureDeletedFromList" />
+
+        <!-- Sidebar footer — user info + logout -->
+        <div class="sidebar-footer">
+            <div class="sidebar-footer-user">
+                <span class="sidebar-footer-avatar">👤</span>
+                <span class="sidebar-footer-name">@_userDisplayName</span>
+            </div>
+            <button class="sidebar-footer-logout" title="@L["app.signOut"]" @onclick="SignOut">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Map Area -->
+    <main class="map-area">
+        <DrawToolbar @ref="_drawToolbar"
+                     MapDivId="@_mapDivId"
+                     OnDrawModeChanged="OnDrawModeChanged" />
+
+        <MapContainer @ref="_mapContainer"
+                      DivId="@_mapDivId"
+                      InitLat="18.5"
+                      InitLon="-69.9"
+                      InitZoom="7"
+                      OnFeatureDrawn="OnFeatureDrawn"
+                      OnFeatureEdited="OnFeatureEdited"
+                      OnFeatureClicked="OnFeatureClicked"
+                      OnFeatureContextMenu="OnFeatureContextMenu" />
+    </main>
+
+    <!-- Properties Panel -->
+    @if (_selectedFeature is not null)
+    {
+        <div class="properties-panel">
+            <AssetForm @ref="_assetForm"
+                       Feature="@_selectedFeature"
+                       IsNew="@_isNewFeature"
+                       OnSave="OnFeatureSaved"
+                       OnCancel="ClosePanel" />
+        </div>
+    }
+</div>
+
+<!-- Map context menu (rendered outside map-area so fixed positioning works correctly) -->
+<MapContextMenu Visible="_contextVisible"
+                X="_contextX"
+                Y="_contextY"
+                ShowSave="_selectedFeature?.Id == _contextFeatureId"
+                OnEdit="ContextMenuEdit"
+                OnSave="ContextMenuSave"
+                OnDelete="ContextMenuDelete"
+                OnClose="CloseContextMenu" />
+
+<!-- Delete confirmation triggered from context menu -->
+<ConfirmDialog Visible="_showDeleteConfirm"
+               Title="@L["assets.deleteTitle"]"
+               Message="@L.GetString("assets.deleteConfirm", _pendingDeleteName)"
+               ConfirmLabel="@L["assets.delete"]"
+               OnConfirm="ConfirmContextDelete"
+               OnCancel="() => { _showDeleteConfirm = false; StateHasChanged(); }" />
+
+@code {
+    private const string _mapDivId = "geoassets-map";
+
+    private MapContainer? _mapContainer;
+    private DrawToolbar?  _drawToolbar;
+    private AssetForm?    _assetForm;
+
+    private GeoFeature? _selectedFeature;
+    private bool _isNewFeature;
+
+    private string _userDisplayName = string.Empty;
+
+    // ─── Context menu state ────────────────────────────────────────────────
+
+    private bool   _contextVisible;
+    private string _contextFeatureId = string.Empty;
+    private double _contextX;
+    private double _contextY;
+
+    private bool   _showDeleteConfirm;
+    private string _pendingDeleteId   = string.Empty;
+    private string _pendingDeleteName = string.Empty;
+
+    // ─── Init ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AssetSvc.InitializeAsync();
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user  = state.User;
+        _userDisplayName = user.FindFirst("name")?.Value
+                        ?? user.FindFirst("preferred_username")?.Value
+                        ?? user.Identity?.Name
+                        ?? L["app.defaultUser"];
+    }
+
+    private void SignOut() => AuthNav.NavigateToLogout();
+
+    // ─── Draw events ──────────────────────────────────────────────────────
+
+    private void OnDrawModeChanged(GeometryType? mode)
+    {
+        if (mode.HasValue) ClosePanel();
+    }
+
+    private void OnFeatureDrawn(GeoFeature feature)
+    {
+        _selectedFeature = feature;
+        _isNewFeature = true;
+        _drawToolbar?.ResetMode();
+        StateHasChanged();
+    }
+
+    private void OnFeatureEdited(GeoFeature feature) => StateHasChanged();
+
+    // ─── Selection / click ────────────────────────────────────────────────
+
+    private async Task OnFeatureSelected(GeoFeature feature)
+    {
+        _selectedFeature = feature;
+        _isNewFeature = false;
+        StateHasChanged();
+        await (_mapContainer?.PanToFeatureAsync(feature.Id) ?? Task.CompletedTask);
+    }
+
+    private async Task OnFeatureClicked(string featureId)
+    {
+        var feature = Repository.GetById(featureId);
+        if (feature is not null)
+            await OnFeatureSelected(feature);
+    }
+
+    // ─── Context menu ─────────────────────────────────────────────────────
+
+    private void OnFeatureContextMenu((string FeatureId, double X, double Y) ctx)
+    {
+        _contextFeatureId = ctx.FeatureId;
+        _contextX         = ctx.X;
+        _contextY         = ctx.Y;
+        _contextVisible   = true;
+        StateHasChanged();
+    }
+
+    private void CloseContextMenu()
+    {
+        _contextVisible = false;
+        StateHasChanged();
+    }
+
+    private async Task ContextMenuEdit()
+    {
+        var feature = Repository.GetById(_contextFeatureId);
+        if (feature is not null)
+            await OnFeatureSelected(feature);
+    }
+
+    private async Task ContextMenuSave()
+    {
+        if (_assetForm is not null)
+            await _assetForm.SaveAsync();
+    }
+
+    private void ContextMenuDelete()
+    {
+        var feature = Repository.GetById(_contextFeatureId);
+        if (feature is null) return;
+        _pendingDeleteId   = feature.Id;
+        _pendingDeleteName = string.IsNullOrEmpty(feature.Properties.Name)
+            ? L["assets.noName"]
+            : feature.Properties.Name;
+        _showDeleteConfirm = true;
+        StateHasChanged();
+    }
+
+    private void ConfirmContextDelete()
+    {
+        if (!string.IsNullOrEmpty(_pendingDeleteId))
+        {
+            Repository.Delete(_pendingDeleteId);
+            if (_selectedFeature?.Id == _pendingDeleteId)
+                ClosePanel();
+        }
+        _pendingDeleteId   = string.Empty;
+        _pendingDeleteName = string.Empty;
+        _showDeleteConfirm = false;
+        StateHasChanged();
+    }
+
+    // ─── Form actions ─────────────────────────────────────────────────────
+
+    private void OnFeatureSaved(GeoFeature _) => ClosePanel();
+    private void OnFeatureDeletedFromList(GeoFeature _) => ClosePanel();
+    private void ClosePanel() { _selectedFeature = null; StateHasChanged(); }
+
+    public async ValueTask DisposeAsync() => await AssetSvc.DisposeAsync();
+}

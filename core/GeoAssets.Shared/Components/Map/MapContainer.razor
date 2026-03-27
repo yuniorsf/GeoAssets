@@ -1,0 +1,118 @@
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models
+@using GeoAssets.Core.Models.Geometry
+@using GeoAssets.Core.Services
+@using GeoAssets.Shared.Interfaces
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@implements IDisposable
+@inject IMapInterop MapInterop
+@inject IAssetProvider Repository
+
+<div id="@DivId" class="leaflet-map-container"></div>
+
+@code {
+    [Parameter] public string DivId { get; set; } = "geoassets-map";
+    [Parameter] public double InitLat { get; set; } = 20.0;
+    [Parameter] public double InitLon { get; set; } = -77.0;
+    [Parameter] public int InitZoom { get; set; } = 5;
+
+    [Parameter] public EventCallback<GeoFeature> OnFeatureDrawn { get; set; }
+    [Parameter] public EventCallback<GeoFeature> OnFeatureEdited { get; set; }
+    [Parameter] public EventCallback<string> OnFeatureClicked { get; set; }
+    [Parameter] public EventCallback<(string FeatureId, double X, double Y)> OnFeatureContextMenu { get; set; }
+
+    // Use DotNetObjectReference<object> to avoid generic covariance issue
+    private DotNetObjectReference<object>? _dotNetRef;
+    private bool _initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialized) return;
+        _initialized = true;
+
+        _dotNetRef = DotNetObjectReference.Create((object)this);
+        await MapInterop.InitializeMapAsync(DivId, InitLat, InitLon, InitZoom);
+        await MapInterop.RegisterEventHandlersAsync(DivId, _dotNetRef);
+
+        var features = Repository.GetAll();
+        if (features.Count > 0)
+            await MapInterop.RenderAllFeaturesAsync(DivId, features);
+
+        Repository.FeatureAdded   += OnFeatureAdded;
+        Repository.FeatureUpdated += OnFeatureUpdated;
+        Repository.FeatureDeleted += OnFeatureDeletedFromRepo;
+    }
+
+    // ─── Repository event handlers ────────────────────────────────────────
+
+    private void OnFeatureAdded(object? _, GeoFeature f)   =>
+        InvokeAsync(() => MapInterop.RenderFeatureAsync(DivId, f));
+
+    private void OnFeatureUpdated(object? _, GeoFeature f) =>
+        InvokeAsync(() => MapInterop.RenderFeatureAsync(DivId, f));
+
+    private void OnFeatureDeletedFromRepo(object? _, string id) =>
+        InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
+
+    // ─── JS → .NET callbacks ─────────────────────────────────────────────
+
+    [JSInvokable("OnFeatureDrawnFromJs")]
+    public async Task OnFeatureDrawnFromJs(string geoJson)
+    {
+        var feature = GeoJsonSerializer.DeserializeFeature(geoJson);
+        if (feature is null) return;
+
+        feature.Properties.AssetTypeId = feature.Geometry switch
+        {
+            GeoLineString => AssetType.Line.Id.ToString(),
+            GeoPolygon    => AssetType.Area.Id.ToString(),
+            _             => AssetType.Point.Id.ToString()
+        };
+
+        await OnFeatureDrawn.InvokeAsync(feature);
+    }
+
+    [JSInvokable("OnFeatureEditedFromJs")]
+    public async Task OnFeatureEditedFromJs(string featureId, string geometryJson)
+    {
+        var feature = Repository.GetById(featureId);
+        if (feature is null) return;
+
+        var newGeometry = GeoJsonSerializer.DeserializeGeometry(geometryJson);
+        if (newGeometry is not null)
+        {
+            feature.Geometry = newGeometry;
+            Repository.Update(feature);
+            await OnFeatureEdited.InvokeAsync(feature);
+        }
+    }
+
+    [JSInvokable("OnFeatureClickedFromJs")]
+    public async Task OnFeatureClickedFromJs(string featureId) =>
+        await OnFeatureClicked.InvokeAsync(featureId);
+
+    [JSInvokable("OnFeatureContextMenuFromJs")]
+    public async Task OnFeatureContextMenuFromJs(string featureId, double x, double y) =>
+        await OnFeatureContextMenu.InvokeAsync((featureId, x, y));
+
+    public Task PanToFeatureAsync(string featureId) =>
+        MapInterop.PanToFeatureAsync(DivId, featureId);
+
+    // ─── Dispose ──────────────────────────────────────────────────────────
+
+    public void Dispose()
+    {
+        Repository.FeatureAdded   -= OnFeatureAdded;
+        Repository.FeatureUpdated -= OnFeatureUpdated;
+        Repository.FeatureDeleted -= OnFeatureDeletedFromRepo;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Dispose();
+        if (_initialized)
+            await MapInterop.DestroyMapAsync(DivId);
+        _dotNetRef?.Dispose();
+    }
+}
