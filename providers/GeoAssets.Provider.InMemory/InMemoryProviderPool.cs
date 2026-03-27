@@ -4,53 +4,53 @@ using GeoAssets.Core.Models;
 namespace GeoAssets.Provider.InMemory;
 
 /// <summary>
-/// In-memory implementation of <see cref="IRepositoryPool"/>.
+/// In-memory implementation of <see cref="IProviderPool"/>.
 /// Creates one default active entry on construction; additional entries
 /// each own an independent <see cref="InMemoryAssetProvider"/>.
 /// </summary>
-public sealed class InMemoryRepositoryPool : IRepositoryPool
+public sealed class InMemoryRepositoryPool : IProviderPool
 {
-    private readonly List<RepositoryEntry> _entries = [];
+    private readonly List<ProviderEntry> _entries = [];
 
     public event EventHandler? Changed;
 
     public InMemoryRepositoryPool()
     {
-        _entries.Add(new RepositoryEntry
+        _entries.Add(new ProviderEntry
         {
             Name       = "Default",
             IsOpen     = true,
             IsEnabled  = true,
             IsActive   = true,
-            Repository = new InMemoryAssetProvider()
+            Provider = new InMemoryAssetProvider()
         });
     }
 
-    public IReadOnlyList<RepositoryEntry> All    => _entries;
-    public RepositoryEntry                Active => _entries.First(e => e.IsActive);
+    public IReadOnlyList<ProviderEntry> All    => _entries;
+    public ProviderEntry                Active => _entries.First(e => e.IsActive);
 
-    public RepositoryEntry Add(string name)
+    public ProviderEntry Add(string name)
     {
-        var entry = new RepositoryEntry
+        var entry = new ProviderEntry
         {
             Name       = name,
             IsOpen     = true,
             IsEnabled  = true,
-            Repository = new InMemoryAssetProvider()
+            Provider = new InMemoryAssetProvider()
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
         return entry;
     }
 
-    public RepositoryEntry AddExternal(string name, IAssetProvider repository)
+    public ProviderEntry AddExternal(string name, IAssetProvider provider)
     {
-        var entry = new RepositoryEntry
+        var entry = new ProviderEntry
         {
             Name       = name,
             IsOpen     = true,
             IsEnabled  = true,
-            Repository = repository
+            Provider = provider
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -115,5 +115,5 @@ public sealed class InMemoryRepositoryPool : IRepositoryPool
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private RepositoryEntry? Find(Guid id) => _entries.FirstOrDefault(e => e.Id == id);
+    private ProviderEntry? Find(Guid id) => _entries.FirstOrDefault(e => e.Id == id);
 }

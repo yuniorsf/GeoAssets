@@ -1,10 +1,10 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using Microsoft.Extensions.Logging
-@inject IRepositoryPool Pool
+@inject IProviderPool Pool
 @inject IMapInterop MapInterop
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
-@inject ILogger<RepositoryPoolPanel> Logger
+@inject ILogger<ProviderPoolPanel> Logger
 @inject IServiceProvider ServiceProvider
 
 <div class="sidebar-section">
@@ -128,7 +128,7 @@
     private string _editingName = string.Empty;
 
     // External provider connect state
-    private IReadOnlyList<IExternalRepositoryFactory> _externalFactories = [];
+    private IReadOnlyList<IExternalProviderFactory> _externalFactories = [];
     private string? _connectingProvider;
     private string  _connName  = string.Empty;
     private string  _connStr   = string.Empty;
@@ -143,7 +143,7 @@
 
         // Discover registered external factories (e.g. PostgreSQL) — optional
         _externalFactories = ServiceProvider
-            .GetService(typeof(IEnumerable<IExternalRepositoryFactory>)) is IEnumerable<IExternalRepositoryFactory> factories
+            .GetService(typeof(IEnumerable<IExternalProviderFactory>)) is IEnumerable<IExternalProviderFactory> factories
             ? [.. factories]
             : [];
     }
@@ -159,47 +159,47 @@
 
     // ── Show / Hide ───────────────────────────────────────────────────────────
 
-    private async Task ToggleEnabledAsync(RepositoryEntry entry)
+    private async Task ToggleEnabledAsync(ProviderEntry entry)
     {
         if (entry.IsEnabled)
         {
             Pool.Disable(entry.Id);
-            foreach (var f in entry.Repository.GetAll())
+            foreach (var f in entry.Provider.GetAll())
                 await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
         }
         else
         {
             Pool.Enable(entry.Id);
-            foreach (var f in entry.Repository.GetAll())
+            foreach (var f in entry.Provider.GetAll())
                 await MapInterop.RenderFeatureAsync(MapDivId, f);
         }
     }
 
     // ── Set active workspace ──────────────────────────────────────────────────
 
-    private async Task SetActiveAsync(RepositoryEntry entry)
+    private async Task SetActiveAsync(ProviderEntry entry)
     {
         Pool.SetActive(entry.Id);
         await MapInterop.ClearAllFeaturesAsync(MapDivId);
         foreach (var e in Pool.All.Where(e => e.IsEnabled))
-            foreach (var f in e.Repository.GetAll())
+            foreach (var f in e.Provider.GetAll())
                 await MapInterop.RenderFeatureAsync(MapDivId, f);
     }
 
     // ── Export ────────────────────────────────────────────────────────────────
 
-    private async Task ExportEntryAsync(RepositoryEntry entry)
+    private async Task ExportEntryAsync(ProviderEntry entry)
     {
         _messages[entry.Id] = string.Empty;
         try
         {
             var collection = new GeoFeatureCollection
             {
-                Features = [.. entry.Repository.GetAll()],
+                Features = [.. entry.Provider.GetAll()],
                 Metadata = new GeoFeatureCollectionMetadata
                 {
                     Name       = entry.Name,
-                    AssetTypes = [.. entry.Repository.GetAssetTypes()]
+                    AssetTypes = [.. entry.Provider.GetAssetTypes()]
                 }
             };
             var json     = await Storage.ExportToStringAsync(collection);
@@ -219,7 +219,7 @@
 
     // ── Import ────────────────────────────────────────────────────────────────
 
-    private async Task ImportFileAsync(InputFileChangeEventArgs ev, RepositoryEntry entry)
+    private async Task ImportFileAsync(InputFileChangeEventArgs ev, ProviderEntry entry)
     {
         _messages[entry.Id] = string.Empty;
         try
@@ -231,9 +231,9 @@
             var imported = await Storage.ImportFromStringAsync(json);
 
             foreach (var t in imported.Metadata.AssetTypes.Where(t => !t.IsBuiltIn))
-                entry.Repository.AddAssetType(t);
+                entry.Provider.AddAssetType(t);
 
-            entry.Repository.AddRange(imported.Features);
+            entry.Provider.AddRange(imported.Features);
 
             if (entry.IsEnabled)
                 foreach (var f in imported.Features)
@@ -288,20 +288,20 @@
 
     // ── Rename ────────────────────────────────────────────────────────────────
 
-    private void StartRename(RepositoryEntry entry)
+    private void StartRename(ProviderEntry entry)
     {
         _editingId   = entry.Id;
         _editingName = entry.Name;
     }
 
-    private void CommitRename(RepositoryEntry entry)
+    private void CommitRename(ProviderEntry entry)
     {
         if (!string.IsNullOrWhiteSpace(_editingName))
             Pool.Rename(entry.Id, _editingName.Trim());
         _editingId = null;
     }
 
-    private void HandleRenameKey(KeyboardEventArgs ev, RepositoryEntry entry)
+    private void HandleRenameKey(KeyboardEventArgs ev, ProviderEntry entry)
     {
         if (ev.Key == "Enter")  CommitRename(entry);
         if (ev.Key == "Escape") _editingId = null;
@@ -309,10 +309,10 @@
 
     // ── Remove ────────────────────────────────────────────────────────────────
 
-    private async Task RemoveEntryAsync(RepositoryEntry entry)
+    private async Task RemoveEntryAsync(ProviderEntry entry)
     {
         if (entry.IsActive) return;
-        foreach (var f in entry.Repository.GetAll())
+        foreach (var f in entry.Provider.GetAll())
             await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);

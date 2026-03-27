@@ -3,23 +3,23 @@ using GeoAssets.Core.Models;
 namespace GeoAssets.Core.Interfaces;
 
 /// <summary>
-/// Manages a pool of named <see cref="RepositoryEntry"/> instances.
+/// Manages a pool of named <see cref="ProviderEntry"/> instances.
 /// One entry is always "active" — all UI writes (AssetForm, AssetList, Import) target it.
 /// Other entries can be opened on the map as read-only overlays.
 /// </summary>
-public interface IRepositoryPool
+public interface IProviderPool
 {
-    IReadOnlyList<RepositoryEntry> All    { get; }
-    RepositoryEntry                Active { get; }
+    IReadOnlyList<ProviderEntry> All    { get; }
+    ProviderEntry                Active { get; }
 
     /// <summary>Creates a new in-memory entry and adds it to the pool.</summary>
-    RepositoryEntry Add(string name);
+    ProviderEntry Add(string name);
 
     /// <summary>
-    /// Wraps an externally created repository (e.g. PostgreSQL-backed) in a pool entry.
+    /// Wraps an externally created provider (e.g. PostgreSQL-backed) in a pool entry.
     /// Use this to connect any <see cref="IAssetProvider"/> implementation to the map.
     /// </summary>
-    RepositoryEntry AddExternal(string name, IAssetProvider repository);
+    ProviderEntry AddExternal(string name, IAssetProvider provider);
 
     /// <summary>Makes the given entry the active workspace; opens and enables it if needed.</summary>
     void SetActive(Guid id);

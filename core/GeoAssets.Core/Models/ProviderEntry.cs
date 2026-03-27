@@ -3,11 +3,11 @@ using GeoAssets.Core.Interfaces;
 namespace GeoAssets.Core.Models;
 
 /// <summary>
-/// Represents one named collection in the repository pool.
+/// Represents one named collection in the provider pool.
 /// Each entry owns an independent <see cref="IAssetProvider"/> and carries
 /// its display state (open on map, visible, active for editing).
 /// </summary>
-public sealed class RepositoryEntry
+public sealed class ProviderEntry
 {
     public Guid   Id        { get; }      = Guid.NewGuid();
     public string Name      { get; set; } = string.Empty;
@@ -21,5 +21,5 @@ public sealed class RepositoryEntry
     /// <summary>This is the editable workspace; all writes from the UI target this entry.</summary>
     public bool IsActive  { get; set; }
 
-    public IAssetProvider Repository { get; init; } = null!;
+    public IAssetProvider Provider { get; init; } = null!;
 }

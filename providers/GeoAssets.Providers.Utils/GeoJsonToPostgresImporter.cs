@@ -52,7 +52,7 @@ public sealed class GeoJsonToPostgresImporter
             staging.AddAssetType(assetType);
 
         // Connect to PostgreSQL and transfer
-        var factory = new PostgresRepositoryFactory(_loggerFactory);
+        var factory = new PostgresProviderFactory(_loggerFactory);
         var postgres = factory.Create(connectionString);
         try
         {

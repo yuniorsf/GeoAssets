@@ -6,7 +6,7 @@ namespace GeoAssets.Provider.Active;
 
 /// <summary>
 /// <see cref="IAssetProvider"/> proxy that transparently delegates to whichever
-/// entry is currently <see cref="IRepositoryPool.Active"/>.
+/// entry is currently <see cref="IProviderPool.Active"/>.
 ///
 /// When the active entry changes, the proxy re-wires its internal subscriptions
 /// and fires <see cref="CollectionChanged"/> so all UI consumers (AssetList, AssetForm, etc.)
@@ -14,7 +14,7 @@ namespace GeoAssets.Provider.Active;
 /// </summary>
 public sealed class ActiveAssetProvider : IAssetProvider
 {
-    private readonly IRepositoryPool _pool;
+    private readonly IProviderPool _pool;
     private IAssetProvider _current;
 
     public event EventHandler<GeoFeature>? FeatureAdded;
@@ -22,17 +22,17 @@ public sealed class ActiveAssetProvider : IAssetProvider
     public event EventHandler<string>?     FeatureDeleted;
     public event EventHandler?             CollectionChanged;
 
-    public ActiveAssetProvider(IRepositoryPool pool)
+    public ActiveAssetProvider(IProviderPool pool)
     {
         _pool    = pool;
-        _current = pool.Active.Repository;
+        _current = pool.Active.Provider;
         Subscribe(_current);
         pool.Changed += OnPoolChanged;
     }
 
     private void OnPoolChanged(object? _, EventArgs __)
     {
-        var next = _pool.Active.Repository;
+        var next = _pool.Active.Provider;
         if (ReferenceEquals(next, _current)) return;
         Unsubscribe(_current);
         _current = next;
