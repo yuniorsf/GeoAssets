@@ -1,4 +1,4 @@
-namespace GeoAssets.Infrastructure.PostgreSQL.Entities;
+namespace GeoAssets.Provider.PostgreSQL.Entities;
 
 /// <summary>EF Core entity that maps to the <c>asset_type</c> table.</summary>
 public sealed class AssetTypeRow

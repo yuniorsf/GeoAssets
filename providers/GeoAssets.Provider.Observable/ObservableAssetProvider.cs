@@ -1,10 +1,11 @@
+using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using Microsoft.Extensions.Logging;
 
-namespace GeoAssets.Shared.Services.Observability;
+namespace GeoAssets.Provider.Observable;
 
 /// <summary>
 /// Observable decorator for <see cref="IAssetProvider"/>.

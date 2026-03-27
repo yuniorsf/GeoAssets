@@ -1,10 +1,10 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Infrastructure.PostgreSQL.Data;
-using GeoAssets.Infrastructure.PostgreSQL.Repositories;
+using GeoAssets.Provider.PostgreSQL.Data;
+using GeoAssets.Provider.PostgreSQL.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace GeoAssets.Infrastructure.PostgreSQL;
+namespace GeoAssets.Provider.PostgreSQL;
 
 /// <summary>
 /// Creates <see cref="IAssetProvider"/> instances backed by PostgreSQL + PostGIS.

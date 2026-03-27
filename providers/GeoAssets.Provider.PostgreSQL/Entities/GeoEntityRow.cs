@@ -1,7 +1,7 @@
 using System.Text.Json;
 using NetTopologySuite.Geometries;
 
-namespace GeoAssets.Infrastructure.PostgreSQL.Entities;
+namespace GeoAssets.Provider.PostgreSQL.Entities;
 
 /// <summary>
 /// EF Core entity that maps to the <c>geo_entity</c> table.

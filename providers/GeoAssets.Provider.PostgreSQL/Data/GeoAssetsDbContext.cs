@@ -1,8 +1,8 @@
 using GeoAssets.Core.Models;
-using GeoAssets.Infrastructure.PostgreSQL.Entities;
+using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace GeoAssets.Infrastructure.PostgreSQL.Data;
+namespace GeoAssets.Provider.PostgreSQL.Data;
 
 /// <summary>
 /// EF Core DbContext for geospatial assets backed by PostgreSQL + PostGIS.

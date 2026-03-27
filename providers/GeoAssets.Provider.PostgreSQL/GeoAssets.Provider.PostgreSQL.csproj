@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>GeoAssets.Infrastructure.PostgreSQL</RootNamespace>
+    <RootNamespace>GeoAssets.Provider.PostgreSQL</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
   </ItemGroup>
 
 </Project>

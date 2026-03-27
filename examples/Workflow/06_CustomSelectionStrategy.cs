@@ -25,6 +25,7 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.InMemory;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Selection;
 using GeoAssets.Workflow.Selection.Strategies;

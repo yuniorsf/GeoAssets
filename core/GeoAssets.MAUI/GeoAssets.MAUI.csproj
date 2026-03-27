@@ -22,7 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..GeoAssets.SharedGeoAssets.Shared.csproj" />
+    <ProjectReference Include="....providersGeoAssets.Provider.InMemoryGeoAssets.Provider.InMemory.csproj" />
+    <ProjectReference Include="....providersGeoAssets.Provider.ActiveGeoAssets.Provider.Active.csproj" />
   </ItemGroup>
 
   <!-- Static web assets from Shared RCL -->

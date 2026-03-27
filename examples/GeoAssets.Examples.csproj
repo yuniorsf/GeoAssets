@@ -9,11 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\GeoAssets.Core\GeoAssets.Core.csproj" />
-    <ProjectReference Include="..\src\GeoAssets.Commands\GeoAssets.Commands.csproj" />
-    <ProjectReference Include="..\src\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj" />
+    <ProjectReference Include="..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
+    <ProjectReference Include="..\core\GeoAssets.Commands\GeoAssets.Commands.csproj" />
+    <ProjectReference Include="..\core\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj" />
     <ProjectReference Include="..\plugins\commands\GeoAssets.Plugin.Hydrology\GeoAssets.Plugin.Hydrology.csproj" />
-    <ProjectReference Include="..\src\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
   </ItemGroup>
 
 </Project>

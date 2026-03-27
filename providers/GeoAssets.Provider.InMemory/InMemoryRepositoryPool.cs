@@ -1,7 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 
-namespace GeoAssets.Core.Services;
+namespace GeoAssets.Provider.InMemory;
 
 /// <summary>
 /// In-memory implementation of <see cref="IRepositoryPool"/>.

@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Services;
+using GeoAssets.Provider.Active;
+using GeoAssets.Provider.InMemory;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;

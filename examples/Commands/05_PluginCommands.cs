@@ -21,6 +21,7 @@ using GeoAssets.Commands.Contracts;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.InMemory;
 using GeoAssets.Plugin.Hydrology;
 
 namespace GeoAssets.Examples.Commands;

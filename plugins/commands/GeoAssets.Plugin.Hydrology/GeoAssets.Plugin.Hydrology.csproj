@@ -12,7 +12,7 @@
   <!-- Only references the slim contracts project — not GeoAssets.Core directly.
        This is the key plugin boundary: external authors ship only against Contracts. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\GeoAssets.Commands\GeoAssets.Commands.csproj" />
+    <ProjectReference Include="..\..\..\core\GeoAssets.Commands\GeoAssets.Commands.csproj" />
   </ItemGroup>
 
 </Project>

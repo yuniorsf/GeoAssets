@@ -2,13 +2,13 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Infrastructure.PostgreSQL.Data;
-using GeoAssets.Infrastructure.PostgreSQL.Entities;
+using GeoAssets.Provider.PostgreSQL.Data;
+using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 
-namespace GeoAssets.Infrastructure.PostgreSQL.Repositories;
+namespace GeoAssets.Provider.PostgreSQL.Repositories;
 
 /// <summary>
 /// PostgreSQL + PostGIS implementation of <see cref="IAssetProvider"/>.

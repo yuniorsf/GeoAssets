@@ -5,37 +5,45 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Core", "src\GeoAssets.Core\GeoAssets.Core.csproj", "{F8860757-71B6-407D-B3F2-9E0FB68146A9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Core", "core\GeoAssets.Core\GeoAssets.Core.csproj", "{F8860757-71B6-407D-B3F2-9E0FB68146A9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Shared", "src\GeoAssets.Shared\GeoAssets.Shared.csproj", "{286CBABC-75E1-49D6-9248-B386B007B92C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Shared", "core\GeoAssets.Shared\GeoAssets.Shared.csproj", "{286CBABC-75E1-49D6-9248-B386B007B92C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Web", "src\GeoAssets.Web\GeoAssets.Web.csproj", "{449C5591-9B31-4935-A4B2-128842E7ECC5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Web", "core\GeoAssets.Web\GeoAssets.Web.csproj", "{449C5591-9B31-4935-A4B2-128842E7ECC5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Commands", "src\GeoAssets.Commands\GeoAssets.Commands.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Commands", "core\GeoAssets.Commands\GeoAssets.Commands.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Commands.Builtin", "src\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Commands.Builtin", "core\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Plugin.Hydrology", "plugins\commands\GeoAssets.Plugin.Hydrology\GeoAssets.Plugin.Hydrology.csproj", "{C3D4E5F6-A7B8-9012-CDEF-123456789012}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow", "src\GeoAssets.Workflow\GeoAssets.Workflow.csproj", "{D4E5F6A7-B8C9-0123-DEFA-234567890123}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow", "core\GeoAssets.Workflow\GeoAssets.Workflow.csproj", "{D4E5F6A7-B8C9-0123-DEFA-234567890123}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Identity", "src\GeoAssets.Identity\GeoAssets.Identity.csproj", "{E5F6A7B8-C9D0-1234-EFAB-345678901234}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Identity", "core\GeoAssets.Identity\GeoAssets.Identity.csproj", "{E5F6A7B8-C9D0-1234-EFAB-345678901234}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Examples", "examples\GeoAssets.Examples.csproj", "{ECF232FE-E646-4CFB-85FC-555085C1E1BE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Identity.EFCore", "src\GeoAssets.Identity.EFCore\GeoAssets.Identity.EFCore.csproj", "{902F1EB4-B569-4643-BCD7-06029E457F22}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Identity.EFCore", "core\GeoAssets.Identity.EFCore\GeoAssets.Identity.EFCore.csproj", "{902F1EB4-B569-4643-BCD7-06029E457F22}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.EFCore", "src\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj", "{97D8C94A-5C3E-43AA-AFCB-ADE221555A9A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.EFCore", "core\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj", "{97D8C94A-5C3E-43AA-AFCB-ADE221555A9A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.ServiceBus", "src\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj", "{F949F8E3-5F4D-42B3-9F07-7FC2269F1DED}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.ServiceBus", "core\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj", "{F949F8E3-5F4D-42B3-9F07-7FC2269F1DED}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.Kafka", "src\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj", "{EE19FD03-1BDE-4C3A-ABCB-F00345531CF7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.Kafka", "core\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj", "{EE19FD03-1BDE-4C3A-ABCB-F00345531CF7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Infrastructure.Observability", "src\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj", "{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Infrastructure.Observability", "core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj", "{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Infrastructure.PostgreSQL", "src\GeoAssets.Infrastructure.PostgreSQL\GeoAssets.Infrastructure.PostgreSQL.csproj", "{A2DBDB39-420A-4483-AFFA-218008D92CB6}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "providers", "providers", "{D9007A03-FD03-1159-6598-E081D0A1BEBA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.InMemory", "providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj", "{7375E71F-2DCE-4523-9B90-A565057EAFA7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Active", "providers\GeoAssets.Provider.Active\GeoAssets.Provider.Active.csproj", "{951E8D27-0026-4694-A1B2-762266AA0390}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Observable", "providers\GeoAssets.Provider.Observable\GeoAssets.Provider.Observable.csproj", "{B88E9253-0830-4EE2-8803-39198B1BDFAD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.PostgreSQL", "providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj", "{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -215,18 +223,54 @@ Global
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}.Release|x64.Build.0 = Release|Any CPU
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}.Release|x86.ActiveCfg = Release|Any CPU
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}.Release|x86.Build.0 = Release|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x64.Build.0 = Debug|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x86.Build.0 = Debug|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x64.ActiveCfg = Release|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x64.Build.0 = Release|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x86.ActiveCfg = Release|Any CPU
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x86.Build.0 = Release|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Debug|x64.Build.0 = Debug|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Debug|x86.Build.0 = Debug|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Release|x64.ActiveCfg = Release|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Release|x64.Build.0 = Release|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Release|x86.ActiveCfg = Release|Any CPU
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7}.Release|x86.Build.0 = Release|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Debug|x64.Build.0 = Debug|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Debug|x86.Build.0 = Debug|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Release|Any CPU.Build.0 = Release|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Release|x64.ActiveCfg = Release|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Release|x64.Build.0 = Release|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Release|x86.ActiveCfg = Release|Any CPU
+		{951E8D27-0026-4694-A1B2-762266AA0390}.Release|x86.Build.0 = Release|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Debug|x64.Build.0 = Debug|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Debug|x86.Build.0 = Debug|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Release|x64.ActiveCfg = Release|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Release|x64.Build.0 = Release|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Release|x86.ActiveCfg = Release|Any CPU
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD}.Release|x86.Build.0 = Release|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Debug|x64.Build.0 = Debug|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Debug|x86.Build.0 = Debug|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Release|x64.ActiveCfg = Release|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Release|x64.Build.0 = Release|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Release|x86.ActiveCfg = Release|Any CPU
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -246,6 +290,9 @@ Global
 		{F949F8E3-5F4D-42B3-9F07-7FC2269F1DED} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EE19FD03-1BDE-4C3A-ABCB-F00345531CF7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{A2DBDB39-420A-4483-AFFA-218008D92CB6} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7375E71F-2DCE-4523-9B90-A565057EAFA7} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
+		{951E8D27-0026-4694-A1B2-762266AA0390} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
+		{B88E9253-0830-4EE2-8803-39198B1BDFAD} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
+		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
 	EndGlobalSection
 EndGlobal

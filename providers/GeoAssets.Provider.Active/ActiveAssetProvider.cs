@@ -2,7 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 
-namespace GeoAssets.Core.Services;
+namespace GeoAssets.Provider.Active;
 
 /// <summary>
 /// <see cref="IAssetProvider"/> proxy that transparently delegates to whichever
