@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
-    <ProjectReference Include="..\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="../../core/GeoAssets.Core/GeoAssets.Core.csproj" />
+    <ProjectReference Include="../../core/GeoAssets.Workflow/GeoAssets.Workflow.csproj" />
   </ItemGroup>
 
 </Project>
