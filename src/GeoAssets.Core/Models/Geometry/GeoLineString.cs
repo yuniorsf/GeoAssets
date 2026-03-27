@@ -46,16 +46,19 @@ public sealed class GeoLineString : GeoGeometry
     // ── Coordinates (JSON) ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Array of [longitude, latitude] positions — RFC 7946 §3.1.4.
-    /// Getting derives the array from the NTS geometry; setting rebuilds it in WGS-84.
+    /// Array of [X, Y] positions in the geometry's CRS.
+    /// Getting derives the array from the NTS geometry; setting rebuilds it preserving the current SRID.
     /// </summary>
     [JsonPropertyName("coordinates")]
     public double[][] Coordinates
     {
         get => [.. _line.Coordinates.Select(static c => new double[] { c.X, c.Y })];
-        set => _line = value.Length < 2
-            ? GeoFactory.Wgs84.CreateLineString(Array.Empty<NtsCoordinate>())
-            : GeoFactory.Wgs84.CreateLineString(
-                value.Select(static c => new NtsCoordinate(c[0], c[1])).ToArray());
+        set
+        {
+            var factory = GeoFactory.For(_line.SRID);
+            _line = value.Length < 2
+                ? factory.CreateLineString(Array.Empty<NtsCoordinate>())
+                : factory.CreateLineString(value.Select(static c => new NtsCoordinate(c[0], c[1])).ToArray());
+        }
     }
 }

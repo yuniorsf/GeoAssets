@@ -12,8 +12,14 @@ public interface IRepositoryPool
     IReadOnlyList<RepositoryEntry> All    { get; }
     RepositoryEntry                Active { get; }
 
-    /// <summary>Creates a new entry and adds it to the pool (closed by default).</summary>
+    /// <summary>Creates a new in-memory entry and adds it to the pool.</summary>
     RepositoryEntry Add(string name);
+
+    /// <summary>
+    /// Wraps an externally created repository (e.g. PostgreSQL-backed) in a pool entry.
+    /// Use this to connect any <see cref="IAssetRepository"/> implementation to the map.
+    /// </summary>
+    RepositoryEntry AddExternal(string name, IAssetRepository repository);
 
     /// <summary>Makes the given entry the active workspace; opens and enables it if needed.</summary>
     void SetActive(Guid id);

@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messagin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Infrastructure.Observability", "src\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj", "{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Infrastructure.PostgreSQL", "src\GeoAssets.Infrastructure.PostgreSQL\GeoAssets.Infrastructure.PostgreSQL.csproj", "{A2DBDB39-420A-4483-AFFA-218008D92CB6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -213,6 +215,18 @@ Global
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}.Release|x64.Build.0 = Release|Any CPU
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}.Release|x86.ActiveCfg = Release|Any CPU
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}.Release|x86.Build.0 = Release|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x64.Build.0 = Debug|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Debug|x86.Build.0 = Debug|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x64.ActiveCfg = Release|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x64.Build.0 = Release|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x86.ActiveCfg = Release|Any CPU
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -232,5 +246,6 @@ Global
 		{F949F8E3-5F4D-42B3-9F07-7FC2269F1DED} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EE19FD03-1BDE-4C3A-ABCB-F00345531CF7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{9193E29B-D03E-463F-86DD-62AA5B0FE6D7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{A2DBDB39-420A-4483-AFFA-218008D92CB6} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -41,6 +41,15 @@ public sealed class GeoFeatureProperties
     [JsonPropertyName("layerId")]
     public string LayerId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// EPSG code of the coordinate reference system for this feature's geometry.
+    /// Defaults to 4326 (WGS-84) for GeoJSON compatibility.
+    /// Set explicitly when working with projected CRS (e.g. 25830 for UTM zone 30N,
+    /// 3857 for Web Mercator, 32632 for UTM zone 32N, etc.).
+    /// </summary>
+    [JsonPropertyName("srid")]
+    public int Srid { get; set; } = 4326;
+
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

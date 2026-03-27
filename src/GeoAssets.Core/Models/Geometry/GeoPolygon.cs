@@ -62,8 +62,8 @@ public sealed class GeoPolygon : GeoGeometry
     // ── Coordinates (JSON) ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Outer ring at [0], optional holes at [1..n] — RFC 7946 §3.1.6.
-    /// Getting derives the array from the NTS geometry; setting rebuilds it in WGS-84.
+    /// Outer ring at [0], optional holes at [1..n].
+    /// Getting derives the array from the NTS geometry; setting rebuilds it preserving the current SRID.
     /// </summary>
     [JsonPropertyName("coordinates")]
     public double[][][] Coordinates
@@ -71,15 +71,16 @@ public sealed class GeoPolygon : GeoGeometry
         get => ToCoordArray(_polygon);
         set
         {
+            var srid = _polygon.SRID;
             if (value.Length == 0)
             {
-                _polygon = GeoFactory.Wgs84.CreatePolygon(Array.Empty<NtsCoordinate>());
+                _polygon = GeoFactory.For(srid).CreatePolygon(Array.Empty<NtsCoordinate>());
                 return;
             }
 
-            var shell = RingFrom(value[0], 4326);
-            var holes = value.Skip(1).Select(r => RingFrom(r, 4326)).ToArray();
-            _polygon = GeoFactory.Wgs84.CreatePolygon(shell, holes);
+            var shell = RingFrom(value[0], srid);
+            var holes = value.Skip(1).Select(r => RingFrom(r, srid)).ToArray();
+            _polygon = GeoFactory.For(srid).CreatePolygon(shell, holes);
         }
     }
 

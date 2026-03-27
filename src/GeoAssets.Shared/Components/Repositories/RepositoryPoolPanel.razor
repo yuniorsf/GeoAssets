@@ -5,11 +5,20 @@
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<RepositoryPoolPanel> Logger
+@inject IServiceProvider ServiceProvider
 
 <div class="sidebar-section">
     <div class="section-header-row">
         <h6>@L["pool.title"]</h6>
-        <button class="btn-icon" title="@L["pool.newCollection"]" @onclick="StartAdd">＋</button>
+        <span style="display:flex;gap:4px">
+            <button class="btn-icon" title="@L["pool.newCollection"]" @onclick="StartAdd">＋</button>
+            @foreach (var factory in _externalFactories)
+            {
+                var f = factory;
+                <button class="btn-icon" title="@L.GetString("pool.connectExternal", f.ProviderName)"
+                        @onclick="() => StartConnect(f.ProviderName)">🔌</button>
+            }
+        </span>
     </div>
 
     <div class="pool-list">
@@ -84,6 +93,29 @@
             <button class="btn btn-secondary btn-sm" @onclick="CancelAdd" type="button">✕</button>
         </div>
     }
+
+    @if (_connectingProvider is not null)
+    {
+        <div class="pool-connect-dialog">
+            <p class="pool-connect-title">@L.GetString("pool.connectExternal", _connectingProvider)</p>
+            <input class="form-control" placeholder="@L["pool.connStrPlaceholder"]"
+                   @bind="_connName" style="margin-bottom:6px" />
+            <textarea class="form-control pool-connstr-input"
+                      placeholder="@L["pool.connStrHint"]"
+                      @bind="_connStr" rows="3"></textarea>
+            @if (!string.IsNullOrEmpty(_connError))
+            {
+                <p class="pool-entry-msg" style="color:var(--danger)">@_connError</p>
+            }
+            <div class="attr-row" style="margin-top:8px;justify-content:flex-end">
+                <button class="btn btn-secondary btn-sm" @onclick="CancelConnect" type="button">@L["assets.cancel"]</button>
+                <button class="btn btn-primary btn-sm" @onclick="CommitConnectAsync" type="button"
+                        disabled="@_connecting">
+                    @(_connecting ? L["pool.connecting"] : L["pool.connect"])
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -95,11 +127,25 @@
     private Guid?  _editingId;
     private string _editingName = string.Empty;
 
+    // External provider connect state
+    private IReadOnlyList<IExternalRepositoryFactory> _externalFactories = [];
+    private string? _connectingProvider;
+    private string  _connName  = string.Empty;
+    private string  _connStr   = string.Empty;
+    private string  _connError = string.Empty;
+    private bool    _connecting;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override void OnInitialized()
     {
         Pool.Changed += OnPoolChanged;
+
+        // Discover registered external factories (e.g. PostgreSQL) — optional
+        _externalFactories = ServiceProvider
+            .GetService(typeof(IEnumerable<IExternalRepositoryFactory>)) is IEnumerable<IExternalRepositoryFactory> factories
+            ? [.. factories]
+            : [];
     }
 
     private void OnPoolChanged(object? _, EventArgs __) =>
@@ -270,5 +316,63 @@
             await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);
+    }
+
+    // ── External provider connect ─────────────────────────────────────────────
+
+    private void StartConnect(string providerName)
+    {
+        _connectingProvider = providerName;
+        _connName           = providerName;
+        _connStr            = string.Empty;
+        _connError          = string.Empty;
+        _connecting         = false;
+    }
+
+    private void CancelConnect()
+    {
+        _connectingProvider = null;
+        _connError          = string.Empty;
+    }
+
+    private async Task CommitConnectAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_connStr))
+        {
+            _connError = L["pool.connStrRequired"];
+            return;
+        }
+
+        var factory = _externalFactories.FirstOrDefault(f => f.ProviderName == _connectingProvider);
+        if (factory is null) return;
+
+        _connecting = true;
+        _connError  = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var repo  = await Task.Run(() => factory.Create(_connStr.Trim()));
+            var name  = string.IsNullOrWhiteSpace(_connName) ? factory.ProviderName : _connName.Trim();
+            var entry = Pool.AddExternal(name, repo);
+
+            // Render all features from the connected repo
+            foreach (var f in repo.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+
+            Logger.LogInformation("External repository connected — provider: {Provider}, name: {Name}, features: {Count}",
+                factory.ProviderName, name, repo.GetAll().Count);
+
+            _connectingProvider = null;
+        }
+        catch (Exception ex)
+        {
+            _connError  = L.GetString("pool.connectError", ex.Message);
+            Logger.LogError(ex, "External repository connection failed — provider: {Provider}", _connectingProvider);
+        }
+        finally
+        {
+            _connecting = false;
+        }
     }
 }
