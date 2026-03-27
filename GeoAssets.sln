@@ -27,11 +27,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Examples", "examp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Identity.EFCore", "core\GeoAssets.Identity.EFCore\GeoAssets.Identity.EFCore.csproj", "{902F1EB4-B569-4643-BCD7-06029E457F22}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.EFCore", "core\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj", "{97D8C94A-5C3E-43AA-AFCB-ADE221555A9A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.EFCore", "workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj", "{97D8C94A-5C3E-43AA-AFCB-ADE221555A9A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.ServiceBus", "core\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj", "{F949F8E3-5F4D-42B3-9F07-7FC2269F1DED}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.ServiceBus", "workflow\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj", "{F949F8E3-5F4D-42B3-9F07-7FC2269F1DED}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.Kafka", "core\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj", "{EE19FD03-1BDE-4C3A-ABCB-F00345531CF7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Messaging.Kafka", "workflow\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj", "{EE19FD03-1BDE-4C3A-ABCB-F00345531CF7}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Infrastructure.Observability", "core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj", "{9193E29B-D03E-463F-86DD-62AA5B0FE6D7}"
 EndProject
