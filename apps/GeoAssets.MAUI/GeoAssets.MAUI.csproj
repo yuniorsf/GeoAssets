@@ -22,6 +22,11 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="9.0.0" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <!-- Existing properties -->
+    <AndroidMinSdkVersion>23</AndroidMinSdkVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
