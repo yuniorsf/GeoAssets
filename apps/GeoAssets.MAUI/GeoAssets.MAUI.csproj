@@ -8,6 +8,7 @@
     <UseMaui>true</UseMaui>
     <SingleProject>true</SingleProject>
     <EnableDefaultCssItems>false</EnableDefaultCssItems>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
 
     <!-- App Info -->
     <ApplicationTitle>GeoAssets</ApplicationTitle>
@@ -22,15 +23,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..GeoAssets.SharedGeoAssets.Shared.csproj" />
-    <ProjectReference Include="....providersGeoAssets.Provider.InMemoryGeoAssets.Provider.InMemory.csproj" />
-    <ProjectReference Include="....providersGeoAssets.Provider.ActiveGeoAssets.Provider.Active.csproj" />
-    <ProjectReference Include="....providersGeoAssets.Provider.PostgreSQLGeoAssets.Provider.PostgreSQL.csproj" />
+    <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Active\GeoAssets.Provider.Active.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
   </ItemGroup>
 
   <!-- Static web assets from Shared RCL -->
   <ItemGroup>
     <MauiAsset Include="wwwroot\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <!-- Explicitly import the StaticWebAssets SDK so that StaticWebAssetsPrepareForRun,
+       StaticWebAssetsPrepareForPublish and LoadStaticWebAssetsPublishManifest are defined
+       for every TFM (including net9.0-android where the Razor SDK skips this import).
+       All task-based work in the SDK is guarded by StaticWebAssetsSdkBuildTasksAssembly
+       so it is a safe no-op when the tasks assembly is absent on mobile platforms. -->
+  <Sdk Name="Microsoft.NET.Sdk.StaticWebAssets" />
 
 </Project>

@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GeoAssets.Commands\GeoAssets.Commands.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Commands\GeoAssets.Commands.csproj" />
   </ItemGroup>
 
 </Project>

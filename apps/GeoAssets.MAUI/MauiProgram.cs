@@ -6,6 +6,7 @@ using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using Microsoft.Extensions.Logging;
+using GeoAssets.Core.Services;
 
 namespace GeoAssets.MAUI;
 
