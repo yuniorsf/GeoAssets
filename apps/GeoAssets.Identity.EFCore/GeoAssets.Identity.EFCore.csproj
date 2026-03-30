@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
   </ItemGroup>
 
 </Project>

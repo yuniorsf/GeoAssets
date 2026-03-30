@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <!-- ObservableDecoratorBase lives in Shared -->
-    <ProjectReference Include="..\..\core\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\apps\GeoAssets.Shared\GeoAssets.Shared.csproj" />
   </ItemGroup>
 
 </Project>
