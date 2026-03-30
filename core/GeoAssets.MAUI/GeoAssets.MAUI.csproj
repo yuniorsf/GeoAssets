@@ -25,6 +25,7 @@
     <ProjectReference Include="..GeoAssets.SharedGeoAssets.Shared.csproj" />
     <ProjectReference Include="....providersGeoAssets.Provider.InMemoryGeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="....providersGeoAssets.Provider.ActiveGeoAssets.Provider.Active.csproj" />
+    <ProjectReference Include="....providersGeoAssets.Provider.PostgreSQLGeoAssets.Provider.PostgreSQL.csproj" />
   </ItemGroup>
 
   <!-- Static web assets from Shared RCL -->

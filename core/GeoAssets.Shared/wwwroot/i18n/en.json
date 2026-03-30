@@ -86,5 +86,15 @@
   "pool.connStrRequired": "Connection string is required.",
   "pool.connect": "Connect",
   "pool.connecting": "Connecting…",
-  "pool.connectError": "Connection failed: {0}"
+  "pool.connectError": "Connection failed: {0}",
+
+  "pool.pg.host": "Host",
+  "pool.pg.port": "Port",
+  "pool.pg.database": "Database",
+  "pool.pg.username": "Username",
+  "pool.pg.password": "Password",
+  "pool.pg.disableSsl": "Disable SSL (local)",
+  "pool.pg.dbRequired": "Database name is required.",
+
+  "pool.rest.urlHint": "http://host:port/api/geoassets"
 }

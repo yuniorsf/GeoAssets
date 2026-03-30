@@ -4,6 +4,7 @@ using GeoAssets.Core.Services;
 using GeoAssets.Provider.Active;
 using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Observable;
+using GeoAssets.Provider.Rest;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Services;
@@ -61,6 +62,10 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 // Provider pool — each entry owns an independent InMemoryAssetProvider.
 // The active entry is the editable workspace for all UI components.
 builder.Services.AddSingleton<IProviderPool, InMemoryProviderPool>();
+
+// REST provider — exposes a remote GeoAssets API as a pool entry.
+// Connect via the 🔌 button in the ProviderPoolPanel using the API base URL.
+builder.Services.AddGeoAssetsRest();
 
 // Proxy follows the active pool entry; wrapped by the observable decorator.
 builder.Services.AddSingleton<ActiveAssetProvider>();

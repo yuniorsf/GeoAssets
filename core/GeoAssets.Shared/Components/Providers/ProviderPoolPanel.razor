@@ -100,9 +100,31 @@
             <p class="pool-connect-title">@L.GetString("pool.connectExternal", _connectingProvider)</p>
             <input class="form-control" placeholder="@L["pool.connStrPlaceholder"]"
                    @bind="_connName" style="margin-bottom:6px" />
-            <textarea class="form-control pool-connstr-input"
-                      placeholder="@L["pool.connStrHint"]"
-                      @bind="_connStr" rows="3"></textarea>
+
+            @if (_isLocalForm)
+            {
+                <div style="display:flex;gap:4px;margin-bottom:4px">
+                    <input class="form-control" placeholder="@L["pool.pg.host"]" @bind="_pgHost" style="flex:1" />
+                    <input class="form-control" placeholder="@L["pool.pg.port"]" @bind="_pgPort" style="width:68px" />
+                </div>
+                <input class="form-control" placeholder="@L["pool.pg.database"]" @bind="_pgDb"
+                       style="margin-bottom:4px" />
+                <input class="form-control" placeholder="@L["pool.pg.username"]" @bind="_pgUser"
+                       style="margin-bottom:4px" />
+                <input type="password" class="form-control" placeholder="@L["pool.pg.password"]" @bind="_pgPass"
+                       style="margin-bottom:4px" />
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer">
+                    <input type="checkbox" @bind="_pgDisableSsl" />
+                    @L["pool.pg.disableSsl"]
+                </label>
+            }
+            else
+            {
+                <textarea class="form-control pool-connstr-input"
+                          placeholder="@(_connectingProvider == "REST" ? L["pool.rest.urlHint"] : L["pool.connStrHint"])"
+                          @bind="_connStr" rows="3"></textarea>
+            }
+
             @if (!string.IsNullOrEmpty(_connError))
             {
                 <p class="pool-entry-msg" style="color:var(--danger)">@_connError</p>
@@ -134,6 +156,16 @@
     private string  _connStr   = string.Empty;
     private string  _connError = string.Empty;
     private bool    _connecting;
+
+    // Structured PostgreSQL local-DB form
+    private string _pgHost       = "localhost";
+    private string _pgPort       = "5432";
+    private string _pgDb         = string.Empty;
+    private string _pgUser       = string.Empty;
+    private string _pgPass       = string.Empty;
+    private bool   _pgDisableSsl = true;
+
+    private bool _isLocalForm => _connectingProvider == "PostgreSQL";
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -327,6 +359,12 @@
         _connStr            = string.Empty;
         _connError          = string.Empty;
         _connecting         = false;
+        _pgHost       = "localhost";
+        _pgPort       = "5432";
+        _pgDb         = string.Empty;
+        _pgUser       = string.Empty;
+        _pgPass       = string.Empty;
+        _pgDisableSsl = true;
     }
 
     private void CancelConnect()
@@ -337,7 +375,18 @@
 
     private async Task CommitConnectAsync()
     {
-        if (string.IsNullOrWhiteSpace(_connStr))
+        if (_isLocalForm)
+        {
+            if (string.IsNullOrWhiteSpace(_pgDb))
+            {
+                _connError = L["pool.pg.dbRequired"];
+                return;
+            }
+            _connStr = $"Host={_pgHost.Trim()};Port={_pgPort.Trim()};Database={_pgDb.Trim()};" +
+                       $"Username={_pgUser.Trim()};Password={_pgPass};" +
+                       (_pgDisableSsl ? "SSL Mode=Disable;" : string.Empty);
+        }
+        else if (string.IsNullOrWhiteSpace(_connStr))
         {
             _connError = L["pool.connStrRequired"];
             return;
@@ -352,7 +401,11 @@
 
         try
         {
-            var repo  = await Task.Run(() => factory.Create(_connStr.Trim()));
+            IAssetProvider repo;
+            if (factory is IAsyncProviderFactory asyncFactory)
+                repo = await asyncFactory.CreateAsync(_connStr.Trim());
+            else
+                repo = await Task.Run(() => factory.Create(_connStr.Trim()));
             var name  = string.IsNullOrWhiteSpace(_connName) ? factory.ProviderName : _connName.Trim();
             var entry = Pool.AddExternal(name, repo);
 

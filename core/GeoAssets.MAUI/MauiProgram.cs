@@ -1,6 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Provider.Active;
 using GeoAssets.Provider.InMemory;
+using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
@@ -28,7 +29,10 @@ public static class MauiProgram
 #endif
 
         // GeoAssets services
-        builder.Services.AddSingleton<IAssetProvider, InMemoryAssetProvider>();
+        builder.Services.AddSingleton<IProviderPool, InMemoryProviderPool>();
+        builder.Services.AddSingleton<ActiveAssetProvider>();
+        builder.Services.AddSingleton<IAssetProvider>(sp => sp.GetRequiredService<ActiveAssetProvider>());
+        builder.Services.AddGeoAssetsPostgres();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
         builder.Services.AddScoped<IMapInterop, MapInteropService>();
         builder.Services.AddScoped<AssetService>();

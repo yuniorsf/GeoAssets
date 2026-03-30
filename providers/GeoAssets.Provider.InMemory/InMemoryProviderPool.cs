@@ -8,13 +8,13 @@ namespace GeoAssets.Provider.InMemory;
 /// Creates one default active entry on construction; additional entries
 /// each own an independent <see cref="InMemoryAssetProvider"/>.
 /// </summary>
-public sealed class InMemoryRepositoryPool : IProviderPool
+public sealed class InMemoryProviderPool : IProviderPool
 {
     private readonly List<ProviderEntry> _entries = [];
 
     public event EventHandler? Changed;
 
-    public InMemoryRepositoryPool()
+    public InMemoryProviderPool()
     {
         _entries.Add(new ProviderEntry
         {

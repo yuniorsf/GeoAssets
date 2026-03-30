@@ -51,6 +51,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflow", "workflow", "{E8
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Providers.Utils", "providers\GeoAssets.Providers.Utils\GeoAssets.Providers.Utils.csproj", "{F61314B1-0593-4751-9112-D8DB0BBBB62F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Rest", "providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj", "{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -301,6 +303,18 @@ Global
 		{F61314B1-0593-4751-9112-D8DB0BBBB62F}.Release|x64.Build.0 = Release|Any CPU
 		{F61314B1-0593-4751-9112-D8DB0BBBB62F}.Release|x86.ActiveCfg = Release|Any CPU
 		{F61314B1-0593-4751-9112-D8DB0BBBB62F}.Release|x86.Build.0 = Release|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Debug|x64.Build.0 = Debug|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Debug|x86.Build.0 = Debug|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Release|x64.ActiveCfg = Release|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Release|x64.Build.0 = Release|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Release|x86.ActiveCfg = Release|Any CPU
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -326,5 +340,6 @@ Global
 		{B88E9253-0830-4EE2-8803-39198B1BDFAD} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
 		{C3AA13AC-BBBA-46A8-BE52-7DB723A651D0} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
 		{F61314B1-0593-4751-9112-D8DB0BBBB62F} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
+		{E969FA36-E5A3-4CC1-B1BB-C8079C30CD28} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
 	EndGlobalSection
 EndGlobal
