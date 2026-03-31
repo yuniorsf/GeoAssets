@@ -26,4 +26,10 @@ public interface IStorageService
 
     /// <summary>Present a file-save dialog and write GeoJSON.</summary>
     Task SaveExportFileAsync(string geoJson, string suggestedName = "export.geojson", CancellationToken ct = default);
+
+    /// <summary>Reads a raw string value from persistent storage. Returns null if not found.</summary>
+    Task<string?> GetStringAsync(string key, CancellationToken ct = default);
+
+    /// <summary>Writes a raw string value to persistent storage.</summary>
+    Task SetStringAsync(string key, string value, CancellationToken ct = default);
 }

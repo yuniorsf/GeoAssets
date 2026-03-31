@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using NtsGeometry = NetTopologySuite.Geometries.Geometry;
 
@@ -10,18 +11,18 @@ namespace GeoAssets.Core.Models.Geometry;
 /// The original JSON text is stored verbatim and round-tripped on
 /// serialization so that Leaflet can render it correctly.
 ///
-/// NTS spatial operations (<see cref="NtsGeometry"/>) return an empty
-/// geometry collection — spatial queries against these features will not
-/// produce meaningful results until a typed subclass is added.
+/// NTS spatial operations are parsed lazily from the raw JSON so that
+/// persistence to PostGIS works correctly for all geometry types.
 /// </summary>
 public sealed class GeoRawGeometry : GeoGeometry
 {
     private readonly string _rawJson;
     private readonly string _type;
+    private NtsGeometry? _ntsGeometry;
 
     public GeoRawGeometry(string type, string rawJson)
     {
-        _type   = type;
+        _type    = type;
         _rawJson = rawJson;
     }
 
@@ -32,12 +33,28 @@ public sealed class GeoRawGeometry : GeoGeometry
     public override GeometryType GeometryType => GeometryType.Raw;
 
     /// <summary>
-    /// Returns an empty geometry collection.
-    /// Spatial predicates and measurements are not supported on raw geometries.
+    /// Parses the raw GeoJSON into an NTS geometry so that PostGIS persistence
+    /// stores the actual geometry instead of an empty collection.
+    /// Falls back to an empty geometry collection if parsing fails.
     /// </summary>
     [JsonIgnore]
-    public override NtsGeometry NtsGeometry =>
-        GeoFactory.Wgs84.CreateGeometryCollection([]);
+    public override NtsGeometry NtsGeometry
+    {
+        get
+        {
+            if (_ntsGeometry is not null) return _ntsGeometry;
+            try
+            {
+                _ntsGeometry = JsonSerializer.Deserialize<NtsGeometry>(_rawJson, _ntsJsonOpts)
+                               ?? GeoFactory.Wgs84.CreateGeometryCollection([]);
+            }
+            catch
+            {
+                _ntsGeometry = GeoFactory.Wgs84.CreateGeometryCollection([]);
+            }
+            return _ntsGeometry;
+        }
+    }
 
     /// <summary>The original GeoJSON text, used to write the geometry back without modification.</summary>
     internal string RawJson => _rawJson;

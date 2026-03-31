@@ -1,0 +1,88 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.Extensions.Logging
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models
+@inject IAssetProvider Provider
+@inject IProviderPool Pool
+@inject IStorageService Storage
+@inject IMapInterop MapInterop
+@inject ILogger<GeoJsonRestImportPanel> Logger
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["import.import"] → @_activeProviderName</h6>
+        <label class="btn-icon" style="cursor:pointer" title="@L["import.import"]">
+            📥
+            <InputFile OnChange="OnFileSelectedAsync" accept=".geojson,.json" style="display:none"
+                       disabled="@_importing" />
+        </label>
+    </div>
+
+    @if (_importing)
+    {
+        <p class="pool-entry-msg">⏳ @L["pool.connecting"]…</p>
+    }
+    else if (!string.IsNullOrEmpty(_statusMsg))
+    {
+        <p class="pool-entry-msg" style="color:@_statusColor">@_statusMsg</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
+
+    private bool   _importing;
+    private string _statusMsg   = string.Empty;
+    private string _statusColor = "var(--success)";
+
+    private string _activeProviderName =>
+        Pool.Active?.Name ?? "–";
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs ev)
+    {
+        _importing  = true;
+        _statusMsg  = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = ev.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            var imported = await Storage.ImportFromStringAsync(json);
+
+            // Register custom asset types first
+            foreach (var t in imported.Metadata.AssetTypes.Where(t => !t.IsBuiltIn))
+                Provider.AddAssetType(t);
+
+            // Push features into the active provider.
+            // If the active provider is a RestAssetProvider this fires
+            // POST /api/geoassets/features/bulk → PostgreSQL.
+            Provider.AddRange(imported.Features);
+
+            // Render on map
+            foreach (var f in imported.Features)
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+
+            _statusMsg   = L.GetString("import.successMsg", ev.File.Name, imported.Features.Count);
+            _statusColor = "var(--success)";
+
+            Logger.LogInformation(
+                "GeoJSON import — provider: {Provider}, file: {File}, features: {Count}",
+                _activeProviderName, ev.File.Name, imported.Features.Count);
+        }
+        catch (Exception ex)
+        {
+            _statusMsg   = L.GetString("import.errorImport", ex.Message);
+            _statusColor = "var(--danger)";
+            Logger.LogError(ex, "GeoJSON import failed — provider: {Provider}, file: {File}",
+                _activeProviderName, ev.File.Name);
+        }
+        finally
+        {
+            _importing = false;
+            StateHasChanged();
+        }
+    }
+}

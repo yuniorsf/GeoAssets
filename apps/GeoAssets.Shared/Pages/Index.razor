@@ -16,6 +16,7 @@
 @inject IAssetProvider Repository
 @inject AssetService AssetSvc
 @inject IMapInterop MapInterop
+@inject IBootLoader BootLoader
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAuthNavigationService AuthNav
@@ -93,6 +94,10 @@
                 OnSave="ContextMenuSave"
                 OnDelete="ContextMenuDelete"
                 OnClose="CloseContextMenu" />
+
+<!-- Provider boot dialog — shown on first launch until a data source is connected.
+     Backdrop click is ignored in boot mode; user must make an explicit choice. -->
+<ProviderConnectDialog Visible="@(!BootLoader.IsBootComplete)" IsBootMode="true" />
 
 <!-- Delete confirmation triggered from context menu -->
 <ConfirmDialog Visible="_showDeleteConfirm"
