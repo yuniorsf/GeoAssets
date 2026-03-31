@@ -5,18 +5,18 @@
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
-@inject IServiceProvider ServiceProvider
+@inject ProviderPluginRegistry PluginRegistry
 
 <div class="sidebar-section">
     <div class="section-header-row">
         <h6>@L["pool.title"]</h6>
         <span style="display:flex;gap:4px">
             <button class="btn-icon" title="@L["pool.newCollection"]" @onclick="StartAdd">＋</button>
-            @foreach (var factory in _externalFactories)
+            @foreach (var plugin in PluginRegistry.All.Where(p => p.Id != "inmemory"))
             {
-                var f = factory;
-                <button class="btn-icon" title="@L.GetString("pool.connectExternal", f.ProviderName)"
-                        @onclick="() => StartConnect(f.ProviderName)">🔌</button>
+                var p = plugin;
+                <button class="btn-icon" title="@L.GetString("pool.connectExternal", p.DisplayName)"
+                        @onclick="() => StartConnect(p)">🔌</button>
             }
         </span>
     </div>
@@ -94,37 +94,11 @@
         </div>
     }
 
-    @if (_connectingProvider is not null)
+    @if (_connectingPlugin is not null)
     {
         <div class="pool-connect-dialog">
-            <p class="pool-connect-title">@L.GetString("pool.connectExternal", _connectingProvider)</p>
-            <input class="form-control" placeholder="@L["pool.connStrPlaceholder"]"
-                   @bind="_connName" style="margin-bottom:6px" />
-
-            @if (_isLocalForm)
-            {
-                <div style="display:flex;gap:4px;margin-bottom:4px">
-                    <input class="form-control" placeholder="@L["pool.pg.host"]" @bind="_pgHost" style="flex:1" />
-                    <input class="form-control" placeholder="@L["pool.pg.port"]" @bind="_pgPort" style="width:68px" />
-                </div>
-                <input class="form-control" placeholder="@L["pool.pg.database"]" @bind="_pgDb"
-                       style="margin-bottom:4px" />
-                <input class="form-control" placeholder="@L["pool.pg.username"]" @bind="_pgUser"
-                       style="margin-bottom:4px" />
-                <input type="password" class="form-control" placeholder="@L["pool.pg.password"]" @bind="_pgPass"
-                       style="margin-bottom:4px" />
-                <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer">
-                    <input type="checkbox" @bind="_pgDisableSsl" />
-                    @L["pool.pg.disableSsl"]
-                </label>
-            }
-            else
-            {
-                <textarea class="form-control pool-connstr-input"
-                          placeholder="@(_connectingProvider == "REST" ? L["pool.rest.urlHint"] : L["pool.connStrHint"])"
-                          @bind="_connStr" rows="3"></textarea>
-            }
-
+            <p class="pool-connect-title">@L.GetString("pool.connectExternal", _connectingPlugin.DisplayName)</p>
+            <ProviderConfigForm Plugin="_connectingPlugin" Config="_connectConfig" />
             @if (!string.IsNullOrEmpty(_connError))
             {
                 <p class="pool-entry-msg" style="color:var(--danger)">@_connError</p>
@@ -149,36 +123,15 @@
     private Guid?  _editingId;
     private string _editingName = string.Empty;
 
-    // External provider connect state
-    private IReadOnlyList<IExternalProviderFactory> _externalFactories = [];
-    private string? _connectingProvider;
-    private string  _connName  = string.Empty;
-    private string  _connStr   = string.Empty;
-    private string  _connError = string.Empty;
-    private bool    _connecting;
-
-    // Structured PostgreSQL local-DB form
-    private string _pgHost       = "localhost";
-    private string _pgPort       = "5432";
-    private string _pgDb         = string.Empty;
-    private string _pgUser       = string.Empty;
-    private string _pgPass       = string.Empty;
-    private bool   _pgDisableSsl = true;
-
-    private bool _isLocalForm => _connectingProvider == "PostgreSQL";
+    // Plugin connect state
+    private IProviderPlugin? _connectingPlugin;
+    private ProviderConfig   _connectConfig = new();
+    private string           _connError     = string.Empty;
+    private bool             _connecting;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    protected override void OnInitialized()
-    {
-        Pool.Changed += OnPoolChanged;
-
-        // Discover registered external factories (e.g. PostgreSQL) — optional
-        _externalFactories = ServiceProvider
-            .GetService(typeof(IEnumerable<IExternalProviderFactory>)) is IEnumerable<IExternalProviderFactory> factories
-            ? [.. factories]
-            : [];
-    }
+    protected override void OnInitialized() => Pool.Changed += OnPoolChanged;
 
     private void OnPoolChanged(object? _, EventArgs __) =>
         InvokeAsync(StateHasChanged);
@@ -352,48 +305,33 @@
 
     // ── External provider connect ─────────────────────────────────────────────
 
-    private void StartConnect(string providerName)
+    private void StartConnect(IProviderPlugin plugin)
     {
-        _connectingProvider = providerName;
-        _connName           = providerName;
-        _connStr            = string.Empty;
-        _connError          = string.Empty;
-        _connecting         = false;
-        _pgHost       = "localhost";
-        _pgPort       = "5432";
-        _pgDb         = string.Empty;
-        _pgUser       = string.Empty;
-        _pgPass       = string.Empty;
-        _pgDisableSsl = true;
+        _connectingPlugin = plugin;
+        _connectConfig    = new ProviderConfig();
+        _connError        = string.Empty;
+        _connecting       = false;
     }
 
     private void CancelConnect()
     {
-        _connectingProvider = null;
-        _connError          = string.Empty;
+        _connectingPlugin = null;
+        _connError        = string.Empty;
     }
 
     private async Task CommitConnectAsync()
     {
-        if (_isLocalForm)
+        if (_connectingPlugin is null) return;
+
+        // Validate required fields
+        foreach (var f in _connectingPlugin.ConfigFields.Where(f => f.Required))
         {
-            if (string.IsNullOrWhiteSpace(_pgDb))
+            if (!_connectConfig.Has(f.Key))
             {
-                _connError = L["pool.pg.dbRequired"];
+                _connError = L.GetString("pool.fieldRequired", f.Label);
                 return;
             }
-            _connStr = $"Host={_pgHost.Trim()};Port={_pgPort.Trim()};Database={_pgDb.Trim()};" +
-                       $"Username={_pgUser.Trim()};Password={_pgPass};" +
-                       (_pgDisableSsl ? "SSL Mode=Disable;" : string.Empty);
         }
-        else if (string.IsNullOrWhiteSpace(_connStr))
-        {
-            _connError = L["pool.connStrRequired"];
-            return;
-        }
-
-        var factory = _externalFactories.FirstOrDefault(f => f.ProviderName == _connectingProvider);
-        if (factory is null) return;
 
         _connecting = true;
         _connError  = string.Empty;
@@ -401,27 +339,22 @@
 
         try
         {
-            IAssetProvider repo;
-            if (factory is IAsyncProviderFactory asyncFactory)
-                repo = await asyncFactory.CreateAsync(_connStr.Trim());
-            else
-                repo = await Task.Run(() => factory.Create(_connStr.Trim()));
-            var name  = string.IsNullOrWhiteSpace(_connName) ? factory.ProviderName : _connName.Trim();
-            var entry = Pool.AddExternal(name, repo);
+            var repo = await _connectingPlugin.CreateAsync(_connectConfig, default!);
+            var name = _connectConfig.Get("name", _connectingPlugin.DisplayName);
+            Pool.AddExternal(name, repo);
 
-            // Render all features from the connected repo
             foreach (var f in repo.GetAll())
                 await MapInterop.RenderFeatureAsync(MapDivId, f);
 
-            Logger.LogInformation("External repository connected — provider: {Provider}, name: {Name}, features: {Count}",
-                factory.ProviderName, name, repo.GetAll().Count);
+            Logger.LogInformation("External provider connected — plugin: {Plugin}, name: {Name}, features: {Count}",
+                _connectingPlugin.Id, name, repo.GetAll().Count);
 
-            _connectingProvider = null;
+            _connectingPlugin = null;
         }
         catch (Exception ex)
         {
-            _connError  = L.GetString("pool.connectError", ex.Message);
-            Logger.LogError(ex, "External repository connection failed — provider: {Provider}", _connectingProvider);
+            _connError = L.GetString("pool.connectError", ex.Message);
+            Logger.LogError(ex, "Provider connection failed — plugin: {Plugin}", _connectingPlugin?.Id);
         }
         finally
         {

@@ -67,4 +67,18 @@ public sealed class FileStorageService : IStorageService
         var filePath = Path.Combine(docsPath, suggestedName);
         await File.WriteAllTextAsync(filePath, geoJson, ct);
     }
+
+    public async Task<string?> GetStringAsync(string key, CancellationToken ct = default)
+    {
+        var path = Path.Combine(FileSystem.AppDataDirectory, $"{key}.txt");
+        if (!File.Exists(path)) return null;
+        var value = await File.ReadAllTextAsync(path, ct);
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    public Task SetStringAsync(string key, string value, CancellationToken ct = default)
+    {
+        var path = Path.Combine(FileSystem.AppDataDirectory, $"{key}.txt");
+        return File.WriteAllTextAsync(path, value, ct);
+    }
 }

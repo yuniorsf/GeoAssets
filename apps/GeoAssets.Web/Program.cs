@@ -59,13 +59,17 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
 
-// Provider pool — each entry owns an independent InMemoryAssetProvider.
-// The active entry is the editable workspace for all UI components.
-builder.Services.AddSingleton<IProviderPool, InMemoryProviderPool>();
+// Provider pool + InMemory plugin (the default local workspace).
+builder.Services.AddGeoAssetsInMemory();
 
-// REST provider — exposes a remote GeoAssets API as a pool entry.
-// Connect via the 🔌 button in the ProviderPoolPanel using the API base URL.
+// REST plugin — adds a 🔌 button in the pool panel and appears in the boot dialog.
 builder.Services.AddGeoAssetsRest();
+
+// Plugin registry — collects all IProviderPlugin registrations for the UI.
+builder.Services.AddSingleton<ProviderPluginRegistry>();
+
+// Boot loader — orchestrates the first-run provider selection flow.
+builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 
 // Proxy follows the active pool entry; wrapped by the observable decorator.
 builder.Services.AddSingleton<ActiveAssetProvider>();

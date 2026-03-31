@@ -1,0 +1,103 @@
+@using GeoAssets.Core.Models
+@using Microsoft.AspNetCore.Components.Forms
+
+@foreach (var field in Plugin.ConfigFields)
+{
+    var f = field;
+    <div class="pcf-field">
+        <label class="pcf-label">
+            @f.Label
+            @if (f.Required) { <span class="pcf-required">*</span> }
+        </label>
+
+        @if (f.Type == ProviderFieldType.Password)
+        {
+            <input type="password"
+                   class="form-control"
+                   placeholder="@f.Placeholder"
+                   value="@GetValue(f)"
+                   @onchange="e => SetValue(f, e)" />
+        }
+        else if (f.Type == ProviderFieldType.Checkbox)
+        {
+            <label class="pcf-checkbox-label">
+                <input type="checkbox"
+                       checked="@IsChecked(f)"
+                       @onchange="e => SetChecked(f, e)" />
+                @if (!string.IsNullOrEmpty(f.Placeholder))
+                {
+                    <span>@f.Placeholder</span>
+                }
+            </label>
+        }
+        else if (f.Type == ProviderFieldType.File)
+        {
+            <InputFile class="form-control pcf-file"
+                       accept=".geojson,.json"
+                       OnChange="e => HandleFileAsync(e, f.Key)" />
+            @if (!string.IsNullOrEmpty(Config.Get(f.Key + "_name")))
+            {
+                <span class="pcf-file-name">@Config.Get(f.Key + "_name")</span>
+            }
+        }
+        else if (f.Type == ProviderFieldType.Number)
+        {
+            <input type="number"
+                   class="form-control"
+                   placeholder="@f.Placeholder"
+                   value="@GetValue(f)"
+                   @onchange="e => SetValue(f, e)" />
+        }
+        else if (f.Type == ProviderFieldType.Select)
+        {
+            <select class="form-control"
+                    value="@GetValue(f)"
+                    @onchange="e => SetValue(f, e)">
+                @foreach (var opt in (f.Options ?? []))
+                {
+                    <option value="@opt">@opt</option>
+                }
+            </select>
+        }
+        else
+        {
+            <input type="@(f.Type == ProviderFieldType.Url ? "url" : "text")"
+                   class="form-control"
+                   placeholder="@f.Placeholder"
+                   value="@GetValue(f)"
+                   @onchange="e => SetValue(f, e)" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IProviderPlugin Plugin { get; set; } = null!;
+    [Parameter, EditorRequired] public ProviderConfig Config { get; set; } = null!;
+
+    protected override void OnParametersSet()
+    {
+        foreach (var f in Plugin.ConfigFields.Where(f => f.DefaultValue is not null && !Config.Has(f.Key)))
+            Config.Set(f.Key, f.DefaultValue!);
+    }
+
+    private string GetValue(ProviderConfigField f) =>
+        Config.Get(f.Key, f.DefaultValue ?? string.Empty);
+
+    private void SetValue(ProviderConfigField f, ChangeEventArgs e) =>
+        Config.Set(f.Key, e.Value?.ToString() ?? string.Empty);
+
+    private bool IsChecked(ProviderConfigField f) =>
+        Config.Get(f.Key, f.DefaultValue ?? string.Empty) == "true";
+
+    private void SetChecked(ProviderConfigField f, ChangeEventArgs e) =>
+        Config.Set(f.Key, (bool)(e.Value ?? false) ? "true" : "false");
+
+    private async Task HandleFileAsync(InputFileChangeEventArgs ev, string key)
+    {
+        using var stream = ev.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+        using var reader = new System.IO.StreamReader(stream);
+        var content = await reader.ReadToEndAsync();
+        Config.Set(key + "_content", content);
+        Config.Set(key + "_name", ev.File.Name);
+    }
+}

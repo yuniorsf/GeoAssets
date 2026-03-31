@@ -72,4 +72,13 @@ public sealed class WebStorageService : IStorageService
             await _js.InvokeVoidAsync("GeoAssets.downloadAsFile", ct, geoJson, suggestedName);
         }
     }
+
+    public async Task<string?> GetStringAsync(string key, CancellationToken ct = default)
+    {
+        var value = await _localStorage.GetItemAsStringAsync(key, ct);
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    public async Task SetStringAsync(string key, string value, CancellationToken ct = default) =>
+        await _localStorage.SetItemAsStringAsync(key, value, ct);
 }
