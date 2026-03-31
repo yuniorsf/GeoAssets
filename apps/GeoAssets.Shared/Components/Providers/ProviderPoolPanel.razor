@@ -5,20 +5,11 @@
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
-@inject ProviderPluginRegistry PluginRegistry
 
 <div class="sidebar-section">
     <div class="section-header-row">
         <h6>@L["pool.title"]</h6>
-        <span style="display:flex;gap:4px">
-            <button class="btn-icon" title="@L["pool.newCollection"]" @onclick="StartAdd">＋</button>
-            @foreach (var plugin in PluginRegistry.All.Where(p => p.Id != "inmemory"))
-            {
-                var p = plugin;
-                <button class="btn-icon" title="@L.GetString("pool.connectExternal", p.DisplayName)"
-                        @onclick="() => StartConnect(p)">🔌</button>
-            }
-        </span>
+        <button class="btn-icon" title="@L["pool.addProvider"]" @onclick="OpenConnectDialog">＋</button>
     </div>
 
     <div class="pool-list">
@@ -84,50 +75,22 @@
         }
     </div>
 
-    @if (_addingNew)
-    {
-        <div class="attr-row" style="margin-top:8px">
-            <input class="form-control" placeholder="@L["pool.namePlaceholder"]"
-                   @bind="_newName" @onkeydown="HandleAddKey" />
-            <button class="btn btn-primary btn-sm" @onclick="CommitAdd" type="button">✓</button>
-            <button class="btn btn-secondary btn-sm" @onclick="CancelAdd" type="button">✕</button>
-        </div>
-    }
 
-    @if (_connectingPlugin is not null)
-    {
-        <div class="pool-connect-dialog">
-            <p class="pool-connect-title">@L.GetString("pool.connectExternal", _connectingPlugin.DisplayName)</p>
-            <ProviderConfigForm Plugin="_connectingPlugin" Config="_connectConfig" />
-            @if (!string.IsNullOrEmpty(_connError))
-            {
-                <p class="pool-entry-msg" style="color:var(--danger)">@_connError</p>
-            }
-            <div class="attr-row" style="margin-top:8px;justify-content:flex-end">
-                <button class="btn btn-secondary btn-sm" @onclick="CancelConnect" type="button">@L["assets.cancel"]</button>
-                <button class="btn btn-primary btn-sm" @onclick="CommitConnectAsync" type="button"
-                        disabled="@_connecting">
-                    @(_connecting ? L["pool.connecting"] : L["pool.connect"])
-                </button>
-            </div>
-        </div>
-    }
 </div>
+
+<!-- Provider connect dialog — position:fixed so it escapes the sidebar's overflow:hidden -->
+<ProviderConnectDialog Visible="_showConnectDialog"
+                       IsBootMode="false"
+                       OnClose="EventCallback.Factory.Create(this, CloseConnectDialog)"
+                       OnProviderConnected="EventCallback.Factory.Create<ProviderEntry>(this, HandleProviderConnected)" />
 
 @code {
     [Parameter] public string MapDivId { get; set; } = "geoassets-map";
 
     private readonly Dictionary<Guid, string> _messages = [];
-    private bool   _addingNew;
-    private string _newName     = string.Empty;
     private Guid?  _editingId;
     private string _editingName = string.Empty;
-
-    // Plugin connect state
-    private IProviderPlugin? _connectingPlugin;
-    private ProviderConfig   _connectConfig = new();
-    private string           _connError     = string.Empty;
-    private bool             _connecting;
+    private bool   _showConnectDialog;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -140,6 +103,18 @@
     {
         Pool.Changed -= OnPoolChanged;
         base.Dispose();
+    }
+
+    // ── Connect dialog ────────────────────────────────────────────────────────
+
+    private void OpenConnectDialog()  => _showConnectDialog = true;
+    private void CloseConnectDialog() => _showConnectDialog = false;
+
+    private async Task HandleProviderConnected(ProviderEntry entry)
+    {
+        _showConnectDialog = false;
+        foreach (var f in entry.Provider.GetAll())
+            await MapInterop.RenderFeatureAsync(MapDivId, f);
     }
 
     // ── Show / Hide ───────────────────────────────────────────────────────────
@@ -252,25 +227,6 @@
         }
     }
 
-    // ── Add ───────────────────────────────────────────────────────────────────
-
-    private void StartAdd()   { _addingNew = true; _newName = string.Empty; }
-    private void CancelAdd()  { _addingNew = false; _newName = string.Empty; }
-
-    private void CommitAdd()
-    {
-        if (!string.IsNullOrWhiteSpace(_newName))
-            Pool.Add(_newName.Trim());
-        _addingNew = false;
-        _newName   = string.Empty;
-    }
-
-    private void HandleAddKey(KeyboardEventArgs ev)
-    {
-        if (ev.Key == "Enter")  CommitAdd();
-        if (ev.Key == "Escape") CancelAdd();
-    }
-
     // ── Rename ────────────────────────────────────────────────────────────────
 
     private void StartRename(ProviderEntry entry)
@@ -301,64 +257,5 @@
             await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);
-    }
-
-    // ── External provider connect ─────────────────────────────────────────────
-
-    private void StartConnect(IProviderPlugin plugin)
-    {
-        _connectingPlugin = plugin;
-        _connectConfig    = new ProviderConfig();
-        _connError        = string.Empty;
-        _connecting       = false;
-    }
-
-    private void CancelConnect()
-    {
-        _connectingPlugin = null;
-        _connError        = string.Empty;
-    }
-
-    private async Task CommitConnectAsync()
-    {
-        if (_connectingPlugin is null) return;
-
-        // Validate required fields
-        foreach (var f in _connectingPlugin.ConfigFields.Where(f => f.Required))
-        {
-            if (!_connectConfig.Has(f.Key))
-            {
-                _connError = L.GetString("pool.fieldRequired", f.Label);
-                return;
-            }
-        }
-
-        _connecting = true;
-        _connError  = string.Empty;
-        StateHasChanged();
-
-        try
-        {
-            var repo = await _connectingPlugin.CreateAsync(_connectConfig, default!);
-            var name = _connectConfig.Get("name", _connectingPlugin.DisplayName);
-            Pool.AddExternal(name, repo);
-
-            foreach (var f in repo.GetAll())
-                await MapInterop.RenderFeatureAsync(MapDivId, f);
-
-            Logger.LogInformation("External provider connected — plugin: {Plugin}, name: {Name}, features: {Count}",
-                _connectingPlugin.Id, name, repo.GetAll().Count);
-
-            _connectingPlugin = null;
-        }
-        catch (Exception ex)
-        {
-            _connError = L.GetString("pool.connectError", ex.Message);
-            Logger.LogError(ex, "Provider connection failed — plugin: {Plugin}", _connectingPlugin?.Id);
-        }
-        finally
-        {
-            _connecting = false;
-        }
     }
 }

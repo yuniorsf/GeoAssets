@@ -70,11 +70,29 @@ public sealed class BootLoaderService : IBootLoader
 
     public async Task BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default)
     {
+        // Snapshot the pool before connecting so we can clean up the default placeholder afterward.
+        var existingEntries = _pool.All.ToList();
+
         var provider = await plugin.CreateAsync(config, _services, ct);
         var name     = config.Get("name", plugin.DisplayName);
-        _pool.AddExternal(name, provider);
+        var entry    = _pool.AddExternal(name, provider);
 
-        // Persist — but strip file content (potentially large) before saving
+        // Make the newly connected provider the active workspace.
+        _pool.SetActive(entry.Id);
+
+        // If the pool previously contained only a single empty placeholder (the one
+        // InMemoryProviderPool creates on construction), remove it so the user sees
+        // only the provider they actually chose to connect.
+        if (existingEntries.Count == 1)
+        {
+            var placeholder = existingEntries[0];
+            var isEmpty     = placeholder.Provider.GetAll().Count == 0
+                           && placeholder.Provider.GetAssetTypes().All(t => t.IsBuiltIn);
+            if (isEmpty)
+                _pool.Remove(placeholder.Id);
+        }
+
+        // Persist — strip file content (potentially large) before saving.
         var toSave = new Dictionary<string, string>(
             config.All.Where(kv => !kv.Key.EndsWith("_content", StringComparison.OrdinalIgnoreCase)),
             StringComparer.OrdinalIgnoreCase);
@@ -87,8 +105,8 @@ public sealed class BootLoaderService : IBootLoader
 
     public void BootWithDefault()
     {
-        // The pool already has a default InMemory entry created by InMemoryProviderPool.
-        // Just mark boot complete — no persistence (next launch will show selector again).
+        // Pool already has the default InMemory entry from InMemoryProviderPool constructor.
+        // No persistence — next launch will show the selector again.
         _logger.LogInformation("Boot skipped — using default in-memory pool entry");
         Complete();
     }

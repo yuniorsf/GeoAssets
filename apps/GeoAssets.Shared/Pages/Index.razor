@@ -10,13 +10,13 @@
 @using GeoAssets.Shared.Components.Assets
 @using GeoAssets.Shared.Components.Layers
 @using GeoAssets.Shared.Components.Map
-@using GeoAssets.Shared.Components.Import
 @using GeoAssets.Shared.Components.Providers
 @using GeoAssets.Shared.Components.Shared
 @implements IAsyncDisposable
 @inject IAssetProvider Repository
 @inject AssetService AssetSvc
 @inject IMapInterop MapInterop
+@inject IBootLoader BootLoader
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAuthNavigationService AuthNav
@@ -31,8 +31,6 @@
         </div>
 
         <ProviderPoolPanel MapDivId="@_mapDivId" />
-
-        <GeoJsonRestImportPanel MapDivId="@_mapDivId" />
 
         <LayerManager MapDivId="@_mapDivId" />
 
@@ -97,8 +95,9 @@
                 OnDelete="ContextMenuDelete"
                 OnClose="CloseContextMenu" />
 
-<!-- Provider boot modal — shown on first launch until a data source is connected -->
-<ProviderSelectionModal />
+<!-- Provider boot dialog — shown on first launch until a data source is connected.
+     Backdrop click is ignored in boot mode; user must make an explicit choice. -->
+<ProviderConnectDialog Visible="@(!BootLoader.IsBootComplete)" IsBootMode="true" />
 
 <!-- Delete confirmation triggered from context menu -->
 <ConfirmDialog Visible="_showDeleteConfirm"
