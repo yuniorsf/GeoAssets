@@ -1,8 +1,10 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
-using NtsGeometry    = NetTopologySuite.Geometries.Geometry;
-using NtsLineString  = NetTopologySuite.Geometries.LineString;
-using NtsPoint       = NetTopologySuite.Geometries.Point;
-using NtsPolygon     = NetTopologySuite.Geometries.Polygon;
+using NetTopologySuite.IO.Converters;
+using NtsGeometry   = NetTopologySuite.Geometries.Geometry;
+using NtsLineString = NetTopologySuite.Geometries.LineString;
+using NtsPoint      = NetTopologySuite.Geometries.Point;
+using NtsPolygon    = NetTopologySuite.Geometries.Polygon;
 
 namespace GeoAssets.Core.Models.Geometry;
 
@@ -99,16 +101,25 @@ public abstract class GeoGeometry
 
     // ── NTS ↔ GeoGeometry ────────────────────────────────────────────────────
 
+    internal static readonly JsonSerializerOptions _ntsJsonOpts = new()
+    {
+        Converters = { new GeoJsonConverterFactory() }
+    };
+
     /// <summary>
-    /// Wraps an NTS geometry directly — no coordinate copying, SRID preserved.
-    /// Supports Point, LineString, and Polygon.
+    /// Wraps an NTS geometry as a <see cref="GeoGeometry"/>.
+    /// Point, LineString, and Polygon map to their typed subclasses.
+    /// All other types (MultiPolygon, GeometryCollection, …) are serialized
+    /// to GeoJSON and stored as <see cref="GeoRawGeometry"/> for pass-through
+    /// rendering — spatial predicates are not supported on raw geometries.
     /// </summary>
     public static GeoGeometry FromNts(NtsGeometry nts) => nts switch
     {
         NtsPoint      p    => new GeoPoint(p),
         NtsLineString ls   => new GeoLineString(ls),
         NtsPolygon    poly => new GeoPolygon(poly),
-        _ => throw new NotSupportedException(
-                $"NTS geometry type '{nts.GeometryType}' has no GeoGeometry subtype.")
+        _ => new GeoRawGeometry(
+                nts.GeometryType,
+                JsonSerializer.Serialize(nts, _ntsJsonOpts))
     };
 }
