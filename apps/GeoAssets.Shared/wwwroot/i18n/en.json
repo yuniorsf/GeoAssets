@@ -71,6 +71,7 @@
   "pool.setActive": "Set as active workspace",
   "pool.delete": "Delete collection",
   "pool.active": "★",
+  "pool.skipBoot": "Skip boot",
 
   "map.layers": "Layers",
   "map.layers.deleteType": "Delete type",

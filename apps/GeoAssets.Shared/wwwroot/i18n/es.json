@@ -71,6 +71,7 @@
   "pool.setActive": "Activar como espacio de trabajo",
   "pool.delete": "Eliminar colección",
   "pool.active": "★",
+  "pool.skipBoot": "Omitir inicio",
 
   "map.layers": "Capas",
   "map.layers.deleteType": "Eliminar tipo",
