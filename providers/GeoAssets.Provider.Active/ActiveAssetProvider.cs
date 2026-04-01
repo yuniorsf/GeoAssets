@@ -25,13 +25,13 @@ public sealed class ActiveAssetProvider : IAssetProvider
     public ActiveAssetProvider(IProviderPool pool)
     {
         _pool    = pool;
-        _current = pool.Active.Provider;
-        Subscribe(_current);
+        _current = NullAssetProvider.Instance;
         pool.Changed += OnPoolChanged;
     }
 
     private void OnPoolChanged(object? _, EventArgs __)
     {
+        if (_pool.All.Count == 0 || !_pool.All.Any(e => e.IsActive)) return;
         var next = _pool.Active.Provider;
         if (ReferenceEquals(next, _current)) return;
         Unsubscribe(_current);

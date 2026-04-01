@@ -1,30 +1,17 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 
-namespace GeoAssets.Provider.InMemory;
+namespace GeoAssets.Core.Services;
 
 /// <summary>
-/// In-memory implementation of <see cref="IProviderPool"/>.
-/// Creates one default active entry on construction; additional entries
-/// each own an independent <see cref="InMemoryAssetProvider"/>.
+/// General-purpose implementation of <see cref="IProviderPool"/>.
+/// Starts empty; entries are added explicitly via <see cref="Add"/>.
 /// </summary>
-public sealed class InMemoryProviderPool : IProviderPool
+public sealed class ProviderPool : IProviderPool
 {
     private readonly List<ProviderEntry> _entries = [];
 
     public event EventHandler? Changed;
-
-    public InMemoryProviderPool()
-    {
-        _entries.Add(new ProviderEntry
-        {
-            Name       = "Default",
-            IsOpen     = true,
-            IsEnabled  = true,
-            IsActive   = true,
-            Provider = new InMemoryAssetProvider()
-        });
-    }
 
     public IReadOnlyList<ProviderEntry> All    => _entries;
     public ProviderEntry                Active => _entries.First(e => e.IsActive);
@@ -33,10 +20,10 @@ public sealed class InMemoryProviderPool : IProviderPool
     {
         var entry = new ProviderEntry
         {
-            Name       = name,
-            IsOpen     = true,
-            IsEnabled  = true,
-            Provider = provider
+            Name      = name,
+            IsOpen    = true,
+            IsEnabled = true,
+            Provider  = provider
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
