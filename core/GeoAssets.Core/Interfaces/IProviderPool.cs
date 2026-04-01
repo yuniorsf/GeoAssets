@@ -12,14 +12,11 @@ public interface IProviderPool
     IReadOnlyList<ProviderEntry> All    { get; }
     ProviderEntry                Active { get; }
 
-    /// <summary>Creates a new in-memory entry and adds it to the pool.</summary>
-    ProviderEntry Add(string name);
-
     /// <summary>
     /// Wraps an externally created provider (e.g. PostgreSQL-backed) in a pool entry.
     /// Use this to connect any <see cref="IAssetProvider"/> implementation to the map.
     /// </summary>
-    ProviderEntry AddExternal(string name, IAssetProvider provider);
+    ProviderEntry Add(string name, IAssetProvider provider);
 
     /// <summary>Makes the given entry the active workspace; opens and enables it if needed.</summary>
     void SetActive(Guid id);

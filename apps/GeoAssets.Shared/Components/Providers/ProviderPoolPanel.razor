@@ -137,13 +137,17 @@
 
     // ── Set active workspace ──────────────────────────────────────────────────
 
-    private async Task SetActiveAsync(ProviderEntry entry)
+    private async Task RefreshProvidersAsync()
     {
-        Pool.SetActive(entry.Id);
         await MapInterop.ClearAllFeaturesAsync(MapDivId);
         foreach (var e in Pool.All.Where(e => e.IsEnabled))
             foreach (var f in e.Provider.GetAll())
                 await MapInterop.RenderFeatureAsync(MapDivId, f);
+    }
+
+    private async Task SetActiveAsync(ProviderEntry entry)
+    {
+        Pool.SetActive(entry.Id);
     }
 
     // ── Export ────────────────────────────────────────────────────────────────

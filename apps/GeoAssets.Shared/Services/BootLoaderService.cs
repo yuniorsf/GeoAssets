@@ -75,7 +75,7 @@ public sealed class BootLoaderService : IBootLoader
 
         var provider = await plugin.CreateAsync(config, _services, ct);
         var name     = config.Get("name", plugin.DisplayName);
-        var entry    = _pool.AddExternal(name, provider);
+        var entry    = _pool.Add(name, provider);
 
         // Make the newly connected provider the active workspace.
         _pool.SetActive(entry.Id);
