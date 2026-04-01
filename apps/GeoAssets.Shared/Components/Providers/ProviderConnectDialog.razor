@@ -62,13 +62,7 @@
             </div>
 
             <div class="pcd-footer">
-                @if (IsBootMode)
-                {
-                    <button class="btn btn-secondary btn-sm" @onclick="SkipBoot" disabled="@_connecting">
-                        @L["pool.skipBoot"]
-                    </button>
-                }
-                else
+                @if (!IsBootMode)
                 {
                     <button class="btn btn-secondary btn-sm" @onclick="Cancel" disabled="@_connecting">
                         @L["assets.cancel"]
@@ -179,8 +173,6 @@
             _connecting = false;
         }
     }
-
-    private void SkipBoot() => BootLoader.BootWithDefault();
 
     private void Cancel()
     {

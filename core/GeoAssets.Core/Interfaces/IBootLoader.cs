@@ -25,10 +25,4 @@ public interface IBootLoader
     /// provider to the pool and persists the config for next launch.
     /// </summary>
     Task BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default);
-
-    /// <summary>
-    /// Skips provider selection: marks boot complete using the existing default
-    /// in-memory pool entry. No config is persisted.
-    /// </summary>
-    void BootWithDefault();
 }
