@@ -156,7 +156,7 @@
             {
                 var provider = await _selected.CreateAsync(_config, Services);
                 var name     = _config.Get("name", _selected.DisplayName);
-                var entry    = Pool.AddExternal(name, provider);
+                var entry    = Pool.Add(name, provider);
 
                 Logger.LogInformation("Provider connected — plugin: {Plugin}, name: {Name}, features: {Count}",
                     _selected.Id, name, provider.GetAll().Count);

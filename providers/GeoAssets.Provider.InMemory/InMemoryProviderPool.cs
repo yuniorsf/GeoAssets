@@ -29,21 +29,7 @@ public sealed class InMemoryProviderPool : IProviderPool
     public IReadOnlyList<ProviderEntry> All    => _entries;
     public ProviderEntry                Active => _entries.First(e => e.IsActive);
 
-    public ProviderEntry Add(string name)
-    {
-        var entry = new ProviderEntry
-        {
-            Name       = name,
-            IsOpen     = true,
-            IsEnabled  = true,
-            Provider = new InMemoryAssetProvider()
-        };
-        _entries.Add(entry);
-        Changed?.Invoke(this, EventArgs.Empty);
-        return entry;
-    }
-
-    public ProviderEntry AddExternal(string name, IAssetProvider provider)
+    public ProviderEntry Add(string name, IAssetProvider provider)
     {
         var entry = new ProviderEntry
         {
