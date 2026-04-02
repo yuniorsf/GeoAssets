@@ -5,7 +5,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using Microsoft.Extensions.Logging;
 
-namespace GeoAssets.Provider.Observable;
+namespace GeoAssets.Shared.Services.Observability;
 
 /// <summary>
 /// Observable decorator for <see cref="IAssetProvider"/>.
