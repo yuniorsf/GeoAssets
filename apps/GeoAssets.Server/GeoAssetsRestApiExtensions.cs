@@ -2,11 +2,8 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 
-namespace GeoAssets.Provider.PostgreSQL;
+namespace  GeoAssets.Server;
 
 /// <summary>
 /// Maps GeoAssets REST API endpoints onto any <see cref="IEndpointRouteBuilder"/>.
