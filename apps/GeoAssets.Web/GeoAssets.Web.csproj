@@ -19,7 +19,6 @@
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Active\GeoAssets.Provider.Active.csproj" />
-    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Observable\GeoAssets.Provider.Observable.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
   </ItemGroup>
 

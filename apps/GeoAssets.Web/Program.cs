@@ -3,7 +3,6 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.Active;
 using GeoAssets.Provider.InMemory;
-using GeoAssets.Provider.Observable;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
@@ -59,10 +58,10 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
 
-// Provider pool + InMemory plugin (the default local workspace).
+// Asset provider — in-memory cache + REST API client, wrapped by the observable decorator.
+// TODO: add a "loading" state to the UI while the provider initializes and remove the "Loading..." placeholder from the map.
+// TODO: load by configuration and support multiple provider types (e.g. in-memory for dev, REST for prod).
 builder.Services.AddGeoAssetsInMemory();
-
-// REST plugin — adds a 🔌 button in the pool panel and appears in the boot dialog.
 builder.Services.AddGeoAssetsRest();
 
 // Plugin registry — collects all IProviderPlugin registrations for the UI.
