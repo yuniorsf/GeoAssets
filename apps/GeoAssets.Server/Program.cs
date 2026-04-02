@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Provider.PostgreSQL;
+using GeoAssets.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
