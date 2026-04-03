@@ -2,7 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 
-namespace GeoAssets.Provider.Active;
+namespace GeoAssets.Core.Providers;
 
 /// <summary>
 /// No-op <see cref="IAssetProvider"/> used as a placeholder before the first

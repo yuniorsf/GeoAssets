@@ -1,11 +1,11 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.Active;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using Microsoft.Extensions.Logging;
+using GeoAssets.Core.Providers;
 
 namespace GeoAssets.MAUI;
 
