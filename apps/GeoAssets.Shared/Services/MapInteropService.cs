@@ -4,7 +4,9 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using Microsoft.JSInterop;
-using System.Text.Json.Nodes;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GeoAssets.Shared.Services;
 
@@ -17,6 +19,18 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     private readonly IJSRuntime _js;
     private readonly IAssetProvider _repo;
     private const string Ns = "GeoAssets"; // window.GeoAssets
+
+    /// <summary>
+    /// Compact (non-indented) options for the JS interop path.
+    /// Mirrors GeoJsonSerializer.Options but without WriteIndented.
+    /// </summary>
+    private static readonly JsonSerializerOptions _interopOptions = new()
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new GeoGeometryConverter() }
+    };
 
     public MapInteropService(IJSRuntime js, IAssetProvider repo)
     {
@@ -32,22 +46,34 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public Task RenderFeatureAsync(string divId, GeoFeature feature)
     {
-        var json = SerializeWithColor(feature);
-        return _js.InvokeVoidAsync($"{Ns}.renderFeature", divId, json).AsTask();
+        var json = JsonSerializer.Serialize(feature, _interopOptions);
+        var colorMap = BuildColorMap();
+        return _js.InvokeVoidAsync($"{Ns}.renderFeature", divId, json, colorMap).AsTask();
     }
 
     public async Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features)
     {
         const int BatchSize = 5;
 
+        // Build the id→color lookup once for the entire render operation.
+        // Passed to JS so color resolution happens there — no DOM manipulation in C#.
+        var colorMap = BuildColorMap();
         var list = features.ToList();
         await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
 
         for (int i = 0; i < list.Count; i += BatchSize)
         {
             var batch = list.GetRange(i, Math.Min(BatchSize, list.Count - i));
-            var json  = $"[{string.Join(",", batch.Select(SerializeWithColor))}]";
-            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, json);
+
+            var sb = new StringBuilder("[");
+            for (int j = 0; j < batch.Count; j++)
+            {
+                if (j > 0) sb.Append(',');
+                sb.Append(JsonSerializer.Serialize(batch[j], _interopOptions));
+            }
+            sb.Append(']');
+
+            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
             await Task.Delay(1); // yield to the browser event loop between batches
         }
     }
@@ -81,18 +107,9 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Serializes the feature and injects the resolved asset-type color into
-    /// <c>properties.color</c> so the JS renderer can use it directly.
+    /// Builds a string-keyed lookup of assetTypeId → color.
+    /// Called once per render operation; Guid.ToString() is paid per type, not per feature.
     /// </summary>
-    private string SerializeWithColor(GeoFeature feature)
-    {
-        var color = _repo.GetAssetTypes()
-            .FirstOrDefault(t => t.Id.ToString() == feature.Properties.AssetTypeId)
-            ?.Color ?? "#3388ff";
-
-        var node = JsonNode.Parse(GeoJsonSerializer.SerializeFeature(feature))!;
-        node["properties"]!["color"] = color;
-        return node.ToJsonString();
-    }
+    private Dictionary<string, string> BuildColorMap() =>
+        _repo.GetAssetTypes().ToDictionary(t => t.Id.ToString(), t => t.Color);
 }
-

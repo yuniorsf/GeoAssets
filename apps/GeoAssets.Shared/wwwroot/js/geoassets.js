@@ -94,14 +94,14 @@ window.GeoAssets = (function () {
 
     // ─── Feature Rendering ───────────────────────────────────────────────────
 
-    function renderFeature(divId, featureJson) {
+    function renderFeature(divId, featureJson, colorMap) {
         const state = _maps[divId];
         if (!state) return;
 
         const feature = typeof featureJson === 'string' ? JSON.parse(featureJson) : featureJson;
         const id      = feature.id;
         const props   = feature.properties || {};
-        const color   = props.color || '#3388ff';
+        const color   = (colorMap && colorMap[props.assetTypeId]) || '#3388ff';
         const assetTypeId = props.assetTypeId || 'default';
 
         // Remove stale layer
@@ -150,9 +150,9 @@ window.GeoAssets = (function () {
         (features || []).forEach(f => renderFeature(divId, f));
     }
 
-    function renderFeatureBatch(divId, featuresJson) {
+    function renderFeatureBatch(divId, featuresJson, colorMap) {
         const features = typeof featuresJson === 'string' ? JSON.parse(featuresJson) : featuresJson;
-        (features || []).forEach(f => renderFeature(divId, f));
+        (features || []).forEach(f => renderFeature(divId, f, colorMap));
     }
 
     function removeFeature(divId, featureId) {
