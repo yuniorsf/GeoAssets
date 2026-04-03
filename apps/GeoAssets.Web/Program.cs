@@ -1,7 +1,7 @@
 using Blazored.LocalStorage;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.Active;
 using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Shared.Interfaces;
