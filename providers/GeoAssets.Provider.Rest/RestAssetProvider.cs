@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
@@ -19,7 +20,7 @@ namespace GeoAssets.Provider.Rest;
 /// </summary>
 public sealed class RestAssetProvider : IAssetProvider
 {
-    private static readonly System.Text.Json.JsonSerializerOptions _opts = GeoJsonSerializer.GetOptions();
+    private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.GetOptions();
 
     private readonly HttpClient            _http;
     private readonly InMemoryAssetProvider _cache = new();
@@ -70,6 +71,53 @@ public sealed class RestAssetProvider : IAssetProvider
     public IReadOnlyList<GeoFeature>                Search(string query)                            => _cache.Search(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                  => _cache.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)          => _cache.GetIntersecting(geometry);
+
+    /// <summary>
+    /// Fetches only features within the viewport from the server,
+    /// enabling the server to filter via PostGIS rather than loading the full dataset.
+    /// </summary>
+    public async Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(
+        double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
+        return await _http.GetFromJsonAsync<GeoFeature[]>(url, _opts) ?? [];
+    }
+
+    /// <summary>
+    /// Returns the raw HTTP response body as a JSON string without any C# parsing,
+    /// so JavaScript can parse it natively (avoids the WASM JSON-parsing bottleneck).
+    /// </summary>
+    public async Task<string?> GetInBoundsRawJsonAsync(
+        double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
+        var response = await _http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    /// <summary>
+    /// Returns the raw JSON elements from the server response directly — no deserialize + re-serialize round-trip.
+    /// The HTTP response body (a JSON array of features) is parsed once into <see cref="JsonElement"/> objects
+    /// and forwarded as-is to the map renderer.
+    /// </summary>
+    public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
+        double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
+        var response = await _http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        var stream = await response.Content.ReadAsStreamAsync();
+        using var doc = await JsonDocument.ParseAsync(stream);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("Expected JSON array from server");
+        // Clone each element so they own their own memory and survive the document disposal.
+        return [.. doc.RootElement.EnumerateArray().Select(e => e.Clone())];
+        // Alternatively, we could use GetFromJsonAsync<JsonElement[]>(url) to get an array directly,
+        // but that would require buffering the entire response in memory as a string first,
+        // which is less efficient for large datasets.
+        // return await _http.GetFromJsonAsync<JsonElement[]>(url) ?? [];
+    }
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg) => _cache.GetNearby(center, distanceDeg);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                 => _cache.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)               => _cache.GetDescendants(featureId);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
@@ -108,6 +109,21 @@ public sealed class InMemoryAssetProvider : IAssetProvider
 
     public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) =>
         [.. _features.Values.Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
+
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var bbox = new GeoPolygon([
+            (minLon, minLat), (maxLon, minLat), (maxLon, maxLat), (minLon, maxLat), (minLon, minLat)
+        ]);
+        return Task.FromResult(GetIntersecting(bbox));
+    }
+
+    public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+        var opts = GeoJsonSerializer.GetCompactOptions();
+        return [.. features.Select(f => JsonSerializer.SerializeToElement(f, opts))];
+    }
 
     public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) =>
         [.. _features.Values

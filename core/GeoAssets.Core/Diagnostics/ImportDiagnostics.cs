@@ -74,4 +74,9 @@ public static class ImportDiagnostics
         _meter.CreateCounter<long>(
             "geoassets.import.feature_count", "{features}",
             "Cumulative features merged into the repository via import.");
+
+    public static readonly Histogram<double> GetInBoundsDurationMs =
+        _meter.CreateHistogram<double>(
+            "geoassets.repository.getall_duration_ms", "ms",
+            "Duration of IAssetProvider.GetAll.");
 }

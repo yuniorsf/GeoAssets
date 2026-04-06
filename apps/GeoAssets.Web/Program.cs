@@ -78,6 +78,8 @@ builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();
 
+builder.Services.Configure<MapInteropOptions>(
+    builder.Configuration.GetSection("MapInterop"));
 builder.Services.AddScoped<MapInteropService>();
 builder.Services.AddScoped<IMapInterop>(sp => new ObservableMapInterop(
     sp.GetRequiredService<MapInteropService>(),

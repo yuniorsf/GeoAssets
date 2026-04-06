@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
@@ -24,6 +25,8 @@ internal sealed class NullAssetProvider : IAssetProvider
     public IReadOnlyList<GeoFeature>                Search(string query)                            => [];
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                  => [];
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)          => [];
+    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double a, double b, double c, double d)     => Task.FromResult<IReadOnlyList<GeoFeature>>([]);
+    public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double a, double b, double c, double d) => Task.FromResult<IReadOnlyList<JsonElement>>([]);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg) => [];
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                 => [];
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)               => [];

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
@@ -42,14 +43,18 @@ public sealed class ObservableMapInterop(
 
     // ── Pass-through ─────────────────────────────────────────────────────────
 
-    public Task InitializeMapAsync(string divId, double lat, double lon, int zoom)    => inner.InitializeMapAsync(divId, lat, lon, zoom);
-    public Task DestroyMapAsync(string divId)                                          => inner.DestroyMapAsync(divId);
-    public Task RenderFeatureAsync(string divId, GeoFeature feature)                  => inner.RenderFeatureAsync(divId, feature);
+    public Task InitializeMapAsync(string divId, double lat, double lon, int zoom)           => inner.InitializeMapAsync(divId, lat, lon, zoom);
+    public Task DestroyMapAsync(string divId)                                               => inner.DestroyMapAsync(divId);
+    public Task RenderFeatureAsync(string divId, GeoFeature feature)                        => inner.RenderFeatureAsync(divId, feature);
+    public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)   => inner.RenderAllFeaturesAsync(divId, features);
+    public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)         => inner.RenderAllFeaturesRawJsonAsync(divId, rawFeaturesJson);
     public Task RemoveFeatureAsync(string divId, string featureId)                    => inner.RemoveFeatureAsync(divId, featureId);
     public Task ClearAllFeaturesAsync(string divId)                                   => inner.ClearAllFeaturesAsync(divId);
     public Task EnableDrawModeAsync(string divId, GeometryType mode)                  => inner.EnableDrawModeAsync(divId, mode);
     public Task DisableDrawModeAsync(string divId)                                    => inner.DisableDrawModeAsync(divId);
-    public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => inner.SetLayerVisibilityAsync(divId, assetTypeId, visible);
+    public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) => inner.AddTileLayerAsync(divId, layerId, url, options);
+    public Task RemoveTileLayerAsync(string divId, string layerId)                                            => inner.RemoveTileLayerAsync(divId, layerId);
+    public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible)                      => inner.SetLayerVisibilityAsync(divId, assetTypeId, visible);
     public Task FitBoundsAsync(string divId, double[] bbox)                           => inner.FitBoundsAsync(divId, bbox);
     public Task PanToFeatureAsync(string divId, string featureId)                     => inner.PanToFeatureAsync(divId, featureId);
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) => inner.RegisterEventHandlersAsync(divId, handlerRef);
