@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 
@@ -17,6 +18,21 @@ public interface IAssetProvider
 
     /// <summary>Returns features whose geometry intersects <paramref name="geometry"/>.</summary>
     IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry);
+
+    /// <summary>
+    /// Returns features whose geometry intersects the given bounding box.
+    /// Implementations backed by a remote or database store should push the
+    /// filter server-side; in-memory implementations filter locally.
+    /// </summary>
+    Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat);
+
+    /// <summary>
+    /// Returns the same features as <see cref="GetInBoundsAsync"/> but already serialized
+    /// as <see cref="JsonElement"/> objects, avoiding a round-trip deserialize → re-serialize
+    /// before the data is forwarded to the JavaScript map.
+    /// Remote providers (e.g. REST) can forward the raw HTTP response JSON directly.
+    /// </summary>
+    Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat);
 
     /// <summary>
     /// Returns features whose geometry is within <paramref name="distanceDegrees"/> of

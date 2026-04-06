@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Interfaces;
@@ -33,6 +34,32 @@ public sealed class ObservableAssetProvider(
                     result.Count, elapsedMs);
             });
 
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat) =>
+        TrackAsync(
+            "repository.get_in_bounds",
+            async () => await inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat),
+            after: (span, result, elapsedMs) =>
+            {
+                span?.SetTag("feature.count", result.Count);
+                ImportDiagnostics.GetInBoundsDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "Repository.GetInBounds — {FeatureCount} features in {ElapsedMs} ms for bounds [{MinLon}, {MinLat}, {MaxLon}, {MaxLat} ] (provider: {ProviderType})",
+                    result.Count, elapsedMs, minLon, minLat, maxLon, maxLat, inner.GetType().FullName);
+            });
+
+    public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
+        TrackAsync(
+            "repository.get_in_bounds_json",
+            async () => await inner.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat),
+            after: (span, result, elapsedMs) =>
+            {
+                span?.SetTag("feature.count", result.Count);
+                ImportDiagnostics.GetInBoundsDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "Repository.GetInBoundsJson — {FeatureCount} features in {ElapsedMs} ms for bounds [{MinLon}, {MinLat}, {MaxLon}, {MaxLat}] (provider: {ProviderType})",
+                    result.Count, elapsedMs, minLon, minLat, maxLon, maxLat, inner.GetType().FullName);
+            });
+
     // ── Pass-through: reads ───────────────────────────────────────────────────
 
     public GeoFeature?                              GetById(string id)                                    => inner.GetById(id);
@@ -40,7 +67,7 @@ public sealed class ObservableAssetProvider(
     public IReadOnlyList<GeoFeature>                Search(string query)                                  => inner.Search(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                        => inner.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)                => inner.GetIntersecting(geometry);
-    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees)   => inner.GetNearby(center, distanceDegrees);
+public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees)   => inner.GetNearby(center, distanceDegrees);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                       => inner.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)                     => inner.GetDescendants(featureId);
     public IReadOnlyList<GeoFeature>                GetAncestors(string featureId)                       => inner.GetAncestors(featureId);

@@ -37,6 +37,6 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory)
         // Apply any pending migrations (idempotent)
         db.Database.Migrate();
 
-        return new PostgresAssetProvider(db, logger);
+        return new PostgresAssetProvider(db, options, logger);
     }
 }

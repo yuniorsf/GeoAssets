@@ -31,6 +31,7 @@ window.GeoAssets = (function () {
             map,
             featureLayers: new Map(),  // featureId → L.Layer
             layerGroups:   new Map(),  // assetTypeId → L.LayerGroup
+            tileLayers:    new Map(),  // layerId → L.TileLayer
             dotNetRef:     null
         };
     }
@@ -64,6 +65,15 @@ window.GeoAssets = (function () {
             layer.remove(); // .NET will re-render via renderFeature
             dotNetRef.invokeMethodAsync('OnFeatureDrawnFromJs', geoJson);
         });
+
+        // Viewport change events — fire after pan/zoom settles
+        function emitViewport() {
+            const b = map.getBounds();
+            dotNetRef.invokeMethodAsync('OnViewportChangedFromJs',
+                b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+        }
+        map.on('moveend', emitViewport);
+        map.on('zoomend', emitViewport);
 
         map.on('pm:edit', ({ layer }) => {
             const feature = layer.toGeoJSON();
@@ -175,6 +185,31 @@ window.GeoAssets = (function () {
         state.layerGroups.clear();
     }
 
+    // ─── Tile / WMS Layers ───────────────────────────────────────────────────
+
+    function addTileLayer(divId, layerId, url, options) {
+        const state = _maps[divId];
+        if (!state || state.tileLayers.has(layerId)) return; // idempotent
+        const layer = L.tileLayer(url, {
+            attribution: options?.attribution || '',
+            maxZoom:     options?.maxZoom     ?? 19,
+            minZoom:     options?.minZoom     ?? 0,
+            opacity:     options?.opacity     ?? 1.0
+        });
+        layer.addTo(state.map);
+        state.tileLayers.set(layerId, layer);
+    }
+
+    function removeTileLayer(divId, layerId) {
+        const state = _maps[divId];
+        if (!state) return;
+        const layer = state.tileLayers.get(layerId);
+        if (layer) {
+            state.map.removeLayer(layer);
+            state.tileLayers.delete(layerId);
+        }
+    }
+
     // ─── Layer Visibility ────────────────────────────────────────────────────
 
     function setLayerVisibility(divId, assetTypeId, visible) {
@@ -274,6 +309,8 @@ window.GeoAssets = (function () {
         renderFeatureBatch,
         removeFeature,
         clearAllFeatures,
+        addTileLayer,
+        removeTileLayer,
         setLayerVisibility,
         fitBounds,
         panToFeature,

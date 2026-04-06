@@ -78,6 +78,39 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         }
     }
 
+    public async Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)
+    {
+        // const int BatchSize = 5;
+        // var colorMap = BuildColorMap();
+        // await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+
+        // for (int i = 0; i < features.Count; i += BatchSize)
+        // {
+        //     var sb = new StringBuilder("[");
+        //     for (int j = 0; j < Math.Min(BatchSize, features.Count - i); j++)
+        //     {
+        //         if (j > 0) sb.Append(',');
+        //         sb.Append(features[i + j].GetRawText());
+        //     }
+        //     sb.Append(']');
+
+        //     await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
+        //     await Task.Delay(1);
+        // }
+
+        var colorMap = BuildColorMap();
+        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        var sb = new StringBuilder("[");
+        for (int i = 0; i < features.Count; i ++)
+        {
+            if (i > 0) sb.Append(',');
+                sb.Append(features[i].GetRawText());
+        }
+        sb.Append(']');
+        await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
+        await Task.Delay(1);
+    }
+
     public Task RemoveFeatureAsync(string divId, string featureId) =>
         _js.InvokeVoidAsync($"{Ns}.removeFeature", divId, featureId).AsTask();
 
@@ -89,6 +122,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public Task DisableDrawModeAsync(string divId) =>
         _js.InvokeVoidAsync($"{Ns}.disableDraw", divId).AsTask();
+
+    public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) =>
+        _js.InvokeVoidAsync($"{Ns}.addTileLayer", divId, layerId, url, options).AsTask();
+
+    public Task RemoveTileLayerAsync(string divId, string layerId) =>
+        _js.InvokeVoidAsync($"{Ns}.removeTileLayer", divId, layerId).AsTask();
 
     public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) =>
         _js.InvokeVoidAsync($"{Ns}.setLayerVisibility", divId, assetTypeId, visible).AsTask();

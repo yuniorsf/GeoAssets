@@ -34,6 +34,10 @@ public static class GeoAssetsRestApiExtensions
         routes.MapGet($"{prefix}/features", (IAssetProvider provider) =>
             Results.Json(provider.GetAll(), opts));
 
+        routes.MapGet($"{prefix}/features/bounds",
+            async (double minLon, double minLat, double maxLon, double maxLat, IAssetProvider provider) =>
+                Results.Json(await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat), opts));
+
         routes.MapGet($"{prefix}/features/{{id}}", (string id, IAssetProvider provider) =>
         {
             var f = provider.GetById(id);

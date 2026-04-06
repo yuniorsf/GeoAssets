@@ -15,6 +15,14 @@ public static class GeoJsonSerializer
         Converters = { new GeoGeometryConverter() }
     };
 
+    private static readonly JsonSerializerOptions _compactOptions = new()
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new GeoGeometryConverter() }
+    };
+
     public static string Serialize(GeoFeatureCollection collection) =>
         JsonSerializer.Serialize(collection, Options);
 
@@ -31,6 +39,9 @@ public static class GeoJsonSerializer
         JsonSerializer.Deserialize<GeoGeometry>(json, Options);
 
     public static JsonSerializerOptions GetOptions() => Options;
+
+    /// <summary>Compact (non-indented) options for the JS interop path — same converter set as <see cref="GetOptions"/> but without <c>WriteIndented</c>.</summary>
+    public static JsonSerializerOptions GetCompactOptions() => _compactOptions;
 }
 
 /// <summary>

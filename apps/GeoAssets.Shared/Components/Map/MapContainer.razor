@@ -39,9 +39,10 @@
         if (features.Count > 0)
             await MapInterop.RenderAllFeaturesAsync(DivId, features);
 
-        Repository.FeatureAdded   += OnFeatureAdded;
-        Repository.FeatureUpdated += OnFeatureUpdated;
-        Repository.FeatureDeleted += OnFeatureDeletedFromRepo;
+        Repository.FeatureAdded      += OnFeatureAdded;
+        Repository.FeatureUpdated    += OnFeatureUpdated;
+        Repository.FeatureDeleted    += OnFeatureDeletedFromRepo;
+        Repository.CollectionChanged += OnCollectionChanged;
     }
 
     // ─── Repository event handlers ────────────────────────────────────────
@@ -54,6 +55,9 @@
 
     private void OnFeatureDeletedFromRepo(object? _, string id) =>
         InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
+
+    private void OnCollectionChanged(object? _, EventArgs __) =>
+        InvokeAsync(() => MapInterop.RenderAllFeaturesAsync(DivId, Repository.GetAll()));
 
     // ─── JS → .NET callbacks ─────────────────────────────────────────────
 
@@ -96,6 +100,13 @@
     public async Task OnFeatureContextMenuFromJs(string featureId, double x, double y) =>
         await OnFeatureContextMenu.InvokeAsync((featureId, x, y));
 
+    [JSInvokable("OnViewportChangedFromJs")]
+    public async Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+        await MapInterop.RenderAllFeaturesAsync(DivId, features);
+    }
+
     public Task PanToFeatureAsync(string featureId) =>
         MapInterop.PanToFeatureAsync(DivId, featureId);
 
@@ -103,9 +114,10 @@
 
     public void Dispose()
     {
-        Repository.FeatureAdded   -= OnFeatureAdded;
-        Repository.FeatureUpdated -= OnFeatureUpdated;
-        Repository.FeatureDeleted -= OnFeatureDeletedFromRepo;
+        Repository.FeatureAdded      -= OnFeatureAdded;
+        Repository.FeatureUpdated    -= OnFeatureUpdated;
+        Repository.FeatureDeleted    -= OnFeatureDeletedFromRepo;
+        Repository.CollectionChanged -= OnCollectionChanged;
     }
 
     public async ValueTask DisposeAsync()

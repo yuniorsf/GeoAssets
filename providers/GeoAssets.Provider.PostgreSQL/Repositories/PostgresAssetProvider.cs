@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Services;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Provider.PostgreSQL.Data;
@@ -7,6 +8,7 @@ using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries.Utilities;
 
 namespace GeoAssets.Provider.PostgreSQL.Repositories;
 
@@ -15,11 +17,12 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// Each instance owns its own <see cref="GeoAssetsDbContext"/> (scoped to one
 /// logical collection / repository pool entry).
 /// Topology and spatial graph queries fall back to the NTS-backed helpers from
-/// <see cref="GeoAssets.Core.Services.TopoGraph"/>.
+/// <see cref="TopoGraph"/>.
 /// </summary>
 public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 {
     private readonly GeoAssetsDbContext _db;
+    private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
     private readonly ILogger<PostgresAssetProvider> _logger;
 
     // In-memory cache — rebuilt on first use and after writes
@@ -33,10 +36,11 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     public event EventHandler<string>? FeatureDeleted;
     public event EventHandler? CollectionChanged;
 
-    public PostgresAssetProvider(GeoAssetsDbContext db, ILogger<PostgresAssetProvider> logger)
+    public PostgresAssetProvider(GeoAssetsDbContext db, DbContextOptions<GeoAssetsDbContext> dbOptions, ILogger<PostgresAssetProvider> logger)
     {
-        _db     = db;
-        _logger = logger;
+        _db        = db;
+        _dbOptions = dbOptions;
+        _logger    = logger;
     }
 
     // ── Cache helpers ──────────────────────────────────────────────────────────
@@ -82,6 +86,36 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) =>
         [.. Cache.Values.Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
 
+    /// <summary>
+    /// Pushes the bbox filter to PostGIS via ST_Intersects — never loads the full table.
+    /// EF Core + Npgsql translates <c>.Intersects()</c> to <c>ST_Intersects</c> in SQL.
+    /// </summary>
+    public async Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(
+        double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var factory = new GeometryFactory(new PrecisionModel(), 4326);
+        var bbox    = factory.ToGeometry(new Envelope(minLon, maxLon, minLat, maxLat));
+        bbox.SRID   = 4326;
+
+        // Use a dedicated short-lived context so concurrent viewport requests
+        // never share the same DbContext instance (which would cause a concurrency exception).
+        await using var db = new GeoAssetsDbContext(_dbOptions);
+        var rows = await db.GeoEntities
+            .AsNoTracking()
+            .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
+            .ToListAsync();
+
+        return rows.Select(MapToFeature).ToList();
+    }
+
+    public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
+        double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+        var opts = GeoJsonSerializer.GetCompactOptions();
+        return [.. features.Select(f => JsonSerializer.SerializeToElement(f, opts))];
+    }
+
     public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) =>
         [.. Cache.Values
             .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
@@ -90,28 +124,28 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     // ── Topology ───────────────────────────────────────────────────────────────
 
     public IReadOnlyList<GeoFeature> GetNeighbors(string id) =>
-        GeoAssets.Core.Services.TopoGraph.GetNeighbors(id, Cache.Values);
+        TopoGraph.GetNeighbors(id, Cache.Values);
 
     public IReadOnlyList<GeoFeature> GetDescendants(string id) =>
-        GeoAssets.Core.Services.TopoGraph.GetDescendants(id, Cache.Values);
+        TopoGraph.GetDescendants(id, Cache.Values);
 
     public IReadOnlyList<GeoFeature> GetAncestors(string id) =>
-        GeoAssets.Core.Services.TopoGraph.GetAncestors(id, Cache.Values);
+        TopoGraph.GetAncestors(id, Cache.Values);
 
     public IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) =>
-        GeoAssets.Core.Services.TopoGraph.FindPath(fromId, toId, Cache.Values);
+        TopoGraph.FindPath(fromId, toId, Cache.Values);
 
     public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) =>
-        GeoAssets.Core.Services.TopoGraph.FindShortestPath(fromId, toId, Cache.Values);
+        TopoGraph.FindShortestPath(fromId, toId, Cache.Values);
 
     public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() =>
-        GeoAssets.Core.Services.TopoGraph.GetConnectedComponents(Cache.Values);
+        TopoGraph.GetConnectedComponents(Cache.Values);
 
     public bool HasCycles() =>
-        GeoAssets.Core.Services.TopoGraph.HasCycles(Cache.Values);
+        TopoGraph.HasCycles(Cache.Values);
 
     public IReadOnlyList<GeoFeature> TopologicalSort() =>
-        GeoAssets.Core.Services.TopoGraph.TopologicalSort(Cache.Values);
+        TopoGraph.TopologicalSort(Cache.Values);
 
     // ── Write ──────────────────────────────────────────────────────────────────
 
