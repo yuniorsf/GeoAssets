@@ -70,8 +70,9 @@ public sealed class ActiveAssetProvider : IAssetProvider
     public IReadOnlyList<GeoFeature>                Search(string query)                              => _current.Search(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                    => _current.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)            => _current.GetIntersecting(geometry);
-    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)     => _current.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
-    public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => _current.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => _current.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+    public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)    => _current.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+    public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => _current.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg)   => _current.GetNearby(center, distanceDeg);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                   => _current.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)                 => _current.GetDescendants(featureId);

@@ -31,6 +31,11 @@ public interface IMapInterop
     Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features);
     /// <summary>Renders features from pre-serialized <see cref="JsonElement"/> objects, avoiding a re-serialize step.</summary>
     Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features);
+    /// <summary>
+    /// Renders features from a raw JSON array string, bypassing all C# JSON parsing.
+    /// The string is forwarded directly to JavaScript which parses it natively.
+    /// </summary>
+    Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson);
     Task RemoveFeatureAsync(string divId, string featureId);
     Task ClearAllFeaturesAsync(string divId);
 

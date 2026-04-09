@@ -84,6 +84,19 @@ public sealed class RestAssetProvider : IAssetProvider
     }
 
     /// <summary>
+    /// Returns the raw HTTP response body as a JSON string without any C# parsing,
+    /// so JavaScript can parse it natively (avoids the WASM JSON-parsing bottleneck).
+    /// </summary>
+    public async Task<string?> GetInBoundsRawJsonAsync(
+        double minLon, double minLat, double maxLon, double maxLat)
+    {
+        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
+        var response = await _http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    /// <summary>
     /// Returns the raw JSON elements from the server response directly — no deserialize + re-serialize round-trip.
     /// The HTTP response body (a JSON array of features) is parsed once into <see cref="JsonElement"/> objects
     /// and forwarded as-is to the map renderer.

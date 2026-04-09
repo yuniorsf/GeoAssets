@@ -35,6 +35,15 @@ public interface IAssetProvider
     Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat);
 
     /// <summary>
+    /// Returns the raw JSON array string for features within the bounding box,
+    /// bypassing all C# JSON parsing so JavaScript can parse natively (much faster in WASM).
+    /// Returns <c>null</c> when the provider does not support this path
+    /// (callers must fall back to <see cref="GetInBoundsJsonAsync"/>).
+    /// </summary>
+    Task<string?> GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat)
+        => Task.FromResult<string?>(null);
+
+    /// <summary>
     /// Returns features whose geometry is within <paramref name="distanceDegrees"/> of
     /// <paramref name="center"/>, ordered by ascending distance.
     /// </summary>

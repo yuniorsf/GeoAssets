@@ -47,6 +47,9 @@ public sealed class ObservableAssetProvider(
                     result.Count, elapsedMs, minLon, minLat, maxLon, maxLat, inner.GetType().FullName);
             });
 
+    public Task<string?> GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
+        inner.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+
     public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
         TrackAsync(
             "repository.get_in_bounds_json",

@@ -3,11 +3,14 @@
 @using GeoAssets.Core.Models.Geometry
 @using GeoAssets.Core.Services
 @using GeoAssets.Shared.Interfaces
+@using Microsoft.Extensions.Logging
 @using Microsoft.JSInterop
+@using System.Diagnostics
 @implements IAsyncDisposable
 @implements IDisposable
 @inject IMapInterop MapInterop
 @inject IAssetProvider Repository
+@inject ILogger<MapContainer> Logger
 
 <div id="@DivId" class="leaflet-map-container"></div>
 
@@ -31,11 +34,15 @@
         if (!firstRender || _initialized) return;
         _initialized = true;
 
+        Logger.LogDebug("MapContainer initializing — divId={DivId} lat={Lat} lon={Lon} zoom={Zoom}",
+            DivId, InitLat, InitLon, InitZoom);
+
         _dotNetRef = DotNetObjectReference.Create((object)this);
         await MapInterop.InitializeMapAsync(DivId, InitLat, InitLon, InitZoom);
         await MapInterop.RegisterEventHandlersAsync(DivId, _dotNetRef);
 
         var features = Repository.GetAll();
+        Logger.LogInformation("MapContainer initialized — rendering {Count} initial features", features.Count);
         if (features.Count > 0)
             await MapInterop.RenderAllFeaturesAsync(DivId, features);
 
@@ -65,7 +72,11 @@
     public async Task OnFeatureDrawnFromJs(string geoJson)
     {
         var feature = GeoJsonSerializer.DeserializeFeature(geoJson);
-        if (feature is null) return;
+        if (feature is null)
+        {
+            Logger.LogWarning("OnFeatureDrawnFromJs — failed to deserialize GeoJSON");
+            return;
+        }
 
         feature.Properties.AssetTypeId = feature.Geometry switch
         {
@@ -74,6 +85,7 @@
             _             => AssetType.Point.Id.ToString()
         };
 
+        Logger.LogDebug("Feature drawn — id={Id} type={Type}", feature.Id, feature.Geometry?.GetType().Name);
         await OnFeatureDrawn.InvokeAsync(feature);
     }
 
@@ -81,13 +93,18 @@
     public async Task OnFeatureEditedFromJs(string featureId, string geometryJson)
     {
         var feature = Repository.GetById(featureId);
-        if (feature is null) return;
+        if (feature is null)
+        {
+            Logger.LogWarning("OnFeatureEditedFromJs — feature not found id={Id}", featureId);
+            return;
+        }
 
         var newGeometry = GeoJsonSerializer.DeserializeGeometry(geometryJson);
         if (newGeometry is not null)
         {
             feature.Geometry = newGeometry;
             Repository.Update(feature);
+            Logger.LogDebug("Feature edited — id={Id} type={Type}", feature.Id, newGeometry.GetType().Name);
             await OnFeatureEdited.InvokeAsync(feature);
         }
     }
@@ -103,8 +120,33 @@
     [JSInvokable("OnViewportChangedFromJs")]
     public async Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
     {
-        var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
-        await MapInterop.RenderAllFeaturesAsync(DivId, features);
+        var sw = Stopwatch.StartNew();
+
+        // Prefer the raw-JSON path: the provider returns the HTTP response body as-is,
+        // JS parses it natively — no WASM JSON parsing bottleneck.
+        var rawJson = await Repository.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+        var fetchMs = sw.Elapsed.TotalMilliseconds;
+        sw.Restart();
+
+        if (rawJson is not null)
+        {
+            await MapInterop.RenderAllFeaturesRawJsonAsync(DivId, rawJson);
+            sw.Stop();
+            Logger.LogInformation(
+                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — raw path, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
+                minLon, minLat, maxLon, maxLat, fetchMs, sw.Elapsed.TotalMilliseconds);
+        }
+        else
+        {
+            var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+            fetchMs += sw.Elapsed.TotalMilliseconds;
+            sw.Restart();
+            await MapInterop.RenderAllFeaturesAsync(DivId, features);
+            sw.Stop();
+            Logger.LogInformation(
+                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
+                minLon, minLat, maxLon, maxLat, features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
+        }
     }
 
     public Task PanToFeatureAsync(string featureId) =>
@@ -124,7 +166,10 @@
     {
         Dispose();
         if (_initialized)
+        {
+            Logger.LogDebug("MapContainer disposing — divId={DivId}", DivId);
             await MapInterop.DestroyMapAsync(DivId);
+        }
         _dotNetRef?.Dispose();
     }
 }

@@ -3,6 +3,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using System.Text;
 using System.Text.Json;
@@ -18,6 +19,7 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 {
     private readonly IJSRuntime _js;
     private readonly IAssetProvider _repo;
+    private readonly MapInteropOptions _options;
     private const string Ns = "GeoAssets"; // window.GeoAssets
 
     /// <summary>
@@ -32,10 +34,11 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         Converters = { new GeoGeometryConverter() }
     };
 
-    public MapInteropService(IJSRuntime js, IAssetProvider repo)
+    public MapInteropService(IJSRuntime js, IAssetProvider repo, IOptions<MapInteropOptions> options)
     {
         _js = js;
         _repo = repo;
+        _options = options.Value;
     }
 
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom) =>
@@ -53,62 +56,56 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public async Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features)
     {
-        const int BatchSize = 5;
-
-        // Build the id→color lookup once for the entire render operation.
-        // Passed to JS so color resolution happens there — no DOM manipulation in C#.
-        var colorMap = BuildColorMap();
-        var list = features.ToList();
-        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
-
-        for (int i = 0; i < list.Count; i += BatchSize)
-        {
-            var batch = list.GetRange(i, Math.Min(BatchSize, list.Count - i));
-
-            var sb = new StringBuilder("[");
-            for (int j = 0; j < batch.Count; j++)
-            {
-                if (j > 0) sb.Append(',');
-                sb.Append(JsonSerializer.Serialize(batch[j], _interopOptions));
-            }
-            sb.Append(']');
-
-            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
-            await Task.Delay(1); // yield to the browser event loop between batches
-        }
+        var featuresAsJsonString = features.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
+        await RenderAllFeaturesAsync(divId, featuresAsJsonString);
     }
 
     public async Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)
     {
-        // const int BatchSize = 5;
-        // var colorMap = BuildColorMap();
-        // await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
+        await RenderAllFeaturesAsync(divId, featuresAsJsonString);
+    }
 
-        // for (int i = 0; i < features.Count; i += BatchSize)
-        // {
-        //     var sb = new StringBuilder("[");
-        //     for (int j = 0; j < Math.Min(BatchSize, features.Count - i); j++)
-        //     {
-        //         if (j > 0) sb.Append(',');
-        //         sb.Append(features[i + j].GetRawText());
-        //     }
-        //     sb.Append(']');
-
-        //     await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
-        //     await Task.Delay(1);
-        // }
-
+    public async Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)
+    {
         var colorMap = BuildColorMap();
         await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
-        var sb = new StringBuilder("[");
-        for (int i = 0; i < features.Count; i ++)
+        // Pass the raw JSON string directly — JS parses it natively via JSON.parse, avoiding WASM parsing entirely.
+        await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap);
+    }
+
+    private async Task RenderAllFeaturesAsync(string divId, IReadOnlyList<string> featuresAsJsonString)
+    {
+        var colorMap = BuildColorMap();
+        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+
+        if (_options.SinglePass)
         {
-            if (i > 0) sb.Append(',');
-                sb.Append(features[i].GetRawText());
+            var sb = new StringBuilder("[");
+            for (int i = 0; i < featuresAsJsonString.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(featuresAsJsonString[i]);
+            }
+            sb.Append(']');
+            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
         }
-        sb.Append(']');
-        await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
-        await Task.Delay(1);
+        else
+        {
+            int batchSize = _options.BatchSize;
+            for (int i = 0; i < featuresAsJsonString.Count; i += batchSize)
+            {
+                var sb = new StringBuilder("[");
+                for (int j = 0; j < Math.Min(batchSize, featuresAsJsonString.Count - i); j++)
+                {
+                    if (j > 0) sb.Append(',');
+                    sb.Append(featuresAsJsonString[i + j]);
+                }
+                sb.Append(']');
+                await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap);
+                await Task.Delay(1); // yield to the browser event loop between batches
+            }
+        }
     }
 
     public Task RemoveFeatureAsync(string divId, string featureId) =>
