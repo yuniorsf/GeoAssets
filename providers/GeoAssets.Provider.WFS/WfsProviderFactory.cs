@@ -90,7 +90,14 @@ public sealed class WfsProviderFactory : IAsyncProviderFactory
     private HttpClient BuildHttpClient(string baseUrl)
     {
         var client = _httpFactory.CreateClient();
-        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+        // The user provides the REST API base URL (e.g. https://server/api/geoassets).
+        // WfsClient uses relative URLs like "?SERVICE=WFS...", so BaseAddress must end
+        // at the WFS path so they resolve to …/api/geoassets/wfs?SERVICE=WFS…
+        var trimmed = baseUrl.TrimEnd('/');
+        var wfsBase = trimmed.EndsWith("/wfs", StringComparison.OrdinalIgnoreCase)
+            ? trimmed           // user already gave the full WFS path
+            : trimmed + "/wfs"; // derive from REST base
+        client.BaseAddress = new Uri(wfsBase + "/");
         return client;
     }
 }

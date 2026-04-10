@@ -106,6 +106,11 @@ public static class GeoAssetsRestApiExtensions
             return Results.NoContent();
         });
 
+        // WFS 2.0 handler mounted under the same CORS-configured prefix so Blazor WASM
+        // clients can reach it without a separate CORS origin entry.
+        // External OGC clients can still use the standalone /wfs route (app.MapWfsApi()).
+        routes.MapWfsApi(route: $"{prefix}/wfs");
+
         return routes;
     }
 }
