@@ -42,7 +42,8 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     }
 
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom) =>
-        _js.InvokeVoidAsync($"{Ns}.initializeMap", divId, lat, lon, zoom).AsTask();
+        _js.InvokeVoidAsync($"{Ns}.initializeMap", divId, lat, lon, zoom,
+            _options.RenderMode.ToString().ToLowerInvariant()).AsTask();
 
     public Task DestroyMapAsync(string divId) =>
         _js.InvokeVoidAsync($"{Ns}.destroyMap", divId).AsTask();
