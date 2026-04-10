@@ -40,4 +40,9 @@ app.UseCors();
 //            GET/POST /asset-types, DELETE /asset-types/{id}
 app.MapGeoAssetsApi();
 
+// OGC WFS 2.0 endpoint backed by the same PostGIS provider.
+// Supports GetCapabilities, GetFeature (with optional BBOX / paging),
+// and DescribeFeatureType at GET /wfs.
+app.MapWfsApi();
+
 app.Run();

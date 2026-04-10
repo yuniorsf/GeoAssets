@@ -4,6 +4,7 @@ using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Rest;
+using GeoAssets.Provider.WFS;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Services;
@@ -63,6 +64,7 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 // TODO: load by configuration and support multiple provider types (e.g. in-memory for dev, REST for prod).
 builder.Services.AddGeoAssetsInMemory();
 builder.Services.AddGeoAssetsRest();
+builder.Services.AddGeoAssetsWfs();
 
 // Plugin registry — collects all IProviderPlugin registrations for the UI.
 builder.Services.AddSingleton<ProviderPluginRegistry>();
