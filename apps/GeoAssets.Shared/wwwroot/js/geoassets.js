@@ -141,6 +141,27 @@ window.GeoAssets = (function () {
         });
     }
 
+    /**
+     * Schedules a WebGL redraw on the next animation frame.
+     *
+     * Double-buffer pattern:
+     *   • The browser already maintains a front/back GPU swap-chain; all GL
+     *     commands go to the back buffer and are presented atomically at the
+     *     next vsync after requestAnimationFrame completes — the user never
+     *     sees a half-drawn frame.
+     *   • The dirty flag ensures at most one RAF callback is in flight at any
+     *     time, so multiple synchronous calls (e.g. from rapid event bursts)
+     *     collapse into a single draw per animation frame.
+     */
+    function _scheduleRedraw(divId) {
+        const wgl = _maps[divId]?.webgl;
+        if (!wgl || wgl.rafHandle !== null) return; // already queued
+        wgl.rafHandle = requestAnimationFrame(() => {
+            wgl.rafHandle = null;
+            _webglRedraw(divId);
+        });
+    }
+
     function _initWebGL(divId) {
         const state = _maps[divId];
         const container = state.map.getContainer();
@@ -177,20 +198,40 @@ window.GeoAssets = (function () {
                 ptSize: gl.getUniformLocation(prog, 'u_ptSize'),
                 color:  gl.getUniformLocation(prog, 'u_color')
             },
-            buf:         gl.createBuffer(),
-            features:    new Map(),   // featureId → { feature, colorHex, assetTypeId }
-            hiddenTypes: new Set()
+            buf:          gl.createBuffer(),
+            features:     new Map(),   // featureId → { feature, colorHex, assetTypeId }
+            hiddenTypes:  new Set(),
+            rafHandle:    null,        // pending requestAnimationFrame id
+            anchorLatLng: null,        // map center at last full draw
+            anchorPx:     null         // pixel position of anchorLatLng at last full draw
         };
 
-        function onUpdate() {
+        // ── Pan: CSS translate (zero GPU cost — compositor handles it) ────────
+        // While the user drags the map we simply shift the WebGL canvas by the
+        // pixel delta from where it was last fully rendered.  This gives smooth
+        // 60 fps panning without any WebGL work at all; the browser uses its own
+        // compositor to blend the translated overlay over the tile layer.
+        state.map.on('move', () => {
+            const wgl = state.webgl;
+            if (!wgl?.anchorLatLng) return;
+            const cur = state.map.latLngToContainerPoint(wgl.anchorLatLng);
+            const dx  = cur.x - wgl.anchorPx.x;
+            const dy  = cur.y - wgl.anchorPx.y;
+            wgl.canvas.style.transform = `translate(${dx}px,${dy}px)`;
+        });
+
+        // ── Settle: reset transform and schedule a true redraw via RAF ────────
+        state.map.on('moveend zoomend resize', () => {
+            const wgl = state.webgl;
+            if (!wgl) return;
+            wgl.canvas.style.transform = '';
             const cw = container.clientWidth, ch = container.clientHeight;
-            if (canvas.width !== cw || canvas.height !== ch) {
-                canvas.width = cw; canvas.height = ch;
+            if (wgl.canvas.width !== cw || wgl.canvas.height !== ch) {
+                wgl.canvas.width = cw; wgl.canvas.height = ch;
                 gl.viewport(0, 0, cw, ch);
             }
-            _webglRedraw(divId);
-        }
-        state.map.on('move zoom moveend zoomend resize', onUpdate);
+            _scheduleRedraw(divId);
+        });
     }
 
     function _webglRedraw(divId) {
@@ -206,6 +247,9 @@ window.GeoAssets = (function () {
             if (!hiddenTypes.has(assetTypeId))
                 _webglDrawGeoFeature(state, feature, colorHex);
         });
+        // Record the anchor for the pan-offset optimisation
+        wgl.anchorLatLng = state.map.getCenter();
+        wgl.anchorPx     = state.map.latLngToContainerPoint(wgl.anchorLatLng);
     }
 
     function _webglDrawGeoFeature(state, feature, hex) {
@@ -289,7 +333,10 @@ window.GeoAssets = (function () {
     function destroyMap(divId) {
         const state = _maps[divId];
         if (state) {
-            if (state.webgl) state.webgl.canvas.remove();
+            if (state.webgl) {
+                if (state.webgl.rafHandle !== null) cancelAnimationFrame(state.webgl.rafHandle);
+                state.webgl.canvas.remove();
+            }
             state.map.remove();
             delete _maps[divId];
         }
@@ -441,7 +488,7 @@ window.GeoAssets = (function () {
 
         if (state.renderMode === 'webgl') {
             _addWebGLFeature(divId, state, feature, color);
-            _webglRedraw(divId);
+            _scheduleRedraw(divId);
         } else {
             _renderLeaflet(state, feature, color);
         }
@@ -468,7 +515,7 @@ window.GeoAssets = (function () {
                 const color = (colorMap && colorMap[f.properties?.assetTypeId]) || '#3388ff';
                 _addWebGLFeature(divId, state, f, color);
             });
-            _webglRedraw(divId);
+            _scheduleRedraw(divId); // one RAF draw covers the entire batch
         } else {
             features.forEach(f => renderFeature(divId, f, colorMap));
         }
@@ -485,7 +532,7 @@ window.GeoAssets = (function () {
         }
         if (state.webgl) {
             state.webgl.features.delete(featureId);
-            _webglRedraw(divId);
+            _scheduleRedraw(divId);
         }
     }
 
@@ -498,7 +545,7 @@ window.GeoAssets = (function () {
         state.layerGroups.clear();
         if (state.webgl) {
             state.webgl.features.clear();
-            _webglRedraw(divId);
+            _scheduleRedraw(divId);
         }
     }
 
@@ -543,7 +590,7 @@ window.GeoAssets = (function () {
                 if (!evtLayer) return;
                 visible ? evtLayer.addTo(state.map) : state.map.removeLayer(evtLayer);
             });
-            _webglRedraw(divId);
+            _scheduleRedraw(divId);
         } else {
             // Leaflet / Canvas mode: toggle the LayerGroup
             const group = state.layerGroups.get(assetTypeId);
