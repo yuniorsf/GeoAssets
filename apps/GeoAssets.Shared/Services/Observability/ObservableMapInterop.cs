@@ -54,6 +54,8 @@ public sealed class ObservableMapInterop(
     public Task DisableDrawModeAsync(string divId)                                    => inner.DisableDrawModeAsync(divId);
     public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) => inner.AddTileLayerAsync(divId, layerId, url, options);
     public Task RemoveTileLayerAsync(string divId, string layerId)                                            => inner.RemoveTileLayerAsync(divId, layerId);
+    public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options)    => inner.AddWmsLayerAsync(divId, layerId, wmsBaseUrl, options);
+    public Task RemoveWmsLayerAsync(string divId, string layerId)                                             => inner.RemoveWmsLayerAsync(divId, layerId);
     public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible)                      => inner.SetLayerVisibilityAsync(divId, assetTypeId, visible);
     public Task FitBoundsAsync(string divId, double[] bbox)                           => inner.FitBoundsAsync(divId, bbox);
     public Task PanToFeatureAsync(string divId, string featureId)                     => inner.PanToFeatureAsync(divId, featureId);

@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.WFS\GeoAssets.Provider.WFS.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.WMS\GeoAssets.Provider.WMS.csproj" />
   </ItemGroup>
 
 </Project>
