@@ -17,6 +17,14 @@ builder.Services.AddGeoAssetsPostgres();
 builder.Services.AddSingleton<IAssetProvider>(sp =>
     sp.GetRequiredService<IPostgresProviderFactory>().Create(connectionString));
 
+// IDbContextFactory<GeoAssetsDbContext> — used by WmsPostGisRenderer so each
+// tile request opens its own short-lived, thread-safe DbContext without touching
+// the shared IAssetProvider in-memory cache.
+builder.Services.AddGeoAssetsDbContextFactory(connectionString);
+
+// WMS renderer — queries PostGIS directly (geometry + color projection only).
+builder.Services.AddSingleton<WmsPostGisRenderer>();
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration
@@ -40,9 +48,9 @@ app.UseCors();
 //            GET/POST /asset-types, DELETE /asset-types/{id}
 app.MapGeoAssetsApi();
 
-// OGC WFS 2.0 endpoint backed by the same PostGIS provider.
-// Supports GetCapabilities, GetFeature (with optional BBOX / paging),
-// and DescribeFeatureType at GET /wfs.
-app.MapWfsApi();
+// Standalone OGC endpoints for external GIS clients (CORS not required
+// for server-to-server or native desktop tools).
+app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
+app.MapWmsApi();  // GET /wms — OGC WMS 1.1.1
 
 app.Run();

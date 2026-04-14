@@ -5,6 +5,7 @@ using GeoAssets.Core.Services;
 using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.WFS;
+using GeoAssets.Provider.WMS;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Services;
@@ -65,6 +66,7 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 builder.Services.AddGeoAssetsInMemory();
 builder.Services.AddGeoAssetsRest();
 builder.Services.AddGeoAssetsWfs();
+builder.Services.AddGeoAssetsWms();
 
 // Plugin registry — collects all IProviderPlugin registrations for the UI.
 builder.Services.AddSingleton<ProviderPluginRegistry>();

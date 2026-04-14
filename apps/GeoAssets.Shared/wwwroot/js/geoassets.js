@@ -16,8 +16,6 @@ window.GeoAssets = (function () {
     //           renderMode, canvasRenderer?, webgl? }
     const _maps = {};
 
-    function getState(divId) { return _maps[divId] || null; }
-
     // ─── WebGL shader sources ────────────────────────────────────────────────
 
     const _VERT_SRC = `
@@ -455,7 +453,7 @@ window.GeoAssets = (function () {
      * Stores feature data for WebGL rendering and registers an invisible SVG event layer.
      * Does NOT trigger a redraw — call _webglRedraw(divId) when ready.
      */
-    function _addWebGLFeature(divId, state, feature, color) {
+    function _addWebGLFeature(_divId, state, feature, color) {
         const id          = feature.id;
         const props       = feature.properties || {};
         const assetTypeId = props.assetTypeId || 'default';
@@ -565,6 +563,37 @@ window.GeoAssets = (function () {
     }
 
     function removeTileLayer(divId, layerId) {
+        const state = _maps[divId];
+        if (!state) return;
+        const layer = state.tileLayers.get(layerId);
+        if (layer) {
+            state.map.removeLayer(layer);
+            state.tileLayers.delete(layerId);
+        }
+    }
+
+    // ─── OGC WMS Layers ──────────────────────────────────────────────────────
+
+    function addWmsLayer(divId, layerId, wmsBaseUrl, options) {
+        const state = _maps[divId];
+        if (!state || state.tileLayers.has(layerId)) return; // idempotent
+        const layer = L.tileLayer.wms(wmsBaseUrl, {
+            layers:      options?.layers      ?? 'geoassets:feature',
+            format:      options?.format      ?? 'image/png',
+            transparent: options?.transparent ?? true,
+            version:     options?.version     ?? '1.1.1',
+            attribution: options?.attribution ?? '',
+            maxZoom:     options?.maxZoom     ?? 19,
+            opacity:     options?.opacity     ?? 1.0,
+            // Force geographic CRS so Leaflet sends BBOX in degrees (EPSG:4326),
+            // matching the coordinate system of the PostGIS data on the server.
+            crs:         L.CRS.EPSG4326
+        });
+        layer.addTo(state.map);
+        state.tileLayers.set(layerId, layer);
+    }
+
+    function removeWmsLayer(divId, layerId) {
         const state = _maps[divId];
         if (!state) return;
         const layer = state.tileLayers.get(layerId);
@@ -685,6 +714,8 @@ window.GeoAssets = (function () {
         clearAllFeatures,
         addTileLayer,
         removeTileLayer,
+        addWmsLayer,
+        removeWmsLayer,
         setLayerVisibility,
         fitBounds,
         panToFeature,

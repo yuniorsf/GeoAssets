@@ -1,4 +1,5 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Interfaces
 @using Microsoft.Extensions.Logging
 @inject IProviderPool Pool
 @inject IMapInterop MapInterop
@@ -113,8 +114,17 @@
     private async Task HandleProviderConnected(ProviderEntry entry)
     {
         _showConnectDialog = false;
-        foreach (var f in entry.Provider.GetAll())
-            await MapInterop.RenderFeatureAsync(MapDivId, f);
+        if (entry.Provider is IWmsProvider wms)
+        {
+            await MapInterop.AddWmsLayerAsync(MapDivId, entry.Id.ToString(),
+                wms.WmsBaseUrl,
+                new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
+        }
+        else
+        {
+            foreach (var f in entry.Provider.GetAll())
+                await MapInterop.RenderFeatureAsync(MapDivId, f);
+        }
     }
 
     // ── Show / Hide ───────────────────────────────────────────────────────────
@@ -124,14 +134,22 @@
         if (entry.IsEnabled)
         {
             Pool.Disable(entry.Id);
-            foreach (var f in entry.Provider.GetAll())
-                await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+            if (entry.Provider is IWmsProvider)
+                await MapInterop.RemoveWmsLayerAsync(MapDivId, entry.Id.ToString());
+            else
+                foreach (var f in entry.Provider.GetAll())
+                    await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
         }
         else
         {
             Pool.Enable(entry.Id);
-            foreach (var f in entry.Provider.GetAll())
-                await MapInterop.RenderFeatureAsync(MapDivId, f);
+            if (entry.Provider is IWmsProvider wms)
+                await MapInterop.AddWmsLayerAsync(MapDivId, entry.Id.ToString(),
+                    wms.WmsBaseUrl,
+                    new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
+            else
+                foreach (var f in entry.Provider.GetAll())
+                    await MapInterop.RenderFeatureAsync(MapDivId, f);
         }
     }
 
@@ -249,8 +267,11 @@
     private async Task RemoveEntryAsync(ProviderEntry entry)
     {
         if (entry.IsActive) return;
-        foreach (var f in entry.Provider.GetAll())
-            await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+        if (entry.Provider is IWmsProvider)
+            await MapInterop.RemoveWmsLayerAsync(MapDivId, entry.Id.ToString());
+        else
+            foreach (var f in entry.Provider.GetAll())
+                await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);
     }

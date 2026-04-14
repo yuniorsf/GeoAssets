@@ -127,6 +127,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     public Task RemoveTileLayerAsync(string divId, string layerId) =>
         _js.InvokeVoidAsync($"{Ns}.removeTileLayer", divId, layerId).AsTask();
 
+    public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options) =>
+        _js.InvokeVoidAsync($"{Ns}.addWmsLayer", divId, layerId, wmsBaseUrl, options).AsTask();
+
+    public Task RemoveWmsLayerAsync(string divId, string layerId) =>
+        _js.InvokeVoidAsync($"{Ns}.removeWmsLayer", divId, layerId).AsTask();
+
     public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) =>
         _js.InvokeVoidAsync($"{Ns}.setLayerVisibility", divId, assetTypeId, visible).AsTask();
 
