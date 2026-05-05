@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>GeoAssets.Server</RootNamespace>
+    <UserSecretsId>geoassets-server</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
