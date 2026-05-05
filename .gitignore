@@ -40,3 +40,7 @@ coverage/
 
 # Publish output
 publish/
+
+# VS Code profiling artifacts
+*.cpuprofile
+vscode-profile-*

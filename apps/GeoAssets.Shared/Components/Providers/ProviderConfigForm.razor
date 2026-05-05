@@ -33,8 +33,18 @@
         else if (f.Type == ProviderFieldType.File)
         {
             <InputFile class="form-control pcf-file"
-                       accept=".geojson,.json"
+                       accept="@(f.Accept ?? ".geojson,.json")"
                        OnChange="e => HandleFileAsync(e, f.Key)" />
+            @if (!string.IsNullOrEmpty(Config.Get(f.Key + "_name")))
+            {
+                <span class="pcf-file-name">@Config.Get(f.Key + "_name")</span>
+            }
+        }
+        else if (f.Type == ProviderFieldType.BinaryFile)
+        {
+            <InputFile class="form-control pcf-file"
+                       accept="@(f.Accept ?? ".zip")"
+                       OnChange="e => HandleBinaryFileAsync(e, f.Key)" />
             @if (!string.IsNullOrEmpty(Config.Get(f.Key + "_name")))
             {
                 <span class="pcf-file-name">@Config.Get(f.Key + "_name")</span>
@@ -98,6 +108,15 @@
         using var reader = new System.IO.StreamReader(stream);
         var content = await reader.ReadToEndAsync();
         Config.Set(key + "_content", content);
+        Config.Set(key + "_name", ev.File.Name);
+    }
+
+    private async Task HandleBinaryFileAsync(InputFileChangeEventArgs ev, string key)
+    {
+        using var stream = ev.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+        using var ms = new System.IO.MemoryStream();
+        await stream.CopyToAsync(ms);
+        Config.Set(key + "_content", Convert.ToBase64String(ms.ToArray()));
         Config.Set(key + "_name", ev.File.Name);
     }
 }
