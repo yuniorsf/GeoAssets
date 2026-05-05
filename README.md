@@ -1,5 +1,10 @@
 # GeoAssets
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-9.0-512BD4.svg)](https://dotnet.microsoft.com/)
+[![Blazor](https://img.shields.io/badge/Blazor-WebAssembly-512BD4.svg)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
+[![MAUI](https://img.shields.io/badge/.NET-MAUI-512BD4.svg)](https://dotnet.microsoft.com/apps/maui)
+
 > A modular .NET 9 platform for managing georeferenced assets across web, mobile, and desktop — built on NetTopologySuite, PostGIS, and a plugin-based architecture, and developed as a working lab for AI-augmented engineering practices.
 
 ---
@@ -180,7 +185,7 @@ Short-term focus areas (subject to change as the design evolves):
 
 ## License
 
-This project is currently unlicensed and made public for review and discussion. A permissive license (likely **MIT** or **Apache 2.0**) will be added before the first tagged release.
+Released under the [MIT License](LICENSE).
 
 ---
 
