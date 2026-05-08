@@ -17,6 +17,10 @@ The project also serves as a deliberate exercise in **AI-augmented engineering**
 
 ---
 
+### Continuous AI-Augmented Review
+
+Every pull request to this repository triggers an automated code review by [Claude Code](https://www.anthropic.com/claude-code), using Anthropic's official `claude-code-action`. Reviewers and contributors can also invoke Claude on-demand in any issue or PR comment by mentioning `@claude`. Workflow definitions live under `.github/workflows/`.
+
 ## Highlights
 
 - **Multi-target delivery from a single core** — Blazor WebAssembly for the web, .NET MAUI for mobile and desktop, and a shared Razor Class Library (`GeoAssets.Shared`) for components, CSS, and JavaScript interop.
