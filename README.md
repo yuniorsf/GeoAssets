@@ -1,11 +1,11 @@
 # GeoAssets
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-9.0-512BD4.svg)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Blazor](https://img.shields.io/badge/Blazor-WebAssembly-512BD4.svg)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
 [![MAUI](https://img.shields.io/badge/.NET-MAUI-512BD4.svg)](https://dotnet.microsoft.com/apps/maui)
 
-> A modular .NET 9 platform for managing georeferenced assets across web, mobile, and desktop — built on NetTopologySuite, PostGIS, and a plugin-based architecture, and developed as a working lab for AI-augmented engineering practices.
+> A modular .NET 10 platform for managing georeferenced assets across web, mobile, and desktop — built on NetTopologySuite, PostGIS, and a plugin-based architecture, and developed as a working lab for AI-augmented engineering practices.
 
 ---
 
@@ -96,10 +96,10 @@ GeoAssets/
 
 | Area | Technology |
 |---|---|
-| Runtime | .NET 9 |
+| Runtime | .NET 10 LTS · C# 14 |
 | Web | Blazor WebAssembly · Razor Class Library · Blazored.LocalStorage |
 | Mobile / Desktop | .NET MAUI |
-| Spatial | NetTopologySuite 2.5 · NTS.IO.GeoJSON4STJ 4.0 |
+| Spatial | NetTopologySuite 2.6 · NTS.IO.GeoJSON4STJ 4.0 |
 | Map UI | Leaflet 1.9.4 · Leaflet-Geoman 2.18.3 |
 | Persistence | PostgreSQL + PostGIS · Entity Framework Core · Npgsql |
 | OGC providers | WFS · WMS · Shapefile |
@@ -115,7 +115,7 @@ GeoAssets/
 
 ### Requirements
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Optional, for the MAUI app: the MAUI workload (`dotnet workload install maui`)
 - Optional, for the PostgreSQL provider: a PostgreSQL instance with the PostGIS extension enabled
 
@@ -180,7 +180,7 @@ Short-term focus areas (subject to change as the design evolves):
 
 - [ ] Stabilize the `IAssetRepository` contract and freeze the public surface exposed to providers.
 - [ ] Expand test coverage beyond `GeoAssets.Core.Tests` to include providers and workflow.
-- [ ] Add a CI pipeline (GitHub Actions) for build + test on every PR.
+- [x] Add a CI pipeline (GitHub Actions) for build + test on every PR.
 - [ ] Document the plugin contract and the `IExternalRepositoryFactory` discovery mechanism.
 - [ ] Tag a `v0.1.0` once the above are in place.
 - [ ] Add observability examples (OpenTelemetry exporter wiring) using the Observability project.
