@@ -20,8 +20,8 @@ jobs:
       - name: Restore packages
         run: dotnet restore
       
-      - name: Build Android only
-        run: dotnet build --no-restore --configuration Release -f net10.0-android
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
       
       - name: Test (skip iOS/Android tests if any)
         run: dotnet test --no-build --configuration Release --filter "Category!=RequiresiOS"
