@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>GeoAssets.Infrastructure.Observability</RootNamespace>
@@ -19,24 +19,24 @@
 
   <ItemGroup>
     <!-- Unified Azure Monitor distro (traces + metrics + logs → Application Insights) -->
-    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore"          Version="1.3.0" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore"          Version="1.5.0" />
 
     <!-- Additional instrumentations not included in the distro -->
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"           Version="1.9.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"           Version="1.15.1" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Process"           Version="0.5.0-beta.6" />
 
     <!-- EF Core instrumentation (opt-in — only add if EF is used in the same host) -->
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.0.0-beta.12" />
 
     <!-- Hosting extensions for AddOpenTelemetry() -->
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting"                Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting"                Version="1.15.3" />
 
     <!-- DI / config abstractions — no hard runtime dep on ASP.NET Core -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions"       Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder"            Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"            Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http"                            Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions"       Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder"            Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"            Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Http"                            Version="10.0.7" />
   </ItemGroup>
 
 </Project>
