@@ -1,0 +1,55 @@
+name: Unit Tests
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore tests/GeoAssets.Core.Tests/GeoAssets.Core.Tests.csproj
+
+      - name: Build
+        run: >
+          dotnet build tests/GeoAssets.Core.Tests/GeoAssets.Core.Tests.csproj
+          --no-restore --configuration Release
+
+      - name: Test
+        run: >
+          dotnet test tests/GeoAssets.Core.Tests/GeoAssets.Core.Tests.csproj
+          --no-build --configuration Release
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+          --collect:"XPlat Code Coverage"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: xUnit — GeoAssets.Core
+          path: TestResults/test-results.trx
+          reporter: dotnet-trx
+          fail-on-error: true
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: TestResults/**/coverage.cobertura.xml
+          retention-days: 14
