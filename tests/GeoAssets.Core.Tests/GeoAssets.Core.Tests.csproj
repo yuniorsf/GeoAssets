@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
   </ItemGroup>
 
 </Project>
