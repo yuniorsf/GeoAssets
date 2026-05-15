@@ -140,9 +140,10 @@ public class TopoGraphTests
     [Fact]
     public void GetAncestors_CycleInGraph_TerminatesAndReturnsVisited()
     {
-        // a→b→c→a  — reverse BFS from c must not loop
+        // a→b→c→a — reverse BFS from c: b (direct), a (b's pred), c (a's pred via c→a)
+        // c appears as its own ancestor; BFS terminates because b is already visited on the loop back
         var result = TopoGraph.GetAncestors("c", [F("a", "b"), F("b", "c"), F("c", "a")]);
-        result.Select(f => f.Id).Should().BeEquivalentTo(["a", "b"]);
+        result.Select(f => f.Id).Should().BeEquivalentTo(["a", "b", "c"]);
     }
 
     // ── TopologicalSort ───────────────────────────────────────────────────────
