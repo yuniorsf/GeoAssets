@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
+using Xunit;
 
 namespace GeoAssets.Core.Tests.Services;
 
