@@ -46,4 +46,4 @@ publish/
 vscode-profile-*
 
 # Claude Code local config (per-developer)
-.claude/
+.claude/settings.local.json
