@@ -1,3 +1,4 @@
+using GeoAssets.Examples.MultiAgent;
 using GeoAssets.Examples.Spatial;
 using GeoAssets.Examples.Topology;
 using GeoAssets.Examples.Workflow;
@@ -14,6 +15,7 @@ var examples = new (string Title, Func<Task> Run)[]
     ("04 · Spatial Queries   — NTS within / intersects / nearby / buffer",      () => { SpatialQueries.Run();   return Task.CompletedTask; }),
     // ("05 · MEF Plugin Commands — command dispatch, built-in + external plugin", PluginCommands.RunAsync),
     ("06 · Custom Selection Strategy — layer-filter + network-impact background process", CustomSelectionStrategy.RunAsync),
+    ("07 · Multi-Agent Claude       — Orchestrator + 3 Subagents (requires ANTHROPIC_API_KEY)", MultiAgentExample.RunAsync),
 };
 
 foreach (var (title, run) in examples)

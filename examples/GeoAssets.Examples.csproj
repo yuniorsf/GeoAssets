@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.22.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\apps\GeoAssets.Commands.Builtin\GeoAssets.Commands.Builtin.csproj" />
     <ProjectReference Include="..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
