@@ -16,6 +16,7 @@ var examples = new (string Title, Func<Task> Run)[]
     // ("05 · MEF Plugin Commands — command dispatch, built-in + external plugin", PluginCommands.RunAsync),
     ("06 · Custom Selection Strategy — layer-filter + network-impact background process", CustomSelectionStrategy.RunAsync),
     ("07 · Multi-Agent Claude       — Orchestrator + 3 Subagents (requires ANTHROPIC_API_KEY)", MultiAgentExample.RunAsync),
+    ("08 · Agent Command Plugin    — Generates a MEF command plugin project (requires ANTHROPIC_API_KEY)", CommandPluginGenerationExample.RunAsync),
 };
 
 foreach (var (title, run) in examples)
