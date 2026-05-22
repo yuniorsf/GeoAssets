@@ -13,7 +13,7 @@
 
 **GeoAssets** is a personal R&D project exploring how to design a modern, extensible geospatial platform in .NET. The codebase delivers the same domain model across multiple targets (Blazor WebAssembly, MAUI mobile and desktop) from a single shared core, integrates real spatial primitives via [NetTopologySuite](https://github.com/NetTopologySuite/NetTopologySuite), and exposes data through standard OGC protocols (WFS, WMS, Shapefile) as well as a PostgreSQL + PostGIS provider.
 
-The project also serves as a deliberate exercise in **AI-augmented engineering**: it is developed with [Claude Code](https://www.anthropic.com/claude-code) as part of the development loop. The `CLAUDE.md` file at the repo root captures the project's conventions, architectural decisions, and key file paths so that LLM agents operate under the same engineering standards as a human contributor.
+The project also serves as a deliberate exercise in **AI-augmented engineering**: it is developed with [Claude Code](https://www.anthropic.com/claude-code) as part of the development loop, and it ships a **multi-agent orchestration** layer that turns a natural-language request into a compilable plugin command. The `CLAUDE.md` file at the repo root captures the project's conventions, architectural decisions, and key file paths so that LLM agents operate under the same engineering standards as a human contributor.
 
 ---
 
@@ -28,6 +28,7 @@ Every pull request to this repository triggers an automated code review by [Clau
 - **Topology as a first-class concept** — directed-graph model over features with classical graph algorithms (Dijkstra shortest path, BFS path finding, Kahn's topological sort, cycle detection, connected components).
 - **Pluggable providers** — InMemory, PostgreSQL/PostGIS, REST, WFS, WMS, Shapefile, all behind a uniform repository contract.
 - **Plugin architecture** — extensions live outside the core; Hydrology and GeoJSON import plugins are included as reference implementations.
+- **Agent-orchestrated plugin generation** — a vendor-neutral multi-agent orchestrator (`GeoAssets.Core.Agents`) coordinates specialist agents (analysis → plugin-spec authoring → review) that, paired with a deterministic scaffolder (`GeoAssets.Commands.Generation`), turn a natural-language request into a compilable `GeoAssets.Plugin.*` command project.
 - **Workflow pipeline** — orchestration layer with EF Core persistence and messaging integrations for Kafka and Azure Service Bus.
 - **Observability layer** — dedicated infrastructure project (`GeoAssets.Infrastructure.Observability`) for logs, metrics, and tracing.
 - **Identity & authentication** — MSAL integration for OIDC/OAuth flows, with EF Core-backed identity persistence.
@@ -41,7 +42,9 @@ Every pull request to this repository triggers an automated code review by [Clau
 GeoAssets/
 ├── core/
 │   ├── GeoAssets.Core/                    # Domain model, geometry, services, repositories
+│   │   └── Agents/                        # Vendor-neutral multi-agent orchestration abstractions
 │   ├── GeoAssets.Commands/                # Command abstractions
+│   │   └── Generation/                    # Plugin-command scaffolder (spec → compilable project)
 │   ├── GeoAssets.Workflow/                # Workflow orchestration core
 │   ├── GeoAssets.Identity/                # Identity domain
 │   └── GeoAssets.Infrastructure.Observability/
@@ -73,10 +76,12 @@ GeoAssets/
 │   └── GeoAssets.Workflow.Messaging.ServiceBus/
 │
 ├── examples/
-│   └── GeoAssets.Examples/                # Spatial, Topology, Workflow, Print samples
+│   └── GeoAssets.Examples/                # Spatial, Topology, Workflow samples
+│       └── MultiAgent/                    # Anthropic-backed orchestrators + agent-generated plugins
 │
 ├── tests/
-│   └── GeoAssets.Core.Tests/              # Unit tests for the core domain
+│   ├── GeoAssets.Core.Tests/              # Unit tests for the core domain + agents
+│   └── GeoAssets.Commands.Tests/          # Unit tests for the plugin-command scaffolder
 │
 ├── CLAUDE.md                              # AI-agent operating instructions
 └── GeoAssets.sln                          # .NET solution file
@@ -89,6 +94,19 @@ GeoAssets/
 - **Plugin extensibility** — additional behavior is delivered as plugins, not core changes.
 - **Workflow isolation** — multi-step processes are orchestrated in `workflow/` rather than scattered through services.
 - **Multi-target by design** — the same domain runs in WebAssembly (no server), in a server-side host, and in MAUI, with feature flags rather than divergent codebases.
+- **Vendor-neutral agents** — the multi-agent orchestration contracts live in `core/` with no LLM-vendor dependency; the Anthropic-backed implementation is an interchangeable adapter that lives in `examples/`.
+
+---
+
+## Agent-Orchestrated Plugin Generation
+
+GeoAssets treats *generating its own extensions* as a first-class, AI-augmented workflow. The pipeline is split into two layers so the intelligence is pluggable and the code generation is deterministic and testable:
+
+- **Orchestration core (`core/GeoAssets.Core/Agents/`)** — vendor-neutral abstractions: `IMultiAgentOrchestrator`, `IAgentWorker`, the `MultiAgentOrchestrator` base (agent registry + dispatch), and the `AgentCapability` / `AgentWorkItem` records. No dependency on any specific LLM provider.
+- **Deterministic scaffolder (`core/GeoAssets.Commands/Generation/`)** — `GeoCommandPluginScaffolder` takes a `GeoCommandPluginSpec` (plugin name, command name, category, parameters, handler body) and emits a compilable `GeoAssets.Plugin.*` project: `.csproj`, an `IGeoCommandHandler` decorated with `[ExportGeoCommand]`, and a README. No LLM in the loop — fully reproducible.
+- **Anthropic adapter (`examples/MultiAgent/`)** — `AnthropicToolOrchestrator` drives a tool-use loop where each registered specialist agent (analysis, code, review, command-plugin authoring) is exposed as a tool. `AnthropicCommandPluginOrchestrator` chains *analysis → JSON plugin spec → review*, and `CommandPluginGenerationExample` feeds the resulting spec into the scaffolder to write a real plugin project to `generated-plugins/`.
+
+End to end: a natural-language task such as *"summarize assets by asset type"* becomes a reviewed JSON spec, then a compilable MEF command plugin that the host discovers at runtime via `GeoPluginContainer`. The Anthropic examples require an `ANTHROPIC_API_KEY`; the orchestration core and scaffolder build and unit-test without one.
 
 ---
 
@@ -106,6 +124,8 @@ GeoAssets/
 | Auth | MSAL (OIDC / OAuth 2.0) |
 | Messaging | Apache Kafka · Azure Service Bus |
 | Observability | Logs / metrics / tracing infrastructure project |
+| Agent orchestration | Vendor-neutral core abstractions · Anthropic .NET SDK 12.22 (tool-use loop) · `claude-opus-4-7` orchestrator · `claude-haiku-4-5` sub-agents |
+| Testing | xUnit · FluentAssertions · 228 unit tests across `GeoAssets.Core.Tests` + `GeoAssets.Commands.Tests` |
 | Conventions | RFC 7946 GeoJSON · SRID 4326 · `[lon, lat]` order |
 | Dev workflow | Claude Code (AI-augmented engineering — see `CLAUDE.md`) |
 
@@ -118,6 +138,7 @@ GeoAssets/
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Optional, for the MAUI app: the MAUI workload (`dotnet workload install maui`)
 - Optional, for the PostgreSQL provider: a PostgreSQL instance with the PostGIS extension enabled
+- Optional, for the agent-orchestration examples: an `ANTHROPIC_API_KEY` environment variable
 
 ### Build
 
@@ -144,12 +165,17 @@ cd examples/GeoAssets.Examples
 dotnet run
 ```
 
-The examples cover spatial queries, topology graph algorithms, and workflow orchestration.
+The examples cover spatial queries, topology graph algorithms, workflow orchestration, a multi-agent Claude orchestrator, and an agent that generates a MEF command plugin project. The two AI examples are skipped automatically when `ANTHROPIC_API_KEY` is not set.
 
 ### Run the tests
 
 ```bash
+# Run the whole suite (228 unit tests)
+dotnet test GeoAssets.sln
+
+# …or a single project
 dotnet test tests/GeoAssets.Core.Tests/
+dotnet test tests/GeoAssets.Commands.Tests/
 ```
 
 ---
@@ -179,8 +205,10 @@ These threads connect to my broader work as a senior software engineer focused o
 Short-term focus areas (subject to change as the design evolves):
 
 - [ ] Stabilize the `IAssetRepository` contract and freeze the public surface exposed to providers.
-- [ ] Expand test coverage beyond `GeoAssets.Core.Tests` to include providers and workflow.
+- [x] Expand test coverage beyond `TopoGraph` — now covering geometry, serialization, providers, the agent orchestrator, and the plugin scaffolder (228 tests).
+- [ ] Extend test coverage further into the providers and workflow projects.
 - [x] Add a CI pipeline (GitHub Actions) for build + test on every PR.
+- [x] Add agent-orchestrated generation of MEF command plugins (`GeoAssets.Core.Agents` + `GeoAssets.Commands.Generation`).
 - [ ] Document the plugin contract and the `IExternalRepositoryFactory` discovery mechanism.
 - [ ] Tag a `v0.1.0` once the above are in place.
 - [ ] Add observability examples (OpenTelemetry exporter wiring) using the Observability project.
