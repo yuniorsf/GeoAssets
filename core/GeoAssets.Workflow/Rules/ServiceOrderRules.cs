@@ -41,7 +41,19 @@ public sealed class ServiceOrderRules
     /// evaluation only ever uses the built-in default rules — the same behavior as before
     /// this parameter existed.
     /// </param>
-    public ServiceOrderRules(OrderTypeRegistry? orderTypeRegistry = null)
+    /// <param name="roleGrants">
+    /// Optional. Overrides <see cref="RoleBasedActionRule.DefaultRoleGrants"/> — which
+    /// actions each role name grants — without needing to add a custom
+    /// <see cref="IServiceOrderRule"/> or edit this class. Omit to keep the defaults.
+    /// </param>
+    /// <param name="unrestrictedRoles">
+    /// Optional. Overrides <see cref="RoleBasedActionRule.DefaultUnrestrictedRoles"/> —
+    /// role names granted every action. Omit to keep the default ("Administrator").
+    /// </param>
+    public ServiceOrderRules(
+        OrderTypeRegistry? orderTypeRegistry = null,
+        IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null,
+        IReadOnlySet<string>? unrestrictedRoles = null)
     {
         _rules =
         [
@@ -49,7 +61,7 @@ public sealed class ServiceOrderRules
             new AssigneeRule(),
             new DispatchRecipientRule(),
             new OrderTypeActionPermissionRule(orderTypeRegistry),
-            new RoleBasedActionRule(),
+            new RoleBasedActionRule(roleGrants, unrestrictedRoles),
         ];
 
         _creationRules =
@@ -270,33 +282,52 @@ file sealed class DispatchRecipientRule : IServiceOrderRule
 }
 
 /// <summary>
-/// Default role-based action grants. These mirror common supervisory hierarchies
-/// but can be overridden by adding earlier rules with explicit denies.
+/// Default role-based action grants. Mirrors common supervisory hierarchies, but the
+/// mapping is data (not a hardcoded switch), so a host can narrow, extend, or replace
+/// it entirely via the <c>roleGrants</c>/<c>unrestrictedRoles</c> parameters on
+/// <see cref="ServiceOrderRules"/>'s constructor — without editing this class — e.g. to
+/// stop granting Supervisors <see cref="OrderActionType.Reject"/>, or to add a new tier.
 ///
-/// Supervisors: Approve, Reject, Assign, Dispatch, Cancel.
-/// Administrators: all actions.
+/// Roles in <paramref name="unrestrictedRoles"/> (default: "Administrator") grant every
+/// action. Every other entry in <paramref name="roleGrants"/> (default: "Supervisor" →
+/// View/Approve/Reject/Assign/Dispatch/Cancel/Annotate) grants only its listed actions.
+/// A principal with no matching role abstains, same as every other built-in rule.
 /// </summary>
-file sealed class RoleBasedActionRule : IServiceOrderRule
+file sealed class RoleBasedActionRule(
+    IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null,
+    IReadOnlySet<string>? unrestrictedRoles = null) : IServiceOrderRule
 {
+    public static readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> DefaultRoleGrants =
+        new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Supervisor"] = new HashSet<OrderActionType>
+            {
+                OrderActionType.View, OrderActionType.Approve, OrderActionType.Reject,
+                OrderActionType.Assign, OrderActionType.Dispatch, OrderActionType.Cancel,
+                OrderActionType.Annotate,
+            },
+        };
+
+    public static readonly IReadOnlySet<string> DefaultUnrestrictedRoles =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Administrator" };
+
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> _roleGrants =
+        roleGrants ?? DefaultRoleGrants;
+    private readonly IReadOnlySet<string> _unrestrictedRoles =
+        unrestrictedRoles ?? DefaultUnrestrictedRoles;
+
     public string Name => "RoleBasedActionRule";
 
     public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
     {
-        if (ctx.Principal.HasRole("Administrator"))
+        if (_unrestrictedRoles.Any(ctx.Principal.HasRole))
             return true;
 
-        if (ctx.Principal.HasRole("Supervisor"))
-            return action switch
-            {
-                OrderActionType.View     => true,
-                OrderActionType.Approve  => true,
-                OrderActionType.Reject   => true,
-                OrderActionType.Assign   => true,
-                OrderActionType.Dispatch => true,
-                OrderActionType.Cancel   => true,
-                OrderActionType.Annotate => true,
-                _ => null,
-            };
+        foreach (var (role, actions) in _roleGrants)
+        {
+            if (actions.Contains(action) && ctx.Principal.HasRole(role))
+                return true;
+        }
 
         return null;
     }

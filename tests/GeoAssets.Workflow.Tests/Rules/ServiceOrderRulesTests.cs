@@ -403,6 +403,71 @@ public class ServiceOrderRulesTests
             .Allowed.Should().BeFalse();
     }
 
+    // ── RoleBasedActionRule configurability ─────────────────────────────────────
+
+    [Fact]
+    public void Evaluate_NarrowedSupervisorGrants_NoLongerAllowsRemovedAction()
+    {
+        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["Supervisor"] = new HashSet<OrderActionType>
+            {
+                OrderActionType.View, OrderActionType.Approve, OrderActionType.Assign,
+                OrderActionType.Dispatch, OrderActionType.Cancel, OrderActionType.Annotate,
+            },
+        };
+        var rules = new ServiceOrderRules(roleGrants: narrowedGrants);
+
+        rules.Evaluate(Principal(roles: ["Supervisor"]), OrderActionType.Reject, Order())
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_NarrowedSupervisorGrants_StillAllowsRetainedAction()
+    {
+        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["Supervisor"] = new HashSet<OrderActionType> { OrderActionType.Approve },
+        };
+        var rules = new ServiceOrderRules(roleGrants: narrowedGrants);
+
+        rules.Evaluate(Principal(roles: ["Supervisor"]), OrderActionType.Approve, Order())
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_CustomRoleTier_GrantsItsConfiguredActions()
+    {
+        var customGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["RegionalManager"] = new HashSet<OrderActionType> { OrderActionType.Approve },
+        };
+        var rules = new ServiceOrderRules(roleGrants: customGrants);
+
+        rules.Evaluate(Principal(roles: ["RegionalManager"]), OrderActionType.Approve, Order())
+            .Allowed.Should().BeTrue();
+        rules.Evaluate(Principal(roles: ["RegionalManager"]), OrderActionType.Reject, Order())
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_CustomUnrestrictedRoles_GrantsAnyAction()
+    {
+        var rules = new ServiceOrderRules(unrestrictedRoles: new HashSet<string> { "SuperAdmin" });
+
+        rules.Evaluate(Principal(roles: ["SuperAdmin"]), OrderActionType.Complete, Order())
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_DefaultAdministrator_NoLongerUnrestrictedWhenOverridden()
+    {
+        var rules = new ServiceOrderRules(unrestrictedRoles: new HashSet<string> { "SuperAdmin" });
+
+        rules.Evaluate(Principal(roles: ["Administrator"]), OrderActionType.Complete, Order())
+            .Allowed.Should().BeFalse();
+    }
+
     // ── ResolveRelationship ────────────────────────────────────────────────────
 
     [Fact]
