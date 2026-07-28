@@ -10,7 +10,10 @@ namespace GeoAssets.Workflow.Selection.Strategies;
 /// Required context: TargetOrder with a non-null ParentOrderId, and OrderRepository.
 ///
 /// Optional parameters:
-///   filter  (Func&lt;GeoFeature, bool&gt;) — narrows the inherited set
+///   filter  (Func&lt;GeoFeature, bool&gt;) — narrows the inherited set.
+///           A delegate cannot be JSON-serialized, so <see cref="FeatureSelectionRegistry.SelectAsync"/>
+///           rejects it: only use <c>filter</c> when calling this strategy directly and
+///           discarding the resulting <see cref="FeatureSelectionSpec"/> rather than persisting it.
 /// </summary>
 [ExportFeatureSelectionStrategy("inherit-parent",
     Category    = "Hierarchy",

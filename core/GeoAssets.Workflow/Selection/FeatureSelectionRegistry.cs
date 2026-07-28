@@ -1,6 +1,7 @@
 using System.ComponentModel.Composition;
 using System.ComponentModel.Composition.Hosting;
 using System.Reflection;
+using System.Text.Json;
 using GeoAssets.Core.Models;
 
 namespace GeoAssets.Workflow.Selection;
@@ -68,6 +69,8 @@ public sealed class FeatureSelectionRegistry : IDisposable
                 $"Selection strategy '{strategyId}' not found. " +
                 $"Available: {string.Join(", ", GetAvailableStrategies().Select(m => m.StrategyId))}");
 
+        ValidateParametersAreSerializable(strategyId, context.Parameters);
+
         var features = await export.Value.SelectAsync(context, ct);
 
         var spec = new FeatureSelectionSpec
@@ -79,6 +82,30 @@ public sealed class FeatureSelectionRegistry : IDisposable
         };
 
         return (features, spec);
+    }
+
+    /// <summary>
+    /// <see cref="FeatureSelectionSpec"/> is persisted as JSON for audit storage, so its
+    /// <see cref="FeatureSelectionSpec.Parameters"/> must be JSON-serializable. Catching a
+    /// non-serializable value (e.g. a delegate passed as a "filter" parameter) here — right
+    /// where the strategy ran — surfaces the mistake immediately, instead of deferring a
+    /// crash to whatever unrelated code path eventually saves the order.
+    /// </summary>
+    private static void ValidateParametersAreSerializable(
+        string strategyId, IReadOnlyDictionary<string, object> parameters)
+    {
+        try
+        {
+            JsonSerializer.Serialize(parameters);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new InvalidOperationException(
+                $"Strategy '{strategyId}' produced parameters that cannot be persisted as JSON " +
+                "(required for FeatureSelectionSpec audit storage). Remove or replace any " +
+                "non-serializable values (e.g. delegates) in the parameters passed to SelectAsync.",
+                ex);
+        }
     }
 
     public void Dispose() => _container.Dispose();
