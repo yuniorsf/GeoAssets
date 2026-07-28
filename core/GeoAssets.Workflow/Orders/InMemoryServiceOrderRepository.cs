@@ -88,17 +88,19 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
     /// <see cref="ParentOrderId"/> is the only persisted source of truth for
     /// hierarchy; <c>ChildOrderIds</c> is a derived convenience view and any
     /// manual mutation of it is overwritten the next time the order is read.
+    /// Every entry in <see cref="_store"/> is guaranteed to be a <see cref="ServiceOrder"/>
+    /// by <see cref="AddAsync"/>'s type check — it's the only method that inserts new keys.
     /// Must be called while holding <see cref="_lock"/>.
     /// </summary>
     private IServiceOrder? Materialize(IServiceOrder? order)
     {
-        if (order is ServiceOrder so)
-        {
-            so.ChildOrderIds.Clear();
-            so.ChildOrderIds.AddRange(
-                _store.Values.Where(o => o.ParentOrderId == so.Id).Select(o => o.Id));
-        }
-        return order;
+        if (order is null) return null;
+
+        var so = (ServiceOrder)order;
+        so.ChildOrderIds.Clear();
+        so.ChildOrderIds.AddRange(
+            _store.Values.Where(o => o.ParentOrderId == so.Id).Select(o => o.Id));
+        return so;
     }
 
     private IReadOnlyList<IServiceOrder> Materialize(IEnumerable<IServiceOrder> orders)
@@ -106,7 +108,8 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
     /// <summary>
     /// Looks up <paramref name="id"/> and returns it as a concrete <see cref="ServiceOrder"/>
-    /// so its mutable collections can be updated in place.
+    /// so its mutable collections can be updated in place. See <see cref="Materialize(IServiceOrder?)"/>
+    /// for why the cast is guaranteed safe.
     /// Must be called while holding <see cref="_lock"/>.
     /// </summary>
     private ServiceOrder RequireConcrete(string id)
@@ -114,16 +117,16 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
         if (!_store.TryGetValue(id, out var order))
             throw new KeyNotFoundException($"ServiceOrder '{id}' not found.");
 
-        if (order is not ServiceOrder so)
-            throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(id));
-
-        return so;
+        return (ServiceOrder)order;
     }
 
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        if (order is not ServiceOrder)
+            throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
+
         lock (_lock) { _store[order.Id] = order; }
         OrderAdded?.Invoke(this, order);
         return Task.CompletedTask;

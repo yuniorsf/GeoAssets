@@ -76,17 +76,6 @@ public class InMemoryServiceOrderRepositoryTests
         (await sut.GetByIdAsync("parent"))!.ChildOrderIds.Should().BeEquivalentTo(["child-a", "child-b"]);
     }
 
-    [Fact]
-    public async Task GetById_NonServiceOrderImplementation_LeavesChildOrderIdsUnchanged()
-    {
-        var sut = new InMemoryServiceOrderRepository();
-        var fake = new FakeServiceOrder { Id = "fake", ChildOrderIds = ["preset"] };
-        await sut.AddAsync(fake);
-        await sut.AddAsync(Order("child", parentOrderId: "fake"));
-
-        (await sut.GetByIdAsync("fake"))!.ChildOrderIds.Should().BeEquivalentTo(["preset"]);
-    }
-
     // ── GetAll ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -355,6 +344,16 @@ public class InMemoryServiceOrderRepositoryTests
         raised!.Id.Should().Be("a");
     }
 
+    [Fact]
+    public async Task AddAsync_NonServiceOrderImplementation_ThrowsArgumentException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+
+        var act = () => sut.AddAsync(new FakeServiceOrder { Id = "a" });
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
     // ── Update ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -428,17 +427,6 @@ public class InMemoryServiceOrderRepositoryTests
         await sut.AddAsync(Order("a"));
 
         var act = () => sut.UpdateAsync(new FakeServiceOrder { Id = "a" });
-
-        await act.Should().ThrowAsync<ArgumentException>();
-    }
-
-    [Fact]
-    public async Task Update_NonServiceOrderStoredEntry_ThrowsArgumentException()
-    {
-        var sut = new InMemoryServiceOrderRepository();
-        await sut.AddAsync(new FakeServiceOrder { Id = "a" });
-
-        var act = () => sut.UpdateAsync(Order("a"));
 
         await act.Should().ThrowAsync<ArgumentException>();
     }
@@ -540,17 +528,6 @@ public class InMemoryServiceOrderRepositoryTests
         var act = () => sut.AppendDispatchAsync("missing", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
-    }
-
-    [Fact]
-    public async Task AppendDispatch_NonServiceOrderStoredEntry_ThrowsArgumentException()
-    {
-        var sut = new InMemoryServiceOrderRepository();
-        await sut.AddAsync(new FakeServiceOrder { Id = "a" });
-
-        var act = () => sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
-
-        await act.Should().ThrowAsync<ArgumentException>();
     }
 
     // ── AppendAction ───────────────────────────────────────────────────────────
@@ -665,17 +642,6 @@ public class InMemoryServiceOrderRepositoryTests
         var act = () => sut.AppendActionAsync("missing", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
-    }
-
-    [Fact]
-    public async Task AppendAction_NonServiceOrderStoredEntry_ThrowsArgumentException()
-    {
-        var sut = new InMemoryServiceOrderRepository();
-        await sut.AddAsync(new FakeServiceOrder { Id = "a" });
-
-        var act = () => sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
-
-        await act.Should().ThrowAsync<ArgumentException>();
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────
