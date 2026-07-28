@@ -31,11 +31,8 @@ public sealed class InheritFromChildOrdersStrategy : IFeatureSelectionStrategy
         var seen     = new HashSet<string>();
         var features = new List<GeoFeature>();
 
-        foreach (var childId in context.TargetOrder.ChildOrderIds)
+        foreach (var child in context.OrderRepository.GetChildren(context.TargetOrder.Id))
         {
-            var child = context.OrderRepository.GetById(childId);
-            if (child is null) continue;
-
             foreach (var f in child.Features)
             {
                 if (seen.Add(f.Id))

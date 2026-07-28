@@ -143,7 +143,6 @@ public static class CustomSelectionStrategy
             ParentOrderId = rootOrder.Id,
         }.WithFeatures(electricFeatures, layerSpec);
 
-        rootOrder.ChildOrderIds.Add(childOrderA.Id);
         orderRepo.Add(childOrderA);
         PrintOrder(childOrderA);
 
@@ -184,7 +183,6 @@ public static class CustomSelectionStrategy
             ParentOrderId = rootOrder.Id,
         }.WithFeatures(impactFeatures, impactSpec);
 
-        rootOrder.ChildOrderIds.Add(childOrderB.Id);
         orderRepo.Add(childOrderB);
         PrintOrder(childOrderB);
 
@@ -236,11 +234,8 @@ public static class CustomSelectionStrategy
         var prefix = new string(' ', indent * 4 + 6);
         var icon   = indent == 0 ? "◆" : "└─";
         Console.WriteLine($"{prefix}{icon} [{order.Status}] {order.Title}  ({order.Features.Count} features)");
-        foreach (var childId in order.ChildOrderIds)
-        {
-            var child = repo.GetById(childId);
-            if (child is not null) PrintHierarchy(child, repo, indent + 1);
-        }
+        foreach (var child in repo.GetChildren(order.Id))
+            PrintHierarchy(child, repo, indent + 1);
     }
 }
 

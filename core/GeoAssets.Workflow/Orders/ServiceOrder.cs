@@ -50,6 +50,12 @@ public sealed class ServiceOrder : IServiceOrder
     // ── Hierarchy ─────────────────────────────────────────────────────────────
 
     public string?      ParentOrderId { get; set; }
+
+    /// <summary>
+    /// Derived from <see cref="ParentOrderId"/> by the repository on every read.
+    /// Set <see cref="ParentOrderId"/> on the child to establish hierarchy —
+    /// do not mutate this list directly, it will be overwritten on next load.
+    /// </summary>
     public List<string> ChildOrderIds { get; init; } = [];
     IReadOnlyList<string> IServiceOrder.ChildOrderIds => ChildOrderIds;
 

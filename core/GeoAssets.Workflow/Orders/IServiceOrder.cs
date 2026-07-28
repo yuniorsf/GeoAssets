@@ -56,10 +56,21 @@ public interface IServiceOrder
 
     // ── Hierarchy ─────────────────────────────────────────────────────────────
 
-    /// <summary>ID of the parent order, or null if this is a root order.</summary>
+    /// <summary>
+    /// ID of the parent order, or null if this is a root order.
+    /// This is the persisted, authoritative link — hierarchy is always
+    /// established by setting this on the child, never by mutating the
+    /// parent's <see cref="ChildOrderIds"/>.
+    /// </summary>
     string? ParentOrderId { get; }
 
-    /// <summary>IDs of direct child orders.</summary>
+    /// <summary>
+    /// IDs of direct child orders, derived from <see cref="ParentOrderId"/>.
+    /// Repositories recompute this on every read (see
+    /// <c>IServiceOrderRepository.GetChildren</c>); it is not itself persisted,
+    /// so mutating it directly has no lasting effect once the order is
+    /// reloaded from a repository.
+    /// </summary>
     IReadOnlyList<string> ChildOrderIds { get; }
 
     bool IsRoot  => ParentOrderId is null;
