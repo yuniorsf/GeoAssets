@@ -37,6 +37,11 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IServiceOrderRepository>(sp =>
             new ValidatingServiceOrderRepository(sp.GetRequiredService<EFServiceOrderRepository>()));
 
+        // Read-only or write-only consumers can depend on just the piece they need
+        // instead of the full IServiceOrderRepository.
+        services.AddScoped<IServiceOrderReader>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+        services.AddScoped<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
 
         return services;

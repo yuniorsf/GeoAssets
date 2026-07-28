@@ -18,6 +18,12 @@ public static class WorkflowServiceExtensions
         services.AddSingleton<InMemoryServiceOrderRepository>();
         services.AddSingleton<IServiceOrderRepository>(sp =>
             new ValidatingServiceOrderRepository(sp.GetRequiredService<InMemoryServiceOrderRepository>()));
+
+        // Read-only or write-only consumers can depend on just the piece they need
+        // instead of the full IServiceOrderRepository.
+        services.AddSingleton<IServiceOrderReader>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+        services.AddSingleton<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+
         services.AddSingleton<IOrderTypeRepository, InMemoryOrderTypeRepository>();
         return services;
     }
