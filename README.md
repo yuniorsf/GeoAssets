@@ -205,8 +205,9 @@ These threads connect to my broader work as a senior software engineer focused o
 Short-term focus areas (subject to change as the design evolves):
 
 - [ ] Stabilize the `IAssetRepository` contract and freeze the public surface exposed to providers.
-- [x] Expand test coverage beyond `TopoGraph` — now covering geometry, serialization, providers, the agent orchestrator, and the plugin scaffolder (228 tests).
-- [ ] Extend test coverage further into the providers and workflow projects.
+- [x] Expand test coverage beyond `TopoGraph` — now covering geometry, serialization, providers, the agent orchestrator, and the plugin scaffolder (229 tests).
+- [x] Extend test coverage into the workflow project — `GeoAssets.Workflow` went from no dedicated test project to 147 tests (`GeoAssets.Workflow.Tests`), with several real correctness bugs (provider-inconsistent hierarchy tracking, a sync/async split, a lost-update race, a missing status-transition state machine, a non-serializable strategy parameter, and an unenforced per-order-type permission override) found and fixed along the way.
+- [ ] Extend test coverage further into the other provider projects (PostgreSQL, REST, WFS, WMS, Shapefile).
 - [x] Add a CI pipeline (GitHub Actions) for build + test on every PR.
 - [x] Add agent-orchestrated generation of MEF command plugins (`GeoAssets.Core.Agents` + `GeoAssets.Commands.Generation`).
 - [ ] Document the plugin contract and the `IExternalRepositoryFactory` discovery mechanism.
