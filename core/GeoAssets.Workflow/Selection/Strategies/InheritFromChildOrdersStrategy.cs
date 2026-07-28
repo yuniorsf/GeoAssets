@@ -18,7 +18,7 @@ public sealed class InheritFromChildOrdersStrategy : IFeatureSelectionStrategy
     public string DisplayName => "Aggregate from Child Orders";
     public string Description => "Merges the feature sets of all direct child orders.";
 
-    public Task<IReadOnlyList<GeoFeature>> SelectAsync(
+    public async Task<IReadOnlyList<GeoFeature>> SelectAsync(
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
@@ -31,7 +31,7 @@ public sealed class InheritFromChildOrdersStrategy : IFeatureSelectionStrategy
         var seen     = new HashSet<string>();
         var features = new List<GeoFeature>();
 
-        foreach (var child in context.OrderRepository.GetChildren(context.TargetOrder.Id))
+        foreach (var child in await context.OrderRepository.GetChildrenAsync(context.TargetOrder.Id, ct))
         {
             foreach (var f in child.Features)
             {
@@ -40,6 +40,6 @@ public sealed class InheritFromChildOrdersStrategy : IFeatureSelectionStrategy
             }
         }
 
-        return Task.FromResult<IReadOnlyList<GeoFeature>>(features);
+        return features;
     }
 }

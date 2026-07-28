@@ -8,31 +8,32 @@ public interface IServiceOrderRepository
 {
     // ── Read ──────────────────────────────────────────────────────────────────
 
-    IServiceOrder?             GetById(string id);
-    IReadOnlyList<IServiceOrder> GetAll();
-    IReadOnlyList<IServiceOrder> GetRoots();
-    IReadOnlyList<IServiceOrder> GetChildren(string parentId);
-    IServiceOrder?             GetParent(string childId);
+    Task<IServiceOrder?>               GetByIdAsync(string id, CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default);
+    Task<IServiceOrder?>               GetParentAsync(string childId, CancellationToken ct = default);
 
     // ── Filtered queries ──────────────────────────────────────────────────────
 
-    IReadOnlyList<IServiceOrder> GetByStatus(ServiceOrderStatus status);
-    IReadOnlyList<IServiceOrder> GetByAssignee(string userId);
-    IReadOnlyList<IServiceOrder> GetByCreator(string userId);
-    IReadOnlyList<IServiceOrder> GetByOrderType(string orderTypeId);
-    IReadOnlyList<IServiceOrder> GetByDateRange(DateTime from, DateTime to);
+    Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default);
 
     /// <summary>
     /// Returns all orders dispatched to the given target
     /// (user ID, group ID, or organization ID depending on <paramref name="targetType"/>).
     /// </summary>
-    IReadOnlyList<IServiceOrder> GetDispatchedTo(string targetId, DispatchTargetType targetType);
+    Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
+        string targetId, DispatchTargetType targetType, CancellationToken ct = default);
 
     // ── Write ─────────────────────────────────────────────────────────────────
 
-    void Add(IServiceOrder order);
-    void Update(IServiceOrder order);
-    void Delete(string id);
+    Task AddAsync(IServiceOrder order, CancellationToken ct = default);
+    Task UpdateAsync(IServiceOrder order, CancellationToken ct = default);
+    Task DeleteAsync(string id, CancellationToken ct = default);
 
     // ── Events ────────────────────────────────────────────────────────────────
 

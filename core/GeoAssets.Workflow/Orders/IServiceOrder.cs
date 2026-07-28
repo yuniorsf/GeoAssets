@@ -67,7 +67,7 @@ public interface IServiceOrder
     /// <summary>
     /// IDs of direct child orders, derived from <see cref="ParentOrderId"/>.
     /// Repositories recompute this on every read (see
-    /// <c>IServiceOrderRepository.GetChildren</c>); it is not itself persisted,
+    /// <c>IServiceOrderRepository.GetChildrenAsync</c>); it is not itself persisted,
     /// so mutating it directly has no lasting effect once the order is
     /// reloaded from a repository.
     /// </summary>

@@ -15,66 +15,67 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
     // ── Read ──────────────────────────────────────────────────────────────────
 
-    public IServiceOrder? GetById(string id)
+    public Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.GetValueOrDefault(id)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.GetValueOrDefault(id))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetAll()
+    public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values)); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetRoots()
+    public Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.IsRoot)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.IsRoot))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetChildren(string parentId)
+    public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.ParentOrderId == parentId)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.ParentOrderId == parentId))); }
     }
 
-    public IServiceOrder? GetParent(string childId)
+    public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default)
     {
         lock (_lock)
         {
             var child = _store.GetValueOrDefault(childId);
-            return child?.ParentOrderId is { } pid ? Materialize(_store.GetValueOrDefault(pid)) : null;
+            return Task.FromResult(child?.ParentOrderId is { } pid ? Materialize(_store.GetValueOrDefault(pid)) : null);
         }
     }
 
-    public IReadOnlyList<IServiceOrder> GetByStatus(ServiceOrderStatus status)
+    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.Status == status)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.Status == status))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetByAssignee(string userId)
+    public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.AssignedTo == userId)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.AssignedTo == userId))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetByCreator(string userId)
+    public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.CreatedBy == userId)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.CreatedBy == userId))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetByOrderType(string orderTypeId)
+    public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.OrderTypeId == orderTypeId)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.OrderTypeId == orderTypeId))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetByDateRange(DateTime from, DateTime to)
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default)
     {
-        lock (_lock) { return Materialize(_store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= to)); }
+        lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= to))); }
     }
 
-    public IReadOnlyList<IServiceOrder> GetDispatchedTo(string targetId, DispatchTargetType targetType)
+    public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
+        string targetId, DispatchTargetType targetType, CancellationToken ct = default)
     {
         lock (_lock)
         {
-            return Materialize(_store.Values.Where(o =>
-                o.Dispatches.Any(d => d.TargetId == targetId && d.TargetType == targetType)));
+            return Task.FromResult(Materialize(_store.Values.Where(o =>
+                o.Dispatches.Any(d => d.TargetId == targetId && d.TargetType == targetType))));
         }
     }
 
@@ -105,13 +106,14 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
     // ── Write ─────────────────────────────────────────────────────────────────
 
-    public void Add(IServiceOrder order)
+    public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
         lock (_lock) { _store[order.Id] = order; }
         OrderAdded?.Invoke(this, order);
+        return Task.CompletedTask;
     }
 
-    public void Update(IServiceOrder order)
+    public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
         ServiceOrderStatus? previous = null;
         lock (_lock)
@@ -125,11 +127,14 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
         if (previous.HasValue && previous.Value != order.Status)
             OrderStatusChanged?.Invoke(this, (order, previous.Value));
+
+        return Task.CompletedTask;
     }
 
-    public void Delete(string id)
+    public Task DeleteAsync(string id, CancellationToken ct = default)
     {
         lock (_lock) { _store.Remove(id); }
         OrderDeleted?.Invoke(this, id);
+        return Task.CompletedTask;
     }
 }

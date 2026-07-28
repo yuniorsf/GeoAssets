@@ -22,7 +22,7 @@ public sealed class InheritFromParentOrderStrategy : IFeatureSelectionStrategy
     public string DisplayName => "Inherit from Parent Order";
     public string Description => "Copies the feature set from the parent service order.";
 
-    public Task<IReadOnlyList<GeoFeature>> SelectAsync(
+    public async Task<IReadOnlyList<GeoFeature>> SelectAsync(
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
@@ -33,17 +33,17 @@ public sealed class InheritFromParentOrderStrategy : IFeatureSelectionStrategy
             throw new InvalidOperationException("OrderRepository must be set for 'inherit-parent' strategy.");
 
         if (context.TargetOrder.ParentOrderId is null)
-            return Task.FromResult<IReadOnlyList<GeoFeature>>([]);
+            return [];
 
-        var parent = context.OrderRepository.GetById(context.TargetOrder.ParentOrderId);
+        var parent = await context.OrderRepository.GetByIdAsync(context.TargetOrder.ParentOrderId, ct);
         if (parent is null)
-            return Task.FromResult<IReadOnlyList<GeoFeature>>([]);
+            return [];
 
         IEnumerable<GeoFeature> features = parent.Features;
 
         if (context.Parameters.TryGetValue("filter", out var raw) && raw is Func<GeoFeature, bool> predicate)
             features = features.Where(predicate);
 
-        return Task.FromResult<IReadOnlyList<GeoFeature>>([.. features]);
+        return [.. features];
     }
 }

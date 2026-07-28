@@ -116,7 +116,7 @@ public static class CustomSelectionStrategy
             Priority    = ServiceOrderPriority.Normal,
         }.WithFeatures(allFeatures, rootSpec);
 
-        orderRepo.Add(rootOrder);
+        await orderRepo.AddAsync(rootOrder);
         PrintOrder(rootOrder);
 
         // ── 5. Orden hija A — LayerFilterStrategy (estrategia personalizada) ─
@@ -143,7 +143,7 @@ public static class CustomSelectionStrategy
             ParentOrderId = rootOrder.Id,
         }.WithFeatures(electricFeatures, layerSpec);
 
-        orderRepo.Add(childOrderA);
+        await orderRepo.AddAsync(childOrderA);
         PrintOrder(childOrderA);
 
         // ── 6. Orden hija B — NetworkImpactStrategy (proceso de background) ──
@@ -183,13 +183,13 @@ public static class CustomSelectionStrategy
             ParentOrderId = rootOrder.Id,
         }.WithFeatures(impactFeatures, impactSpec);
 
-        orderRepo.Add(childOrderB);
+        await orderRepo.AddAsync(childOrderB);
         PrintOrder(childOrderB);
 
         // ── 7. Inspeccionar jerarquía y FeatureSelectionSpec ─────────────────
 
         Print.Section("Jerarquía de órdenes");
-        PrintHierarchy(rootOrder, orderRepo, indent: 0);
+        await PrintHierarchy(rootOrder, orderRepo, indent: 0);
 
         Print.Section("Auditoría — FeatureSelectionSpec por orden");
         foreach (var order in new[] { rootOrder, childOrderA, childOrderB })
@@ -229,13 +229,13 @@ public static class CustomSelectionStrategy
         Print.List("Features", order.Features);
     }
 
-    private static void PrintHierarchy(IServiceOrder order, IServiceOrderRepository repo, int indent)
+    private static async Task PrintHierarchy(IServiceOrder order, IServiceOrderRepository repo, int indent)
     {
         var prefix = new string(' ', indent * 4 + 6);
         var icon   = indent == 0 ? "◆" : "└─";
         Console.WriteLine($"{prefix}{icon} [{order.Status}] {order.Title}  ({order.Features.Count} features)");
-        foreach (var child in repo.GetChildren(order.Id))
-            PrintHierarchy(child, repo, indent + 1);
+        foreach (var child in await repo.GetChildrenAsync(order.Id))
+            await PrintHierarchy(child, repo, indent + 1);
     }
 }
 

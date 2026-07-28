@@ -52,57 +52,57 @@ public class InMemoryServiceOrderRepositoryTests
     // ── GetById ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetById_MissingId_ReturnsNull()
+    public async Task GetById_MissingId_ReturnsNull()
     {
-        new InMemoryServiceOrderRepository().GetById("x").Should().BeNull();
+        (await new InMemoryServiceOrderRepository().GetByIdAsync("x")).Should().BeNull();
     }
 
     [Fact]
-    public void GetById_ExistingOrder_ReturnsOrder()
-    {
-        var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a"));
-        sut.GetById("a")!.Id.Should().Be("a");
-    }
-
-    [Fact]
-    public void GetById_OrderWithChildren_RecomputesChildOrderIds()
+    public async Task GetById_ExistingOrder_ReturnsOrder()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("parent"));
-        sut.Add(Order("child-a", parentOrderId: "parent"));
-        sut.Add(Order("child-b", parentOrderId: "parent"));
-
-        sut.GetById("parent")!.ChildOrderIds.Should().BeEquivalentTo(["child-a", "child-b"]);
+        await sut.AddAsync(Order("a"));
+        (await sut.GetByIdAsync("a"))!.Id.Should().Be("a");
     }
 
     [Fact]
-    public void GetById_NonServiceOrderImplementation_LeavesChildOrderIdsUnchanged()
+    public async Task GetById_OrderWithChildren_RecomputesChildOrderIds()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("parent"));
+        await sut.AddAsync(Order("child-a", parentOrderId: "parent"));
+        await sut.AddAsync(Order("child-b", parentOrderId: "parent"));
+
+        (await sut.GetByIdAsync("parent"))!.ChildOrderIds.Should().BeEquivalentTo(["child-a", "child-b"]);
+    }
+
+    [Fact]
+    public async Task GetById_NonServiceOrderImplementation_LeavesChildOrderIdsUnchanged()
     {
         var sut = new InMemoryServiceOrderRepository();
         var fake = new FakeServiceOrder { Id = "fake", ChildOrderIds = ["preset"] };
-        sut.Add(fake);
-        sut.Add(Order("child", parentOrderId: "fake"));
+        await sut.AddAsync(fake);
+        await sut.AddAsync(Order("child", parentOrderId: "fake"));
 
-        sut.GetById("fake")!.ChildOrderIds.Should().BeEquivalentTo(["preset"]);
+        (await sut.GetByIdAsync("fake"))!.ChildOrderIds.Should().BeEquivalentTo(["preset"]);
     }
 
     // ── GetAll ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetAll_EmptyStore_ReturnsEmpty()
+    public async Task GetAll_EmptyStore_ReturnsEmpty()
     {
-        new InMemoryServiceOrderRepository().GetAll().Should().BeEmpty();
+        (await new InMemoryServiceOrderRepository().GetAllAsync()).Should().BeEmpty();
     }
 
     [Fact]
-    public void GetAll_WithOrders_ReturnsAllMaterialized()
+    public async Task GetAll_WithOrders_ReturnsAllMaterialized()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("parent"));
-        sut.Add(Order("child", parentOrderId: "parent"));
+        await sut.AddAsync(Order("parent"));
+        await sut.AddAsync(Order("child", parentOrderId: "parent"));
 
-        var all = sut.GetAll();
+        var all = await sut.GetAllAsync();
 
         all.Select(o => o.Id).Should().BeEquivalentTo(["parent", "child"]);
         all.Single(o => o.Id == "parent").ChildOrderIds.Should().BeEquivalentTo(["child"]);
@@ -111,246 +111,246 @@ public class InMemoryServiceOrderRepositoryTests
     // ── GetRoots ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetRoots_MixOfRootAndChildOrders_ReturnsOnlyRoots()
+    public async Task GetRoots_MixOfRootAndChildOrders_ReturnsOnlyRoots()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("root"));
-        sut.Add(Order("child", parentOrderId: "root"));
+        await sut.AddAsync(Order("root"));
+        await sut.AddAsync(Order("child", parentOrderId: "root"));
 
-        sut.GetRoots().Select(o => o.Id).Should().BeEquivalentTo(["root"]);
+        (await sut.GetRootsAsync()).Select(o => o.Id).Should().BeEquivalentTo(["root"]);
     }
 
     // ── GetChildren ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetChildren_ParentWithChildren_ReturnsChildren()
+    public async Task GetChildren_ParentWithChildren_ReturnsChildren()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("parent"));
-        sut.Add(Order("child-a", parentOrderId: "parent"));
-        sut.Add(Order("other-root"));
+        await sut.AddAsync(Order("parent"));
+        await sut.AddAsync(Order("child-a", parentOrderId: "parent"));
+        await sut.AddAsync(Order("other-root"));
 
-        sut.GetChildren("parent").Select(o => o.Id).Should().BeEquivalentTo(["child-a"]);
+        (await sut.GetChildrenAsync("parent")).Select(o => o.Id).Should().BeEquivalentTo(["child-a"]);
     }
 
     [Fact]
-    public void GetChildren_ParentWithNoChildren_ReturnsEmpty()
+    public async Task GetChildren_ParentWithNoChildren_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("parent"));
+        await sut.AddAsync(Order("parent"));
 
-        sut.GetChildren("parent").Should().BeEmpty();
+        (await sut.GetChildrenAsync("parent")).Should().BeEmpty();
     }
 
     // ── GetParent ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetParent_ChildIdNotFound_ReturnsNull()
+    public async Task GetParent_ChildIdNotFound_ReturnsNull()
     {
-        new InMemoryServiceOrderRepository().GetParent("missing").Should().BeNull();
+        (await new InMemoryServiceOrderRepository().GetParentAsync("missing")).Should().BeNull();
     }
 
     [Fact]
-    public void GetParent_RootOrder_ReturnsNull()
+    public async Task GetParent_RootOrder_ReturnsNull()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("root"));
+        await sut.AddAsync(Order("root"));
 
-        sut.GetParent("root").Should().BeNull();
+        (await sut.GetParentAsync("root")).Should().BeNull();
     }
 
     [Fact]
-    public void GetParent_ChildWithExistingParent_ReturnsParent()
+    public async Task GetParent_ChildWithExistingParent_ReturnsParent()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("parent"));
-        sut.Add(Order("child", parentOrderId: "parent"));
+        await sut.AddAsync(Order("parent"));
+        await sut.AddAsync(Order("child", parentOrderId: "parent"));
 
-        sut.GetParent("child")!.Id.Should().Be("parent");
+        (await sut.GetParentAsync("child"))!.Id.Should().Be("parent");
     }
 
     [Fact]
-    public void GetParent_ChildWithMissingParentRecord_ReturnsNull()
+    public async Task GetParent_ChildWithMissingParentRecord_ReturnsNull()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("orphan", parentOrderId: "does-not-exist"));
+        await sut.AddAsync(Order("orphan", parentOrderId: "does-not-exist"));
 
-        sut.GetParent("orphan").Should().BeNull();
+        (await sut.GetParentAsync("orphan")).Should().BeNull();
     }
 
     // ── GetByStatus ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetByStatus_MatchingOrders_ReturnsThem()
+    public async Task GetByStatus_MatchingOrders_ReturnsThem()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", status: ServiceOrderStatus.Pending));
-        sut.Add(Order("b", status: ServiceOrderStatus.Draft));
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Pending));
+        await sut.AddAsync(Order("b", status: ServiceOrderStatus.Draft));
 
-        sut.GetByStatus(ServiceOrderStatus.Pending).Select(o => o.Id).Should().BeEquivalentTo(["a"]);
+        (await sut.GetByStatusAsync(ServiceOrderStatus.Pending)).Select(o => o.Id).Should().BeEquivalentTo(["a"]);
     }
 
     [Fact]
-    public void GetByStatus_NoMatch_ReturnsEmpty()
+    public async Task GetByStatus_NoMatch_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", status: ServiceOrderStatus.Draft));
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
 
-        sut.GetByStatus(ServiceOrderStatus.Completed).Should().BeEmpty();
+        (await sut.GetByStatusAsync(ServiceOrderStatus.Completed)).Should().BeEmpty();
     }
 
     // ── GetByAssignee ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetByAssignee_MatchingOrder_ReturnsIt()
+    public async Task GetByAssignee_MatchingOrder_ReturnsIt()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", assignedTo: "tech-1"));
-        sut.Add(Order("b", assignedTo: "tech-2"));
+        await sut.AddAsync(Order("a", assignedTo: "tech-1"));
+        await sut.AddAsync(Order("b", assignedTo: "tech-2"));
 
-        sut.GetByAssignee("tech-1").Select(o => o.Id).Should().BeEquivalentTo(["a"]);
+        (await sut.GetByAssigneeAsync("tech-1")).Select(o => o.Id).Should().BeEquivalentTo(["a"]);
     }
 
     [Fact]
-    public void GetByAssignee_NoMatch_ReturnsEmpty()
+    public async Task GetByAssignee_NoMatch_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", assignedTo: "tech-1"));
+        await sut.AddAsync(Order("a", assignedTo: "tech-1"));
 
-        sut.GetByAssignee("tech-9").Should().BeEmpty();
+        (await sut.GetByAssigneeAsync("tech-9")).Should().BeEmpty();
     }
 
     // ── GetByCreator ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetByCreator_MatchingOrder_ReturnsIt()
+    public async Task GetByCreator_MatchingOrder_ReturnsIt()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", createdBy: "alice"));
-        sut.Add(Order("b", createdBy: "bob"));
+        await sut.AddAsync(Order("a", createdBy: "alice"));
+        await sut.AddAsync(Order("b", createdBy: "bob"));
 
-        sut.GetByCreator("alice").Select(o => o.Id).Should().BeEquivalentTo(["a"]);
+        (await sut.GetByCreatorAsync("alice")).Select(o => o.Id).Should().BeEquivalentTo(["a"]);
     }
 
     [Fact]
-    public void GetByCreator_NoMatch_ReturnsEmpty()
+    public async Task GetByCreator_NoMatch_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", createdBy: "alice"));
+        await sut.AddAsync(Order("a", createdBy: "alice"));
 
-        sut.GetByCreator("carol").Should().BeEmpty();
+        (await sut.GetByCreatorAsync("carol")).Should().BeEmpty();
     }
 
     // ── GetByOrderType ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetByOrderType_MatchingOrder_ReturnsIt()
+    public async Task GetByOrderType_MatchingOrder_ReturnsIt()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", orderTypeId: "inspection"));
-        sut.Add(Order("b", orderTypeId: "maintenance"));
+        await sut.AddAsync(Order("a", orderTypeId: "inspection"));
+        await sut.AddAsync(Order("b", orderTypeId: "maintenance"));
 
-        sut.GetByOrderType("inspection").Select(o => o.Id).Should().BeEquivalentTo(["a"]);
+        (await sut.GetByOrderTypeAsync("inspection")).Select(o => o.Id).Should().BeEquivalentTo(["a"]);
     }
 
     [Fact]
-    public void GetByOrderType_NoMatch_ReturnsEmpty()
+    public async Task GetByOrderType_NoMatch_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", orderTypeId: "inspection"));
+        await sut.AddAsync(Order("a", orderTypeId: "inspection"));
 
-        sut.GetByOrderType("emergency-repair").Should().BeEmpty();
+        (await sut.GetByOrderTypeAsync("emergency-repair")).Should().BeEmpty();
     }
 
     // ── GetByDateRange ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetByDateRange_OrderWithinRange_ReturnsIt()
+    public async Task GetByDateRange_OrderWithinRange_ReturnsIt()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", createdAt: new DateTime(2026, 1, 15)));
+        await sut.AddAsync(Order("a", createdAt: new DateTime(2026, 1, 15)));
 
-        sut.GetByDateRange(new DateTime(2026, 1, 1), new DateTime(2026, 1, 31))
+        (await sut.GetByDateRangeAsync(new DateTime(2026, 1, 1), new DateTime(2026, 1, 31)))
             .Select(o => o.Id).Should().BeEquivalentTo(["a"]);
     }
 
     [Fact]
-    public void GetByDateRange_OrderBeforeRange_Excluded()
+    public async Task GetByDateRange_OrderBeforeRange_Excluded()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", createdAt: new DateTime(2025, 12, 31)));
+        await sut.AddAsync(Order("a", createdAt: new DateTime(2025, 12, 31)));
 
-        sut.GetByDateRange(new DateTime(2026, 1, 1), new DateTime(2026, 1, 31)).Should().BeEmpty();
+        (await sut.GetByDateRangeAsync(new DateTime(2026, 1, 1), new DateTime(2026, 1, 31))).Should().BeEmpty();
     }
 
     [Fact]
-    public void GetByDateRange_OrderAfterRange_Excluded()
+    public async Task GetByDateRange_OrderAfterRange_Excluded()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", createdAt: new DateTime(2026, 2, 1)));
+        await sut.AddAsync(Order("a", createdAt: new DateTime(2026, 2, 1)));
 
-        sut.GetByDateRange(new DateTime(2026, 1, 1), new DateTime(2026, 1, 31)).Should().BeEmpty();
+        (await sut.GetByDateRangeAsync(new DateTime(2026, 1, 1), new DateTime(2026, 1, 31))).Should().BeEmpty();
     }
 
     // ── GetDispatchedTo ────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetDispatchedTo_MatchingTargetIdAndType_ReturnsOrder()
+    public async Task GetDispatchedTo_MatchingTargetIdAndType_ReturnsOrder()
     {
         var sut = new InMemoryServiceOrderRepository();
         var order = Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1");
-        sut.Add(order);
+        await sut.AddAsync(order);
 
-        sut.GetDispatchedTo("user-1", DispatchTargetType.User)
+        (await sut.GetDispatchedToAsync("user-1", DispatchTargetType.User))
             .Select(o => o.Id).Should().BeEquivalentTo(["a"]);
     }
 
     [Fact]
-    public void GetDispatchedTo_MismatchedTargetId_ReturnsEmpty()
+    public async Task GetDispatchedTo_MismatchedTargetId_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1"));
+        await sut.AddAsync(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1"));
 
-        sut.GetDispatchedTo("user-2", DispatchTargetType.User).Should().BeEmpty();
+        (await sut.GetDispatchedToAsync("user-2", DispatchTargetType.User)).Should().BeEmpty();
     }
 
     [Fact]
-    public void GetDispatchedTo_MismatchedTargetType_ReturnsEmpty()
+    public async Task GetDispatchedTo_MismatchedTargetType_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a").DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1"));
+        await sut.AddAsync(Order("a").DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1"));
 
-        sut.GetDispatchedTo("crew-1", DispatchTargetType.User).Should().BeEmpty();
+        (await sut.GetDispatchedToAsync("crew-1", DispatchTargetType.User)).Should().BeEmpty();
     }
 
     [Fact]
-    public void GetDispatchedTo_NoDispatches_ReturnsEmpty()
+    public async Task GetDispatchedTo_NoDispatches_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a"));
+        await sut.AddAsync(Order("a"));
 
-        sut.GetDispatchedTo("user-1", DispatchTargetType.User).Should().BeEmpty();
+        (await sut.GetDispatchedToAsync("user-1", DispatchTargetType.User)).Should().BeEmpty();
     }
 
     // ── Add ────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Add_NewOrder_IsStoredAndRetrievable()
+    public async Task Add_NewOrder_IsStoredAndRetrievable()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a"));
+        await sut.AddAsync(Order("a"));
 
-        sut.GetById("a").Should().NotBeNull();
+        (await sut.GetByIdAsync("a")).Should().NotBeNull();
     }
 
     [Fact]
-    public void Add_FiresOrderAdded()
+    public async Task Add_FiresOrderAdded()
     {
         var sut = new InMemoryServiceOrderRepository();
         IServiceOrder? raised = null;
         sut.OrderAdded += (_, o) => raised = o;
 
-        sut.Add(Order("a"));
+        await sut.AddAsync(Order("a"));
 
         raised!.Id.Should().Be("a");
     }
@@ -358,14 +358,14 @@ public class InMemoryServiceOrderRepositoryTests
     // ── Update ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Update_ExistingOrderStatusChanged_FiresOrderStatusChanged()
+    public async Task Update_ExistingOrderStatusChanged_FiresOrderStatusChanged()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", status: ServiceOrderStatus.Draft));
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
         (IServiceOrder Order, ServiceOrderStatus Previous)? raised = null;
         sut.OrderStatusChanged += (_, e) => raised = e;
 
-        sut.Update(Order("a", status: ServiceOrderStatus.Pending));
+        await sut.UpdateAsync(Order("a", status: ServiceOrderStatus.Pending));
 
         raised.Should().NotBeNull();
         raised!.Value.Previous.Should().Be(ServiceOrderStatus.Draft);
@@ -373,100 +373,100 @@ public class InMemoryServiceOrderRepositoryTests
     }
 
     [Fact]
-    public void Update_ExistingOrderSameStatus_DoesNotFireOrderStatusChanged()
+    public async Task Update_ExistingOrderSameStatus_DoesNotFireOrderStatusChanged()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", status: ServiceOrderStatus.Draft));
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
         var fired = false;
         sut.OrderStatusChanged += (_, _) => fired = true;
 
-        sut.Update(Order("a", status: ServiceOrderStatus.Draft));
+        await sut.UpdateAsync(Order("a", status: ServiceOrderStatus.Draft));
 
         fired.Should().BeFalse();
     }
 
     [Fact]
-    public void Update_UnknownOrder_AddsItWithoutFiringOrderStatusChanged()
+    public async Task Update_UnknownOrder_AddsItWithoutFiringOrderStatusChanged()
     {
         var sut = new InMemoryServiceOrderRepository();
         var fired = false;
         sut.OrderStatusChanged += (_, _) => fired = true;
 
-        sut.Update(Order("new", status: ServiceOrderStatus.InProgress));
+        await sut.UpdateAsync(Order("new", status: ServiceOrderStatus.InProgress));
 
         fired.Should().BeFalse();
-        sut.GetById("new").Should().NotBeNull();
+        (await sut.GetByIdAsync("new")).Should().NotBeNull();
     }
 
     [Fact]
-    public void Update_AlwaysFiresOrderUpdated()
+    public async Task Update_AlwaysFiresOrderUpdated()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a"));
+        await sut.AddAsync(Order("a"));
         var fired = false;
         sut.OrderUpdated += (_, _) => fired = true;
 
-        sut.Update(Order("a"));
+        await sut.UpdateAsync(Order("a"));
 
         fired.Should().BeTrue();
     }
 
     [Fact]
-    public void Update_StatusChangedWithNoSubscriber_DoesNotThrow()
+    public async Task Update_StatusChangedWithNoSubscriber_DoesNotThrow()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a", status: ServiceOrderStatus.Draft));
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
 
-        var act = () => sut.Update(Order("a", status: ServiceOrderStatus.Pending));
+        var act = () => sut.UpdateAsync(Order("a", status: ServiceOrderStatus.Pending));
 
-        act.Should().NotThrow();
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]
-    public void Update_ReplacesStoredInstance()
+    public async Task Update_ReplacesStoredInstance()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(new ServiceOrder { Id = "a", Title = "Old" });
+        await sut.AddAsync(new ServiceOrder { Id = "a", Title = "Old" });
 
-        sut.Update(new ServiceOrder { Id = "a", Title = "New" });
+        await sut.UpdateAsync(new ServiceOrder { Id = "a", Title = "New" });
 
-        sut.GetById("a")!.Title.Should().Be("New");
+        (await sut.GetByIdAsync("a"))!.Title.Should().Be("New");
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Delete_ExistingId_RemovesOrder()
+    public async Task Delete_ExistingId_RemovesOrder()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a"));
+        await sut.AddAsync(Order("a"));
 
-        sut.Delete("a");
+        await sut.DeleteAsync("a");
 
-        sut.GetById("a").Should().BeNull();
+        (await sut.GetByIdAsync("a")).Should().BeNull();
     }
 
     [Fact]
-    public void Delete_ExistingId_FiresOrderDeleted()
+    public async Task Delete_ExistingId_FiresOrderDeleted()
     {
         var sut = new InMemoryServiceOrderRepository();
-        sut.Add(Order("a"));
+        await sut.AddAsync(Order("a"));
         string? deletedId = null;
         sut.OrderDeleted += (_, id) => deletedId = id;
 
-        sut.Delete("a");
+        await sut.DeleteAsync("a");
 
         deletedId.Should().Be("a");
     }
 
     [Fact]
-    public void Delete_NonExistingId_StillFiresOrderDeleted()
+    public async Task Delete_NonExistingId_StillFiresOrderDeleted()
     {
         var sut = new InMemoryServiceOrderRepository();
         string? deletedId = null;
         sut.OrderDeleted += (_, id) => deletedId = id;
 
-        sut.Delete("missing");
+        await sut.DeleteAsync("missing");
 
         deletedId.Should().Be("missing");
     }
