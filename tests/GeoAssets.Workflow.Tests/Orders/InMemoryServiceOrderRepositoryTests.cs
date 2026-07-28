@@ -386,16 +386,62 @@ public class InMemoryServiceOrderRepositoryTests
     }
 
     [Fact]
-    public async Task Update_UnknownOrder_AddsItWithoutFiringOrderStatusChanged()
+    public async Task Update_UnknownOrder_ThrowsKeyNotFoundException()
     {
         var sut = new InMemoryServiceOrderRepository();
-        var fired = false;
-        sut.OrderStatusChanged += (_, _) => fired = true;
 
-        await sut.UpdateAsync(Order("new", status: ServiceOrderStatus.InProgress));
+        var act = () => sut.UpdateAsync(Order("new", status: ServiceOrderStatus.InProgress));
 
-        fired.Should().BeFalse();
-        (await sut.GetByIdAsync("new")).Should().NotBeNull();
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task Update_NonServiceOrderIncomingArgument_ThrowsArgumentException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a"));
+
+        var act = () => sut.UpdateAsync(new FakeServiceOrder { Id = "a" });
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task Update_NonServiceOrderStoredEntry_ThrowsArgumentException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(new FakeServiceOrder { Id = "a" });
+
+        var act = () => sut.UpdateAsync(Order("a"));
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task Update_CopiesAttributes()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a"));
+
+        var incoming = Order("a");
+        incoming.Attributes["zone"] = "north";
+        await sut.UpdateAsync(incoming);
+
+        (await sut.GetByIdAsync("a"))!.Attributes.Should().ContainKey("zone").WhoseValue.Should().Be("north");
+    }
+
+    [Fact]
+    public async Task Update_DoesNotPersistDispatchesOrActionLog()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a"));
+
+        var incoming = Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1");
+        await sut.UpdateAsync(incoming);
+
+        var stored = await sut.GetByIdAsync("a");
+        stored!.Dispatches.Should().BeEmpty();
+        stored.ActionLog.Should().BeEmpty();
     }
 
     [Fact]
@@ -431,6 +477,149 @@ public class InMemoryServiceOrderRepositoryTests
         await sut.UpdateAsync(new ServiceOrder { Id = "a", Title = "New" });
 
         (await sut.GetByIdAsync("a"))!.Title.Should().Be("New");
+    }
+
+    // ── AppendDispatch ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AppendDispatch_ExistingOrder_AddsDispatch()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a"));
+        var dispatch = new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow);
+
+        await sut.AppendDispatchAsync("a", dispatch);
+
+        (await sut.GetByIdAsync("a"))!.Dispatches.Should().ContainSingle().Which.Should().Be(dispatch);
+    }
+
+    [Fact]
+    public async Task AppendDispatch_ExistingOrder_FiresOrderUpdated()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a"));
+        var fired = false;
+        sut.OrderUpdated += (_, _) => fired = true;
+
+        await sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
+
+        fired.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AppendDispatch_UnknownOrder_ThrowsKeyNotFoundException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+
+        var act = () => sut.AppendDispatchAsync("missing", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task AppendDispatch_NonServiceOrderStoredEntry_ThrowsArgumentException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(new FakeServiceOrder { Id = "a" });
+
+        var act = () => sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    // ── AppendAction ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AppendAction_WithoutResultingStatus_AddsEntryAndDoesNotFireOrderStatusChanged()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+        var fired = false;
+        sut.OrderStatusChanged += (_, _) => fired = true;
+
+        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow, "note"));
+
+        var stored = await sut.GetByIdAsync("a");
+        stored!.ActionLog.Should().ContainSingle();
+        stored.Status.Should().Be(ServiceOrderStatus.Draft);
+        fired.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AppendAction_ExistingOrder_FiresOrderUpdated()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a"));
+        var fired = false;
+        sut.OrderUpdated += (_, _) => fired = true;
+
+        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
+
+        fired.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AppendAction_ResultingStatusEqualToCurrent_DoesNotFireOrderStatusChanged()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+        var fired = false;
+        sut.OrderStatusChanged += (_, _) => fired = true;
+
+        await sut.AppendActionAsync("a",
+            new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Draft));
+
+        fired.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AppendAction_ResultingStatusDifferentFromCurrent_UpdatesStatusAndFiresOrderStatusChanged()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+        (IServiceOrder Order, ServiceOrderStatus Previous)? raised = null;
+        sut.OrderStatusChanged += (_, e) => raised = e;
+
+        await sut.AppendActionAsync("a",
+            new OrderActionLog(OrderActionType.Approve, "supervisor-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Pending));
+
+        raised.Should().NotBeNull();
+        raised!.Value.Previous.Should().Be(ServiceOrderStatus.Draft);
+        raised.Value.Order.Status.Should().Be(ServiceOrderStatus.Pending);
+    }
+
+    [Fact]
+    public async Task AppendAction_ResultingStatusCompleted_SetsCompletedAt()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.InProgress));
+        var performedAt = new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc);
+
+        await sut.AppendActionAsync("a",
+            new OrderActionLog(OrderActionType.Complete, "tech-1", performedAt, ResultingStatus: ServiceOrderStatus.Completed));
+
+        (await sut.GetByIdAsync("a"))!.CompletedAt.Should().Be(performedAt);
+    }
+
+    [Fact]
+    public async Task AppendAction_UnknownOrder_ThrowsKeyNotFoundException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+
+        var act = () => sut.AppendActionAsync("missing", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task AppendAction_NonServiceOrderStoredEntry_ThrowsArgumentException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(new FakeServiceOrder { Id = "a" });
+
+        var act = () => sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
+
+        await act.Should().ThrowAsync<ArgumentException>();
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────

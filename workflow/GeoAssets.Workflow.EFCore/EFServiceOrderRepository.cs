@@ -120,10 +120,8 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             .Select(o => (ServiceOrderStatus)o.Status)
             .FirstOrDefaultAsync(ct);
 
-        var existing = await _db.ServiceOrders
-            .Include(o => o.Dispatches)
-            .Include(o => o.ActionLog)
-            .FirstAsync(o => o.Id == order.Id, ct);
+        var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct)
+            ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
         UpdateRecord(existing, so);
         await _db.SaveChangesAsync(ct);
@@ -132,6 +130,66 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         if (previous != order.Status)
             OrderStatusChanged?.Invoke(this, (order, previous));
+    }
+
+    public async Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default)
+    {
+        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct)
+            ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
+
+        _db.OrderDispatches.Add(new OrderDispatchRecord
+        {
+            ServiceOrderId = orderId,
+            TargetId       = dispatch.TargetId,
+            TargetType     = (int)dispatch.TargetType,
+            DispatchedBy   = dispatch.DispatchedBy,
+            DispatchedAt   = dispatch.DispatchedAt,
+            Note           = dispatch.Note,
+        });
+        record.UpdatedAt = dispatch.DispatchedAt;
+
+        await _db.SaveChangesAsync(ct);
+
+        var updated = await GetByIdAsync(orderId, ct);
+        OrderUpdated?.Invoke(this, updated!);
+    }
+
+    public async Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
+    {
+        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct)
+            ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
+
+        var previous = (ServiceOrderStatus)record.Status;
+
+        _db.OrderActionLogs.Add(new OrderActionLogRecord
+        {
+            ServiceOrderId  = orderId,
+            Action          = (int)entry.Action,
+            PerformedBy     = entry.PerformedBy,
+            PerformedAt     = entry.PerformedAt,
+            Comment         = entry.Comment,
+            ResultingStatus = entry.ResultingStatus.HasValue ? (int)entry.ResultingStatus.Value : null,
+        });
+
+        if (entry.ResultingStatus.HasValue)
+        {
+            record.Status    = (int)entry.ResultingStatus.Value;
+            record.UpdatedAt = entry.PerformedAt;
+            if (entry.ResultingStatus.Value == ServiceOrderStatus.Completed)
+                record.CompletedAt = entry.PerformedAt;
+        }
+        else
+        {
+            record.UpdatedAt = entry.PerformedAt;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        var updated = await GetByIdAsync(orderId, ct);
+        OrderUpdated?.Invoke(this, updated!);
+
+        if (entry.ResultingStatus.HasValue && entry.ResultingStatus.Value != previous)
+            OrderStatusChanged?.Invoke(this, (updated!, previous));
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
@@ -180,10 +238,10 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     }
 
     /// <summary>
-    /// Updates an existing tracked <paramref name="target"/> record in-place
-    /// from the domain <paramref name="source"/>.
-    /// Dispatches and ActionLog rows are synced by id: new rows are added,
-    /// existing rows are updated.
+    /// Updates the scalar fields of an existing tracked <paramref name="target"/>
+    /// record in-place from the domain <paramref name="source"/>.
+    /// Does not touch Dispatches or ActionLog — see <see cref="AppendDispatchAsync"/>
+    /// and <see cref="AppendActionAsync"/>.
     /// </summary>
     private static void UpdateRecord(ServiceOrderRecord target, ServiceOrder source)
     {
@@ -205,33 +263,5 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         target.SelectionSpecJson = source.SelectionSpec is null
             ? null
             : System.Text.Json.JsonSerializer.Serialize(source.SelectionSpec);
-
-        // Sync dispatches: remove deleted, add new (dispatches are append-only by design)
-        var existingDispatchCount = target.Dispatches.Count;
-        foreach (var d in source.Dispatches.Skip(existingDispatchCount))
-        {
-            target.Dispatches.Add(new OrderDispatchRecord
-            {
-                TargetId     = d.TargetId,
-                TargetType   = (int)d.TargetType,
-                DispatchedBy = d.DispatchedBy,
-                DispatchedAt = d.DispatchedAt,
-                Note         = d.Note,
-            });
-        }
-
-        // Sync action log: append-only
-        var existingLogCount = target.ActionLog.Count;
-        foreach (var a in source.ActionLog.Skip(existingLogCount))
-        {
-            target.ActionLog.Add(new OrderActionLogRecord
-            {
-                Action          = (int)a.Action,
-                PerformedBy     = a.PerformedBy,
-                PerformedAt     = a.PerformedAt,
-                Comment         = a.Comment,
-                ResultingStatus = a.ResultingStatus.HasValue ? (int)a.ResultingStatus.Value : null,
-            });
-        }
     }
 }

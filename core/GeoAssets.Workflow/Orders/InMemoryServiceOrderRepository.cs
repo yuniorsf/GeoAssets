@@ -104,6 +104,22 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
     private IReadOnlyList<IServiceOrder> Materialize(IEnumerable<IServiceOrder> orders)
         => [.. orders.Select(o => Materialize(o)!)];
 
+    /// <summary>
+    /// Looks up <paramref name="id"/> and returns it as a concrete <see cref="ServiceOrder"/>
+    /// so its mutable collections can be updated in place.
+    /// Must be called while holding <see cref="_lock"/>.
+    /// </summary>
+    private ServiceOrder RequireConcrete(string id)
+    {
+        if (!_store.TryGetValue(id, out var order))
+            throw new KeyNotFoundException($"ServiceOrder '{id}' not found.");
+
+        if (order is not ServiceOrder so)
+            throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(id));
+
+        return so;
+    }
+
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
@@ -115,18 +131,86 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
     public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
-        ServiceOrderStatus? previous = null;
+        if (order is not ServiceOrder incoming)
+            throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
+
+        ServiceOrder existing;
+        ServiceOrderStatus previous;
         lock (_lock)
         {
-            if (_store.TryGetValue(order.Id, out var existing))
-                previous = existing.Status;
-            _store[order.Id] = order;
+            existing = RequireConcrete(order.Id);
+            previous = existing.Status;
+
+            existing.Title         = incoming.Title;
+            existing.Description   = incoming.Description;
+            existing.OrderTypeId   = incoming.OrderTypeId;
+            existing.Status        = incoming.Status;
+            existing.Priority      = incoming.Priority;
+            existing.AssignedTo    = incoming.AssignedTo;
+            existing.UpdatedAt     = incoming.UpdatedAt;
+            existing.ScheduledAt   = incoming.ScheduledAt;
+            existing.CompletedAt   = incoming.CompletedAt;
+            existing.ParentOrderId = incoming.ParentOrderId;
+            existing.SelectionSpec = incoming.SelectionSpec;
+            existing.FeatureIds    = incoming.FeatureIds;
+
+            existing.Attributes.Clear();
+            foreach (var kv in incoming.Attributes) existing.Attributes[kv.Key] = kv.Value;
+
+            existing.Features.Clear();
+            existing.Features.AddRange(incoming.Features);
+        }
+
+        OrderUpdated?.Invoke(this, existing);
+
+        if (previous != existing.Status)
+            OrderStatusChanged?.Invoke(this, (existing, previous));
+
+        return Task.CompletedTask;
+    }
+
+    public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default)
+    {
+        ServiceOrder order;
+        lock (_lock)
+        {
+            order = RequireConcrete(orderId);
+            order.Dispatches.Add(dispatch);
+            order.UpdatedAt = dispatch.DispatchedAt;
+        }
+
+        OrderUpdated?.Invoke(this, order);
+        return Task.CompletedTask;
+    }
+
+    public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
+    {
+        ServiceOrder order;
+        ServiceOrderStatus previous;
+        lock (_lock)
+        {
+            order = RequireConcrete(orderId);
+            previous = order.Status;
+
+            order.ActionLog.Add(entry);
+
+            if (entry.ResultingStatus.HasValue)
+            {
+                order.Status    = entry.ResultingStatus.Value;
+                order.UpdatedAt = entry.PerformedAt;
+                if (entry.ResultingStatus.Value == ServiceOrderStatus.Completed)
+                    order.CompletedAt = entry.PerformedAt;
+            }
+            else
+            {
+                order.UpdatedAt = entry.PerformedAt;
+            }
         }
 
         OrderUpdated?.Invoke(this, order);
 
-        if (previous.HasValue && previous.Value != order.Status)
-            OrderStatusChanged?.Invoke(this, (order, previous.Value));
+        if (entry.ResultingStatus.HasValue && entry.ResultingStatus.Value != previous)
+            OrderStatusChanged?.Invoke(this, (order, previous));
 
         return Task.CompletedTask;
     }
