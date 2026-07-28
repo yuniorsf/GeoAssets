@@ -10,12 +10,21 @@ namespace GeoAssets.Workflow.Rules;
 ///   • At least one explicit ALLOW with no DENYs → granted.
 ///   • All rules abstain → denied by default (fail-closed).
 ///
-/// Comes with built-in default rules. Extend by calling <see cref="AddRule"/>.
+/// Creation is gated by a separate chain of <see cref="IOrderCreationRule"/> instances
+/// (no <see cref="IServiceOrder"/> exists yet at creation time), using the same
+/// deny-overrides logic. Extend either chain via <see cref="AddRule"/> / <see cref="AddCreationRule"/>.
+///
+/// Passing an <see cref="Orders.OrderTypeRegistry"/> lets the engine also honor
+/// per-order-type <see cref="OrderType.ActionPermissions"/>: when an order type defines
+/// permissions for a given action, satisfying them is required and overrides the
+/// built-in default rules for that action; when it defines none for that action,
+/// evaluation falls through to the defaults unchanged.
 ///
 /// Usage:
 /// <code>
-///   var rules = new ServiceOrderRules()
-///       .AddRule(new MyCustomSupervisorRule());
+///   var rules = new ServiceOrderRules(orderTypeRegistry)
+///       .AddRule(new MyCustomSupervisorRule())
+///       .AddCreationRule(new MyCustomCreationRule());
 ///
 ///   bool canCreate = rules.CanCreate(principal, orderType);
 ///   var  result    = rules.Evaluate(principal, OrderActionType.Approve, order);
@@ -23,25 +32,45 @@ namespace GeoAssets.Workflow.Rules;
 /// </summary>
 public sealed class ServiceOrderRules
 {
-    private readonly List<IServiceOrderRule> _rules;
+    private readonly List<IServiceOrderRule>   _rules;
+    private readonly List<IOrderCreationRule>  _creationRules;
 
-    public ServiceOrderRules()
+    /// <param name="orderTypeRegistry">
+    /// Optional. When supplied, <see cref="Evaluate"/> also consults each order type's
+    /// <see cref="OrderType.ActionPermissions"/> (see class summary). When omitted,
+    /// evaluation only ever uses the built-in default rules — the same behavior as before
+    /// this parameter existed.
+    /// </param>
+    public ServiceOrderRules(OrderTypeRegistry? orderTypeRegistry = null)
     {
         _rules =
         [
             new CreatorRule(),
             new AssigneeRule(),
             new DispatchRecipientRule(),
+            new OrderTypeActionPermissionRule(orderTypeRegistry),
             new RoleBasedActionRule(),
+        ];
+
+        _creationRules =
+        [
+            new CreationPolicyRule(),
         ];
     }
 
     // ── Fluent configuration ──────────────────────────────────────────────────
 
-    /// <summary>Appends a custom rule to the evaluation chain.</summary>
+    /// <summary>Appends a custom rule to the action-evaluation chain.</summary>
     public ServiceOrderRules AddRule(IServiceOrderRule rule)
     {
         _rules.Add(rule);
+        return this;
+    }
+
+    /// <summary>Appends a custom rule to the creation-evaluation chain.</summary>
+    public ServiceOrderRules AddCreationRule(IOrderCreationRule rule)
+    {
+        _creationRules.Add(rule);
         return this;
     }
 
@@ -49,19 +78,28 @@ public sealed class ServiceOrderRules
 
     /// <summary>
     /// Returns true if <paramref name="principal"/> is allowed to create an order
-    /// of the given <paramref name="orderType"/>.
-    ///
-    /// A user passes if they satisfy AT LEAST ONE creation policy.
-    /// When no policies are defined, creation is open to all authenticated users.
+    /// of the given <paramref name="orderType"/>, using the same deny-overrides logic
+    /// as <see cref="Evaluate"/> over the creation-rule chain (see <see cref="AddCreationRule"/>).
+    /// The built-in <see cref="CreationPolicyRule"/> grants when the principal satisfies
+    /// at least one of <see cref="OrderType.CreationPolicies"/> (or when none are defined),
+    /// and otherwise abstains — leaving room for a custom creation rule to grant access
+    /// through a different path entirely.
     /// </summary>
     public bool CanCreate(WorkflowPrincipal principal, OrderType orderType)
     {
         if (string.IsNullOrEmpty(principal.UserId)) return false;
 
-        var policies = orderType.CreationPolicies;
-        if (policies.Count == 0) return true;
+        bool anyAllow = false;
+        foreach (var rule in _creationRules)
+        {
+            var verdict = rule.Evaluate(principal, orderType);
+            if (verdict == false)
+                return false;
+            if (verdict == true)
+                anyAllow = true;
+        }
 
-        return policies.Any(p => SatisfiesPolicy(principal, p.Kind, p.Value));
+        return anyAllow;
     }
 
     // ── View gate ─────────────────────────────────────────────────────────────
@@ -261,5 +299,56 @@ file sealed class RoleBasedActionRule : IServiceOrderRule
             };
 
         return null;
+    }
+}
+
+/// <summary>
+/// Consults the current order's <see cref="OrderType.ActionPermissions"/> (resolved via
+/// the optional <see cref="OrderTypeRegistry"/> passed to <see cref="ServiceOrderRules"/>).
+///
+/// When the order's type defines one or more permission entries for the action being
+/// evaluated, satisfying at least one is required — returning <c>false</c> here overrides
+/// any grant from the built-in default rules, since a single explicit DENY wins the whole
+/// evaluation. When the type defines no entries for that action (or no registry was
+/// supplied, or the type isn't registered), this rule abstains and evaluation falls
+/// through to the defaults unchanged.
+/// </summary>
+file sealed class OrderTypeActionPermissionRule(OrderTypeRegistry? registry) : IServiceOrderRule
+{
+    public string Name => "OrderTypeActionPermissionRule";
+
+    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    {
+        var orderType = registry?.Find(ctx.Order.OrderTypeId);
+        if (orderType is null) return null;
+
+        var permissions = orderType.ActionPermissions.Where(p => p.Action == action).ToList();
+        if (permissions.Count == 0) return null;
+
+        return permissions.Any(p => ServiceOrderRules.SatisfiesPolicy(ctx.Principal, p.Kind, p.Value));
+    }
+}
+
+// ── Default built-in creation rule ─────────────────────────────────────────────
+
+/// <summary>
+/// Grants creation when the principal satisfies at least one of
+/// <see cref="OrderType.CreationPolicies"/> (any-match), or when none are defined
+/// (creation is then open to all authenticated users). Abstains — rather than
+/// explicitly denying — when policies are defined but unsatisfied, so a custom
+/// <see cref="IOrderCreationRule"/> can still grant access through a different path.
+/// </summary>
+file sealed class CreationPolicyRule : IOrderCreationRule
+{
+    public string Name => "CreationPolicyRule";
+
+    public bool? Evaluate(WorkflowPrincipal principal, OrderType orderType)
+    {
+        var policies = orderType.CreationPolicies;
+        if (policies.Count == 0) return true;
+
+        return policies.Any(p => ServiceOrderRules.SatisfiesPolicy(principal, p.Kind, p.Value))
+            ? true
+            : null;
     }
 }
