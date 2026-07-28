@@ -358,6 +358,32 @@ public class InMemoryServiceOrderRepositoryTests
     // ── Update ─────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Update_IllegalStatusTransition_ThrowsInvalidServiceOrderTransitionException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+
+        var act = () => sut.UpdateAsync(Order("a", status: ServiceOrderStatus.Completed));
+
+        await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
+    }
+
+    [Fact]
+    public async Task Update_IllegalStatusTransition_DoesNotMutateStoredOrder()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft, createdBy: "alice"));
+
+        var incoming = Order("a", status: ServiceOrderStatus.Completed, createdBy: "alice");
+        incoming.Title = "Should not persist";
+        try { await sut.UpdateAsync(incoming); } catch (InvalidServiceOrderTransitionException) { }
+
+        var stored = await sut.GetByIdAsync("a");
+        stored!.Status.Should().Be(ServiceOrderStatus.Draft);
+        stored.Title.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Update_ExistingOrderStatusChanged_FiresOrderStatusChanged()
     {
         var sut = new InMemoryServiceOrderRepository();
@@ -556,6 +582,36 @@ public class InMemoryServiceOrderRepositoryTests
         await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
 
         fired.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AppendAction_IllegalResultingStatus_ThrowsInvalidServiceOrderTransitionException()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+
+        var act = () => sut.AppendActionAsync("a",
+            new OrderActionLog(OrderActionType.Complete, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Completed));
+
+        await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
+    }
+
+    [Fact]
+    public async Task AppendAction_IllegalResultingStatus_DoesNotPersistLogEntry()
+    {
+        var sut = new InMemoryServiceOrderRepository();
+        await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+
+        try
+        {
+            await sut.AppendActionAsync("a",
+                new OrderActionLog(OrderActionType.Complete, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Completed));
+        }
+        catch (InvalidServiceOrderTransitionException) { }
+
+        var stored = await sut.GetByIdAsync("a");
+        stored!.ActionLog.Should().BeEmpty();
+        stored.Status.Should().Be(ServiceOrderStatus.Draft);
     }
 
     [Fact]

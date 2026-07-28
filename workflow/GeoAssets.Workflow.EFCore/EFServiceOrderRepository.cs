@@ -123,6 +123,9 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
+        if (!ServiceOrderTransitions.IsValid(previous, so.Status))
+            throw new InvalidServiceOrderTransitionException(previous, so.Status);
+
         UpdateRecord(existing, so);
         await _db.SaveChangesAsync(ct);
 
@@ -160,6 +163,9 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
         var previous = (ServiceOrderStatus)record.Status;
+
+        if (entry.ResultingStatus.HasValue && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus.Value))
+            throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus.Value);
 
         _db.OrderActionLogs.Add(new OrderActionLogRecord
         {

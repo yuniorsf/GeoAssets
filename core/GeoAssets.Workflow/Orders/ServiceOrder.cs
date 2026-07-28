@@ -69,9 +69,16 @@ public sealed class ServiceOrder : IServiceOrder
 
     // ── Status transitions ────────────────────────────────────────────────────
 
-    /// <summary>Moves the order to <paramref name="newStatus"/> and stamps <see cref="UpdatedAt"/>.</summary>
+    /// <summary>
+    /// Moves the order to <paramref name="newStatus"/> and stamps <see cref="UpdatedAt"/>.
+    /// Throws <see cref="InvalidServiceOrderTransitionException"/> if the transition is
+    /// not structurally legal per <see cref="ServiceOrderTransitions.IsValid"/>.
+    /// </summary>
     public ServiceOrder Transition(ServiceOrderStatus newStatus)
     {
+        if (!ServiceOrderTransitions.IsValid(Status, newStatus))
+            throw new InvalidServiceOrderTransitionException(Status, newStatus);
+
         Status    = newStatus;
         UpdatedAt = DateTime.UtcNow;
 

@@ -141,6 +141,9 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
             existing = RequireConcrete(order.Id);
             previous = existing.Status;
 
+            if (!ServiceOrderTransitions.IsValid(previous, incoming.Status))
+                throw new InvalidServiceOrderTransitionException(previous, incoming.Status);
+
             existing.Title         = incoming.Title;
             existing.Description   = incoming.Description;
             existing.OrderTypeId   = incoming.OrderTypeId;
@@ -191,6 +194,9 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
         {
             order = RequireConcrete(orderId);
             previous = order.Status;
+
+            if (entry.ResultingStatus.HasValue && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus.Value))
+                throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus.Value);
 
             order.ActionLog.Add(entry);
 
