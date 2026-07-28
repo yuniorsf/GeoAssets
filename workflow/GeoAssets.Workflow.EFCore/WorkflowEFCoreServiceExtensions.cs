@@ -30,10 +30,12 @@ public static class WorkflowEFCoreServiceExtensions
     {
         services.AddDbContext<ServiceOrderDbContext>(configureDb);
 
-        services.AddScoped<IServiceOrderRepository>(sp =>
+        services.AddScoped(sp =>
             new EFServiceOrderRepository(
                 sp.GetRequiredService<ServiceOrderDbContext>(),
                 sp.GetService<IAssetProvider>()));
+        services.AddScoped<IServiceOrderRepository>(sp =>
+            new ValidatingServiceOrderRepository(sp.GetRequiredService<EFServiceOrderRepository>()));
 
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
 

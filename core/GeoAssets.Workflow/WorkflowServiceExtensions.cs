@@ -15,8 +15,10 @@ public static class WorkflowServiceExtensions
     /// </summary>
     public static IServiceCollection AddWorkflowInMemory(this IServiceCollection services)
     {
-        services.AddSingleton<IServiceOrderRepository, InMemoryServiceOrderRepository>();
-        services.AddSingleton<IOrderTypeRepository,    InMemoryOrderTypeRepository>();
+        services.AddSingleton<InMemoryServiceOrderRepository>();
+        services.AddSingleton<IServiceOrderRepository>(sp =>
+            new ValidatingServiceOrderRepository(sp.GetRequiredService<InMemoryServiceOrderRepository>()));
+        services.AddSingleton<IOrderTypeRepository, InMemoryOrderTypeRepository>();
         return services;
     }
 
