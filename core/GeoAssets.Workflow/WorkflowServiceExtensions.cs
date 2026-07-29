@@ -1,5 +1,6 @@
 using GeoAssets.Workflow.Notifications;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoAssets.Workflow;
@@ -76,6 +77,29 @@ public static class WorkflowServiceExtensions
     {
         services.AddSingleton<IOrderEventPublisher,    TPublisher>();
         services.AddSingleton<IOrderNotificationService, OrderNotificationService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers a single, consistently configured <see cref="ServiceOrderRules"/> singleton,
+    /// resolving the <see cref="OrderTypeRegistry"/> registered by
+    /// <see cref="AddOrderTypeRegistry"/> if present. Without this, every caller would
+    /// otherwise hand-construct its own <see cref="ServiceOrderRules"/> — a risk once both
+    /// human-facing and AI-agent-facing callers need to share the exact same role-grant
+    /// configuration.
+    /// </summary>
+    public static IServiceCollection AddServiceOrderRules(
+        this IServiceCollection services,
+        Action<ServiceOrderRulesOptions>? configure = null)
+    {
+        var options = new ServiceOrderRulesOptions();
+        configure?.Invoke(options);
+
+        services.AddSingleton(sp => new ServiceOrderRules(
+            orderTypeRegistry: sp.GetService<OrderTypeRegistry>(),
+            roleGrants: options.RoleGrants.Count > 0 ? options.RoleGrants : null,
+            unrestrictedRoles: options.UnrestrictedRoles.Count > 0 ? options.UnrestrictedRoles : null));
+
         return services;
     }
 
