@@ -57,20 +57,24 @@ internal static class ServiceOrderMapper
 
     private static OrderDispatchRecord ToDispatchRecord(OrderDispatch d) => new()
     {
-        TargetId     = d.TargetId,
-        TargetType   = (int)d.TargetType,
-        DispatchedBy = d.DispatchedBy,
-        DispatchedAt = d.DispatchedAt,
-        Note         = d.Note,
+        TargetId          = d.TargetId,
+        TargetType        = (int)d.TargetType,
+        DispatchedBy      = d.DispatchedBy,
+        DispatchedAt      = d.DispatchedAt,
+        Note              = d.Note,
+        ActorKind         = (int)d.ActorKind,
+        AgentInvocationId = d.AgentInvocationId,
     };
 
     private static OrderActionLogRecord ToActionLogRecord(OrderActionLog a) => new()
     {
-        Action          = (int)a.Action,
-        PerformedBy     = a.PerformedBy,
-        PerformedAt     = a.PerformedAt,
-        Comment         = a.Comment,
-        ResultingStatus = a.ResultingStatus.HasValue ? (int)a.ResultingStatus.Value : null,
+        Action            = (int)a.Action,
+        PerformedBy       = a.PerformedBy,
+        PerformedAt       = a.PerformedAt,
+        Comment           = a.Comment,
+        ResultingStatus   = a.ResultingStatus.HasValue ? (int)a.ResultingStatus.Value : null,
+        ActorKind         = (int)a.ActorKind,
+        AgentInvocationId = a.AgentInvocationId,
     };
 
     // ── EF → Domain ───────────────────────────────────────────────────────────
@@ -140,7 +144,11 @@ internal static class ServiceOrderMapper
                 (DispatchTargetType)d.TargetType,
                 d.DispatchedBy,
                 d.DispatchedAt,
-                d.Note)));
+                d.Note)
+            {
+                ActorKind         = (ActorKind)d.ActorKind,
+                AgentInvocationId = d.AgentInvocationId,
+            }));
 
         order.ActionLog.AddRange(record.ActionLog
             .OrderBy(a => a.PerformedAt)
@@ -149,7 +157,11 @@ internal static class ServiceOrderMapper
                 a.PerformedBy,
                 a.PerformedAt,
                 a.Comment,
-                a.ResultingStatus.HasValue ? (ServiceOrderStatus)a.ResultingStatus.Value : null)));
+                a.ResultingStatus.HasValue ? (ServiceOrderStatus)a.ResultingStatus.Value : null)
+            {
+                ActorKind         = (ActorKind)a.ActorKind,
+                AgentInvocationId = a.AgentInvocationId,
+            }));
 
         return order;
     }

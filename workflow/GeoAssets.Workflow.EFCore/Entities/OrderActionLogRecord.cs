@@ -10,6 +10,8 @@ internal sealed class OrderActionLogRecord
     public DateTime PerformedAt  { get; set; }
     public string?  Comment      { get; set; }
     public int?     ResultingStatus { get; set; }   // ServiceOrderStatus? stored as int
+    public int      ActorKind    { get; set; }   // ActorKind enum stored as int
+    public string?  AgentInvocationId { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────────
 

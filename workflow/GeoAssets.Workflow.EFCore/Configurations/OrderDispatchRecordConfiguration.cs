@@ -17,6 +17,7 @@ internal sealed class OrderDispatchRecordConfiguration : IEntityTypeConfiguratio
         b.Property(d => d.DispatchedBy).IsRequired().HasMaxLength(256);
         b.Property(d => d.DispatchedAt).IsRequired();
         b.Property(d => d.Note).HasMaxLength(2048);
+        b.Property(d => d.AgentInvocationId).HasMaxLength(256);
 
         // Index on (TargetId, TargetType) powers GetDispatchedTo queries
         b.HasIndex(d => new { d.TargetId, d.TargetType });

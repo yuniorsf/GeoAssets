@@ -16,6 +16,7 @@ internal sealed class OrderActionLogRecordConfiguration : IEntityTypeConfigurati
         b.Property(a => a.PerformedBy).IsRequired().HasMaxLength(256);
         b.Property(a => a.PerformedAt).IsRequired();
         b.Property(a => a.Comment).HasMaxLength(4096);
+        b.Property(a => a.AgentInvocationId).HasMaxLength(256);
 
         b.HasIndex(a => a.ServiceOrderId);
         b.HasIndex(a => a.PerformedBy);

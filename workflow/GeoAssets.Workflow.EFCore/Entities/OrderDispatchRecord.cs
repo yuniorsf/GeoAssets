@@ -12,6 +12,8 @@ internal sealed class OrderDispatchRecord
     public string DispatchedBy   { get; set; } = string.Empty;
     public DateTime DispatchedAt { get; set; }
     public string?  Note         { get; set; }
+    public int      ActorKind    { get; set; }   // ActorKind enum stored as int
+    public string?  AgentInvocationId { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
