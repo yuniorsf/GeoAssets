@@ -82,4 +82,61 @@ public class ServiceOrderTests
 
         act.Should().Throw<InvalidServiceOrderTransitionException>();
     }
+
+    [Fact]
+    public void RecordAction_DefaultActorKind_IsHuman()
+    {
+        var order = new ServiceOrder { Status = ServiceOrderStatus.Draft };
+
+        order.RecordAction(OrderActionType.Annotate, "tech-1");
+
+        order.ActionLog.Single().ActorKind.Should().Be(ActorKind.Human);
+    }
+
+    [Fact]
+    public void RecordAction_AgentActor_RecordsActorKindAndInvocationId()
+    {
+        var order = new ServiceOrder { Status = ServiceOrderStatus.Draft };
+
+        order.RecordAction(
+            OrderActionType.Annotate,
+            "agent-hydro-01",
+            actorKind: ActorKind.Agent,
+            agentInvocationId: "run-42");
+
+        var entry = order.ActionLog.Single();
+        entry.ActorKind.Should().Be(ActorKind.Agent);
+        entry.AgentInvocationId.Should().Be("run-42");
+    }
+
+    // ── DispatchTo ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DispatchTo_DefaultActorKind_IsHuman()
+    {
+        var order = new ServiceOrder();
+
+        order.DispatchTo("tech-1", DispatchTargetType.User, "supervisor-1");
+
+        order.Dispatches.Single().ActorKind.Should().Be(ActorKind.Human);
+        order.ActionLog.Single().ActorKind.Should().Be(ActorKind.Human);
+    }
+
+    [Fact]
+    public void DispatchTo_AgentActor_RecordsActorKindAndInvocationIdOnDispatchAndActionLog()
+    {
+        var order = new ServiceOrder();
+
+        order.DispatchTo(
+            "tech-1",
+            DispatchTargetType.User,
+            "agent-dispatcher-01",
+            actorKind: ActorKind.Agent,
+            agentInvocationId: "run-7");
+
+        order.Dispatches.Single().Should().Match<OrderDispatch>(
+            d => d.ActorKind == ActorKind.Agent && d.AgentInvocationId == "run-7");
+        order.ActionLog.Single().Should().Match<OrderActionLog>(
+            a => a.ActorKind == ActorKind.Agent && a.AgentInvocationId == "run-7");
+    }
 }

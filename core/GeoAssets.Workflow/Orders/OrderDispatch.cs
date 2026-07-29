@@ -17,4 +17,14 @@ public sealed record OrderDispatch(
 
     /// <summary>Optional note explaining the dispatch decision.</summary>
     string?            Note = null
-);
+)
+{
+    /// <summary>Whether a human, an AI agent, or an automated system triggered this dispatch.</summary>
+    public ActorKind ActorKind { get; init; } = ActorKind.Human;
+
+    /// <summary>
+    /// Correlates this entry back to the agent run/thread that produced it.
+    /// Only meaningful when <see cref="ActorKind"/> is <see cref="ActorKind.Agent"/>.
+    /// </summary>
+    public string? AgentInvocationId { get; init; }
+}

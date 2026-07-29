@@ -1,3 +1,5 @@
+using GeoAssets.Workflow.Orders;
+
 namespace GeoAssets.Workflow.Rules;
 
 /// <summary>
@@ -31,6 +33,13 @@ public sealed record WorkflowPrincipal(
         RoleNames       : [],
         GroupIds        : [],
         PermissionCodes : []);
+
+    /// <summary>
+    /// What kind of actor this principal represents. Defaults to <see cref="ActorKind.Human"/>
+    /// so every existing caller is unaffected; an agent-issued principal sets this to
+    /// <see cref="ActorKind.Agent"/>. Rule evaluation never branches on this value.
+    /// </summary>
+    public ActorKind Kind { get; init; } = ActorKind.Human;
 
     public bool HasRole(string role)
         => RoleNames.Contains(role, StringComparer.OrdinalIgnoreCase);

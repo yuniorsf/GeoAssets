@@ -12,8 +12,9 @@ public class ServiceOrderRulesTests
         string? orgId = null,
         string[]? roles = null,
         string[]? groups = null,
-        string[]? permissions = null)
-        => new(userId, orgId, roles ?? [], groups ?? [], permissions ?? []);
+        string[]? permissions = null,
+        ActorKind kind = ActorKind.Human)
+        => new(userId, orgId, roles ?? [], groups ?? [], permissions ?? []) { Kind = kind };
 
     private static ServiceOrder Order(
         string createdBy = "",
@@ -308,6 +309,36 @@ public class ServiceOrderRulesTests
         var rules = new ServiceOrderRules();
 
         rules.Evaluate(Principal(roles: ["Administrator"]), OrderActionType.Complete, Order())
+            .Allowed.Should().BeTrue();
+    }
+
+    // ── Actor-kind transparency ────────────────────────────────────────────────
+    // The engine never branches on WorkflowPrincipal.Kind — an agent-held principal
+    // must reach the exact same verdict as a human-held principal with identical
+    // role/relationship data.
+
+    [Fact]
+    public void Evaluate_AgentPrincipalWithSameRoleAsHuman_ReachesIdenticalVerdict()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order();
+
+        var humanVerdict = rules.Evaluate(
+            Principal(roles: ["Supervisor"], kind: ActorKind.Human), OrderActionType.Dispatch, order);
+        var agentVerdict = rules.Evaluate(
+            Principal(userId: "agent-01", roles: ["Supervisor"], kind: ActorKind.Agent), OrderActionType.Dispatch, order);
+
+        agentVerdict.Allowed.Should().Be(humanVerdict.Allowed);
+        agentVerdict.Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_AgentAssignee_GetsSameGrantsAsHumanAssignee()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order(assignedTo: "agent-01");
+
+        rules.Evaluate(Principal(userId: "agent-01", kind: ActorKind.Agent), OrderActionType.Execute, order)
             .Allowed.Should().BeTrue();
     }
 

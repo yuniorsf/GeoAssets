@@ -93,15 +93,25 @@ public sealed class ServiceOrder : IServiceOrder
         string             targetId,
         DispatchTargetType targetType,
         string             dispatchedBy,
-        string?            note = null)
+        string?            note              = null,
+        ActorKind          actorKind         = ActorKind.Human,
+        string?            agentInvocationId = null)
     {
-        var dispatch = new OrderDispatch(targetId, targetType, dispatchedBy, DateTime.UtcNow, note);
+        var dispatch = new OrderDispatch(targetId, targetType, dispatchedBy, DateTime.UtcNow, note)
+        {
+            ActorKind         = actorKind,
+            AgentInvocationId = agentInvocationId
+        };
         Dispatches.Add(dispatch);
         ActionLog.Add(new OrderActionLog(
             Action         : OrderActionType.Dispatch,
             PerformedBy    : dispatchedBy,
             PerformedAt    : dispatch.DispatchedAt,
-            Comment        : note));
+            Comment        : note)
+        {
+            ActorKind         = actorKind,
+            AgentInvocationId = agentInvocationId
+        });
         UpdatedAt = DateTime.UtcNow;
         return this;
     }
@@ -110,10 +120,16 @@ public sealed class ServiceOrder : IServiceOrder
     public ServiceOrder RecordAction(
         OrderActionType     action,
         string              performedBy,
-        string?             comment        = null,
-        ServiceOrderStatus? resultingStatus = null)
+        string?             comment           = null,
+        ServiceOrderStatus? resultingStatus   = null,
+        ActorKind           actorKind         = ActorKind.Human,
+        string?             agentInvocationId = null)
     {
-        ActionLog.Add(new OrderActionLog(action, performedBy, DateTime.UtcNow, comment, resultingStatus));
+        ActionLog.Add(new OrderActionLog(action, performedBy, DateTime.UtcNow, comment, resultingStatus)
+        {
+            ActorKind         = actorKind,
+            AgentInvocationId = agentInvocationId
+        });
         if (resultingStatus.HasValue)
             Transition(resultingStatus.Value);
         else
