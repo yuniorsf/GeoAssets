@@ -16,6 +16,7 @@ using GeoAssets.Web.Extensions;
 using GeoAssets.Web.Services;
 using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Session;
+using GeoAssets.Workflow;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -95,6 +96,13 @@ builder.Services.AddScoped<AssetService>();
 builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
     sp.GetRequiredService<AssetService>(),
     sp.GetRequiredService<ILogger<ObservableAssetService>>()));
+
+// ── Service Order workflow — in-memory, session-scoped for this first pass.
+// See XD01-8 for the durable/Postgres-backed alternative via GeoAssets.Server.
+builder.Services.AddOrderTypeRegistry();
+builder.Services.AddWorkflowInMemory();
+builder.Services.AddServiceOrderRules();
+builder.Services.AddScoped<WorkflowPrincipalFactory>();
 
 // ── Build + seed + run ────────────────────────────────────────────────────────
 var host = builder.Build();

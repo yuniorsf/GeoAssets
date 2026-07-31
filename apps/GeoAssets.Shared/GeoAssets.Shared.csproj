@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
   </ItemGroup>
 
   <ItemGroup>
