@@ -1,0 +1,121 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Workflow.Orders
+@using GeoAssets.Shared.Components.Shared
+@inject IServiceOrderRepository Repository
+
+<div class="sidebar-section">
+    <h6>@L["orders.title"] (@_filtered.Count)</h6>
+    <SearchBar Query="@_searchQuery" OnSearch="OnSearch" />
+</div>
+
+<div class="sidebar-section">
+    <select class="form-control" style="font-size:0.82rem" @onchange="OnStatusFilter">
+        <option value="">@L["orders.allStatuses"]</option>
+        @foreach (var status in Enum.GetValues<ServiceOrderStatus>())
+        {
+            <option value="@status">@status</option>
+        }
+    </select>
+    <button class="btn btn-primary btn-sm order-new-btn" @onclick="RequestCreate">@L["orders.newOrder"]</button>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_filtered.Count == 0)
+    {
+        <div class="empty-state">
+            <p>@L["orders.empty"]</p>
+        </div>
+    }
+    else
+    {
+        <div class="order-list">
+            @foreach (var order in _filtered)
+            {
+                <div class="order-list-item @(SelectedOrderId == order.Id ? "selected" : "")"
+                     @onclick="() => SelectOrder(order)">
+                    <span class="order-status-dot order-status-@order.Status.ToString().ToLowerInvariant()"></span>
+                    <span class="order-name">@order.Title</span>
+                    <span class="order-priority-badge order-priority-@order.Priority.ToString().ToLowerInvariant()">@order.Priority</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? SelectedOrderId { get; set; }
+    [Parameter] public EventCallback<IServiceOrder> OnOrderSelected { get; set; }
+    [Parameter] public EventCallback OnCreateRequested { get; set; }
+
+    private List<IServiceOrder> _all = [];
+    private List<IServiceOrder> _filtered = [];
+    private string _searchQuery = string.Empty;
+    private string _statusFilter = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Repository.OrderAdded        += OnChanged;
+        Repository.OrderUpdated      += OnChanged;
+        Repository.OrderStatusChanged += OnStatusChanged;
+        Repository.OrderDeleted      += OnDeleted;
+        await RefreshListAsync();
+    }
+
+    private void OnChanged(object? _, IServiceOrder __) => _ = ReloadAndRenderAsync();
+    private void OnStatusChanged(object? _, (IServiceOrder Order, ServiceOrderStatus Previous) __) => _ = ReloadAndRenderAsync();
+    private void OnDeleted(object? _, string __) => _ = ReloadAndRenderAsync();
+
+    private async Task ReloadAndRenderAsync()
+    {
+        await InvokeAsync(async () =>
+        {
+            await RefreshListAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshListAsync()
+    {
+        _all = [.. await Repository.GetAllAsync()];
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        IEnumerable<IServiceOrder> query = _all;
+
+        if (!string.IsNullOrEmpty(_searchQuery))
+            query = query.Where(o => o.Title.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrEmpty(_statusFilter) && Enum.TryParse<ServiceOrderStatus>(_statusFilter, out var status))
+            query = query.Where(o => o.Status == status);
+
+        _filtered = [.. query.OrderByDescending(o => o.CreatedAt)];
+    }
+
+    private Task OnSearch(string query)
+    {
+        _searchQuery = query;
+        ApplyFilters();
+        return Task.CompletedTask;
+    }
+
+    private void OnStatusFilter(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? string.Empty;
+        ApplyFilters();
+    }
+
+    private async Task SelectOrder(IServiceOrder order) => await OnOrderSelected.InvokeAsync(order);
+
+    private async Task RequestCreate() => await OnCreateRequested.InvokeAsync();
+
+    public override void Dispose()
+    {
+        Repository.OrderAdded        -= OnChanged;
+        Repository.OrderUpdated      -= OnChanged;
+        Repository.OrderStatusChanged -= OnStatusChanged;
+        Repository.OrderDeleted      -= OnDeleted;
+        base.Dispose();
+    }
+}

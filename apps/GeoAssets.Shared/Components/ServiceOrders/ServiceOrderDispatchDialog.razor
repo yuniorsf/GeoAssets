@@ -1,0 +1,57 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Workflow.Orders
+
+@if (Visible)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box" @onclick:stopPropagation="true">
+            <h6>@L["orders.dispatchTitle"]</h6>
+
+            <div class="form-group">
+                <label>@L["orders.dispatchTargetType"]</label>
+                <select class="form-control" @bind="_targetType">
+                    @foreach (var type in Enum.GetValues<DispatchTargetType>())
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>@L["orders.dispatchTargetId"]</label>
+                <input class="form-control" @bind="_targetId" placeholder="@L["orders.dispatchTargetIdPlaceholder"]" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["orders.dispatchNote"]</label>
+                <textarea class="form-control" rows="2" @bind="_note"></textarea>
+            </div>
+
+            <div class="dialog-actions">
+                <button class="btn btn-secondary btn-sm" @onclick="Cancel">@L["assets.cancel"]</button>
+                <button class="btn btn-primary btn-sm" disabled="@string.IsNullOrWhiteSpace(_targetId)" @onclick="Confirm">@L["orders.dispatch"]</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<(string TargetId, DispatchTargetType TargetType, string? Note)> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DispatchTargetType _targetType = DispatchTargetType.User;
+    private string _targetId = string.Empty;
+    private string _note = string.Empty;
+
+    private async Task Confirm()
+    {
+        if (string.IsNullOrWhiteSpace(_targetId)) return;
+
+        await OnConfirm.InvokeAsync((_targetId, _targetType, string.IsNullOrWhiteSpace(_note) ? null : _note));
+        _targetId = string.Empty;
+        _note     = string.Empty;
+    }
+
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+}

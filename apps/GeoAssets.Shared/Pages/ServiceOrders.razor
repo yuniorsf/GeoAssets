@@ -1,0 +1,88 @@
+@page "/service-orders"
+@attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.AspNetCore.Authorization
+@using GeoAssets.Workflow.Orders
+@using GeoAssets.Workflow.Rules
+@using GeoAssets.Shared.Components.ServiceOrders
+@using GeoAssets.Shared.Services
+@inject IServiceOrderRepository Repository
+@inject WorkflowPrincipalFactory PrincipalFactory
+
+<div class="geoassets-app">
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="btn-icon" title="@L["orders.backToMap"]">←</a>
+            <h1>@L["orders.title"]</h1>
+        </div>
+
+        @if (_principal is not null)
+        {
+            <ServiceOrderList SelectedOrderId="@_selectedOrder?.Id"
+                               OnOrderSelected="OnOrderSelected"
+                               OnCreateRequested="OnCreateRequested" />
+        }
+    </aside>
+
+    <main class="order-main">
+        @if (_principal is null)
+        {
+            <div class="empty-state">@L["app.loading"]</div>
+        }
+        else if (_showCreateForm)
+        {
+            <ServiceOrderCreateForm Principal="@_principal" OnSave="OnOrderCreated" OnCancel="() => _showCreateForm = false" />
+        }
+        else if (_selectedOrder is not null)
+        {
+            <ServiceOrderDetail Order="@_selectedOrder"
+                                 Principal="@_principal"
+                                 OnClose="() => _selectedOrder = null"
+                                 OnChanged="ReloadSelectedAsync" />
+        }
+        else
+        {
+            <div class="empty-state">@L["orders.selectPrompt"]</div>
+        }
+    </main>
+</div>
+
+@code {
+    private WorkflowPrincipal? _principal;
+    private IServiceOrder? _selectedOrder;
+    private bool _showCreateForm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _principal = await PrincipalFactory.CreateAsync();
+    }
+
+    private void OnOrderSelected(IServiceOrder order)
+    {
+        _selectedOrder   = order;
+        _showCreateForm  = false;
+        StateHasChanged();
+    }
+
+    private void OnCreateRequested()
+    {
+        _selectedOrder  = null;
+        _showCreateForm = true;
+        StateHasChanged();
+    }
+
+    private void OnOrderCreated(IServiceOrder order)
+    {
+        _showCreateForm = false;
+        _selectedOrder  = order;
+        StateHasChanged();
+    }
+
+    private async Task ReloadSelectedAsync()
+    {
+        if (_selectedOrder is null) return;
+        _selectedOrder = await Repository.GetByIdAsync(_selectedOrder.Id);
+        StateHasChanged();
+    }
+}
