@@ -28,10 +28,10 @@ public sealed class BoundingBoxSelectionStrategy : IFeatureSelectionStrategy
     {
         var p = context.Parameters;
 
-        var minLon = Convert.ToDouble(p["minLon"]);
-        var minLat = Convert.ToDouble(p["minLat"]);
-        var maxLon = Convert.ToDouble(p["maxLon"]);
-        var maxLat = Convert.ToDouble(p["maxLat"]);
+        var minLon = p.GetDouble("minLon");
+        var minLat = p.GetDouble("minLat");
+        var maxLon = p.GetDouble("maxLon");
+        var maxLat = p.GetDouble("maxLat");
 
         // Build a polygon from the bounding box corners
         var bbox = new GeoPolygon

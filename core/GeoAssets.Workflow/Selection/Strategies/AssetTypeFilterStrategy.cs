@@ -24,7 +24,7 @@ public sealed class AssetTypeFilterStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
-        var assetTypeId = (string)context.Parameters["assetTypeId"];
+        var assetTypeId = context.Parameters.GetString("assetTypeId");
         var result      = context.Repository.GetByAssetType(assetTypeId);
         return Task.FromResult(result);
     }

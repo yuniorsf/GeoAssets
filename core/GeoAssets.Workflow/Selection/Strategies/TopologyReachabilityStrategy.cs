@@ -28,12 +28,12 @@ public sealed class TopologyReachabilityStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
-        var featureId   = (string)context.Parameters["featureId"];
+        var featureId   = context.Parameters.GetString("featureId");
         var direction   = context.Parameters.TryGetValue("direction", out var d)
-                            ? (TraversalDirection)d
+                            ? FeatureSelectionParameters.ToEnum<TraversalDirection>(d)
                             : TraversalDirection.Downstream;
         var includeSeed = context.Parameters.TryGetValue("includeSeed", out var s)
-                            ? Convert.ToBoolean(s)
+                            ? FeatureSelectionParameters.ToBoolean(s)
                             : true;
 
         var result = new List<GeoFeature>();

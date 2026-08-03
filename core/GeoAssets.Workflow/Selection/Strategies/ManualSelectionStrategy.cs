@@ -23,7 +23,7 @@ public sealed class ManualSelectionStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
-        var ids = (IEnumerable<string>)context.Parameters["featureIds"];
+        var ids = context.Parameters.GetStringList("featureIds");
 
         var result = ids
             .Select(id => context.Repository.GetById(id))

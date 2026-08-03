@@ -25,8 +25,8 @@ public sealed class NearbyFeaturesSelectionStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
-        var center    = (GeoPoint)context.Parameters["center"];
-        var radiusDeg = Convert.ToDouble(context.Parameters["radiusDegrees"]);
+        var center    = context.Parameters.GetValue<GeoPoint>("center");
+        var radiusDeg = context.Parameters.GetDouble("radiusDegrees");
 
         var result = context.Repository.GetNearby(center, radiusDeg);
         return Task.FromResult(result);
