@@ -44,4 +44,7 @@ internal sealed class ServiceOrderRecord
 
     public List<OrderDispatchRecord>   Dispatches { get; set; } = [];
     public List<OrderActionLogRecord>  ActionLog  { get; set; } = [];
+
+    /// <summary>Optimistic concurrency token, maintained by the database on every UPDATE.</summary>
+    public byte[] RowVersion { get; set; } = [];
 }

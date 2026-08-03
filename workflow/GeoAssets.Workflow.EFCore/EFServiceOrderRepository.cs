@@ -127,7 +127,15 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             throw new InvalidServiceOrderTransitionException(previous, so.Status);
 
         UpdateRecord(existing, so);
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ServiceOrderConcurrencyException(order.Id);
+        }
 
         OrderUpdated?.Invoke(this, order);
 

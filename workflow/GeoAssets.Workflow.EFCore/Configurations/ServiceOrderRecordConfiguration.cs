@@ -21,6 +21,7 @@ internal sealed class ServiceOrderRecordConfiguration : IEntityTypeConfiguration
         b.Property(o => o.AttributesJson).IsRequired().HasColumnType("nvarchar(max)");
         b.Property(o => o.FeatureIdsJson).IsRequired().HasColumnType("nvarchar(max)");
         b.Property(o => o.SelectionSpecJson).HasColumnType("nvarchar(max)");
+        b.Property(o => o.RowVersion).IsRowVersion();
 
         // Self-referencing hierarchy
         b.HasOne<ServiceOrderRecord>()

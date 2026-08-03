@@ -20,7 +20,9 @@ public interface IServiceOrderWriter
     /// and <see cref="AppendActionAsync"/> for those, so concurrent appends from
     /// different callers never race to infer "what's new" from list state.
     /// Throws <see cref="KeyNotFoundException"/> if no order with this ID was
-    /// previously added.
+    /// previously added, or <see cref="ServiceOrderConcurrencyException"/> if another
+    /// writer committed a change to the same order since it was last read
+    /// (only <c>EFServiceOrderRepository</c> currently detects this).
     /// </summary>
     Task UpdateAsync(IServiceOrder order, CancellationToken ct = default);
 
