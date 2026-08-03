@@ -3,13 +3,17 @@
 This document describes the design of the **Service Order** module — the workflow
 orchestration layer for field/analytical work over georeferenced assets. It covers
 the domain model, the authorization engine, the feature-selection subsystem, the
-persistence layer, and the end-to-end flow, with diagrams for the status lifecycle,
-the actors/use-cases, and a representative operational sequence.
+persistence layer, per-order-type attribute validation, **AI-agent participation**,
+the Blazor Web UI, and the end-to-end flow, with diagrams for the status lifecycle,
+the actors/use-cases, and representative operational sequences (human-driven and
+agent-driven).
 
 The module lives in `core/GeoAssets.Workflow` (domain, rules, selection — no
-infrastructure dependencies) and `workflow/GeoAssets.Workflow.EFCore` /
+infrastructure dependencies), `workflow/GeoAssets.Workflow.EFCore` /
 `workflow/GeoAssets.Workflow.Messaging.*` (persistence and messaging
-infrastructure, referencing the core module).
+infrastructure), `workflow/GeoAssets.Workflow.Agents` (AI-agent orchestration —
+see §9), and `apps/GeoAssets.Web` / `apps/GeoAssets.Shared` (the human-facing
+Blazor UI — see §15).
 
 ---
 
@@ -25,7 +29,9 @@ valve failure downstream," "repair this hydrant." An order:
   child orders, for example),
 - records **how** its feature set was populated (which selection strategy, with which
   parameters) for audit and reproducibility,
-- accumulates a dispatch history and an append-only action log.
+- accumulates a dispatch history and an append-only action log,
+- can be created and driven by **either a human or an AI agent** through the exact
+  same domain calls — see §9.
 
 ---
 
@@ -34,7 +40,7 @@ valve failure downstream," "repair this hydrant." An order:
 ```mermaid
 flowchart TB
     subgraph Host["Host application"]
-        UI["Blazor / MAUI UI<br/>(not yet wired — see §9 Known Limitations)"]
+        UI["Blazor Web UI<br/>(wired — /service-orders, see §15)<br/>MAUI UI (not yet wired — see §16)"]
     end
 
     subgraph Core["core/GeoAssets.Workflow  (no infrastructure dependencies)"]
@@ -50,6 +56,7 @@ flowchart TB
         EFCore["GeoAssets.Workflow.EFCore<br/>EFServiceOrderRepository · ServiceOrderDbContext"]
         Kafka["GeoAssets.Workflow.Messaging.Kafka"]
         SvcBus["GeoAssets.Workflow.Messaging.ServiceBus"]
+        Agents["<b>GeoAssets.Workflow.Agents</b> (new)<br/>MAF executors · IAgentIdentityProvider<br/>— references Core only, never EFCore"]
     end
 
     UI -.->|"AddWorkflowInMemory() /<br/>AddWorkflowPersistence()"| Orders
@@ -59,16 +66,19 @@ flowchart TB
     EFCore -.implements.-> Orders
     Notifications --> Kafka
     Notifications --> SvcBus
+    Agents -.drives via Core abstractions only.-> Orders
+    Agents -.-> Rules
 ```
 
 | Layer | Responsibility | Key types |
 |---|---|---|
 | **Orders** | Domain model, status legality, persistence contracts | `ServiceOrder`, `IServiceOrder`, `OrderType`, `ServiceOrderTransitions`, `IServiceOrderRepository` |
-| **Rules** | *Who* may perform an action, per order and per order type | `ServiceOrderRules`, `IServiceOrderRule`, `IOrderCreationRule` |
+| **Rules** | *Who* may perform an action, per order and per order type — human or agent | `ServiceOrderRules`, `IServiceOrderRule`, `IOrderCreationRule` |
 | **Selection** | Populating an order's feature set, pluggably | `FeatureSelectionRegistry`, `IFeatureSelectionStrategy` |
 | **Notifications** | Publishing state-change events to a transport | `IOrderEventPublisher`, `OrderNotificationService` |
 | **EFCore** | Relational persistence | `EFServiceOrderRepository`, `ServiceOrderDbContext` |
 | **Messaging.\*** | Kafka / Azure Service Bus transports | `KafkaOrderEventPublisher`, `ServiceBusOrderEventPublisher` |
+| **Agents** *(new)* | AI-agent orchestration over the same domain/rules calls a human uses | `CreateServiceOrderExecutor`, `DispatchServiceOrderExecutor`, `IAgentIdentityProvider` |
 
 ---
 
@@ -96,8 +106,8 @@ classDiagram
     }
     class ServiceOrder {
         +Transition(newStatus)
-        +DispatchTo(targetId, targetType, by, note)
-        +RecordAction(action, by, comment, resultingStatus)
+        +DispatchTo(targetId, targetType, by, note, actorKind, agentInvocationId)
+        +RecordAction(action, by, comment, resultingStatus, actorKind, agentInvocationId)
         +WithFeatures(features, spec)
     }
     class OrderType {
@@ -105,6 +115,7 @@ classDiagram
         +string DisplayName
         +List~OrderCreationPolicy~ CreationPolicies
         +List~OrderActionPermission~ ActionPermissions
+        +string AttributesSchemaJson
     }
     class ServiceOrderStatus {
         <<enumeration>>
@@ -127,18 +138,28 @@ classDiagram
         Cancel
         Annotate
     }
+    class ActorKind {
+        <<enumeration>>
+        Human
+        Agent
+        System
+    }
     class OrderDispatch {
         +string TargetId
         +DispatchTargetType TargetType
         +string DispatchedBy
         +DateTime DispatchedAt
         +string Note
+        +ActorKind ActorKind
+        +string AgentInvocationId
     }
     class OrderActionLog {
         +OrderActionType Action
         +string PerformedBy
         +DateTime PerformedAt
         +ServiceOrderStatus ResultingStatus
+        +ActorKind ActorKind
+        +string AgentInvocationId
     }
 
     IServiceOrder <|.. ServiceOrder
@@ -146,6 +167,8 @@ classDiagram
     ServiceOrder "1" --> "*" OrderDispatch
     ServiceOrder "1" --> "*" OrderActionLog
     OrderActionLog --> OrderActionType
+    OrderDispatch --> ActorKind
+    OrderActionLog --> ActorKind
     ServiceOrder ..> OrderType : OrderTypeId (loose ref)
     ServiceOrder "1" o-- "0..*" ServiceOrder : ParentOrderId / ChildOrderIds
 ```
@@ -157,10 +180,16 @@ Notes on the model, reflecting decisions made while hardening it:
   never write to it directly.
 - **`FeatureSelectionSpec`** (on `SelectionSpec`) records which
   `IFeatureSelectionStrategy` populated `Features` and with what parameters, so the
-  selection can be audited (see §5).
+  selection can be audited (see §6).
 - **`OrderType`** carries two independent policy tables:
   `CreationPolicies` (who may create an order of this type) and `ActionPermissions`
-  (per-action overrides, consulted by `ServiceOrderRules` — see §4).
+  (per-action overrides, consulted by `ServiceOrderRules` — see §5) — plus an
+  optional `AttributesSchemaJson` validating `Attributes` (see §14).
+- **`ActorKind`** (`Human` / `Agent` / `System`) was added additively to
+  `WorkflowPrincipal`, `OrderDispatch`, and `OrderActionLog` — every new member
+  defaults to `Human`, so no existing call site changed. It exists purely for
+  audit/observability: **authorization and transition logic never branch on it**
+  (see §9).
 
 ### File map
 
@@ -173,9 +202,12 @@ Notes on the model, reflecting decisions made while hardening it:
 | Status enum | `core/GeoAssets.Workflow/Orders/ServiceOrderStatus.cs` |
 | Priority enum | `core/GeoAssets.Workflow/Orders/ServiceOrderPriority.cs` |
 | Action enum | `core/GeoAssets.Workflow/Orders/OrderActionType.cs` |
+| Actor-kind enum | `core/GeoAssets.Workflow/Orders/ActorKind.cs` |
 | Dispatch record | `core/GeoAssets.Workflow/Orders/OrderDispatch.cs` |
 | Audit log record | `core/GeoAssets.Workflow/Orders/OrderActionLog.cs` |
 | State machine | `core/GeoAssets.Workflow/Orders/ServiceOrderTransitions.cs` |
+| Attribute schema validator | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidator.cs` (§14) |
+| Concurrency exception | `core/GeoAssets.Workflow/Orders/ServiceOrderConcurrencyException.cs` (§7) |
 
 ---
 
@@ -185,7 +217,9 @@ Every legal status transition is defined in one place, `ServiceOrderTransitions.
 and enforced at **every** write path that can change `Status` — the domain entity
 (`ServiceOrder.Transition`), both repository implementations' `UpdateAsync`/
 `AppendActionAsync`, and the `ValidatingServiceOrderRepository` decorator that wraps
-any future implementation automatically.
+any future implementation automatically. This holds regardless of whether the actor
+is a human or an AI agent — the state machine has no concept of *who* is transitioning
+the order, only whether the transition itself is legal.
 
 ```mermaid
 stateDiagram-v2
@@ -260,7 +294,7 @@ flowchart TD
 | `AssigneeRule` | View, Execute, Complete, Annotate to the assignee | |
 | `DispatchRecipientRule` | View, Annotate to direct/group/org dispatch recipients | |
 | `OrderTypeActionPermissionRule` | Per-`OrderType.ActionPermissions` override | **Overrides** the role-based default below when the order's type defines an entry for the action being evaluated; abstains otherwise |
-| `RoleBasedActionRule` | Configurable role → action-set mapping (default: `Supervisor` → View/Approve/Reject/Assign/Dispatch/Cancel/Annotate; `Administrator` → everything) | Mapping is data, injected via `ServiceOrderRules`'s constructor — no code change needed to narrow or add a role tier |
+| `RoleBasedActionRule` | Configurable role → action-set mapping (default: `Supervisor` → View/Approve/Reject/Assign/Dispatch/Cancel/Annotate; `Administrator` → everything) | Mapping is data, injected via `ServiceOrderRules`'s constructor or `AddServiceOrderRules` (see §12) — **this is exactly how an AI agent's role (e.g. `"AutomationAgent"`) is granted actions, with zero code change** |
 
 ### Built-in `IOrderCreationRule` chain
 
@@ -271,7 +305,10 @@ flowchart TD
 `PolicyKind` (used by both `CreationPolicies` and `ActionPermissions`) matches on
 `Role`, `Permission`, `Group`, or `Organization` against a `WorkflowPrincipal` — a
 snapshot record deliberately decoupled from `GeoAssets.Identity`, so the workflow
-core has no dependency on any specific identity system.
+core has no dependency on any specific identity system — **and no dependency on
+`GeoAssets.Workflow.Agents` either.** `WorkflowPrincipal.Kind` (§9) means the same
+principal shape represents a human or an agent; `ServiceOrderRules` evaluates both
+identically, never branching on `Kind`.
 
 ### File map
 
@@ -282,6 +319,7 @@ core has no dependency on any specific identity system.
 | Creation-rule contract | `core/GeoAssets.Workflow/Rules/IOrderCreationRule.cs` |
 | Principal snapshot | `core/GeoAssets.Workflow/Rules/WorkflowPrincipal.cs` |
 | Relationship flags | `core/GeoAssets.Workflow/Rules/OrderUserRelationship.cs` |
+| DI options | `core/GeoAssets.Workflow/Rules/ServiceOrderRulesOptions.cs` |
 
 ---
 
@@ -306,6 +344,17 @@ Every call to `FeatureSelectionRegistry.SelectAsync` validates that the strategy
 `Parameters` are JSON-serializable **before** running it, so a non-serializable
 parameter (a delegate, for instance) fails immediately at the call site instead of
 much later when the resulting `FeatureSelectionSpec` is persisted.
+
+**Reading `Parameters` back after a reload.** `System.Text.Json` deserializes an
+`object`-typed dictionary value into a boxed `JsonElement`, not its original CLR
+type — a raw cast or `Convert.ToDouble` call that only handled the fresh (never
+persisted) case would throw `InvalidCastException` on any reloaded order. Every
+built-in strategy that reads typed parameters (`bounding-box`, `nearby`,
+`asset-type-filter`, `topology-reachability`, `manual`) now reads through
+`FeatureSelectionParameters`' accessors (`GetDouble`, `GetString`, `GetEnum<T>`,
+`GetValue<T>`, `GetStringList`), which transparently handle both a fresh CLR value
+and a `JsonElement` — so a strategy behaves identically whether it's driving a
+brand-new selection or replaying one loaded from storage.
 
 ---
 
@@ -353,11 +402,30 @@ classDiagram
 - **`AppendDispatchAsync`** / **`AppendActionAsync`** insert a single new row each,
   independent of any other concurrent write — replacing an earlier design that tried
   to infer "what's new" by comparing collection lengths, which could silently drop
-  an entry under concurrent writers.
+  an entry under concurrent writers. **This is the exact pair of methods the agent
+  executors use** (§9) — never `UpdateAsync`, which would silently no-op the
+  dispatch/audit entry.
 - **`ValidatingServiceOrderRepository`** decorates any inner repository with
-  transition-legality enforcement on `UpdateAsync`/`AppendActionAsync`, so a future
-  implementation gets the guarantee automatically instead of having to reimplement
-  it. `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register it by default.
+  transition-legality enforcement on `UpdateAsync`/`AppendActionAsync`, **and**
+  attribute-schema enforcement on `AddAsync`/`UpdateAsync` (via the optional
+  `OrderTypeRegistry` constructor parameter — see §14), so a future implementation
+  gets both guarantees automatically instead of having to reimplement them.
+  `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register it by default,
+  passing through whatever `OrderTypeRegistry` is registered (or `null`, in which
+  case attribute validation is a no-op — same "unrestricted by default" behavior as
+  no schema at all). A test-only implementation added alongside the agent work,
+  `SnapshottingServiceOrderRepository` (see §9), does *not* get this protection when
+  used unwrapped — a live, if low-stakes, reminder that this contract is still
+  enforced by convention for any repository that isn't wrapped, not by the compiler.
+- **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts.**
+  `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`) is compared at save time;
+  a `DbUpdateConcurrencyException` is translated to `ServiceOrderConcurrencyException`
+  so two writers racing on the same order's `UpdateAsync` fail loudly instead of
+  silently overwriting each other. This detects conflicts between writes that overlap
+  *within* the EF-backed repository's own read-then-save window — it does not (yet)
+  round-trip a version token through the caller, so it doesn't catch the "held a
+  stale in-memory copy for minutes, then saved" scenario. `InMemoryServiceOrderRepository`
+  has no equivalent check.
 
 ---
 
@@ -377,7 +445,149 @@ transports never touches call sites.
 
 ---
 
-## 9. Use cases
+## 9. Agentic AI participation
+
+An AI agent can create and drive a Service Order end to end through **the exact same
+in-process calls a human-driven caller uses** — `IServiceOrderRepository`,
+`ServiceOrderRules`, `ServiceOrderTransitions` — so no domain or authorization code
+branches on whether the actor is human or agent. This is implemented in a new
+project, `workflow/GeoAssets.Workflow.Agents`, built on
+[Microsoft Agent Framework](https://www.nuget.org/packages/Microsoft.Agents.AI.Workflows)
+(`Microsoft.Agents.AI.Workflows` 1.15.0), and it references **only**
+`GeoAssets.Workflow` (core) — never `GeoAssets.Workflow.EFCore` — so the same
+orchestration runs against any storage backend.
+
+### Identity: an agent gets a `WorkflowPrincipal` too
+
+```mermaid
+classDiagram
+    class IAgentIdentityProvider {
+        <<interface>>
+        +Resolve(agentId) WorkflowPrincipal
+    }
+    class ConfiguredAgentIdentityProvider {
+        -AgentIdentityOptions options
+    }
+    class AgentIdentityOptions {
+        +Dictionary~string,AgentIdentityDescriptor~ Agents
+    }
+    class AgentIdentityDescriptor {
+        +string OrganizationId
+        +List~string~ RoleNames
+        +List~string~ GroupIds
+        +List~string~ PermissionCodes
+    }
+    class WorkflowPrincipal {
+        +ActorKind Kind
+    }
+
+    IAgentIdentityProvider <|.. ConfiguredAgentIdentityProvider
+    ConfiguredAgentIdentityProvider --> AgentIdentityOptions
+    AgentIdentityOptions --> AgentIdentityDescriptor
+    ConfiguredAgentIdentityProvider ..> WorkflowPrincipal : builds (Kind = Agent)
+```
+
+`IAgentIdentityProvider.Resolve(agentId)` turns a registered agent id into a
+`WorkflowPrincipal` with `Kind = ActorKind.Agent` — the agent-side counterpart to a
+host assembling a human principal from `GeoAssets.Identity` data. `ServiceOrderRules`
+evaluates the result exactly like a human's: same relationship/role checks, no
+special-casing, because it is the same type.
+
+```json
+// appsettings.json
+{
+  "WorkflowAgents": {
+    "Agents": {
+      "agent-hydro-01": { "RoleNames": [ "AutomationAgent" ] }
+    }
+  }
+}
+```
+
+### Executors: the same domain calls, wired into a workflow graph
+
+| Executor | Does | Authorization check |
+|---|---|---|
+| `CreateServiceOrderExecutor` | Creates a `ServiceOrder` via `IServiceOrderWriter.AddAsync` | `ServiceOrderRules.CanCreate` — throws if withheld |
+| `DispatchServiceOrderExecutor` | Dispatches + activates (`Draft → Pending`) via `AppendDispatchAsync`/`AppendActionAsync` | `ServiceOrderRules.Evaluate(..., Dispatch, ...)` — **leaves the order in `Draft`, untouched, if withheld** (does not throw) |
+
+`EmergencyRepairAgentWorkflow.Build(...)` wires both into a MAF `WorkflowBuilder`
+graph shaped exactly like `ServiceOrderTransitions`' `Draft → Pending` edge:
+`create → dispatch`, with the workflow's output being whatever `DispatchServiceOrderExecutor`
+returns.
+
+### The hybrid design: an agent can stop short, and a human finishes identically
+
+This is the centerpiece of the design. `DispatchServiceOrderExecutor` checks
+authorization *before* acting — when the agent's configured role doesn't grant
+`Dispatch` for this order type, it returns the order **unchanged, still `Draft`**,
+for a human to pick up later. Both paths are proven end to end against the real MAF
+runtime:
+
+```mermaid
+sequenceDiagram
+    actor Agent as AI Agent (via MAF workflow)
+    participant Identity as IAgentIdentityProvider
+    participant Create as CreateServiceOrderExecutor
+    participant Dispatch as DispatchServiceOrderExecutor
+    participant Rules as ServiceOrderRules
+    participant Repo as IServiceOrderRepository
+    actor Human as Human Supervisor
+
+    Agent->>Create: CreateServiceOrderRequest(agentId, orderType, ...)
+    Create->>Identity: Resolve(agentId)
+    Identity-->>Create: WorkflowPrincipal { Kind = Agent }
+    Create->>Rules: CanCreate(principal, orderType)
+    Rules-->>Create: allowed
+    Create->>Repo: AddAsync(new ServiceOrder { Status = Draft })
+    Create-->>Dispatch: ServiceOrderCreated
+
+    Dispatch->>Identity: Resolve(agentId)
+    Dispatch->>Rules: Evaluate(principal, Dispatch, order)
+
+    alt Dispatch granted to this agent's role
+        Rules-->>Dispatch: allowed
+        Dispatch->>Repo: AppendDispatchAsync(orderId, dispatch [ActorKind=Agent])
+        Dispatch->>Repo: AppendActionAsync(orderId, Dispatch, ResultingStatus=Pending)
+        Dispatch->>Repo: GetByIdAsync(orderId)
+        Repo-->>Dispatch: order (Status = Pending)
+    else Dispatch withheld (role-grant config doesn't include it)
+        Rules-->>Dispatch: denied
+        Note over Dispatch: order returned unchanged — still Draft
+        Human->>Rules: Evaluate(humanPrincipal, Dispatch, order)
+        Rules-->>Human: allowed (Supervisor role)
+        Human->>Repo: AppendDispatchAsync(orderId, dispatch [ActorKind=Human])
+        Human->>Repo: AppendActionAsync(orderId, Dispatch, ResultingStatus=Pending)
+    end
+```
+
+Which branch happens is **entirely a matter of the deployment's role-grant
+configuration** (§5) — not a code fork. The same `EmergencyRepairAgentWorkflow`
+graph, unmodified, produces either outcome depending on whether `"AutomationAgent"`
+is granted `Dispatch` that day.
+
+`DispatchServiceOrderExecutor` also re-reads the authoritative state via
+`GetByIdAsync` after writing, rather than trusting that `AppendDispatchAsync`/
+`AppendActionAsync` happened to mutate the in-memory `order` reference in place —
+`InMemoryServiceOrderRepository` does; an EF-backed or remote one won't. The
+`SnapshottingServiceOrderRepository` test double exists specifically to make that
+distinction observable in tests, after an earlier draft of the executor called
+`UpdateAsync` post-mutation and had the bug masked by reference-aliasing.
+
+### File map
+
+| Concept | Path |
+|---|---|
+| Agent identity contract | `workflow/GeoAssets.Workflow.Agents/Identity/IAgentIdentityProvider.cs` |
+| Config-bound provider | `workflow/GeoAssets.Workflow.Agents/Identity/ConfiguredAgentIdentityProvider.cs` |
+| Creation executor | `workflow/GeoAssets.Workflow.Agents/Executors/CreateServiceOrderExecutor.cs` |
+| Dispatch executor | `workflow/GeoAssets.Workflow.Agents/Executors/DispatchServiceOrderExecutor.cs` |
+| Workflow graph | `workflow/GeoAssets.Workflow.Agents/Executors/EmergencyRepairAgentWorkflow.cs` |
+| DI registration | `workflow/GeoAssets.Workflow.Agents/WorkflowAgentsServiceExtensions.cs` |
+
+---
+
+## 10. Use cases
 
 ```mermaid
 flowchart LR
@@ -385,6 +595,7 @@ flowchart LR
     Tech(("Field Technician<br/>(Assignee)"))
     Supervisor(("Supervisor"))
     Admin(("Administrator"))
+    AIAgent(("AI Agent<br/>(via MAF workflow)"))
     Sys(("Automated Process<br/>(background strategy)"))
 
     subgraph SO["Service Order System"]
@@ -398,7 +609,7 @@ flowchart LR
         UC8(["Annotate Order"])
         UC9(["Complete Order"])
         UC10(["Cancel Order"])
-        UC11(["Configure Order-Type Permissions"])
+        UC11(["Configure Order-Type / Role Permissions"])
     end
 
     Creator --> UC1
@@ -428,21 +639,25 @@ flowchart LR
     Admin --> UC10
     Admin --> UC11
 
+    AIAgent --> UC1
+    AIAgent -.->|"if role-granted"| UC4
+
     Sys --> UC3
     UC1 -.includes.-> UC3
 ```
 
-Which actions a role may perform is not hardcoded per actor above the built-in
-defaults — see §5. `UC11` (configuring `OrderType.ActionPermissions`) is what lets an
-administrator narrow or extend any of the other use cases *per order type* without a
-code change.
+Which actions a role — human or agent — may perform is not hardcoded per actor
+above the built-in defaults; see §5. `UC11` (configuring role grants and
+`OrderType.ActionPermissions`) is what lets an administrator narrow or extend any
+of the other use cases, per order type or per actor role, without a code change —
+it's the same lever that scopes what an AI agent may do.
 
 ---
 
-## 10. End-to-end flow — worked example
+## 11. End-to-end flow — human-driven worked example
 
 A Supervisor creates an inspection order, dispatches it, and a Field Technician
-executes and completes it:
+executes and completes it (the agent-driven equivalent is in §9):
 
 ```mermaid
 sequenceDiagram
@@ -487,22 +702,28 @@ sequenceDiagram
 If the Technician instead attempted `AppendActionAsync(orderId, Complete,
 ResultingStatus=Completed)` while the order was still `Draft`, the repository would
 throw `InvalidServiceOrderTransitionException` before mutating anything — the same
-enforcement shown in §4 applies regardless of which action triggered the attempt.
+enforcement shown in §4 applies regardless of which action, or which kind of actor,
+triggered the attempt.
 
 ---
 
-## 11. Registering the module
+## 12. Registering the module
 
 ```csharp
 // In-memory (WASM hosts, tests) — no database required.
 services.AddWorkflowInMemory();
 services.AddOrderTypeRegistry();           // seeds "inspection", "maintenance", "emergency-repair"
 services.AddWorkflowNotifications();       // no-op publisher by default
+services.AddServiceOrderRules();           // one consistently configured singleton for every caller
 
 // EF Core-backed (server-side hosts).
 services.AddWorkflowPersistence(o => o.UseSqlServer(connectionString));
 services.AddWorkflowKafka(opts => { opts.BootstrapServers = "..."; opts.TopicName = "..."; });
 // or: services.AddWorkflowServiceBus(configuration);
+
+// AI-agent participation — from configuration, or inline.
+services.AddWorkflowAgents(builder.Configuration);
+// or: services.AddWorkflowAgents(opts => opts.Agents["agent-hydro-01"] = new() { RoleNames = ["AutomationAgent"] });
 ```
 
 Both `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register
@@ -510,32 +731,180 @@ Both `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register
 concrete implementation, and separately register `IServiceOrderReader` /
 `IServiceOrderWriter` pointing at that same instance.
 
----
-
-## 12. Testing
-
-`GeoAssets.Workflow.Tests` covers the module end to end — 177 test cases as of this
-writing, with `InMemoryServiceOrderRepository`, `ServiceOrder` (transition logic),
-`ServiceOrderTransitions`, `ServiceOrderRules`, `FeatureSelectionRegistry` (parameter
-validation), and `ValidatingServiceOrderRepository` all at 100% line/branch coverage.
-The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
-`GeoAssets.Commands.Tests`) runs 406 tests.
+`AddServiceOrderRules()` exists specifically because, before it, every caller
+hand-constructed its own `ServiceOrderRules` — a real risk of a human-facing host
+and an AI-agent orchestrator silently diverging on role-grant configuration. It
+resolves the `OrderTypeRegistry` registered by `AddOrderTypeRegistry` automatically
+when present.
 
 ---
 
-## 13. Known limitations
+## 13. Testing
 
-- **Not yet wired into any host.** No project under `apps/` references
-  `GeoAssets.Workflow` — this module has no UI today. Confirmed intentional
-  pre-`v0.1.0` sequencing (see the project README's roadmap), not a stalled
-  integration — but worth knowing before assuming a page exists to click through.
-- **`FeatureSelectionSpec.Parameters` doesn't survive a reload with full type
-  fidelity.** Every parameter value comes back as a `System.Text.Json.JsonElement`
-  after a save/reload cycle, regardless of its original CLR type — strategies with
-  hard casts (`(GeoPoint)`, `(TraversalDirection)`) would throw if fed a reloaded
-  spec instead of a freshly-built one. `Parameters` is safe for audit/display, not
-  for literal replay.
-- **No optimistic concurrency token.** Two concurrent `UpdateAsync` calls editing
-  different scalar fields on the same order still resolve last-writer-wins with no
-  conflict signal. The append-only writer methods (§7) close the sharper version of
-  this problem (silently dropped audit-log rows); the general case is still open.
+`GeoAssets.Workflow.Tests` and `GeoAssets.Workflow.Agents.Tests` cover the module
+end to end — 229 and 14 test cases respectively as of this writing, with
+`InMemoryServiceOrderRepository`, `ServiceOrder` (transition logic),
+`ServiceOrderTransitions`, `ServiceOrderRules`, `FeatureSelectionRegistry`
+(parameter validation), `FeatureSelectionParameters` (the JSON-round-trip
+accessors, §6), `ServiceOrderAttributeValidator` (schema validation, §14), and
+`ValidatingServiceOrderRepository` all at 100% line/branch coverage. The agent
+tests run against the **real MAF runtime** (`InProcessExecution.RunAsync`), not a
+mock of it, and specifically cover both authorization outcomes (agent fully
+granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
+rests on. The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
+`GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Commands.Tests`) runs **472 tests**.
+
+**Gap:** `GeoAssets.Workflow.EFCore` (`EFServiceOrderRepository`,
+`EFOrderTypeRepository`, the mappers, `ServiceOrderDbContext` + configurations,
+including the new `RowVersion` concurrency check in §7) has **zero automated test
+coverage** — no test project references it, and there's no EF-backed test harness
+(e.g. Sqlite in-memory) in the repo yet to extend. Tracked separately (not yet
+scheduled).
+
+---
+
+## 14. Attribute schema validation
+
+`ServiceOrder.Attributes` (`Dictionary<string, string>`) is free-form by default —
+any key, any value. An `OrderType` can optionally attach a JSON Schema (draft
+2020-12, via `JsonSchema.Net`) through `AttributesSchemaJson`; when present, every
+write is validated against it.
+
+```mermaid
+flowchart LR
+    Write["AddAsync / UpdateAsync(order)"] --> Decorator["ValidatingServiceOrderRepository"]
+    Decorator --> Lookup["orderTypeRegistry?.Find(order.OrderTypeId)"]
+    Lookup -->|"no registry, or type has no schema"| Pass["pass through — unrestricted"]
+    Lookup -->|"schema present"| Validate["ServiceOrderAttributeValidator.EnsureValid"]
+    Validate -->|valid| Inner["inner.AddAsync / UpdateAsync"]
+    Validate -->|invalid| Throw["throws ServiceOrderAttributeValidationException"]
+```
+
+Because `Attributes` values are always strings, `ServiceOrderAttributeValidator`
+tries each value as JSON on its own before falling back to a JSON string — so a
+schema author can write real `"type": "integer"` / `"boolean"` / `"number"`
+constraints (not just `"type": "string"` plus a regex) against a value that's
+stored as the text `"5"`. A value that isn't valid JSON by itself (ordinary free
+text like `"Downtown Depot"`) falls back to being validated as a JSON string, as
+expected.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "severity":     { "type": "integer", "minimum": 1, "maximum": 5 },
+    "hazard_class": { "type": "string", "enum": ["electrical", "gas", "structural"] },
+    "incident_ref": { "type": "string", "pattern": "^INC-[0-9]{6}$" }
+  },
+  "required": ["severity", "hazard_class"],
+  "additionalProperties": false
+}
+```
+
+No schema on an `OrderType` means unrestricted — the same "empty = unrestricted"
+convention `CreationPolicies` already uses. None of the three built-in seeded
+order types (`inspection`, `maintenance`, `emergency-repair`) set one, so this is
+fully backward compatible.
+
+**Scope:** `ServiceOrder.Attributes` only. `GeoFeature.CustomAttributes` has the
+identical gap — free-form, no schema — but extending validation there is a
+materially bigger pass: it's already live in the shipped map UI
+(`CustomAttributeEditor` inside `AssetForm.razor`), spans multiple `IAssetProvider`
+implementations, and has no `OrderType`-equivalent grouping construct to attach a
+schema to. Tracked separately, not yet scheduled.
+
+### File map
+
+| Concept | Path |
+|---|---|
+| Validator | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidator.cs` |
+| Exception | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidationException.cs` |
+| Schema field | `core/GeoAssets.Workflow/Orders/OrderType.cs` (`AttributesSchemaJson`) |
+| Enforcement point | `core/GeoAssets.Workflow/Orders/ValidatingServiceOrderRepository.cs` |
+
+---
+
+## 15. Host UI (Blazor Web)
+
+`apps/GeoAssets.Web` wires the module with the in-memory implementations —
+session-scoped, no database — the same trade-off `InMemoryAssetRepository` already
+makes for assets in that host:
+
+```csharp
+builder.Services.AddOrderTypeRegistry();
+builder.Services.AddWorkflowInMemory();
+builder.Services.AddServiceOrderRules();
+builder.Services.AddScoped<WorkflowPrincipalFactory>();
+```
+
+`WorkflowPrincipalFactory` (`apps/GeoAssets.Shared/Services/`) bridges
+`IGeoAuthorizationService` (Identity) into a `WorkflowPrincipal`, built once per
+page load from the authenticated user's roles/permissions. `GroupIds` is always
+empty — `AuthorizationContext` has no group source without a separate lookup —
+which only affects org/group-targeted dispatch rules (§16), not the
+Creator/Assignee/Role rules that cover the primary flows.
+
+A new route, `/service-orders`, composes list/create/detail/dispatch components
+under `apps/GeoAssets.Shared/Components/ServiceOrders/`, following the same
+conventions as the existing asset UI (`EventCallback<T>` up, `[Parameter]` down,
+`IServiceOrderRepository` injected directly rather than passed through parents).
+`ServiceOrderDetail` checks `ServiceOrderRules.Evaluate(principal, action, order)`
+before rendering each action button (Dispatch, Assign to me, Start, Complete,
+Cancel, Annotate) — the UI never offers an action the current user can't perform.
+
+| Component | Role |
+|---|---|
+| `ServiceOrders.razor` | Page shell — list on the left, detail/create on the right |
+| `ServiceOrderList.razor` | Search/status-filter list, subscribes to repository events |
+| `ServiceOrderCreateForm.razor` | New-order form, filtered to order types `ServiceOrderRules.CanCreate` allows |
+| `ServiceOrderDetail.razor` | Read-only fields, rule-gated action buttons, dispatch/action-log timeline |
+| `ServiceOrderDispatchDialog.razor` | Target type/id/note modal for `AppendDispatchAsync` |
+
+**Known limitation of this pass:** orders are lost on page refresh/app restart —
+in-memory store only. A durable, Postgres-backed alternative via `GeoAssets.Server`
+(already a live EF Core/PostgreSQL host — see `apps/GeoAssets.Server`) is tracked
+separately, not yet scheduled. `apps/GeoAssets.MAUI` has no equivalent UI yet
+either — also a separate, unscheduled follow-up.
+
+---
+
+## 16. Known limitations
+
+Resolved since the last pass — kept here only as a pointer to where each is now
+documented: not wired into a host UI (§15, Blazor Web only), `FeatureSelectionSpec.Parameters`
+type fidelity after reload (§6), no optimistic concurrency signal at all (§7,
+though see the narrower scope noted there). What's still genuinely open:
+
+- **Dispatch routing to an organization/group doesn't grant more than View/Annotate.**
+  `DispatchRecipientRule` only ever grants `View`/`Annotate` to org/group/direct
+  dispatch recipients — never `Assign`, `Dispatch`, `Execute`, or `Reject`. There's
+  no dedicated `Accept` action distinct from `Assign` (an audited "I am claiming
+  this order" verb), and the rule chain only supports independent rules that OR
+  together (deny-overrides) — there's no way to express "(is a recipient of this
+  dispatch) AND (has role/permission X)," which is what "any org member with the
+  right permissions" actually requires. Today, granting that requires a *global*
+  role grant via `RoleBasedActionRule`, which is over-broad. Diagnosed only — needs
+  a fresh design pass on the rule-chain itself (a composite AND-rule, and/or a
+  first-class `Accept` action), not just implementation of an agreed plan.
+- **One hardcoded, global status graph shared by every order type.**
+  `ServiceOrderTransitions` is a single compiled `Dictionary<ServiceOrderStatus,
+  ServiceOrderStatus[]>` — `inspection`, `maintenance`, and `emergency-repair` all
+  follow the identical lifecycle today, and adding a state or diverging one order
+  type's flow requires a code change and redeploy. Design settled (states/transitions
+  embedding directly on `OrderType`, mirroring `CreationPolicies`/`ActionPermissions`;
+  `ServiceOrderStatus` moves from a compiled `enum` to a `string` state key) and a
+  concrete ripple-effect list drafted, but nothing implemented — sized as an epic
+  given the breadth (enum→string migration, new EF entities/migration, fixes across
+  at least 5 classes).
+- **`GeoFeature.CustomAttributes` has no schema validation.** Same gap §14 closed
+  for `ServiceOrder.Attributes`, but bigger in scope — see §14's "Scope" note.
+- **`GeoAssets.Workflow.EFCore` has zero automated test coverage** — see §13.
+- **The concurrency check (§7) only covers races within the EF repository's own
+  read-then-save window**, not a caller holding a stale copy across a longer gap —
+  see §7 for the distinction.
+- **`IServiceOrderRepository`'s correctness contract is enforced by convention, not
+  the compiler.** A third implementation, `SnapshottingServiceOrderRepository`
+  (test-only, added alongside the agent work), doesn't recompute `ChildOrderIds` or
+  enforce transition legality, and is used unwrapped by `ValidatingServiceOrderRepository`
+  in its own tests — correctly, for what those tests check, but it's live evidence
+  that any *real* new implementation would need to remember the same rules by hand.
