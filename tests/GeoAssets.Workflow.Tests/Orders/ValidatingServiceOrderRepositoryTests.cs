@@ -384,4 +384,110 @@ public class ValidatingServiceOrderRepositoryTests
         await act.Should().ThrowAsync<KeyNotFoundException>();
         inner.AppendActionAsyncCallCount.Should().Be(0);
     }
+
+    // ── Attribute schema validation (XD01-2) ───────────────────────────────────
+
+    private const string RequiresSeveritySchema = """
+    {
+      "type": "object",
+      "properties": { "severity": { "type": "integer" } },
+      "required": ["severity"]
+    }
+    """;
+
+    private static OrderTypeRegistry RegistryWithSchema()
+    {
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id = "emergency-repair",
+            DisplayName = "Emergency Repair",
+            AttributesSchemaJson = RequiresSeveritySchema,
+        });
+        return registry;
+    }
+
+    [Fact]
+    public async Task AddAsync_NoRegistry_SkipsAttributeValidation()
+    {
+        var inner = new InMemoryServiceOrderRepository();
+        var sut = new ValidatingServiceOrderRepository(inner);
+
+        var order = new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" };
+        await sut.AddAsync(order);
+
+        (await inner.GetByIdAsync("a")).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task AddAsync_OrderTypeNotRegistered_SkipsAttributeValidation()
+    {
+        var inner = new InMemoryServiceOrderRepository();
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
+
+        var order = new ServiceOrder { Id = "a", OrderTypeId = "unregistered-type" };
+        await sut.AddAsync(order);
+
+        (await inner.GetByIdAsync("a")).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task AddAsync_ValidAttributes_DelegatesToInner()
+    {
+        var inner = new InMemoryServiceOrderRepository();
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
+
+        var order = new ServiceOrder
+        {
+            Id = "a",
+            OrderTypeId = "emergency-repair",
+            Attributes = { ["severity"] = "3" },
+        };
+        await sut.AddAsync(order);
+
+        (await inner.GetByIdAsync("a")).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task AddAsync_InvalidAttributes_ThrowsAndDoesNotCallInner()
+    {
+        var inner = new InMemoryServiceOrderRepository();
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
+
+        var order = new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" };
+        var act = () => sut.AddAsync(order);
+
+        await act.Should().ThrowAsync<ServiceOrderAttributeValidationException>();
+        (await inner.GetByIdAsync("a")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_InvalidAttributes_ThrowsAndDoesNotCallInner()
+    {
+        var inner = new NaiveServiceOrderRepository();
+        await inner.AddAsync(new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" });
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
+
+        var act = () => sut.UpdateAsync(new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" });
+
+        await act.Should().ThrowAsync<ServiceOrderAttributeValidationException>();
+        inner.UpdateAsyncCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ValidAttributes_DelegatesToInner()
+    {
+        var inner = new NaiveServiceOrderRepository();
+        await inner.AddAsync(new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" });
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
+
+        await sut.UpdateAsync(new ServiceOrder
+        {
+            Id = "a",
+            OrderTypeId = "emergency-repair",
+            Attributes = { ["severity"] = "3" },
+        });
+
+        inner.UpdateAsyncCallCount.Should().Be(1);
+    }
 }

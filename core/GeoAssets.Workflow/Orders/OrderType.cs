@@ -29,6 +29,15 @@ public sealed class OrderType
     /// the global defaults.
     /// </summary>
     public List<OrderActionPermission> ActionPermissions { get; init; } = [];
+
+    /// <summary>
+    /// Optional JSON Schema (draft 2020-12) text validating this order type's
+    /// <see cref="ServiceOrder.Attributes"/>. Null or empty means unrestricted — any
+    /// key/value pairs are accepted (same "empty = unrestricted" convention as
+    /// <see cref="CreationPolicies"/>). Enforced by <see cref="ServiceOrderAttributeValidator"/>,
+    /// applied on every write by <see cref="ValidatingServiceOrderRepository"/>.
+    /// </summary>
+    public string? AttributesSchemaJson { get; init; }
 }
 
 // ── Supporting value types ─────────────────────────────────────────────────────

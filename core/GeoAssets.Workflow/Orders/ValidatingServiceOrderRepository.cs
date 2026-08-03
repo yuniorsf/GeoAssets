@@ -12,7 +12,9 @@ namespace GeoAssets.Workflow.Orders;
 /// implementer to remember to add it. <see cref="WorkflowServiceExtensions.AddWorkflowInMemory"/>
 /// and <c>AddWorkflowPersistence</c> register it by default.
 /// </summary>
-public sealed class ValidatingServiceOrderRepository(IServiceOrderRepository inner) : IServiceOrderRepository
+public sealed class ValidatingServiceOrderRepository(
+    IServiceOrderRepository inner,
+    OrderTypeRegistry? orderTypeRegistry = null) : IServiceOrderRepository
 {
     // ── Read (pass-through) ────────────────────────────────────────────────────
 
@@ -55,10 +57,15 @@ public sealed class ValidatingServiceOrderRepository(IServiceOrderRepository inn
     // ── Write ──────────────────────────────────────────────────────────────────
 
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
-        => inner.AddAsync(order, ct);
+    {
+        ValidateAttributes(order);
+        return inner.AddAsync(order, ct);
+    }
 
     public async Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ValidateAttributes(order);
+
         var existing = await inner.GetByIdAsync(order.Id, ct)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
@@ -66,6 +73,19 @@ public sealed class ValidatingServiceOrderRepository(IServiceOrderRepository inn
             throw new InvalidServiceOrderTransitionException(existing.Status, order.Status);
 
         await inner.UpdateAsync(order, ct);
+    }
+
+    /// <summary>
+    /// No-op when no <see cref="OrderTypeRegistry"/> was supplied, or the order's type isn't
+    /// registered, or the registered type has no <see cref="OrderType.AttributesSchemaJson"/> —
+    /// same "unrestricted by default" behavior as <see cref="ServiceOrderRules"/>'s optional
+    /// registry parameter.
+    /// </summary>
+    private void ValidateAttributes(IServiceOrder order)
+    {
+        var orderType = orderTypeRegistry?.Find(order.OrderTypeId);
+        if (orderType is not null)
+            ServiceOrderAttributeValidator.EnsureValid(orderType, order.Attributes);
     }
 
     public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default)
