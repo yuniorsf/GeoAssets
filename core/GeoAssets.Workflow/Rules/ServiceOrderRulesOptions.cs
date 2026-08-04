@@ -20,4 +20,14 @@ public sealed class ServiceOrderRulesOptions
     /// action). Leave empty to keep the default ("Administrator").
     /// </summary>
     public HashSet<string> UnrestrictedRoles { get; } = [];
+
+    /// <summary>
+    /// Actions a dispatch recipient (direct/group/org) may additionally perform when they
+    /// also hold the paired role — evaluated by the built-in dispatch-recipient rule. Unlike
+    /// <see cref="RoleGrants"/> (global, applies to every order), a grant here only applies
+    /// to orders actually dispatched to the principal. Leave empty to keep the default
+    /// (none — a recipient without a configured role grant still only gets
+    /// View/Annotate/Accept).
+    /// </summary>
+    public Dictionary<string, IReadOnlySet<OrderActionType>> RecipientRoleGrants { get; } = [];
 }

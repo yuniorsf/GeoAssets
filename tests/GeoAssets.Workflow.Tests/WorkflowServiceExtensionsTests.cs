@@ -103,4 +103,23 @@ public class WorkflowServiceExtensionsTests
         rules.Evaluate(agentPrincipal, OrderActionType.Dispatch, order).Allowed.Should().BeTrue();
         rules.Evaluate(agentPrincipal, OrderActionType.Approve, order).Allowed.Should().BeFalse();
     }
+
+    [Fact]
+    public void AddServiceOrderRules_RecipientRoleGrantsOptionGrantsDispatchRecipientTheConfiguredAction()
+    {
+        var services = new ServiceCollection();
+        services.AddServiceOrderRules(o =>
+        {
+            o.RecipientRoleGrants["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign };
+        });
+        using var sp = services.BuildServiceProvider();
+
+        var rules = sp.GetRequiredService<ServiceOrderRules>();
+        var order = new ServiceOrder().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var principal = new WorkflowPrincipal("u1", "org-1", ["FieldTechnician"], [], []);
+
+        rules.Evaluate(principal, OrderActionType.Assign, order).Allowed.Should().BeTrue();
+        // Same role, but this order was never dispatched to org-1 — must not leak.
+        rules.Evaluate(principal, OrderActionType.Assign, new ServiceOrder()).Allowed.Should().BeFalse();
+    }
 }

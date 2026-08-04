@@ -15,6 +15,13 @@ public enum OrderActionType
     /// <summary>Assign the order to a specific user.</summary>
     Assign,
 
+    /// <summary>
+    /// Claim ownership of an order dispatched to a group/organization/user, distinct from
+    /// <see cref="Assign"/> (which is done *to* someone else, typically by a supervisor).
+    /// Accept is self-initiated by the recipient: "I am claiming this order."
+    /// </summary>
+    Accept,
+
     /// <summary>Dispatch the order to a user, group, or organization.</summary>
     Dispatch,
 

@@ -50,16 +50,24 @@ public sealed class ServiceOrderRules
     /// Optional. Overrides <see cref="RoleBasedActionRule.DefaultUnrestrictedRoles"/> —
     /// role names granted every action. Omit to keep the default ("Administrator").
     /// </param>
+    /// <param name="recipientRoleGrants">
+    /// Optional. Actions a dispatch recipient (direct/group/org) may additionally perform
+    /// when they also hold the paired role — see <see cref="DispatchRecipientRule"/>. Unlike
+    /// <paramref name="roleGrants"/> (global, applies to every order), this only applies to
+    /// orders actually dispatched to the principal. Omit to keep the default (none — a
+    /// recipient without a configured role grant still only gets View/Annotate/Accept).
+    /// </param>
     public ServiceOrderRules(
         OrderTypeRegistry? orderTypeRegistry = null,
         IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null,
-        IReadOnlySet<string>? unrestrictedRoles = null)
+        IReadOnlySet<string>? unrestrictedRoles = null,
+        IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? recipientRoleGrants = null)
     {
         _rules =
         [
             new CreatorRule(),
             new AssigneeRule(),
-            new DispatchRecipientRule(),
+            new DispatchRecipientRule(recipientRoleGrants),
             new OrderTypeActionPermissionRule(orderTypeRegistry),
             new RoleBasedActionRule(roleGrants, unrestrictedRoles),
         ];
@@ -257,9 +265,20 @@ file sealed class AssigneeRule : IServiceOrderRule
 
 /// <summary>
 /// Users who are direct recipients of a dispatch, or members of a dispatched-to
-/// group or organization, may view and annotate the order.
+/// group or organization, may unconditionally view, annotate, and accept the order —
+/// "accept" being how any qualifying member of a dispatched-to group/org claims an
+/// order that wasn't addressed to a pre-named individual.
+///
+/// Broader actions (<see cref="OrderActionType.Assign"/>, <see cref="OrderActionType.Dispatch"/>,
+/// <see cref="OrderActionType.Execute"/>, <see cref="OrderActionType.Reject"/>, or any other
+/// action a host chooses to configure) require *also* holding a paired role — set via
+/// <paramref name="roleGrants"/> — expressing "(is a recipient of this dispatch) AND (has role X)."
+/// This is deliberately narrower than <see cref="RoleBasedActionRule"/>'s global role grants:
+/// a role listed here only unlocks the action on orders actually dispatched to the principal,
+/// not on every order in the system.
 /// </summary>
-file sealed class DispatchRecipientRule : IServiceOrderRule
+file sealed class DispatchRecipientRule(
+    IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null) : IServiceOrderRule
 {
     public string Name => "DispatchRecipientRule";
 
@@ -268,16 +287,28 @@ file sealed class DispatchRecipientRule : IServiceOrderRule
         OrderUserRelationship.GroupMember     |
         OrderUserRelationship.OrgMember;
 
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> _roleGrants =
+        roleGrants ?? new Dictionary<string, IReadOnlySet<OrderActionType>>();
+
     public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
     {
         if ((ctx.Relationship & _recipientFlags) == 0) return null;
 
-        return action switch
+        switch (action)
         {
-            OrderActionType.View     => true,
-            OrderActionType.Annotate => true,
-            _ => null,
-        };
+            case OrderActionType.View:
+            case OrderActionType.Annotate:
+            case OrderActionType.Accept:
+                return true;
+        }
+
+        foreach (var (role, actions) in _roleGrants)
+        {
+            if (actions.Contains(action) && ctx.Principal.HasRole(role))
+                return true;
+        }
+
+        return null;
     }
 }
 

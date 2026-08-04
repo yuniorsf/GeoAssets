@@ -301,6 +301,116 @@ public class ServiceOrderRulesTests
         rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.View, order).Allowed.Should().BeTrue();
     }
 
+    [Fact]
+    public void Evaluate_DirectDispatchRecipient_CanAccept()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1");
+
+        rules.Evaluate(Principal(), OrderActionType.Accept, order).Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_GroupDispatchMember_CanAccept()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1");
+
+        rules.Evaluate(Principal(groups: ["crew-1"]), OrderActionType.Accept, order).Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_OrgDispatchMember_CanAccept()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+
+        rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.Accept, order).Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_NonRecipient_CannotAccept()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+
+        rules.Evaluate(Principal(orgId: "org-2"), OrderActionType.Accept, order).Allowed.Should().BeFalse();
+    }
+
+    // ── DispatchRecipientRule: recipient role grants (AND composition) ──────────
+    // "(is a recipient of this dispatch) AND (has role X)" — narrower than
+    // RoleBasedActionRule's global grants, which would apply to every order.
+
+    [Fact]
+    public void Evaluate_OrgRecipientWithGrantedRole_CanPerformConfiguredAction()
+    {
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+        };
+        var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+
+        rules.Evaluate(Principal(orgId: "org-1", roles: ["FieldTechnician"]), OrderActionType.Assign, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_OrgRecipientWithoutGrantedRole_CannotPerformConfiguredAction()
+    {
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+        };
+        var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+
+        rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.Assign, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_MatchingRoleButNotARecipient_CannotPerformConfiguredAction()
+    {
+        // Proves the grant is scoped to orders actually dispatched to the principal —
+        // holding the role alone (without the relationship) must not be enough, otherwise
+        // this degrades into the same over-broad global grant RoleBasedActionRule already offers.
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+        };
+        var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
+        var order = Order(); // never dispatched to anyone
+
+        rules.Evaluate(Principal(roles: ["FieldTechnician"]), OrderActionType.Assign, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_RecipientGrantOnOneOrder_DoesNotLeakToOrderNotDispatchedToPrincipal()
+    {
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        {
+            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+        };
+        var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
+        var dispatchedOrder    = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var notDispatchedOrder = Order().DispatchTo("org-2", DispatchTargetType.Organization, "supervisor-1");
+        var principal = Principal(orgId: "org-1", roles: ["FieldTechnician"]);
+
+        rules.Evaluate(principal, OrderActionType.Assign, dispatchedOrder).Allowed.Should().BeTrue();
+        rules.Evaluate(principal, OrderActionType.Assign, notDispatchedOrder).Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_RecipientRoleGrantsDefault_GrantsNothingBeyondViewAnnotateAccept()
+    {
+        var rules = new ServiceOrderRules();
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+
+        rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.Assign, order).Allowed.Should().BeFalse();
+    }
+
     // ── RoleBasedActionRule ────────────────────────────────────────────────────
 
     [Fact]
