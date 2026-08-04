@@ -2,7 +2,33 @@
   "permissions": {
     "allow": [
       "Bash(sort -t: -k1,1 -k2,2n)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(dotnet sln *)",
+      "Bash(sed -i '' '/{9152F553-B7B5-4590-81E3-47778C1078A5}/d' GeoAssets.sln)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(claude mcp *)",
+      "mcp__atlassian__atlassianUserInfo",
+      "mcp__atlassian__getAccessibleAtlassianResources",
+      "mcp__atlassian__getVisibleJiraProjects",
+      "mcp__atlassian__getConfluenceSpaces",
+      "mcp__atlassian__getConfluencePage",
+      "mcp__atlassian__updateConfluencePage",
+      "mcp__atlassian__createConfluencePage",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "mcp__atlassian__getJiraProjectIssueTypesMetadata",
+      "mcp__atlassian__createJiraIssue",
+      "Bash(dotnet add *)",
+      "mcp__atlassian__getJiraIssue",
+      "mcp__atlassian__getTransitionsForJiraIssue",
+      "mcp__atlassian__editJiraIssue",
+      "mcp__atlassian__transitionJiraIssue",
+      "mcp__atlassian__getIssueLinkTypes",
+      "mcp__atlassian__createIssueLink",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(npm ls *)"
     ]
   }
 }
