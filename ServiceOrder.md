@@ -91,7 +91,7 @@ classDiagram
         +string Id
         +string Title
         +string OrderTypeId
-        +ServiceOrderStatus Status
+        +string Status
         +ServiceOrderPriority Priority
         +string CreatedBy
         +string AssignedTo
@@ -116,15 +116,28 @@ classDiagram
         +List~OrderCreationPolicy~ CreationPolicies
         +List~OrderActionPermission~ ActionPermissions
         +string AttributesSchemaJson
+        +List~WorkflowState~ States
+        +List~WorkflowTransition~ Transitions
+        +string InitialStateKey
     }
     class ServiceOrderStatus {
-        <<enumeration>>
+        <<string constants>>
         Draft
         Pending
         InProgress
         OnHold
         Completed
         Cancelled
+    }
+    class WorkflowState {
+        +string Key
+        +string DisplayName
+        +bool IsSuccess
+    }
+    class WorkflowTransition {
+        +string FromStateKey
+        +string ToStateKey
+        +OrderActionType TriggerAction
     }
     class OrderActionType {
         <<enumeration>>
@@ -157,13 +170,12 @@ classDiagram
         +OrderActionType Action
         +string PerformedBy
         +DateTime PerformedAt
-        +ServiceOrderStatus ResultingStatus
+        +string ResultingStatus
         +ActorKind ActorKind
         +string AgentInvocationId
     }
 
     IServiceOrder <|.. ServiceOrder
-    ServiceOrder --> ServiceOrderStatus
     ServiceOrder "1" --> "*" OrderDispatch
     ServiceOrder "1" --> "*" OrderActionLog
     OrderActionLog --> OrderActionType
@@ -171,6 +183,8 @@ classDiagram
     OrderActionLog --> ActorKind
     ServiceOrder ..> OrderType : OrderTypeId (loose ref)
     ServiceOrder "1" o-- "0..*" ServiceOrder : ParentOrderId / ChildOrderIds
+    OrderType "1" --> "*" WorkflowState
+    OrderType "1" --> "*" WorkflowTransition
 ```
 
 Notes on the model, reflecting decisions made while hardening it:
@@ -184,7 +198,14 @@ Notes on the model, reflecting decisions made while hardening it:
 - **`OrderType`** carries two independent policy tables:
   `CreationPolicies` (who may create an order of this type) and `ActionPermissions`
   (per-action overrides, consulted by `ServiceOrderRules` — see §5) — plus an
-  optional `AttributesSchemaJson` validating `Attributes` (see §14).
+  optional `AttributesSchemaJson` validating `Attributes` (see §14), and an
+  optional `States`/`Transitions`/`InitialStateKey` workflow graph (see §4).
+- **`IServiceOrder.Status` is a plain `string` state key, not an enum.**
+  `ServiceOrderStatus` (`Orders/ServiceOrderStatus.cs`) is a static class of
+  `const string` fields (`Draft`, `Pending`, …) — existing call sites like
+  `ServiceOrderStatus.Draft` keep working unchanged, they just yield a string
+  instead of an enum value now. This is what lets an `OrderType` introduce states
+  the built-in set never anticipated, with no code change or redeploy (see §4).
 - **`ActorKind`** (`Human` / `Agent` / `System`) was added additively to
   `WorkflowPrincipal`, `OrderDispatch`, and `OrderActionLog` — every new member
   defaults to `Human`, so no existing call site changed. It exists purely for
@@ -197,9 +218,9 @@ Notes on the model, reflecting decisions made while hardening it:
 |---|---|
 | Domain entity | `core/GeoAssets.Workflow/Orders/ServiceOrder.cs` |
 | Domain interface | `core/GeoAssets.Workflow/Orders/IServiceOrder.cs` |
-| Order type + policies | `core/GeoAssets.Workflow/Orders/OrderType.cs` |
+| Order type + policies + workflow graph | `core/GeoAssets.Workflow/Orders/OrderType.cs` (also `WorkflowState`, `WorkflowTransition`) |
 | Order type catalogue | `core/GeoAssets.Workflow/Orders/OrderTypeRegistry.cs` |
-| Status enum | `core/GeoAssets.Workflow/Orders/ServiceOrderStatus.cs` |
+| Status string constants | `core/GeoAssets.Workflow/Orders/ServiceOrderStatus.cs` |
 | Priority enum | `core/GeoAssets.Workflow/Orders/ServiceOrderPriority.cs` |
 | Action enum | `core/GeoAssets.Workflow/Orders/OrderActionType.cs` |
 | Actor-kind enum | `core/GeoAssets.Workflow/Orders/ActorKind.cs` |
@@ -220,6 +241,32 @@ and enforced at **every** write path that can change `Status` — the domain ent
 any future implementation automatically. This holds regardless of whether the actor
 is a human or an AI agent — the state machine has no concept of *who* is transitioning
 the order, only whether the transition itself is legal.
+
+**The graph below is the global default**, used by any `OrderType` that doesn't
+define its own — same "empty = unrestricted/default" convention `CreationPolicies`
+and `AttributesSchemaJson` already use. An `OrderType` can instead embed its own
+`States`/`Transitions`/`InitialStateKey` (mirroring `CreationPolicies`/
+`ActionPermissions`) to introduce states or edges the global graph never
+anticipated — **with no code change or redeploy** — which is exactly why `Status`
+is a plain `string` state key (`ServiceOrderStatus`'s `const string` fields), not a
+compiled `enum`: an enum can't gain members at runtime. `ServiceOrderTransitions.IsValid(OrderType?, string, string)`
+consults the order's own graph when it defines one, falling back to the graph below
+otherwise; `ServiceOrderTransitions.HasTransitionFor` and `IsSuccessState` do the
+same for "does a Cancel-triggering edge exist from this state" (used by
+`ServiceOrderRules`'s `CreatorRule` — see §5) and "does reaching this state mean
+success" (used for `CompletedAt` stamping) respectively. All three built-in order
+types (`inspection`, `maintenance`, `emergency-repair`) are seeded with this exact
+graph as explicit data (`WorkflowServiceExtensions.SeedDefaultOrderTypes`), so
+nothing behaves differently for them today — the fallback exists for any order type
+that doesn't bother defining its own graph, not just the built-ins.
+
+Enforcement of a custom graph happens in `ValidatingServiceOrderRepository`
+(`UpdateAsync`/`AppendActionAsync`), which already carried an optional
+`OrderTypeRegistry` for attribute-schema validation (§14) and now uses it here too.
+`InMemoryServiceOrderRepository`/`EFServiceOrderRepository`'s own baked-in checks
+are unchanged — global graph only — since every registered host wraps them in
+`ValidatingServiceOrderRepository` for the per-type guarantee (see §16 for the
+"convention, not compiler" nuance this implies for any *unwrapped* implementation).
 
 ```mermaid
 stateDiagram-v2
@@ -290,10 +337,10 @@ flowchart TD
 
 | Rule | Grants | Notes |
 |---|---|---|
-| `CreatorRule` | View, Annotate to the creator; Cancel while `Draft`/`Pending` | Only status-aware built-in rule |
+| `CreatorRule` | View, Annotate to the creator; Cancel while a Cancel-triggering transition still exists from the order's current state | Status-aware — for an order type with no custom workflow graph this means "still `Draft`/`Pending`" (the historical behavior, via `ServiceOrderTransitions.HasTransitionFor`'s fallback); for a custom graph it's derived from that type's own `Transitions` |
 | `AssigneeRule` | View, Execute, Complete, Annotate to the assignee | |
 | `DispatchRecipientRule` | View, Annotate, Accept unconditionally to direct/group/org dispatch recipients; Assign/Dispatch/Execute/Reject/etc. when the recipient *also* holds a configured role | The role-gated grants (`recipientRoleGrants`) express "(is a recipient of **this** dispatch) AND (has role X)" — narrower than `RoleBasedActionRule` below, which would grant the action on every order in the system. `Accept` (`OrderActionType.Accept`) is the audited "I am claiming this order" verb, distinct from `Assign` (done *to* someone else) |
-| `OrderTypeActionPermissionRule` | Per-`OrderType.ActionPermissions` override | **Overrides** the role-based default below when the order's type defines an entry for the action being evaluated; abstains otherwise |
+| `OrderTypeActionPermissionRule` | Per-`OrderType.ActionPermissions` override | **Overrides** the role-based default below when the order's type defines an entry for the action being evaluated; abstains otherwise. An entry's optional `FromStateKey` (§4) scopes it to one state — e.g. "Approve requires role X, but only from `Pending`" — null (the default) applies regardless of state |
 | `RoleBasedActionRule` | Configurable role → action-set mapping (default: `Supervisor` → View/Approve/Reject/Assign/Dispatch/Cancel/Annotate; `Administrator` → everything) | Mapping is data, injected via `ServiceOrderRules`'s constructor or `AddServiceOrderRules` (see §12) — **this is exactly how an AI agent's role (e.g. `"AutomationAgent"`) is granted actions, with zero code change** |
 
 ### Built-in `IOrderCreationRule` chain
@@ -742,7 +789,7 @@ when present.
 ## 13. Testing
 
 `GeoAssets.Workflow.Tests` and `GeoAssets.Workflow.Agents.Tests` cover the module
-end to end — 229 and 14 test cases respectively as of this writing, with
+end to end — 261 and 15 test cases respectively as of this writing, with
 `InMemoryServiceOrderRepository`, `ServiceOrder` (transition logic),
 `ServiceOrderTransitions`, `ServiceOrderRules`, `FeatureSelectionRegistry`
 (parameter validation), `FeatureSelectionParameters` (the JSON-round-trip
@@ -752,7 +799,7 @@ tests run against the **real MAF runtime** (`InProcessExecution.RunAsync`), not 
 mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
 rests on. The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
-`GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Commands.Tests`) runs **472 tests**.
+`GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Commands.Tests`) runs **505 tests**.
 
 **Gap:** `GeoAssets.Workflow.EFCore` (`EFServiceOrderRepository`,
 `EFOrderTypeRepository`, the mappers, `ServiceOrderDbContext` + configurations,
@@ -873,38 +920,33 @@ either — also a separate, unscheduled follow-up.
 Resolved since the last pass — kept here only as a pointer to where each is now
 documented: not wired into a host UI (§15, Blazor Web only), `FeatureSelectionSpec.Parameters`
 type fidelity after reload (§6), no optimistic concurrency signal at all (§7,
-though see the narrower scope noted there). What's still genuinely open:
+though see the narrower scope noted there), **dispatch routing to an
+organization/group only granting View/Annotate** — `DispatchRecipientRule` now
+grants `Accept` unconditionally to any dispatch recipient plus role-gated
+Assign/Dispatch/Execute/Reject via `recipientRoleGrants` (§5), closed by
+[XD01-4](https://xdicor.atlassian.net/browse/XD01-4) — and **one hardcoded,
+global status graph shared by every order type** — `Status` is now a plain
+`string` state key, and an `OrderType` can define its own
+`States`/`Transitions`/`InitialStateKey` graph that fully replaces the global
+default for that type (§4), closed by
+[XD01-3](https://xdicor.atlassian.net/browse/XD01-3). What's still genuinely open:
 
-- **Dispatch routing to an organization/group doesn't grant more than View/Annotate.**
-  `DispatchRecipientRule` only ever grants `View`/`Annotate` to org/group/direct
-  dispatch recipients — never `Assign`, `Dispatch`, `Execute`, or `Reject`. There's
-  no dedicated `Accept` action distinct from `Assign` (an audited "I am claiming
-  this order" verb), and the rule chain only supports independent rules that OR
-  together (deny-overrides) — there's no way to express "(is a recipient of this
-  dispatch) AND (has role/permission X)," which is what "any org member with the
-  right permissions" actually requires. Today, granting that requires a *global*
-  role grant via `RoleBasedActionRule`, which is over-broad. Diagnosed only — needs
-  a fresh design pass on the rule-chain itself (a composite AND-rule, and/or a
-  first-class `Accept` action), not just implementation of an agreed plan.
-- **One hardcoded, global status graph shared by every order type.**
-  `ServiceOrderTransitions` is a single compiled `Dictionary<ServiceOrderStatus,
-  ServiceOrderStatus[]>` — `inspection`, `maintenance`, and `emergency-repair` all
-  follow the identical lifecycle today, and adding a state or diverging one order
-  type's flow requires a code change and redeploy. Design settled (states/transitions
-  embedding directly on `OrderType`, mirroring `CreationPolicies`/`ActionPermissions`;
-  `ServiceOrderStatus` moves from a compiled `enum` to a `string` state key) and a
-  concrete ripple-effect list drafted, but nothing implemented — sized as an epic
-  given the breadth (enum→string migration, new EF entities/migration, fixes across
-  at least 5 classes).
 - **`GeoFeature.CustomAttributes` has no schema validation.** Same gap §14 closed
   for `ServiceOrder.Attributes`, but bigger in scope — see §14's "Scope" note.
+  Tracked as [XD01-10](https://xdicor.atlassian.net/browse/XD01-10).
 - **`GeoAssets.Workflow.EFCore` has zero automated test coverage** — see §13.
+  Tracked as [XD01-9](https://xdicor.atlassian.net/browse/XD01-9).
 - **The concurrency check (§7) only covers races within the EF repository's own
   read-then-save window**, not a caller holding a stale copy across a longer gap —
-  see §7 for the distinction.
+  see §7 for the distinction. The `RowVersion` detection itself is done
+  ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7)); round-tripping a version
+  token through the caller so a longer-held stale copy is also caught is tracked
+  separately as [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
 - **`IServiceOrderRepository`'s correctness contract is enforced by convention, not
   the compiler.** A third implementation, `SnapshottingServiceOrderRepository`
   (test-only, added alongside the agent work), doesn't recompute `ChildOrderIds` or
-  enforce transition legality, and is used unwrapped by `ValidatingServiceOrderRepository`
-  in its own tests — correctly, for what those tests check, but it's live evidence
-  that any *real* new implementation would need to remember the same rules by hand.
+  enforce transition legality, and is used unwrapped in
+  `DispatchServiceOrderExecutorTests.cs` (`GeoAssets.Workflow.Agents.Tests`) —
+  correctly, for what those tests check, but it's live evidence that any *real* new
+  implementation would need to remember the same rules by hand. Tracked as
+  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
