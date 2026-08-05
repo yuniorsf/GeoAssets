@@ -14,6 +14,7 @@ internal sealed class ServiceOrderRecordConfiguration : IEntityTypeConfiguration
         b.Property(o => o.Title).IsRequired().HasMaxLength(512);
         b.Property(o => o.Description).HasMaxLength(4096);
         b.Property(o => o.OrderTypeId).IsRequired().HasMaxLength(128);
+        b.Property(o => o.Status).IsRequired().HasMaxLength(64);
         b.Property(o => o.CreatedBy).IsRequired().HasMaxLength(256);
         b.Property(o => o.AssignedTo).HasMaxLength(256);
         b.Property(o => o.ParentOrderId).HasMaxLength(36);

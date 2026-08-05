@@ -86,8 +86,8 @@ public sealed class OrderNotificationService(IOrderEventPublisher publisher)
     public async Task NotifyStateChangedAsync(
         string                               orderId,
         string                               orderTypeId,
-        Orders.ServiceOrderStatus            previous,
-        Orders.ServiceOrderStatus            newStatus,
+        string                               previous,
+        string                               newStatus,
         string                               performedBy,
         IEnumerable<string>                  recipientIds,
         string?                              correlationId = null,

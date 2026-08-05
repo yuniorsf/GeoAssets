@@ -11,7 +11,7 @@ public class InMemoryServiceOrderRepositoryTests
     private static ServiceOrder Order(
         string id,
         string? parentOrderId = null,
-        ServiceOrderStatus status = ServiceOrderStatus.Draft,
+        string status = ServiceOrderStatus.Draft,
         string createdBy = "",
         string? assignedTo = null,
         string orderTypeId = "",
@@ -32,7 +32,7 @@ public class InMemoryServiceOrderRepositoryTests
         public string Title { get; init; } = string.Empty;
         public string Description { get; init; } = string.Empty;
         public string OrderTypeId { get; init; } = string.Empty;
-        public ServiceOrderStatus Status { get; init; } = ServiceOrderStatus.Draft;
+        public string Status { get; init; } = ServiceOrderStatus.Draft;
         public ServiceOrderPriority Priority { get; init; } = ServiceOrderPriority.Normal;
         public string CreatedBy { get; init; } = string.Empty;
         public string? AssignedTo { get; init; }
@@ -387,7 +387,7 @@ public class InMemoryServiceOrderRepositoryTests
     {
         var sut = new InMemoryServiceOrderRepository();
         await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
-        (IServiceOrder Order, ServiceOrderStatus Previous)? raised = null;
+        (IServiceOrder Order, string Previous)? raised = null;
         sut.OrderStatusChanged += (_, e) => raised = e;
 
         await sut.UpdateAsync(Order("a", status: ServiceOrderStatus.Pending));
@@ -610,7 +610,7 @@ public class InMemoryServiceOrderRepositoryTests
     {
         var sut = new InMemoryServiceOrderRepository();
         await sut.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
-        (IServiceOrder Order, ServiceOrderStatus Previous)? raised = null;
+        (IServiceOrder Order, string Previous)? raised = null;
         sut.OrderStatusChanged += (_, e) => raised = e;
 
         await sut.AppendActionAsync("a",

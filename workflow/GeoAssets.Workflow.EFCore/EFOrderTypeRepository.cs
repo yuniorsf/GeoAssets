@@ -11,6 +11,8 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
         var record = await db.OrderTypes
             .Include(t => t.CreationPolicies)
             .Include(t => t.ActionPermissions)
+            .Include(t => t.States)
+            .Include(t => t.Transitions)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
 
         return record is null ? null : OrderTypeMapper.ToDomain(record);
@@ -21,6 +23,8 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
         var records = await db.OrderTypes
             .Include(t => t.CreationPolicies)
             .Include(t => t.ActionPermissions)
+            .Include(t => t.States)
+            .Include(t => t.Transitions)
             .OrderBy(t => t.DisplayName)
             .ToListAsync(ct);
 
@@ -35,16 +39,21 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
         var existing = await db.OrderTypes
             .Include(t => t.CreationPolicies)
             .Include(t => t.ActionPermissions)
+            .Include(t => t.States)
+            .Include(t => t.Transitions)
             .FirstOrDefaultAsync(t => t.Id == orderType.Id, ct);
 
         if (existing is null) return;
 
-        existing.DisplayName = orderType.DisplayName;
-        existing.Description = orderType.Description;
+        existing.DisplayName     = orderType.DisplayName;
+        existing.Description     = orderType.Description;
+        existing.InitialStateKey = orderType.InitialStateKey;
 
         // Replace child collections (simplest correct strategy for small sets)
         db.RemoveRange(existing.CreationPolicies);
         db.RemoveRange(existing.ActionPermissions);
+        db.RemoveRange(existing.States);
+        db.RemoveRange(existing.Transitions);
 
         existing.CreationPolicies = orderType.CreationPolicies
             .Select(p => new Entities.OrderCreationPolicyRecord
@@ -57,10 +66,29 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
         existing.ActionPermissions = orderType.ActionPermissions
             .Select(p => new Entities.OrderActionPermissionRecord
             {
+                OrderTypeId  = orderType.Id,
+                Action       = (int)p.Action,
+                Kind         = (int)p.Kind,
+                Value        = p.Value,
+                FromStateKey = p.FromStateKey,
+            }).ToList();
+
+        existing.States = orderType.States
+            .Select(s => new Entities.OrderTypeStateRecord
+            {
                 OrderTypeId = orderType.Id,
-                Action      = (int)p.Action,
-                Kind        = (int)p.Kind,
-                Value       = p.Value,
+                Key         = s.Key,
+                DisplayName = s.DisplayName,
+                IsSuccess   = s.IsSuccess,
+            }).ToList();
+
+        existing.Transitions = orderType.Transitions
+            .Select(x => new Entities.OrderTypeTransitionRecord
+            {
+                OrderTypeId   = orderType.Id,
+                FromStateKey  = x.FromStateKey,
+                ToStateKey    = x.ToStateKey,
+                TriggerAction = x.TriggerAction.HasValue ? (int)x.TriggerAction.Value : null,
             }).ToList();
     }
 

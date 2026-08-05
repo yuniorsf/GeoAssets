@@ -18,7 +18,7 @@ public sealed class ServiceOrder : IServiceOrder
 
     // ── Workflow metadata ─────────────────────────────────────────────────────
 
-    public ServiceOrderStatus   Status   { get; set; } = ServiceOrderStatus.Draft;
+    public string               Status   { get; set; } = ServiceOrderStatus.Draft;
     public ServiceOrderPriority Priority { get; set; } = ServiceOrderPriority.Normal;
 
     public string  CreatedBy  { get; init; } = string.Empty;
@@ -74,7 +74,7 @@ public sealed class ServiceOrder : IServiceOrder
     /// Throws <see cref="InvalidServiceOrderTransitionException"/> if the transition is
     /// not structurally legal per <see cref="ServiceOrderTransitions.IsValid"/>.
     /// </summary>
-    public ServiceOrder Transition(ServiceOrderStatus newStatus)
+    public ServiceOrder Transition(string newStatus)
     {
         if (!ServiceOrderTransitions.IsValid(Status, newStatus))
             throw new InvalidServiceOrderTransitionException(Status, newStatus);
@@ -82,7 +82,7 @@ public sealed class ServiceOrder : IServiceOrder
         Status    = newStatus;
         UpdatedAt = DateTime.UtcNow;
 
-        if (newStatus == ServiceOrderStatus.Completed)
+        if (ServiceOrderTransitions.IsSuccessState(null, newStatus))
             CompletedAt = DateTime.UtcNow;
 
         return this;
@@ -118,20 +118,20 @@ public sealed class ServiceOrder : IServiceOrder
 
     /// <summary>Records a performed action in the audit log and optionally transitions status.</summary>
     public ServiceOrder RecordAction(
-        OrderActionType     action,
-        string              performedBy,
-        string?             comment           = null,
-        ServiceOrderStatus? resultingStatus   = null,
-        ActorKind           actorKind         = ActorKind.Human,
-        string?             agentInvocationId = null)
+        OrderActionType action,
+        string          performedBy,
+        string?         comment           = null,
+        string?         resultingStatus   = null,
+        ActorKind       actorKind         = ActorKind.Human,
+        string?         agentInvocationId = null)
     {
         ActionLog.Add(new OrderActionLog(action, performedBy, DateTime.UtcNow, comment, resultingStatus)
         {
             ActorKind         = actorKind,
             AgentInvocationId = agentInvocationId
         });
-        if (resultingStatus.HasValue)
-            Transition(resultingStatus.Value);
+        if (resultingStatus is not null)
+            Transition(resultingStatus);
         else
             UpdatedAt = DateTime.UtcNow;
         return this;

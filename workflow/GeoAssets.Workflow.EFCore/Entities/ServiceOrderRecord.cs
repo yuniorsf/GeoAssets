@@ -17,8 +17,8 @@ internal sealed class ServiceOrderRecord
     public string Description { get; set; } = string.Empty;
     public string OrderTypeId { get; set; } = string.Empty;
 
-    public int Status   { get; set; }
-    public int Priority { get; set; }
+    public string Status   { get; set; } = string.Empty;
+    public int    Priority { get; set; }
 
     public string  CreatedBy  { get; set; } = string.Empty;
     public string? AssignedTo { get; set; }

@@ -29,7 +29,7 @@ public interface IServiceOrder
 
     // ── Workflow metadata ─────────────────────────────────────────────────────
 
-    ServiceOrderStatus   Status   { get; }
+    string               Status   { get; }
     ServiceOrderPriority Priority { get; }
 
     string  CreatedBy   { get; }

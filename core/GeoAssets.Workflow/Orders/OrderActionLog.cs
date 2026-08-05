@@ -7,8 +7,8 @@ public sealed record OrderActionLog(
     OrderActionType Action,
     string          PerformedBy,
     DateTime        PerformedAt,
-    string?         Comment    = null,
-    ServiceOrderStatus? ResultingStatus = null
+    string?         Comment         = null,
+    string?         ResultingStatus = null
 )
 {
     /// <summary>Whether a human, an AI agent, or an automated system performed this action.</summary>

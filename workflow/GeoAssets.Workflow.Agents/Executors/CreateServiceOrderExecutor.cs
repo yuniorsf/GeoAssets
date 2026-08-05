@@ -35,6 +35,7 @@ public sealed class CreateServiceOrderExecutor(
             Title       = message.Title,
             OrderTypeId = message.OrderTypeId,
             CreatedBy   = message.AgentId,
+            Status      = orderType.InitialStateKey ?? ServiceOrderStatus.Draft,
         };
 
         await writer.AddAsync(order, cancellationToken);

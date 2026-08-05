@@ -14,6 +14,7 @@ internal sealed class OrderTypeRecordConfiguration : IEntityTypeConfiguration<Or
         b.Property(t => t.Id).HasMaxLength(128);
         b.Property(t => t.DisplayName).IsRequired().HasMaxLength(256);
         b.Property(t => t.Description).HasMaxLength(1024);
+        b.Property(t => t.InitialStateKey).HasMaxLength(64);
 
         b.HasMany(t => t.CreationPolicies)
          .WithOne(p => p.OrderType)
@@ -23,6 +24,16 @@ internal sealed class OrderTypeRecordConfiguration : IEntityTypeConfiguration<Or
         b.HasMany(t => t.ActionPermissions)
          .WithOne(p => p.OrderType)
          .HasForeignKey(p => p.OrderTypeId)
+         .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasMany(t => t.States)
+         .WithOne(s => s.OrderType)
+         .HasForeignKey(s => s.OrderTypeId)
+         .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasMany(t => t.Transitions)
+         .WithOne(x => x.OrderType)
+         .HasForeignKey(x => x.OrderTypeId)
          .OnDelete(DeleteBehavior.Cascade);
     }
 }

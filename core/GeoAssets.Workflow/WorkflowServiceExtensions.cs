@@ -108,6 +108,35 @@ public static class WorkflowServiceExtensions
 
     // ── Default order types ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// The workflow graph every built-in order type below uses — identical to the
+    /// global default graph in <see cref="ServiceOrderTransitions"/>, expressed as
+    /// data on each <see cref="OrderType"/> instead of relying on the implicit
+    /// "no States defined" fallback, per XD01-3's per-order-type workflow design.
+    /// </summary>
+    private static List<WorkflowState> DefaultWorkflowStates() =>
+    [
+        new(ServiceOrderStatus.Draft,      "Borrador"),
+        new(ServiceOrderStatus.Pending,    "Pendiente"),
+        new(ServiceOrderStatus.InProgress, "En progreso"),
+        new(ServiceOrderStatus.OnHold,     "En espera"),
+        new(ServiceOrderStatus.Completed,  "Completado", IsSuccess: true),
+        new(ServiceOrderStatus.Cancelled,  "Cancelado"),
+    ];
+
+    private static List<WorkflowTransition> DefaultWorkflowTransitions() =>
+    [
+        new(ServiceOrderStatus.Draft,      ServiceOrderStatus.Pending,    OrderActionType.Dispatch),
+        new(ServiceOrderStatus.Draft,      ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+        new(ServiceOrderStatus.Pending,    ServiceOrderStatus.InProgress, OrderActionType.Execute),
+        new(ServiceOrderStatus.Pending,    ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.OnHold),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed,  OrderActionType.Complete),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+        new(ServiceOrderStatus.OnHold,     ServiceOrderStatus.InProgress),
+        new(ServiceOrderStatus.OnHold,     ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+    ];
+
     private static void SeedDefaultOrderTypes(OrderTypeRegistry registry)
     {
         registry.Register(new OrderType
@@ -121,6 +150,9 @@ public static class WorkflowServiceExtensions
                 new(PolicyKind.Role, "Supervisor"),
                 new(PolicyKind.Role, "Administrator"),
             ],
+            States          = DefaultWorkflowStates(),
+            Transitions     = DefaultWorkflowTransitions(),
+            InitialStateKey = ServiceOrderStatus.Draft,
         });
 
         registry.Register(new OrderType
@@ -133,6 +165,9 @@ public static class WorkflowServiceExtensions
                 new(PolicyKind.Role, "Supervisor"),
                 new(PolicyKind.Role, "Administrator"),
             ],
+            States          = DefaultWorkflowStates(),
+            Transitions     = DefaultWorkflowTransitions(),
+            InitialStateKey = ServiceOrderStatus.Draft,
         });
 
         registry.Register(new OrderType
@@ -146,6 +181,9 @@ public static class WorkflowServiceExtensions
                 new(PolicyKind.Role, "Administrator"),
                 new(PolicyKind.Permission, "serviceorders:create"),
             ],
+            States          = DefaultWorkflowStates(),
+            Transitions     = DefaultWorkflowTransitions(),
+            InitialStateKey = ServiceOrderStatus.Draft,
         });
     }
 }

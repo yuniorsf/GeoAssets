@@ -15,6 +15,7 @@ internal sealed class OrderActionPermissionRecordConfiguration
 
         b.Property(p => p.OrderTypeId).IsRequired().HasMaxLength(128);
         b.Property(p => p.Value).IsRequired().HasMaxLength(256);
+        b.Property(p => p.FromStateKey).HasMaxLength(64);
 
         // Index on (OrderTypeId, Action) — powers per-action permission lookup
         b.HasIndex(p => new { p.OrderTypeId, p.Action });

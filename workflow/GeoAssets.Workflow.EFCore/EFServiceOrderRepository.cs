@@ -28,7 +28,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
     public event EventHandler<IServiceOrder>?                                      OrderAdded;
     public event EventHandler<IServiceOrder>?                                      OrderUpdated;
-    public event EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)>? OrderStatusChanged;
+    public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
     public event EventHandler<string>?                                             OrderDeleted;
 
     // ── Read ──────────────────────────────────────────────────────────────────
@@ -69,8 +69,8 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         return parentId is null ? null : await GetByIdAsync(parentId, ct);
     }
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default)
-        => LoadAllAsync(_db.ServiceOrders.Where(o => o.Status == (int)status), ct);
+    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default)
+        => LoadAllAsync(_db.ServiceOrders.Where(o => o.Status == status), ct);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default)
         => LoadAllAsync(_db.ServiceOrders.Where(o => o.AssignedTo == userId), ct);
@@ -114,14 +114,10 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         if (order is not ServiceOrder so)
             throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
 
-        var previous = await _db.ServiceOrders
-            .AsNoTracking()
-            .Where(o => o.Id == order.Id)
-            .Select(o => (ServiceOrderStatus)o.Status)
-            .FirstOrDefaultAsync(ct);
-
         var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
+
+        var previous = existing.Status;
 
         if (!ServiceOrderTransitions.IsValid(previous, so.Status))
             throw new InvalidServiceOrderTransitionException(previous, so.Status);
@@ -170,10 +166,10 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
-        var previous = (ServiceOrderStatus)record.Status;
+        var previous = record.Status;
 
-        if (entry.ResultingStatus.HasValue && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus.Value))
-            throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus.Value);
+        if (entry.ResultingStatus is not null && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus))
+            throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus);
 
         _db.OrderActionLogs.Add(new OrderActionLogRecord
         {
@@ -182,14 +178,14 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             PerformedBy     = entry.PerformedBy,
             PerformedAt     = entry.PerformedAt,
             Comment         = entry.Comment,
-            ResultingStatus = entry.ResultingStatus.HasValue ? (int)entry.ResultingStatus.Value : null,
+            ResultingStatus = entry.ResultingStatus,
         });
 
-        if (entry.ResultingStatus.HasValue)
+        if (entry.ResultingStatus is not null)
         {
-            record.Status    = (int)entry.ResultingStatus.Value;
+            record.Status    = entry.ResultingStatus;
             record.UpdatedAt = entry.PerformedAt;
-            if (entry.ResultingStatus.Value == ServiceOrderStatus.Completed)
+            if (ServiceOrderTransitions.IsSuccessState(null, entry.ResultingStatus))
                 record.CompletedAt = entry.PerformedAt;
         }
         else
@@ -202,7 +198,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var updated = await GetByIdAsync(orderId, ct);
         OrderUpdated?.Invoke(this, updated!);
 
-        if (entry.ResultingStatus.HasValue && entry.ResultingStatus.Value != previous)
+        if (entry.ResultingStatus is not null && entry.ResultingStatus != previous)
             OrderStatusChanged?.Invoke(this, (updated!, previous));
     }
 
@@ -262,7 +258,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         target.Title           = source.Title;
         target.Description     = source.Description;
         target.OrderTypeId     = source.OrderTypeId;
-        target.Status          = (int)source.Status;
+        target.Status          = source.Status;
         target.Priority        = (int)source.Priority;
         target.AssignedTo      = source.AssignedTo;
         target.UpdatedAt       = source.UpdatedAt;

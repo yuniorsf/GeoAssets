@@ -20,7 +20,7 @@ public interface IServiceOrderReader
 
     // ── Filtered queries ──────────────────────────────────────────────────────
 
-    Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default);
+    Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default);
     Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default);
     Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default);
     Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default);

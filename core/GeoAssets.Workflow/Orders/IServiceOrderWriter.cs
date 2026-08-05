@@ -49,6 +49,6 @@ public interface IServiceOrderWriter
 
     event EventHandler<IServiceOrder>? OrderAdded;
     event EventHandler<IServiceOrder>? OrderUpdated;
-    event EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)>? OrderStatusChanged;
+    event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
     event EventHandler<string>?        OrderDeleted;
 }

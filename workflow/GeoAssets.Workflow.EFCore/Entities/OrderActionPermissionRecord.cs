@@ -13,6 +13,9 @@ internal sealed class OrderActionPermissionRecord
     public int    Kind  { get; set; }
     public string Value { get; set; } = string.Empty;
 
+    /// <summary>See <see cref="Orders.OrderActionPermission.FromStateKey"/>. Null = applies regardless of state.</summary>
+    public string? FromStateKey { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────────
 
     public OrderTypeRecord OrderType { get; set; } = null!;

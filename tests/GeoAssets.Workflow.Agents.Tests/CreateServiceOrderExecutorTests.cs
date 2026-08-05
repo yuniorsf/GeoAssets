@@ -88,4 +88,25 @@ public class CreateServiceOrderExecutorTests
         result.AgentInvocationId.Should().Be("run-1");
         (await writer.GetByIdAsync(result.Order.Id)).Should().NotBeNull();
     }
+
+    [Fact]
+    public async Task HandleAsync_OrderTypeDefinesInitialStateKey_NewOrderStartsThere()
+    {
+        var writer   = new InMemoryServiceOrderRepository();
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id               = "custom-intake",
+            DisplayName      = "Custom Intake",
+            CreationPolicies = [new(PolicyKind.Role, "AutomationAgent")],
+            States           = [new("Intake", "Intake")],
+            InitialStateKey  = "Intake",
+        });
+        var executor = new CreateServiceOrderExecutor(writer, new ServiceOrderRules(), registry, AgentIdentity("AutomationAgent"));
+        var request  = new CreateServiceOrderRequest(AgentId, "custom-intake", "T", "crew-1", DispatchTargetType.Group);
+
+        var result = await executor.HandleAsync(request, NoOpWorkflowContext.Instance);
+
+        result.Order.Status.Should().Be("Intake");
+    }
 }

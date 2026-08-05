@@ -6,7 +6,7 @@ namespace GeoAssets.Workflow.Tests.Orders;
 
 public class ValidatingServiceOrderRepositoryTests
 {
-    private static ServiceOrder Order(string id, ServiceOrderStatus status = ServiceOrderStatus.Draft)
+    private static ServiceOrder Order(string id, string status = ServiceOrderStatus.Draft)
         => new() { Id = id, Status = status };
 
     /// <summary>
@@ -24,7 +24,7 @@ public class ValidatingServiceOrderRepositoryTests
 
         public event EventHandler<IServiceOrder>? OrderAdded;
         public event EventHandler<IServiceOrder>? OrderUpdated;
-        public event EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)>? OrderStatusChanged;
+        public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
         public event EventHandler<string>? OrderDeleted;
 
         public Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default)
@@ -37,7 +37,7 @@ public class ValidatingServiceOrderRepositoryTests
         public Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) => throw new NotImplementedException();
@@ -261,7 +261,7 @@ public class ValidatingServiceOrderRepositoryTests
         await inner.AddAsync(Order("a", ServiceOrderStatus.Draft));
         var sut = new ValidatingServiceOrderRepository(inner);
         var count = 0;
-        EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)> handler = (_, _) => count++;
+        EventHandler<(IServiceOrder Order, string Previous)> handler = (_, _) => count++;
 
         sut.OrderStatusChanged += handler;
         await sut.UpdateAsync(Order("a", ServiceOrderStatus.Pending));
@@ -382,6 +382,79 @@ public class ValidatingServiceOrderRepositoryTests
             new OrderActionLog(OrderActionType.Approve, "supervisor-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Pending));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
+        inner.AppendActionAsyncCallCount.Should().Be(0);
+    }
+
+    // ── Per-OrderType workflow graph validation (XD01-3) ───────────────────────
+
+    private static OrderTypeRegistry RegistryWithCustomGraph()
+    {
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id          = "custom",
+            DisplayName = "Custom",
+            States      = [new("Intake", "Intake"), new("Triaged", "Triaged"), new("Closed", "Closed", IsSuccess: true)],
+            Transitions = [new("Intake", "Triaged"), new("Triaged", "Closed")],
+        });
+        return registry;
+    }
+
+    private static ServiceOrder CustomOrder(string id, string status) =>
+        new() { Id = id, Status = status, OrderTypeId = "custom" };
+
+    [Fact]
+    public async Task UpdateAsync_CustomOrderTypeGraph_AllowsEdgeAbsentFromGlobalGraph()
+    {
+        // "Intake -> Triaged" isn't a state the global graph knows about at all —
+        // proving the custom order type's own graph is what's actually consulted.
+        var inner = new NaiveServiceOrderRepository();
+        await inner.AddAsync(CustomOrder("a", "Intake"));
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithCustomGraph());
+
+        await sut.UpdateAsync(CustomOrder("a", "Triaged"));
+
+        inner.UpdateAsyncCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_CustomOrderTypeGraph_RejectsEdgeTheGraphDoesNotDefine()
+    {
+        var inner = new NaiveServiceOrderRepository();
+        await inner.AddAsync(CustomOrder("a", "Intake"));
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithCustomGraph());
+
+        // Skips straight to Closed — no such edge in the custom graph.
+        var act = () => sut.UpdateAsync(CustomOrder("a", "Closed"));
+
+        await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
+        inner.UpdateAsyncCallCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AppendActionAsync_CustomOrderTypeGraph_AllowsEdgeAbsentFromGlobalGraph()
+    {
+        var inner = new NaiveServiceOrderRepository();
+        await inner.AddAsync(CustomOrder("a", "Intake"));
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithCustomGraph());
+
+        await sut.AppendActionAsync("a",
+            new OrderActionLog(OrderActionType.Approve, "triager-1", DateTime.UtcNow, ResultingStatus: "Triaged"));
+
+        inner.AppendActionAsyncCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AppendActionAsync_CustomOrderTypeGraph_RejectsEdgeTheGraphDoesNotDefine()
+    {
+        var inner = new NaiveServiceOrderRepository();
+        await inner.AddAsync(CustomOrder("a", "Intake"));
+        var sut = new ValidatingServiceOrderRepository(inner, RegistryWithCustomGraph());
+
+        var act = () => sut.AppendActionAsync("a",
+            new OrderActionLog(OrderActionType.Complete, "triager-1", DateTime.UtcNow, ResultingStatus: "Closed"));
+
+        await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
         inner.AppendActionAsyncCallCount.Should().Be(0);
     }
 

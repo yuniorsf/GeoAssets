@@ -31,6 +31,8 @@ public class ServiceOrderDbContext(DbContextOptions<ServiceOrderDbContext> optio
     internal DbSet<OrderTypeRecord>             OrderTypes         => Set<OrderTypeRecord>();
     internal DbSet<OrderCreationPolicyRecord>   CreationPolicies   => Set<OrderCreationPolicyRecord>();
     internal DbSet<OrderActionPermissionRecord> ActionPermissions  => Set<OrderActionPermissionRecord>();
+    internal DbSet<OrderTypeStateRecord>        OrderTypeStates    => Set<OrderTypeStateRecord>();
+    internal DbSet<OrderTypeTransitionRecord>   OrderTypeTransitions => Set<OrderTypeTransitionRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

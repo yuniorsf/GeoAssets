@@ -65,7 +65,7 @@ public sealed class ServiceOrderRules
     {
         _rules =
         [
-            new CreatorRule(),
+            new CreatorRule(orderTypeRegistry),
             new AssigneeRule(),
             new DispatchRecipientRule(recipientRoleGrants),
             new OrderTypeActionPermissionRule(orderTypeRegistry),
@@ -217,10 +217,13 @@ public sealed class ServiceOrderRules
 // ── Default built-in rules ─────────────────────────────────────────────────────
 
 /// <summary>
-/// The creator of an order may always view it, annotate it, and cancel it
-/// while it is still in Draft or Pending state.
+/// The creator of an order may always view it, annotate it, and cancel it while a
+/// Cancel-triggering transition still exists from its current state (see
+/// <see cref="ServiceOrderTransitions.HasTransitionFor"/> — for order types with no
+/// custom workflow graph this is exactly "still Draft or Pending", the historical
+/// behavior; for a custom graph it's derived from that type's own transitions).
 /// </summary>
-file sealed class CreatorRule : IServiceOrderRule
+file sealed class CreatorRule(OrderTypeRegistry? orderTypeRegistry = null) : IServiceOrderRule
 {
     public string Name => "CreatorRule";
 
@@ -232,9 +235,10 @@ file sealed class CreatorRule : IServiceOrderRule
         {
             OrderActionType.View     => true,
             OrderActionType.Annotate => true,
-            OrderActionType.Cancel   => ctx.Order.Status is
-                                        ServiceOrderStatus.Draft or
-                                        ServiceOrderStatus.Pending
+            OrderActionType.Cancel   => ServiceOrderTransitions.HasTransitionFor(
+                                            orderTypeRegistry?.Find(ctx.Order.OrderTypeId),
+                                            ctx.Order.Status,
+                                            OrderActionType.Cancel)
                                         ? true : null,
             _ => null,
         };
@@ -384,7 +388,9 @@ file sealed class OrderTypeActionPermissionRule(OrderTypeRegistry? registry) : I
         var orderType = registry?.Find(ctx.Order.OrderTypeId);
         if (orderType is null) return null;
 
-        var permissions = orderType.ActionPermissions.Where(p => p.Action == action).ToList();
+        var permissions = orderType.ActionPermissions
+            .Where(p => p.Action == action && (p.FromStateKey is null || p.FromStateKey == ctx.Order.Status))
+            .ToList();
         if (permissions.Count == 0) return null;
 
         return permissions.Any(p => ServiceOrderRules.SatisfiesPolicy(ctx.Principal, p.Kind, p.Value));

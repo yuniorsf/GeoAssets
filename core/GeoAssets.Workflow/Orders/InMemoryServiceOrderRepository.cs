@@ -10,7 +10,7 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
     public event EventHandler<IServiceOrder>?                                       OrderAdded;
     public event EventHandler<IServiceOrder>?                                       OrderUpdated;
-    public event EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)>?  OrderStatusChanged;
+    public event EventHandler<(IServiceOrder Order, string Previous)>?             OrderStatusChanged;
     public event EventHandler<string>?                                              OrderDeleted;
 
     // ── Read ──────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
         }
     }
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default)
+    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default)
     {
         lock (_lock) { return Task.FromResult(Materialize(_store.Values.Where(o => o.Status == status))); }
     }
@@ -138,7 +138,7 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
             throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
 
         ServiceOrder existing;
-        ServiceOrderStatus previous;
+        string previous;
         lock (_lock)
         {
             existing = RequireConcrete(order.Id);
@@ -192,22 +192,22 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
     public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
         ServiceOrder order;
-        ServiceOrderStatus previous;
+        string previous;
         lock (_lock)
         {
             order = RequireConcrete(orderId);
             previous = order.Status;
 
-            if (entry.ResultingStatus.HasValue && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus.Value))
-                throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus.Value);
+            if (entry.ResultingStatus is not null && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus))
+                throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus);
 
             order.ActionLog.Add(entry);
 
-            if (entry.ResultingStatus.HasValue)
+            if (entry.ResultingStatus is not null)
             {
-                order.Status    = entry.ResultingStatus.Value;
+                order.Status    = entry.ResultingStatus;
                 order.UpdatedAt = entry.PerformedAt;
-                if (entry.ResultingStatus.Value == ServiceOrderStatus.Completed)
+                if (ServiceOrderTransitions.IsSuccessState(null, entry.ResultingStatus))
                     order.CompletedAt = entry.PerformedAt;
             }
             else
@@ -218,7 +218,7 @@ public sealed class InMemoryServiceOrderRepository : IServiceOrderRepository
 
         OrderUpdated?.Invoke(this, order);
 
-        if (entry.ResultingStatus.HasValue && entry.ResultingStatus.Value != previous)
+        if (entry.ResultingStatus is not null && entry.ResultingStatus != previous)
             OrderStatusChanged?.Invoke(this, (order, previous));
 
         return Task.CompletedTask;

@@ -15,8 +15,8 @@ namespace GeoAssets.Workflow.Notifications;
 public sealed record OrderStateChangedEvent(
     string                              OrderId,
     string                              OrderTypeId,
-    Orders.ServiceOrderStatus           PreviousStatus,
-    Orders.ServiceOrderStatus           NewStatus,
+    string                              PreviousStatus,
+    string                              NewStatus,
     string                              PerformedBy,
     DateTimeOffset                      OccurredAt,
     string?                             CorrelationId = null,
@@ -26,8 +26,8 @@ public sealed record OrderStateChangedEvent(
     public static OrderStateChangedEvent Create(
         string                              orderId,
         string                              orderTypeId,
-        Orders.ServiceOrderStatus           previous,
-        Orders.ServiceOrderStatus           next,
+        string                              previous,
+        string                              next,
         string                              performedBy,
         string?                             correlationId = null,
         IReadOnlyDictionary<string, string>? metadata     = null)

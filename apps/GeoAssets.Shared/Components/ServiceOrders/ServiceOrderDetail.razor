@@ -197,7 +197,7 @@
         await OnChanged.InvokeAsync();
     }
 
-    private async Task RecordAction(OrderActionType action, ServiceOrderStatus resultingStatus)
+    private async Task RecordAction(OrderActionType action, string resultingStatus)
     {
         if (Order is null) return;
 

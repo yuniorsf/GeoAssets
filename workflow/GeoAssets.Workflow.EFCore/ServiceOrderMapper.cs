@@ -36,7 +36,7 @@ internal static class ServiceOrderMapper
             Title           = order.Title,
             Description     = order.Description,
             OrderTypeId     = order.OrderTypeId,
-            Status          = (int)order.Status,
+            Status          = order.Status,
             Priority        = (int)order.Priority,
             CreatedBy       = order.CreatedBy,
             AssignedTo      = order.AssignedTo,
@@ -72,7 +72,7 @@ internal static class ServiceOrderMapper
         PerformedBy       = a.PerformedBy,
         PerformedAt       = a.PerformedAt,
         Comment           = a.Comment,
-        ResultingStatus   = a.ResultingStatus.HasValue ? (int)a.ResultingStatus.Value : null,
+        ResultingStatus   = a.ResultingStatus,
         ActorKind         = (int)a.ActorKind,
         AgentInvocationId = a.AgentInvocationId,
     };
@@ -117,7 +117,7 @@ internal static class ServiceOrderMapper
             Title         = record.Title,
             Description   = record.Description,
             OrderTypeId   = record.OrderTypeId,
-            Status        = (ServiceOrderStatus)record.Status,
+            Status        = record.Status,
             Priority      = (ServiceOrderPriority)record.Priority,
             CreatedBy     = record.CreatedBy,
             AssignedTo    = record.AssignedTo,
@@ -157,7 +157,7 @@ internal static class ServiceOrderMapper
                 a.PerformedBy,
                 a.PerformedAt,
                 a.Comment,
-                a.ResultingStatus.HasValue ? (ServiceOrderStatus)a.ResultingStatus.Value : null)
+                a.ResultingStatus)
             {
                 ActorKind         = (ActorKind)a.ActorKind,
                 AgentInvocationId = a.AgentInvocationId,

@@ -38,7 +38,63 @@ public sealed class OrderType
     /// applied on every write by <see cref="ValidatingServiceOrderRepository"/>.
     /// </summary>
     public string? AttributesSchemaJson { get; init; }
+
+    /// <summary>
+    /// The states this order type's workflow graph can be in. Empty means "use the
+    /// global default graph" (<see cref="ServiceOrderTransitions"/>'s built-in
+    /// Draft/Pending/InProgress/OnHold/Completed/Cancelled dictionary) — same
+    /// "empty = unrestricted/default" convention as <see cref="CreationPolicies"/> and
+    /// <see cref="AttributesSchemaJson"/>. When non-empty, <see cref="Transitions"/>
+    /// defines the only legal moves between them (see
+    /// <see cref="ServiceOrderTransitions.IsValid(OrderType?, string, string)"/>).
+    /// </summary>
+    public List<WorkflowState> States { get; init; } = [];
+
+    /// <summary>
+    /// The legal edges between <see cref="States"/>. Only consulted when
+    /// <see cref="States"/> is non-empty. Carries no permission data — authorization
+    /// stays entirely <see cref="ServiceOrderRules"/>'s job (extended with
+    /// <see cref="OrderActionPermission.FromStateKey"/> for per-state overrides), not a
+    /// second, weaker mechanism duplicated here.
+    /// </summary>
+    public List<WorkflowTransition> Transitions { get; init; } = [];
+
+    /// <summary>
+    /// The state a new order of this type starts in. Null means "use
+    /// <see cref="ServiceOrderStatus.Draft"/>" (<see cref="ServiceOrder.Status"/>'s own
+    /// default), so leaving this unset changes nothing for order types that don't
+    /// define a custom graph.
+    /// </summary>
+    public string? InitialStateKey { get; init; }
 }
+
+/// <summary>
+/// One node in an <see cref="OrderType"/>'s workflow graph.
+/// </summary>
+/// <param name="Key">Stable state key, stored as <see cref="ServiceOrder.Status"/>.</param>
+/// <param name="DisplayName">Human-readable label for UI presentation.</param>
+/// <param name="IsSuccess">
+/// Whether reaching this state means the order finished successfully — drives
+/// <see cref="ServiceOrder.CompletedAt"/> stamping the same way the literal
+/// <see cref="ServiceOrderStatus.Completed"/> comparison does for order types with
+/// no custom graph.
+/// </param>
+public sealed record WorkflowState(string Key, string DisplayName, bool IsSuccess = false);
+
+/// <summary>
+/// One legal edge between two <see cref="WorkflowState"/>s in an
+/// <see cref="OrderType"/>'s workflow graph.
+/// </summary>
+/// <param name="FromStateKey">Source state key.</param>
+/// <param name="ToStateKey">Destination state key.</param>
+/// <param name="TriggerAction">
+/// The <see cref="OrderActionType"/> that normally drives this edge, when there is
+/// one unambiguous action for it (e.g. <see cref="OrderActionType.Cancel"/> for a
+/// move to a cancelled state). Null when no single action maps to this edge (e.g.
+/// suspend/resume edges with no dedicated action today) — the edge is still legal,
+/// it's just not derivable from an action alone.
+/// </param>
+public sealed record WorkflowTransition(string FromStateKey, string ToStateKey, OrderActionType? TriggerAction = null);
 
 // ── Supporting value types ─────────────────────────────────────────────────────
 
@@ -52,7 +108,13 @@ public sealed record OrderCreationPolicy(PolicyKind Kind, string Value);
 /// <summary>
 /// Maps an action to a required role or permission code for a specific order type.
 /// </summary>
-public sealed record OrderActionPermission(OrderActionType Action, PolicyKind Kind, string Value);
+/// <param name="FromStateKey">
+/// When set, this permission only applies while the order is in this state — e.g.
+/// "Approve requires role X, but only from the Pending state." Null (the default)
+/// applies regardless of state, matching every permission's behavior before this
+/// parameter existed.
+/// </param>
+public sealed record OrderActionPermission(OrderActionType Action, PolicyKind Kind, string Value, string? FromStateKey = null);
 
 /// <summary>The dimension along which a policy requirement is expressed.</summary>
 public enum PolicyKind

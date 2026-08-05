@@ -35,7 +35,7 @@ public sealed class ValidatingServiceOrderRepository(
 
     // ── Filtered queries (pass-through) ────────────────────────────────────────
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default)
+    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default)
         => inner.GetByStatusAsync(status, ct);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default)
@@ -69,7 +69,8 @@ public sealed class ValidatingServiceOrderRepository(
         var existing = await inner.GetByIdAsync(order.Id, ct)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
-        if (!ServiceOrderTransitions.IsValid(existing.Status, order.Status))
+        var orderType = orderTypeRegistry?.Find(order.OrderTypeId);
+        if (!ServiceOrderTransitions.IsValid(orderType, existing.Status, order.Status))
             throw new InvalidServiceOrderTransitionException(existing.Status, order.Status);
 
         await inner.UpdateAsync(order, ct);
@@ -93,13 +94,14 @@ public sealed class ValidatingServiceOrderRepository(
 
     public async Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
-        if (entry.ResultingStatus.HasValue)
+        if (entry.ResultingStatus is { } resultingStatus)
         {
             var existing = await inner.GetByIdAsync(orderId, ct)
                 ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
-            if (!ServiceOrderTransitions.IsValid(existing.Status, entry.ResultingStatus.Value))
-                throw new InvalidServiceOrderTransitionException(existing.Status, entry.ResultingStatus.Value);
+            var orderType = orderTypeRegistry?.Find(existing.OrderTypeId);
+            if (!ServiceOrderTransitions.IsValid(orderType, existing.Status, resultingStatus))
+                throw new InvalidServiceOrderTransitionException(existing.Status, resultingStatus);
         }
 
         await inner.AppendActionAsync(orderId, entry, ct);
@@ -122,7 +124,7 @@ public sealed class ValidatingServiceOrderRepository(
         remove => inner.OrderUpdated -= value;
     }
 
-    public event EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)>? OrderStatusChanged
+    public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged
     {
         add    => inner.OrderStatusChanged += value;
         remove => inner.OrderStatusChanged -= value;

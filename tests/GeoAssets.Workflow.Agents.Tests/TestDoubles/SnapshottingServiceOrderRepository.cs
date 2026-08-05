@@ -66,8 +66,8 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
     {
         var order = _store[orderId];
         order.ActionLog.Add(entry);
-        if (entry.ResultingStatus.HasValue)
-            order.Status = entry.ResultingStatus.Value;
+        if (entry.ResultingStatus is not null)
+            order.Status = entry.ResultingStatus;
         return Task.CompletedTask;
     }
 
@@ -94,7 +94,7 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
             ? (IServiceOrder?)Clone(_store[child.ParentOrderId])
             : null);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(ServiceOrderStatus status, CancellationToken ct = default) =>
+    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.Status == status).Select(Clone)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) =>
@@ -116,6 +116,6 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
 
     public event EventHandler<IServiceOrder>? OrderAdded;
     public event EventHandler<IServiceOrder>? OrderUpdated;
-    public event EventHandler<(IServiceOrder Order, ServiceOrderStatus Previous)>? OrderStatusChanged;
+    public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
     public event EventHandler<string>? OrderDeleted;
 }

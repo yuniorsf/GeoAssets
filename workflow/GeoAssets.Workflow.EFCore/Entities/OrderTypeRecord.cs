@@ -11,4 +11,8 @@ internal sealed class OrderTypeRecord
 
     public List<OrderCreationPolicyRecord>  CreationPolicies  { get; set; } = [];
     public List<OrderActionPermissionRecord> ActionPermissions { get; set; } = [];
+    public List<OrderTypeStateRecord>       States            { get; set; } = [];
+    public List<OrderTypeTransitionRecord>  Transitions       { get; set; } = [];
+
+    public string? InitialStateKey { get; set; }
 }

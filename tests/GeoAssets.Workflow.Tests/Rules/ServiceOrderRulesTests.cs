@@ -20,7 +20,7 @@ public class ServiceOrderRulesTests
         string createdBy = "",
         string? assignedTo = null,
         string orderTypeId = "",
-        ServiceOrderStatus status = ServiceOrderStatus.Draft)
+        string status = ServiceOrderStatus.Draft)
         => new() { CreatedBy = createdBy, AssignedTo = assignedTo, OrderTypeId = orderTypeId, Status = status };
 
     private sealed class DelegateCreationRule(Func<WorkflowPrincipal, OrderType, bool?> fn) : IOrderCreationRule
@@ -244,6 +244,49 @@ public class ServiceOrderRulesTests
     {
         var rules = new ServiceOrderRules();
         var order = Order(createdBy: "u1", status: ServiceOrderStatus.InProgress);
+
+        rules.Evaluate(Principal(), OrderActionType.Cancel, order).Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_Creator_CanCancel_FromCustomOrderTypeGraphState_NotDraftOrPending()
+    {
+        // A custom order type whose graph allows Cancel from "UnderReview" — a state
+        // that isn't Draft or Pending, proving CreatorRule derives self-cancel
+        // eligibility from the order type's own graph rather than the hardcoded
+        // Draft/Pending check the global-graph fallback still uses.
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id          = "custom",
+            DisplayName = "Custom",
+            States      = [new("UnderReview", "Under Review"), new("Cancelled", "Cancelled")],
+            Transitions = [new("UnderReview", "Cancelled", OrderActionType.Cancel)],
+        });
+
+        var rules = new ServiceOrderRules(registry);
+        var order = Order(createdBy: "u1", orderTypeId: "custom", status: "UnderReview");
+
+        rules.Evaluate(Principal(), OrderActionType.Cancel, order).Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_Creator_CannotCancel_WhenCustomOrderTypeGraphHasNoCancelTransitionFromCurrentState()
+    {
+        // Same custom graph, but the order sits in a state the graph gives no
+        // Cancel edge from — must be denied even though the global fallback's
+        // hardcoded Draft/Pending check would otherwise be irrelevant here.
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id          = "custom",
+            DisplayName = "Custom",
+            States      = [new("UnderReview", "Under Review"), new("Approved", "Approved"), new("Cancelled", "Cancelled")],
+            Transitions = [new("UnderReview", "Cancelled", OrderActionType.Cancel)],
+        });
+
+        var rules = new ServiceOrderRules(registry);
+        var order = Order(createdBy: "u1", orderTypeId: "custom", status: "Approved");
 
         rules.Evaluate(Principal(), OrderActionType.Cancel, order).Allowed.Should().BeFalse();
     }
@@ -541,6 +584,46 @@ public class ServiceOrderRulesTests
         // Supervisor role alone would normally grant Approve (RoleBasedActionRule) —
         // the unsatisfied ActionPermissions entry must override that to a deny.
         rules.Evaluate(Principal(roles: ["Supervisor"]), OrderActionType.Approve, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_ActionPermissionWithFromStateKey_AppliesOnlyInThatState()
+    {
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id = "emergency-repair", DisplayName = "Emergency",
+            ActionPermissions =
+            [
+                new(OrderActionType.Approve, PolicyKind.Permission, "emergency:approve", FromStateKey: ServiceOrderStatus.Pending),
+            ],
+        });
+        var rules = new ServiceOrderRules(registry);
+        var principal = Principal(permissions: ["emergency:approve"]);
+
+        rules.Evaluate(principal, OrderActionType.Approve, Order(orderTypeId: "emergency-repair", status: ServiceOrderStatus.Pending))
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_ActionPermissionWithFromStateKey_AbstainsOutsideThatState()
+    {
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType
+        {
+            Id = "emergency-repair", DisplayName = "Emergency",
+            ActionPermissions =
+            [
+                new(OrderActionType.Approve, PolicyKind.Permission, "emergency:approve", FromStateKey: ServiceOrderStatus.Pending),
+            ],
+        });
+        var rules = new ServiceOrderRules(registry);
+
+        // Order is Draft, not Pending — the FromStateKey-scoped permission doesn't apply here,
+        // so evaluation falls through to defaults; no role/permission grants Approve by default,
+        // so it's denied (fail-closed), not merely "not overridden".
+        rules.Evaluate(Principal(permissions: ["emergency:approve"]), OrderActionType.Approve, Order(orderTypeId: "emergency-repair", status: ServiceOrderStatus.Draft))
             .Allowed.Should().BeFalse();
     }
 

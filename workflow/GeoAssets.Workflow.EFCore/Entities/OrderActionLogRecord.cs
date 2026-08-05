@@ -9,7 +9,7 @@ internal sealed class OrderActionLogRecord
     public string PerformedBy    { get; set; } = string.Empty;
     public DateTime PerformedAt  { get; set; }
     public string?  Comment      { get; set; }
-    public int?     ResultingStatus { get; set; }   // ServiceOrderStatus? stored as int
+    public string?  ResultingStatus { get; set; }   // status state key
     public int      ActorKind    { get; set; }   // ActorKind enum stored as int
     public string?  AgentInvocationId { get; set; }
 
