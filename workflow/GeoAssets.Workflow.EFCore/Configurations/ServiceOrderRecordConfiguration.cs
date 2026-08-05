@@ -19,9 +19,14 @@ internal sealed class ServiceOrderRecordConfiguration : IEntityTypeConfiguration
         b.Property(o => o.AssignedTo).HasMaxLength(256);
         b.Property(o => o.ParentOrderId).HasMaxLength(36);
         b.Property(o => o.CreatedAt).IsRequired();
-        b.Property(o => o.AttributesJson).IsRequired().HasColumnType("nvarchar(max)");
-        b.Property(o => o.FeatureIdsJson).IsRequired().HasColumnType("nvarchar(max)");
-        b.Property(o => o.SelectionSpecJson).HasColumnType("nvarchar(max)");
+        // No HasColumnType/HasMaxLength here — an unbounded string already maps to each
+        // provider's own "no length limit" text type by convention (SQL Server:
+        // nvarchar(max); SQLite: TEXT; Npgsql: text). An explicit "nvarchar(max)" is
+        // redundant on SQL Server and invalid syntax on SQLite (breaks EnsureCreated()),
+        // which this project's test suite (GeoAssets.Workflow.EFCore.Tests) now exercises.
+        b.Property(o => o.AttributesJson).IsRequired();
+        b.Property(o => o.FeatureIdsJson).IsRequired();
+        b.Property(o => o.SelectionSpecJson);
         b.Property(o => o.RowVersion).IsRowVersion();
 
         // Self-referencing hierarchy

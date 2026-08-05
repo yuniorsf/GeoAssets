@@ -75,6 +75,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Agents",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.Agents.Tests", "tests\GeoAssets.Workflow.Agents.Tests\GeoAssets.Workflow.Agents.Tests.csproj", "{96360C07-DAA6-4BB6-A8CD-9592889A2988}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Workflow.EFCore.Tests", "tests\GeoAssets.Workflow.EFCore.Tests\GeoAssets.Workflow.EFCore.Tests.csproj", "{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -409,6 +411,18 @@ Global
 		{96360C07-DAA6-4BB6-A8CD-9592889A2988}.Release|x64.Build.0 = Release|Any CPU
 		{96360C07-DAA6-4BB6-A8CD-9592889A2988}.Release|x86.ActiveCfg = Release|Any CPU
 		{96360C07-DAA6-4BB6-A8CD-9592889A2988}.Release|x86.Build.0 = Release|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Debug|x64.Build.0 = Debug|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Debug|x86.Build.0 = Debug|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Release|x64.ActiveCfg = Release|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Release|x64.Build.0 = Release|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Release|x86.ActiveCfg = Release|Any CPU
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -443,5 +457,6 @@ Global
 		{E8A15ADD-6975-466C-9E8D-2FA1AE32ABBC} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{C247E50E-7408-471C-973D-B910FE5E8006} = {E82C3CE9-5C08-2220-110F-95EADBAB7019}
 		{96360C07-DAA6-4BB6-A8CD-9592889A2988} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{7312E23B-1A6A-472F-A2AC-5EF8F0164EEB} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 	EndGlobalSection
 EndGlobal

@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Workflow.EFCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../core/GeoAssets.Core/GeoAssets.Core.csproj" />
     <ProjectReference Include="../../core/GeoAssets.Workflow/GeoAssets.Workflow.csproj" />
   </ItemGroup>
