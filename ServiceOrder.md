@@ -798,8 +798,31 @@ accessors, §6), `ServiceOrderAttributeValidator` (schema validation, §14), and
 tests run against the **real MAF runtime** (`InProcessExecution.RunAsync`), not a
 mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
-rests on. The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
-`GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Commands.Tests`) runs **505 tests**.
+rests on.
+
+`GeoAssets.Workflow.EFCore.Tests` (45 test cases) covers `EFServiceOrderRepository`
+and `EFOrderTypeRepository` (all CRUD, hierarchy, filtered queries, the
+`ServiceOrderConcurrencyException` conflict path, and cascade-delete of an order
+type's child collections) against a **real SQLite in-memory database**
+(`Microsoft.EntityFrameworkCore.Sqlite`, one held-open connection per test so
+multiple `DbContext` instances can share the same schema/data) — not the
+`Microsoft.EntityFrameworkCore.InMemory` provider, which does not enforce
+optimistic-concurrency tokens and would silently let the concurrency test pass for
+the wrong reason. SQLite has no native auto-updating rowversion column type, so the
+test-only `SqliteFixture`/`SqliteTestDbContext` add a default value and an
+`AFTER UPDATE` trigger via raw SQL to make `ServiceOrderRecord.RowVersion` actually
+change on every write, purely in the test harness — production's
+`ServiceOrderRecordConfiguration` is unmodified apart from dropping the redundant,
+SQLite-incompatible `HasColumnType("nvarchar(max)")` calls on the JSON columns
+(EF already defaults an unbounded string to each provider's own unlimited-text type,
+so this was a no-op on SQL Server and a syntax error under SQLite). The EFCore test
+project references its production counterpart via `InternalsVisibleTo`, letting
+`SqliteTestDbContext` layer that one SQLite-only default onto the otherwise-internal
+`ServiceOrderRecord` entity without changing its visibility.
+
+The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
+`GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
+`GeoAssets.Commands.Tests`) runs **550 tests**.
 
 **Gap:** `GeoAssets.Workflow.EFCore` (`EFServiceOrderRepository`,
 `EFOrderTypeRepository`, the mappers, `ServiceOrderDbContext` + configurations,
@@ -918,24 +941,29 @@ either — also a separate, unscheduled follow-up.
 ## 16. Known limitations
 
 Resolved since the last pass — kept here only as a pointer to where each is now
-documented: not wired into a host UI (§15, Blazor Web only), `FeatureSelectionSpec.Parameters`
-type fidelity after reload (§6), no optimistic concurrency signal at all (§7,
-though see the narrower scope noted there), **dispatch routing to an
-organization/group only granting View/Annotate** — `DispatchRecipientRule` now
-grants `Accept` unconditionally to any dispatch recipient plus role-gated
-Assign/Dispatch/Execute/Reject via `recipientRoleGrants` (§5), closed by
-[XD01-4](https://xdicor.atlassian.net/browse/XD01-4) — and **one hardcoded,
-global status graph shared by every order type** — `Status` is now a plain
-`string` state key, and an `OrderType` can define its own
-`States`/`Transitions`/`InitialStateKey` graph that fully replaces the global
-default for that type (§4), closed by
-[XD01-3](https://xdicor.atlassian.net/browse/XD01-3). What's still genuinely open:
+documented:
+
+- Not wired into a host UI (§15, Blazor Web only); `FeatureSelectionSpec.Parameters`
+  type fidelity after reload (§6); no optimistic concurrency signal at all (§7,
+  though see the narrower scope noted there).
+- **Dispatch routing to an organization/group only granting View/Annotate** —
+  `DispatchRecipientRule` now grants `Accept` unconditionally to any dispatch
+  recipient plus role-gated Assign/Dispatch/Execute/Reject via `recipientRoleGrants`
+  (§5), closed by [XD01-4](https://xdicor.atlassian.net/browse/XD01-4).
+- **One hardcoded, global status graph shared by every order type** — `Status` is
+  now a plain `string` state key, and an `OrderType` can define its own
+  `States`/`Transitions`/`InitialStateKey` graph that fully replaces the global
+  default for that type (§4), closed by [XD01-3](https://xdicor.atlassian.net/browse/XD01-3).
+- **`GeoAssets.Workflow.EFCore` had zero automated test coverage** —
+  `GeoAssets.Workflow.EFCore.Tests` now covers `EFServiceOrderRepository`/
+  `EFOrderTypeRepository` against a real SQLite database (§13), closed by
+  [XD01-9](https://xdicor.atlassian.net/browse/XD01-9).
+
+What's still genuinely open:
 
 - **`GeoFeature.CustomAttributes` has no schema validation.** Same gap §14 closed
   for `ServiceOrder.Attributes`, but bigger in scope — see §14's "Scope" note.
   Tracked as [XD01-10](https://xdicor.atlassian.net/browse/XD01-10).
-- **`GeoAssets.Workflow.EFCore` has zero automated test coverage** — see §13.
-  Tracked as [XD01-9](https://xdicor.atlassian.net/browse/XD01-9).
 - **The concurrency check (§7) only covers races within the EF repository's own
   read-then-save window**, not a caller holding a stale copy across a longer gap —
   see §7 for the distinction. The `RowVersion` detection itself is done
