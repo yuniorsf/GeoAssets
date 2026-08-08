@@ -29,9 +29,10 @@ az login   # if not already
 ```
 
 This requires the `Key Vault Secrets User` (or `Secrets Officer`) role on
-`geoassets-otel-kv`. It fills in `NEW_RELIC_LICENSE_KEY` and
-`AZURE_MONITOR_CONNECTION_STRING` — `DD_API_KEY`/`DD_SITE` still need to be
-set by hand until a Datadog secret exists in the vault too.
+`geoassets-otel-kv`. It fills in `NEW_RELIC_LICENSE_KEY`,
+`AZURE_MONITOR_CONNECTION_STRING`, `DD_API_KEY`, and `DD_SITE` — all four
+vendor credentials, once their secrets exist in the vault (see below for
+the Datadog and Azure Monitor one-time setup steps).
 
 #### Creating the Azure Monitor connection string secret (one-time setup)
 
@@ -84,6 +85,52 @@ recreated or rotated.
 Treat the connection string like any other secret: never paste it directly
 into `otel-collector-config.yaml`, commit it, or log it — it grants write
 access to the Application Insights resource's ingestion endpoint.
+
+#### Adding the Datadog secrets (one-time setup)
+
+Run this once per Datadog organization, by whoever holds an `Admin` (or
+`API Keys` capability) role in Datadog and `Key Vault Secrets Officer` on
+`geoassets-otel-kv`. It only needs to be repeated if the API key is
+rotated or revoked.
+
+1. **Obtain the Datadog API key.** This is a Datadog-side credential, not
+   an Azure resource, so there's no `az` equivalent — create or copy it
+   from the Datadog UI: **Organization Settings → API Keys**. Note the
+   **site** your org is on too (shown in the URL, e.g. `datadoghq.com`,
+   `datadoghq.eu`, `us3.datadoghq.com`).
+
+2. **Store the API key as a Key Vault secret**:
+   ```bash
+   az login   # if not already
+
+   az keyvault secret set \
+     --vault-name geoassets-otel-kv \
+     --name DD-API-KEY \
+     --value "<API key from step 1>"
+   ```
+
+3. **Store the site alongside it**, so `fetch-secrets.sh` can pull both
+   with the same pattern (not sensitive on its own, but kept in the vault
+   for a uniform fetch flow):
+   ```bash
+   az keyvault secret set \
+     --vault-name geoassets-otel-kv \
+     --name DD-SITE \
+     --value "<your Datadog site, e.g. datadoghq.com>"
+   ```
+
+4. **Verify** both are readable with your own identity:
+   ```bash
+   az keyvault secret show --vault-name geoassets-otel-kv --name DD-API-KEY --query value -o tsv
+   az keyvault secret show --vault-name geoassets-otel-kv --name DD-SITE --query value -o tsv
+   ```
+
+5. **Pull them into `.env`** — `./fetch-secrets.sh` now does this
+   automatically alongside New Relic and Azure Monitor.
+
+Treat the API key like any other secret: never paste it directly into
+`otel-collector-config.yaml`, commit it, or log it — it grants write
+access to your Datadog org's intake API.
 
 The collector listens on:
 - `4317` — OTLP gRPC

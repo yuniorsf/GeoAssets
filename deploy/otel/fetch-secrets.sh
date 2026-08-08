@@ -39,3 +39,31 @@ else
 fi
 
 echo "AZURE_MONITOR_CONNECTION_STRING pulled from Key Vault '$VAULT_NAME' into .env"
+
+DD_API_KEY=$(az keyvault secret show \
+  --vault-name "$VAULT_NAME" \
+  --name DD-API-KEY \
+  --query value -o tsv)
+
+if grep -q '^DD_API_KEY=' .env; then
+  sed -i.bak "s|^DD_API_KEY=.*|DD_API_KEY=${DD_API_KEY}|" .env
+  rm .env.bak
+else
+  echo "DD_API_KEY=${DD_API_KEY}" >> .env
+fi
+
+echo "DD_API_KEY pulled from Key Vault '$VAULT_NAME' into .env"
+
+DD_SITE=$(az keyvault secret show \
+  --vault-name "$VAULT_NAME" \
+  --name DD-SITE \
+  --query value -o tsv)
+
+if grep -q '^DD_SITE=' .env; then
+  sed -i.bak "s|^DD_SITE=.*|DD_SITE=${DD_SITE}|" .env
+  rm .env.bak
+else
+  echo "DD_SITE=${DD_SITE}" >> .env
+fi
+
+echo "DD_SITE pulled from Key Vault '$VAULT_NAME' into .env"
