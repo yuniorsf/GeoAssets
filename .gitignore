@@ -47,3 +47,6 @@ vscode-profile-*
 
 # Claude Code local config (per-developer)
 .claude/settings.local.json
+
+# Local secrets (vendor credentials for deploy/otel Collector)
+deploy/otel/.env

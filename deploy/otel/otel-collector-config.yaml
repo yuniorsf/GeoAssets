@@ -1,0 +1,41 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  # New Relic — OTLP/HTTP endpoint, license key passed as the `api-key` header.
+  # US endpoint shown; EU accounts must use otlp.eu01.nr-data.net:4318.
+  otlphttp/newrelic:
+    endpoint: https://otlp.nr-data.net:4318
+    headers:
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+
+  # Datadog — native exporter, not OTLP. Site controls the regional intake
+  # (datadoghq.com, datadoghq.eu, us3.datadoghq.com, ...).
+  datadog:
+    api:
+      key: ${env:DD_API_KEY}
+      site: ${env:DD_SITE}
+
+  # Azure Monitor — connection string carries both the ingestion endpoint
+  # and the instrumentation key.
+  azuremonitor:
+    connection_string: ${env:AZURE_MONITOR_CONNECTION_STRING}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/newrelic, datadog, azuremonitor]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/newrelic, datadog, azuremonitor]
