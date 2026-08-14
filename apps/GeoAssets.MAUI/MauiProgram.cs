@@ -38,6 +38,7 @@ public static class MauiProgram
 #endif
 
         // GeoAssets services
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IProviderPool, ProviderPool>();
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp =>
