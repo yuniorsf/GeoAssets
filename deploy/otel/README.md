@@ -42,21 +42,23 @@ only needs to be repeated if the Application Insights resource is
 recreated or rotated.
 
 1. **Find or create the Application Insights resource** the Collector
-   should forward to:
+   should forward to. The existing resource for this environment is
+   `geoassets-insights` (resource group `Develop`, region `centralus`),
+   confirmed present:
    ```bash
    az login   # if not already
 
-   # Check whether one already exists in the target resource group
+   # Check whether it already exists in the target resource group
    az monitor app-insights component show \
-     --app geoassets-otel \
+     --app geoassets-insights \
      --resource-group Develop \
      --query connectionString -o tsv
 
-   # If it doesn't exist yet, create it (Log Analytics-based, recommended)
+   # Only if it doesn't exist yet — create a new one (Log Analytics-based, recommended)
    az monitor app-insights component create \
-     --app geoassets-otel \
+     --app geoassets-insights \
      --resource-group Develop \
-     --location eastus \
+     --location centralus \
      --workspace <log-analytics-workspace-resource-id>
    ```
    The `create` command's output includes `connectionString` directly —
