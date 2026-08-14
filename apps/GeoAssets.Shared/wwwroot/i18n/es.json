@@ -57,6 +57,7 @@
   "form.type": "Tipo / Categoría",
   "form.descriptionPlaceholder": "Descripción opcional",
   "form.geometry": "Geometría",
+  "form.attributeErrors": "Los atributos personalizados no son válidos para este tipo de activo:",
 
   "app.signOut": "Cerrar sesión",
   "app.defaultUser": "Usuario",

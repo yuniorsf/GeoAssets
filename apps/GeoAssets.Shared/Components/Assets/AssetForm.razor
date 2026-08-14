@@ -1,6 +1,7 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Models
 @using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Services
 @inject IAssetProvider Repository
 
 @if (Feature is not null)
@@ -44,6 +45,19 @@
 
             <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
 
+            @if (_attributeErrors.Count > 0)
+            {
+                <div class="attribute-errors">
+                    <strong>@L["form.attributeErrors"]</strong>
+                    <ul>
+                        @foreach (var error in _attributeErrors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                </div>
+            }
+
             <div class="form-actions">
                 <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
                 <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
@@ -66,16 +80,27 @@
         _                                  => "—"
     };
 
+    private IReadOnlyList<string> _attributeErrors = [];
+
     private async Task HandleSave()
     {
         if (Feature is null) return;
         Feature.Properties.UpdatedAt = DateTime.UtcNow;
 
-        if (IsNew)
-            Repository.Add(Feature);
-        else
-            Repository.Update(Feature);
+        try
+        {
+            if (IsNew)
+                Repository.Add(Feature);
+            else
+                Repository.Update(Feature);
+        }
+        catch (GeoFeatureAttributeValidationException ex)
+        {
+            _attributeErrors = ex.Errors;
+            return;
+        }
 
+        _attributeErrors = [];
         await OnSave.InvokeAsync(Feature);
     }
 

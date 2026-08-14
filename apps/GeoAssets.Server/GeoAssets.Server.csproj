@@ -20,6 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
   </ItemGroup>
 
 </Project>

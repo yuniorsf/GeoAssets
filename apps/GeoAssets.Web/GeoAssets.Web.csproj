@@ -18,6 +18,7 @@
     <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.WFS\GeoAssets.Provider.WFS.csproj" />

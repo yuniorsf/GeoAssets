@@ -46,6 +46,16 @@ language features, or planning a future migration.
 | [domain-driven-design.md](references/domain-driven-design.md) | Bounded contexts, entities/value objects/aggregates, Onion architecture, repository/UoW, CQRS | `current` |
 | [testing-strategy-and-dotnet-tooling.md](references/testing-strategy-and-dotnet-tooling.md) | Unit/integration/acceptance tiers, TDD/BDD, xUnit/Moq, subcutaneous-test pitfalls | `current` |
 | [entity-framework-core-and-onion-architecture.md](references/entity-framework-core-and-onion-architecture.md) | EF Core configuration/migrations, global query filters, EF-entity-vs-aggregate tension | `current` |
+| [async-and-concurrency-conventions.md](references/async-and-concurrency-conventions.md) | async/await naming, `ConfigureAwait`, `Task` vs `ValueTask`, cancellation, fire-and-forget | `current` |
+| [nullable-reference-types.md](references/nullable-reference-types.md) | `?`/`!`/`required` usage, nullable-oblivious boundaries, entity/persistence nullability | `current` |
+| [error-handling-and-result-pattern.md](references/error-handling-and-result-pattern.md) | Exceptions vs. Result, translating domain exceptions across a REST boundary | `current` |
+| [records-vs-classes.md](references/records-vs-classes.md) | General type-shape decision rule: identity/lifecycle vs. value/data-in-motion | `current` |
+| [project-and-solution-structure.md](references/project-and-solution-structure.md) | Folder-as-dependency-lane rules, namespace-mirrors-path, one project per backend | `current` |
+| [configuration-and-options-pattern.md](references/configuration-and-options-pattern.md) | Options classes, `SectionName` convention, `IOptions` vs `IOptionsSnapshot`/`Monitor` | `current` |
+| [api-design-conventions.md](references/api-design-conventions.md) | Minimal API grouping, route/verb conventions, request validation, error-shape conventions | `current` |
+| [domain-test-data-builders.md](references/domain-test-data-builders.md) | When/how to promote ad-hoc geometry/topology test construction into shared builders | `current` |
+| [rest-provider-contract-testing.md](references/rest-provider-contract-testing.md) | Closing the untested seam between the REST server endpoints and REST client repository | `current` |
+| [timeprovider-and-clock-abstraction.md](references/timeprovider-and-clock-abstraction.md) | Never `DateTime.Now`/`Stopwatch`/raw timers — inject `TimeProvider`; ties to active XD01-34 migration | `current` |
 
 As more books/articles are added, list them here with topic and status so
 this table stays the single index of what's been curated.

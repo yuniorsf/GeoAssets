@@ -57,6 +57,7 @@
   "form.type": "Tipo / Categoria",
   "form.descriptionPlaceholder": "Descrição opcional",
   "form.geometry": "Geometria",
+  "form.attributeErrors": "Os atributos personalizados são inválidos para este tipo de ativo:",
 
   "app.signOut": "Sair",
   "app.defaultUser": "Usuário",

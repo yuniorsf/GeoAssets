@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
     <PackageReference Include="NetTopologySuite.IO.GeoJSON4STJ" Version="4.0.0" />
   </ItemGroup>

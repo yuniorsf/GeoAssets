@@ -17,6 +17,8 @@ using GeoAssets.Web.Services;
 using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Session;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -48,6 +50,7 @@ builder.Services.AddScoped<SessionTimeoutService>();
 builder.Services.AddScoped<IAuthNavigationService, MsalAuthNavigationService>();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddBlazoredLocalStorage();
 
@@ -77,10 +80,11 @@ builder.Services.AddSingleton<ProviderPluginRegistry>();
 // Boot loader — orchestrates the first-run provider selection flow.
 builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 
-// Proxy follows the active pool entry; wrapped by the observable decorator.
+// Proxy follows the active pool entry; wrapped by the attribute-schema-validating
+// decorator (XD01-10), then the observable decorator.
 builder.Services.AddSingleton<ActiveAssetProvider>();
 builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
-    sp.GetRequiredService<ActiveAssetProvider>(),
+    new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
     sp.GetRequiredService<ILogger<ObservableAssetProvider>>()));
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();
@@ -97,10 +101,28 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
     sp.GetRequiredService<AssetService>(),
     sp.GetRequiredService<ILogger<ObservableAssetService>>()));
 
-// ── Service Order workflow — in-memory, session-scoped for this first pass.
-// See XD01-8 for the durable/Postgres-backed alternative via GeoAssets.Server.
+// ── Service Order workflow — in-memory (default) or REST-backed via GeoAssets.Server,
+// switched by "ServiceOrders:Backend" config ("InMemory" | "Rest"; env var override:
+// ServiceOrders__Backend). In-memory stays the default so the app still runs with zero
+// config against a Postgres server (XD01-8). When "Rest", OrderTypes are also loaded from
+// the server below, overlaying the seeded defaults — see AddWorkflowRest's doc comment.
 builder.Services.AddOrderTypeRegistry();
-builder.Services.AddWorkflowInMemory();
+
+var serviceOrdersBackend = builder.Configuration["ServiceOrders:Backend"] ?? "InMemory";
+var serviceOrdersUseRest = string.Equals(serviceOrdersBackend, "Rest", StringComparison.OrdinalIgnoreCase);
+
+if (serviceOrdersUseRest)
+{
+    var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
+        ?? throw new InvalidOperationException(
+            "ServiceOrders:Backend is 'Rest' but ServiceOrders:ApiBaseUrl is not configured.");
+    builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
+}
+else
+{
+    builder.Services.AddWorkflowInMemory();
+}
+
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
 
@@ -112,5 +134,12 @@ logger.LogInformation("GeoAssets starting — environment: {Environment}", build
 
 host.Services.GetRequiredService<IdentitySeeder>().Seed();
 host.Services.GetRequiredService<UserProvisioningService>();
+
+if (serviceOrdersUseRest)
+{
+    var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
+    var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
+    await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
+}
 
 await host.RunAsync();

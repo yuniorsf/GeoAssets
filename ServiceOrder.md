@@ -876,33 +876,48 @@ convention `CreationPolicies` already uses. None of the three built-in seeded
 order types (`inspection`, `maintenance`, `emergency-repair`) set one, so this is
 fully backward compatible.
 
-**Scope:** `ServiceOrder.Attributes` only. `GeoFeature.CustomAttributes` has the
-identical gap — free-form, no schema — but extending validation there is a
+**Scope:** originally `ServiceOrder.Attributes` only — `GeoFeature.CustomAttributes`
+had the identical gap (free-form, no schema) but extending validation there was a
 materially bigger pass: it's already live in the shipped map UI
-(`CustomAttributeEditor` inside `AssetForm.razor`), spans multiple `IAssetProvider`
-implementations, and has no `OrderType`-equivalent grouping construct to attach a
-schema to. Tracked separately, not yet scheduled.
+(`CustomAttributeEditor` inside `AssetForm.razor`) and spans multiple
+`IAssetProvider` implementations. Closed by
+[XD01-10](https://xdicor.atlassian.net/browse/XD01-10), which generalizes the same
+mechanism to `AssetType.AttributesSchemaJson` + `GeoFeatureAttributeValidator`,
+enforced by a `ValidatingAssetProvider` decorator wrapping `IAssetProvider` in
+`GeoAssets.Web`, `GeoAssets.Server`, and `GeoAssets.MAUI`. Unlike `OrderType`
+(which needs a separate `OrderTypeRegistry`), asset types are already part of
+`IAssetProvider`'s own state (`GetAssetTypes()`), so the decorator looks the type
+up on its inner provider directly — no registry needed. `AssetForm.HandleSave`
+catches the validation exception and shows the errors inline; there is still no
+schema-*authoring* UI for either `OrderType` or `AssetType` (schemas are set via
+code/API, same as before).
 
 ### File map
 
-| Concept | Path |
-|---|---|
-| Validator | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidator.cs` |
-| Exception | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidationException.cs` |
-| Schema field | `core/GeoAssets.Workflow/Orders/OrderType.cs` (`AttributesSchemaJson`) |
-| Enforcement point | `core/GeoAssets.Workflow/Orders/ValidatingServiceOrderRepository.cs` |
+| Concept | Path (`ServiceOrder`) | Path (`GeoFeature`, XD01-10) |
+|---|---|---|
+| Validator | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidator.cs` | `core/GeoAssets.Core/Services/GeoFeatureAttributeValidator.cs` |
+| Exception | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidationException.cs` | `core/GeoAssets.Core/Services/GeoFeatureAttributeValidationException.cs` |
+| Schema field | `core/GeoAssets.Workflow/Orders/OrderType.cs` (`AttributesSchemaJson`) | `core/GeoAssets.Core/Models/AssetType.cs` (`AttributesSchemaJson`) |
+| Enforcement point | `core/GeoAssets.Workflow/Orders/ValidatingServiceOrderRepository.cs` | `core/GeoAssets.Core/Providers/ValidatingAssetProvider.cs` |
 
 ---
 
 ## 15. Host UI (Blazor Web)
 
-`apps/GeoAssets.Web` wires the module with the in-memory implementations —
-session-scoped, no database — the same trade-off `InMemoryAssetRepository` already
-makes for assets in that host:
+`apps/GeoAssets.Web` wires the module with either the in-memory implementation
+(default) or a REST-backed one talking to `GeoAssets.Server` (XD01-8, §15.1),
+switched by a `ServiceOrders:Backend` config flag — no runtime picker like assets'
+provider pool, deliberately, to keep this pass's footprint small:
 
 ```csharp
 builder.Services.AddOrderTypeRegistry();
-builder.Services.AddWorkflowInMemory();
+
+if (config["ServiceOrders:Backend"] == "Rest")
+    builder.Services.AddWorkflowRest(config["ServiceOrders:ApiBaseUrl"]!);
+else
+    builder.Services.AddWorkflowInMemory();  // default — zero-config, no Postgres required
+
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
 ```
@@ -930,11 +945,63 @@ Cancel, Annotate) — the UI never offers an action the current user can't perfo
 | `ServiceOrderDetail.razor` | Read-only fields, rule-gated action buttons, dispatch/action-log timeline |
 | `ServiceOrderDispatchDialog.razor` | Target type/id/note modal for `AppendDispatchAsync` |
 
-**Known limitation of this pass:** orders are lost on page refresh/app restart —
-in-memory store only. A durable, Postgres-backed alternative via `GeoAssets.Server`
-(already a live EF Core/PostgreSQL host — see `apps/GeoAssets.Server`) is tracked
-separately, not yet scheduled. `apps/GeoAssets.MAUI` has no equivalent UI yet
-either — also a separate, unscheduled follow-up.
+**In-memory backend limitation:** orders are lost on page refresh/app restart —
+session-scoped only. See §15.1 for the durable alternative. `apps/GeoAssets.MAUI`
+has no Service Order UI at all yet (neither backend is wired there) — a separate,
+unscheduled follow-up.
+
+### 15.1 Postgres-backed persistence via GeoAssets.Server (XD01-8)
+
+`apps/GeoAssets.Server` exposes Service Orders and Order Types over REST, reusing
+the same Postgres connection/database as assets (workflow tables alongside
+`geo_entity`/`asset_type`):
+
+```csharp
+builder.Services.AddOrderTypeRegistry();
+builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
+    connectionString,
+    npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+// ...
+await app.Services.LoadRegistryFromDbAsync();  // overlay DB-persisted OrderTypes on the seeded defaults
+app.MapServiceOrdersApi();  // /api/workflow/service-orders, /api/workflow/order-types
+```
+
+`ServiceOrderDbContext` (`workflow/GeoAssets.Workflow.EFCore`) stays
+provider-agnostic by design (see its own doc comment), so the Postgres migration
+lives in `apps/GeoAssets.Server/Migrations` instead, with `MigrationsAssembly(...)`
+pointing EF at it. That migration also adds a `BEFORE UPDATE` trigger
+(`touch_service_orders_row_version`) stamping a fresh `RowVersion` on every
+`UPDATE` — Postgres has no native auto-updating rowversion type like SQL Server,
+so without the trigger, `ServiceOrderRecordConfiguration`'s
+`RowVersion.IsRowVersion()` would never actually change and EF's optimistic
+concurrency check would silently stop detecting concurrent writers. Mirrors the
+same problem `GeoAssets.Workflow.EFCore.Tests`' `SqliteTestDbContext` already
+solves for SQLite with its own trigger.
+
+`GeoAssets.Web` opts into this backend via `ServiceOrders:Backend = "Rest"` +
+`ServiceOrders:ApiBaseUrl` config (`appsettings.Development.json` has a commented
+example) — `RestServiceOrderRepository`/`RestOrderTypeRepository`
+(`workflow/GeoAssets.Workflow.Rest`) implement the same
+`IServiceOrderRepository`/`IOrderTypeRepository` interfaces the in-memory/EF
+backends do. Unlike `RestAssetProvider` (cache-first, fire-and-forget writes),
+this client is direct and non-caching — every call awaits its own HTTP round trip
+and propagates `ServiceOrderConcurrencyException`/`KeyNotFoundException`/
+`InvalidServiceOrderTransitionException`/`ServiceOrderAttributeValidationException`
+exactly as the EF backend does, translated from HTTP status codes + a small JSON
+error envelope (`ServiceOrdersRestApiExtensions` and `RestServiceOrderRepository`
+document the shared shape). `UpdateAsync`/`AppendDispatchAsync` don't fire
+`OrderStatusChanged` (only `AppendActionAsync` does, with a status pre-fetch) —
+the real UI only changes status through `AppendActionAsync`
+(`ServiceOrderDetail.razor`'s `RecordAction`), so detecting status changes on the
+other two paths would cost an extra round trip for an event no caller observes.
+
+**Not covered by this pass:** the Postgres migration + rowversion trigger haven't
+been run against a real Postgres instance (no Postgres available in this
+environment) — verify before deploying. `ServiceOrdersRestApiExtensions`'s
+endpoints have no integration test coverage, matching `GeoAssetsRestApiExtensions`'
+own (pre-existing) lack of coverage — only the underlying repository/client classes
+are unit-tested. No schema-authoring or backend-switch UI exists (both are
+config/code only, same convention as `OrderType`'s attribute schemas).
 
 ---
 
@@ -958,12 +1025,16 @@ documented:
   `GeoAssets.Workflow.EFCore.Tests` now covers `EFServiceOrderRepository`/
   `EFOrderTypeRepository` against a real SQLite database (§13), closed by
   [XD01-9](https://xdicor.atlassian.net/browse/XD01-9).
+- **`GeoFeature.CustomAttributes` had no schema validation** — same gap §14 closed
+  for `ServiceOrder.Attributes`, generalized to `AssetType`/`IAssetProvider` (§14's
+  "Scope" note), closed by [XD01-10](https://xdicor.atlassian.net/browse/XD01-10).
+- **Service Orders were session-scoped only, lost on refresh/restart** —
+  `GeoAssets.Server` now exposes them over REST, backed by the same Postgres
+  database as assets, with `GeoAssets.Web` opting in via a config flag (§15.1),
+  closed by [XD01-8](https://xdicor.atlassian.net/browse/XD01-8).
 
 What's still genuinely open:
 
-- **`GeoFeature.CustomAttributes` has no schema validation.** Same gap §14 closed
-  for `ServiceOrder.Attributes`, but bigger in scope — see §14's "Scope" note.
-  Tracked as [XD01-10](https://xdicor.atlassian.net/browse/XD01-10).
 - **The concurrency check (§7) only covers races within the EF repository's own
   read-then-save window**, not a caller holding a stale copy across a longer gap —
   see §7 for the distinction. The `RowVersion` detection itself is done
