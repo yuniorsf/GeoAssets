@@ -4,7 +4,7 @@ using GeoAssets.Web.Services.Identity;
 
 namespace GeoAssets.Web.Services.Identity.InMemory;
 
-public sealed class InMemoryUserRepository(WasmIdentityStore store) : IUserRepository
+public sealed class InMemoryUserRepository(WasmIdentityStore store, TimeProvider timeProvider) : IUserRepository
 {
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => Task.FromResult(store.Users.FirstOrDefault(u => u.Id == id));
@@ -61,7 +61,7 @@ public sealed class InMemoryUserRepository(WasmIdentityStore store) : IUserRepos
     public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default)
     {
         if (!store.UserRoles.Any(ur => ur.UserId == userId && ur.RoleId == roleId))
-            store.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy });
+            store.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime });
         return Task.CompletedTask;
     }
 

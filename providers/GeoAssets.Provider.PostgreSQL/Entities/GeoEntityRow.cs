@@ -15,8 +15,8 @@ public sealed class GeoEntityRow
     public string AssetTypeId   { get; set; } = string.Empty;
     public string Description   { get; set; } = string.Empty;
     public string LayerId       { get; set; } = string.Empty;
-    public DateTime CreatedAt   { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt   { get; set; } = DateTime.UtcNow;
+    public required DateTime CreatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 
     /// <summary>PostGIS geometry column via Npgsql.NetTopologySuite (SRID 4326).</summary>
     public Geometry? Geom { get; set; }

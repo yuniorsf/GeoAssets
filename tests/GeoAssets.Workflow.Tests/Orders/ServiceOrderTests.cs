@@ -191,7 +191,7 @@ public class ServiceOrderTests
     public void WithFeatures_ReplacesFeaturesAndRecordsSpec()
     {
         var order = new ServiceOrder();
-        var spec  = new FeatureSelectionSpec { StrategyId = "bounding-box" };
+        var spec  = new FeatureSelectionSpec { StrategyId = "bounding-box", ExecutedAt = TimeProvider.System.GetUtcNow().UtcDateTime };
 
         order.WithFeatures([new GeoFeature { Id = "f1" }], TimeProvider.System, spec);
 

@@ -3,6 +3,7 @@
 @using GeoAssets.Core.Interfaces
 @using GeoAssets.Core.Services
 @inject IAssetProvider Repository
+@inject TimeProvider Clock
 
 @if (Feature is not null)
 {
@@ -85,7 +86,10 @@
     private async Task HandleSave()
     {
         if (Feature is null) return;
-        Feature.Properties.UpdatedAt = DateTime.UtcNow;
+        var now = Clock.GetUtcNow().UtcDateTime;
+        Feature.Properties.UpdatedAt = now;
+        if (IsNew)
+            Feature.Properties.CreatedAt = now;
 
         try
         {

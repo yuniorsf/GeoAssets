@@ -6,6 +6,7 @@
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
+@inject TimeProvider Clock
 
 <div class="sidebar-section">
     <div class="section-header-row">
@@ -173,6 +174,7 @@
                 Metadata = new GeoFeatureCollectionMetadata
                 {
                     Name       = entry.Name,
+                    CreatedAt  = Clock.GetUtcNow().UtcDateTime,
                     AssetTypes = [.. entry.Provider.GetAssetTypes()]
                 }
             };

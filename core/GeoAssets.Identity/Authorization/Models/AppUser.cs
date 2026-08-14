@@ -19,7 +19,7 @@ public sealed class AppUser
     public string   DisplayName   { get; set; } = string.Empty;
     public bool     IsActive      { get; set; } = true;
 
-    public DateTime  CreatedAt    { get; set; } = DateTime.UtcNow;
+    public required DateTime CreatedAt { get; set; }
     public DateTime? LastLoginAt  { get; set; }
 
     // ── Organization ──────────────────────────────────────────────────────────

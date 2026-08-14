@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Identity.Authorization.EFCore.Repositories;
 
-public sealed class EFUserRepository(GeoIdentityDbContext db) : IUserRepository
+public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeProvider) : IUserRepository
 {
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => db.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
@@ -58,7 +58,7 @@ public sealed class EFUserRepository(GeoIdentityDbContext db) : IUserRepository
     {
         var exists = await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct);
         if (!exists)
-            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy }, ct);
+            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime }, ct);
     }
 
     public async Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)

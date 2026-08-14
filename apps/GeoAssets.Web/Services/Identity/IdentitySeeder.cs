@@ -13,7 +13,7 @@ namespace GeoAssets.Web.Services.Identity;
 ///   await host.RunAsync();
 /// </code>
 /// </summary>
-public sealed class IdentitySeeder(WasmIdentityStore store)
+public sealed class IdentitySeeder(WasmIdentityStore store, TimeProvider timeProvider)
 {
     // ── Well-known IDs (stable across restarts) ───────────────────────────────
 
@@ -44,6 +44,7 @@ public sealed class IdentitySeeder(WasmIdentityStore store)
                 Slug        = "default",
                 Description = "Organización predeterminada del sistema.",
                 IsActive    = true,
+                CreatedAt   = timeProvider.GetUtcNow().UtcDateTime,
             });
     }
 

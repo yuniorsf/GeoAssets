@@ -151,7 +151,7 @@ public class EFServiceOrderRepositoryTests
         using var fixture = new SqliteFixture();
         var repo = new EFServiceOrderRepository(fixture.Context);
         var order = Order("a");
-        order.SelectionSpec = new FeatureSelectionSpec { StrategyId = "bounding-box", Note = "north sector" };
+        order.SelectionSpec = new FeatureSelectionSpec { StrategyId = "bounding-box", Note = "north sector", ExecutedAt = TimeProvider.System.GetUtcNow().UtcDateTime };
 
         await repo.AddAsync(order);
         var loaded = await repo.GetByIdAsync("a");

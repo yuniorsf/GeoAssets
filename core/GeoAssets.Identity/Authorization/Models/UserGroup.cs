@@ -6,7 +6,7 @@ public sealed class UserGroup
     public Guid     UserId   { get; set; }
     public Guid     GroupId  { get; set; }
 
-    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+    public required DateTime JoinedAt { get; set; }
     public string?  AddedBy  { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────────

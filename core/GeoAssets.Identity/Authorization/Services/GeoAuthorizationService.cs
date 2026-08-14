@@ -69,7 +69,8 @@ public class GeoAuthorizationService(
                 {
                     AzureObjectId = current.AzureObjectId,
                     Email         = current.Email,
-                    DisplayName   = current.DisplayName
+                    DisplayName   = current.DisplayName,
+                    CreatedAt     = timeProvider.GetUtcNow().UtcDateTime
                 },
                 Roles       = [],
                 Claims      = [],

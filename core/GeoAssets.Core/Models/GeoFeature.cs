@@ -50,11 +50,18 @@ public sealed class GeoFeatureProperties
     [JsonPropertyName("srid")]
     public int Srid { get; set; } = 4326;
 
+    /// <summary>
+    /// Defaults to <see cref="DateTime.MinValue"/> — a "creation time unknown" sentinel, not the
+    /// current clock. This type is built primarily via JSON deserialization (import/localStorage/
+    /// WFS), which can't be intercepted to inject a <see cref="TimeProvider"/>; explicit-construction
+    /// callers that know the real creation time (e.g. <c>AssetForm.razor</c>) set this themselves.
+    /// </summary>
     [JsonPropertyName("createdAt")]
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
+    /// <summary>Defaults to <see cref="DateTime.MinValue"/> — see <see cref="CreatedAt"/>.</summary>
     [JsonPropertyName("updatedAt")]
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; }
 
     /// <summary>Flexible user-defined attributes stored as a JSON object</summary>
     [JsonPropertyName("customAttributes")]

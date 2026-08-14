@@ -92,7 +92,8 @@ public sealed class AssetService : IAssetService
         Features = [.. _repository.GetAll()],
         Metadata = new()
         {
-            Name = _collectionName,
+            Name       = _collectionName,
+            CreatedAt  = _timeProvider.GetUtcNow().UtcDateTime,
             AssetTypes = [.. _repository.GetAssetTypes()]
         }
     };

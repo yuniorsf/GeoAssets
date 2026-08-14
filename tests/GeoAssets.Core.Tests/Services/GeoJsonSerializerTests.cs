@@ -71,6 +71,27 @@ public class GeoJsonSerializerTests
         GeoJsonSerializer.DeserializeFeature("null").Should().BeNull();
     }
 
+    [Fact]
+    public void DeserializeFeature_OmittedTimestamps_DefaultToMinValueNotCurrentClock()
+    {
+        const string json = """{"type":"Feature","id":"f1","properties":{"name":"x"}}""";
+
+        var feature = GeoJsonSerializer.DeserializeFeature(json)!;
+
+        feature.Properties.CreatedAt.Should().Be(DateTime.MinValue);
+        feature.Properties.UpdatedAt.Should().Be(DateTime.MinValue);
+    }
+
+    [Fact]
+    public void Deserialize_OmittedCollectionCreatedAt_DefaultsToMinValueNotCurrentClock()
+    {
+        const string json = """{"type":"FeatureCollection","features":[],"metadata":{"name":"x"}}""";
+
+        var collection = GeoJsonSerializer.Deserialize(json)!;
+
+        collection.Metadata.CreatedAt.Should().Be(DateTime.MinValue);
+    }
+
     // ── DeserializeGeometry ───────────────────────────────────────────────────
 
     [Fact]
