@@ -876,21 +876,30 @@ convention `CreationPolicies` already uses. None of the three built-in seeded
 order types (`inspection`, `maintenance`, `emergency-repair`) set one, so this is
 fully backward compatible.
 
-**Scope:** `ServiceOrder.Attributes` only. `GeoFeature.CustomAttributes` has the
-identical gap — free-form, no schema — but extending validation there is a
+**Scope:** originally `ServiceOrder.Attributes` only — `GeoFeature.CustomAttributes`
+had the identical gap (free-form, no schema) but extending validation there was a
 materially bigger pass: it's already live in the shipped map UI
-(`CustomAttributeEditor` inside `AssetForm.razor`), spans multiple `IAssetProvider`
-implementations, and has no `OrderType`-equivalent grouping construct to attach a
-schema to. Tracked separately, not yet scheduled.
+(`CustomAttributeEditor` inside `AssetForm.razor`) and spans multiple
+`IAssetProvider` implementations. Closed by
+[XD01-10](https://xdicor.atlassian.net/browse/XD01-10), which generalizes the same
+mechanism to `AssetType.AttributesSchemaJson` + `GeoFeatureAttributeValidator`,
+enforced by a `ValidatingAssetProvider` decorator wrapping `IAssetProvider` in
+`GeoAssets.Web`, `GeoAssets.Server`, and `GeoAssets.MAUI`. Unlike `OrderType`
+(which needs a separate `OrderTypeRegistry`), asset types are already part of
+`IAssetProvider`'s own state (`GetAssetTypes()`), so the decorator looks the type
+up on its inner provider directly — no registry needed. `AssetForm.HandleSave`
+catches the validation exception and shows the errors inline; there is still no
+schema-*authoring* UI for either `OrderType` or `AssetType` (schemas are set via
+code/API, same as before).
 
 ### File map
 
-| Concept | Path |
-|---|---|
-| Validator | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidator.cs` |
-| Exception | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidationException.cs` |
-| Schema field | `core/GeoAssets.Workflow/Orders/OrderType.cs` (`AttributesSchemaJson`) |
-| Enforcement point | `core/GeoAssets.Workflow/Orders/ValidatingServiceOrderRepository.cs` |
+| Concept | Path (`ServiceOrder`) | Path (`GeoFeature`, XD01-10) |
+|---|---|---|
+| Validator | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidator.cs` | `core/GeoAssets.Core/Services/GeoFeatureAttributeValidator.cs` |
+| Exception | `core/GeoAssets.Workflow/Orders/ServiceOrderAttributeValidationException.cs` | `core/GeoAssets.Core/Services/GeoFeatureAttributeValidationException.cs` |
+| Schema field | `core/GeoAssets.Workflow/Orders/OrderType.cs` (`AttributesSchemaJson`) | `core/GeoAssets.Core/Models/AssetType.cs` (`AttributesSchemaJson`) |
+| Enforcement point | `core/GeoAssets.Workflow/Orders/ValidatingServiceOrderRepository.cs` | `core/GeoAssets.Core/Providers/ValidatingAssetProvider.cs` |
 
 ---
 
@@ -958,12 +967,12 @@ documented:
   `GeoAssets.Workflow.EFCore.Tests` now covers `EFServiceOrderRepository`/
   `EFOrderTypeRepository` against a real SQLite database (§13), closed by
   [XD01-9](https://xdicor.atlassian.net/browse/XD01-9).
+- **`GeoFeature.CustomAttributes` had no schema validation** — same gap §14 closed
+  for `ServiceOrder.Attributes`, generalized to `AssetType`/`IAssetProvider` (§14's
+  "Scope" note), closed by [XD01-10](https://xdicor.atlassian.net/browse/XD01-10).
 
 What's still genuinely open:
 
-- **`GeoFeature.CustomAttributes` has no schema validation.** Same gap §14 closed
-  for `ServiceOrder.Attributes`, but bigger in scope — see §14's "Scope" note.
-  Tracked as [XD01-10](https://xdicor.atlassian.net/browse/XD01-10).
 - **The concurrency check (§7) only covers races within the EF repository's own
   read-then-save window**, not a caller holding a stale copy across a longer gap —
   see §7 for the distinction. The `RowVersion` detection itself is done
