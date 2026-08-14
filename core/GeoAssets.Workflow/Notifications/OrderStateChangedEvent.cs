@@ -29,8 +29,9 @@ public sealed record OrderStateChangedEvent(
         string                              previous,
         string                              next,
         string                              performedBy,
+        TimeProvider                        timeProvider,
         string?                             correlationId = null,
         IReadOnlyDictionary<string, string>? metadata     = null)
         => new(orderId, orderTypeId, previous, next, performedBy,
-               DateTimeOffset.UtcNow, correlationId, metadata);
+               timeProvider.GetUtcNow(), correlationId, metadata);
 }

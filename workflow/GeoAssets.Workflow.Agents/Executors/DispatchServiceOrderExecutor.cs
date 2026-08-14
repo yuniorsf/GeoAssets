@@ -20,6 +20,7 @@ public sealed class DispatchServiceOrderExecutor(
     IServiceOrderRepository repository,
     ServiceOrderRules       rules,
     IAgentIdentityProvider  identity,
+    TimeProvider            timeProvider,
     string                  id = nameof(DispatchServiceOrderExecutor))
     : Executor<ServiceOrderCreated, ServiceOrder>(id)
 {
@@ -37,7 +38,7 @@ public sealed class DispatchServiceOrderExecutor(
         // AppendDispatchAsync/AppendActionAsync — not UpdateAsync, which explicitly does not
         // persist Dispatches/ActionLog (see IServiceOrderWriter.UpdateAsync). AppendActionAsync
         // applies the Draft -> Pending transition atomically with the audit entry.
-        var dispatchedAt = DateTime.UtcNow;
+        var dispatchedAt = timeProvider.GetUtcNow().UtcDateTime;
         var dispatch = new OrderDispatch(
             message.DispatchTargetId,
             message.DispatchTargetType,

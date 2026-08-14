@@ -12,7 +12,7 @@ public class FeatureSelectionRegistryTests
     private static async Task<InMemoryServiceOrderRepository> RepositoryWithParentAsync(params GeoFeature[] features)
     {
         var repo = new InMemoryServiceOrderRepository();
-        var parent = new ServiceOrder { Title = "Parent" }.WithFeatures(features);
+        var parent = new ServiceOrder { Title = "Parent" }.WithFeatures(features, TimeProvider.System);
         await repo.AddAsync(parent);
         return repo;
     }
@@ -23,7 +23,7 @@ public class FeatureSelectionRegistryTests
     public async Task SelectAsync_SerializableParameters_ReturnsSpec()
     {
         using var registry = new FeatureSelectionRegistry(
-            "no-such-plugins-dir", typeof(InheritFromParentOrderStrategy).Assembly);
+            TimeProvider.System, "no-such-plugins-dir", typeof(InheritFromParentOrderStrategy).Assembly);
 
         var orderRepo = await RepositoryWithParentAsync(new GeoFeature { Id = "f1" });
         var parent = (await orderRepo.GetRootsAsync()).Single();
@@ -45,7 +45,7 @@ public class FeatureSelectionRegistryTests
     public async Task SelectAsync_NonSerializableParameter_ThrowsInvalidOperationException()
     {
         using var registry = new FeatureSelectionRegistry(
-            "no-such-plugins-dir", typeof(InheritFromParentOrderStrategy).Assembly);
+            TimeProvider.System, "no-such-plugins-dir", typeof(InheritFromParentOrderStrategy).Assembly);
 
         var orderRepo = await RepositoryWithParentAsync(
             new GeoFeature { Id = "f1" }, new GeoFeature { Id = "f2" });

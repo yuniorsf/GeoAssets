@@ -37,7 +37,7 @@ public class DispatchServiceOrderExecutorTests
         var order = new ServiceOrder { Id = "order-1", OrderTypeId = "emergency-repair", CreatedBy = AgentId };
         await repository.AddAsync(order);
 
-        var executor = new DispatchServiceOrderExecutor(repository, GrantingRules(), AgentIdentity());
+        var executor = new DispatchServiceOrderExecutor(repository, GrantingRules(), AgentIdentity(), TimeProvider.System);
         var message = new ServiceOrderCreated(order, AgentId, "crew-1", DispatchTargetType.Group, "run-1");
 
         var result = await executor.HandleAsync(message, NoOpWorkflowContext.Instance);
@@ -62,7 +62,7 @@ public class DispatchServiceOrderExecutorTests
         var order = new ServiceOrder { Id = "order-2", OrderTypeId = "emergency-repair", CreatedBy = AgentId };
         await repository.AddAsync(order);
 
-        var executor = new DispatchServiceOrderExecutor(repository, new ServiceOrderRules(), AgentIdentity());
+        var executor = new DispatchServiceOrderExecutor(repository, new ServiceOrderRules(), AgentIdentity(), TimeProvider.System);
         var message = new ServiceOrderCreated(order, AgentId, "crew-1", DispatchTargetType.Group, "run-1");
 
         var result = await executor.HandleAsync(message, NoOpWorkflowContext.Instance);

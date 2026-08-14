@@ -18,7 +18,8 @@ public class GeoAuthorizationService(
     ICurrentUserAccessor   currentUserAccessor,
     IUserRepository        userRepository,
     IUserClaimRepository   claimRepository,
-    IPolicyRepository      policyRepository) : IGeoAuthorizationService
+    IPolicyRepository      policyRepository,
+    TimeProvider           timeProvider) : IGeoAuthorizationService
 {
     public async Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default)
     {
@@ -77,7 +78,7 @@ public class GeoAuthorizationService(
         }
 
         // Update last-login stamp (fire-and-forget; no await to keep the path fast)
-        user.LastLoginAt = DateTime.UtcNow;
+        user.LastLoginAt = timeProvider.GetUtcNow().UtcDateTime;
         await userRepository.UpdateAsync(user, ct);
         await userRepository.SaveChangesAsync(ct);
 

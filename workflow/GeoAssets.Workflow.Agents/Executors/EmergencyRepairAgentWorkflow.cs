@@ -18,10 +18,11 @@ public static class EmergencyRepairAgentWorkflow
         IServiceOrderRepository repository,
         ServiceOrderRules       rules,
         OrderTypeRegistry       orderTypeRegistry,
-        IAgentIdentityProvider  identity)
+        IAgentIdentityProvider  identity,
+        TimeProvider            timeProvider)
     {
         var create   = new CreateServiceOrderExecutor(repository, rules, orderTypeRegistry, identity);
-        var dispatch = new DispatchServiceOrderExecutor(repository, rules, identity);
+        var dispatch = new DispatchServiceOrderExecutor(repository, rules, identity, timeProvider);
 
         return new WorkflowBuilder(create)
             .AddEdge(create, dispatch)

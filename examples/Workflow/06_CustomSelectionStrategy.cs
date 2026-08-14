@@ -75,6 +75,7 @@ public static class CustomSelectionStrategy
 
         var pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
         using var registry = new FeatureSelectionRegistry(
+            timeProvider: TimeProvider.System,
             pluginsDirectory: pluginsDir,
             builtInAssemblies:
             [
@@ -114,7 +115,7 @@ public static class CustomSelectionStrategy
             Title       = "Inspección General de Red",
             CreatedBy   = "supervisor@empresa.com",
             Priority    = ServiceOrderPriority.Normal,
-        }.WithFeatures(allFeatures, rootSpec);
+        }.WithFeatures(allFeatures, TimeProvider.System, rootSpec);
 
         await orderRepo.AddAsync(rootOrder);
         PrintOrder(rootOrder);
@@ -141,7 +142,7 @@ public static class CustomSelectionStrategy
             CreatedBy     = "tecnico.electrico@empresa.com",
             Priority      = ServiceOrderPriority.High,
             ParentOrderId = rootOrder.Id,
-        }.WithFeatures(electricFeatures, layerSpec);
+        }.WithFeatures(electricFeatures, TimeProvider.System, layerSpec);
 
         await orderRepo.AddAsync(childOrderA);
         PrintOrder(childOrderA);
@@ -181,7 +182,7 @@ public static class CustomSelectionStrategy
             CreatedBy     = "sistema.automatico",
             Priority      = ServiceOrderPriority.Critical,
             ParentOrderId = rootOrder.Id,
-        }.WithFeatures(impactFeatures, impactSpec);
+        }.WithFeatures(impactFeatures, TimeProvider.System, impactSpec);
 
         await orderRepo.AddAsync(childOrderB);
         PrintOrder(childOrderB);

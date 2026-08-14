@@ -10,6 +10,18 @@ public sealed class InMemoryAssetProvider : IAssetProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// <paramref name="timeProvider"/> defaults to <see cref="TimeProvider.System"/> because this
+    /// type is constructed directly (no DI) at dozens of call sites across providers, plugins, and
+    /// tests that don't care about clock behavior — only tests exercising <see cref="Update"/>/
+    /// <see cref="AddRange"/> timestamp behavior need to pass a fake one explicitly.
+    /// </summary>
+    public InMemoryAssetProvider(TimeProvider? timeProvider = null)
+    {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;
@@ -47,7 +59,7 @@ public sealed class InMemoryAssetProvider : IAssetProvider
 
     public void Update(GeoFeature feature)
     {
-        feature.Properties.UpdatedAt = DateTime.UtcNow;
+        feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         _features[feature.Id] = feature;
         FeatureUpdated?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
@@ -58,7 +70,7 @@ public sealed class InMemoryAssetProvider : IAssetProvider
         foreach (var feature in features)
         {
             if (_features.ContainsKey(feature.Id))
-                feature.Properties.UpdatedAt = DateTime.UtcNow;
+                feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
             _features[feature.Id] = feature;
         }
         CollectionChanged?.Invoke(this, EventArgs.Empty);

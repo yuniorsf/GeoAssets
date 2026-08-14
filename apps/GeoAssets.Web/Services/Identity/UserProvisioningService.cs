@@ -22,13 +22,16 @@ public sealed class UserProvisioningService : IAsyncDisposable
 {
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly IServiceScopeFactory        _scopeFactory;
+    private readonly TimeProvider                _timeProvider;
 
     public UserProvisioningService(
         AuthenticationStateProvider authStateProvider,
-        IServiceScopeFactory        scopeFactory)
+        IServiceScopeFactory        scopeFactory,
+        TimeProvider                timeProvider)
     {
         _authStateProvider = authStateProvider;
         _scopeFactory      = scopeFactory;
+        _timeProvider      = timeProvider;
         _authStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
     }
 
@@ -61,13 +64,14 @@ public sealed class UserProvisioningService : IAsyncDisposable
         var existing = await userRepo.GetByAzureObjectIdAsync(current.AzureObjectId);
         if (existing is not null) return; // already provisioned
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var newUser = new AppUser
         {
             AzureObjectId = current.AzureObjectId,
             Email         = current.Email,
             DisplayName   = current.DisplayName,
-            CreatedAt     = DateTime.UtcNow,
-            LastLoginAt   = DateTime.UtcNow,
+            CreatedAt     = now,
+            LastLoginAt   = now,
         };
 
         await userRepo.AddAsync(newUser);

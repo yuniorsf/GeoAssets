@@ -47,7 +47,7 @@ public static class WfsEndpointExtensions
         this IEndpointRouteBuilder routes,
         string route = "/wfs")
     {
-        routes.MapGet(route, async (HttpRequest req, IAssetProvider provider) =>
+        routes.MapGet(route, async (HttpRequest req, IAssetProvider provider, TimeProvider timeProvider) =>
         {
             // WFS uses case-insensitive query params (KVP binding)
             var qs = req.Query;
@@ -62,7 +62,7 @@ public static class WfsEndpointExtensions
             return operation.ToUpperInvariant() switch
             {
                 "GETCAPABILITIES"     => HandleGetCapabilities(req, provider),
-                "GETFEATURE"          => await HandleGetFeatureAsync(Param, provider),
+                "GETFEATURE"          => await HandleGetFeatureAsync(Param, provider, timeProvider),
                 "DESCRIBEFEATURETYPE" => HandleDescribeFeatureType(),
                 _ => Results.BadRequest(
                     $"Unsupported or missing REQUEST parameter: '{operation}'. " +
@@ -167,7 +167,8 @@ public static class WfsEndpointExtensions
 
     private static async Task<IResult> HandleGetFeatureAsync(
         Func<string, string> param,
-        IAssetProvider       provider)
+        IAssetProvider       provider,
+        TimeProvider         timeProvider)
     {
         // TYPENAMES (WFS 2.0) / TYPENAME (WFS 1.x legacy)
         var typeName = param("TYPENAMES") is { Length: > 0 } tn ? tn
@@ -219,7 +220,7 @@ public static class WfsEndpointExtensions
         var response = new WfsFeatureCollection(
             NumberMatched:  matched.Count,
             NumberReturned: page.Count,
-            TimeStamp:      DateTime.UtcNow.ToString("O"),
+            TimeStamp:      timeProvider.GetUtcNow().UtcDateTime.ToString("O"),
             Features:       page);
 
         return Results.Json(response, _geoOpts, contentType: "application/json");

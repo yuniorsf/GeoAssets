@@ -9,6 +9,11 @@ namespace GeoAssets.Core.Tests.Services;
 
 public class InMemoryAssetProviderTests
 {
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
     private static GeoFeature Feature(string id, string? assetTypeId = null) => new()
     {
         Id = id,
@@ -208,6 +213,19 @@ public class InMemoryAssetProviderTests
     }
 
     [Fact]
+    public void Update_SetsUpdatedAt_FromInjectedTimeProvider()
+    {
+        var fixedNow = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var sut = new InMemoryAssetProvider(new FixedTimeProvider(fixedNow));
+        var feature = new GeoFeature { Id = "a" };
+        sut.Add(feature);
+
+        sut.Update(feature);
+
+        sut.GetById("a")!.Properties.UpdatedAt.Should().Be(fixedNow.UtcDateTime);
+    }
+
+    [Fact]
     public void Update_FiresFeatureUpdated()
     {
         var sut = new InMemoryAssetProvider();
@@ -249,6 +267,19 @@ public class InMemoryAssetProviderTests
         var before = DateTime.UtcNow;
         sut.AddRange([feature]);
         sut.GetById("a")!.Properties.UpdatedAt.Should().BeOnOrAfter(before);
+    }
+
+    [Fact]
+    public void AddRange_ExistingFeature_SetsUpdatedAt_FromInjectedTimeProvider()
+    {
+        var fixedNow = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var sut = new InMemoryAssetProvider(new FixedTimeProvider(fixedNow));
+        var feature = new GeoFeature { Id = "a" };
+        sut.Add(feature);
+
+        sut.AddRange([feature]);
+
+        sut.GetById("a")!.Properties.UpdatedAt.Should().Be(fixedNow.UtcDateTime);
     }
 
     [Fact]

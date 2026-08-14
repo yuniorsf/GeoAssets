@@ -105,10 +105,10 @@ classDiagram
         +bool IsLeaf
     }
     class ServiceOrder {
-        +Transition(newStatus)
-        +DispatchTo(targetId, targetType, by, note, actorKind, agentInvocationId)
-        +RecordAction(action, by, comment, resultingStatus, actorKind, agentInvocationId)
-        +WithFeatures(features, spec)
+        +Transition(newStatus, timeProvider)
+        +DispatchTo(targetId, targetType, by, timeProvider, note, actorKind, agentInvocationId)
+        +RecordAction(action, by, timeProvider, comment, resultingStatus, actorKind, agentInvocationId)
+        +WithFeatures(features, timeProvider, spec)
     }
     class OrderType {
         +string Id

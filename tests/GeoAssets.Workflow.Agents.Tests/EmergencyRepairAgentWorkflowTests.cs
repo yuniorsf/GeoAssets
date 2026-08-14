@@ -38,7 +38,7 @@ public class EmergencyRepairAgentWorkflowTests
     {
         var repository = new ValidatingServiceOrderRepository(new InMemoryServiceOrderRepository());
         var workflow = EmergencyRepairAgentWorkflow.Build(
-            repository, rules, OrderTypeRegistry(), AgentIdentity());
+            repository, rules, OrderTypeRegistry(), AgentIdentity(), TimeProvider.System);
 
         var request = new CreateServiceOrderRequest(
             AgentId,

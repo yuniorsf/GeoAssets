@@ -24,6 +24,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     private readonly GeoAssetsDbContext _db;
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
     private readonly ILogger<PostgresAssetProvider> _logger;
+    private readonly TimeProvider _timeProvider;
 
     // In-memory cache — rebuilt on first use and after writes
     private Dictionary<string, GeoFeature>? _cache;
@@ -36,11 +37,12 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     public event EventHandler<string>? FeatureDeleted;
     public event EventHandler? CollectionChanged;
 
-    public PostgresAssetProvider(GeoAssetsDbContext db, DbContextOptions<GeoAssetsDbContext> dbOptions, ILogger<PostgresAssetProvider> logger)
+    public PostgresAssetProvider(GeoAssetsDbContext db, DbContextOptions<GeoAssetsDbContext> dbOptions, ILogger<PostgresAssetProvider> logger, TimeProvider timeProvider)
     {
-        _db        = db;
-        _dbOptions = dbOptions;
-        _logger    = logger;
+        _db           = db;
+        _dbOptions    = dbOptions;
+        _logger       = logger;
+        _timeProvider = timeProvider;
     }
 
     // ── Cache helpers ──────────────────────────────────────────────────────────
@@ -161,7 +163,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 
     public void Update(GeoFeature feature)
     {
-        feature.Properties.UpdatedAt = DateTime.UtcNow;
+        feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = MapToRow(feature);
         _db.GeoEntities.Update(row);
         SaveChanges();

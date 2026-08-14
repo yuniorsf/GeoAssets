@@ -115,7 +115,7 @@ public class WorkflowServiceExtensionsTests
         using var sp = services.BuildServiceProvider();
 
         var rules = sp.GetRequiredService<ServiceOrderRules>();
-        var order = new ServiceOrder().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = new ServiceOrder().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
         var principal = new WorkflowPrincipal("u1", "org-1", ["FieldTechnician"], [], []);
 
         rules.Evaluate(principal, OrderActionType.Assign, order).Allowed.Should().BeTrue();

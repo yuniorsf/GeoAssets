@@ -287,7 +287,7 @@ public class InMemoryServiceOrderRepositoryTests
     public async Task GetDispatchedTo_MatchingTargetIdAndType_ReturnsOrder()
     {
         var sut = new InMemoryServiceOrderRepository();
-        var order = Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1");
+        var order = Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1", TimeProvider.System);
         await sut.AddAsync(order);
 
         (await sut.GetDispatchedToAsync("user-1", DispatchTargetType.User))
@@ -298,7 +298,7 @@ public class InMemoryServiceOrderRepositoryTests
     public async Task GetDispatchedTo_MismatchedTargetId_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        await sut.AddAsync(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1"));
+        await sut.AddAsync(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1", TimeProvider.System));
 
         (await sut.GetDispatchedToAsync("user-2", DispatchTargetType.User)).Should().BeEmpty();
     }
@@ -307,7 +307,7 @@ public class InMemoryServiceOrderRepositoryTests
     public async Task GetDispatchedTo_MismatchedTargetType_ReturnsEmpty()
     {
         var sut = new InMemoryServiceOrderRepository();
-        await sut.AddAsync(Order("a").DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1"));
+        await sut.AddAsync(Order("a").DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1", TimeProvider.System));
 
         (await sut.GetDispatchedToAsync("crew-1", DispatchTargetType.User)).Should().BeEmpty();
     }
@@ -450,7 +450,7 @@ public class InMemoryServiceOrderRepositoryTests
         var sut = new InMemoryServiceOrderRepository();
         await sut.AddAsync(Order("a"));
 
-        var incoming = Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1");
+        var incoming = Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1", TimeProvider.System);
         await sut.UpdateAsync(incoming);
 
         var stored = await sut.GetByIdAsync("a");
