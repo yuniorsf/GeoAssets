@@ -55,6 +55,7 @@ language features, or planning a future migration.
 | [api-design-conventions.md](references/api-design-conventions.md) | Minimal API grouping, route/verb conventions, request validation, error-shape conventions | `current` |
 | [domain-test-data-builders.md](references/domain-test-data-builders.md) | When/how to promote ad-hoc geometry/topology test construction into shared builders | `current` |
 | [rest-provider-contract-testing.md](references/rest-provider-contract-testing.md) | Closing the untested seam between the REST server endpoints and REST client repository | `current` |
+| [timeprovider-and-clock-abstraction.md](references/timeprovider-and-clock-abstraction.md) | Never `DateTime.Now`/`Stopwatch`/raw timers — inject `TimeProvider`; ties to active XD01-34 migration | `current` |
 
 As more books/articles are added, list them here with topic and status so
 this table stays the single index of what's been curated.
