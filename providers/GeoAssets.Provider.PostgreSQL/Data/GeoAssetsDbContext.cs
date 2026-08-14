@@ -74,6 +74,10 @@ public class GeoAssetsDbContext(DbContextOptions<GeoAssetsDbContext> options) : 
             e.Property(x => x.Name).HasMaxLength(128).IsRequired();
             e.Property(x => x.Color).HasMaxLength(32).HasDefaultValue("#3388ff");
             e.Property(x => x.IconUrl).HasMaxLength(512).HasDefaultValue(string.Empty);
+
+            e.Property(x => x.AttributesSchemaJson)
+             .HasColumnType("jsonb")
+             .HasColumnName("attributes_schema");
         });
 
         // ── Built-in asset type seed data ───────────────────────────────────────

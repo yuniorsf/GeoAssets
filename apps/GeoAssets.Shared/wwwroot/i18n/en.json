@@ -57,6 +57,7 @@
   "form.type": "Type / Category",
   "form.descriptionPlaceholder": "Optional description",
   "form.geometry": "Geometry",
+  "form.attributeErrors": "Custom attributes are invalid for this asset type:",
 
   "app.signOut": "Sign out",
   "app.defaultUser": "User",

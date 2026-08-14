@@ -40,7 +40,8 @@ public static class MauiProgram
         // GeoAssets services
         builder.Services.AddSingleton<IProviderPool, ProviderPool>();
         builder.Services.AddSingleton<ActiveAssetProvider>();
-        builder.Services.AddSingleton<IAssetProvider>(sp => sp.GetRequiredService<ActiveAssetProvider>());
+        builder.Services.AddSingleton<IAssetProvider>(sp =>
+            new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()));
         builder.Services.AddGeoAssetsPostgres();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
         builder.Services.Configure<MapInteropOptions>(

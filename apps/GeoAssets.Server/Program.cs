@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Providers;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
 
@@ -15,7 +16,8 @@ var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
 // ── PostgreSQL provider ───────────────────────────────────────────────────────
 builder.Services.AddGeoAssetsPostgres();
 builder.Services.AddSingleton<IAssetProvider>(sp =>
-    sp.GetRequiredService<IPostgresProviderFactory>().Create(connectionString));
+    new ValidatingAssetProvider(
+        sp.GetRequiredService<IPostgresProviderFactory>().Create(connectionString)));
 
 // IDbContextFactory<GeoAssetsDbContext> — used by WmsPostGisRenderer so each
 // tile request opens its own short-lived, thread-safe DbContext without touching

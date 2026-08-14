@@ -8,4 +8,5 @@ public sealed class AssetTypeRow
     public string Color     { get; set; } = "#3388ff";
     public string IconUrl   { get; set; } = string.Empty;
     public bool   IsBuiltIn { get; set; } = false;
+    public string? AttributesSchemaJson { get; set; }
 }

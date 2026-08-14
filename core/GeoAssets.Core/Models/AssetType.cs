@@ -9,6 +9,15 @@ public sealed class AssetType
     public string IconUrl { get; set; } = string.Empty;
     public bool IsBuiltIn { get; set; } = false;
 
+    /// <summary>
+    /// Optional JSON Schema (draft 2020-12) text validating <see cref="GeoFeatureProperties.CustomAttributes"/>
+    /// for features of this asset type. Null or empty means unrestricted — any key/value pairs are
+    /// accepted (same "empty = unrestricted" convention as <c>OrderType.AttributesSchemaJson</c>).
+    /// Enforced by <c>GeoFeatureAttributeValidator</c>, applied on every write by
+    /// <c>ValidatingAssetProvider</c>.
+    /// </summary>
+    public string? AttributesSchemaJson { get; set; }
+
     // Built-in default types
     public static readonly AssetType Point = new()
     {

@@ -227,7 +227,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Name      = r.Name,
                 Color     = r.Color,
                 IconUrl   = r.IconUrl,
-                IsBuiltIn = r.IsBuiltIn
+                IsBuiltIn = r.IsBuiltIn,
+                AttributesSchemaJson = r.AttributesSchemaJson
             }).ToList();
         return [.. _typeCache];
     }
@@ -241,7 +242,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Name      = assetType.Name,
             Color     = assetType.Color,
             IconUrl   = assetType.IconUrl,
-            IsBuiltIn = assetType.IsBuiltIn
+            IsBuiltIn = assetType.IsBuiltIn,
+            AttributesSchemaJson = assetType.AttributesSchemaJson
         });
         SaveChanges();
         _typeCache = null;

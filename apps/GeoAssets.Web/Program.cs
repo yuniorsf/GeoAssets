@@ -77,10 +77,11 @@ builder.Services.AddSingleton<ProviderPluginRegistry>();
 // Boot loader — orchestrates the first-run provider selection flow.
 builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 
-// Proxy follows the active pool entry; wrapped by the observable decorator.
+// Proxy follows the active pool entry; wrapped by the attribute-schema-validating
+// decorator (XD01-10), then the observable decorator.
 builder.Services.AddSingleton<ActiveAssetProvider>();
 builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
-    sp.GetRequiredService<ActiveAssetProvider>(),
+    new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
     sp.GetRequiredService<ILogger<ObservableAssetProvider>>()));
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();
