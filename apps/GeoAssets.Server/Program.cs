@@ -17,6 +17,7 @@ var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
         "Set it in appsettings.json or via the ConnectionStrings__GeoAssets environment variable.");
 
 // ── PostgreSQL provider ───────────────────────────────────────────────────────
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddGeoAssetsPostgres();
 builder.Services.AddSingleton<IAssetProvider>(sp =>
     new ValidatingAssetProvider(
