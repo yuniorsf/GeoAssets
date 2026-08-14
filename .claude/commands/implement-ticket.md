@@ -1,6 +1,8 @@
-Implement a Jira ticket end-to-end: design, code, test, commit — moving the ticket's Jira status forward at each real step, not just at the end. Stops after the commit(s); does not push. Argument: the ticket key (e.g. `XD01-4`).
+Implement a Jira ticket end-to-end: design, code, test, commit — moving the ticket's Jira status forward at each real step, not just at the end. Stops after the commit(s); does not push. Argument: the ticket key (e.g. `XD01-4`), or the literal `FIRST_TO_DO`.
 
 Parse `$ARGUMENTS` as the ticket key. If empty, ask for one instead of guessing.
+
+If `$ARGUMENTS` is the literal `FIRST_TO_DO`, resolve it to an actual ticket key before continuing: `searchJiraIssuesUsingJql` with `project = XD01 AND status = "To Do" ORDER BY Rank ASC`, take the first result's key, and use that as the ticket key for every step below. If no issues are in "To Do", stop and tell the user rather than falling back to another status.
 
 Jira site for this project: `xdicor.atlassian.net`, project key `XD01` (see the `reference_jira_project` memory if available — the key has changed before, verify with `getVisibleJiraProjects` if a call 404s).
 
@@ -43,8 +45,8 @@ Jira site for this project: `xdicor.atlassian.net`, project key `XD01` (see the 
     Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
     ```
 
-13. **Move to Done** — same transition-lookup pattern as step 3. Before transitioning, `editJiraIssue` to append a "## Resolution" section to the ticket's description (don't overwrite the original problem statement) with: the commit hash(es), a summary of what changed, test counts/pass status, and any follow-up gaps deliberately left out of scope (file those as new tickets only if they're substantial — a one-line note is enough for small ones).
+13. **Append the resolution note, stay in In Review** — `editJiraIssue` to append a "## Resolution" section to the ticket's description (don't overwrite the original problem statement) with: the commit hash(es), a summary of what changed, test counts/pass status, and any follow-up gaps deliberately left out of scope (file those as new tickets only if they're substantial — a one-line note is enough for small ones). Do **not** transition the ticket to Done — the agent never moves a ticket past In Review; only a human reviewer does that.
 
 14. **Report back** — a short summary: what was implemented, the commit hash(es) (and why split that way, if more than one), ticket's final state, and anything that needed a judgment call worth flagging. Note explicitly that nothing was pushed, so the user can review before pushing themselves.
 
-If any step fails (build error, test failure, Jira transition unavailable), stop and surface the failure rather than skipping ahead — do not silently mark the ticket Done on a red step.
+If any step fails (build error, test failure, Jira transition unavailable), stop and surface the failure rather than skipping ahead — do not silently mark the ticket Done on a red step. The ticket must never be transitioned to Done by this command, regardless of how the implementation went — In Review is the maximum status this workflow sets.
