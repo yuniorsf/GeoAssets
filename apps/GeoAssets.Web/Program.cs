@@ -17,6 +17,8 @@ using GeoAssets.Web.Services;
 using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Session;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -98,10 +100,28 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
     sp.GetRequiredService<AssetService>(),
     sp.GetRequiredService<ILogger<ObservableAssetService>>()));
 
-// ── Service Order workflow — in-memory, session-scoped for this first pass.
-// See XD01-8 for the durable/Postgres-backed alternative via GeoAssets.Server.
+// ── Service Order workflow — in-memory (default) or REST-backed via GeoAssets.Server,
+// switched by "ServiceOrders:Backend" config ("InMemory" | "Rest"; env var override:
+// ServiceOrders__Backend). In-memory stays the default so the app still runs with zero
+// config against a Postgres server (XD01-8). When "Rest", OrderTypes are also loaded from
+// the server below, overlaying the seeded defaults — see AddWorkflowRest's doc comment.
 builder.Services.AddOrderTypeRegistry();
-builder.Services.AddWorkflowInMemory();
+
+var serviceOrdersBackend = builder.Configuration["ServiceOrders:Backend"] ?? "InMemory";
+var serviceOrdersUseRest = string.Equals(serviceOrdersBackend, "Rest", StringComparison.OrdinalIgnoreCase);
+
+if (serviceOrdersUseRest)
+{
+    var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
+        ?? throw new InvalidOperationException(
+            "ServiceOrders:Backend is 'Rest' but ServiceOrders:ApiBaseUrl is not configured.");
+    builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
+}
+else
+{
+    builder.Services.AddWorkflowInMemory();
+}
+
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
 
@@ -113,5 +133,12 @@ logger.LogInformation("GeoAssets starting — environment: {Environment}", build
 
 host.Services.GetRequiredService<IdentitySeeder>().Seed();
 host.Services.GetRequiredService<UserProvisioningService>();
+
+if (serviceOrdersUseRest)
+{
+    var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
+    var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
+    await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
+}
 
 await host.RunAsync();
