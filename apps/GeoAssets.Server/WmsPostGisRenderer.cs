@@ -29,7 +29,7 @@ namespace GeoAssets.Server;
 /// timeout, it is cancelled cleanly.  The caller can still detect client-side
 /// cancellation via the original HTTP token and return an empty result early.
 /// </summary>
-public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> factory)
+public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> factory, TimeProvider timeProvider)
 {
     /// <summary>Per-query timeout for PostGIS operations (tile rendering must be fast).</summary>
     public static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(30);
@@ -68,7 +68,7 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
 
         var bbox = MakeBbox(minLon, minLat, maxLon, maxLat);
 
-        using var cts = new CancellationTokenSource(QueryTimeout);
+        using var cts = new CancellationTokenSource(QueryTimeout, timeProvider);
         await using var db = await factory.CreateDbContextAsync(cts.Token);
 
         var query = db.GeoEntities
@@ -106,7 +106,7 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
             clickLon - toleranceLon, clickLat - toleranceLat,
             clickLon + toleranceLon, clickLat + toleranceLat);
 
-        using var cts = new CancellationTokenSource(QueryTimeout);
+        using var cts = new CancellationTokenSource(QueryTimeout, timeProvider);
         await using var db = await factory.CreateDbContextAsync(cts.Token);
 
         return await db.GeoEntities
@@ -128,7 +128,7 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
     {
         if (httpCt.IsCancellationRequested) return [];
 
-        using var cts = new CancellationTokenSource(QueryTimeout);
+        using var cts = new CancellationTokenSource(QueryTimeout, timeProvider);
         await using var db = await factory.CreateDbContextAsync(cts.Token);
 
         return await db.AssetTypes

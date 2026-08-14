@@ -85,7 +85,8 @@ builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 builder.Services.AddSingleton<ActiveAssetProvider>();
 builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
     new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
-    sp.GetRequiredService<ILogger<ObservableAssetProvider>>()));
+    sp.GetRequiredService<ILogger<ObservableAssetProvider>>(),
+    sp.GetRequiredService<TimeProvider>()));
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();
 
@@ -94,12 +95,14 @@ builder.Services.Configure<MapInteropOptions>(
 builder.Services.AddScoped<MapInteropService>();
 builder.Services.AddScoped<IMapInterop>(sp => new ObservableMapInterop(
     sp.GetRequiredService<MapInteropService>(),
-    sp.GetRequiredService<ILogger<ObservableMapInterop>>()));
+    sp.GetRequiredService<ILogger<ObservableMapInterop>>(),
+    sp.GetRequiredService<TimeProvider>()));
 
 builder.Services.AddScoped<AssetService>();
 builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
     sp.GetRequiredService<AssetService>(),
-    sp.GetRequiredService<ILogger<ObservableAssetService>>()));
+    sp.GetRequiredService<ILogger<ObservableAssetService>>(),
+    sp.GetRequiredService<TimeProvider>()));
 
 // ── Service Order workflow — in-memory (default) or REST-backed via GeoAssets.Server,
 // switched by "ServiceOrders:Backend" config ("InMemory" | "Rest"; env var override:

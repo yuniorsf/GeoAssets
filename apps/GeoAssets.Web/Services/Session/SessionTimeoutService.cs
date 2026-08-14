@@ -16,8 +16,9 @@ namespace GeoAssets.Web.Services.Session;
 public sealed class SessionTimeoutService : IAsyncDisposable
 {
     private readonly SessionConfig _config;
+    private readonly TimeProvider  _timeProvider;
 
-    private DateTime              _lastActivity = DateTime.UtcNow;
+    private DateTimeOffset        _lastActivity;
     private CancellationTokenSource _cts        = new();
     private Task?                 _runTask;
 
@@ -30,21 +31,25 @@ public sealed class SessionTimeoutService : IAsyncDisposable
     public bool IsInWarning  { get; private set; }
     public int  SecondsLeft  { get; private set; } = int.MaxValue;
 
-    public SessionTimeoutService(IOptions<SessionConfig> config)
-        => _config = config.Value;
+    public SessionTimeoutService(IOptions<SessionConfig> config, TimeProvider timeProvider)
+    {
+        _config = config.Value;
+        _timeProvider = timeProvider;
+        _lastActivity = _timeProvider.GetUtcNow();
+    }
 
     /// <summary>Starts the background inactivity monitoring loop.</summary>
     public void Start()
     {
         if (_runTask is not null) return;
-        _lastActivity = DateTime.UtcNow;
+        _lastActivity = _timeProvider.GetUtcNow();
         _runTask = RunAsync(_cts.Token);
     }
 
     /// <summary>Called on any user interaction — resets the inactivity timer.</summary>
     public void RecordActivity()
     {
-        _lastActivity = DateTime.UtcNow;
+        _lastActivity = _timeProvider.GetUtcNow();
 
         if (IsInWarning)
         {
@@ -56,11 +61,11 @@ public sealed class SessionTimeoutService : IAsyncDisposable
 
     private async Task RunAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), _timeProvider);
 
         while (await timer.WaitForNextTickAsync(ct))
         {
-            var elapsed         = (DateTime.UtcNow - _lastActivity).TotalSeconds;
+            var elapsed         = (_timeProvider.GetUtcNow() - _lastActivity).TotalSeconds;
             var timeoutSeconds  = _config.InactivityTimeoutMinutes * 60;
             var remaining       = timeoutSeconds - (int)elapsed;
 

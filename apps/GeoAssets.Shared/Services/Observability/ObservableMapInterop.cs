@@ -16,8 +16,9 @@ namespace GeoAssets.Shared.Services.Observability;
 /// </summary>
 public sealed class ObservableMapInterop(
     IMapInterop inner,
-    ILogger<ObservableMapInterop> logger)
-    : ObservableDecoratorBase<ObservableMapInterop>(logger), IMapInterop
+    ILogger<ObservableMapInterop> logger,
+    TimeProvider timeProvider)
+    : ObservableDecoratorBase<ObservableMapInterop>(logger, timeProvider), IMapInterop
 {
     // ── Instrumented ─────────────────────────────────────────────────────────
 
