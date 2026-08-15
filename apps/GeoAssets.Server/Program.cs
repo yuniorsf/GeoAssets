@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
 using GeoAssets.Workflow;
@@ -7,6 +8,10 @@ using GeoAssets.Workflow.Orders;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Observability (traces + metrics + logs → OTLP, e.g. New Relic; see
+// "Observability" section in appsettings.json) ─────────────────────────────────
+builder.Services.AddGeoAssetsObservability(builder.Configuration);
 
 // ── Connection string ─────────────────────────────────────────────────────────
 // Read from appsettings.json "ConnectionStrings:GeoAssets"
@@ -60,6 +65,8 @@ var app = builder.Build();
 
 // Overlay any DB-persisted OrderTypes on top of the seeded defaults.
 await app.Services.LoadRegistryFromDbAsync();
+
+app.UseGeoAssetsObservability();
 
 app.UseCors();
 

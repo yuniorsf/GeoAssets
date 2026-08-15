@@ -8,18 +8,26 @@
   </PropertyGroup>
 
   <!--
-    OpenTelemetry + Azure Monitor "distro" package.
-    Azure.Monitor.OpenTelemetry.AspNetCore is the recommended single-package
-    entrypoint: it bundles AspNetCore instrumentation, HttpClient instrumentation,
-    and the AzureMonitorExporter for traces, metrics, and logs in one go.
+    Vendor-agnostic OpenTelemetry stack. Traces, metrics, and logs are exported
+    via the standard OTLP exporter, so the destination (New Relic, an OTel
+    Collector, Datadog, etc.) is a config choice — see ObservabilityOptions.Otlp.
   -->
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.Core\GeoAssets.Core.csproj" />
   </ItemGroup>
 
+  <!-- Needed for IApplicationBuilder / health checks / HttpContext (ObservabilityApplicationExtensions, TelemetryEnrichmentMiddleware) and ASP.NET Core instrumentation below. -->
   <ItemGroup>
-    <!-- Unified Azure Monitor distro (traces + metrics + logs → Application Insights) -->
-    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore"          Version="1.5.0" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- OTLP exporter (traces + metrics + logs → any OTLP-compatible backend) -->
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"    Version="1.15.3" />
+
+    <!-- ASP.NET Core + HttpClient instrumentation (previously bundled by the Azure Monitor distro) -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore"        Version="1.15.2" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http"              Version="1.15.1" />
 
     <!-- Additional instrumentations not included in the distro -->
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"           Version="1.15.1" />
@@ -31,7 +39,7 @@
     <!-- Hosting extensions for AddOpenTelemetry() -->
     <PackageReference Include="OpenTelemetry.Extensions.Hosting"                Version="1.15.3" />
 
-    <!-- DI / config abstractions — no hard runtime dep on ASP.NET Core -->
+    <!-- DI / config abstractions -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions"       Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder"            Version="10.0.7" />
