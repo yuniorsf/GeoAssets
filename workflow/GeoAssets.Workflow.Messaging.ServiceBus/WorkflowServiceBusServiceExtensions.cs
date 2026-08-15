@@ -6,6 +6,10 @@ namespace GeoAssets.Workflow.Messaging.ServiceBus;
 
 /// <summary>
 /// DI registration helpers for the Azure Service Bus messaging implementation.
+/// <see cref="ServiceBusOrderEventPublisher"/> requires a registered
+/// <see cref="GeoAssets.Infrastructure.Observability.GeoAssetsActivitySource"/> —
+/// call <c>builder.Services.AddGeoAssetsObservability(...)</c> before
+/// <see cref="AddWorkflowServiceBus(IServiceCollection, IConfiguration)"/>.
 /// </summary>
 /// <example>
 /// <b>appsettings.json</b>
