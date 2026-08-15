@@ -3,17 +3,13 @@ using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Provider.InMemory;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Services;
 
 public class InMemoryAssetProviderTests
 {
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
     private static GeoFeature Feature(string id, string? assetTypeId = null) => new()
     {
         Id = id,
@@ -203,26 +199,15 @@ public class InMemoryAssetProviderTests
     [Fact]
     public void Update_SetsUpdatedAt()
     {
-        var sut = new InMemoryAssetProvider();
-        var feature = new GeoFeature { Id = "a" };
-        feature.Properties.UpdatedAt = DateTime.UtcNow.AddDays(-1);
-        sut.Add(feature);
-        var before = DateTime.UtcNow;
-        sut.Update(feature);
-        sut.GetById("a")!.Properties.UpdatedAt.Should().BeOnOrAfter(before);
-    }
-
-    [Fact]
-    public void Update_SetsUpdatedAt_FromInjectedTimeProvider()
-    {
-        var fixedNow = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var sut = new InMemoryAssetProvider(new FixedTimeProvider(fixedNow));
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var sut = new InMemoryAssetProvider(timeProvider);
         var feature = new GeoFeature { Id = "a" };
         sut.Add(feature);
 
+        timeProvider.Advance(TimeSpan.FromDays(1));
         sut.Update(feature);
 
-        sut.GetById("a")!.Properties.UpdatedAt.Should().Be(fixedNow.UtcDateTime);
+        sut.GetById("a")!.Properties.UpdatedAt.Should().Be(timeProvider.GetUtcNow().UtcDateTime);
     }
 
     [Fact]
@@ -260,26 +245,15 @@ public class InMemoryAssetProviderTests
     [Fact]
     public void AddRange_ExistingFeature_SetsUpdatedAt()
     {
-        var sut = new InMemoryAssetProvider();
-        var feature = new GeoFeature { Id = "a" };
-        feature.Properties.UpdatedAt = DateTime.UtcNow.AddDays(-1);
-        sut.Add(feature);
-        var before = DateTime.UtcNow;
-        sut.AddRange([feature]);
-        sut.GetById("a")!.Properties.UpdatedAt.Should().BeOnOrAfter(before);
-    }
-
-    [Fact]
-    public void AddRange_ExistingFeature_SetsUpdatedAt_FromInjectedTimeProvider()
-    {
-        var fixedNow = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var sut = new InMemoryAssetProvider(new FixedTimeProvider(fixedNow));
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var sut = new InMemoryAssetProvider(timeProvider);
         var feature = new GeoFeature { Id = "a" };
         sut.Add(feature);
 
+        timeProvider.Advance(TimeSpan.FromDays(1));
         sut.AddRange([feature]);
 
-        sut.GetById("a")!.Properties.UpdatedAt.Should().Be(fixedNow.UtcDateTime);
+        sut.GetById("a")!.Properties.UpdatedAt.Should().Be(timeProvider.GetUtcNow().UtcDateTime);
     }
 
     [Fact]
