@@ -6,6 +6,10 @@ namespace GeoAssets.Workflow.Messaging.Kafka;
 
 /// <summary>
 /// DI registration helpers for the Apache Kafka messaging implementation.
+/// <see cref="KafkaOrderEventPublisher"/> requires a registered
+/// <see cref="GeoAssets.Infrastructure.Observability.GeoAssetsActivitySource"/> —
+/// call <c>builder.Services.AddGeoAssetsObservability(...)</c> before
+/// <see cref="AddWorkflowKafka(IServiceCollection, IConfiguration)"/>.
 /// </summary>
 /// <example>
 /// <b>appsettings.json</b>
