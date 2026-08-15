@@ -39,8 +39,8 @@ public sealed class GeoAssetsActivitySource
         _source.StartActivity($"ServiceOrder.{operationName}")
                ?.AddTag("order.id", orderId);
 
-    public Activity? StartNotificationActivity(string orderId, string transport) =>
-        _source.StartActivity("Notification.Publish")
+    public Activity? StartNotificationActivity(string orderId, string transport, ActivityKind kind = ActivityKind.Internal) =>
+        _source.StartActivity("Notification.Publish", kind)
                ?.AddTag("order.id", orderId)
                 .AddTag("messaging.system", transport);
 
