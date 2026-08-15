@@ -13,7 +13,6 @@ namespace GeoAssets.Infrastructure.Observability;
 ///     "Protocol": "Grpc",
 ///     "Headers": ""
 ///   },
-///   "Sampling": { "RatioForProduction": 0.1 },
 ///   "Instrumentation": {
 ///     "EnableEFCore": true,
 ///     "EnableRuntime": true,
@@ -34,7 +33,6 @@ public sealed class ObservabilityOptions
     public string ServiceVersion { get; set; } = "1.0.0";
 
     public OtlpOptions            Otlp            { get; set; } = new();
-    public SamplingOptions        Sampling        { get; set; } = new();
     public InstrumentationOptions Instrumentation { get; set; } = new();
 }
 
@@ -58,16 +56,6 @@ public sealed class OtlpOptions
     /// wired in automatically as <c>api-key=&lt;value&gt;</c>.
     /// </summary>
     public string Headers { get; set; } = string.Empty;
-}
-
-public sealed class SamplingOptions
-{
-    /// <summary>
-    /// Probability of sampling a trace in production (0.0–1.0).
-    /// 1.0 = sample everything (good for dev/staging).
-    /// 0.1 = sample 10 % (sensible default for high-traffic prod).
-    /// </summary>
-    public double RatioForProduction { get; set; } = 1.0;
 }
 
 public sealed class InstrumentationOptions

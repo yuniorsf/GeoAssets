@@ -28,7 +28,6 @@ namespace GeoAssets.Infrastructure.Observability;
 ///       "Endpoint": "https://otlp.nr-data.net:4317",
 ///       "Protocol": "Grpc"
 ///     },
-///     "Sampling": { "RatioForProduction": 0.25 },
 ///     "Instrumentation": { "EnableEFCore": true, "EnableRuntime": true }
 ///   }
 /// }
@@ -133,13 +132,13 @@ public static class ObservabilityServiceExtensions
                 tracing.AddEntityFrameworkCoreInstrumentation(o =>
                     o.SetDbStatementForText = true);
 
-            // Head-based probabilistic sampling: RatioForProduction of traces are
-            // sampled at the SDK, independent of outcome (errors included). True
-            // tail-based sampling (retain all errors/high-latency, thin out the
-            // rest) requires an OTel Collector `tail_sampling` processor in front
-            // of the exporter — not implemented yet (Jira XD01-31).
-            tracing.SetSampler(new ParentBasedSampler(
-                new TraceIdRatioBasedSampler(opts.Sampling.RatioForProduction)));
+            // Export everything from the SDK; the retain/discard decision for
+            // tail-based sampling (100% of errors + P95+ latency, ~1% baseline)
+            // belongs to an OTel Collector `tail_sampling` processor placed
+            // between this exporter and the backend — not deployed yet. Until
+            // that Collector exists, every exported trace is billed/stored
+            // as-is by the OTLP backend (see XD01-31).
+            tracing.SetSampler(new AlwaysOnSampler());
 
             if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
                 tracing.AddOtlpExporter(ConfigureOtlp);
