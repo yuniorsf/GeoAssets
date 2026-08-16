@@ -44,6 +44,17 @@ public sealed class GeoAssetsActivitySource
                ?.AddTag("order.id", orderId)
                 .AddTag("messaging.system", transport);
 
+    /// <summary>
+    /// Starts a span for an AI-agent-driven workflow operation (see
+    /// <c>GeoAssets.Workflow.Agents.Executors</c>), tagged with the order, the acting agent,
+    /// and — when present — the agent invocation/run that triggered it.
+    /// </summary>
+    public Activity? StartAgentActivity(string operationName, string orderId, string agentId, string? agentInvocationId = null) =>
+        _source.StartActivity($"Agent.{operationName}")
+               ?.AddTag("order.id", orderId)
+                .AddTag("agent.id", agentId)
+                .AddTag("agent.invocation_id", agentInvocationId);
+
     // ── Generic ───────────────────────────────────────────────────────────────
 
     /// <summary>

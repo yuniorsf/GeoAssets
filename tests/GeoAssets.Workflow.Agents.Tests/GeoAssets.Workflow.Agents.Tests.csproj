@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Agents\GeoAssets.Workflow.Agents.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
   </ItemGroup>
 
 </Project>

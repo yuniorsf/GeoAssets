@@ -638,6 +638,25 @@ is granted `Dispatch` that day.
 distinction observable in tests, after an earlier draft of the executor called
 `UpdateAsync` post-mutation and had the bug masked by reference-aliasing.
 
+### Observability
+
+Both executors' `HandleAsync` are wrapped in a `GeoAssetsActivitySource.StartAgentActivity`
+span (`Agent.Create`/`Agent.Dispatch`, tagged `order.id`/`agent.id`/`agent.invocation_id`/
+`decision.allowed`) and log structurally via `ILogger` — the rule-evaluation outcome
+(allow/deny, with `RuleEvaluationResult.Reason` where one exists), the resulting transition,
+and any exception (`GeoAssetsActivitySource.RecordException` on the span, plus `LogError` —
+except the executors' own intentional authorization denials, which log once at
+Warning/Information and aren't re-logged as an unexpected error). Since neither executor is
+DI-resolved — `EmergencyRepairAgentWorkflow.Build(...)` constructs them directly — it takes a
+`GeoAssetsActivitySource` and an `ILoggerFactory` (not a pre-resolved logger) and calls
+`loggerFactory.CreateLogger<T>()` itself for each.
+
+This makes `GeoAssets.Workflow.Agents` depend on `GeoAssets.Infrastructure.Observability`,
+which nothing in this project needed before — safe here because, unlike
+`GeoAssets.Workflow`'s in-memory repository (§7, used from Blazor WASM), nothing in
+`GeoAssets.Workflow.Agents` runs client-side; only its own test project references it today
+(no host wires `AddWorkflowAgents`/`EmergencyRepairAgentWorkflow.Build` in yet).
+
 ### File map
 
 | Concept | Path |

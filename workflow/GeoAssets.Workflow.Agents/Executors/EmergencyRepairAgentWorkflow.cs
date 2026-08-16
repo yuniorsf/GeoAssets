@@ -1,7 +1,9 @@
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Agents.Identity;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.Logging;
 using MafWorkflow = Microsoft.Agents.AI.Workflows.Workflow;
 
 namespace GeoAssets.Workflow.Agents.Executors;
@@ -14,15 +16,29 @@ namespace GeoAssets.Workflow.Agents.Executors;
 /// </summary>
 public static class EmergencyRepairAgentWorkflow
 {
+    /// <param name="tracer">
+    /// Issues the <c>Agent.Create</c>/<c>Agent.Dispatch</c> spans each executor records — see
+    /// <see cref="GeoAssetsActivitySource.StartAgentActivity"/>. Register
+    /// <c>AddGeoAssetsObservability</c> in the host to get a real instance.
+    /// </param>
+    /// <param name="loggerFactory">
+    /// Used to create each executor's own <c>ILogger&lt;T&gt;</c> — the executors aren't
+    /// DI-resolved (this factory method constructs them directly), so a factory rather than a
+    /// pre-resolved logger is required here.
+    /// </param>
     public static MafWorkflow Build(
         IServiceOrderRepository repository,
         ServiceOrderRules       rules,
         OrderTypeRegistry       orderTypeRegistry,
         IAgentIdentityProvider  identity,
-        TimeProvider            timeProvider)
+        TimeProvider            timeProvider,
+        GeoAssetsActivitySource tracer,
+        ILoggerFactory          loggerFactory)
     {
-        var create   = new CreateServiceOrderExecutor(repository, rules, orderTypeRegistry, identity);
-        var dispatch = new DispatchServiceOrderExecutor(repository, rules, identity, timeProvider);
+        var create   = new CreateServiceOrderExecutor(
+            repository, rules, orderTypeRegistry, identity, tracer, loggerFactory.CreateLogger<CreateServiceOrderExecutor>());
+        var dispatch = new DispatchServiceOrderExecutor(
+            repository, rules, identity, timeProvider, tracer, loggerFactory.CreateLogger<DispatchServiceOrderExecutor>());
 
         return new WorkflowBuilder(create)
             .AddEdge(create, dispatch)
