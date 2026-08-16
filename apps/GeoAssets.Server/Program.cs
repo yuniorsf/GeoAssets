@@ -13,6 +13,11 @@ var builder = WebApplication.CreateBuilder(args);
 // "Observability" section in appsettings.json) ─────────────────────────────────
 builder.Services.AddGeoAssetsObservability(builder.Configuration);
 
+// UseGeoAssetsObservability() (below) wires a /healthz endpoint via UseHealthChecks,
+// which requires HealthCheckService to be registered — without this call the host
+// throws InvalidOperationException at startup (found via XD01-45's test coverage).
+builder.Services.AddHealthChecks();
+
 // ── Connection string ─────────────────────────────────────────────────────────
 // Read from appsettings.json "ConnectionStrings:GeoAssets"
 // or override with env var: ConnectionStrings__GeoAssets
