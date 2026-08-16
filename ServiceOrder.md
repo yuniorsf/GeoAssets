@@ -434,13 +434,18 @@ classDiagram
     class ValidatingServiceOrderRepository {
         -IServiceOrderRepository inner
     }
+    class ObservableServiceOrderRepository {
+        -IServiceOrderRepository inner
+    }
 
     IServiceOrderRepository --|> IServiceOrderReader
     IServiceOrderRepository --|> IServiceOrderWriter
     IServiceOrderRepository <|.. InMemoryServiceOrderRepository
     IServiceOrderRepository <|.. EFServiceOrderRepository
     IServiceOrderRepository <|.. ValidatingServiceOrderRepository
+    IServiceOrderRepository <|.. ObservableServiceOrderRepository
     ValidatingServiceOrderRepository o--> IServiceOrderRepository : wraps
+    ObservableServiceOrderRepository o--> IServiceOrderRepository : wraps
 ```
 
 - **`UpdateAsync`** persists scalar fields only (title, status, priority, assignee,
@@ -464,6 +469,18 @@ classDiagram
   `SnapshottingServiceOrderRepository` (see §9), does *not* get this protection when
   used unwrapped — a live, if low-stakes, reminder that this contract is still
   enforced by convention for any repository that isn't wrapped, not by the compiler.
+- **`ObservableServiceOrderRepository`** decorates any inner repository with
+  tracing/metrics/logging for status transitions — a span + a
+  `geoassets.orders.transitions` metric (via `GeoAssetsActivitySource`/
+  `GeoAssetsMeter`) on every transition the inner repository's
+  `OrderStatusChanged` event reports, and a structured warning log for any
+  transition the repository rejects (`InvalidServiceOrderTransitionException`).
+  Only `AddWorkflowPersistence()` registers it, wrapping
+  `ValidatingServiceOrderRepository` (outermost, so a rejection either layer
+  raises is still logged) — not `AddWorkflowInMemory()`, since that registration
+  runs inside Blazor WASM (`GeoAssets.Web/Program.cs`) and
+  `GeoAssets.Infrastructure.Observability` carries an ASP.NET Core
+  `FrameworkReference` a WASM client can't take on.
 - **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts.**
   `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`) is compared at save time;
   a `DbUpdateConcurrencyException` is translated to `ServiceOrderConcurrencyException`
@@ -776,7 +793,9 @@ services.AddWorkflowAgents(builder.Configuration);
 Both `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register
 `IServiceOrderRepository` as a `ValidatingServiceOrderRepository` wrapping the
 concrete implementation, and separately register `IServiceOrderReader` /
-`IServiceOrderWriter` pointing at that same instance.
+`IServiceOrderWriter` pointing at that same instance. `AddWorkflowPersistence()`
+additionally wraps that in an outermost `ObservableServiceOrderRepository` — see
+§7 — which requires `AddGeoAssetsObservability` to have been called first.
 
 `AddServiceOrderRules()` exists specifically because, before it, every caller
 hand-constructed its own `ServiceOrderRules` — a real risk of a human-facing host
