@@ -5,9 +5,12 @@ application code strictly with the OpenTelemetry SDK, send OTLP to this
 Collector, and let the Collector fan out to New Relic, Datadog, and Azure
 Monitor via config only — swapping/adding a backend never touches app code.
 
-This is **local/dev scaffolding only**. Nothing in GeoAssets currently
-emits OTLP (see XD01-29/XD01-30, both still "To Do") — until that lands,
-this Collector has no real traffic to receive.
+This is **local/dev scaffolding only**, separate from `GeoAssets.Server`'s
+normal path. `GeoAssets.Server` already emits OTLP directly to New Relic out
+of the box (XD01-29/XD01-30 landed 2026-08-14) — see "Configuring
+GeoAssets.Server directly against a vendor (no Collector)" below for that
+path. This Collector exists for local multi-vendor fan-out and testing
+(XD01-33), not because production needs one.
 
 ## Running it
 
@@ -155,13 +158,14 @@ hardcoded in application code.
 ## .NET Program.cs — illustrative snippet
 
 This is a generic, standalone example of wiring the official OpenTelemetry
-.NET SDK with `AddOtlpExporter()`. It is **not** applied to
-`GeoAssets.Server` in this change — the real wiring of
-`GeoAssets.Infrastructure.Observability` into `GeoAssets.Server` is tracked
-separately in XD01-29 (project reference + `AddGeoAssetsObservability`
-call site) and XD01-30 (replacing the `Azure.Monitor.OpenTelemetry.AspNetCore`
-distro in `ObservabilityServiceExtensions.cs` with this same
-`AddOtlpExporter()` approach).
+.NET SDK with `AddOtlpExporter()` — useful as a reference if you're adding
+OTLP to a *different* service that isn't `GeoAssets.Server`.
+`GeoAssets.Server` itself doesn't need this snippet: `AddGeoAssetsObservability`
+(from `GeoAssets.Infrastructure.Observability`, called in
+`apps/GeoAssets.Server/Program.cs`) already does exactly this, driven by the
+`Observability:Otlp:*` config section instead of raw `OTEL_EXPORTER_OTLP_*`
+env vars — see "Configuring GeoAssets.Server directly against a vendor (no
+Collector)" below for how to point it at a specific backend.
 
 ```csharp
 using OpenTelemetry.Metrics;
@@ -198,6 +202,83 @@ app.Run();
 
 To stop sending to a vendor, remove it from `service.pipelines.*.exporters`
 in `otel-collector-config.yaml` — no application redeploy required.
+
+## Configuring GeoAssets.Server directly against a vendor (no Collector)
+
+Everything above is about the local/dev Collector. In production,
+`GeoAssets.Server` doesn't go through a Collector at all —
+`AddGeoAssetsObservability`
+(`core/GeoAssets.Infrastructure.Observability/ObservabilityServiceExtensions.cs`)
+wires a plain `AddOtlpExporter()` for traces, metrics, and logs, configured
+entirely through the `Observability:Otlp:*` section of `appsettings.json` (or
+the `Observability__Otlp__Endpoint` / `OTEL_EXPORTER_OTLP_HEADERS`
+environment-variable overrides, same `__` convention as
+`ConnectionStrings__GeoAssets`). Swapping vendors is a config change, not a
+code change — instrumentation call sites (`GeoAssetsActivitySource`,
+`GeoAssetsMeter`) never know which backend is on the other end.
+
+### New Relic (direct — no Collector or Agent needed)
+
+This is the shipped default in `appsettings.json`:
+
+| Setting | Value |
+|---|---|
+| `Observability:Otlp:Endpoint` | `https://otlp.nr-data.net:4317` (US, gRPC) or `https://otlp.nr-data.net:4318` (US, HTTP — also set `Protocol: HttpProtobuf`) |
+| EU accounts | `https://otlp.eu01.nr-data.net:4317` / `:4318` |
+| Header | `api-key=<your New Relic ingest license key>` |
+
+Easiest setup: just set the `NEW_RELIC_LICENSE_KEY` environment variable.
+`ObservabilityServiceExtensions.cs` auto-formats it into the `api-key` header
+for you, so you don't need to hand-build `Observability:Otlp:Headers`.
+
+New Relic accepts OTLP directly on that endpoint — no Agent or Collector
+required.
+
+### Datadog
+
+Two supported paths — pick one:
+
+1. **Via the Datadog Agent's OTLP receiver** — the proven path, and the same
+   one the local Collector's `datadog` exporter in this directory stands in
+   for. Run the Datadog Agent (v7.32+) with OTLP ingestion enabled
+   (`otlp_config.receiver` in `datadog.yaml`, listening on `4317`/`4318`),
+   then point `Observability:Otlp:Endpoint` at the Agent's host, e.g.
+   `http://<agent-host>:4317`. The app itself sends no Datadog credential —
+   the Agent authenticates to Datadog with its own `DD_API_KEY`.
+2. **Direct/agentless OTLP intake.** Datadog has been rolling out OTLP
+   ingestion that skips the Agent entirely, but the intake hostname and
+   required headers vary by account site and are still evolving — check
+   Datadog's current OTLP ingestion documentation for your site before
+   wiring this up rather than assuming the New Relic-shaped URL applies here
+   too.
+
+Either path: still no code change in `GeoAssets.Server`, only
+`Observability:Otlp:Endpoint`/`Headers`.
+
+### Azure Application Insights / Azure Monitor
+
+This one is different from the other two: **Azure Monitor doesn't expose a
+plain OTLP ingest endpoint**, so you can't just repoint
+`Observability:Otlp:Endpoint` at an Azure URL the way you can for New Relic.
+Two real options:
+
+1. **Through a Collector running the `azuremonitor` exporter** — exactly
+   what `otel-collector-config.yaml` in this directory already does. Point
+   `Observability:Otlp:Endpoint` at the Collector (e.g.
+   `http://otel-collector:4317` inside the Compose network) and let the
+   Collector translate OTLP into Application Insights' ingestion protocol
+   using `AZURE_MONITOR_CONNECTION_STRING`. This is the only path proven in
+   this repo today, and it requires a Collector running somewhere between
+   the app and Azure — see the scope note below, production Collector
+   deployment isn't solved yet.
+2. **Re-adding the `Azure.Monitor.OpenTelemetry.AspNetCore` distro package**
+   directly to `GeoAssets.Server` — this *is* a code change, and it's the
+   exact vendor-SDK coupling XD01-30 removed to make the app
+   vendor-agnostic. Only do this if you're deliberately opting back into an
+   Azure-only setup and accepting that trade-off.
+
+Unlike New Relic (and mostly Datadog), there's no agentless, Collector-free,
+code-free path to Azure Monitor today.
 
 ## Scope note
 
