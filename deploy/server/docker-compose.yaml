@@ -8,7 +8,10 @@ services:
     volumes:
       - geoassets-postgres-data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Host-side 5433, not 5432 — avoids colliding with a native Postgres
+      # already listening on the host's 5432. Container-to-container traffic
+      # (the server service below) still uses the standard 5432 internally.
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

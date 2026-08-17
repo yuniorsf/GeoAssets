@@ -40,8 +40,10 @@ dotnet ef database update \
   --project apps/GeoAssets.Server \
   --startup-project apps/GeoAssets.Server \
   --context ServiceOrderDbContext \
-  --connection "Host=localhost;Port=5432;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
+  --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
 ```
+
+Note the host-side port is **5433**, not 5432 — see the comment in `docker-compose.yaml`; this avoids colliding with any Postgres already running natively on your machine's 5432. The `server` container itself talks to `postgres` over the internal Docker network on the standard 5432, unaffected by this remap.
 
 ## What this doesn't solve
 
