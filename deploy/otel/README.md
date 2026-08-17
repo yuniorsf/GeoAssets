@@ -285,3 +285,10 @@ code-free path to Azure Monitor today.
 Production Collector deployment (HA, scaling, secrets management) is out
 of scope here — see the "Non-goals" section on XD01-28. This is local/dev
 only.
+
+## Running GeoAssets.Server itself in Docker
+
+Everything above is about the Collector in isolation. To actually run
+`GeoAssets.Server` as a container on your machine (New Relic direct, no
+Collector, backed by a local PostGIS container) — see `../server/README.md`.
+It reuses this directory's `.env` for `NEW_RELIC_LICENSE_KEY`.

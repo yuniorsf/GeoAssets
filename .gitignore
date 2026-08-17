@@ -50,3 +50,6 @@ vscode-profile-*
 
 # Local secrets (vendor credentials for deploy/otel Collector)
 deploy/otel/.env
+
+# Local secrets (Postgres password for deploy/server Docker stack)
+deploy/server/.env

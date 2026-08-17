@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: geoassets
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/server/.env}
+    volumes:
+      - geoassets-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ../..
+      dockerfile: apps/GeoAssets.Server/Dockerfile
+    # NEW_RELIC_LICENSE_KEY (and the other vendor credentials) come from the
+    # same Key Vault-backed .env used by the local OTel Collector — see
+    # deploy/otel/README.md "Pulling credentials from Key Vault instead".
+    # Run `deploy/otel/fetch-secrets.sh` (or copy deploy/otel/.env.example)
+    # before starting this stack.
+    env_file:
+      - ../otel/.env
+      - .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__GeoAssets: Host=postgres;Port=5432;Database=geoassets;Username=postgres;Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  geoassets-postgres-data:
