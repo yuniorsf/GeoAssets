@@ -170,6 +170,14 @@ CanAsync(actionCode, resource):
         (g.ExpiresAt is null || g.ExpiresAt > now))
 ```
 
+**Unowned-resource exception** (added during XD01-21 implementation, not in the
+original design above): every `GeoFeature`/`AssetType` created before XD01-20
+shipped defaults to `OrganizationId = Guid.Empty` (that model's own "no
+organization assigned" sentinel). Treating `Guid.Empty` as "belongs to no one, so
+no one may access it" would have mass-locked out all pre-existing data the moment
+this handler shipped — instead, `resource.OrganizationId == Guid.Empty` short-circuits
+straight to "allowed" (after the base RBAC gate), same as if same-org matched.
+
 **3. `OrganizationGrant`** — new entity:
 
 ```csharp
@@ -194,7 +202,7 @@ Index on `(GranteeOrganizationId, ResourceOrganizationId)` — the hot lookup pa
 
 | Resource | Mechanism |
 |---|---|
-| `GeoFeature` / `AssetType` | New `AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>`, wired alongside the subject-only checks on REST endpoints |
+| `GeoFeature` / `AssetType` | New `AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>`, wired alongside the subject-only checks on REST endpoints (**Implemented — XD01-21**) |
 | `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules |
 
 ---
