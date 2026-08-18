@@ -3,6 +3,7 @@ using System;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GeoAssets.Provider.PostgreSQL.Migrations
 {
     [DbContext(typeof(GeoAssetsDbContext))]
-    partial class GeoAssetsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260818190156_AddOrganizationOwnership")]
+    partial class AddOrganizationOwnership
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

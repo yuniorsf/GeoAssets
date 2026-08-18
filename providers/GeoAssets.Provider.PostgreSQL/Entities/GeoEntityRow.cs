@@ -15,6 +15,7 @@ public sealed class GeoEntityRow
     public string AssetTypeId   { get; set; } = string.Empty;
     public string Description   { get; set; } = string.Empty;
     public string LayerId       { get; set; } = string.Empty;
+    public Guid   OrganizationId { get; set; } = Guid.Empty;
     public required DateTime CreatedAt { get; set; }
     public required DateTime UpdatedAt { get; set; }
 

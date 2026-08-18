@@ -38,6 +38,7 @@ public class GeoAssetsDbContext(DbContextOptions<GeoAssetsDbContext> options) : 
             e.Property(x => x.AssetTypeId).HasMaxLength(36).IsRequired();
             e.Property(x => x.Description).HasMaxLength(2048).HasDefaultValue(string.Empty);
             e.Property(x => x.LayerId).HasMaxLength(36).HasDefaultValue(string.Empty);
+            e.Property(x => x.OrganizationId).HasDefaultValue(Guid.Empty);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
 
@@ -61,6 +62,7 @@ public class GeoAssetsDbContext(DbContextOptions<GeoAssetsDbContext> options) : 
 
             e.HasIndex(x => x.AssetTypeId);
             e.HasIndex(x => x.LayerId);
+            e.HasIndex(x => x.OrganizationId);
 
             // Spatial index (GiST) — added via raw SQL in migration
         });
@@ -78,6 +80,10 @@ public class GeoAssetsDbContext(DbContextOptions<GeoAssetsDbContext> options) : 
             e.Property(x => x.AttributesSchemaJson)
              .HasColumnType("jsonb")
              .HasColumnName("attributes_schema");
+
+            e.Property(x => x.OrganizationId).HasDefaultValue(Guid.Empty);
+
+            e.HasIndex(x => x.OrganizationId);
         });
 
         // ── Built-in asset type seed data ───────────────────────────────────────

@@ -3,6 +3,7 @@ using System;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GeoAssets.Server.Migrations
 {
     [DbContext(typeof(ServiceOrderDbContext))]
-    partial class ServiceOrderDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260818190240_AddOrganizationIdToServiceOrders")]
+    partial class AddOrganizationIdToServiceOrders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

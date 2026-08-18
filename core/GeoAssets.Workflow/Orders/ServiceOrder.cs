@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Selection;
 
@@ -23,6 +24,9 @@ public sealed class ServiceOrder : IServiceOrder
 
     public string  CreatedBy  { get; init; } = string.Empty;
     public string? AssignedTo { get; set;  }
+
+    /// <summary>See <see cref="IOrgOwnedResource"/>. Set-once at creation, like <see cref="CreatedBy"/>.</summary>
+    public Guid OrganizationId { get; init; } = Guid.Empty;
 
     public DateTime  CreatedAt   { get; init; } = DateTime.UtcNow;
     public DateTime? UpdatedAt   { get; set;  }

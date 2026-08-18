@@ -1,10 +1,11 @@
 using System.Text.Json.Serialization;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models.Geometry;
 
 namespace GeoAssets.Core.Models;
 
 /// <summary>Maps 1:1 to a GeoJSON Feature object (RFC 7946 §3.2)</summary>
-public sealed class GeoFeature
+public sealed class GeoFeature : IOrgOwnedResource
 {
     [JsonPropertyName("type")]
     public string Type => "Feature";
@@ -25,6 +26,10 @@ public sealed class GeoFeature
     /// </summary>
     [JsonPropertyName("topology")]
     public List<TopoEdge> Topology { get; set; } = [];
+
+    /// <summary>See <see cref="IOrgOwnedResource"/>. Delegates to <see cref="Properties"/>,
+    /// which is the JSON source of truth (<see cref="GeoFeatureProperties.OrganizationId"/>).</summary>
+    Guid IOrgOwnedResource.OrganizationId => Properties.OrganizationId;
 }
 
 public sealed class GeoFeatureProperties
@@ -40,6 +45,12 @@ public sealed class GeoFeatureProperties
 
     [JsonPropertyName("layerId")]
     public string LayerId { get; set; } = string.Empty;
+
+    /// <summary>See <see cref="IOrgOwnedResource"/>. Defaults to <see cref="Guid.Empty"/> —
+    /// "no organization assigned" — rather than being nullable, matching this class's own
+    /// <see cref="CreatedAt"/>/<see cref="UpdatedAt"/> sentinel-default convention.</summary>
+    [JsonPropertyName("organizationId")]
+    public Guid OrganizationId { get; set; } = Guid.Empty;
 
     /// <summary>
     /// EPSG code of the coordinate reference system for this feature's geometry.

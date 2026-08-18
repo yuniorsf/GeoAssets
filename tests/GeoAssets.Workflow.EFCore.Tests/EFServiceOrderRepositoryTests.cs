@@ -40,6 +40,7 @@ public class EFServiceOrderRepositoryTests
         public ServiceOrderPriority Priority { get; init; } = ServiceOrderPriority.Normal;
         public string CreatedBy { get; init; } = string.Empty;
         public string? AssignedTo { get; init; }
+        public Guid OrganizationId { get; init; } = Guid.Empty;
         public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; init; }
         public DateTime? ScheduledAt { get; init; }
@@ -74,6 +75,26 @@ public class EFServiceOrderRepositoryTests
         loaded.Status.Should().Be(ServiceOrderStatus.Draft);
         loaded.CreatedBy.Should().Be("u1");
         loaded.AssignedTo.Should().Be("tech-1");
+    }
+
+    [Fact]
+    public async Task AddAsync_ThenGetById_RoundTripsOrganizationId()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFServiceOrderRepository(fixture.Context);
+        var orgId = Guid.NewGuid();
+
+        await repo.AddAsync(new ServiceOrder
+        {
+            Id             = "org-1",
+            CreatedBy      = "u1",
+            OrderTypeId    = "inspection",
+            OrganizationId = orgId,
+        });
+        var loaded = await repo.GetByIdAsync("org-1");
+
+        loaded.Should().NotBeNull();
+        loaded!.OrganizationId.Should().Be(orgId);
     }
 
     [Fact]

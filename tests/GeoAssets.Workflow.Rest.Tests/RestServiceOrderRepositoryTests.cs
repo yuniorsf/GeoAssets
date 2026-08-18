@@ -396,6 +396,7 @@ public class RestServiceOrderRepositoryTests
         public ServiceOrderPriority Priority => ServiceOrderPriority.Normal;
         public string CreatedBy => "";
         public string? AssignedTo => null;
+        public Guid OrganizationId => Guid.Empty;
         public DateTime CreatedAt => DateTime.UtcNow;
         public DateTime? UpdatedAt => null;
         public DateTime? ScheduledAt => null;

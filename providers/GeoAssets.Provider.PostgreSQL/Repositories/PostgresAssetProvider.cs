@@ -230,7 +230,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Color     = r.Color,
                 IconUrl   = r.IconUrl,
                 IsBuiltIn = r.IsBuiltIn,
-                AttributesSchemaJson = r.AttributesSchemaJson
+                AttributesSchemaJson = r.AttributesSchemaJson,
+                OrganizationId = r.OrganizationId
             }).ToList();
         return [.. _typeCache];
     }
@@ -245,7 +246,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Color     = assetType.Color,
             IconUrl   = assetType.IconUrl,
             IsBuiltIn = assetType.IsBuiltIn,
-            AttributesSchemaJson = assetType.AttributesSchemaJson
+            AttributesSchemaJson = assetType.AttributesSchemaJson,
+            OrganizationId = assetType.OrganizationId
         });
         SaveChanges();
         _typeCache = null;
@@ -280,6 +282,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 AssetTypeId      = row.AssetTypeId,
                 Description      = row.Description,
                 LayerId          = row.LayerId,
+                OrganizationId   = row.OrganizationId,
                 CreatedAt        = row.CreatedAt,
                 UpdatedAt        = row.UpdatedAt,
                 // SRID comes from the PostGIS geometry (authoritative); fall back to 4326
@@ -297,6 +300,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             AssetTypeId          = f.Properties.AssetTypeId,
             Description          = f.Properties.Description,
             LayerId              = f.Properties.LayerId,
+            OrganizationId       = f.Properties.OrganizationId,
             CreatedAt            = f.Properties.CreatedAt,
             UpdatedAt            = f.Properties.UpdatedAt,
             Geom                 = f.Geometry?.NtsGeometry,
