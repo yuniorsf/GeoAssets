@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgis/postgis:16-3.4
+    container_name: PostgresL
     environment:
       POSTGRES_DB: geoassets
       POSTGRES_USER: postgres
@@ -19,6 +20,7 @@ services:
       retries: 10
 
   server:
+    container_name: geoasset-server
     build:
       context: ../..
       dockerfile: apps/GeoAssets.Server/Dockerfile

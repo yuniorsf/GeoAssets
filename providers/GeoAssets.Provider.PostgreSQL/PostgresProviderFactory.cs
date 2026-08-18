@@ -28,7 +28,9 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimePr
     public IAssetProvider Create(string connectionString)
     {
         var options = new DbContextOptionsBuilder<GeoAssetsDbContext>()
-            .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
+            .UseNpgsql(connectionString, npgsql => npgsql
+                .UseNetTopologySuite()
+                .EnableRetryOnFailure())
             .Options;
 
         var db     = new GeoAssetsDbContext(options);
