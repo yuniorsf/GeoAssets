@@ -26,10 +26,10 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// ── Authentication — Azure AD via MSAL ───────────────────────────────────────
+// ── Authentication — Entra External ID (CIAM tenant) via MSAL ────────────────
 builder.Services.AddMsalAuthentication(options =>
 {
-    builder.Configuration.Bind("AzureAd", options.ProviderOptions.Authentication);
+    builder.Configuration.Bind("AzureAdCiam", options.ProviderOptions.Authentication);
     // Use redirect instead of popup to avoid COOP (Cross-Origin-Opener-Policy)
     // browser restrictions that block window.closed monitoring in popup flow.
     options.ProviderOptions.LoginMode = "redirect";

@@ -13,6 +13,11 @@ var builder = WebApplication.CreateBuilder(args);
 // "Observability" section in appsettings.json) ─────────────────────────────────
 builder.Services.AddGeoAssetsObservability(builder.Configuration);
 
+// ── Authentication (bearer-token validation against the CIAM tenant; see
+// "AzureAdCiam" section in appsettings.json) — every endpoint requires an
+// authenticated caller by default (XD01-12) ─────────────────────────────────────
+builder.Services.AddGeoAssetsAuthentication(builder.Configuration);
+
 // UseGeoAssetsObservability() (below) wires a /healthz endpoint via UseHealthChecks,
 // which requires HealthCheckService to be registered — without this call the host
 // throws InvalidOperationException at startup (found via XD01-45's test coverage).
@@ -71,9 +76,11 @@ var app = builder.Build();
 // Overlay any DB-persisted OrderTypes on top of the seeded defaults.
 await app.Services.LoadRegistryFromDbAsync();
 
-app.UseGeoAssetsObservability();
-
 app.UseCors();
+
+app.UseGeoAssetsAuthentication();
+
+app.UseGeoAssetsObservability();
 
 // Expose all GeoAssets REST endpoints under /api/geoassets
 // Endpoints: GET/POST /features, GET/PUT/DELETE /features/{id},
