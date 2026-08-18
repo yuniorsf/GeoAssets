@@ -8,7 +8,8 @@ namespace GeoAssets.Infrastructure.Observability;
 ///
 /// Inject <see cref="GeoAssetsActivitySource"/> and call
 /// <see cref="StartActivity"/> to create custom spans that appear alongside
-/// ASP.NET Core and HTTP client spans in Azure Monitor / Application Insights.
+/// ASP.NET Core and HTTP client spans in the configured OTLP backend
+/// (New Relic as of XD01-30).
 ///
 /// <code>
 /// public class ServiceOrderCommandHandler(GeoAssetsActivitySource tracer, …)

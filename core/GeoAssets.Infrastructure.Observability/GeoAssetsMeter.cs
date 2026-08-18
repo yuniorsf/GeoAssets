@@ -3,8 +3,8 @@ using System.Diagnostics.Metrics;
 namespace GeoAssets.Infrastructure.Observability;
 
 /// <summary>
-/// Application-level metrics for GeoAssets, exported to Azure Monitor as
-/// custom metrics visible in Metrics Explorer and usable in Alerts.
+/// Application-level metrics for GeoAssets, exported via OpenTelemetry's
+/// OTLP metrics exporter to the configured backend (New Relic as of XD01-30).
 ///
 /// Inject <see cref="GeoAssetsMeter"/> where needed:
 /// <code>
