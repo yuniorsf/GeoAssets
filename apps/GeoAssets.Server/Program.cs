@@ -112,6 +112,10 @@ app.MapGeoAssetsApi();
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
 app.MapServiceOrdersApi();
 
+// Read-only identity/authorization endpoints under /api/identity (XD01-18) —
+// see IdentityRestApiExtensions for the full endpoint list.
+app.MapIdentityApi();
+
 // Standalone OGC endpoints for external GIS clients (CORS not required
 // for server-to-server or native desktop tools).
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
