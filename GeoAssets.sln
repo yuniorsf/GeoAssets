@@ -95,6 +95,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Server.Tests", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Rest.Tests", "tests\GeoAssets.Provider.Rest.Tests\GeoAssets.Provider.Rest.Tests.csproj", "{C8B9B301-0F69-4D4F-B4DE-2713B8BB0AB9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Identity.EFCore.Tests", "tests\GeoAssets.Identity.EFCore.Tests\GeoAssets.Identity.EFCore.Tests.csproj", "{B02533FA-7E85-4D27-B9D2-78C988679B44}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -549,6 +551,18 @@ Global
 		{C8B9B301-0F69-4D4F-B4DE-2713B8BB0AB9}.Release|x64.Build.0 = Release|Any CPU
 		{C8B9B301-0F69-4D4F-B4DE-2713B8BB0AB9}.Release|x86.ActiveCfg = Release|Any CPU
 		{C8B9B301-0F69-4D4F-B4DE-2713B8BB0AB9}.Release|x86.Build.0 = Release|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Debug|x64.Build.0 = Debug|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Debug|x86.Build.0 = Debug|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Release|x64.ActiveCfg = Release|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Release|x64.Build.0 = Release|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Release|x86.ActiveCfg = Release|Any CPU
+		{B02533FA-7E85-4D27-B9D2-78C988679B44}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -593,5 +607,6 @@ Global
 		{8629EAE4-A254-455B-829A-E8D5B237987A} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{8B7334CE-E7BC-4E09-B2E4-581207432E0D} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{C8B9B301-0F69-4D4F-B4DE-2713B8BB0AB9} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{B02533FA-7E85-4D27-B9D2-78C988679B44} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 	EndGlobalSection
 EndGlobal

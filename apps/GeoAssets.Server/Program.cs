@@ -1,5 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
+using GeoAssets.Identity;
+using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
@@ -58,6 +60,21 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     // (Server) project instead, which already legitimately depends on Npgsql.
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
 
+// ── Identity (RBAC/ABAC) — EF Core backend against Postgres (XD01-14). Well-known
+// roles/permissions/policies are seeded idempotently on every startup (see
+// SeedGeoIdentityAsync below).
+builder.Services.AddGeoIdentity(o => o.UseNpgsql(
+    connectionString,
+    npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+
+// ICurrentUserAccessor reads the authenticated ClaimsPrincipal populated by
+// AddGeoAssetsAuthentication (XD01-12) — pattern documented on
+// GeoIdentityEFCoreServiceExtensions.AddGeoIdentity's own XML doc comment.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
+    new ClaimsPrincipalCurrentUserAccessor(
+        () => sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.User));
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration
@@ -75,6 +92,9 @@ var app = builder.Build();
 
 // Overlay any DB-persisted OrderTypes on top of the seeded defaults.
 await app.Services.LoadRegistryFromDbAsync();
+
+// Seed canonical identity roles/permissions/policies (idempotent, XD01-14).
+await app.Services.SeedGeoIdentityAsync();
 
 app.UseCors();
 

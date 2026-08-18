@@ -51,4 +51,24 @@ public static class GeoIdentityEFCoreServiceExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Seeds the canonical roles/permissions/policies into <see cref="GeoIdentityDbContext"/>
+    /// (see <see cref="GeoIdentitySeeder"/>) — idempotent, safe to call on every startup.
+    ///
+    /// Call once after <c>host.Build()</c>:
+    /// <code>
+    ///   var app = builder.Build();
+    ///   await app.Services.SeedGeoIdentityAsync();
+    /// </code>
+    /// </summary>
+    public static async Task SeedGeoIdentityAsync(
+        this IServiceProvider services,
+        CancellationToken ct = default)
+    {
+        using var scope        = services.CreateScope();
+        var db                 = scope.ServiceProvider.GetRequiredService<GeoIdentityDbContext>();
+        var timeProvider       = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        await GeoIdentitySeeder.SeedAsync(db, timeProvider, ct);
+    }
 }
