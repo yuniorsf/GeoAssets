@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using FluentAssertions;
 using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
@@ -62,6 +63,10 @@ public class ServiceOrderRulesEndpointTests
                     services.AddScoped<ServerWorkflowPrincipalFactory>();
                     services.AddSingleton<IGeoAuthorizationService>(
                         new FakeAuthorizationService(callerUserId, callerRoles));
+                    // FakeAuthorizationService's AppUser never sets OrganizationId, so
+                    // ServerWorkflowPrincipalFactory (XD01-22) never actually calls this —
+                    // registered only because its constructor now requires the dependency.
+                    services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
                 });
                 webHost.Configure(app =>
                 {

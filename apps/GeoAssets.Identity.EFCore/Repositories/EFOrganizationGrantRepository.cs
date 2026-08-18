@@ -24,6 +24,17 @@ public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db) : IOr
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(
+        Guid granteeOrganizationId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        return await db.OrganizationGrants
+            .Where(g => g.GranteeOrganizationId == granteeOrganizationId
+                     && g.IsActive
+                     && (g.ExpiresAt == null || g.ExpiresAt > now))
+            .ToListAsync(ct);
+    }
+
     public async Task AddAsync(OrganizationGrant grant, CancellationToken ct = default)
         => await db.OrganizationGrants.AddAsync(grant, ct);
 

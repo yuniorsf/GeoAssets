@@ -129,4 +129,58 @@ public class EFOrganizationGrantRepositoryTests
 
         active.Should().BeEmpty();
     }
+
+    // ── GetActiveGrantsForGranteeAsync ─────────────────────────────────────────
+
+    [Fact]
+    public async Task GetActiveGrantsForGranteeAsync_ReturnsGrantsAcrossMultipleResourceOrganizations()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+        var repo = new EFOrganizationGrantRepository(db);
+        var grantee = Guid.NewGuid();
+        await repo.AddAsync(Grant(grantee, Guid.NewGuid()));
+        await repo.AddAsync(Grant(grantee, Guid.NewGuid()));
+        await repo.SaveChangesAsync();
+
+        var active = await repo.GetActiveGrantsForGranteeAsync(grantee);
+
+        active.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetActiveGrantsForGranteeAsync_DifferentGranteeOrganization_IsExcluded()
+    {
+        // Non-leakage: a grant issued to a different grantee organization must not leak.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+        var repo = new EFOrganizationGrantRepository(db);
+        await repo.AddAsync(Grant(Guid.NewGuid(), Guid.NewGuid()));
+        await repo.SaveChangesAsync();
+
+        var active = await repo.GetActiveGrantsForGranteeAsync(Guid.NewGuid());
+
+        active.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetActiveGrantsForGranteeAsync_InactiveGrant_IsExcluded()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+        var repo = new EFOrganizationGrantRepository(db);
+        var grantee = Guid.NewGuid();
+        await repo.AddAsync(Grant(grantee, Guid.NewGuid(), isActive: false));
+        await repo.SaveChangesAsync();
+
+        var active = await repo.GetActiveGrantsForGranteeAsync(grantee);
+
+        active.Should().BeEmpty();
+    }
 }

@@ -70,6 +70,7 @@ public sealed class ServiceOrderRules
             new DispatchRecipientRule(recipientRoleGrants),
             new OrderTypeActionPermissionRule(orderTypeRegistry),
             new RoleBasedActionRule(roleGrants, unrestrictedRoles),
+            new CrossOrgGrantRule(),
         ];
 
         _creationRules =
@@ -365,6 +366,39 @@ file sealed class RoleBasedActionRule(
         }
 
         return null;
+    }
+}
+
+/// <summary>
+/// Allow-contributor for cross-organization access (XD01-22): grants the action when the
+/// principal's own organization holds an active <see cref="WorkflowOrgGrant"/> — pre-resolved
+/// onto <see cref="WorkflowPrincipal.OrgGrants"/> — covering the order's owning organization
+/// (<see cref="IServiceOrder.OrganizationId"/>). Matches on resource org, optional resource
+/// type (null = any), the action's permission code (<c>"serviceorders:{action}"</c>, lowercase
+/// — e.g. <c>"serviceorders:complete"</c>, matching the format decided when
+/// <c>OrganizationGrant</c> was designed), and an optional required role.
+///
+/// Same pattern as every other built-in rule: abstains (returns <c>null</c>) rather than
+/// denying when no grant applies, so same-org access via the existing rules (Creator/
+/// Assignee/DispatchRecipient/RoleBased) is entirely unaffected — this only ever *adds* an
+/// allow path, never a new deny condition.
+/// </summary>
+file sealed class CrossOrgGrantRule : IServiceOrderRule
+{
+    public string Name => "CrossOrgGrantRule";
+
+    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    {
+        var actionCode = $"serviceorders:{action.ToString().ToLowerInvariant()}";
+        var resourceOrganizationId = ctx.Order.OrganizationId.ToString();
+
+        var hasGrant = ctx.Principal.OrgGrants.Any(g =>
+            g.ResourceOrganizationId.Equals(resourceOrganizationId, StringComparison.OrdinalIgnoreCase) &&
+            (g.ResourceType is null || g.ResourceType.Equals(nameof(Orders.ServiceOrder), StringComparison.OrdinalIgnoreCase)) &&
+            g.AllowedActions.Contains(actionCode, StringComparer.OrdinalIgnoreCase) &&
+            (g.RequiredRole is null || ctx.Principal.HasRole(g.RequiredRole)));
+
+        return hasGrant ? true : null;
     }
 }
 

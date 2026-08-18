@@ -45,6 +45,7 @@ internal sealed class NeverCalledOrganizationGrantRepository : IOrganizationGran
     public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(Guid granteeOrganizationId, CancellationToken ct = default) => throw new NotSupportedException();
     public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
     public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
     public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();

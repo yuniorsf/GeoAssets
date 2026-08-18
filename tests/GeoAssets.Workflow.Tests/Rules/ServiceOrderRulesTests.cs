@@ -13,15 +13,21 @@ public class ServiceOrderRulesTests
         string[]? roles = null,
         string[]? groups = null,
         string[]? permissions = null,
-        ActorKind kind = ActorKind.Human)
-        => new(userId, orgId, roles ?? [], groups ?? [], permissions ?? []) { Kind = kind };
+        ActorKind kind = ActorKind.Human,
+        WorkflowOrgGrant[]? orgGrants = null)
+        => new(userId, orgId, roles ?? [], groups ?? [], permissions ?? []) { Kind = kind, OrgGrants = orgGrants ?? [] };
 
     private static ServiceOrder Order(
         string createdBy = "",
         string? assignedTo = null,
         string orderTypeId = "",
-        string status = ServiceOrderStatus.Draft)
-        => new() { CreatedBy = createdBy, AssignedTo = assignedTo, OrderTypeId = orderTypeId, Status = status };
+        string status = ServiceOrderStatus.Draft,
+        Guid? organizationId = null)
+        => new()
+        {
+            CreatedBy = createdBy, AssignedTo = assignedTo, OrderTypeId = orderTypeId, Status = status,
+            OrganizationId = organizationId ?? Guid.Empty,
+        };
 
     private sealed class DelegateCreationRule(Func<WorkflowPrincipal, OrderType, bool?> fn) : IOrderCreationRule
     {
@@ -690,6 +696,115 @@ public class ServiceOrderRulesTests
 
         rules.Evaluate(Principal(roles: ["Administrator"]), OrderActionType.Complete, Order())
             .Allowed.Should().BeFalse();
+    }
+
+    // ── CrossOrgGrantRule ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Evaluate_MatchingActiveGrant_Allows()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_NoGrantAtAll_Denies()
+    {
+        var order = Order(organizationId: Guid.NewGuid());
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(), OrderActionType.Complete, order).Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantForDifferentResourceOrganization_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant scoped to one resource org must not authorize a different one.
+        var order = Order(organizationId: Guid.NewGuid());
+        var grant = new WorkflowOrgGrant(Guid.NewGuid().ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantForDifferentResourceType_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant scoped to "GeoFeature" must not authorize a ServiceOrder.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: "GeoFeature", ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithNullResourceType_AppliesToServiceOrder()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: "ServiceOrder", ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_GrantMissingRequestedAction_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant for "serviceorders:view" must not also unlock "serviceorders:complete".
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:view"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantRequiresRoleTheUserLacks_DoesNotLeakAccess()
+    {
+        // Non-leakage: RequiredRole is an extra gate, not decoration.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: "Supervisor");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant], roles: ["FieldTechnician"]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantRequiresRoleTheUserHolds_Allows()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: "Supervisor");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant], roles: ["Supervisor"]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_CrossOrgGrant_DoesNotAffectSameOrgRulesLikeCreator()
+    {
+        // The rule only ever adds an allow path; it must never interfere with the
+        // pre-existing Creator/Assignee/Role rules that don't care about organization.
+        var order = Order(createdBy: "u1", organizationId: Guid.NewGuid());
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(), OrderActionType.View, order).Allowed.Should().BeTrue();
     }
 
     // ── ResolveRelationship ────────────────────────────────────────────────────

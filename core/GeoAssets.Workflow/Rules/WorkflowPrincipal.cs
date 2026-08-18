@@ -41,6 +41,16 @@ public sealed record WorkflowPrincipal(
     /// </summary>
     public ActorKind Kind { get; init; } = ActorKind.Human;
 
+    /// <summary>
+    /// Active cross-organization grants letting this principal's organization reach other
+    /// organizations' resources (XD01-22) — pre-resolved once per principal, same reasoning
+    /// as <see cref="RoleNames"/>/<see cref="PermissionCodes"/>, since the specific resource
+    /// being evaluated against isn't known yet when the principal is built. Defaults to empty
+    /// so every existing caller is unaffected; see <see cref="CrossOrgGrantRule"/> for how
+    /// it's consulted.
+    /// </summary>
+    public IReadOnlyList<WorkflowOrgGrant> OrgGrants { get; init; } = [];
+
     public bool HasRole(string role)
         => RoleNames.Contains(role, StringComparer.OrdinalIgnoreCase);
 

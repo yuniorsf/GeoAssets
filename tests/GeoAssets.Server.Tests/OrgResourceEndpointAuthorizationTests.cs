@@ -62,6 +62,11 @@ public class OrgResourceEndpointAuthorizationTests
                 [.. grants.Where(g => g.GranteeOrganizationId == granteeOrganizationId
                                     && g.ResourceOrganizationId == resourceOrganizationId)]);
 
+        public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(
+            Guid granteeOrganizationId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<OrganizationGrant>>(
+                [.. grants.Where(g => g.GranteeOrganizationId == granteeOrganizationId)]);
+
         public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
