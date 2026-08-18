@@ -28,6 +28,23 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
+// Per-developer, git-ignored overrides (e.g. real AzureAdCiam tenant/client IDs, kept out of
+// the public repo — see wwwroot/appsettings.Local.json.example). Silently absent for anyone
+// who hasn't created the file; loaded last so it wins over appsettings.{Environment}.json.
+if (builder.HostEnvironment.IsDevelopment())
+{
+    using var localSettingsHttp = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    try
+    {
+        var localSettingsStream = await localSettingsHttp.GetStreamAsync("appsettings.Local.json");
+        builder.Configuration.AddJsonStream(localSettingsStream);
+    }
+    catch (HttpRequestException)
+    {
+        // appsettings.Local.json not present — fine, it's optional.
+    }
+}
+
 // ── Authentication (XD01-48: provider-agnostic seam; defaults to Entra External ID (CIAM)
 // tenant via MSAL — see EntraCiamWasmAuthenticationProvider) ─────────────────────────────────
 builder.Services.AddGeoAssetsWasmAuthentication(builder.Configuration);

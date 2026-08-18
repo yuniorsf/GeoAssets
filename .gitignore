@@ -53,3 +53,7 @@ deploy/otel/.env
 
 # Local secrets (Postgres password for deploy/server Docker stack)
 deploy/server/.env
+
+# Per-developer AzureAdCiam tenant/client IDs for the WASM client (real values kept out of
+# the public repo; dotnet user-secrets covers the equivalent Server-side values)
+apps/GeoAssets.Web/wwwroot/appsettings.Local.json

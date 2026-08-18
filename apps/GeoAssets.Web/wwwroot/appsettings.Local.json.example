@@ -1,0 +1,10 @@
+{
+  "AzureAdCiam": {
+    "Authority": "https://YOUR_TENANT_SUBDOMAIN.ciamlogin.com/YOUR_CIAM_TENANT_ID",
+    "ClientId": "YOUR_WEB_CLIENT_ID"
+  },
+
+  "GeoAssetsServer": {
+    "ApiScope": "api://YOUR_SERVER_API_CLIENT_ID/access_as_user"
+  }
+}
