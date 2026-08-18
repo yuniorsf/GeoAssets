@@ -88,6 +88,17 @@ Reuses what's already built instead of inventing a new authorization model.
 - **AuthN**: `Microsoft.Identity.Web` validates the Azure AD access token as a JWT
   bearer on every request to `GeoAssets.Server`. The WASM client attaches its MSAL
   token to outgoing calls via the existing REST provider (`AddGeoAssetsRest()`).
+  Neither vendor SDK is called directly at either composition root anymore
+  (**XD01-48, Implemented**): `GeoAssets.Server`/`GeoAssets.Web` each depend on
+  `IGeoAuthenticationProvider` (`GeoAssets.Identity.Authentication`), which
+  `AddGeoAssetsAuthentication`/`AddGeoAssetsWasmAuthentication` default to an
+  `EntraCiam*AuthenticationProvider` implementation unless a different one is
+  passed in — the authentication-layer analog of how the AuthZ bridge below already
+  decouples authorization from any specific backend. `ClaimsPrincipalCurrentUserAccessor`/
+  `BlazorWasmCurrentUserAccessor` likewise no longer hardcode Entra claim-type
+  strings, delegating to a configurable `ClaimMapping` (default: `ClaimMapping.EntraDefault`).
+  Actually swapping to a different CIAM vendor remains out of scope — this only
+  removes the hardcoding.
 - **AuthZ bridge**: a custom `IAuthorizationPolicyProvider` + `IAuthorizationHandler`
   that resolves ASP.NET Core policy names to `AppPolicy` lookups and delegates
   evaluation to the *existing* `IGeoAuthorizationService.EvaluatePolicyAsync` /
