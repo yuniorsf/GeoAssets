@@ -349,6 +349,7 @@ flowchart TD
 | `DispatchRecipientRule` | View, Annotate, Accept unconditionally to direct/group/org dispatch recipients; Assign/Dispatch/Execute/Reject/etc. when the recipient *also* holds a configured role | The role-gated grants (`recipientRoleGrants`) express "(is a recipient of **this** dispatch) AND (has role X)" — narrower than `RoleBasedActionRule` below, which would grant the action on every order in the system. `Accept` (`OrderActionType.Accept`) is the audited "I am claiming this order" verb, distinct from `Assign` (done *to* someone else) |
 | `OrderTypeActionPermissionRule` | Per-`OrderType.ActionPermissions` override | **Overrides** the role-based default below when the order's type defines an entry for the action being evaluated; abstains otherwise. An entry's optional `FromStateKey` (§4) scopes it to one state — e.g. "Approve requires role X, but only from `Pending`" — null (the default) applies regardless of state |
 | `RoleBasedActionRule` | Configurable role → action-set mapping (default: `Supervisor` → View/Approve/Reject/Assign/Dispatch/Cancel/Annotate; `Administrator` → everything) | Mapping is data, injected via `ServiceOrderRules`'s constructor or `AddServiceOrderRules` (see §12) — **this is exactly how an AI agent's role (e.g. `"AutomationAgent"`) is granted actions, with zero code change** |
+| `CrossOrgGrantRule` (XD01-22) | The action when the principal's organization holds an active cross-org grant covering the order's owning organization | Pure allow-contributor — never denies, only adds an extra allow path on top of the rules above. Grants are pre-resolved onto `WorkflowPrincipal.OrgGrants` (a `WorkflowOrgGrant` DTO, decoupled from `GeoAssets.Identity`'s `OrganizationGrant`) by `ServerWorkflowPrincipalFactory`, server-side only — see `Authorization.md` §4 |
 
 ### Built-in `IOrderCreationRule` chain
 
@@ -1114,6 +1115,12 @@ documented:
   any order over REST** — every `GeoAssets.Server` write endpoint on an order now
   evaluates the same rule engine via `ServerWorkflowPrincipalFactory` (§15.2),
   closed by [XD01-16](https://xdicor.atlassian.net/browse/XD01-16).
+- **`OrganizationId`/`OrganizationGrant` were data model only — nothing read them
+  at authorization time** — `CrossOrgGrantRule` (§5) now grants a `ServiceOrder`
+  action when the principal's organization holds a matching active grant,
+  server-side only (the Blazor client's own `WorkflowPrincipal` doesn't resolve
+  grants yet — no REST endpoint exposes them), closed by
+  [XD01-22](https://xdicor.atlassian.net/browse/XD01-22).
 
 What's still genuinely open:
 
@@ -1131,11 +1138,13 @@ What's still genuinely open:
   correctly, for what those tests check, but it's live evidence that any *real* new
   implementation would need to remember the same rules by hand. Tracked as
   [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
-- **`OrganizationId` (§3) and `OrganizationGrant` are data model only — nothing yet
-  reads them at authorization time.** `ServiceOrderRules` (§5) still evaluates
-  purely on creator/assignee/role/dispatch-recipient; a caller from a different
-  organization than an order's `OrganizationId` is not blocked, and an
-  `OrganizationGrant` row does not yet grant anything in practice.
-  [XD01-20](https://xdicor.atlassian.net/browse/XD01-20) added the shapes so a
-  follow-up ticket can wire an `IOrgOwnedResource`/`OrganizationGrant`-aware rule
-  into the chain.
+- **No same-organization gate exists for `ServiceOrder` access — only an
+  additional cross-org allow path.** `CrossOrgGrantRule` (§5, XD01-22) is
+  deliberately an allow-contributor only, per its own design: a caller from a
+  *different* organization than an order's `OrganizationId`, with no matching
+  grant, is still not blocked by organization alone — Creator/Assignee/Role/
+  DispatchRecipient access is entirely organization-agnostic, same as before this
+  ticket. Contrast `GeoFeature`/`AssetType`'s `OrgResourceAuthorizationHandler`
+  (XD01-21, `Authorization.md` §4), which *does* enforce same-org-or-grant as a
+  mandatory gate. Whether `ServiceOrder` should gain an equivalent mandatory gate
+  is an open design question, not yet ticketed.

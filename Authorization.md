@@ -203,7 +203,7 @@ Index on `(GranteeOrganizationId, ResourceOrganizationId)` — the hot lookup pa
 | Resource | Mechanism |
 |---|---|
 | `GeoFeature` / `AssetType` | New `AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>`, wired alongside the subject-only checks on REST endpoints (**Implemented — XD01-21**) |
-| `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules |
+| `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules (**Implemented — XD01-22**, server-side only; see `ServiceOrder.md` §5/§16) |
 
 ---
 
