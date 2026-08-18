@@ -7,6 +7,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -59,6 +60,13 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     // see its own doc comment), so migrations targeting Postgres are generated into this
     // (Server) project instead, which already legitimately depends on Npgsql.
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+
+// ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
+// apps/GeoAssets.Web/Program.cs, so server-side enforcement and the client UI agree on
+// who can do what. ServerWorkflowPrincipalFactory builds the WorkflowPrincipal it evaluates
+// against from the authenticated caller (IGeoAuthorizationService, registered below).
+builder.Services.AddServiceOrderRules();
+builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
 
 // ── Identity (RBAC/ABAC) — EF Core backend against Postgres (XD01-14). Well-known
 // roles/permissions/policies are seeded idempotently on every startup (see

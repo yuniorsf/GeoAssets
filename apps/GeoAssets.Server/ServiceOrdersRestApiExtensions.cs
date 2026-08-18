@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 
 namespace GeoAssets.Server;
 
@@ -18,6 +19,16 @@ namespace GeoAssets.Server;
 /// are translated to HTTP status codes so <c>RestServiceOrderRepository</c> (the client) can
 /// re-throw the same exception types regardless of backend, honoring
 /// <see cref="IServiceOrderWriter"/>'s documented contract.
+///
+/// Every write endpoint on an existing order is gated by <see cref="ServiceOrderRules"/>
+/// (XD01-16) — the same deny-overrides engine the Blazor client already evaluates — via
+/// <c>OrderActionType</c>: dispatch → <c>Dispatch</c>; the action log endpoint → the action
+/// the caller is actually logging; create → <c>CanCreate</c>. <c>PUT</c> (a whole-order
+/// replace with no single corresponding <c>OrderActionType</c>) and <c>DELETE</c> (a hard
+/// delete, likewise unnamed in the enum) reuse <c>Annotate</c> and <c>Cancel</c> respectively
+/// as the closest existing verb — see the deny-reason "reason" field returned on 403 for
+/// exactly which rule declined. Order Type CRUD is unchanged/ungated: that's configuration
+/// data, not a per-order action <c>ServiceOrderRules</c> governs.
 /// </summary>
 public static class ServiceOrdersRestApiExtensions
 {
@@ -71,10 +82,20 @@ public static class ServiceOrdersRestApiExtensions
 
         // ── Service Orders — writes ─────────────────────────────────────────────
 
-        routes.MapPost($"{prefix}/service-orders", async (HttpRequest req, IServiceOrderRepository repo) =>
+        routes.MapPost($"{prefix}/service-orders", async (
+            HttpRequest req, IServiceOrderRepository repo, IOrderTypeRepository orderTypeRepo,
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
             var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts);
             if (order is null) return Results.BadRequest("Invalid service order.");
+
+            var orderType = await orderTypeRepo.GetByIdAsync(order.OrderTypeId);
+            if (orderType is null) return Results.BadRequest($"Unknown order type '{order.OrderTypeId}'.");
+
+            var principal = await principalFactory.CreateAsync();
+            if (!rules.CanCreate(principal, orderType))
+                return Results.Json(new { reason = "Not authorized to create orders of this type." },
+                    statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
@@ -87,11 +108,21 @@ public static class ServiceOrdersRestApiExtensions
             }
         });
 
-        routes.MapPut($"{prefix}/service-orders/{{id}}", async (string id, HttpRequest req, IServiceOrderRepository repo) =>
+        routes.MapPut($"{prefix}/service-orders/{{id}}", async (
+            string id, HttpRequest req, IServiceOrderRepository repo,
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
             var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts);
             if (order is null) return Results.BadRequest("Invalid service order.");
             if (order.Id != id) return Results.BadRequest("Route id does not match body id.");
+
+            var existing = await repo.GetByIdAsync(id);
+            if (existing is null) return Results.NotFound();
+
+            var principal = await principalFactory.CreateAsync();
+            var verdict = rules.Evaluate(principal, OrderActionType.Annotate, existing);
+            if (!verdict.Allowed)
+                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
@@ -116,10 +147,20 @@ public static class ServiceOrdersRestApiExtensions
             }
         });
 
-        routes.MapPost($"{prefix}/service-orders/{{id}}/dispatch", async (string id, HttpRequest req, IServiceOrderRepository repo) =>
+        routes.MapPost($"{prefix}/service-orders/{{id}}/dispatch", async (
+            string id, HttpRequest req, IServiceOrderRepository repo,
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
             var dispatch = await JsonSerializer.DeserializeAsync<OrderDispatch>(req.Body, opts);
             if (dispatch is null) return Results.BadRequest("Invalid dispatch.");
+
+            var order = await repo.GetByIdAsync(id);
+            if (order is null) return Results.NotFound();
+
+            var principal = await principalFactory.CreateAsync();
+            var verdict = rules.Evaluate(principal, OrderActionType.Dispatch, order);
+            if (!verdict.Allowed)
+                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
@@ -132,10 +173,20 @@ public static class ServiceOrdersRestApiExtensions
             }
         });
 
-        routes.MapPost($"{prefix}/service-orders/{{id}}/actions", async (string id, HttpRequest req, IServiceOrderRepository repo) =>
+        routes.MapPost($"{prefix}/service-orders/{{id}}/actions", async (
+            string id, HttpRequest req, IServiceOrderRepository repo,
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
             var entry = await JsonSerializer.DeserializeAsync<OrderActionLog>(req.Body, opts);
             if (entry is null) return Results.BadRequest("Invalid action.");
+
+            var order = await repo.GetByIdAsync(id);
+            if (order is null) return Results.NotFound();
+
+            var principal = await principalFactory.CreateAsync();
+            var verdict = rules.Evaluate(principal, entry.Action, order);
+            if (!verdict.Allowed)
+                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
@@ -152,8 +203,18 @@ public static class ServiceOrdersRestApiExtensions
             }
         });
 
-        routes.MapDelete($"{prefix}/service-orders/{{id}}", async (string id, IServiceOrderRepository repo) =>
+        routes.MapDelete($"{prefix}/service-orders/{{id}}", async (
+            string id, IServiceOrderRepository repo,
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
+            var order = await repo.GetByIdAsync(id);
+            if (order is null) return Results.NotFound();
+
+            var principal = await principalFactory.CreateAsync();
+            var verdict = rules.Evaluate(principal, OrderActionType.Cancel, order);
+            if (!verdict.Allowed)
+                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
+
             await repo.DeleteAsync(id);
             return Results.NoContent();
         });
