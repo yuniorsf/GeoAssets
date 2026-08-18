@@ -95,6 +95,7 @@ classDiagram
         +ServiceOrderPriority Priority
         +string CreatedBy
         +string AssignedTo
+        +Guid OrganizationId
         +string ParentOrderId
         +IReadOnlyList~string~ ChildOrderIds
         +IReadOnlyList~GeoFeature~ Features
@@ -211,6 +212,12 @@ Notes on the model, reflecting decisions made while hardening it:
   defaults to `Human`, so no existing call site changed. It exists purely for
   audit/observability: **authorization and transition logic never branch on it**
   (see §9).
+- **`OrganizationId`** (set-once at creation, like `CreatedBy`) marks which
+  organization owns the order, via the shared `IOrgOwnedResource` marker interface
+  also implemented by `GeoFeature`/`AssetType`. It defaults to `Guid.Empty` ("no
+  organization assigned") rather than being nullable, matching this model's own
+  `CreatedAt`/`UpdatedAt`-style sentinel-default convention. See §16 for what this
+  data-model addition does *not* yet do.
 
 ### File map
 
@@ -1124,3 +1131,11 @@ What's still genuinely open:
   correctly, for what those tests check, but it's live evidence that any *real* new
   implementation would need to remember the same rules by hand. Tracked as
   [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
+- **`OrganizationId` (§3) and `OrganizationGrant` are data model only — nothing yet
+  reads them at authorization time.** `ServiceOrderRules` (§5) still evaluates
+  purely on creator/assignee/role/dispatch-recipient; a caller from a different
+  organization than an order's `OrganizationId` is not blocked, and an
+  `OrganizationGrant` row does not yet grant anything in practice.
+  [XD01-20](https://xdicor.atlassian.net/browse/XD01-20) added the shapes so a
+  follow-up ticket can wire an `IOrgOwnedResource`/`OrganizationGrant`-aware rule
+  into the chain.
