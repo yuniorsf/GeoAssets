@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace  GeoAssets.Server;
 
@@ -25,6 +26,14 @@ namespace  GeoAssets.Server;
 /// <c>features:delete</c> <c>AppPermission</c> (XD01-15) via <c>AddGeoAuthorizationPolicyBridge()</c>
 /// (XD01-13) — reads need <c>features:read</c>, creates/updates need <c>features:edit</c>,
 /// deletes (including the bulk "clear all" endpoint) need <c>features:delete</c>.
+///
+/// The single-resource endpoints (<c>GET/PUT/DELETE /features/{id}</c>,
+/// <c>DELETE /asset-types/{id}</c>) additionally run <see cref="OrgResourceAuthorizationHandler"/>
+/// (XD01-21) once the resource is loaded — this subject-only gate answers "can this user
+/// act on features at all"; the resource-based check that follows answers "can this user
+/// act on *this* feature", scoped by owning organization / cross-org grant. Bulk/list
+/// endpoints (no single loaded resource) and creates (no existing resource to check
+/// ownership of) only run the subject-only gate.
 /// </summary>
 public static class GeoAssetsRestApiExtensions
 {
@@ -45,10 +54,18 @@ public static class GeoAssetsRestApiExtensions
                 Results.Json(await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat), opts))
             .RequireAuthorization("features:read");
 
-        routes.MapGet($"{prefix}/features/{{id}}", (string id, IAssetProvider provider) =>
+        routes.MapGet($"{prefix}/features/{{id}}", async (
+            string id, IAssetProvider provider, IAuthorizationService authz, HttpContext http) =>
         {
             var f = provider.GetById(id);
-            return f is null ? Results.NotFound() : Results.Json(f, opts);
+            if (f is null) return Results.NotFound();
+
+            var result = await authz.AuthorizeAsync(http.User, f, new OrgResourceRequirement("features:read"));
+            if (!result.Succeeded)
+                return Results.Json(new { reason = "Not authorized to read this feature." },
+                    statusCode: StatusCodes.Status403Forbidden);
+
+            return Results.Json(f, opts);
         })
             .RequireAuthorization("features:read");
 
@@ -61,8 +78,18 @@ public static class GeoAssetsRestApiExtensions
         })
             .RequireAuthorization("features:edit");
 
-        routes.MapPut($"{prefix}/features/{{id}}", async (string id, HttpRequest req, IAssetProvider provider) =>
+        routes.MapPut($"{prefix}/features/{{id}}", async (
+            string id, HttpRequest req, IAssetProvider provider, IAuthorizationService authz, HttpContext http) =>
         {
+            var existing = provider.GetById(id);
+            if (existing is not null)
+            {
+                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:edit"));
+                if (!result.Succeeded)
+                    return Results.Json(new { reason = "Not authorized to edit this feature." },
+                        statusCode: StatusCodes.Status403Forbidden);
+            }
+
             var feature = await JsonSerializer.DeserializeAsync<GeoFeature>(req.Body, opts);
             if (feature is null) return Results.BadRequest("Invalid feature.");
             feature.Id = id;
@@ -71,8 +98,18 @@ public static class GeoAssetsRestApiExtensions
         })
             .RequireAuthorization("features:edit");
 
-        routes.MapDelete($"{prefix}/features/{{id}}", (string id, IAssetProvider provider) =>
+        routes.MapDelete($"{prefix}/features/{{id}}", async (
+            string id, IAssetProvider provider, IAuthorizationService authz, HttpContext http) =>
         {
+            var existing = provider.GetById(id);
+            if (existing is not null)
+            {
+                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:delete"));
+                if (!result.Succeeded)
+                    return Results.Json(new { reason = "Not authorized to delete this feature." },
+                        statusCode: StatusCodes.Status403Forbidden);
+            }
+
             provider.Delete(id);
             return Results.NoContent();
         })
@@ -116,8 +153,18 @@ public static class GeoAssetsRestApiExtensions
         })
             .RequireAuthorization("features:edit");
 
-        routes.MapDelete($"{prefix}/asset-types/{{id}}", (Guid id, IAssetProvider provider) =>
+        routes.MapDelete($"{prefix}/asset-types/{{id}}", async (
+            Guid id, IAssetProvider provider, IAuthorizationService authz, HttpContext http) =>
         {
+            var existing = provider.GetAssetTypes().FirstOrDefault(t => t.Id == id);
+            if (existing is not null)
+            {
+                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:delete"));
+                if (!result.Succeeded)
+                    return Results.Json(new { reason = "Not authorized to delete this asset type." },
+                        statusCode: StatusCodes.Status403Forbidden);
+            }
+
             provider.DeleteAssetType(id);
             return Results.NoContent();
         })

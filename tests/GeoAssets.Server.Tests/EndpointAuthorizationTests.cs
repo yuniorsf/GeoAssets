@@ -5,6 +5,7 @@ using System.Text;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.PostgreSQL.Data;
@@ -30,6 +31,23 @@ internal sealed class NeverCalledDbContextFactory : IDbContextFactory<GeoAssetsD
 {
     public GeoAssetsDbContext CreateDbContext() => throw new NotSupportedException();
     public Task<GeoAssetsDbContext> CreateDbContextAsync(CancellationToken ct = default) => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Never actually invoked by tests that only exercise the subject-only gate — registered
+/// purely because <c>OrgResourceAuthorizationHandler</c> (XD01-21) is now unconditionally
+/// constructed by <c>DefaultAuthorizationHandlerProvider</c> for every authorization check,
+/// resource-based or not, so its constructor dependencies must resolve even when a given
+/// test never reaches a resource-aware check.
+/// </summary>
+internal sealed class NeverCalledOrganizationGrantRepository : IOrganizationGrantRepository
+{
+    public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
 }
 
 /// <summary>
@@ -65,6 +83,7 @@ public class EndpointAuthorizationTests
                     services.AddAuthorization();
                     services.AddGeoAuthorizationPolicyBridge();
                     services.AddSingleton<IGeoAuthorizationService>(new FakeAuthorizationService([.. grantedPermissions]));
+                    services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
                     services.AddSingleton<IAssetProvider>(new InMemoryAssetProvider());
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
                     services.AddSingleton<WmsPostGisRenderer>();

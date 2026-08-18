@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using FluentAssertions;
 using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -66,6 +67,7 @@ public class GeoAuthorizationPolicyBridgeEndToEndTests
                     services.AddAuthorization();
                     services.AddGeoAuthorizationPolicyBridge();
                     services.AddSingleton<IGeoAuthorizationService>(new FakeAuthorizationService(grant));
+                    services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
                 });
                 webHost.Configure(app =>
                 {
