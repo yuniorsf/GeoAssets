@@ -10,8 +10,11 @@ namespace GeoAssets.Web.Services.Identity;
 /// and provisions a local <see cref="AppUser"/> the first time a user authenticates
 /// (Just-In-Time provisioning).
 ///
-/// New users are assigned the <see cref="IdentitySeeder.ReadOnlyRoleId"/> role by default.
-/// An administrator can then elevate their role via the user management UI.
+/// No default role is granted (XD01-19) — role assignment is sourced from the external
+/// provider's roles claim (<see cref="CurrentUser.AzureRoles"/>), consumed by
+/// <see cref="GeoAssets.Identity.Authorization.Services.GeoAuthorizationService"/>. A newly
+/// provisioned user with no external role assignment gets a safe empty <c>Roles</c> list —
+/// see <see cref="GeoAssets.Identity.Authorization.Services.AuthorizationContext"/>.
 ///
 /// Registered as a singleton. Initialized in Program.cs:
 /// <code>
@@ -75,9 +78,6 @@ public sealed class UserProvisioningService : IAsyncDisposable
         };
 
         await userRepo.AddAsync(newUser);
-
-        // Assign default ReadOnly role
-        await userRepo.AssignRoleAsync(newUser.Id, IdentitySeeder.ReadOnlyRoleId, assignedBy: "system");
         await userRepo.SaveChangesAsync();
 
         Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.AzureObjectId})");
