@@ -46,6 +46,7 @@ public static class GeoIdentityEFCoreServiceExtensions
         services.AddScoped<IPermissionRepository, EFPermissionRepository>();
         services.AddScoped<IUserClaimRepository,  EFUserClaimRepository>();
         services.AddScoped<IPolicyRepository,     EFPolicyRepository>();
+        services.AddScoped<IOrganizationGrantRepository, EFOrganizationGrantRepository>();
 
         services.AddScoped<IGeoAuthorizationService, GeoAuthorizationService>();
 
