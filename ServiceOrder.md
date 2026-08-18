@@ -1036,10 +1036,42 @@ other two paths would cost an extra round trip for an event no caller observes.
 **Not covered by this pass:** the Postgres migration + rowversion trigger haven't
 been run against a real Postgres instance (no Postgres available in this
 environment) — verify before deploying. `ServiceOrdersRestApiExtensions`'s
-endpoints have no integration test coverage, matching `GeoAssetsRestApiExtensions`'
-own (pre-existing) lack of coverage — only the underlying repository/client classes
-are unit-tested. No schema-authoring or backend-switch UI exists (both are
+endpoints had no integration test coverage — only the underlying repository/client
+classes were unit-tested; §15.2 closes this specifically for authorization, the
+rest is still open. No schema-authoring or backend-switch UI exists (both are
 config/code only, same convention as `OrderType`'s attribute schemas).
+
+### 15.2 Server-side authorization enforcement (XD01-16)
+
+`ServiceOrdersRestApiExtensions`'s write endpoints went straight to the
+repository with no authorization check at all — any authenticated (or, before
+[XD01-12](https://xdicor.atlassian.net/browse/XD01-12), even anonymous) caller
+could mutate any order. Every write on an existing/new order is now gated by
+`ServiceOrderRules` (§5) — the same engine the Blazor client evaluates — via a new
+`ServerWorkflowPrincipalFactory` (`apps/GeoAssets.Server`), the server-side twin of
+`GeoAssets.Shared.Services.WorkflowPrincipalFactory` (§9's "Identity" subsection),
+duplicated rather than shared since `GeoAssets.Server` doesn't reference the Blazor
+Razor Class Library:
+
+```csharp
+builder.Services.AddServiceOrderRules();               // same singleton config as GeoAssets.Web
+builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
+```
+
+Endpoint → `OrderActionType` mapping: create → `CanCreate`; dispatch →
+`Dispatch`; the action-log endpoint → the entry's own `Action` (whatever the
+caller is actually logging). `PUT` (a whole-order replace) and `DELETE` (a hard
+delete) have no single corresponding action in the enum, so they reuse the
+closest existing verb — `Annotate` and `Cancel` respectively — rather than adding
+new ones speculatively; a denied request gets a 403 with a `reason` field naming
+the rule that declined. Order Type CRUD is unchanged: that's configuration data,
+not a per-order action this engine governs.
+
+`tests/GeoAssets.Server.Tests/ServiceOrderRulesEndpointTests.cs` exercises the
+real `MapServiceOrdersApi()` endpoints end-to-end against `AddWorkflowInMemory()`,
+including non-leakage checks (e.g. being an order's creator doesn't also grant
+`Dispatch`; being its creator doesn't grant `Complete` on an order assigned to
+someone else).
 
 ---
 
@@ -1070,6 +1102,11 @@ documented:
   `GeoAssets.Server` now exposes them over REST, backed by the same Postgres
   database as assets, with `GeoAssets.Web` opting in via a config flag (§15.1),
   closed by [XD01-8](https://xdicor.atlassian.net/browse/XD01-8).
+- **`ServiceOrderRules` (§5) only ever ran against the Blazor client's in-memory
+  store — no server host evaluated it, so any authenticated caller could mutate
+  any order over REST** — every `GeoAssets.Server` write endpoint on an order now
+  evaluates the same rule engine via `ServerWorkflowPrincipalFactory` (§15.2),
+  closed by [XD01-16](https://xdicor.atlassian.net/browse/XD01-16).
 
 What's still genuinely open:
 
