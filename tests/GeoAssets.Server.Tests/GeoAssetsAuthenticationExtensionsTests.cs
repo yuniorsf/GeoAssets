@@ -1,5 +1,7 @@
 using System.Net;
 using FluentAssertions;
+using GeoAssets.Identity.Authentication;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
@@ -16,6 +18,22 @@ namespace GeoAssets.Server.Tests;
 
 public class GeoAssetsAuthenticationExtensionsTests
 {
+    private sealed class RecordingAuthenticationProvider : IGeoAuthenticationProvider
+    {
+        public bool WasInvoked { get; private set; }
+        public IConfiguration? ReceivedConfiguration { get; private set; }
+
+        public void AddAuthentication(IServiceCollection services, IConfiguration configuration)
+        {
+            WasInvoked = true;
+            ReceivedConfiguration = configuration;
+            services
+                .AddAuthentication("Custom")
+                .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Custom", _ => { });
+        }
+    }
+
+
     private static IConfiguration BuildCiamConfiguration() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -58,6 +76,45 @@ public class GeoAssetsAuthenticationExtensionsTests
         authOptions.FallbackPolicy.Should().NotBeNull();
         authOptions.FallbackPolicy!.Requirements
             .Should().ContainItemsAssignableTo<DenyAnonymousAuthorizationRequirement>();
+    }
+
+    // ── IGeoAuthenticationProvider seam (XD01-48) ─────────────────────────────
+
+    [Fact]
+    public void AddGeoAssetsAuthentication_NoProviderSupplied_UsesEntraDefault()
+    {
+        var configuration = BuildCiamConfiguration();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(configuration);
+
+        services.AddGeoAssetsAuthentication(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var jwtOptions = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(JwtBearerDefaults.AuthenticationScheme);
+        jwtOptions.Authority.Should().Contain("contoso.ciamlogin.com");
+    }
+
+    [Fact]
+    public async Task AddGeoAssetsAuthentication_CustomProviderSupplied_IsUsedInsteadOfEntraDefault()
+    {
+        // Proves the seam is real: a caller-supplied IGeoAuthenticationProvider actually
+        // drives registration, rather than AddGeoAssetsAuthentication always wiring
+        // Microsoft.Identity.Web regardless of what's passed in.
+        var configuration = BuildCiamConfiguration();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var customProvider = new RecordingAuthenticationProvider();
+
+        services.AddGeoAssetsAuthentication(configuration, customProvider);
+
+        customProvider.WasInvoked.Should().BeTrue();
+        customProvider.ReceivedConfiguration.Should().BeSameAs(configuration);
+        using var provider = services.BuildServiceProvider();
+        var schemeProvider = provider.GetRequiredService<IAuthenticationSchemeProvider>();
+        var scheme = await schemeProvider.GetSchemeAsync("Custom");
+        scheme.Should().NotBeNull();
     }
 
     private static async Task<TestServer> BuildServerAsync()

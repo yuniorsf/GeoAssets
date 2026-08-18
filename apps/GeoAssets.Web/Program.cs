@@ -28,14 +28,9 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// ── Authentication — Entra External ID (CIAM tenant) via MSAL ────────────────
-builder.Services.AddMsalAuthentication(options =>
-{
-    builder.Configuration.Bind("AzureAdCiam", options.ProviderOptions.Authentication);
-    // Use redirect instead of popup to avoid COOP (Cross-Origin-Opener-Policy)
-    // browser restrictions that block window.closed monitoring in popup flow.
-    options.ProviderOptions.LoginMode = "redirect";
-});
+// ── Authentication (XD01-48: provider-agnostic seam; defaults to Entra External ID (CIAM)
+// tenant via MSAL — see EntraCiamWasmAuthenticationProvider) ─────────────────────────────────
+builder.Services.AddGeoAssetsWasmAuthentication(builder.Configuration);
 
 // ── Authorization ─────────────────────────────────────────────────────────────
 builder.Services.AddAuthorizationCore();
