@@ -20,6 +20,7 @@ using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -69,6 +70,20 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 // TODO: add a "loading" state to the UI while the provider initializes and remove the "Loading..." placeholder from the map.
 // TODO: load by configuration and support multiple provider types (e.g. in-memory for dev, REST for prod).
 builder.Services.AddGeoAssetsInMemory();
+
+// AuthorizationMessageHandler (MSAL) attaches the CIAM access token to the "GeoAssetsServer"
+// named HttpClient that RestProviderFactory requests (XD01-17) — scoped to the configured,
+// trusted GeoAssets.Server origin only, never to arbitrary REST URLs a user might type into
+// the provider-pool UI (RestProviderPlugin).
+builder.Services.AddHttpClient("GeoAssetsServer")
+    .AddHttpMessageHandler(sp =>
+    {
+        var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
+        handler.ConfigureHandler(
+            authorizedUrls: [builder.Configuration["GeoAssetsServer:BaseUrl"] ?? ""],
+            scopes:         [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
+        return handler;
+    });
 builder.Services.AddGeoAssetsRest();
 builder.Services.AddGeoAssetsWfs();
 builder.Services.AddGeoAssetsWms();
