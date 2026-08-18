@@ -303,8 +303,19 @@ shape §4's `OrganizationGrant` design should be tested against.
 
 ## 7. Phase 2 (backlog) — Entra ID role governance
 
-Not started; explicitly sequenced after Phase 1 ships (role source only matters once
-something server-side checks it). Captured here so the analysis isn't lost.
+Explicitly sequenced after Phase 1 ships (role source only matters once something
+server-side checks it). Captured here so the analysis isn't lost.
+
+**Migration steps 3–4 below are Implemented (XD01-19)**, generalized to be
+provider-agnostic per that ticket's 2026-08-18 rewrite: `GetAuthorizationContextAsync`
+sources `Roles` from `CurrentUser.AzureRoles` (the token's roles claim, read through
+the XD01-48 `IGeoAuthenticationProvider`/`ClaimMapping` seam — not an Entra-specific
+API), and `UserProvisioningService` no longer grants a default role. The rest of this
+section (Entra manifest/App Roles registration, the Graph backfill tooling, admin UX,
+eventually dropping `UserRole`) remains backlog — XD01-19's shipped scope was role
+*sourcing* only, not the admin-management tooling around it, and stayed deliberately
+silent on federated/social sign-in (§5's Organization-resolution open question is
+still unresolved).
 
 ### What moves to Entra vs. what stays local
 
@@ -330,12 +341,14 @@ something server-side checks it). Captured here so the analysis isn't lost.
    after use. Modes: `--dry-run` (default), `--only <ids>` for a pilot rollout,
    `--verify` to diff Entra assignments against expected DB state — required to show
    zero mismatches before the code cutover ships.
-3. Switch `GeoAuthorizationService.GetAuthorizationContextAsync` to source `Roles`
-   from `current.Roles` (the token) instead of the `UserRole` DB join. Keep
-   `UserRole` write-through-but-unused for one release as a rollback path.
-4. Drop the JIT default-role grant in `UserProvisioningService` — a user with no
-   Entra app-role assignment naturally gets an empty `Roles` list, already treated
-   as a safe no-permissions default.
+3. **(Implemented — XD01-19)** Switch `GeoAuthorizationService.GetAuthorizationContextAsync`
+   to source `Roles` from `current.AzureRoles` (the token) instead of the `UserRole`
+   DB join — permissions for each role name still resolve against the local
+   `AppRole`/`RolePermission` tables via `IRoleRepository`. `UserRole`/`AssignRoleAsync`
+   are kept, unused by this path, as the rollback path this step already called for.
+4. **(Implemented — XD01-19)** Drop the JIT default-role grant in
+   `UserProvisioningService` — a user with no external role assignment naturally
+   gets an empty `Roles` list, already treated as a safe no-permissions default.
 5. Retire in-app role-assignment write paths; replace with the admin-UX design below.
 6. Drop `UserRole` once confident.
 
