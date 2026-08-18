@@ -2,6 +2,7 @@ using Blazored.LocalStorage;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
+using GeoAssets.Identity.Authentication;
 using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.WFS;
@@ -39,8 +40,9 @@ builder.Services.AddMsalAuthentication(options =>
 // ── Authorization ─────────────────────────────────────────────────────────────
 builder.Services.AddAuthorizationCore();
 
-// ── GeoAssets Identity (in-memory repos + authorization service) ─────────────
-builder.Services.AddGeoIdentityWasm();
+// ICurrentUserAccessor reads the current user from Blazor's MSAL auth state — needed by
+// both identity backends below (InMemory dev seeding and Rest), so registered once here.
+builder.Services.AddScoped<ICurrentUserAccessor, BlazorWasmCurrentUserAccessor>();
 
 // ── Session timeout (inactivity = configurable via appsettings.json → Session) ─
 builder.Services.Configure<SessionConfig>(opts =>
@@ -84,6 +86,19 @@ builder.Services.AddHttpClient("GeoAssetsServer")
             scopes:         [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
         return handler;
     });
+
+// ── GeoAssets Identity — in-memory dev/demo seed (default) or HTTP-backed against
+// GeoAssets.Server (XD01-18), switched by "Identity:Backend" config ("InMemory" | "Rest";
+// env var override: Identity__Backend). In-memory stays the default so the app still runs
+// with zero config against a Postgres server, mirroring "ServiceOrders:Backend" below.
+var identityBackend = builder.Configuration["Identity:Backend"] ?? "InMemory";
+var identityUseRest = string.Equals(identityBackend, "Rest", StringComparison.OrdinalIgnoreCase);
+
+if (identityUseRest)
+    builder.Services.AddGeoIdentityRest();
+else
+    builder.Services.AddGeoIdentityWasmDev();
+
 builder.Services.AddGeoAssetsRest();
 builder.Services.AddGeoAssetsWfs();
 builder.Services.AddGeoAssetsWms();
@@ -150,8 +165,11 @@ var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("GeoAssets starting — environment: {Environment}", builder.HostEnvironment.Environment);
 
-host.Services.GetRequiredService<IdentitySeeder>().Seed();
-host.Services.GetRequiredService<UserProvisioningService>();
+if (!identityUseRest)
+{
+    host.Services.GetRequiredService<IdentitySeeder>().Seed();
+    host.Services.GetRequiredService<UserProvisioningService>();
+}
 
 if (serviceOrdersUseRest)
 {
