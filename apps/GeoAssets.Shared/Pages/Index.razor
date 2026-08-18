@@ -31,7 +31,7 @@
             <a href="/service-orders" class="btn-icon order-nav-link" title="@L["orders.title"]">🗂️</a>
         </div>
 
-        <ProviderPoolPanel MapDivId="@_mapDivId" />
+        <ProviderPoolPanel @ref="_providerPoolPanel" MapDivId="@_mapDivId" />
 
         <LayerManager MapDivId="@_mapDivId" />
 
@@ -98,7 +98,8 @@
 
 <!-- Provider boot dialog — shown on first launch until a data source is connected.
      Backdrop click is ignored in boot mode; user must make an explicit choice. -->
-<ProviderConnectDialog Visible="@(!BootLoader.IsBootComplete)" IsBootMode="true" />
+<ProviderConnectDialog Visible="@(!BootLoader.IsBootComplete)" IsBootMode="true"
+                       OnProviderConnected="EventCallback.Factory.Create<ProviderEntry>(this, HandleBootProviderConnected)" />
 
 <!-- Delete confirmation triggered from context menu -->
 <ConfirmDialog Visible="_showDeleteConfirm"
@@ -111,9 +112,10 @@
 @code {
     private const string _mapDivId = "geoassets-map";
 
-    private MapContainer? _mapContainer;
-    private DrawToolbar?  _drawToolbar;
-    private AssetForm?    _assetForm;
+    private MapContainer?      _mapContainer;
+    private DrawToolbar?       _drawToolbar;
+    private AssetForm?         _assetForm;
+    private ProviderPoolPanel? _providerPoolPanel;
 
     private GeoFeature? _selectedFeature;
     private bool _isNewFeature;
@@ -146,6 +148,11 @@
     }
 
     private void SignOut() => AuthNav.NavigateToLogout();
+
+    // ─── Boot ─────────────────────────────────────────────────────────────
+
+    private async Task HandleBootProviderConnected(ProviderEntry entry) =>
+        await (_providerPoolPanel?.HandleProviderConnected(entry) ?? Task.CompletedTask);
 
     // ─── Draw events ──────────────────────────────────────────────────────
 

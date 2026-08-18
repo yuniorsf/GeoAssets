@@ -143,8 +143,9 @@
         {
             if (IsBootMode)
             {
-                await BootLoader.BootWithAsync(_selected, _config);
+                var entry = await BootLoader.BootWithAsync(_selected, _config);
                 // BootCompleted event triggers StateHasChanged → overlay disappears
+                await OnProviderConnected.InvokeAsync(entry);
             }
             else
             {

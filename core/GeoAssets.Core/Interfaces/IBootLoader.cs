@@ -22,7 +22,8 @@ public interface IBootLoader
 
     /// <summary>
     /// Initialises the selected plugin with the given config, adds the resulting
-    /// provider to the pool and persists the config for next launch.
+    /// provider to the pool and persists the config for next launch. Returns the
+    /// pool entry so the caller can render it onto the map.
     /// </summary>
-    Task BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default);
+    Task<ProviderEntry> BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default);
 }
