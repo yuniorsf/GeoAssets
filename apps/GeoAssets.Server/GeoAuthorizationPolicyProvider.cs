@@ -4,18 +4,20 @@ using Microsoft.Extensions.Options;
 namespace GeoAssets.Server;
 
 /// <summary>
-/// Resolves any policy name passed to <c>.RequireAuthorization("SomeName")</c> into an
+/// Resolves any name passed to <c>.RequireAuthorization("SomeName")</c> into an
 /// ASP.NET Core <see cref="AuthorizationPolicy"/> requiring an authenticated user plus a
 /// <see cref="GeoPolicyRequirement"/> for that name (XD01-13) — bridging the
-/// <c>AppPolicy</c>/<c>PolicyRequirement</c> engine already used by the Blazor client
-/// (<c>GeoAuthorizationService.EvaluatePolicyAsync</c>) into the native authorization
-/// pipeline, so server endpoints and client UI share one source of truth for policy
-/// definitions instead of re-encoding them as ASP.NET Core policies by hand.
+/// <c>AppPolicy</c>/<c>AppPermission</c> data already used by the Blazor client
+/// (<c>GeoAuthorizationService</c>) into the native authorization pipeline, so server
+/// endpoints and client UI share one source of truth instead of re-encoding checks as
+/// ASP.NET Core policies by hand. The name may be a permission code (<c>"features:read"</c>)
+/// or a named policy (<c>"CanEditFeatures"</c>) — see <see cref="GeoAuthorizationHandler"/>
+/// for how the two are told apart (XD01-15).
 ///
-/// Policy names aren't validated here against the real <c>AppPolicy</c> table — that data
-/// lives in Postgres and is looked up per-request by <see cref="GeoAuthorizationHandler"/>.
-/// An unknown name (typo, deleted policy) fails closed at evaluation time rather than at
-/// startup; see that handler's doc comment.
+/// Names aren't validated here against the real <c>AppPolicy</c>/<c>AppPermission</c> tables
+/// — that data lives in Postgres and is looked up per-request by
+/// <see cref="GeoAuthorizationHandler"/>. An unknown policy name (typo, deleted policy) fails
+/// closed at evaluation time rather than at startup; see that handler's doc comment.
 ///
 /// <see cref="GetDefaultPolicyAsync"/>/<see cref="GetFallbackPolicyAsync"/> delegate to the
 /// framework's own <see cref="DefaultAuthorizationPolicyProvider"/> so the global

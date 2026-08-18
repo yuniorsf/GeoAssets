@@ -27,6 +27,10 @@ namespace GeoAssets.Server;
 /// GET /wfs?SERVICE=WFS&amp;VERSION=2.0.0&amp;REQUEST=GetFeature&amp;TYPENAMES=geoassets:feature&amp;BBOX=-70,-33,-65,-28,urn:ogc:def:crs:EPSG::4326
 /// GET /wfs?SERVICE=WFS&amp;VERSION=2.0.0&amp;REQUEST=DescribeFeatureType&amp;TYPENAMES=geoassets:feature
 /// </code>
+///
+/// Every operation here is read-only (no WFS-T/transactional support), so the whole
+/// endpoint requires only <c>features:read</c> (XD01-15) — external GIS clients (QGIS etc.)
+/// authenticate the same way any other caller does: a bearer token on the request.
 /// </summary>
 public static class WfsEndpointExtensions
 {
@@ -68,7 +72,8 @@ public static class WfsEndpointExtensions
                     $"Unsupported or missing REQUEST parameter: '{operation}'. " +
                     "Supported: GetCapabilities, GetFeature, DescribeFeatureType.")
             };
-        });
+        })
+            .RequireAuthorization("features:read");
 
         return routes;
     }
