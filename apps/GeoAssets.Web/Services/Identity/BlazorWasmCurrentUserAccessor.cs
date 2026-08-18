@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using GeoAssets.Identity.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 
@@ -7,21 +6,19 @@ namespace GeoAssets.Web.Services.Identity;
 /// <summary>
 /// Blazor WebAssembly implementation of <see cref="ICurrentUserAccessor"/>.
 ///
-/// Reads the current user from <see cref="AuthenticationStateProvider"/>,
-/// which is backed by MSAL (Azure AD) in the browser.
+/// Reads the current user from <see cref="AuthenticationStateProvider"/>, which is backed by
+/// whatever <see cref="IGeoAuthenticationProvider"/> the host registered (MSAL/Entra by
+/// default). Claim-type mapping is delegated to <see cref="ClaimMapping"/> (XD01-48) rather
+/// than hardcoded here, so a different IdP's claim shape is a configuration change, not a
+/// code change.
 ///
 /// <see cref="GetCurrentUser"/> returns the last cached value (safe for sync callers).
 /// <see cref="GetCurrentUserAsync"/> always refreshes from the live auth state.
 /// </summary>
 public sealed class BlazorWasmCurrentUserAccessor(
-    AuthenticationStateProvider authStateProvider) : ICurrentUserAccessor
+    AuthenticationStateProvider authStateProvider, ClaimMapping? claimMapping = null) : ICurrentUserAccessor
 {
-    private static readonly string OidClaim     = "oid";
-    private static readonly string OidAltClaim  = "http://schemas.microsoft.com/identity/claims/objectidentifier";
-    private static readonly string EmailClaim   = "preferred_username";
-    private static readonly string EmailAlt     = "upn";
-    private static readonly string NameClaim    = "name";
-    private static readonly string RolesClaim   = "roles";
+    private readonly ClaimMapping _claimMapping = claimMapping ?? ClaimMapping.EntraDefault;
 
     private CurrentUser? _cached;
 
@@ -32,34 +29,7 @@ public sealed class BlazorWasmCurrentUserAccessor(
     public async Task<CurrentUser?> GetCurrentUserAsync(CancellationToken ct = default)
     {
         var state = await authStateProvider.GetAuthenticationStateAsync();
-        _cached = Build(state.User);
+        _cached = _claimMapping.Map(state.User);
         return _cached;
-    }
-
-    private static CurrentUser? Build(ClaimsPrincipal principal)
-    {
-        if (principal.Identity?.IsAuthenticated != true)
-            return null;
-
-        var oid = principal.FindFirst(OidClaim)?.Value
-               ?? principal.FindFirst(OidAltClaim)?.Value
-               ?? string.Empty;
-
-        var email = principal.FindFirst(EmailClaim)?.Value
-                 ?? principal.FindFirst(EmailAlt)?.Value
-                 ?? principal.FindFirst(ClaimTypes.Email)?.Value
-                 ?? string.Empty;
-
-        var displayName = principal.FindFirst(NameClaim)?.Value
-                       ?? principal.FindFirst(ClaimTypes.Name)?.Value
-                       ?? email;
-
-        var roles = principal.FindAll(RolesClaim)
-                             .Concat(principal.FindAll(ClaimTypes.Role))
-                             .Select(c => c.Value)
-                             .Distinct()
-                             .ToList();
-
-        return new CurrentUser(oid, email, displayName, roles);
     }
 }

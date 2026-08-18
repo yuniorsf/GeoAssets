@@ -6,7 +6,9 @@ namespace GeoAssets.Identity.Authentication;
 /// Reads the current user from a <see cref="ClaimsPrincipal"/>.
 ///
 /// Works with any OIDC / OAuth 2.0 middleware that populates a ClaimsPrincipal
-/// (Azure AD via Microsoft.Identity.Web, OpenIdConnect, JwtBearer, etc.).
+/// (Azure AD via Microsoft.Identity.Web, OpenIdConnect, JwtBearer, etc.) — claim-type
+/// mapping is delegated to <see cref="ClaimMapping"/> (XD01-48) rather than hardcoded here,
+/// so a different IdP's claim shape is a configuration change, not a code change.
 ///
 /// Register in ASP.NET Core / Blazor:
 /// <code>
@@ -17,42 +19,11 @@ namespace GeoAssets.Identity.Authentication;
 ///                   .HttpContext?.User));
 /// </code>
 /// </summary>
-public sealed class ClaimsPrincipalCurrentUserAccessor(Func<ClaimsPrincipal?> principalResolver)
+public sealed class ClaimsPrincipalCurrentUserAccessor(
+    Func<ClaimsPrincipal?> principalResolver, ClaimMapping? claimMapping = null)
     : ICurrentUserAccessor
 {
-    // Standard Azure AD claim types
-    private const string OidClaim          = "oid";
-    private const string OidAlternateClaim = "http://schemas.microsoft.com/identity/claims/objectidentifier";
-    private const string EmailClaim        = "preferred_username";
-    private const string EmailAltClaim     = "upn";
-    private const string NameClaim         = "name";
-    private const string RolesClaim        = "roles";
+    private readonly ClaimMapping _claimMapping = claimMapping ?? ClaimMapping.EntraDefault;
 
-    public CurrentUser? GetCurrentUser()
-    {
-        var principal = principalResolver();
-        if (principal?.Identity?.IsAuthenticated != true)
-            return null;
-
-        var oid = principal.FindFirst(OidClaim)?.Value
-               ?? principal.FindFirst(OidAlternateClaim)?.Value
-               ?? string.Empty;
-
-        var email = principal.FindFirst(EmailClaim)?.Value
-                 ?? principal.FindFirst(EmailAltClaim)?.Value
-                 ?? principal.FindFirst(ClaimTypes.Email)?.Value
-                 ?? string.Empty;
-
-        var displayName = principal.FindFirst(NameClaim)?.Value
-                       ?? principal.FindFirst(ClaimTypes.Name)?.Value
-                       ?? email;
-
-        var roles = principal.FindAll(RolesClaim)
-                             .Concat(principal.FindAll(ClaimTypes.Role))
-                             .Select(c => c.Value)
-                             .Distinct()
-                             .ToList();
-
-        return new CurrentUser(oid, email, displayName, roles);
-    }
+    public CurrentUser? GetCurrentUser() => _claimMapping.Map(principalResolver());
 }

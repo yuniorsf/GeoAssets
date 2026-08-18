@@ -1,13 +1,10 @@
 namespace GeoAssets.Identity.Authentication;
 
 /// <summary>
-/// Snapshot of the currently authenticated principal, populated from the Azure AD JWT claims.
-///
-/// Azure AD claim mappings used:
-///   oid  (or objectidentifier) → <see cref="AzureObjectId"/>
-///   preferred_username / upn   → <see cref="Email"/>
-///   name                       → <see cref="DisplayName"/>
-///   roles                      → <see cref="AzureRoles"/> (App Roles configured in Azure AD)
+/// Snapshot of the currently authenticated principal, populated from the IdP's JWT claims via
+/// <see cref="ClaimMapping"/> (XD01-48) — <see cref="AzureObjectId"/>/<see cref="AzureRoles"/>
+/// keep their Entra-era names for source compatibility, but the values themselves come from
+/// whichever IdP is actually configured, not necessarily Azure AD.
 /// </summary>
 public sealed record CurrentUser(
     string             AzureObjectId,
