@@ -75,6 +75,11 @@ builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
     new ClaimsPrincipalCurrentUserAccessor(
         () => sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.User));
 
+// AuthZ bridge (XD01-13) — lets endpoints declare .RequireAuthorization("SomePolicyName")
+// (matching an AppPolicy.Name row) and get evaluated against IGeoAuthorizationService,
+// the same policy engine the Blazor client already uses.
+builder.Services.AddGeoAuthorizationPolicyBridge();
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration
