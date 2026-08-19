@@ -37,7 +37,11 @@ public sealed class RestProviderFactory : IAsyncProviderFactory
 
     private HttpClient BuildClient(string baseUrl)
     {
-        var client = _httpFactory.CreateClient();
+        // Named (not the anonymous default) so a host can attach request handlers scoped
+        // to GeoAssets.Server calls specifically — e.g. GeoAssets.Web attaches an MSAL
+        // AuthorizationMessageHandler to this name (XD01-17) without also attaching a
+        // bearer token to arbitrary REST URLs a user might type into the provider-pool UI.
+        var client = _httpFactory.CreateClient("GeoAssetsServer");
         client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
         return client;
     }

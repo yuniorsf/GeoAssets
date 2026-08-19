@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Selection;
 
@@ -13,7 +14,7 @@ namespace GeoAssets.Workflow.Orders;
 ///   • records the <see cref="FeatureSelectionSpec"/> that was used to populate its feature set,
 ///     enabling reproducibility and audit
 /// </summary>
-public interface IServiceOrder
+public interface IServiceOrder : IOrgOwnedResource
 {
     // ── Identity ─────────────────────────────────────────────────────────────
 

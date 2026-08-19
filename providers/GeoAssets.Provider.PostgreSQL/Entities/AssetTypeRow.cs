@@ -9,4 +9,5 @@ public sealed class AssetTypeRow
     public string IconUrl   { get; set; } = string.Empty;
     public bool   IsBuiltIn { get; set; } = false;
     public string? AttributesSchemaJson { get; set; }
+    public Guid   OrganizationId { get; set; } = Guid.Empty;
 }

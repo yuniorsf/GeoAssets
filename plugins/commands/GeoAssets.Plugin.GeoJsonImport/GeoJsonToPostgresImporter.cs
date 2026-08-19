@@ -19,10 +19,12 @@ namespace GeoAssets.Providers.Utils;
 public sealed class GeoJsonToPostgresImporter
 {
     private readonly ILoggerFactory _loggerFactory;
+    private readonly TimeProvider   _timeProvider;
 
-    public GeoJsonToPostgresImporter(ILoggerFactory? loggerFactory = null)
+    public GeoJsonToPostgresImporter(ILoggerFactory? loggerFactory = null, TimeProvider? timeProvider = null)
     {
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+        _timeProvider  = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -52,7 +54,7 @@ public sealed class GeoJsonToPostgresImporter
             staging.AddAssetType(assetType);
 
         // Connect to PostgreSQL and transfer
-        var factory = new PostgresProviderFactory(_loggerFactory);
+        var factory = new PostgresProviderFactory(_loggerFactory, _timeProvider);
         var postgres = factory.Create(connectionString);
         try
         {

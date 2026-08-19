@@ -8,7 +8,8 @@ namespace GeoAssets.Infrastructure.Observability;
 ///
 /// Inject <see cref="GeoAssetsActivitySource"/> and call
 /// <see cref="StartActivity"/> to create custom spans that appear alongside
-/// ASP.NET Core and HTTP client spans in Azure Monitor / Application Insights.
+/// ASP.NET Core and HTTP client spans in the configured OTLP backend
+/// (New Relic as of XD01-30).
 ///
 /// <code>
 /// public class ServiceOrderCommandHandler(GeoAssetsActivitySource tracer, …)
@@ -39,10 +40,21 @@ public sealed class GeoAssetsActivitySource
         _source.StartActivity($"ServiceOrder.{operationName}")
                ?.AddTag("order.id", orderId);
 
-    public Activity? StartNotificationActivity(string orderId, string transport) =>
-        _source.StartActivity("Notification.Publish")
+    public Activity? StartNotificationActivity(string orderId, string transport, ActivityKind kind = ActivityKind.Internal) =>
+        _source.StartActivity("Notification.Publish", kind)
                ?.AddTag("order.id", orderId)
                 .AddTag("messaging.system", transport);
+
+    /// <summary>
+    /// Starts a span for an AI-agent-driven workflow operation (see
+    /// <c>GeoAssets.Workflow.Agents.Executors</c>), tagged with the order, the acting agent,
+    /// and — when present — the agent invocation/run that triggered it.
+    /// </summary>
+    public Activity? StartAgentActivity(string operationName, string orderId, string agentId, string? agentInvocationId = null) =>
+        _source.StartActivity($"Agent.{operationName}")
+               ?.AddTag("order.id", orderId)
+                .AddTag("agent.id", agentId)
+                .AddTag("agent.invocation_id", agentInvocationId);
 
     // ── Generic ───────────────────────────────────────────────────────────────
 

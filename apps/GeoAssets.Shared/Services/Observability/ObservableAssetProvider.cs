@@ -16,8 +16,9 @@ namespace GeoAssets.Shared.Services.Observability;
 /// </summary>
 public sealed class ObservableAssetProvider(
     IAssetProvider inner,
-    ILogger<ObservableAssetProvider> logger)
-    : ObservableDecoratorBase<ObservableAssetProvider>(logger), IAssetProvider
+    ILogger<ObservableAssetProvider> logger,
+    TimeProvider timeProvider)
+    : ObservableDecoratorBase<ObservableAssetProvider>(logger, timeProvider), IAssetProvider
 {
     // ── Instrumented ─────────────────────────────────────────────────────────
 

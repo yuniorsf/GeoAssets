@@ -34,7 +34,9 @@ public static class PostgresServiceExtensions
         string                  connectionString)
     {
         services.AddDbContextFactory<GeoAssetsDbContext>(opts =>
-            opts.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
+            opts.UseNpgsql(connectionString, npgsql => npgsql
+                .UseNetTopologySuite()
+                .EnableRetryOnFailure()));
         return services;
     }
 }

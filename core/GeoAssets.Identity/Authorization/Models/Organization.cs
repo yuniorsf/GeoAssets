@@ -20,7 +20,7 @@ public sealed class Organization
     public string? Description { get; set; }
     public bool    IsActive    { get; set; } = true;
 
-    public DateTime  CreatedAt { get; set; } = DateTime.UtcNow;
+    public required DateTime CreatedAt { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────────
 

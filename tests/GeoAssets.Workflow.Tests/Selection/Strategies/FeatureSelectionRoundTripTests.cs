@@ -25,7 +25,7 @@ public class FeatureSelectionRoundTripTests
     }
 
     private static FeatureSelectionRegistry NewRegistry() =>
-        new("no-such-plugins-dir", typeof(BoundingBoxSelectionStrategy).Assembly);
+        new(TimeProvider.System, "no-such-plugins-dir", typeof(BoundingBoxSelectionStrategy).Assembly);
 
     // ── bounding-box ─────────────────────────────────────────────────────────
 

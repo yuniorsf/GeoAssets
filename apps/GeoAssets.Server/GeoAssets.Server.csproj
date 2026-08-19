@@ -10,18 +10,26 @@
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
+    <!-- The managed SkiaSharp package alone doesn't ship libSkiaSharp.so — without
+         this, WmsEndpointExtensions' GetMap handler throws DllNotFoundException at
+         runtime on Linux (e.g. the Docker image). NoDependencies avoids needing
+         libfontconfig/libX11 etc. installed in the runtime image. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.2" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Identity.Web" Version="4.14.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
+    <ProjectReference Include="..\GeoAssets.Identity.EFCore\GeoAssets.Identity.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
   </ItemGroup>
 
 </Project>

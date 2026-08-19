@@ -20,7 +20,7 @@ public interface IPostgresProviderFactory
     IAssetProvider Create(string connectionString);
 }
 
-public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory)
+public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimeProvider timeProvider)
     : IPostgresProviderFactory, IExternalProviderFactory
 {
     public string ProviderName => "PostgreSQL";
@@ -28,7 +28,9 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory)
     public IAssetProvider Create(string connectionString)
     {
         var options = new DbContextOptionsBuilder<GeoAssetsDbContext>()
-            .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
+            .UseNpgsql(connectionString, npgsql => npgsql
+                .UseNetTopologySuite()
+                .EnableRetryOnFailure())
             .Options;
 
         var db     = new GeoAssetsDbContext(options);
@@ -37,6 +39,6 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory)
         // Apply any pending migrations (idempotent)
         db.Database.Migrate();
 
-        return new PostgresAssetProvider(db, options, logger);
+        return new PostgresAssetProvider(db, options, logger, timeProvider);
     }
 }

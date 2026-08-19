@@ -5,6 +5,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
+using GeoAssets.Shared.Services.Observability;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -38,18 +39,43 @@ public static class MauiProgram
 #endif
 
         // GeoAssets services
+        //
+        // Observability (XD01-43): wrapped with the same Observable* decorators as
+        // apps/GeoAssets.Web/Program.cs, giving MAUI the same import/render/repository-timing
+        // telemetry Blazor Web already has. Deliberately NOT wired to AddGeoAssetsObservability
+        // (GeoAssets.Infrastructure.Observability) or an OTLP exporter here:
+        //   - That extension is ASP.NET Core-oriented (FrameworkReference on
+        //     Microsoft.AspNetCore.App, ASP.NET Core request instrumentation, a /healthz
+        //     endpoint) — none of it applies to a MAUI client, which hosts no HTTP server.
+        //   - A mobile/desktop app is a distributed binary an end user's device — unlike
+        //     GeoAssets.Server, a vendor OTLP endpoint/API-key credential embedded in it can be
+        //     extracted by decompiling the package. The safe pattern for client telemetry is
+        //     proxying through a trusted backend, not exporting directly from the client; that's
+        //     a separate, larger design (out of scope here).
+        // The decorators below are safe with no exporter at all — ImportDiagnostics'
+        // ActivitySource/Meter are zero-cost no-ops with nothing listening, exactly like
+        // Blazor Web before OTel is wired up client-side.
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IProviderPool, ProviderPool>();
         builder.Services.AddSingleton<ActiveAssetProvider>();
-        builder.Services.AddSingleton<IAssetProvider>(sp =>
-            new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()));
+        builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
+            new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
+            sp.GetRequiredService<ILogger<ObservableAssetProvider>>(),
+            sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddGeoAssetsPostgres();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
         builder.Services.Configure<MapInteropOptions>(
             builder.Configuration.GetSection("MapInterop"));
         builder.Services.AddScoped<MapInteropService>();
-        builder.Services.AddScoped<IMapInterop>(sp => sp.GetRequiredService<MapInteropService>());
+        builder.Services.AddScoped<IMapInterop>(sp => new ObservableMapInterop(
+            sp.GetRequiredService<MapInteropService>(),
+            sp.GetRequiredService<ILogger<ObservableMapInterop>>(),
+            sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddScoped<AssetService>();
+        builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
+            sp.GetRequiredService<AssetService>(),
+            sp.GetRequiredService<ILogger<ObservableAssetService>>(),
+            sp.GetRequiredService<TimeProvider>()));
 
         return builder.Build();
     }

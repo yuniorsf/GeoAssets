@@ -33,31 +33,21 @@ with the `tail_sampling` processor) before the sampling decision is made.
 
 ## Where this would apply in GeoAssets
 
-`ObservabilityServiceExtensions.WithTracing`
-(`core/GeoAssets.Infrastructure.Observability/ObservabilityServiceExtensions.cs:116-118`)
-currently configures:
+**Resolved 2026-08-14 (XD01-31).** `ObservabilityServiceExtensions.WithTracing`
+(`core/GeoAssets.Infrastructure.Observability/ObservabilityServiceExtensions.cs`)
+previously configured head-based, probabilistic sampling
+(`ParentBasedSampler(TraceIdRatioBasedSampler(...))`) behind a comment that
+inaccurately claimed "tail-based sampling: always sample errors" —
+`TraceIdRatioBasedSampler` cannot implement that policy, since the
+keep/discard decision happens at trace-start, before the outcome (error?
+P95+ latency?) is known.
 
-```csharp
-tracing.SetSampler(new ParentBasedSampler(
-    new TraceIdRatioBasedSampler(opts.Sampling.RatioForProduction)));
-```
-
-This is **head-based, probabilistic sampling** — the keep/discard decision
-is made when the trace *starts*, based only on a hash of the `TraceId`,
-before anything is known about whether the request will error or run slow.
-It cannot implement "always keep errors and P95+ latency" — a trace that
-turns out to fail was already discarded (or kept) by the coin flip at the
-root span, independent of its outcome. The in-code comment above that call
-(`"Tail-based sampling: always sample errors..."`) is aspirational, not an
-accurate description of what `TraceIdRatioBasedSampler` does — worth fixing
-that comment, or the sampler itself, so they agree.
-
-Getting genuine tail-based sampling per this directive would mean routing
-export through an OpenTelemetry Collector configured with the
-`tail_sampling` processor (policies: `status_code` for errors,
-`latency` for the P95+ bucket, `probabilistic` for the baseline 1%) placed
-between the SDK and Azure Monitor, rather than deciding sampling in-process
-via `SetSampler`. That's an infrastructure/deployment change, not a
-`GeoAssets.Infrastructure.Observability` code change — the SDK-side sampler
-would most likely be set to `AlwaysOnSampler` (export everything to the
-Collector) and let the Collector make the retain/drop call.
+The sampler is now `AlwaysOnSampler` — the SDK exports 100% of traces, and
+the in-code comment says so plainly. Genuine tail-based sampling per this
+directive still requires an OpenTelemetry Collector configured with the
+`tail_sampling` processor (policies: `status_code` for errors, `latency`
+for the P95+ bucket, `probabilistic` for the baseline 1%) placed between
+the SDK and the OTLP backend (New Relic as of XD01-30) — that Collector
+does not exist yet, so every exported trace is currently billed/stored
+as-is by the backend. Deploying that Collector is infrastructure work, out
+of scope for `GeoAssets.Infrastructure.Observability`.

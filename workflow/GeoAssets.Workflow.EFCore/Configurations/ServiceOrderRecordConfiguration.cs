@@ -17,6 +17,7 @@ internal sealed class ServiceOrderRecordConfiguration : IEntityTypeConfiguration
         b.Property(o => o.Status).IsRequired().HasMaxLength(64);
         b.Property(o => o.CreatedBy).IsRequired().HasMaxLength(256);
         b.Property(o => o.AssignedTo).HasMaxLength(256);
+        b.Property(o => o.OrganizationId).IsRequired().HasDefaultValue(Guid.Empty);
         b.Property(o => o.ParentOrderId).HasMaxLength(36);
         b.Property(o => o.CreatedAt).IsRequired();
         // No HasColumnType/HasMaxLength here — an unbounded string already maps to each
@@ -41,6 +42,7 @@ internal sealed class ServiceOrderRecordConfiguration : IEntityTypeConfiguration
         b.HasIndex(o => o.OrderTypeId);
         b.HasIndex(o => o.ParentOrderId);
         b.HasIndex(o => o.CreatedAt);
+        b.HasIndex(o => o.OrganizationId);
 
         b.HasMany(o => o.Dispatches)
          .WithOne(d => d.ServiceOrder)

@@ -18,6 +18,11 @@
 
   <ItemGroup>
     <ProjectReference Include="../../core/GeoAssets.Workflow/GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="../../core/GeoAssets.Infrastructure.Observability/GeoAssets.Infrastructure.Observability.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Workflow.Messaging.Kafka.Tests" />
   </ItemGroup>
 
 </Project>

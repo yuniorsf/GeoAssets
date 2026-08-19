@@ -12,8 +12,13 @@ namespace GeoAssets.Shared.Services.Observability;
 public abstract class ObservableDecoratorBase<T>
 {
     protected readonly ILogger<T> Logger;
+    protected readonly TimeProvider TimeProvider;
 
-    protected ObservableDecoratorBase(ILogger<T> logger) => Logger = logger;
+    protected ObservableDecoratorBase(ILogger<T> logger, TimeProvider timeProvider)
+    {
+        Logger = logger;
+        TimeProvider = timeProvider;
+    }
 
     /// <summary>Tracks a <c>Task</c>-returning operation.</summary>
     /// <param name="spanName">Name of the child span to create.</param>
@@ -26,19 +31,18 @@ public abstract class ObservableDecoratorBase<T>
         Action<Activity?>? before = null,
         Action<Activity?, long>? after = null)
     {
-        var sw = Stopwatch.StartNew();
+        var startTimestamp = TimeProvider.GetTimestamp();
         using var span = ImportDiagnostics.ActivitySource.StartActivity(spanName, ActivityKind.Internal);
         before?.Invoke(span);
         try
         {
             await operation();
-            sw.Stop();
-            span?.SetTag("duration_ms", sw.ElapsedMilliseconds);
-            after?.Invoke(span, sw.ElapsedMilliseconds);
+            var elapsedMs = (long)TimeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            span?.SetTag("duration_ms", elapsedMs);
+            after?.Invoke(span, elapsedMs);
         }
         catch (Exception ex)
         {
-            sw.Stop();
             span?.SetStatus(ActivityStatusCode.Error, ex.Message)
                  .AddException(ex);
             throw;
@@ -53,20 +57,19 @@ public abstract class ObservableDecoratorBase<T>
         Action<Activity?>? before = null,
         Action<Activity?, TResult, long>? after = null)
     {
-        var sw = Stopwatch.StartNew();
+        var startTimestamp = TimeProvider.GetTimestamp();
         using var span = ImportDiagnostics.ActivitySource.StartActivity(spanName, ActivityKind.Internal);
         before?.Invoke(span);
         try
         {
             var result = await operation();
-            sw.Stop();
-            span?.SetTag("duration_ms", sw.ElapsedMilliseconds);
-            after?.Invoke(span, result, sw.ElapsedMilliseconds);
+            var elapsedMs = (long)TimeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            span?.SetTag("duration_ms", elapsedMs);
+            after?.Invoke(span, result, elapsedMs);
             return result;
         }
         catch (Exception ex)
         {
-            sw.Stop();
             span?.SetStatus(ActivityStatusCode.Error, ex.Message)
                  .AddException(ex);
             throw;
@@ -80,20 +83,19 @@ public abstract class ObservableDecoratorBase<T>
         Action<Activity?>? before = null,
         Action<Activity?, TResult, long>? after = null)
     {
-        var sw = Stopwatch.StartNew();
+        var startTimestamp = TimeProvider.GetTimestamp();
         using var span = ImportDiagnostics.ActivitySource.StartActivity(spanName, ActivityKind.Internal);
         before?.Invoke(span);
         try
         {
             var result = operation();
-            sw.Stop();
-            span?.SetTag("duration_ms", sw.ElapsedMilliseconds);
-            after?.Invoke(span, result, sw.ElapsedMilliseconds);
+            var elapsedMs = (long)TimeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            span?.SetTag("duration_ms", elapsedMs);
+            after?.Invoke(span, result, elapsedMs);
             return result;
         }
         catch (Exception ex)
         {
-            sw.Stop();
             span?.SetStatus(ActivityStatusCode.Error, ex.Message)
                  .AddException(ex);
             throw;

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Identity.Authorization.EFCore.Repositories;
 
-public sealed class EFGroupRepository(GeoIdentityDbContext db) : IGroupRepository
+public sealed class EFGroupRepository(GeoIdentityDbContext db, TimeProvider timeProvider) : IGroupRepository
 {
     public Task<AppGroup?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => db.Groups.Include(g => g.UserGroups)
@@ -41,7 +41,7 @@ public sealed class EFGroupRepository(GeoIdentityDbContext db) : IGroupRepositor
     {
         var exists = await db.UserGroups.AnyAsync(ug => ug.UserId == userId && ug.GroupId == groupId, ct);
         if (!exists)
-            await db.UserGroups.AddAsync(new UserGroup { UserId = userId, GroupId = groupId, AddedBy = addedBy }, ct);
+            await db.UserGroups.AddAsync(new UserGroup { UserId = userId, GroupId = groupId, AddedBy = addedBy, JoinedAt = timeProvider.GetUtcNow().UtcDateTime }, ct);
     }
 
     public async Task RemoveMemberAsync(Guid groupId, Guid userId, CancellationToken ct = default)

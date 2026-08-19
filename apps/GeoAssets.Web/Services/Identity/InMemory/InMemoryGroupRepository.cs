@@ -3,7 +3,7 @@ using GeoAssets.Identity.Authorization.Repositories;
 
 namespace GeoAssets.Web.Services.Identity.InMemory;
 
-public sealed class InMemoryGroupRepository(WasmIdentityStore store) : IGroupRepository
+public sealed class InMemoryGroupRepository(WasmIdentityStore store, TimeProvider timeProvider) : IGroupRepository
 {
     public Task<AppGroup?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => Task.FromResult(store.Groups.FirstOrDefault(g => g.Id == id));
@@ -45,7 +45,7 @@ public sealed class InMemoryGroupRepository(WasmIdentityStore store) : IGroupRep
     public Task AddMemberAsync(Guid groupId, Guid userId, string? addedBy = null, CancellationToken ct = default)
     {
         if (!store.UserGroups.Any(ug => ug.UserId == userId && ug.GroupId == groupId))
-            store.UserGroups.Add(new UserGroup { UserId = userId, GroupId = groupId, AddedBy = addedBy });
+            store.UserGroups.Add(new UserGroup { UserId = userId, GroupId = groupId, AddedBy = addedBy, JoinedAt = timeProvider.GetUtcNow().UtcDateTime });
         return Task.CompletedTask;
     }
 

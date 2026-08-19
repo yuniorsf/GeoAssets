@@ -36,6 +36,7 @@ public class GeoIdentityDbContext(DbContextOptions<GeoIdentityDbContext> options
     public DbSet<RolePermission>    RolePermissions => Set<RolePermission>();
     public DbSet<AppPolicy>         Policies        => Set<AppPolicy>();
     public DbSet<PolicyRequirement> PolicyRequirements => Set<PolicyRequirement>();
+    public DbSet<OrganizationGrant> OrganizationGrants => Set<OrganizationGrant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

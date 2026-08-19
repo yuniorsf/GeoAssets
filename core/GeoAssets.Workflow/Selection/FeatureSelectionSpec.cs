@@ -14,7 +14,7 @@ public sealed record FeatureSelectionSpec
         new Dictionary<string, object>();
 
     /// <summary>UTC timestamp when the selection was executed.</summary>
-    public DateTime ExecutedAt { get; init; } = DateTime.UtcNow;
+    public required DateTime ExecutedAt { get; init; }
 
     /// <summary>Optional free-text note explaining why this selection was made.</summary>
     public string? Note { get; init; }

@@ -1,0 +1,8 @@
+services:
+  web:
+    container_name: geoasset-app
+    build:
+      context: ../..
+      dockerfile: apps/GeoAssets.Web/Dockerfile
+    ports:
+      - "8081:80"

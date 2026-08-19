@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Confluent.Kafka;
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Notifications;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,12 +19,14 @@ namespace GeoAssets.Workflow.Messaging.Kafka;
 ///   <item><term>Header "orderTypeId"</term><description>For consumer-side routing.</description></item>
 ///   <item><term>Header "newStatus"</term><description>For consumer-side filtering.</description></item>
 ///   <item><term>Header "correlationId"</term><description>Forwarded when present.</description></item>
+///   <item><term>Header "traceparent"</term><description>W3C trace context of the publishing span, so a future consumer can continue the same trace instead of starting a disconnected one.</description></item>
 /// </list>
 /// </summary>
 public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
 {
     private readonly IProducer<string?, string> _producer;
     private readonly KafkaPublisherOptions _options;
+    private readonly GeoAssetsActivitySource _tracer;
     private readonly ILogger<KafkaOrderEventPublisher> _logger;
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -34,9 +38,11 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
 
     public KafkaOrderEventPublisher(
         IOptions<KafkaPublisherOptions> options,
+        GeoAssetsActivitySource tracer,
         ILogger<KafkaOrderEventPublisher> logger)
     {
         _options = options.Value;
+        _tracer  = tracer;
         _logger  = logger;
 
         var config = new ProducerConfig
@@ -53,6 +59,8 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
 
     public async Task PublishAsync(OrderStateChangedEvent evt, CancellationToken ct = default)
     {
+        using var activity = _tracer.StartNotificationActivity(evt.OrderId, "kafka", ActivityKind.Producer);
+
         var payload = JsonSerializer.Serialize(evt, _jsonOptions);
         var key     = _options.UseOrderIdAsKey ? evt.OrderId : null;
 
@@ -60,7 +68,7 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
         {
             Key     = key,
             Value   = payload,
-            Headers = BuildHeaders(evt),
+            Headers = BuildHeaders(evt, activity),
         };
 
         try
@@ -77,6 +85,7 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
         }
         catch (ProduceException<string?, string> ex)
         {
+            GeoAssetsActivitySource.RecordException(activity, ex);
             _logger.LogError(ex,
                 "Failed to publish OrderStateChangedEvent for order {OrderId} to Kafka. " +
                 "Error: {KafkaError}",
@@ -85,7 +94,13 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
         }
     }
 
-    private static Headers BuildHeaders(OrderStateChangedEvent evt)
+    /// <summary>
+    /// Builds the Kafka message headers, including the W3C <c>traceparent</c>
+    /// (and <c>tracestate</c>, if set) derived from <paramref name="activity"/>
+    /// via <see cref="DistributedContextPropagator"/> — additive alongside the
+    /// existing bespoke headers, not a replacement for any of them.
+    /// </summary>
+    internal static Headers BuildHeaders(OrderStateChangedEvent evt, Activity? activity)
     {
         var headers = new Headers
         {
@@ -95,6 +110,10 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
 
         if (evt.CorrelationId is not null)
             headers.Add("correlationId", System.Text.Encoding.UTF8.GetBytes(evt.CorrelationId));
+
+        DistributedContextPropagator.Current.Inject(activity, headers,
+            static (carrier, fieldName, fieldValue) =>
+                ((Headers)carrier!).Add(fieldName, System.Text.Encoding.UTF8.GetBytes(fieldValue)));
 
         return headers;
     }

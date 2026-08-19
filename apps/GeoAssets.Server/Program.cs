@@ -1,12 +1,30 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
+using GeoAssets.Identity;
+using GeoAssets.Identity.Authentication;
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Observability (traces + metrics + logs → OTLP, e.g. New Relic; see
+// "Observability" section in appsettings.json) ─────────────────────────────────
+builder.Services.AddGeoAssetsObservability(builder.Configuration);
+
+// ── Authentication (bearer-token validation against the CIAM tenant; see
+// "AzureAdCiam" section in appsettings.json) — every endpoint requires an
+// authenticated caller by default (XD01-12) ─────────────────────────────────────
+builder.Services.AddGeoAssetsAuthentication(builder.Configuration);
+
+// UseGeoAssetsObservability() (below) wires a /healthz endpoint via UseHealthChecks,
+// which requires HealthCheckService to be registered — without this call the host
+// throws InvalidOperationException at startup (found via XD01-45's test coverage).
+builder.Services.AddHealthChecks();
 
 // ── Connection string ─────────────────────────────────────────────────────────
 // Read from appsettings.json "ConnectionStrings:GeoAssets"
@@ -43,6 +61,33 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     // (Server) project instead, which already legitimately depends on Npgsql.
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
 
+// ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
+// apps/GeoAssets.Web/Program.cs, so server-side enforcement and the client UI agree on
+// who can do what. ServerWorkflowPrincipalFactory builds the WorkflowPrincipal it evaluates
+// against from the authenticated caller (IGeoAuthorizationService, registered below).
+builder.Services.AddServiceOrderRules();
+builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
+
+// ── Identity (RBAC/ABAC) — EF Core backend against Postgres (XD01-14). Well-known
+// roles/permissions/policies are seeded idempotently on every startup (see
+// SeedGeoIdentityAsync below).
+builder.Services.AddGeoIdentity(o => o.UseNpgsql(
+    connectionString,
+    npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+
+// ICurrentUserAccessor reads the authenticated ClaimsPrincipal populated by
+// AddGeoAssetsAuthentication (XD01-12) — pattern documented on
+// GeoIdentityEFCoreServiceExtensions.AddGeoIdentity's own XML doc comment.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
+    new ClaimsPrincipalCurrentUserAccessor(
+        () => sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.User));
+
+// AuthZ bridge (XD01-13) — lets endpoints declare .RequireAuthorization("SomePolicyName")
+// (matching an AppPolicy.Name row) and get evaluated against IGeoAuthorizationService,
+// the same policy engine the Blazor client already uses.
+builder.Services.AddGeoAuthorizationPolicyBridge();
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration
@@ -61,7 +106,14 @@ var app = builder.Build();
 // Overlay any DB-persisted OrderTypes on top of the seeded defaults.
 await app.Services.LoadRegistryFromDbAsync();
 
+// Seed canonical identity roles/permissions/policies (idempotent, XD01-14).
+await app.Services.SeedGeoIdentityAsync();
+
 app.UseCors();
+
+app.UseGeoAssetsAuthentication();
+
+app.UseGeoAssetsObservability();
 
 // Expose all GeoAssets REST endpoints under /api/geoassets
 // Endpoints: GET/POST /features, GET/PUT/DELETE /features/{id},
@@ -72,6 +124,10 @@ app.MapGeoAssetsApi();
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
 app.MapServiceOrdersApi();
+
+// Read-only identity/authorization endpoints under /api/identity (XD01-18) —
+// see IdentityRestApiExtensions for the full endpoint list.
+app.MapIdentityApi();
 
 // Standalone OGC endpoints for external GIS clients (CORS not required
 // for server-to-server or native desktop tools).

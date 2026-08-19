@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Selection;
 
@@ -23,6 +24,9 @@ public sealed class ServiceOrder : IServiceOrder
 
     public string  CreatedBy  { get; init; } = string.Empty;
     public string? AssignedTo { get; set;  }
+
+    /// <summary>See <see cref="IOrgOwnedResource"/>. Set-once at creation, like <see cref="CreatedBy"/>.</summary>
+    public Guid OrganizationId { get; init; } = Guid.Empty;
 
     public DateTime  CreatedAt   { get; init; } = DateTime.UtcNow;
     public DateTime? UpdatedAt   { get; set;  }
@@ -74,16 +78,18 @@ public sealed class ServiceOrder : IServiceOrder
     /// Throws <see cref="InvalidServiceOrderTransitionException"/> if the transition is
     /// not structurally legal per <see cref="ServiceOrderTransitions.IsValid"/>.
     /// </summary>
-    public ServiceOrder Transition(string newStatus)
+    public ServiceOrder Transition(string newStatus, TimeProvider timeProvider)
     {
         if (!ServiceOrderTransitions.IsValid(Status, newStatus))
             throw new InvalidServiceOrderTransitionException(Status, newStatus);
 
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+
         Status    = newStatus;
-        UpdatedAt = DateTime.UtcNow;
+        UpdatedAt = now;
 
         if (ServiceOrderTransitions.IsSuccessState(null, newStatus))
-            CompletedAt = DateTime.UtcNow;
+            CompletedAt = now;
 
         return this;
     }
@@ -93,11 +99,13 @@ public sealed class ServiceOrder : IServiceOrder
         string             targetId,
         DispatchTargetType targetType,
         string             dispatchedBy,
+        TimeProvider       timeProvider,
         string?            note              = null,
         ActorKind          actorKind         = ActorKind.Human,
         string?            agentInvocationId = null)
     {
-        var dispatch = new OrderDispatch(targetId, targetType, dispatchedBy, DateTime.UtcNow, note)
+        var now      = timeProvider.GetUtcNow().UtcDateTime;
+        var dispatch = new OrderDispatch(targetId, targetType, dispatchedBy, now, note)
         {
             ActorKind         = actorKind,
             AgentInvocationId = agentInvocationId
@@ -112,7 +120,7 @@ public sealed class ServiceOrder : IServiceOrder
             ActorKind         = actorKind,
             AgentInvocationId = agentInvocationId
         });
-        UpdatedAt = DateTime.UtcNow;
+        UpdatedAt = now;
         return this;
     }
 
@@ -120,30 +128,32 @@ public sealed class ServiceOrder : IServiceOrder
     public ServiceOrder RecordAction(
         OrderActionType action,
         string          performedBy,
+        TimeProvider    timeProvider,
         string?         comment           = null,
         string?         resultingStatus   = null,
         ActorKind       actorKind         = ActorKind.Human,
         string?         agentInvocationId = null)
     {
-        ActionLog.Add(new OrderActionLog(action, performedBy, DateTime.UtcNow, comment, resultingStatus)
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        ActionLog.Add(new OrderActionLog(action, performedBy, now, comment, resultingStatus)
         {
             ActorKind         = actorKind,
             AgentInvocationId = agentInvocationId
         });
         if (resultingStatus is not null)
-            Transition(resultingStatus);
+            Transition(resultingStatus, timeProvider);
         else
-            UpdatedAt = DateTime.UtcNow;
+            UpdatedAt = now;
         return this;
     }
 
     /// <summary>Replaces the feature set and records the spec used to build it.</summary>
-    public ServiceOrder WithFeatures(IEnumerable<GeoFeature> features, FeatureSelectionSpec? spec = null)
+    public ServiceOrder WithFeatures(IEnumerable<GeoFeature> features, TimeProvider timeProvider, FeatureSelectionSpec? spec = null)
     {
         Features.Clear();
         Features.AddRange(features);
         SelectionSpec = spec;
-        UpdatedAt = DateTime.UtcNow;
+        UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
         return this;
     }
 }

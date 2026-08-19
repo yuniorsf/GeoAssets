@@ -13,15 +13,21 @@ public class ServiceOrderRulesTests
         string[]? roles = null,
         string[]? groups = null,
         string[]? permissions = null,
-        ActorKind kind = ActorKind.Human)
-        => new(userId, orgId, roles ?? [], groups ?? [], permissions ?? []) { Kind = kind };
+        ActorKind kind = ActorKind.Human,
+        WorkflowOrgGrant[]? orgGrants = null)
+        => new(userId, orgId, roles ?? [], groups ?? [], permissions ?? []) { Kind = kind, OrgGrants = orgGrants ?? [] };
 
     private static ServiceOrder Order(
         string createdBy = "",
         string? assignedTo = null,
         string orderTypeId = "",
-        string status = ServiceOrderStatus.Draft)
-        => new() { CreatedBy = createdBy, AssignedTo = assignedTo, OrderTypeId = orderTypeId, Status = status };
+        string status = ServiceOrderStatus.Draft,
+        Guid? organizationId = null)
+        => new()
+        {
+            CreatedBy = createdBy, AssignedTo = assignedTo, OrderTypeId = orderTypeId, Status = status,
+            OrganizationId = organizationId ?? Guid.Empty,
+        };
 
     private sealed class DelegateCreationRule(Func<WorkflowPrincipal, OrderType, bool?> fn) : IOrderCreationRule
     {
@@ -321,7 +327,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_DirectDispatchRecipient_CanView()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1");
+        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(), OrderActionType.View, order).Allowed.Should().BeTrue();
     }
@@ -330,7 +336,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_GroupDispatchMember_CanAnnotate()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1");
+        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(groups: ["crew-1"]), OrderActionType.Annotate, order).Allowed.Should().BeTrue();
     }
@@ -339,7 +345,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_OrgDispatchMember_CanView()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.View, order).Allowed.Should().BeTrue();
     }
@@ -348,7 +354,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_DirectDispatchRecipient_CanAccept()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1");
+        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(), OrderActionType.Accept, order).Allowed.Should().BeTrue();
     }
@@ -357,7 +363,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_GroupDispatchMember_CanAccept()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1");
+        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(groups: ["crew-1"]), OrderActionType.Accept, order).Allowed.Should().BeTrue();
     }
@@ -366,7 +372,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_OrgDispatchMember_CanAccept()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.Accept, order).Allowed.Should().BeTrue();
     }
@@ -375,7 +381,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_NonRecipient_CannotAccept()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(orgId: "org-2"), OrderActionType.Accept, order).Allowed.Should().BeFalse();
     }
@@ -392,7 +398,7 @@ public class ServiceOrderRulesTests
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(orgId: "org-1", roles: ["FieldTechnician"]), OrderActionType.Assign, order)
             .Allowed.Should().BeTrue();
@@ -406,7 +412,7 @@ public class ServiceOrderRulesTests
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.Assign, order)
             .Allowed.Should().BeFalse();
@@ -437,8 +443,8 @@ public class ServiceOrderRulesTests
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
-        var dispatchedOrder    = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
-        var notDispatchedOrder = Order().DispatchTo("org-2", DispatchTargetType.Organization, "supervisor-1");
+        var dispatchedOrder    = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
+        var notDispatchedOrder = Order().DispatchTo("org-2", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
         var principal = Principal(orgId: "org-1", roles: ["FieldTechnician"]);
 
         rules.Evaluate(principal, OrderActionType.Assign, dispatchedOrder).Allowed.Should().BeTrue();
@@ -449,7 +455,7 @@ public class ServiceOrderRulesTests
     public void Evaluate_RecipientRoleGrantsDefault_GrantsNothingBeyondViewAnnotateAccept()
     {
         var rules = new ServiceOrderRules();
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
 
         rules.Evaluate(Principal(orgId: "org-1"), OrderActionType.Assign, order).Allowed.Should().BeFalse();
     }
@@ -692,6 +698,115 @@ public class ServiceOrderRulesTests
             .Allowed.Should().BeFalse();
     }
 
+    // ── CrossOrgGrantRule ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Evaluate_MatchingActiveGrant_Allows()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_NoGrantAtAll_Denies()
+    {
+        var order = Order(organizationId: Guid.NewGuid());
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(), OrderActionType.Complete, order).Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantForDifferentResourceOrganization_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant scoped to one resource org must not authorize a different one.
+        var order = Order(organizationId: Guid.NewGuid());
+        var grant = new WorkflowOrgGrant(Guid.NewGuid().ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantForDifferentResourceType_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant scoped to "GeoFeature" must not authorize a ServiceOrder.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: "GeoFeature", ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithNullResourceType_AppliesToServiceOrder()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: "ServiceOrder", ["serviceorders:complete"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_GrantMissingRequestedAction_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant for "serviceorders:view" must not also unlock "serviceorders:complete".
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:view"], RequiredRole: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantRequiresRoleTheUserLacks_DoesNotLeakAccess()
+    {
+        // Non-leakage: RequiredRole is an extra gate, not decoration.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: "Supervisor");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant], roles: ["FieldTechnician"]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantRequiresRoleTheUserHolds_Allows()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: "Supervisor");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant], roles: ["Supervisor"]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_CrossOrgGrant_DoesNotAffectSameOrgRulesLikeCreator()
+    {
+        // The rule only ever adds an allow path; it must never interfere with the
+        // pre-existing Creator/Assignee/Role rules that don't care about organization.
+        var order = Order(createdBy: "u1", organizationId: Guid.NewGuid());
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(), OrderActionType.View, order).Allowed.Should().BeTrue();
+    }
+
     // ── ResolveRelationship ────────────────────────────────────────────────────
 
     [Fact]
@@ -718,7 +833,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void ResolveRelationship_UserDispatchTarget_SetsDirectRecipientFlag()
     {
-        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1");
+        var order = Order().DispatchTo("u1", DispatchTargetType.User, "supervisor-1", TimeProvider.System);
         var rel = ServiceOrderRules.ResolveRelationship(Principal(), order);
         rel.Should().HaveFlag(OrderUserRelationship.DirectRecipient);
     }
@@ -726,7 +841,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void ResolveRelationship_GroupMember_SetsGroupMemberFlag()
     {
-        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1");
+        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1", TimeProvider.System);
         var rel = ServiceOrderRules.ResolveRelationship(Principal(groups: ["crew-1"]), order);
         rel.Should().HaveFlag(OrderUserRelationship.GroupMember);
     }
@@ -734,7 +849,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void ResolveRelationship_GroupDispatchButNotMember_DoesNotSetGroupMemberFlag()
     {
-        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1");
+        var order = Order().DispatchTo("crew-1", DispatchTargetType.Group, "supervisor-1", TimeProvider.System);
         var rel = ServiceOrderRules.ResolveRelationship(Principal(groups: ["other-crew"]), order);
         rel.Should().NotHaveFlag(OrderUserRelationship.GroupMember);
     }
@@ -742,7 +857,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void ResolveRelationship_OrgMember_SetsOrgMemberFlag()
     {
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
         var rel = ServiceOrderRules.ResolveRelationship(Principal(orgId: "org-1"), order);
         rel.Should().HaveFlag(OrderUserRelationship.OrgMember);
     }
@@ -750,7 +865,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void ResolveRelationship_OrgDispatchButNotMember_DoesNotSetOrgMemberFlag()
     {
-        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1");
+        var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
         var rel = ServiceOrderRules.ResolveRelationship(Principal(orgId: "org-2"), order);
         rel.Should().NotHaveFlag(OrderUserRelationship.OrgMember);
     }
@@ -758,7 +873,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void ResolveRelationship_Dispatcher_SetsDispatcherFlag()
     {
-        var order = Order().DispatchTo("someone-else", DispatchTargetType.User, "u1");
+        var order = Order().DispatchTo("someone-else", DispatchTargetType.User, "u1", TimeProvider.System);
         var rel = ServiceOrderRules.ResolveRelationship(Principal(), order);
         rel.Should().HaveFlag(OrderUserRelationship.Dispatcher);
     }

@@ -16,6 +16,7 @@ namespace GeoAssets.Workflow.Selection;
 /// Usage:
 /// <code>
 ///   using var registry = new FeatureSelectionRegistry(
+///       timeProvider: TimeProvider.System,
 ///       pluginsDirectory: Path.Combine(AppContext.BaseDirectory, "plugins"),
 ///       builtInAssemblies: typeof(BoundingBoxSelectionStrategy).Assembly);
 ///
@@ -25,13 +26,15 @@ namespace GeoAssets.Workflow.Selection;
 public sealed class FeatureSelectionRegistry : IDisposable
 {
     private readonly CompositionContainer _container;
+    private readonly TimeProvider         _timeProvider;
 
     [ImportMany]
     public IEnumerable<Lazy<IFeatureSelectionStrategy, IFeatureSelectionStrategyMetadata>> Strategies
     { get; set; } = [];
 
-    public FeatureSelectionRegistry(string pluginsDirectory, params Assembly[] builtInAssemblies)
+    public FeatureSelectionRegistry(TimeProvider timeProvider, string pluginsDirectory, params Assembly[] builtInAssemblies)
     {
+        _timeProvider = timeProvider;
         var catalog = new AggregateCatalog();
 
         foreach (var asm in builtInAssemblies)
@@ -77,7 +80,7 @@ public sealed class FeatureSelectionRegistry : IDisposable
         {
             StrategyId  = strategyId,
             Parameters  = context.Parameters,
-            ExecutedAt  = DateTime.UtcNow,
+            ExecutedAt  = _timeProvider.GetUtcNow().UtcDateTime,
             Note        = note
         };
 

@@ -11,13 +11,15 @@ public sealed class AssetService : IAssetService
 {
     private readonly IAssetProvider _repository;
     private readonly IStorageService _storage;
+    private readonly TimeProvider _timeProvider;
     private CancellationTokenSource _saveCts = new();
     private string _collectionName = "Mis Activos GIS";
 
-    public AssetService(IAssetProvider repository, IStorageService storage)
+    public AssetService(IAssetProvider repository, IStorageService storage, TimeProvider timeProvider)
     {
         _repository = repository;
         _storage = storage;
+        _timeProvider = timeProvider;
         _repository.CollectionChanged += OnCollectionChanged;
     }
 
@@ -77,7 +79,7 @@ public sealed class AssetService : IAssetService
         {
             try
             {
-                await Task.Delay(500, token);
+                await Task.Delay(TimeSpan.FromMilliseconds(500), _timeProvider, token);
                 var collection = BuildCollection();
                 await _storage.SaveAsync(collection, "default", token);
             }
@@ -90,7 +92,8 @@ public sealed class AssetService : IAssetService
         Features = [.. _repository.GetAll()],
         Metadata = new()
         {
-            Name = _collectionName,
+            Name       = _collectionName,
+            CreatedAt  = _timeProvider.GetUtcNow().UtcDateTime,
             AssetTypes = [.. _repository.GetAssetTypes()]
         }
     };

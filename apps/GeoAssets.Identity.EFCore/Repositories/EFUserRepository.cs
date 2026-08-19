@@ -4,17 +4,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Identity.Authorization.EFCore.Repositories;
 
-public sealed class EFUserRepository(GeoIdentityDbContext db) : IUserRepository
+public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeProvider) : IUserRepository
 {
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => db.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                    .Include(u => u.UserClaims)
                    .FirstOrDefaultAsync(u => u.Id == id, ct);
 
-    public Task<AppUser?> GetByAzureObjectIdAsync(string oid, CancellationToken ct = default)
+    public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default)
         => db.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                    .Include(u => u.UserClaims)
-                   .FirstOrDefaultAsync(u => u.AzureObjectId == oid, ct);
+                   .FirstOrDefaultAsync(u => u.ExternalObjectId == oid, ct);
 
     public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default)
         => db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
@@ -58,7 +58,7 @@ public sealed class EFUserRepository(GeoIdentityDbContext db) : IUserRepository
     {
         var exists = await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct);
         if (!exists)
-            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy }, ct);
+            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime }, ct);
     }
 
     public async Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)

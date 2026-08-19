@@ -12,8 +12,9 @@ namespace GeoAssets.Shared.Services.Observability;
 /// </summary>
 public sealed class ObservableAssetService(
     IAssetService inner,
-    ILogger<ObservableAssetService> logger)
-    : ObservableDecoratorBase<ObservableAssetService>(logger), IAssetService
+    ILogger<ObservableAssetService> logger,
+    TimeProvider timeProvider)
+    : ObservableDecoratorBase<ObservableAssetService>(logger, timeProvider), IAssetService
 {
     public string CollectionName
     {

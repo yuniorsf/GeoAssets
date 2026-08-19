@@ -10,8 +10,11 @@ namespace GeoAssets.Web.Services.Identity;
 /// and provisions a local <see cref="AppUser"/> the first time a user authenticates
 /// (Just-In-Time provisioning).
 ///
-/// New users are assigned the <see cref="IdentitySeeder.ReadOnlyRoleId"/> role by default.
-/// An administrator can then elevate their role via the user management UI.
+/// No default role is granted (XD01-19) — role assignment is sourced from the external
+/// provider's roles claim (<see cref="CurrentUser.ExternalRoles"/>), consumed by
+/// <see cref="GeoAssets.Identity.Authorization.Services.GeoAuthorizationService"/>. A newly
+/// provisioned user with no external role assignment gets a safe empty <c>Roles</c> list —
+/// see <see cref="GeoAssets.Identity.Authorization.Services.AuthorizationContext"/>.
 ///
 /// Registered as a singleton. Initialized in Program.cs:
 /// <code>
@@ -22,13 +25,16 @@ public sealed class UserProvisioningService : IAsyncDisposable
 {
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly IServiceScopeFactory        _scopeFactory;
+    private readonly TimeProvider                _timeProvider;
 
     public UserProvisioningService(
         AuthenticationStateProvider authStateProvider,
-        IServiceScopeFactory        scopeFactory)
+        IServiceScopeFactory        scopeFactory,
+        TimeProvider                timeProvider)
     {
         _authStateProvider = authStateProvider;
         _scopeFactory      = scopeFactory;
+        _timeProvider      = timeProvider;
         _authStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
     }
 
@@ -56,27 +62,25 @@ public sealed class UserProvisioningService : IAsyncDisposable
         var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
 
         var current = await accessor.GetCurrentUserAsync();
-        if (current is null || string.IsNullOrEmpty(current.AzureObjectId)) return;
+        if (current is null || string.IsNullOrEmpty(current.ExternalObjectId)) return;
 
-        var existing = await userRepo.GetByAzureObjectIdAsync(current.AzureObjectId);
+        var existing = await userRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
         if (existing is not null) return; // already provisioned
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var newUser = new AppUser
         {
-            AzureObjectId = current.AzureObjectId,
-            Email         = current.Email,
-            DisplayName   = current.DisplayName,
-            CreatedAt     = DateTime.UtcNow,
-            LastLoginAt   = DateTime.UtcNow,
+            ExternalObjectId = current.ExternalObjectId,
+            Email            = current.Email,
+            DisplayName      = current.DisplayName,
+            CreatedAt        = now,
+            LastLoginAt      = now,
         };
 
         await userRepo.AddAsync(newUser);
-
-        // Assign default ReadOnly role
-        await userRepo.AssignRoleAsync(newUser.Id, IdentitySeeder.ReadOnlyRoleId, assignedBy: "system");
         await userRepo.SaveChangesAsync();
 
-        Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.AzureObjectId})");
+        Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.ExternalObjectId})");
     }
 
     public ValueTask DisposeAsync()

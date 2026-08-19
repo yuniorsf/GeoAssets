@@ -24,6 +24,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     private readonly GeoAssetsDbContext _db;
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
     private readonly ILogger<PostgresAssetProvider> _logger;
+    private readonly TimeProvider _timeProvider;
 
     // In-memory cache — rebuilt on first use and after writes
     private Dictionary<string, GeoFeature>? _cache;
@@ -36,11 +37,12 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     public event EventHandler<string>? FeatureDeleted;
     public event EventHandler? CollectionChanged;
 
-    public PostgresAssetProvider(GeoAssetsDbContext db, DbContextOptions<GeoAssetsDbContext> dbOptions, ILogger<PostgresAssetProvider> logger)
+    public PostgresAssetProvider(GeoAssetsDbContext db, DbContextOptions<GeoAssetsDbContext> dbOptions, ILogger<PostgresAssetProvider> logger, TimeProvider timeProvider)
     {
-        _db        = db;
-        _dbOptions = dbOptions;
-        _logger    = logger;
+        _db           = db;
+        _dbOptions    = dbOptions;
+        _logger       = logger;
+        _timeProvider = timeProvider;
     }
 
     // ── Cache helpers ──────────────────────────────────────────────────────────
@@ -161,7 +163,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 
     public void Update(GeoFeature feature)
     {
-        feature.Properties.UpdatedAt = DateTime.UtcNow;
+        feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = MapToRow(feature);
         _db.GeoEntities.Update(row);
         SaveChanges();
@@ -228,7 +230,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Color     = r.Color,
                 IconUrl   = r.IconUrl,
                 IsBuiltIn = r.IsBuiltIn,
-                AttributesSchemaJson = r.AttributesSchemaJson
+                AttributesSchemaJson = r.AttributesSchemaJson,
+                OrganizationId = r.OrganizationId
             }).ToList();
         return [.. _typeCache];
     }
@@ -243,7 +246,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Color     = assetType.Color,
             IconUrl   = assetType.IconUrl,
             IsBuiltIn = assetType.IsBuiltIn,
-            AttributesSchemaJson = assetType.AttributesSchemaJson
+            AttributesSchemaJson = assetType.AttributesSchemaJson,
+            OrganizationId = assetType.OrganizationId
         });
         SaveChanges();
         _typeCache = null;
@@ -278,6 +282,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 AssetTypeId      = row.AssetTypeId,
                 Description      = row.Description,
                 LayerId          = row.LayerId,
+                OrganizationId   = row.OrganizationId,
                 CreatedAt        = row.CreatedAt,
                 UpdatedAt        = row.UpdatedAt,
                 // SRID comes from the PostGIS geometry (authoritative); fall back to 4326
@@ -295,6 +300,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             AssetTypeId          = f.Properties.AssetTypeId,
             Description          = f.Properties.Description,
             LayerId              = f.Properties.LayerId,
+            OrganizationId       = f.Properties.OrganizationId,
             CreatedAt            = f.Properties.CreatedAt,
             UpdatedAt            = f.Properties.UpdatedAt,
             Geom                 = f.Geometry?.NtsGeometry,

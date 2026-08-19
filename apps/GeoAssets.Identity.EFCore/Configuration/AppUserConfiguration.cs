@@ -11,12 +11,12 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
         b.ToTable("Users");
         b.HasKey(u => u.Id);
 
-        b.Property(u => u.AzureObjectId).IsRequired().HasMaxLength(36);
+        b.Property(u => u.ExternalObjectId).IsRequired().HasMaxLength(36);
         b.Property(u => u.Email).IsRequired().HasMaxLength(256);
         b.Property(u => u.DisplayName).IsRequired().HasMaxLength(256);
         b.Property(u => u.CreatedAt).IsRequired();
 
-        b.HasIndex(u => u.AzureObjectId).IsUnique();
+        b.HasIndex(u => u.ExternalObjectId).IsUnique();
         b.HasIndex(u => u.Email).IsUnique();
         b.HasIndex(u => u.OrganizationId);
 

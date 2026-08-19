@@ -1,9 +1,10 @@
-using Azure.Monitor.OpenTelemetry.AspNetCore;
 using GeoAssets.Core.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -23,10 +24,10 @@ namespace GeoAssets.Infrastructure.Observability;
 ///   "Observability": {
 ///     "ServiceName": "geoassets-api",
 ///     "ServiceVersion": "2.1.0",
-///     "AzureMonitor": {
-///       "ConnectionString": "InstrumentationKey=...;IngestionEndpoint=..."
+///     "Otlp": {
+///       "Endpoint": "https://otlp.nr-data.net:4317",
+///       "Protocol": "Grpc"
 ///     },
-///     "Sampling": { "RatioForProduction": 0.25 },
 ///     "Instrumentation": { "EnableEFCore": true, "EnableRuntime": true }
 ///   }
 /// }
@@ -35,20 +36,20 @@ namespace GeoAssets.Infrastructure.Observability;
 /// <b>Architecture</b>
 /// <code>
 /// ILogger  ──┐
-///             │  OpenTelemetry SDK  ──→  AzureMonitorExporter  ──→  Application Insights
-/// Activity ──┤      (OTLP pipeline)
+///             │  OpenTelemetry SDK  ──→  OTLP exporter  ──→  New Relic / Collector / any OTLP backend
+/// Activity ──┤      (traces + metrics + logs)
 ///             │
 /// Meter    ──┘
 /// </code>
 ///
-/// The <c>Azure.Monitor.OpenTelemetry.AspNetCore</c> distro package
-/// registers a single exporter that handles <b>traces, metrics, and logs</b>,
-/// so no per-signal exporter configuration is needed.
+/// The exporter target is a config choice (<see cref="OtlpOptions.Endpoint"/>) —
+/// swapping vendors (New Relic, Datadog, a local Collector) never requires a
+/// code change.
 /// </summary>
 public static class ObservabilityServiceExtensions
 {
     /// <summary>
-    /// Adds OpenTelemetry instrumentation and Azure Monitor exporter.
+    /// Adds OpenTelemetry instrumentation and the OTLP exporter.
     /// Also registers <see cref="GeoAssetsActivitySource"/> and
     /// <see cref="GeoAssetsMeter"/> as singletons for injection into
     /// application services.
@@ -60,11 +61,29 @@ public static class ObservabilityServiceExtensions
         var opts = new ObservabilityOptions();
         configuration.GetSection(ObservabilityOptions.SectionName).Bind(opts);
 
-        // Override connection string from environment variable if present
-        // (Azure App Service / Container Apps inject this automatically).
-        var envConnStr = Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
-        if (!string.IsNullOrWhiteSpace(envConnStr))
-            opts.AzureMonitor.ConnectionString = envConnStr;
+        // Override OTLP headers from environment variable if present.
+        // NEW_RELIC_LICENSE_KEY is the common case (New Relic's OTLP ingest
+        // authenticates via an `api-key` header); OTEL_EXPORTER_OTLP_HEADERS
+        // takes precedence if both are set, matching the OTel SDK convention.
+        var newRelicKey = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
+        if (!string.IsNullOrWhiteSpace(newRelicKey))
+            opts.Otlp.Headers = $"api-key={newRelicKey}";
+
+        var envHeaders = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_HEADERS");
+        if (!string.IsNullOrWhiteSpace(envHeaders))
+            opts.Otlp.Headers = envHeaders;
+
+        var otlpProtocol = opts.Otlp.Protocol.Equals("HttpProtobuf", StringComparison.OrdinalIgnoreCase)
+            ? OtlpExportProtocol.HttpProtobuf
+            : OtlpExportProtocol.Grpc;
+
+        void ConfigureOtlp(OtlpExporterOptions o)
+        {
+            o.Endpoint = new Uri(opts.Otlp.Endpoint);
+            o.Protocol = otlpProtocol;
+            if (!string.IsNullOrWhiteSpace(opts.Otlp.Headers))
+                o.Headers = opts.Otlp.Headers;
+        }
 
         // ── Domain singletons ─────────────────────────────────────────────────
         var activitySource = new GeoAssetsActivitySource(opts.ServiceVersion);
@@ -113,9 +132,16 @@ public static class ObservabilityServiceExtensions
                 tracing.AddEntityFrameworkCoreInstrumentation(o =>
                     o.SetDbStatementForText = true);
 
-            // Tail-based sampling: always sample errors; probabilistic for the rest.
-            tracing.SetSampler(new ParentBasedSampler(
-                new TraceIdRatioBasedSampler(opts.Sampling.RatioForProduction)));
+            // Export everything from the SDK; the retain/discard decision for
+            // tail-based sampling (100% of errors + P95+ latency, ~1% baseline)
+            // belongs to an OTel Collector `tail_sampling` processor placed
+            // between this exporter and the backend — not deployed yet. Until
+            // that Collector exists, every exported trace is billed/stored
+            // as-is by the OTLP backend (see XD01-31).
+            tracing.SetSampler(new AlwaysOnSampler());
+
+            if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
+                tracing.AddOtlpExporter(ConfigureOtlp);
         });
 
         // ── Metrics pipeline ──────────────────────────────────────────────────
@@ -132,27 +158,15 @@ public static class ObservabilityServiceExtensions
 
             if (opts.Instrumentation.EnableProcess)
                 metrics.AddProcessInstrumentation();
+
+            if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
+                metrics.AddOtlpExporter(ConfigureOtlp);
         });
-
-        // ── Azure Monitor exporter ────────────────────────────────────────────
-        // Handles traces + metrics + ILogger logs in one call.
-        // When ConnectionString is empty (local dev) the exporter is skipped.
-        if (!string.IsNullOrWhiteSpace(opts.AzureMonitor.ConnectionString))
-        {
-            otelBuilder.UseAzureMonitor(o =>
-            {
-                o.ConnectionString = opts.AzureMonitor.ConnectionString;
-
-                // Sampling ratio applied at the Azure Monitor ingestion level
-                // (backup to SDK-side sampler above).
-                o.SamplingRatio = (float)opts.Sampling.RatioForProduction;
-            });
-        }
 
         // ── ILogger → OpenTelemetry bridge ───────────────────────────────────
         // Ensures ILogger output is funnelled into the OTel pipeline and
-        // therefore into Azure Monitor.  The bridge is always registered;
-        // when there is no Azure Monitor exporter, logs go to the console only.
+        // therefore into the OTLP exporter below.  The bridge is always
+        // registered; when Otlp.Endpoint is empty, logs go to the console only.
         services.AddLogging(logging =>
         {
             logging.AddOpenTelemetry(otelLogging =>
@@ -161,6 +175,9 @@ public static class ObservabilityServiceExtensions
                 otelLogging.IncludeScopes           = true;
                 otelLogging.ParseStateValues        = true;
                 otelLogging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(opts.ServiceName, opts.ServiceVersion));
+
+                if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
+                    otelLogging.AddOtlpExporter(ConfigureOtlp);
             });
         });
 

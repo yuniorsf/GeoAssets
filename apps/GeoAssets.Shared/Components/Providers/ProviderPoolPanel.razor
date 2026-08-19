@@ -6,6 +6,7 @@
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
+@inject TimeProvider Clock
 
 <div class="sidebar-section">
     <div class="section-header-row">
@@ -111,7 +112,13 @@
     private void OpenConnectDialog()  => _showConnectDialog = true;
     private void CloseConnectDialog() => _showConnectDialog = false;
 
-    private async Task HandleProviderConnected(ProviderEntry entry)
+    /// <summary>
+    /// Renders a newly connected provider onto the map. Called both from this panel's
+    /// own "add provider" dialog and from the boot-time <see cref="ProviderConnectDialog"/>
+    /// in <c>Index.razor</c>, since the latter connects via <c>IBootLoader</c> directly
+    /// and has no other path to trigger the initial WMS layer / feature render.
+    /// </summary>
+    public async Task HandleProviderConnected(ProviderEntry entry)
     {
         _showConnectDialog = false;
         if (entry.Provider is IWmsProvider wms)
@@ -173,6 +180,7 @@
                 Metadata = new GeoFeatureCollectionMetadata
                 {
                     Name       = entry.Name,
+                    CreatedAt  = Clock.GetUtcNow().UtcDateTime,
                     AssetTypes = [.. entry.Provider.GetAssetTypes()]
                 }
             };

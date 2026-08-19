@@ -176,7 +176,7 @@ public class ValidatingServiceOrderRepositoryTests
     public async Task GetDispatchedToAsync_DelegatesToInner()
     {
         var inner = new InMemoryServiceOrderRepository();
-        await inner.AddAsync(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1"));
+        await inner.AddAsync(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1", TimeProvider.System));
         var sut = new ValidatingServiceOrderRepository(inner);
 
         (await sut.GetDispatchedToAsync("user-1", DispatchTargetType.User)).Should().ContainSingle();

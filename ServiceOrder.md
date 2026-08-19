@@ -95,6 +95,7 @@ classDiagram
         +ServiceOrderPriority Priority
         +string CreatedBy
         +string AssignedTo
+        +Guid OrganizationId
         +string ParentOrderId
         +IReadOnlyList~string~ ChildOrderIds
         +IReadOnlyList~GeoFeature~ Features
@@ -105,10 +106,10 @@ classDiagram
         +bool IsLeaf
     }
     class ServiceOrder {
-        +Transition(newStatus)
-        +DispatchTo(targetId, targetType, by, note, actorKind, agentInvocationId)
-        +RecordAction(action, by, comment, resultingStatus, actorKind, agentInvocationId)
-        +WithFeatures(features, spec)
+        +Transition(newStatus, timeProvider)
+        +DispatchTo(targetId, targetType, by, timeProvider, note, actorKind, agentInvocationId)
+        +RecordAction(action, by, timeProvider, comment, resultingStatus, actorKind, agentInvocationId)
+        +WithFeatures(features, timeProvider, spec)
     }
     class OrderType {
         +string Id
@@ -211,6 +212,12 @@ Notes on the model, reflecting decisions made while hardening it:
   defaults to `Human`, so no existing call site changed. It exists purely for
   audit/observability: **authorization and transition logic never branch on it**
   (see §9).
+- **`OrganizationId`** (set-once at creation, like `CreatedBy`) marks which
+  organization owns the order, via the shared `IOrgOwnedResource` marker interface
+  also implemented by `GeoFeature`/`AssetType`. It defaults to `Guid.Empty` ("no
+  organization assigned") rather than being nullable, matching this model's own
+  `CreatedAt`/`UpdatedAt`-style sentinel-default convention. See §16 for what this
+  data-model addition does *not* yet do.
 
 ### File map
 
@@ -342,6 +349,7 @@ flowchart TD
 | `DispatchRecipientRule` | View, Annotate, Accept unconditionally to direct/group/org dispatch recipients; Assign/Dispatch/Execute/Reject/etc. when the recipient *also* holds a configured role | The role-gated grants (`recipientRoleGrants`) express "(is a recipient of **this** dispatch) AND (has role X)" — narrower than `RoleBasedActionRule` below, which would grant the action on every order in the system. `Accept` (`OrderActionType.Accept`) is the audited "I am claiming this order" verb, distinct from `Assign` (done *to* someone else) |
 | `OrderTypeActionPermissionRule` | Per-`OrderType.ActionPermissions` override | **Overrides** the role-based default below when the order's type defines an entry for the action being evaluated; abstains otherwise. An entry's optional `FromStateKey` (§4) scopes it to one state — e.g. "Approve requires role X, but only from `Pending`" — null (the default) applies regardless of state |
 | `RoleBasedActionRule` | Configurable role → action-set mapping (default: `Supervisor` → View/Approve/Reject/Assign/Dispatch/Cancel/Annotate; `Administrator` → everything) | Mapping is data, injected via `ServiceOrderRules`'s constructor or `AddServiceOrderRules` (see §12) — **this is exactly how an AI agent's role (e.g. `"AutomationAgent"`) is granted actions, with zero code change** |
+| `CrossOrgGrantRule` (XD01-22) | The action when the principal's organization holds an active cross-org grant covering the order's owning organization | Pure allow-contributor — never denies, only adds an extra allow path on top of the rules above. Grants are pre-resolved onto `WorkflowPrincipal.OrgGrants` (a `WorkflowOrgGrant` DTO, decoupled from `GeoAssets.Identity`'s `OrganizationGrant`) by `ServerWorkflowPrincipalFactory`, server-side only — see `Authorization.md` §4 |
 
 ### Built-in `IOrderCreationRule` chain
 
@@ -434,13 +442,18 @@ classDiagram
     class ValidatingServiceOrderRepository {
         -IServiceOrderRepository inner
     }
+    class ObservableServiceOrderRepository {
+        -IServiceOrderRepository inner
+    }
 
     IServiceOrderRepository --|> IServiceOrderReader
     IServiceOrderRepository --|> IServiceOrderWriter
     IServiceOrderRepository <|.. InMemoryServiceOrderRepository
     IServiceOrderRepository <|.. EFServiceOrderRepository
     IServiceOrderRepository <|.. ValidatingServiceOrderRepository
+    IServiceOrderRepository <|.. ObservableServiceOrderRepository
     ValidatingServiceOrderRepository o--> IServiceOrderRepository : wraps
+    ObservableServiceOrderRepository o--> IServiceOrderRepository : wraps
 ```
 
 - **`UpdateAsync`** persists scalar fields only (title, status, priority, assignee,
@@ -464,6 +477,18 @@ classDiagram
   `SnapshottingServiceOrderRepository` (see §9), does *not* get this protection when
   used unwrapped — a live, if low-stakes, reminder that this contract is still
   enforced by convention for any repository that isn't wrapped, not by the compiler.
+- **`ObservableServiceOrderRepository`** decorates any inner repository with
+  tracing/metrics/logging for status transitions — a span + a
+  `geoassets.orders.transitions` metric (via `GeoAssetsActivitySource`/
+  `GeoAssetsMeter`) on every transition the inner repository's
+  `OrderStatusChanged` event reports, and a structured warning log for any
+  transition the repository rejects (`InvalidServiceOrderTransitionException`).
+  Only `AddWorkflowPersistence()` registers it, wrapping
+  `ValidatingServiceOrderRepository` (outermost, so a rejection either layer
+  raises is still logged) — not `AddWorkflowInMemory()`, since that registration
+  runs inside Blazor WASM (`GeoAssets.Web/Program.cs`) and
+  `GeoAssets.Infrastructure.Observability` carries an ASP.NET Core
+  `FrameworkReference` a WASM client can't take on.
 - **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts.**
   `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`) is compared at save time;
   a `DbUpdateConcurrencyException` is translated to `ServiceOrderConcurrencyException`
@@ -621,6 +646,25 @@ is granted `Dispatch` that day.
 distinction observable in tests, after an earlier draft of the executor called
 `UpdateAsync` post-mutation and had the bug masked by reference-aliasing.
 
+### Observability
+
+Both executors' `HandleAsync` are wrapped in a `GeoAssetsActivitySource.StartAgentActivity`
+span (`Agent.Create`/`Agent.Dispatch`, tagged `order.id`/`agent.id`/`agent.invocation_id`/
+`decision.allowed`) and log structurally via `ILogger` — the rule-evaluation outcome
+(allow/deny, with `RuleEvaluationResult.Reason` where one exists), the resulting transition,
+and any exception (`GeoAssetsActivitySource.RecordException` on the span, plus `LogError` —
+except the executors' own intentional authorization denials, which log once at
+Warning/Information and aren't re-logged as an unexpected error). Since neither executor is
+DI-resolved — `EmergencyRepairAgentWorkflow.Build(...)` constructs them directly — it takes a
+`GeoAssetsActivitySource` and an `ILoggerFactory` (not a pre-resolved logger) and calls
+`loggerFactory.CreateLogger<T>()` itself for each.
+
+This makes `GeoAssets.Workflow.Agents` depend on `GeoAssets.Infrastructure.Observability`,
+which nothing in this project needed before — safe here because, unlike
+`GeoAssets.Workflow`'s in-memory repository (§7, used from Blazor WASM), nothing in
+`GeoAssets.Workflow.Agents` runs client-side; only its own test project references it today
+(no host wires `AddWorkflowAgents`/`EmergencyRepairAgentWorkflow.Build` in yet).
+
 ### File map
 
 | Concept | Path |
@@ -776,7 +820,9 @@ services.AddWorkflowAgents(builder.Configuration);
 Both `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register
 `IServiceOrderRepository` as a `ValidatingServiceOrderRepository` wrapping the
 concrete implementation, and separately register `IServiceOrderReader` /
-`IServiceOrderWriter` pointing at that same instance.
+`IServiceOrderWriter` pointing at that same instance. `AddWorkflowPersistence()`
+additionally wraps that in an outermost `ObservableServiceOrderRepository` — see
+§7 — which requires `AddGeoAssetsObservability` to have been called first.
 
 `AddServiceOrderRules()` exists specifically because, before it, every caller
 hand-constructed its own `ServiceOrderRules` — a real risk of a human-facing host
@@ -789,7 +835,7 @@ when present.
 ## 13. Testing
 
 `GeoAssets.Workflow.Tests` and `GeoAssets.Workflow.Agents.Tests` cover the module
-end to end — 261 and 15 test cases respectively as of this writing, with
+end to end — 275 and 19 test cases respectively as of this writing, with
 `InMemoryServiceOrderRepository`, `ServiceOrder` (transition logic),
 `ServiceOrderTransitions`, `ServiceOrderRules`, `FeatureSelectionRegistry`
 (parameter validation), `FeatureSelectionParameters` (the JSON-round-trip
@@ -800,7 +846,7 @@ mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
 rests on.
 
-`GeoAssets.Workflow.EFCore.Tests` (45 test cases) covers `EFServiceOrderRepository`
+`GeoAssets.Workflow.EFCore.Tests` (69 test cases) covers `EFServiceOrderRepository`
 and `EFOrderTypeRepository` (all CRUD, hierarchy, filtered queries, the
 `ServiceOrderConcurrencyException` conflict path, and cascade-delete of an order
 type's child collections) against a **real SQLite in-memory database**
@@ -820,9 +866,12 @@ project references its production counterpart via `InternalsVisibleTo`, letting
 `SqliteTestDbContext` layer that one SQLite-only default onto the otherwise-internal
 `ServiceOrderRecord` entity without changing its visibility.
 
-The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
+These five projects (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
 `GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
-`GeoAssets.Commands.Tests`) runs **550 tests**.
+`GeoAssets.Commands.Tests`) run **653 tests** as of this writing — no longer the
+full solution total, since unrelated modules (`GeoAssets.Identity`, `GeoAssets.
+Infrastructure.Observability`, `GeoAssets.Server`, messaging transports, etc.)
+have since grown their own test projects outside this module's scope.
 
 **Gap:** `GeoAssets.Workflow.EFCore` (`EFServiceOrderRepository`,
 `EFOrderTypeRepository`, the mappers, `ServiceOrderDbContext` + configurations,
@@ -998,10 +1047,42 @@ other two paths would cost an extra round trip for an event no caller observes.
 **Not covered by this pass:** the Postgres migration + rowversion trigger haven't
 been run against a real Postgres instance (no Postgres available in this
 environment) — verify before deploying. `ServiceOrdersRestApiExtensions`'s
-endpoints have no integration test coverage, matching `GeoAssetsRestApiExtensions`'
-own (pre-existing) lack of coverage — only the underlying repository/client classes
-are unit-tested. No schema-authoring or backend-switch UI exists (both are
+endpoints had no integration test coverage — only the underlying repository/client
+classes were unit-tested; §15.2 closes this specifically for authorization, the
+rest is still open. No schema-authoring or backend-switch UI exists (both are
 config/code only, same convention as `OrderType`'s attribute schemas).
+
+### 15.2 Server-side authorization enforcement (XD01-16)
+
+`ServiceOrdersRestApiExtensions`'s write endpoints went straight to the
+repository with no authorization check at all — any authenticated (or, before
+[XD01-12](https://xdicor.atlassian.net/browse/XD01-12), even anonymous) caller
+could mutate any order. Every write on an existing/new order is now gated by
+`ServiceOrderRules` (§5) — the same engine the Blazor client evaluates — via a new
+`ServerWorkflowPrincipalFactory` (`apps/GeoAssets.Server`), the server-side twin of
+`GeoAssets.Shared.Services.WorkflowPrincipalFactory` (§9's "Identity" subsection),
+duplicated rather than shared since `GeoAssets.Server` doesn't reference the Blazor
+Razor Class Library:
+
+```csharp
+builder.Services.AddServiceOrderRules();               // same singleton config as GeoAssets.Web
+builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
+```
+
+Endpoint → `OrderActionType` mapping: create → `CanCreate`; dispatch →
+`Dispatch`; the action-log endpoint → the entry's own `Action` (whatever the
+caller is actually logging). `PUT` (a whole-order replace) and `DELETE` (a hard
+delete) have no single corresponding action in the enum, so they reuse the
+closest existing verb — `Annotate` and `Cancel` respectively — rather than adding
+new ones speculatively; a denied request gets a 403 with a `reason` field naming
+the rule that declined. Order Type CRUD is unchanged: that's configuration data,
+not a per-order action this engine governs.
+
+`tests/GeoAssets.Server.Tests/ServiceOrderRulesEndpointTests.cs` exercises the
+real `MapServiceOrdersApi()` endpoints end-to-end against `AddWorkflowInMemory()`,
+including non-leakage checks (e.g. being an order's creator doesn't also grant
+`Dispatch`; being its creator doesn't grant `Complete` on an order assigned to
+someone else).
 
 ---
 
@@ -1032,6 +1113,17 @@ documented:
   `GeoAssets.Server` now exposes them over REST, backed by the same Postgres
   database as assets, with `GeoAssets.Web` opting in via a config flag (§15.1),
   closed by [XD01-8](https://xdicor.atlassian.net/browse/XD01-8).
+- **`ServiceOrderRules` (§5) only ever ran against the Blazor client's in-memory
+  store — no server host evaluated it, so any authenticated caller could mutate
+  any order over REST** — every `GeoAssets.Server` write endpoint on an order now
+  evaluates the same rule engine via `ServerWorkflowPrincipalFactory` (§15.2),
+  closed by [XD01-16](https://xdicor.atlassian.net/browse/XD01-16).
+- **`OrganizationId`/`OrganizationGrant` were data model only — nothing read them
+  at authorization time** — `CrossOrgGrantRule` (§5) now grants a `ServiceOrder`
+  action when the principal's organization holds a matching active grant,
+  server-side only (the Blazor client's own `WorkflowPrincipal` doesn't resolve
+  grants yet — no REST endpoint exposes them), closed by
+  [XD01-22](https://xdicor.atlassian.net/browse/XD01-22).
 
 What's still genuinely open:
 
@@ -1049,3 +1141,13 @@ What's still genuinely open:
   correctly, for what those tests check, but it's live evidence that any *real* new
   implementation would need to remember the same rules by hand. Tracked as
   [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
+- **No same-organization gate exists for `ServiceOrder` access — only an
+  additional cross-org allow path.** `CrossOrgGrantRule` (§5, XD01-22) is
+  deliberately an allow-contributor only, per its own design: a caller from a
+  *different* organization than an order's `OrganizationId`, with no matching
+  grant, is still not blocked by organization alone — Creator/Assignee/Role/
+  DispatchRecipient access is entirely organization-agnostic, same as before this
+  ticket. Contrast `GeoFeature`/`AssetType`'s `OrgResourceAuthorizationHandler`
+  (XD01-21, `Authorization.md` §4), which *does* enforce same-org-or-grant as a
+  mandatory gate. Whether `ServiceOrder` should gain an equivalent mandatory gate
+  is an open design question, not yet ticketed.

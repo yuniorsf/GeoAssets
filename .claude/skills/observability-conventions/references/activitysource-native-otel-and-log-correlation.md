@@ -74,13 +74,14 @@ code shape rather than introducing a new one.
   (`core/GeoAssets.Infrastructure.Observability/GeoAssetsActivitySource.cs`)
   already implements this pattern correctly: `StartActivity` returns
   `Activity?` and every tag call site in the codebase chains off it with
-  `?.AddTag(...)` (e.g. `StartOrderActivity`, `StartNotificationActivity`
-  at lines 33-40), so the zero-cost-when-unsampled property already holds.
-  Tag naming (`order.id`, `messaging.system`) already follows the
-  dot-notation convention this source's examples use (`tenant.id`,
-  `customer.id`) — no change needed there.
+  `?.AddTag(...)` (e.g. `StartOrderActivity`/`StartNotificationActivity` at
+  lines 38-45, and `StartAgentActivity` added since at lines 52-56), so the
+  zero-cost-when-unsampled property already holds. Tag naming (`order.id`,
+  `messaging.system`, `agent.id`) already follows the dot-notation
+  convention this source's examples use (`tenant.id`, `customer.id`) — no
+  change needed there.
 - `GeoAssetsActivitySource.RecordException`
-  (`GeoAssetsActivitySource.cs:53-58`) already calls
+  (`GeoAssetsActivitySource.cs:71-75`) already calls
   `activity.AddException(ex)` followed by
   `SetStatus(ActivityStatusCode.Error, ex.Message)` — this is the
   semantic-convention-correct form this reference recommends, and it's
@@ -92,18 +93,23 @@ code shape rather than introducing a new one.
 - GeoAssets does **not** use Serilog anywhere in the tree (no
   `Serilog`/`Serilog.Enrichers.Span` package reference exists). Log/trace
   correlation is already handled via the OpenTelemetry `ILogger` bridge in
-  `ObservabilityServiceExtensions.cs:156-165` (`IncludeScopes = true`) —
+  `ObservabilityServiceExtensions.cs:175` (`IncludeScopes = true`) —
   per the note above, that already satisfies the MDC requirement.
   **Do not suggest adding Serilog** to get span-correlated logs; the
   runtime-native bridge already in place does the same job through one
   pipeline. Only reconsider this if the user explicitly wants Serilog's
   sink ecosystem (e.g. file rotation, Seq) for reasons unrelated to trace
   correlation.
-- The current exporter is `Azure.Monitor.OpenTelemetry.AspNetCore`'s
-  `UseAzureMonitor(...)` (`ObservabilityServiceExtensions.cs:142-150`), not
-  a raw `AddOtlpExporter(...)` pointed at a local Collector. If GeoAssets
-  ever needs the Collector-side `tail_sampling` processor described in
-  [tail-based-sampling.md](tail-based-sampling.md), swapping to
-  `AddOtlpExporter` targeting the Collector (which can itself forward to
-  Azure Monitor) is the concrete migration path — confined to this one
-  file, per the vendor-agnostic boundary above.
+- **Updated 2026-08-16 (XD01-46).** The exporter is now a raw
+  `AddOtlpExporter(...)` (`OpenTelemetry.Exporter.OpenTelemetryProtocol`),
+  not the vendor-specific `Azure.Monitor.OpenTelemetry.AspNetCore` distro
+  this section previously described (removed in XD01-30) — see
+  `ObservabilityServiceExtensions.cs` lines 144/163/180 for the
+  tracing/metrics/logging pipelines respectively, all pointed at
+  `ObservabilityOptions.Otlp.Endpoint`. If GeoAssets ever needs the
+  Collector-side `tail_sampling` processor described in
+  [tail-based-sampling.md](tail-based-sampling.md), pointing `Otlp.Endpoint`
+  at a local Collector instead of directly at New Relic is the concrete
+  migration path — already a config change, not a code change, per the
+  vendor-agnostic boundary above. `deploy/otel/README.md` documents both
+  the direct-to-vendor and Collector-fan-out paths.

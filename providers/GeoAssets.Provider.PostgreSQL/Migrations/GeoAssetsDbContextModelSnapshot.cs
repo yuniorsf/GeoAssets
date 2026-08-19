@@ -56,7 +56,14 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
+
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
 
                     b.ToTable("asset_type", (string)null);
 
@@ -67,7 +74,8 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             Color = "#e74c3c",
                             IconUrl = "",
                             IsBuiltIn = true,
-                            Name = "Punto de interés"
+                            Name = "Punto de interés",
+                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
                         },
                         new
                         {
@@ -75,7 +83,8 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             Color = "#3498db",
                             IconUrl = "",
                             IsBuiltIn = true,
-                            Name = "Línea"
+                            Name = "Línea",
+                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
                         },
                         new
                         {
@@ -83,7 +92,8 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             Color = "#2ecc71",
                             IconUrl = "",
                             IsBuiltIn = true,
-                            Name = "Área"
+                            Name = "Área",
+                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
                         });
                 });
 
@@ -136,6 +146,11 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
+
                     b.Property<string>("TopologyJson")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -155,6 +170,8 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                     b.HasIndex("AssetTypeId1");
 
                     b.HasIndex("LayerId");
+
+                    b.HasIndex("OrganizationId");
 
                     b.ToTable("geo_entity", (string)null);
                 });

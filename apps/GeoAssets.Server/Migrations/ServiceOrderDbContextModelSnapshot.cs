@@ -314,6 +314,11 @@ namespace GeoAssets.Server.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
+
                     b.Property<string>("ParentOrderId")
                         .HasMaxLength(36)
                         .HasColumnType("character varying(36)");
@@ -355,6 +360,8 @@ namespace GeoAssets.Server.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("OrderTypeId");
+
+                    b.HasIndex("OrganizationId");
 
                     b.HasIndex("ParentOrderId");
 

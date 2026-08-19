@@ -1,14 +1,17 @@
 using FluentAssertions;
 using GeoAssets.Workflow.Agents.Executors;
 using GeoAssets.Workflow.Agents.Identity;
+using GeoAssets.Workflow.Agents.Tests.TestDoubles;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace GeoAssets.Workflow.Agents.Tests;
 
+[Collection("AgentObservability")]
 public class EmergencyRepairAgentWorkflowTests
 {
     private const string AgentId = "agent-hydro-01";
@@ -38,7 +41,8 @@ public class EmergencyRepairAgentWorkflowTests
     {
         var repository = new ValidatingServiceOrderRepository(new InMemoryServiceOrderRepository());
         var workflow = EmergencyRepairAgentWorkflow.Build(
-            repository, rules, OrderTypeRegistry(), AgentIdentity());
+            repository, rules, OrderTypeRegistry(), AgentIdentity(), TimeProvider.System,
+            TestObservability.Tracer, NullLoggerFactory.Instance);
 
         var request = new CreateServiceOrderRequest(
             AgentId,

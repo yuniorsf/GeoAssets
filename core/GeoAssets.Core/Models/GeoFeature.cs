@@ -1,10 +1,11 @@
 using System.Text.Json.Serialization;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models.Geometry;
 
 namespace GeoAssets.Core.Models;
 
 /// <summary>Maps 1:1 to a GeoJSON Feature object (RFC 7946 §3.2)</summary>
-public sealed class GeoFeature
+public sealed class GeoFeature : IOrgOwnedResource
 {
     [JsonPropertyName("type")]
     public string Type => "Feature";
@@ -25,6 +26,10 @@ public sealed class GeoFeature
     /// </summary>
     [JsonPropertyName("topology")]
     public List<TopoEdge> Topology { get; set; } = [];
+
+    /// <summary>See <see cref="IOrgOwnedResource"/>. Delegates to <see cref="Properties"/>,
+    /// which is the JSON source of truth (<see cref="GeoFeatureProperties.OrganizationId"/>).</summary>
+    Guid IOrgOwnedResource.OrganizationId => Properties.OrganizationId;
 }
 
 public sealed class GeoFeatureProperties
@@ -41,6 +46,12 @@ public sealed class GeoFeatureProperties
     [JsonPropertyName("layerId")]
     public string LayerId { get; set; } = string.Empty;
 
+    /// <summary>See <see cref="IOrgOwnedResource"/>. Defaults to <see cref="Guid.Empty"/> —
+    /// "no organization assigned" — rather than being nullable, matching this class's own
+    /// <see cref="CreatedAt"/>/<see cref="UpdatedAt"/> sentinel-default convention.</summary>
+    [JsonPropertyName("organizationId")]
+    public Guid OrganizationId { get; set; } = Guid.Empty;
+
     /// <summary>
     /// EPSG code of the coordinate reference system for this feature's geometry.
     /// Defaults to 4326 (WGS-84) for GeoJSON compatibility.
@@ -50,11 +61,18 @@ public sealed class GeoFeatureProperties
     [JsonPropertyName("srid")]
     public int Srid { get; set; } = 4326;
 
+    /// <summary>
+    /// Defaults to <see cref="DateTime.MinValue"/> — a "creation time unknown" sentinel, not the
+    /// current clock. This type is built primarily via JSON deserialization (import/localStorage/
+    /// WFS), which can't be intercepted to inject a <see cref="TimeProvider"/>; explicit-construction
+    /// callers that know the real creation time (e.g. <c>AssetForm.razor</c>) set this themselves.
+    /// </summary>
     [JsonPropertyName("createdAt")]
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
+    /// <summary>Defaults to <see cref="DateTime.MinValue"/> — see <see cref="CreatedAt"/>.</summary>
     [JsonPropertyName("updatedAt")]
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; }
 
     /// <summary>Flexible user-defined attributes stored as a JSON object</summary>
     [JsonPropertyName("customAttributes")]

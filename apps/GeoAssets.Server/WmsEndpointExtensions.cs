@@ -24,6 +24,10 @@ namespace GeoAssets.Server;
 ///   <item><term>GetMap</term><description>PNG raster image rendered with SkiaSharp from PostGIS features.</description></item>
 ///   <item><term>GetFeatureInfo</term><description>JSON properties for features at a clicked pixel.</description></item>
 /// </list>
+///
+/// All operations here are read-only, so the whole endpoint requires only
+/// <c>features:read</c> (XD01-15) — external GIS clients (QGIS etc.) authenticate the same
+/// way any other caller does: a bearer token on the request.
 /// </summary>
 public static class WmsEndpointExtensions
 {
@@ -63,7 +67,8 @@ public static class WmsEndpointExtensions
                 // Return a transparent 1×1 PNG so the browser doesn't log a network error.
                 return Results.Bytes(_emptyTilePng, "image/png");
             }
-        });
+        })
+            .RequireAuthorization("features:read");
 
         return routes;
     }

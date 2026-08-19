@@ -35,17 +35,20 @@ service regardless of vendor.
 
 ## Where this would apply in GeoAssets
 
-- `KafkaOrderEventPublisher` (`workflow/GeoAssets.Workflow.Messaging.Kafka/KafkaOrderEventPublisher.cs:88-99`)
-  and the equivalent `ServiceBusOrderEventPublisher` forward a bespoke
-  `correlationId` header when present, but do not propagate a W3C
-  `traceparent`. A consumer picking the message off the topic today starts
-  a brand-new trace with no causal link back to the publish-side span —
-  the DAG breaks exactly at the queue boundary this directive calls out.
-  Populating `Activity.Current?.Id` (or `System.Diagnostics.ActivityContext`
-  serialized via `System.Diagnostics.DistributedContextPropagator`) into a
-  `traceparent` header on publish, and extracting it into the consumer's
-  `Activity` on receive, would close that gap without touching the existing
-  `correlationId` header.
+- **Resolved 2026-08-14 (XD01-32), publish side only.** `KafkaOrderEventPublisher`
+  and `ServiceBusOrderEventPublisher` now wrap each publish in a
+  `GeoAssetsActivitySource`-issued `ActivityKind.Producer` span and inject
+  its W3C `traceparent` (via `System.Diagnostics.DistributedContextPropagator`)
+  into a `traceparent` Kafka header / Service Bus application property,
+  additive alongside the existing `correlationId` header. The DAG no longer
+  breaks at the point of publish.
+  **Still open**: this repo has no Kafka/ServiceBus *consumer* implementation
+  yet (publish-only), so nothing currently extracts `traceparent` on
+  receive — whoever builds a consumer needs to read that header/property
+  into an `ActivityContext` (e.g. via
+  `DistributedContextPropagator.Current.Extract`) and start the consumer's
+  `Activity` as a child of it, or the causal link this ticket added on the
+  publish side still dead-ends at the topic.
 - `ObservabilityServiceExtensions.AddGeoAssetsObservability`
   (`core/GeoAssets.Infrastructure.Observability/ObservabilityServiceExtensions.cs`)
   already registers ASP.NET Core and `HttpClient` instrumentation, which

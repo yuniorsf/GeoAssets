@@ -38,14 +38,18 @@ never a code change in the instrumented service.
   should ever inject — they wrap `System.Diagnostics.ActivitySource` /
   `System.Diagnostics.Metrics.Meter`, which are OpenTelemetry-native, not
   a vendor SDK.
-- The one vendor-specific piece, `Azure.Monitor.OpenTelemetry.AspNetCore`
-  (`ObservabilityServiceExtensions.cs:1,142-150`), is correctly isolated to
-  this single registration file — it configures *export*, not
-  instrumentation, and no other project references it directly. That's the
-  "out-of-process, infrastructure-layer" boundary this directive describes,
-  already respected. If GeoAssets ever needs a second exporter (e.g. an
-  OTLP Collector target instead of/alongside Azure Monitor), the change
-  belongs entirely inside this one file.
+- **Updated 2026-08-16 (XD01-46).** The exporter is now the standard
+  `OpenTelemetry.Exporter.OpenTelemetryProtocol` (OTLP) package —
+  `tracing.AddOtlpExporter(...)` / `metrics.AddOtlpExporter(...)` /
+  `otelLogging.AddOtlpExporter(...)` in `ObservabilityServiceExtensions.cs`
+  (lines 144/163/180), all pointed at `ObservabilityOptions.Otlp.Endpoint`
+  (line 45) — not the vendor-specific `Azure.Monitor.OpenTelemetry.AspNetCore`
+  distro this section previously described (removed in XD01-30). This is
+  an even stronger instance of the directive than a vendor distro isolated
+  to one file: OTLP is itself the vendor-neutral wire protocol, so swapping
+  backends (New Relic, Datadog, an OTel Collector) is a config change to
+  `Otlp.Endpoint`/`Otlp.Headers`, not a package swap — see
+  `deploy/otel/README.md` for the per-vendor configuration paths.
 - Application code (providers, workflow publishers, Blazor services) should
   keep depending on `GeoAssetsActivitySource`/`GeoAssetsMeter` for any new
   instrumentation rather than adding a direct OpenTelemetry SDK or vendor

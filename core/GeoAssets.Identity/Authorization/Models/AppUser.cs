@@ -2,24 +2,25 @@ namespace GeoAssets.Identity.Authorization.Models;
 
 /// <summary>
 /// Application user stored in the local database.
-/// Linked to Azure AD via <see cref="AzureObjectId"/> (the `oid` JWT claim).
+/// Linked to the external IdP via <see cref="ExternalObjectId"/> (the `oid` JWT claim, or its
+/// equivalent for other providers — XD01-51).
 ///
 /// Users are provisioned on first login (Just-In-Time provisioning):
-/// when Azure AD authenticates a user, the app looks up or creates an <see cref="AppUser"/>
-/// matching the AzureObjectId.
+/// when the IdP authenticates a user, the app looks up or creates an <see cref="AppUser"/>
+/// matching the ExternalObjectId.
 /// </summary>
 public sealed class AppUser
 {
-    public Guid     Id            { get; set; } = Guid.NewGuid();
+    public Guid     Id               { get; set; } = Guid.NewGuid();
 
-    /// <summary>Azure AD Object ID (`oid` claim) — the stable external identifier.</summary>
-    public string   AzureObjectId { get; set; } = string.Empty;
+    /// <summary>The IdP's stable object identifier for this user (`oid` claim or equivalent).</summary>
+    public string   ExternalObjectId { get; set; } = string.Empty;
 
-    public string   Email         { get; set; } = string.Empty;
-    public string   DisplayName   { get; set; } = string.Empty;
-    public bool     IsActive      { get; set; } = true;
+    public string   Email            { get; set; } = string.Empty;
+    public string   DisplayName      { get; set; } = string.Empty;
+    public bool     IsActive         { get; set; } = true;
 
-    public DateTime  CreatedAt    { get; set; } = DateTime.UtcNow;
+    public required DateTime CreatedAt { get; set; }
     public DateTime? LastLoginAt  { get; set; }
 
     // ── Organization ──────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ public sealed class AppGroup
     public Guid?   OrganizationId { get; set; }
 
     public bool     IsActive  { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public required DateTime CreatedAt { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────────
 

@@ -68,7 +68,7 @@ public sealed class BootLoaderService : IBootLoader
         }
     }
 
-    public async Task BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default)
+    public async Task<ProviderEntry> BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default)
     {
         var provider = await plugin.CreateAsync(config, _services, ct);
         var name     = config.Get("name", plugin.DisplayName);
@@ -85,6 +85,7 @@ public sealed class BootLoaderService : IBootLoader
         await _storage.SetStringAsync(StorageKey, JsonSerializer.Serialize(persisted), ct);
 
         Complete();
+        return entry;
     }
 
     private void Complete()

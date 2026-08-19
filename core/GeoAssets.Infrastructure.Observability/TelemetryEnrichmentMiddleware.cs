@@ -7,7 +7,8 @@ namespace GeoAssets.Infrastructure.Observability;
 /// <summary>
 /// ASP.NET Core middleware that enriches every structured log entry with
 /// W3C trace context so that logs and traces can be cross-referenced in
-/// Azure Monitor / Application Insights without any manual plumbing.
+/// the configured OTLP backend (New Relic as of XD01-30) without any
+/// manual plumbing.
 ///
 /// Adds to the logging scope:
 /// <list type="bullet">

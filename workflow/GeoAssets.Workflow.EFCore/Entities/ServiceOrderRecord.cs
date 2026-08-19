@@ -23,6 +23,8 @@ internal sealed class ServiceOrderRecord
     public string  CreatedBy  { get; set; } = string.Empty;
     public string? AssignedTo { get; set; }
 
+    public Guid OrganizationId { get; set; } = Guid.Empty;
+
     public DateTime  CreatedAt   { get; set; }
     public DateTime? UpdatedAt   { get; set; }
     public DateTime? ScheduledAt { get; set; }

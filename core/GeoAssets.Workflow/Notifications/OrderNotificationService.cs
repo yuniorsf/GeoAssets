@@ -80,7 +80,7 @@ namespace GeoAssets.Workflow.Notifications;
 /// builder.Services.AddWorkflowNotifications&lt;MyCustomPublisher&gt;();
 /// </code>
 /// </example>
-public sealed class OrderNotificationService(IOrderEventPublisher publisher)
+public sealed class OrderNotificationService(IOrderEventPublisher publisher, TimeProvider timeProvider)
     : IOrderNotificationService
 {
     public async Task NotifyStateChangedAsync(
@@ -107,6 +107,7 @@ public sealed class OrderNotificationService(IOrderEventPublisher publisher)
             previous,
             newStatus,
             performedBy,
+            timeProvider,
             correlationId,
             enriched);
 

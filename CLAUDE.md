@@ -80,6 +80,11 @@
 
 Layout: sidebar (340px fixed) + map-area (flex:1). Overlays use `position:absolute` z-1000. Dialogs use `position:fixed` z-2000.
 
+## Pull Requests
+
+- When an Agent (Claude Code Action or otherwise) opens a PR implementing a Jira ticket, the PR title must be prefixed with that ticket's key, e.g. `XD01-8: Add REST-backed IServiceOrderRepository client`
+- If a PR's changes span multiple tickets, prefix with the primary/parent ticket key
+
 ## Conventions
 
 - All geometry follows RFC 7946 GeoJSON ([longitude, latitude] order)

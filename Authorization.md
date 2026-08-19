@@ -23,7 +23,7 @@ and extends rather than duplicates.
 
 | Concept | Type |
 |---|---|
-| User | `AppUser` (linked to Azure AD via `AzureObjectId`, JIT-provisioned) |
+| User | `AppUser` (linked to the external IdP via `ExternalObjectId`, JIT-provisioned) |
 | Role | `AppRole` → `UserRole` (many-to-many) |
 | Permission | `AppPermission` (`resource:action` codes) → `RolePermission` |
 | Attribute claim | `UserClaim` (e.g. `zone=north`, `department=operations`) |
@@ -88,6 +88,17 @@ Reuses what's already built instead of inventing a new authorization model.
 - **AuthN**: `Microsoft.Identity.Web` validates the Azure AD access token as a JWT
   bearer on every request to `GeoAssets.Server`. The WASM client attaches its MSAL
   token to outgoing calls via the existing REST provider (`AddGeoAssetsRest()`).
+  Neither vendor SDK is called directly at either composition root anymore
+  (**XD01-48, Implemented**): `GeoAssets.Server`/`GeoAssets.Web` each depend on
+  `IGeoAuthenticationProvider` (`GeoAssets.Identity.Authentication`), which
+  `AddGeoAssetsAuthentication`/`AddGeoAssetsWasmAuthentication` default to an
+  `EntraCiam*AuthenticationProvider` implementation unless a different one is
+  passed in — the authentication-layer analog of how the AuthZ bridge below already
+  decouples authorization from any specific backend. `ClaimsPrincipalCurrentUserAccessor`/
+  `BlazorWasmCurrentUserAccessor` likewise no longer hardcode Entra claim-type
+  strings, delegating to a configurable `ClaimMapping` (default: `ClaimMapping.EntraDefault`).
+  Actually swapping to a different CIAM vendor remains out of scope — this only
+  removes the hardcoding.
 - **AuthZ bridge**: a custom `IAuthorizationPolicyProvider` + `IAuthorizationHandler`
   that resolves ASP.NET Core policy names to `AppPolicy` lookups and delegates
   evaluation to the *existing* `IGeoAuthorizationService.EvaluatePolicyAsync` /
@@ -170,6 +181,14 @@ CanAsync(actionCode, resource):
         (g.ExpiresAt is null || g.ExpiresAt > now))
 ```
 
+**Unowned-resource exception** (added during XD01-21 implementation, not in the
+original design above): every `GeoFeature`/`AssetType` created before XD01-20
+shipped defaults to `OrganizationId = Guid.Empty` (that model's own "no
+organization assigned" sentinel). Treating `Guid.Empty` as "belongs to no one, so
+no one may access it" would have mass-locked out all pre-existing data the moment
+this handler shipped — instead, `resource.OrganizationId == Guid.Empty` short-circuits
+straight to "allowed" (after the base RBAC gate), same as if same-org matched.
+
 **3. `OrganizationGrant`** — new entity:
 
 ```csharp
@@ -194,8 +213,8 @@ Index on `(GranteeOrganizationId, ResourceOrganizationId)` — the hot lookup pa
 
 | Resource | Mechanism |
 |---|---|
-| `GeoFeature` / `AssetType` | New `AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>`, wired alongside the subject-only checks on REST endpoints |
-| `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules |
+| `GeoFeature` / `AssetType` | New `AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>`, wired alongside the subject-only checks on REST endpoints (**Implemented — XD01-21**) |
+| `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules (**Implemented — XD01-22**, server-side only; see `ServiceOrder.md` §5/§16) |
 
 ---
 
@@ -284,8 +303,19 @@ shape §4's `OrganizationGrant` design should be tested against.
 
 ## 7. Phase 2 (backlog) — Entra ID role governance
 
-Not started; explicitly sequenced after Phase 1 ships (role source only matters once
-something server-side checks it). Captured here so the analysis isn't lost.
+Explicitly sequenced after Phase 1 ships (role source only matters once something
+server-side checks it). Captured here so the analysis isn't lost.
+
+**Migration steps 3–4 below are Implemented (XD01-19)**, generalized to be
+provider-agnostic per that ticket's 2026-08-18 rewrite: `GetAuthorizationContextAsync`
+sources `Roles` from `CurrentUser.ExternalRoles` (the token's roles claim, read through
+the XD01-48 `IGeoAuthenticationProvider`/`ClaimMapping` seam — not an Entra-specific
+API), and `UserProvisioningService` no longer grants a default role. The rest of this
+section (Entra manifest/App Roles registration, the Graph backfill tooling, admin UX,
+eventually dropping `UserRole`) remains backlog — XD01-19's shipped scope was role
+*sourcing* only, not the admin-management tooling around it, and stayed deliberately
+silent on federated/social sign-in (§5's Organization-resolution open question is
+still unresolved).
 
 ### What moves to Entra vs. what stays local
 
@@ -311,12 +341,14 @@ something server-side checks it). Captured here so the analysis isn't lost.
    after use. Modes: `--dry-run` (default), `--only <ids>` for a pilot rollout,
    `--verify` to diff Entra assignments against expected DB state — required to show
    zero mismatches before the code cutover ships.
-3. Switch `GeoAuthorizationService.GetAuthorizationContextAsync` to source `Roles`
-   from `current.Roles` (the token) instead of the `UserRole` DB join. Keep
-   `UserRole` write-through-but-unused for one release as a rollback path.
-4. Drop the JIT default-role grant in `UserProvisioningService` — a user with no
-   Entra app-role assignment naturally gets an empty `Roles` list, already treated
-   as a safe no-permissions default.
+3. **(Implemented — XD01-19)** Switch `GeoAuthorizationService.GetAuthorizationContextAsync`
+   to source `Roles` from `current.ExternalRoles` (the token) instead of the `UserRole`
+   DB join — permissions for each role name still resolve against the local
+   `AppRole`/`RolePermission` tables via `IRoleRepository`. `UserRole`/`AssignRoleAsync`
+   are kept, unused by this path, as the rollback path this step already called for.
+4. **(Implemented — XD01-19)** Drop the JIT default-role grant in
+   `UserProvisioningService` — a user with no external role assignment naturally
+   gets an empty `Roles` list, already treated as a safe no-permissions default.
 5. Retire in-app role-assignment write paths; replace with the admin-UX design below.
 6. Drop `UserRole` once confident.
 
