@@ -61,8 +61,9 @@ builder.Services.Configure<SessionConfig>(opts =>
     builder.Configuration.GetSection("Session").Bind(opts));
 builder.Services.AddScoped<SessionTimeoutService>();
 
-// ── Auth navigation (MSAL logout/login wrappers) ─────────────────────────────G
-builder.Services.AddScoped<IAuthNavigationService, MsalAuthNavigationService>();
+// ── Auth navigation (Blazor remote-auth login/logout wrappers — vendor-agnostic per
+// BlazorRemoteAuthNavigationService's doc comment, XD01-50) ──────────────────────────────────
+builder.Services.AddScoped<IAuthNavigationService, BlazorRemoteAuthNavigationService>();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(TimeProvider.System);
