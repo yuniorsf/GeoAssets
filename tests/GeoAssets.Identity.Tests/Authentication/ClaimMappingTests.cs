@@ -34,7 +34,7 @@ public class ClaimMappingTests
     {
         var principal = Principal(true, ("oid", "user-1"));
 
-        ClaimMapping.EntraDefault.Map(principal)!.AzureObjectId.Should().Be("user-1");
+        ClaimMapping.EntraDefault.Map(principal)!.ExternalObjectId.Should().Be("user-1");
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class ClaimMappingTests
         var principal = Principal(true,
             ("http://schemas.microsoft.com/identity/claims/objectidentifier", "user-2"));
 
-        ClaimMapping.EntraDefault.Map(principal)!.AzureObjectId.Should().Be("user-2");
+        ClaimMapping.EntraDefault.Map(principal)!.ExternalObjectId.Should().Be("user-2");
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class ClaimMappingTests
     {
         var principal = Principal(true, ("name", "Someone"));
 
-        ClaimMapping.EntraDefault.Map(principal)!.AzureObjectId.Should().BeEmpty();
+        ClaimMapping.EntraDefault.Map(principal)!.ExternalObjectId.Should().BeEmpty();
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class ClaimMappingTests
     {
         var principal = Principal(true, ("roles", "Administrator"), ("roles", "Supervisor"));
 
-        ClaimMapping.EntraDefault.Map(principal)!.AzureRoles.Should().BeEquivalentTo(["Administrator", "Supervisor"]);
+        ClaimMapping.EntraDefault.Map(principal)!.ExternalRoles.Should().BeEquivalentTo(["Administrator", "Supervisor"]);
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class ClaimMappingTests
     {
         var principal = Principal(true, ("roles", "Administrator"), (ClaimTypes.Role, "Administrator"), (ClaimTypes.Role, "Supervisor"));
 
-        ClaimMapping.EntraDefault.Map(principal)!.AzureRoles.Should().BeEquivalentTo(["Administrator", "Supervisor"]);
+        ClaimMapping.EntraDefault.Map(principal)!.ExternalRoles.Should().BeEquivalentTo(["Administrator", "Supervisor"]);
     }
 
     [Fact]
@@ -128,10 +128,10 @@ public class ClaimMappingTests
 
         var user = customMapping.Map(principal);
 
-        user!.AzureObjectId.Should().Be("okta-user-1");
+        user!.ExternalObjectId.Should().Be("okta-user-1");
         user.Email.Should().Be("user@otherco.com");
         user.DisplayName.Should().Be("Grace");
-        user.AzureRoles.Should().BeEquivalentTo(["Engineers"]);
+        user.ExternalRoles.Should().BeEquivalentTo(["Engineers"]);
     }
 
     [Fact]
@@ -142,6 +142,6 @@ public class ClaimMappingTests
         var customMapping = new ClaimMapping { ObjectIdClaimTypes = ["sub"] };
         var principal = Principal(true, ("oid", "entra-user-1"));
 
-        customMapping.Map(principal)!.AzureObjectId.Should().BeEmpty();
+        customMapping.Map(principal)!.ExternalObjectId.Should().BeEmpty();
     }
 }

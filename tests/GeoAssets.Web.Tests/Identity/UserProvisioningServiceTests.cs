@@ -65,7 +65,7 @@ public class UserProvisioningServiceTests
 
         await InvokeProvisionAsync(sut);
 
-        store.Users.Should().ContainSingle(u => u.AzureObjectId == "user-1");
+        store.Users.Should().ContainSingle(u => u.ExternalObjectId == "user-1");
         store.UserRoles.Should().BeEmpty();
     }
 

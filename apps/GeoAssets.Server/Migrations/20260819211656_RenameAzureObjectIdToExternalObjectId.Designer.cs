@@ -3,6 +3,7 @@ using System;
 using GeoAssets.Identity.Authorization.EFCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GeoAssets.Server.Migrations
 {
     [DbContext(typeof(GeoIdentityDbContext))]
-    partial class GeoIdentityDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260819211656_RenameAzureObjectIdToExternalObjectId")]
+    partial class RenameAzureObjectIdToExternalObjectId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

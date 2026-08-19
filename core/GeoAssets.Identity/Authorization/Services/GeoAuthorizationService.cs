@@ -9,10 +9,10 @@ namespace GeoAssets.Identity.Authorization.Services;
 ///
 /// Flow per authorization check:
 ///   1. Resolve current user via <see cref="ICurrentUserAccessor.GetCurrentUserAsync"/>
-///   2. Look up <see cref="AppUser"/> by AzureObjectId in the repository
+///   2. Look up <see cref="AppUser"/> by ExternalObjectId in the repository
 ///   3. If user not yet provisioned, returns an empty (no-permissions) context (safe default)
 ///   4. Load claims from the DB / store; source roles from the external provider's roles
-///      claim (<see cref="CurrentUser.AzureRoles"/>, XD01-19) rather than the local
+///      claim (<see cref="CurrentUser.ExternalRoles"/>, XD01-19) rather than the local
 ///      <c>UserRole</c> assignment table, then resolve each role name's permissions via
 ///      <see cref="IRoleRepository"/> — the permission taxonomy/policy engine stay local
 ///      (<see cref="AppRole"/>/<see cref="RolePermission"/>), only role *assignment* moves to
@@ -65,7 +65,7 @@ public class GeoAuthorizationService(
         var current = await currentUserAccessor.GetCurrentUserAsync(ct)
             ?? throw new UnauthorizedAccessException("No authenticated user in the current context.");
 
-        var user = await userRepository.GetByAzureObjectIdAsync(current.AzureObjectId, ct);
+        var user = await userRepository.GetByExternalObjectIdAsync(current.ExternalObjectId, ct);
 
         // User not yet provisioned — return empty context (safe default).
         // Provisioning is handled by the host (e.g. UserProvisioningService in WASM).
@@ -75,10 +75,10 @@ public class GeoAuthorizationService(
             {
                 User        = new AppUser
                 {
-                    AzureObjectId = current.AzureObjectId,
-                    Email         = current.Email,
-                    DisplayName   = current.DisplayName,
-                    CreatedAt     = timeProvider.GetUtcNow().UtcDateTime
+                    ExternalObjectId = current.ExternalObjectId,
+                    Email            = current.Email,
+                    DisplayName      = current.DisplayName,
+                    CreatedAt        = timeProvider.GetUtcNow().UtcDateTime
                 },
                 Roles       = [],
                 Claims      = [],
@@ -98,7 +98,7 @@ public class GeoAuthorizationService(
         // against the local AppRole/RolePermission tables — a role name with no matching
         // local AppRole (not yet created by an admin) simply contributes no permissions,
         // rather than failing the whole lookup.
-        var roles = current.AzureRoles;
+        var roles = current.ExternalRoles;
         var permissions = new List<AppPermission>();
         foreach (var roleName in roles)
         {

@@ -11,7 +11,7 @@ namespace GeoAssets.Web.Services.Identity;
 /// (Just-In-Time provisioning).
 ///
 /// No default role is granted (XD01-19) — role assignment is sourced from the external
-/// provider's roles claim (<see cref="CurrentUser.AzureRoles"/>), consumed by
+/// provider's roles claim (<see cref="CurrentUser.ExternalRoles"/>), consumed by
 /// <see cref="GeoAssets.Identity.Authorization.Services.GeoAuthorizationService"/>. A newly
 /// provisioned user with no external role assignment gets a safe empty <c>Roles</c> list —
 /// see <see cref="GeoAssets.Identity.Authorization.Services.AuthorizationContext"/>.
@@ -62,25 +62,25 @@ public sealed class UserProvisioningService : IAsyncDisposable
         var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
 
         var current = await accessor.GetCurrentUserAsync();
-        if (current is null || string.IsNullOrEmpty(current.AzureObjectId)) return;
+        if (current is null || string.IsNullOrEmpty(current.ExternalObjectId)) return;
 
-        var existing = await userRepo.GetByAzureObjectIdAsync(current.AzureObjectId);
+        var existing = await userRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
         if (existing is not null) return; // already provisioned
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var newUser = new AppUser
         {
-            AzureObjectId = current.AzureObjectId,
-            Email         = current.Email,
-            DisplayName   = current.DisplayName,
-            CreatedAt     = now,
-            LastLoginAt   = now,
+            ExternalObjectId = current.ExternalObjectId,
+            Email            = current.Email,
+            DisplayName      = current.DisplayName,
+            CreatedAt        = now,
+            LastLoginAt      = now,
         };
 
         await userRepo.AddAsync(newUser);
         await userRepo.SaveChangesAsync();
 
-        Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.AzureObjectId})");
+        Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.ExternalObjectId})");
     }
 
     public ValueTask DisposeAsync()

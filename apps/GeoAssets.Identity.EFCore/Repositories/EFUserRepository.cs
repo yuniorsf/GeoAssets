@@ -11,10 +11,10 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
                    .Include(u => u.UserClaims)
                    .FirstOrDefaultAsync(u => u.Id == id, ct);
 
-    public Task<AppUser?> GetByAzureObjectIdAsync(string oid, CancellationToken ct = default)
+    public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default)
         => db.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
                    .Include(u => u.UserClaims)
-                   .FirstOrDefaultAsync(u => u.AzureObjectId == oid, ct);
+                   .FirstOrDefaultAsync(u => u.ExternalObjectId == oid, ct);
 
     public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default)
         => db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);

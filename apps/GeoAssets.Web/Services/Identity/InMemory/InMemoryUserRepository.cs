@@ -9,8 +9,8 @@ public sealed class InMemoryUserRepository(WasmIdentityStore store, TimeProvider
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => Task.FromResult(store.Users.FirstOrDefault(u => u.Id == id));
 
-    public Task<AppUser?> GetByAzureObjectIdAsync(string oid, CancellationToken ct = default)
-        => Task.FromResult(store.Users.FirstOrDefault(u => u.AzureObjectId == oid));
+    public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default)
+        => Task.FromResult(store.Users.FirstOrDefault(u => u.ExternalObjectId == oid));
 
     public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default)
         => Task.FromResult(store.Users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase)));

@@ -9,7 +9,7 @@ namespace GeoAssets.Identity.Authorization.Repositories;
 public interface IUserRepository
 {
     Task<AppUser?>                  GetByIdAsync(Guid id, CancellationToken ct = default);
-    Task<AppUser?>                  GetByAzureObjectIdAsync(string oid, CancellationToken ct = default);
+    Task<AppUser?>                  GetByExternalObjectIdAsync(string oid, CancellationToken ct = default);
     Task<AppUser?>                  GetByEmailAsync(string email, CancellationToken ct = default);
     Task<IReadOnlyList<AppUser>>    GetAllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<AppUser>>    GetByRoleAsync(string roleName, CancellationToken ct = default);

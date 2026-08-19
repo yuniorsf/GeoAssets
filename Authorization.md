@@ -23,7 +23,7 @@ and extends rather than duplicates.
 
 | Concept | Type |
 |---|---|
-| User | `AppUser` (linked to Azure AD via `AzureObjectId`, JIT-provisioned) |
+| User | `AppUser` (linked to the external IdP via `ExternalObjectId`, JIT-provisioned) |
 | Role | `AppRole` → `UserRole` (many-to-many) |
 | Permission | `AppPermission` (`resource:action` codes) → `RolePermission` |
 | Attribute claim | `UserClaim` (e.g. `zone=north`, `department=operations`) |
@@ -308,7 +308,7 @@ server-side checks it). Captured here so the analysis isn't lost.
 
 **Migration steps 3–4 below are Implemented (XD01-19)**, generalized to be
 provider-agnostic per that ticket's 2026-08-18 rewrite: `GetAuthorizationContextAsync`
-sources `Roles` from `CurrentUser.AzureRoles` (the token's roles claim, read through
+sources `Roles` from `CurrentUser.ExternalRoles` (the token's roles claim, read through
 the XD01-48 `IGeoAuthenticationProvider`/`ClaimMapping` seam — not an Entra-specific
 API), and `UserProvisioningService` no longer grants a default role. The rest of this
 section (Entra manifest/App Roles registration, the Graph backfill tooling, admin UX,
@@ -342,7 +342,7 @@ still unresolved).
    `--verify` to diff Entra assignments against expected DB state — required to show
    zero mismatches before the code cutover ships.
 3. **(Implemented — XD01-19)** Switch `GeoAuthorizationService.GetAuthorizationContextAsync`
-   to source `Roles` from `current.AzureRoles` (the token) instead of the `UserRole`
+   to source `Roles` from `current.ExternalRoles` (the token) instead of the `UserRole`
    DB join — permissions for each role name still resolve against the local
    `AppRole`/`RolePermission` tables via `IRoleRepository`. `UserRole`/`AssignRoleAsync`
    are kept, unused by this path, as the rollback path this step already called for.

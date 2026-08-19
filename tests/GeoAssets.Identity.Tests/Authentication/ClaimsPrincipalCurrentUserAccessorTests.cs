@@ -26,7 +26,7 @@ public class ClaimsPrincipalCurrentUserAccessorTests
 
         var user = accessor.GetCurrentUser();
 
-        user!.AzureObjectId.Should().Be("user-1");
+        user!.ExternalObjectId.Should().Be("user-1");
         user.Email.Should().Be("a@example.com");
     }
 
@@ -37,6 +37,6 @@ public class ClaimsPrincipalCurrentUserAccessorTests
         var principal = AuthenticatedPrincipal(("sub", "okta-user-1"));
         var accessor = new ClaimsPrincipalCurrentUserAccessor(() => principal, customMapping);
 
-        accessor.GetCurrentUser()!.AzureObjectId.Should().Be("okta-user-1");
+        accessor.GetCurrentUser()!.ExternalObjectId.Should().Be("okta-user-1");
     }
 }

@@ -9,7 +9,7 @@ namespace GeoAssets.Identity.Tests.Authorization;
 
 /// <summary>
 /// Proves roles are sourced from the external provider's roles claim
-/// (<see cref="CurrentUser.AzureRoles"/>) rather than the local <c>UserRole</c> assignment
+/// (<see cref="CurrentUser.ExternalRoles"/>) rather than the local <c>UserRole</c> assignment
 /// table (XD01-19) — including that the local table's repository methods are never even
 /// called by this path, which is exactly what "not the local table" needs to mean.
 /// </summary>
@@ -24,7 +24,7 @@ public class GeoAuthorizationServiceTests
     private sealed class FakeUserRepository(AppUser? user) : IUserRepository
     {
         public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<AppUser?> GetByAzureObjectIdAsync(string oid, CancellationToken ct = default) => Task.FromResult(user);
+        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) => Task.FromResult(user);
         public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
@@ -104,12 +104,12 @@ public class GeoAuthorizationServiceTests
             roleRepository ?? new FakeRoleRepository(),
             TimeProvider.System);
 
-    private static AppUser ProvisionedUser(string azureObjectId) => new()
+    private static AppUser ProvisionedUser(string externalObjectId) => new()
     {
-        AzureObjectId = azureObjectId,
-        Email         = "a@example.com",
-        DisplayName   = "Test",
-        CreatedAt     = DateTime.UtcNow,
+        ExternalObjectId = externalObjectId,
+        Email            = "a@example.com",
+        DisplayName      = "Test",
+        CreatedAt        = DateTime.UtcNow,
     };
 
     [Fact]
