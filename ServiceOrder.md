@@ -835,7 +835,7 @@ when present.
 ## 13. Testing
 
 `GeoAssets.Workflow.Tests` and `GeoAssets.Workflow.Agents.Tests` cover the module
-end to end — 261 and 15 test cases respectively as of this writing, with
+end to end — 275 and 19 test cases respectively as of this writing, with
 `InMemoryServiceOrderRepository`, `ServiceOrder` (transition logic),
 `ServiceOrderTransitions`, `ServiceOrderRules`, `FeatureSelectionRegistry`
 (parameter validation), `FeatureSelectionParameters` (the JSON-round-trip
@@ -846,7 +846,7 @@ mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
 rests on.
 
-`GeoAssets.Workflow.EFCore.Tests` (45 test cases) covers `EFServiceOrderRepository`
+`GeoAssets.Workflow.EFCore.Tests` (69 test cases) covers `EFServiceOrderRepository`
 and `EFOrderTypeRepository` (all CRUD, hierarchy, filtered queries, the
 `ServiceOrderConcurrencyException` conflict path, and cascade-delete of an order
 type's child collections) against a **real SQLite in-memory database**
@@ -866,9 +866,12 @@ project references its production counterpart via `InternalsVisibleTo`, letting
 `SqliteTestDbContext` layer that one SQLite-only default onto the otherwise-internal
 `ServiceOrderRecord` entity without changing its visibility.
 
-The full solution (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
+These five projects (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
 `GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
-`GeoAssets.Commands.Tests`) runs **550 tests**.
+`GeoAssets.Commands.Tests`) run **653 tests** as of this writing — no longer the
+full solution total, since unrelated modules (`GeoAssets.Identity`, `GeoAssets.
+Infrastructure.Observability`, `GeoAssets.Server`, messaging transports, etc.)
+have since grown their own test projects outside this module's scope.
 
 **Gap:** `GeoAssets.Workflow.EFCore` (`EFServiceOrderRepository`,
 `EFOrderTypeRepository`, the mappers, `ServiceOrderDbContext` + configurations,
