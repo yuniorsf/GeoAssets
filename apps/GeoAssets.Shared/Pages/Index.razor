@@ -13,6 +13,7 @@
 @using GeoAssets.Shared.Components.Providers
 @using GeoAssets.Shared.Components.Shared
 @using GeoAssets.Identity.Authorization.Services
+@using Microsoft.Extensions.DependencyInjection
 @implements IAsyncDisposable
 @inject IAssetProvider Repository
 @inject AssetService AssetSvc
@@ -22,6 +23,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAuthNavigationService AuthNav
 @inject IGeoAuthorizationService AuthService
+@inject IServiceProvider ServiceProvider
 
 <div class="geoassets-app">
 
@@ -152,6 +154,13 @@
                         ?? user.FindFirst("preferred_username")?.Value
                         ?? user.Identity?.Name
                         ?? L["app.defaultUser"];
+
+        // Ensure the local user record exists before checking authorization. Only relevant
+        // under Identity:Backend=InMemory (Rest has no local provisioning step, so the service
+        // isn't registered there — resolved optionally to avoid breaking that backend).
+        var provisioning = ServiceProvider.GetService<UserProvisioningService>();
+        if (provisioning is not null)
+            await provisioning.EnsureProvisionedAsync();
 
         try
         {

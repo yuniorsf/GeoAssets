@@ -1,5 +1,6 @@
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.Shared.Services;
 using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Identity.InMemory;
 using Microsoft.Extensions.DependencyInjection;

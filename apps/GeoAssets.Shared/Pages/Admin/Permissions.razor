@@ -4,7 +4,9 @@
 @using Microsoft.AspNetCore.Authorization
 @using GeoAssets.Identity.Authorization.Services
 @using GeoAssets.Shared.Components.Admin
+@using Microsoft.Extensions.DependencyInjection
 @inject IGeoAuthorizationService AuthService
+@inject IServiceProvider ServiceProvider
 
 <div class="geoassets-app">
 
@@ -41,6 +43,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Ensure the local user record exists before checking authorization. Only relevant
+        // under Identity:Backend=InMemory (Rest has no local provisioning step, so the service
+        // isn't registered there — resolved optionally to avoid breaking that backend).
+        var provisioning = ServiceProvider.GetService<UserProvisioningService>();
+        if (provisioning is not null)
+            await provisioning.EnsureProvisionedAsync();
+
         try
         {
             _authorized = await AuthService.HasPermissionAsync("permissions:read");

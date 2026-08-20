@@ -2,13 +2,25 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace GeoAssets.Web.Services.Identity;
+namespace GeoAssets.Shared.Services;
 
 /// <summary>
-/// Subscribes to <see cref="AuthenticationStateProvider.AuthenticationStateChanged"/>
-/// and provisions a local <see cref="AppUser"/> the first time a user authenticates
-/// (Just-In-Time provisioning).
+/// Provisions a local <see cref="AppUser"/> the first time a user authenticates
+/// (Just-In-Time provisioning) — both reactively, via
+/// <see cref="AuthenticationStateProvider.AuthenticationStateChanged"/>, and on demand via
+/// <see cref="EnsureProvisionedAsync"/>.
+///
+/// The reactive path alone is unreliable for anything that needs the user to already exist
+/// by the time it runs: <c>AuthenticationStateChanged</c> only fires on a *transition*, so a
+/// user resuming a cached MSAL session on a plain reload (not a fresh interactive login) may
+/// never raise it — and the WASM in-memory identity store is pure in-memory, so it resets on
+/// every reload regardless. A page whose <c>OnInitializedAsync</c> needs the user to already
+/// be provisioned (e.g. before checking <c>IGeoAuthorizationService.HasPermissionAsync</c>)
+/// should call <see cref="EnsureProvisionedAsync"/> explicitly and await it — safe to do from
+/// a routed <c>[Authorize]</c> page, since <c>AuthorizeRouteView</c> only renders it once
+/// authentication has already resolved, so there's no race there.
 ///
 /// No default role is granted (XD01-19) — role assignment is sourced from the external
 /// provider's roles claim (<see cref="CurrentUser.ExternalRoles"/>), consumed by
@@ -16,7 +28,12 @@ namespace GeoAssets.Web.Services.Identity;
 /// provisioned user with no external role assignment gets a safe empty <c>Roles</c> list —
 /// see <see cref="GeoAssets.Identity.Authorization.Services.AuthorizationContext"/>.
 ///
-/// Registered as a singleton. Initialized in Program.cs:
+/// Registered as a singleton (only when <c>Identity:Backend</c> is <c>InMemory</c> — Rest has
+/// no local provisioning step) — lives in <c>GeoAssets.Shared</c> rather than
+/// <c>GeoAssets.Web</c> (despite the WASM-only registration) so routed pages in this project
+/// (e.g. the identity admin pages, XD01-58) can call <see cref="EnsureProvisionedAsync"/>
+/// directly; <c>GeoAssets.Shared</c> cannot reference <c>GeoAssets.Web</c>. Initialized in
+/// Program.cs:
 /// <code>
 ///   host.Services.GetRequiredService&lt;UserProvisioningService&gt;();
 /// </code>
@@ -45,7 +62,7 @@ public sealed class UserProvisioningService : IAsyncDisposable
             var state = await task;
             if (state.User.Identity?.IsAuthenticated != true) return;
 
-            await ProvisionAsync(state.User);
+            await ProvisionAsync();
         }
         catch (Exception ex)
         {
@@ -53,7 +70,14 @@ public sealed class UserProvisioningService : IAsyncDisposable
         }
     }
 
-    private async Task ProvisionAsync(System.Security.Claims.ClaimsPrincipal principal)
+    /// <summary>
+    /// Ensures the current user is provisioned, awaited synchronously. See the class doc
+    /// comment for why callers with an already-confirmed-authenticated context should prefer
+    /// this over relying on the reactive <c>AuthenticationStateChanged</c> path alone.
+    /// </summary>
+    public Task EnsureProvisionedAsync() => ProvisionAsync();
+
+    private async Task ProvisionAsync()
     {
         // Use a fresh scope because this runs outside a normal Blazor request scope
         await using var scope = _scopeFactory.CreateAsyncScope();
