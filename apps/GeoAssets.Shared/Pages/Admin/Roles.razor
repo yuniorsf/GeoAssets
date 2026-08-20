@@ -59,7 +59,17 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _authorized = await AuthService.HasPermissionAsync("roles:read");
+        try
+        {
+            _authorized = await AuthService.HasPermissionAsync("roles:read");
+        }
+        catch (Exception ex)
+        {
+            // Fail closed: if the authorization check itself can't be answered (e.g. the
+            // identity backend is unreachable), don't show admin functionality.
+            Console.Error.WriteLine($"[AdminRoles] Failed to resolve authorization: {ex.Message}");
+            _authorized = false;
+        }
     }
 
     private void OnRoleSelected(AppRole role)

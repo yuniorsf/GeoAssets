@@ -153,7 +153,17 @@
                         ?? user.Identity?.Name
                         ?? L["app.defaultUser"];
 
-        _showAdminNavLink = await AuthService.HasPermissionAsync("users:read");
+        try
+        {
+            _showAdminNavLink = await AuthService.HasPermissionAsync("users:read");
+        }
+        catch (Exception ex)
+        {
+            // Showing the admin nav icon is optional — a failure here (e.g. the identity
+            // backend being unreachable) must not take down the map page itself.
+            Console.Error.WriteLine($"[Index] Failed to resolve admin nav visibility: {ex.Message}");
+            _showAdminNavLink = false;
+        }
     }
 
     private void SignOut() => AuthNav.NavigateToLogout();
