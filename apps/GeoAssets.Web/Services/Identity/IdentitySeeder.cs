@@ -64,6 +64,15 @@ public sealed class IdentitySeeder(WasmIdentityStore store, TimeProvider timePro
             P("features:delete",        "features",      "delete",   "Eliminar activos GIS"),
             P("reports:export",         "reports",       "export",   "Exportar reportes"),
             P("users:manage",           "users",         "manage",   "Gestionar usuarios y roles"),
+
+            // XD01-55: identity admin CRUD (XD01-54 Phase 1) — Administrator-only for now.
+            // Mirrors GeoIdentitySeeder (the Server/EF equivalent of this class).
+            P("users:read",             "users",         "read",       "Ver usuarios"),
+            P("users:edit",             "users",         "edit",       "Editar usuarios y su estado"),
+            P("roles:read",             "roles",         "read",       "Ver roles"),
+            P("roles:edit",             "roles",         "edit",       "Crear y editar roles, y gestionar sus permisos"),
+            P("roles:delete",           "roles",         "delete",     "Eliminar roles personalizados"),
+            P("permissions:read",       "permissions",   "read",       "Ver el catálogo de permisos"),
         };
 
         foreach (var perm in perms)
@@ -79,7 +88,8 @@ public sealed class IdentitySeeder(WasmIdentityStore store, TimeProvider timePro
             "serviceorders:create", "serviceorders:read", "serviceorders:assign",
             "serviceorders:complete", "serviceorders:cancel",
             "features:read", "features:edit", "features:delete",
-            "reports:export", "users:manage");
+            "reports:export", "users:manage",
+            "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read");
 
         AddRole(SupervisorRoleId, "Supervisor",       "Gestión de órdenes y supervisión",     isBuiltIn: true,
             "serviceorders:create", "serviceorders:read", "serviceorders:assign",
