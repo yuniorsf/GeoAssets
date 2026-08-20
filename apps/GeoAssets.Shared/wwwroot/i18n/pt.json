@@ -129,5 +129,36 @@
   "orders.dispatchHistory": "Histórico de despachos",
   "orders.noDispatches": "Nenhum despacho registrado.",
   "orders.actionLog": "Registro de ações",
-  "orders.noActions": "Nenhuma ação registrada."
+  "orders.noActions": "Nenhuma ação registrada.",
+
+  "admin.accessDenied": "Você não tem permissão para ver esta página.",
+
+  "admin.users.title": "Usuários",
+  "admin.users.empty": "Nenhum usuário encontrado.",
+  "admin.users.selectPrompt": "Selecione um usuário para ver seus detalhes.",
+  "admin.users.editTitle": "Editar usuário",
+  "admin.users.email": "E-mail",
+  "admin.users.displayName": "Nome de exibição",
+  "admin.users.isActive": "Ativo",
+  "admin.users.organizationId": "ID da organização",
+  "admin.users.organizationIdPlaceholder": "Opcional — deixe em branco se não houver",
+  "admin.users.invalidOrganizationId": "O ID da organização deve ser um GUID válido.",
+
+  "admin.roles.title": "Funções",
+  "admin.roles.newRole": "+ Nova função",
+  "admin.roles.empty": "Nenhuma função encontrada.",
+  "admin.roles.builtIn": "Predefinida",
+  "admin.roles.editTitle": "Editar função",
+  "admin.roles.name": "Nome",
+  "admin.roles.description": "Descrição",
+  "admin.roles.permissions": "Permissões",
+  "admin.roles.savePermissionsHint": "Salve a função primeiro e depois atribua suas permissões.",
+  "admin.roles.deleteTitle": "Excluir função",
+  "admin.roles.deleteConfirm": "Excluir a função «{0}»? Esta ação não pode ser desfeita.",
+  "admin.roles.builtInDeleteError": "Funções predefinidas não podem ser excluídas.",
+  "admin.roles.selectPrompt": "Selecione uma função para ver seus detalhes, ou crie uma nova.",
+
+  "admin.permissions.title": "Permissões",
+  "admin.permissions.empty": "Nenhuma permissão encontrada.",
+  "admin.permissions.hint": "As permissões são somente leitura — atribua-as a uma função na página Funções."
 }

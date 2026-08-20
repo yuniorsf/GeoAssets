@@ -129,5 +129,36 @@
   "orders.dispatchHistory": "Dispatch history",
   "orders.noDispatches": "No dispatches recorded.",
   "orders.actionLog": "Action log",
-  "orders.noActions": "No actions recorded."
+  "orders.noActions": "No actions recorded.",
+
+  "admin.accessDenied": "You don't have permission to view this page.",
+
+  "admin.users.title": "Users",
+  "admin.users.empty": "No users found.",
+  "admin.users.selectPrompt": "Select a user to see their details.",
+  "admin.users.editTitle": "Edit user",
+  "admin.users.email": "Email",
+  "admin.users.displayName": "Display name",
+  "admin.users.isActive": "Active",
+  "admin.users.organizationId": "Organization ID",
+  "admin.users.organizationIdPlaceholder": "Optional — leave blank for none",
+  "admin.users.invalidOrganizationId": "Organization ID must be a valid GUID.",
+
+  "admin.roles.title": "Roles",
+  "admin.roles.newRole": "+ New role",
+  "admin.roles.empty": "No roles found.",
+  "admin.roles.builtIn": "Built-in",
+  "admin.roles.editTitle": "Edit role",
+  "admin.roles.name": "Name",
+  "admin.roles.description": "Description",
+  "admin.roles.permissions": "Permissions",
+  "admin.roles.savePermissionsHint": "Save the role first, then assign its permissions.",
+  "admin.roles.deleteTitle": "Delete role",
+  "admin.roles.deleteConfirm": "Delete role «{0}»? This action cannot be undone.",
+  "admin.roles.builtInDeleteError": "Built-in roles cannot be deleted.",
+  "admin.roles.selectPrompt": "Select a role to see its details, or create a new one.",
+
+  "admin.permissions.title": "Permissions",
+  "admin.permissions.empty": "No permissions found.",
+  "admin.permissions.hint": "Permissions are read-only — assign them to a role from the Roles page."
 }

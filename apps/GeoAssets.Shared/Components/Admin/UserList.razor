@@ -1,0 +1,53 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IUserRepository Repository
+
+<div class="sidebar-section">
+    <h6>@L["admin.users.title"] (@_users.Count)</h6>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (_users.Count == 0)
+    {
+        <div class="empty-state"><p>@L["admin.users.empty"]</p></div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var user in _users)
+            {
+                <div class="asset-list-item @(SelectedUserId == user.Id ? "selected" : "")"
+                     @onclick="() => SelectUser(user)">
+                    <span class="asset-color-dot" style="background:@(user.IsActive ? "var(--success)" : "var(--text-secondary)")"></span>
+                    <span class="asset-name">@user.DisplayName</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? SelectedUserId { get; set; }
+    [Parameter] public EventCallback<AppUser> OnUserSelected { get; set; }
+
+    private List<AppUser> _users = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    public async Task RefreshAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _users = [.. await Repository.GetAllAsync()];
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task SelectUser(AppUser user) => await OnUserSelected.InvokeAsync(user);
+}

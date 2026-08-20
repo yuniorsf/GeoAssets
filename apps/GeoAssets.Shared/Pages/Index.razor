@@ -12,6 +12,7 @@
 @using GeoAssets.Shared.Components.Map
 @using GeoAssets.Shared.Components.Providers
 @using GeoAssets.Shared.Components.Shared
+@using GeoAssets.Identity.Authorization.Services
 @implements IAsyncDisposable
 @inject IAssetProvider Repository
 @inject AssetService AssetSvc
@@ -20,6 +21,7 @@
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAuthNavigationService AuthNav
+@inject IGeoAuthorizationService AuthService
 
 <div class="geoassets-app">
 
@@ -29,6 +31,10 @@
             <span style="font-size:1.4rem">🗺️</span>
             <h1>GeoAssets</h1>
             <a href="/service-orders" class="btn-icon order-nav-link" title="@L["orders.title"]">🗂️</a>
+            @if (_showAdminNavLink)
+            {
+                <a href="/admin/users" class="btn-icon admin-nav-link" title="@L["admin.users.title"]">🛡️</a>
+            }
         </div>
 
         <ProviderPoolPanel @ref="_providerPoolPanel" MapDivId="@_mapDivId" />
@@ -121,6 +127,7 @@
     private bool _isNewFeature;
 
     private string _userDisplayName = string.Empty;
+    private bool _showAdminNavLink;
 
     // ─── Context menu state ────────────────────────────────────────────────
 
@@ -145,6 +152,8 @@
                         ?? user.FindFirst("preferred_username")?.Value
                         ?? user.Identity?.Name
                         ?? L["app.defaultUser"];
+
+        _showAdminNavLink = await AuthService.HasPermissionAsync("users:read");
     }
 
     private void SignOut() => AuthNav.NavigateToLogout();

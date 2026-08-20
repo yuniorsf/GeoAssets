@@ -1,0 +1,60 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IRoleRepository Repository
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["admin.roles.title"] (@_roles.Count)</h6>
+        <button class="btn-icon" title="@L["admin.roles.newRole"]" @onclick="() => OnCreateRequested.InvokeAsync()">＋</button>
+    </div>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (_roles.Count == 0)
+    {
+        <div class="empty-state"><p>@L["admin.roles.empty"]</p></div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var role in _roles)
+            {
+                <div class="asset-list-item @(SelectedRoleId == role.Id ? "selected" : "")"
+                     @onclick="() => SelectRole(role)">
+                    <span class="asset-name">@role.Name</span>
+                    @if (role.IsBuiltIn)
+                    {
+                        <span class="badge-builtin">@L["admin.roles.builtIn"]</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? SelectedRoleId { get; set; }
+    [Parameter] public EventCallback<AppRole> OnRoleSelected { get; set; }
+    [Parameter] public EventCallback OnCreateRequested { get; set; }
+
+    private List<AppRole> _roles = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    public async Task RefreshAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _roles = [.. await Repository.GetAllAsync()];
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task SelectRole(AppRole role) => await OnRoleSelected.InvokeAsync(role);
+}

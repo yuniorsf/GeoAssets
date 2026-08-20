@@ -1,0 +1,215 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using System.ComponentModel.DataAnnotations
+@using System.Net
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IRoleRepository RoleRepository
+@inject IPermissionRepository PermissionRepository
+
+@if (_loading)
+{
+    <div class="empty-state"><p>@L["app.loading"]</p></div>
+}
+else
+{
+    <div>
+        <h5>
+            @(IsNew ? L["admin.roles.newRole"] : L["admin.roles.editTitle"])
+            @if (!IsNew && _role is { IsBuiltIn: true })
+            {
+                <span class="badge-builtin">@L["admin.roles.builtIn"]</span>
+            }
+        </h5>
+
+        <EditForm Model="@_editModel" OnValidSubmit="HandleSave">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>@L["admin.roles.name"]</label>
+                <InputText class="form-control" @bind-Value="_editModel.Name" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.roles.description"]</label>
+                <InputTextArea class="form-control" @bind-Value="_editModel.Description" rows="2" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.roles.permissions"]</label>
+                @if (IsNew)
+                {
+                    <p class="empty-state">@L["admin.roles.savePermissionsHint"]</p>
+                }
+                else
+                {
+                    @foreach (var group in _allPermissions.GroupBy(p => p.Resource).OrderBy(g => g.Key))
+                    {
+                        <div class="permission-group">
+                            <h6>@group.Key</h6>
+                            @foreach (var permission in group.OrderBy(p => p.Action))
+                            {
+                                <label class="permission-toggle">
+                                    <input type="checkbox"
+                                           checked="@_grantedPermissionIds.Contains(permission.Id)"
+                                           disabled="@_togglingPermissionId.HasValue"
+                                           @onchange="ev => TogglePermissionAsync(permission, (bool)ev.Value!)" />
+                                    <span>@permission.Code</span>
+                                </label>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="attribute-errors">@_error</p>
+            }
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+                @if (!IsNew && _role is { IsBuiltIn: false })
+                {
+                    <button class="btn btn-danger" type="button" @onclick="RequestDelete">@L["assets.delete"]</button>
+                }
+            </div>
+        </EditForm>
+    </div>
+}
+
+<ConfirmDialog Visible="_showDeleteConfirm"
+               Title="@L["admin.roles.deleteTitle"]"
+               Message="@L.GetString("admin.roles.deleteConfirm", _role?.Name ?? string.Empty)"
+               ConfirmLabel="@L["assets.delete"]"
+               OnConfirm="ConfirmDelete"
+               OnCancel="() => _showDeleteConfirm = false" />
+
+@code {
+    [Parameter] public Guid? RoleId { get; set; }
+    [Parameter] public bool IsNew { get; set; }
+    [Parameter] public EventCallback<Guid> OnSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
+
+    private sealed class RoleEditModel
+    {
+        [Required] public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    private RoleEditModel _editModel = new();
+    private AppRole? _role;
+    private List<AppPermission> _allPermissions = [];
+    private HashSet<Guid> _grantedPermissionIds = [];
+    private Guid? _togglingPermissionId;
+    private bool _loading = true;
+    private bool _showDeleteConfirm;
+    private string? _error;
+    private Guid? _loadedRoleId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsNew)
+        {
+            _loadedRoleId = null;
+            _role = null;
+            _editModel = new RoleEditModel();
+            _grantedPermissionIds = [];
+            _loading = false;
+            return;
+        }
+
+        if (RoleId is null || RoleId == _loadedRoleId) return;
+
+        _loading = true;
+        StateHasChanged();
+
+        _loadedRoleId = RoleId;
+        _allPermissions = [.. await PermissionRepository.GetAllAsync()];
+        _role = await RoleRepository.GetByIdAsync(RoleId.Value);
+        if (_role is not null)
+        {
+            _editModel = new RoleEditModel { Name = _role.Name, Description = _role.Description };
+            _grantedPermissionIds = [.. _role.RolePermissions.Select(rp => rp.PermissionId)];
+        }
+        _loading = false;
+    }
+
+    private async Task HandleSave()
+    {
+        _error = null;
+
+        if (IsNew)
+        {
+            var role = new AppRole
+            {
+                Id          = Guid.NewGuid(),
+                Name        = _editModel.Name,
+                Description = _editModel.Description,
+                IsBuiltIn   = false,
+            };
+            await RoleRepository.AddAsync(role);
+            await RoleRepository.SaveChangesAsync();
+            await OnSaved.InvokeAsync(role.Id);
+        }
+        else if (_role is not null)
+        {
+            _role.Name        = _editModel.Name;
+            _role.Description = _editModel.Description;
+            await RoleRepository.UpdateAsync(_role);
+            await RoleRepository.SaveChangesAsync();
+            await OnSaved.InvokeAsync(_role.Id);
+        }
+    }
+
+    private async Task TogglePermissionAsync(AppPermission permission, bool isChecked)
+    {
+        if (_role is null) return;
+
+        _togglingPermissionId = permission.Id;
+        StateHasChanged();
+
+        try
+        {
+            if (isChecked)
+                await RoleRepository.GrantPermissionAsync(_role.Id, permission.Id);
+            else
+                await RoleRepository.RevokePermissionAsync(_role.Id, permission.Id);
+            await RoleRepository.SaveChangesAsync();
+
+            if (isChecked)
+                _grantedPermissionIds.Add(permission.Id);
+            else
+                _grantedPermissionIds.Remove(permission.Id);
+        }
+        finally
+        {
+            _togglingPermissionId = null;
+        }
+    }
+
+    private void RequestDelete() => _showDeleteConfirm = true;
+
+    private async Task ConfirmDelete()
+    {
+        if (_role is null) return;
+        _showDeleteConfirm = false;
+
+        try
+        {
+            await RoleRepository.DeleteAsync(_role.Id);
+            await RoleRepository.SaveChangesAsync();
+            await OnDeleted.InvokeAsync();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
+        {
+            // Defensive: the delete button is already hidden for built-in roles, but the
+            // server is the source of truth (409 per XD01-56) — surface it cleanly instead
+            // of an unhandled exception if this is ever reached (e.g. a stale client state).
+            _error = L["admin.roles.builtInDeleteError"];
+        }
+    }
+
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+}

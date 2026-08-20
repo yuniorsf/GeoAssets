@@ -1,0 +1,91 @@
+@page "/admin/roles"
+@attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.AspNetCore.Authorization
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Services
+@using GeoAssets.Shared.Components.Admin
+@inject IGeoAuthorizationService AuthService
+
+<div class="geoassets-app">
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="btn-icon" title="@L["orders.backToMap"]">←</a>
+            <h1>@L["admin.roles.title"]</h1>
+        </div>
+
+        @if (_authorized == true)
+        {
+            <RoleList @ref="_list"
+                      SelectedRoleId="@_selectedRoleId"
+                      OnRoleSelected="OnRoleSelected"
+                      OnCreateRequested="OnCreateRequested" />
+        }
+    </aside>
+
+    <main class="order-main">
+        @if (_authorized is null)
+        {
+            <div class="empty-state">@L["app.loading"]</div>
+        }
+        else if (_authorized == false)
+        {
+            <div class="empty-state">@L["admin.accessDenied"]</div>
+        }
+        else if (_showCreateForm)
+        {
+            <RoleForm IsNew="true" OnSaved="OnRoleSaved" OnCancel="() => _showCreateForm = false" />
+        }
+        else if (_selectedRoleId is not null)
+        {
+            <RoleForm RoleId="@_selectedRoleId"
+                      OnSaved="OnRoleSaved"
+                      OnCancel="() => _selectedRoleId = null"
+                      OnDeleted="OnRoleDeleted" />
+        }
+        else
+        {
+            <div class="empty-state">@L["admin.roles.selectPrompt"]</div>
+        }
+    </main>
+</div>
+
+@code {
+    private RoleList? _list;
+    private Guid? _selectedRoleId;
+    private bool _showCreateForm;
+    private bool? _authorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _authorized = await AuthService.HasPermissionAsync("roles:read");
+    }
+
+    private void OnRoleSelected(AppRole role)
+    {
+        _selectedRoleId = role.Id;
+        _showCreateForm = false;
+        StateHasChanged();
+    }
+
+    private void OnCreateRequested()
+    {
+        _selectedRoleId = null;
+        _showCreateForm = true;
+        StateHasChanged();
+    }
+
+    private async Task OnRoleSaved(Guid roleId)
+    {
+        _showCreateForm = false;
+        _selectedRoleId = roleId;
+        if (_list is not null) await _list.RefreshAsync();
+    }
+
+    private async Task OnRoleDeleted()
+    {
+        _selectedRoleId = null;
+        if (_list is not null) await _list.RefreshAsync();
+    }
+}

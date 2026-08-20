@@ -1,0 +1,92 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IUserRepository Repository
+
+@if (User is not null)
+{
+    <div>
+        <h5>@L["admin.users.editTitle"]</h5>
+
+        <div class="form-group">
+            <label>@L["admin.users.email"]</label>
+            <input class="form-control" readonly value="@User.Email" />
+        </div>
+
+        <EditForm Model="@User" OnValidSubmit="HandleSave">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>@L["admin.users.displayName"]</label>
+                <InputText class="form-control" @bind-Value="User.DisplayName" />
+            </div>
+
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:6px">
+                    <InputCheckbox @bind-Value="User.IsActive" />
+                    @L["admin.users.isActive"]
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.users.organizationId"]</label>
+                <input class="form-control" @bind="_organizationIdText"
+                       placeholder="@L["admin.users.organizationIdPlaceholder"]" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="attribute-errors">@_error</p>
+            }
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public AppUser? User { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _organizationIdText = string.Empty;
+    private string? _error;
+    private Guid? _loadedUserId;
+
+    protected override void OnParametersSet()
+    {
+        if (User is null || User.Id == _loadedUserId) return;
+        _loadedUserId = User.Id;
+        _organizationIdText = User.OrganizationId?.ToString() ?? string.Empty;
+        _error = null;
+    }
+
+    private async Task HandleSave()
+    {
+        if (User is null) return;
+
+        Guid? organizationId = null;
+        if (!string.IsNullOrWhiteSpace(_organizationIdText))
+        {
+            if (!Guid.TryParse(_organizationIdText, out var parsed))
+            {
+                _error = L["admin.users.invalidOrganizationId"];
+                return;
+            }
+            organizationId = parsed;
+        }
+
+        User.OrganizationId = organizationId;
+        _error = null;
+
+        await Repository.UpdateAsync(User);
+        await Repository.SaveChangesAsync();
+
+        await OnSaved.InvokeAsync();
+    }
+
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+}

@@ -494,6 +494,50 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     padding-left: 18px;
 }
 
+/* ─── Identity Admin (XD01-58) ──────────────────────────────────────────── */
+
+.badge-builtin {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
+}
+
+.permission-group {
+    margin-bottom: 14px;
+}
+
+.permission-group h6 {
+    margin: 0 0 6px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+}
+
+.permission-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.85rem;
+}
+
+.permission-toggle--static {
+    justify-content: space-between;
+    padding: 6px 4px;
+}
+
+.permission-description {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+}
+
 /* ─── Empty State ────────────────────────────────────────────────────────── */
 
 .empty-state {
