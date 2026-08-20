@@ -91,12 +91,17 @@ public sealed class RestRoleRepository(HttpClient http) : IRoleRepository
         IsBuiltIn   = dto.IsBuiltIn,
     };
 
+    // RoleDetailDto.PermissionIds has no direct AppRole property — surfaced via
+    // RolePermissions (PermissionId only, no Permission nav) so callers (e.g. the identity
+    // admin UI, XD01-58) can read a role's current permissions the same way regardless of
+    // which IRoleRepository is active; see the matching fix in InMemoryRoleRepository.
     private static AppRole ToRole(RoleDetailDto dto) => new()
     {
-        Id          = dto.Id,
-        Name        = dto.Name,
-        Description = dto.Description,
-        IsBuiltIn   = dto.IsBuiltIn,
+        Id              = dto.Id,
+        Name            = dto.Name,
+        Description     = dto.Description,
+        IsBuiltIn       = dto.IsBuiltIn,
+        RolePermissions = [.. dto.PermissionIds.Select(pid => new RolePermission { RoleId = dto.Id, PermissionId = pid })],
     };
 
     public Task<AppRole?> GetByNameAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();

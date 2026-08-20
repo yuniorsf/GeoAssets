@@ -23,7 +23,8 @@ public class RestRoleRepositoryTests
     [Fact]
     public async Task GetByIdAsync_Found_MapsFields()
     {
-        var dto = new RoleDetailDto(Guid.NewGuid(), "Auditor", "desc", false, [Guid.NewGuid()]);
+        var permissionId = Guid.NewGuid();
+        var dto = new RoleDetailDto(Guid.NewGuid(), "Auditor", "desc", false, [permissionId]);
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(dto));
         var sut = Sut(handler);
 
@@ -34,6 +35,9 @@ public class RestRoleRepositoryTests
         role.Name.Should().Be("Auditor");
         role.Description.Should().Be("desc");
         role.IsBuiltIn.Should().BeFalse();
+        // RoleDetailDto.PermissionIds has no direct AppRole property — the identity admin UI
+        // (XD01-58) reads a role's current permissions via RolePermissions instead.
+        role.RolePermissions.Should().ContainSingle(rp => rp.PermissionId == permissionId && rp.RoleId == dto.Id);
         handler.Requests.Single().RequestUri!.AbsolutePath.Should().Be($"/roles/{dto.Id}");
     }
 
