@@ -23,6 +23,9 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
             // Use redirect instead of popup to avoid COOP (Cross-Origin-Opener-Policy)
             // browser restrictions that block window.closed monitoring in popup flow.
             options.ProviderOptions.LoginMode = "redirect";
-        });
+        })
+        // See RolesClaimsPrincipalFactory's doc comment — the default factory doesn't split
+        // Entra's array-valued "roles" claim into individual claims.
+        .AddAccountClaimsPrincipalFactory<RolesClaimsPrincipalFactory>();
     }
 }
