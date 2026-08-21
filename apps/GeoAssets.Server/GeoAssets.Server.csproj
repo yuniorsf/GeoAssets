@@ -21,6 +21,10 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Identity.Web" Version="4.14.2" />
+    <!-- App-only (client-credentials) Graph token acquisition for EntraGraphRoleAssignmentProvider
+         (XD01-62) — already a transitive dependency of Microsoft.Identity.Web above; pinned
+         explicitly here since this project calls into it directly. -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.87.0" />
   </ItemGroup>
 
   <ItemGroup>
