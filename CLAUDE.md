@@ -89,7 +89,7 @@ Layout: sidebar (340px fixed) + map-area (flex:1). Overlays use `position:absolu
 
 - All geometry follows RFC 7946 GeoJSON ([longitude, latitude] order)
 - Razor components: `EventCallback<T>` up, `[Parameter]` down
-- No Bootstrap — bespoke CSS only
+- Bootstrap is allowed and is the base for component styling in `GeoAssets.Shared` (used by both Web and MAUI); layer bespoke CSS in `geoassets.css` on top for anything Bootstrap doesn't cover — don't hand-roll styles Bootstrap already provides
 - The only loaded JS file is `geoassets.js` (IIFE); `mapInterop.js` and `drawInterop.js` are legacy drafts — do not reference them
 - Do not add features, refactor, or clean up code beyond what is asked
 - Do not add comments or docstrings to code you did not change
