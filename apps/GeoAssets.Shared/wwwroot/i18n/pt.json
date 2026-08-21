@@ -143,6 +143,7 @@
   "admin.users.organizationId": "ID da organização",
   "admin.users.organizationIdPlaceholder": "Opcional — deixe em branco se não houver",
   "admin.users.invalidOrganizationId": "O ID da organização deve ser um GUID válido.",
+  "admin.users.entraRoles": "Funções do Entra",
 
   "admin.roles.title": "Funções",
   "admin.roles.newRole": "+ Nova função",
@@ -157,6 +158,10 @@
   "admin.roles.deleteConfirm": "Excluir a função «{0}»? Esta ação não pode ser desfeita.",
   "admin.roles.builtInDeleteError": "Funções predefinidas não podem ser excluídas.",
   "admin.roles.selectPrompt": "Selecione uma função para ver seus detalhes, ou crie uma nova.",
+  "admin.roles.registerInEntra": "Registrar no Entra",
+  "admin.roles.registering": "Registrando…",
+  "admin.roles.registerSuccess": "Função registrada no Entra.",
+  "admin.roles.registerError": "Não foi possível registrar esta função no Entra. Tente novamente em instantes.",
 
   "admin.permissions.title": "Permissões",
   "admin.permissions.empty": "Nenhuma permissão encontrada.",

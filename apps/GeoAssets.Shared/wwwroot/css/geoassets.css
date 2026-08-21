@@ -494,6 +494,15 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     padding-left: 18px;
 }
 
+.attribute-success {
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--success) 12%, var(--panel-bg));
+    border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
 /* ─── Identity Admin (XD01-58) ──────────────────────────────────────────── */
 
 .badge-builtin {

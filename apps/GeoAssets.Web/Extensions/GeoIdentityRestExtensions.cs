@@ -20,6 +20,13 @@ namespace GeoAssets.Web.Extensions;
 /// to consume — previously undone because the identity API was read-only. Does not register
 /// <c>UserProvisioningService</c>: JIT user provisioning against this backend isn't possible
 /// (that's tracked separately, see XD01-12's federated-auth/JIT-provisioning follow-up note).
+///
+/// Also registers <see cref="IRoleAssignmentProvider"/>/<see cref="IRoleSyncStatusProvider"/>
+/// (XD01-63) — thin HTTP proxies to the server's own <see cref="IRoleAssignmentProvider"/>
+/// (XD01-62, which may itself resolve to a no-op depending on the server's <c>RoleSync:Enabled</c>
+/// config; <see cref="IRoleSyncStatusProvider"/> is how the UI tells which). Deliberately not
+/// registered by <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> — the in-memory backend
+/// has no server round-trip, so role sync can never be functional there.
 /// </summary>
 public static class GeoIdentityRestExtensions
 {
@@ -36,6 +43,12 @@ public static class GeoIdentityRestExtensions
 
         services.AddScoped<IPermissionRepository>(sp =>
             new RestPermissionRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IRoleAssignmentProvider>(sp =>
+            new RestRoleAssignmentProvider(CreateIdentityClient(sp)));
+
+        services.AddScoped<IRoleSyncStatusProvider>(sp =>
+            new RestRoleSyncStatusProvider(CreateIdentityClient(sp)));
 
         return services;
     }

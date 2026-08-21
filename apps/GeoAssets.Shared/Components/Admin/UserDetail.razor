@@ -1,7 +1,11 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Identity.Authorization.Models
 @using GeoAssets.Identity.Authorization.Repositories
+@using GeoAssets.Identity.Authorization.Services
+@using Microsoft.Extensions.DependencyInjection
 @inject IUserRepository Repository
+@inject IRoleRepository RoleRepository
+@inject IServiceProvider ServiceProvider
 
 @if (User is not null)
 {
@@ -44,6 +48,23 @@
                 <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
             </div>
         </EditForm>
+
+        @if (_roleSyncEnabled)
+        {
+            <div class="permission-group">
+                <h6>@L["admin.users.entraRoles"]</h6>
+                @foreach (var role in _allRoles)
+                {
+                    <label class="permission-toggle">
+                        <input type="checkbox"
+                               checked="@_assignedRoleNames.Contains(role.Name)"
+                               disabled="@(_togglingRoleId == role.Id)"
+                               @onchange="ev => ToggleRoleAsync(role, (bool)ev.Value!)" />
+                        <span>@role.Name</span>
+                    </label>
+                }
+            </div>
+        }
     </div>
 }
 
@@ -56,12 +77,27 @@
     private string? _error;
     private Guid? _loadedUserId;
 
-    protected override void OnParametersSet()
+    private bool _roleSyncEnabled;
+    private List<AppRole> _allRoles = [];
+    private HashSet<string> _assignedRoleNames = [];
+    private Guid? _togglingRoleId;
+
+    protected override async Task OnParametersSetAsync()
     {
         if (User is null || User.Id == _loadedUserId) return;
         _loadedUserId = User.Id;
         _organizationIdText = User.OrganizationId?.ToString() ?? string.Empty;
         _error = null;
+
+        var statusProvider = ServiceProvider.GetService<IRoleSyncStatusProvider>();
+        _roleSyncEnabled = statusProvider is not null && await statusProvider.IsEnabledAsync();
+
+        if (_roleSyncEnabled)
+        {
+            var roleSync = ServiceProvider.GetRequiredService<IRoleAssignmentProvider>();
+            _allRoles = [.. await RoleRepository.GetAllAsync()];
+            _assignedRoleNames = [.. await roleSync.GetAssignedRoleNamesAsync(User.ExternalObjectId)];
+        }
     }
 
     private async Task HandleSave()
@@ -89,4 +125,29 @@
     }
 
     private async Task Cancel() => await OnCancel.InvokeAsync();
+
+    private async Task ToggleRoleAsync(AppRole role, bool isChecked)
+    {
+        if (User is null) return;
+        var roleSync = ServiceProvider.GetService<IRoleAssignmentProvider>();
+        if (roleSync is null) return;
+
+        _togglingRoleId = role.Id;
+        StateHasChanged();
+
+        try
+        {
+            if (isChecked)
+                await roleSync.AssignRoleAsync(User.ExternalObjectId, role.Name);
+            else
+                await roleSync.RevokeRoleAsync(User.ExternalObjectId, role.Name);
+
+            if (isChecked) _assignedRoleNames.Add(role.Name);
+            else _assignedRoleNames.Remove(role.Name);
+        }
+        finally
+        {
+            _togglingRoleId = null;
+        }
+    }
 }

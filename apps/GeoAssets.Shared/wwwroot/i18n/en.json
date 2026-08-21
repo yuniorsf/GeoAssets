@@ -143,6 +143,7 @@
   "admin.users.organizationId": "Organization ID",
   "admin.users.organizationIdPlaceholder": "Optional — leave blank for none",
   "admin.users.invalidOrganizationId": "Organization ID must be a valid GUID.",
+  "admin.users.entraRoles": "Entra roles",
 
   "admin.roles.title": "Roles",
   "admin.roles.newRole": "+ New role",
@@ -157,6 +158,10 @@
   "admin.roles.deleteConfirm": "Delete role «{0}»? This action cannot be undone.",
   "admin.roles.builtInDeleteError": "Built-in roles cannot be deleted.",
   "admin.roles.selectPrompt": "Select a role to see its details, or create a new one.",
+  "admin.roles.registerInEntra": "Register in Entra",
+  "admin.roles.registering": "Registering…",
+  "admin.roles.registerSuccess": "Role registered in Entra.",
+  "admin.roles.registerError": "Couldn't register this role in Entra. Try again shortly.",
 
   "admin.permissions.title": "Permissions",
   "admin.permissions.empty": "No permissions found.",

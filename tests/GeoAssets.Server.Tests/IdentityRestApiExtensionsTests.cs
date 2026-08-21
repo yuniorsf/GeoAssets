@@ -58,6 +58,7 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IRoleRepository>(
                         new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()));
                     services.AddSingleton<IPermissionRepository>(new FakeAdminPermissionRepository([]));
+                    services.AddSingleton<IRoleAssignmentProvider>(new NullRoleAssignmentProvider());
                 });
                 webHost.Configure(app =>
                 {
@@ -270,6 +271,39 @@ public class IdentityRestApiExtensionsTests
     private static AppPermission NewPermission(string code) =>
         new() { Id = Guid.NewGuid(), Code = code, Resource = code.Split(':')[0], Action = code.Split(':')[1], Description = code };
 
+    /// <summary>Records what was called and returns a caller-configurable role list — drives
+    /// the XD01-63 rolesync endpoint tests below.</summary>
+    private sealed class FakeRoleAssignmentProvider : IRoleAssignmentProvider
+    {
+        public AppRole? RegisteredRole { get; private set; }
+        public (string ExternalObjectId, string RoleName)? Assigned { get; private set; }
+        public (string ExternalObjectId, string RoleName)? Revoked { get; private set; }
+        public IReadOnlyList<string> AssignedRoleNamesToReturn { get; init; } = [];
+
+        public Task RegisterRoleAsync(AppRole role, CancellationToken ct = default)
+        {
+            RegisteredRole = role;
+            return Task.CompletedTask;
+        }
+
+        public Task UnregisterRoleAsync(Guid roleId, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task AssignRoleAsync(string externalUserObjectId, string roleName, CancellationToken ct = default)
+        {
+            Assigned = (externalUserObjectId, roleName);
+            return Task.CompletedTask;
+        }
+
+        public Task RevokeRoleAsync(string externalUserObjectId, string roleName, CancellationToken ct = default)
+        {
+            Revoked = (externalUserObjectId, roleName);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<string>> GetAssignedRoleNamesAsync(string externalUserObjectId, CancellationToken ct = default)
+            => Task.FromResult(AssignedRoleNamesToReturn);
+    }
+
     /// <summary>
     /// Real ASP.NET Core auth pipeline (AddGeoAuthorizationPolicyBridge + a no-op scheme),
     /// mirroring GeoAuthorizationPolicyBridgeEndToEndTests — needed because, unlike /me and
@@ -277,7 +311,7 @@ public class IdentityRestApiExtensionsTests
     /// </summary>
     private static async Task<TestServer> BuildAdminServerAsync(
         IUserRepository userRepo, IRoleRepository roleRepo, IPermissionRepository permissionRepo,
-        IGeoAuthorizationService authService)
+        IGeoAuthorizationService authService, IRoleAssignmentProvider? roleSync = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -299,6 +333,7 @@ public class IdentityRestApiExtensionsTests
                     // whole group is built lazily on first request, so IPolicyRepository must
                     // be resolvable even though these tests never call /policies.
                     services.AddSingleton<IPolicyRepository>(new FakePolicyRepository([]));
+                    services.AddSingleton<IRoleAssignmentProvider>(roleSync ?? new NullRoleAssignmentProvider());
                 });
                 webHost.Configure(app =>
                 {
@@ -775,6 +810,170 @@ public class IdentityRestApiExtensionsTests
         using var client = AuthenticatedClient(server);
 
         var response = await client.GetAsync("/api/identity/permissions");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // ── Role Sync (XD01-59 Phase 2, XD01-63) ────────────────────────────────
+
+    private static (IUserRepository, IRoleRepository, IPermissionRepository) EmptyAdminRepos() => (
+        new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
+        new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
+        new FakeAdminPermissionRepository([]));
+
+    [Fact]
+    public async Task RoleSync_Status_NullProvider_ReturnsDisabled()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService(), new NullRoleAssignmentProvider());
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<RoleSyncStatusDto>("/api/identity/rolesync/status");
+
+        dto.Should().NotBeNull();
+        dto!.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RoleSync_Status_RealProvider_ReturnsEnabled()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService(), new FakeRoleAssignmentProvider());
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<RoleSyncStatusDto>("/api/identity/rolesync/status");
+
+        dto.Should().NotBeNull();
+        dto!.Enabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RoleSync_RegisterRole_Authorized_CallsProviderAndReturns204()
+    {
+        var role = NewRole("Supervisor");
+        var roleRepo = new FakeAdminRoleRepository(
+            new Dictionary<Guid, AppRole> { [role.Id] = role }, new Dictionary<Guid, List<AppPermission>>());
+        var roleSync = new FakeRoleAssignmentProvider();
+        using var server = await BuildAdminServerAsync(
+            new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
+            roleRepo, new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:edit"), roleSync);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync($"/api/identity/rolesync/roles/{role.Id}", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        roleSync.RegisteredRole.Should().Be(role);
+    }
+
+    [Fact]
+    public async Task RoleSync_RegisterRole_NotFound_Returns404()
+    {
+        var roleSync = new FakeRoleAssignmentProvider();
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("roles:edit"), roleSync);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync($"/api/identity/rolesync/roles/{Guid.NewGuid()}", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        roleSync.RegisteredRole.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RoleSync_RegisterRole_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync($"/api/identity/rolesync/roles/{Guid.NewGuid()}", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RoleSync_AssignRole_Authorized_CallsProviderAndReturns204()
+    {
+        var roleSync = new FakeRoleAssignmentProvider();
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"), roleSync);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        roleSync.Assigned.Should().Be(("ext-oid-1", "Supervisor"));
+    }
+
+    [Fact]
+    public async Task RoleSync_AssignRole_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RoleSync_RevokeRole_Authorized_CallsProviderAndReturns204()
+    {
+        var roleSync = new FakeRoleAssignmentProvider();
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"), roleSync);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        roleSync.Revoked.Should().Be(("ext-oid-1", "Supervisor"));
+    }
+
+    [Fact]
+    public async Task RoleSync_RevokeRole_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RoleSync_GetAssignedRoles_Authorized_ReturnsNames()
+    {
+        var roleSync = new FakeRoleAssignmentProvider { AssignedRoleNamesToReturn = ["Supervisor", "Auditor"] };
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:read"), roleSync);
+        using var client = AuthenticatedClient(server);
+
+        var names = await client.GetFromJsonAsync<List<string>>("/api/identity/rolesync/users/ext-oid-1/roles");
+
+        names.Should().BeEquivalentTo(["Supervisor", "Auditor"]);
+    }
+
+    [Fact]
+    public async Task RoleSync_GetAssignedRoles_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync("/api/identity/rolesync/users/ext-oid-1/roles");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }

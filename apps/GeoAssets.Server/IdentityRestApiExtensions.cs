@@ -14,9 +14,13 @@ namespace GeoAssets.Server;
 /// <c>AuthorizationOptions.FallbackPolicy</c> (XD01-12). The Users/Roles/Permissions admin
 /// endpoints (XD01-54 Phase 1) additionally call <c>.RequireAuthorization("resource:action")</c> —
 /// a raw <c>AppPermission.Code</c>, resolved by <see cref="GeoAuthorizationHandler"/> (XD01-15).
-/// No user→role assignment endpoint exists here: production role membership is sourced from the
-/// external provider's roles claim, not the local <c>UserRole</c> table (XD01-19) — see XD01-54's
-/// Phase 2 for the provider-backed role-assignment seam. Permissions are code-seeded and read-only.
+/// Permissions are code-seeded and read-only.
+///
+/// Production role <em>membership</em> is still sourced from the external provider's roles claim,
+/// not the local <c>UserRole</c> table (XD01-19) — the <c>rolesync/*</c> endpoints (XD01-59 Phase
+/// 2, XD01-63) don't change that; they let an admin push a locally-defined role and its
+/// assignments <em>to</em> the external provider (via <see cref="IRoleAssignmentProvider"/>,
+/// server-side only) so that claim ends up populated in the first place.
 /// </summary>
 public static class IdentityRestApiExtensions
 {
@@ -179,6 +183,44 @@ public static class IdentityRestApiExtensions
             var permissions = await permissionRepo.GetAllAsync();
             return Results.Json(permissions.Select(ToDto), _opts);
         }).RequireAuthorization("permissions:read");
+
+        // ── Role Sync (XD01-59 Phase 2, XD01-63) ────────────────────────────────
+
+        // Authenticated-only, like /me and /policies — whether role sync is on isn't
+        // sensitive, and both admin pages that ask already gate their own visibility on
+        // users:read/roles:read.
+        routes.MapGet($"{prefix}/rolesync/status", (IRoleAssignmentProvider roleSync) =>
+            Results.Json(new RoleSyncStatusDto(roleSync is not NullRoleAssignmentProvider), _opts));
+
+        routes.MapPost($"{prefix}/rolesync/roles/{{id}}", async (Guid id, IRoleRepository roleRepo, IRoleAssignmentProvider roleSync) =>
+        {
+            var role = await roleRepo.GetByIdAsync(id);
+            if (role is null) return Results.NotFound();
+
+            await roleSync.RegisterRoleAsync(role);
+            return Results.NoContent();
+        }).RequireAuthorization("roles:edit");
+
+        routes.MapPost($"{prefix}/rolesync/users/{{externalObjectId}}/roles/{{roleName}}",
+            async (string externalObjectId, string roleName, IRoleAssignmentProvider roleSync) =>
+            {
+                await roleSync.AssignRoleAsync(externalObjectId, roleName);
+                return Results.NoContent();
+            }).RequireAuthorization("users:edit");
+
+        routes.MapDelete($"{prefix}/rolesync/users/{{externalObjectId}}/roles/{{roleName}}",
+            async (string externalObjectId, string roleName, IRoleAssignmentProvider roleSync) =>
+            {
+                await roleSync.RevokeRoleAsync(externalObjectId, roleName);
+                return Results.NoContent();
+            }).RequireAuthorization("users:edit");
+
+        routes.MapGet($"{prefix}/rolesync/users/{{externalObjectId}}/roles",
+            async (string externalObjectId, IRoleAssignmentProvider roleSync) =>
+            {
+                var names = await roleSync.GetAssignedRoleNamesAsync(externalObjectId);
+                return Results.Json(names, _opts);
+            }).RequireAuthorization("users:read");
 
         return routes;
     }

@@ -3,8 +3,11 @@
 @using System.Net
 @using GeoAssets.Identity.Authorization.Models
 @using GeoAssets.Identity.Authorization.Repositories
+@using GeoAssets.Identity.Authorization.Services
+@using Microsoft.Extensions.DependencyInjection
 @inject IRoleRepository RoleRepository
 @inject IPermissionRepository PermissionRepository
+@inject IServiceProvider ServiceProvider
 
 @if (_loading)
 {
@@ -65,10 +68,20 @@ else
             {
                 <p class="attribute-errors">@_error</p>
             }
+            @if (!string.IsNullOrEmpty(_registerSuccessMessage))
+            {
+                <p class="attribute-success">@_registerSuccessMessage</p>
+            }
 
             <div class="form-actions">
                 <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
                 <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+                @if (!IsNew && _roleSyncEnabled)
+                {
+                    <button class="btn btn-secondary" type="button" @onclick="RegisterInEntraAsync" disabled="@_registeringInEntra">
+                        @(_registeringInEntra ? L["admin.roles.registering"] : L["admin.roles.registerInEntra"])
+                    </button>
+                }
                 @if (!IsNew && _role is { IsBuiltIn: false })
                 {
                     <button class="btn btn-danger" type="button" @onclick="RequestDelete">@L["assets.delete"]</button>
@@ -108,6 +121,18 @@ else
     private string? _error;
     private Guid? _loadedRoleId;
 
+    private bool _roleSyncEnabled;
+    private bool _registeringInEntra;
+    private string? _registerSuccessMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Role-sync status is global (not per-role), so this only needs to run once per
+        // component instance, not on every RoleId change (unlike OnParametersSetAsync below).
+        var statusProvider = ServiceProvider.GetService<IRoleSyncStatusProvider>();
+        _roleSyncEnabled = statusProvider is not null && await statusProvider.IsEnabledAsync();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (IsNew)
@@ -123,6 +148,7 @@ else
         if (RoleId is null || RoleId == _loadedRoleId) return;
 
         _loading = true;
+        _registerSuccessMessage = null;
         StateHasChanged();
 
         _loadedRoleId = RoleId;
@@ -186,6 +212,35 @@ else
         finally
         {
             _togglingPermissionId = null;
+        }
+    }
+
+    private async Task RegisterInEntraAsync()
+    {
+        if (_role is null) return;
+        var roleSync = ServiceProvider.GetService<IRoleAssignmentProvider>();
+        if (roleSync is null) return;
+
+        _registeringInEntra = true;
+        _registerSuccessMessage = null;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            await roleSync.RegisterRoleAsync(_role);
+            _registerSuccessMessage = L["admin.roles.registerSuccess"];
+        }
+        catch (Exception)
+        {
+            // The Graph credential/network is genuinely allowed to fail here (expired secret,
+            // throttling) — surface it without taking down the rest of the form, matching the
+            // ConfirmDelete 409-guard precedent above.
+            _error = L["admin.roles.registerError"];
+        }
+        finally
+        {
+            _registeringInEntra = false;
         }
     }
 
