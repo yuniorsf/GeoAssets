@@ -99,63 +99,176 @@ html, body {
     scrollbar-color: var(--panel-border) transparent;
 }
 
-.sidebar-footer {
+/* ─── Nav Menu (Bootstrap nav-pills, Catppuccin) ────────────────────────── */
+
+.geo-nav {
+    padding: 8px 10px;
+    gap: 2px;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.geo-nav .nav-link {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 14px;
-    border-top: 1px solid var(--panel-border);
-    background: var(--panel-bg);
-    flex-shrink: 0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
 }
 
-.sidebar-footer-user {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 0;
+.geo-nav .nav-link:hover { background: rgba(255,255,255,0.05); }
+
+.geo-nav .nav-link.active {
+    background: var(--accent);
+    color: #11111b;
 }
 
-.sidebar-footer-avatar {
-    font-size: 1.1rem;
-    flex-shrink: 0;
+.geo-nav button.nav-link {
+    width: 100%;
+    background: transparent;
+    border: none;
+    text-align: left;
+    font: inherit;
 }
 
-.sidebar-footer-name {
-    font-size: 0.78rem;
+.geo-nav-section-label {
+    margin: 10px 10px 4px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     color: var(--text-secondary);
+}
+
+.geo-nav-icon { flex-shrink: 0; }
+
+.geo-nav-chevron {
+    margin-left: auto;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+.geo-nav-subitems {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 20px;
+}
+
+.geo-nav-sublink { font-size: 0.8rem; }
+
+/* ─── Content Column (topbar + map area) ────────────────────────────────── */
+
+.content-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ─── Topbar ─────────────────────────────────────────────────────────────── */
+
+.topbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: 52px;
+    padding: 0 16px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.topbar-cluster {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.topbar .vr { color: var(--panel-border); opacity: 1; }
+
+.topbar-settings {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.topbar-org {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.topbar-usermenu { position: relative; }
+
+.topbar-usermenu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.topbar-usermenu-trigger:hover { background: rgba(255,255,255,0.05); }
+
+.topbar-avatar { font-size: 1.1rem; }
+
+.topbar-username {
+    font-size: 0.82rem;
+    max-width: 160px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.sidebar-footer-logout {
+.topbar-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+}
+
+.topbar-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 1500;
+    display: block;
+    min-width: 200px;
+}
+
+.topbar-dropdown-header { padding: 6px 16px 4px; }
+.topbar-dropdown-name { font-size: 0.85rem; color: var(--text-primary); }
+.topbar-dropdown-role { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; }
+
+/* ─── Dropdown (Bootstrap) ───────────────────────────────────────────────── */
+
+.dropdown-menu {
+    background: var(--panel-bg);
+    border-color: var(--panel-border);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.dropdown-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--panel-border);
-    border-radius: 6px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background .15s, color .15s, border-color .15s;
+    gap: 8px;
+    color: var(--text-primary);
 }
 
-.sidebar-footer-logout:hover {
-    background: rgba(243, 139, 168, 0.12);
-    color: var(--danger);
-    border-color: var(--danger);
+.dropdown-item:hover, .dropdown-item:focus {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-primary);
 }
 
-.sidebar-footer-logout svg {
-    width: 16px;
-    height: 16px;
-}
+.dropdown-item svg { width: 16px; height: 16px; }
+
+.dropdown-divider { border-top-color: var(--panel-border); }
 
 /* ─── Map ────────────────────────────────────────────────────────────────── */
 
@@ -579,8 +692,6 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 }
 
 /* ─── Service Orders ─────────────────────────────────────────────────────── */
-
-.order-nav-link { margin-left: auto; }
 
 .order-new-btn { width: 100%; margin-top: 8px; }
 

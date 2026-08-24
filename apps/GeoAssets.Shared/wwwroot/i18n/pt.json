@@ -5,6 +5,15 @@
   "app.reload": "Recarregar",
 
   "nav.language": "Idioma",
+  "nav.overview": "Visão geral",
+  "nav.management": "Gestão",
+  "nav.assets": "Ativos",
+  "nav.administration": "Administração",
+  "nav.identity": "Identidade",
+  "nav.theme": "Tema",
+  "nav.settings": "Configurações",
+  "nav.comingSoon": "Em breve",
+  "nav.role": "Função",
 
   "import.section": "Importar / Exportar",
   "import.activeCollection": "Coleção: {0}",

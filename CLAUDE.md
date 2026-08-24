@@ -24,6 +24,8 @@
 | Purpose | Path |
 |---|---|
 | Main page | `apps/GeoAssets.Shared/Pages/Index.razor` |
+| Nav menu | `apps/GeoAssets.Shared/Components/Layout/NavMenu.razor` |
+| Top bar | `apps/GeoAssets.Shared/Components/Layout/TopBar.razor` |
 | Map component | `apps/GeoAssets.Shared/Components/Map/MapContainer.razor` |
 | Context menu | `apps/GeoAssets.Shared/Components/Map/MapContextMenu.razor` |
 | Draw toolbar | `apps/GeoAssets.Shared/Components/Map/DrawToolbar.razor` |
