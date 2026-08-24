@@ -11,6 +11,28 @@
     --text-secondary: #6c7086;
 }
 
+/* ─── Bootstrap 5 token bridge (Catppuccin Mocha) ───────────────────────────
+   GeoAssets always runs in the dark palette (data-bs-theme="dark" on <html>).
+   Re-map Bootstrap's --bs-* variables to the tokens above so Bootstrap
+   components render in-brand without per-component overrides. Bootstrap
+   itself sets these under the same [data-bs-theme=dark] selector, so this
+   rule must be loaded after bootstrap.min.css to win the cascade. */
+[data-bs-theme="dark"] {
+    --bs-body-bg: #11111b;
+    --bs-body-color: var(--text-primary);
+    --bs-emphasis-color: var(--text-primary);
+    --bs-primary: var(--accent);
+    --bs-primary-rgb: 137, 180, 250;
+    --bs-secondary-color: var(--text-secondary);
+    --bs-tertiary-bg: var(--panel-bg);
+    --bs-secondary-bg: var(--panel-bg);
+    --bs-border-color: var(--panel-border);
+    --bs-success: var(--success);
+    --bs-danger: var(--danger);
+    --bs-link-color: var(--accent);
+    --bs-link-hover-color: var(--accent);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
@@ -632,6 +654,12 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+.order-main h5 {
+    margin: 0 0 16px;
+    font-size: 1.1rem;
+    color: var(--accent);
 }
 
 .order-detail-header h5 { margin: 0; font-size: 1.1rem; color: var(--accent); }

@@ -80,6 +80,8 @@
 
 Layout: sidebar (340px fixed) + map-area (flex:1). Overlays use `position:absolute` z-1000. Dialogs use `position:fixed` z-2000.
 
+Bootstrap 5.3 (vendored at `apps/GeoAssets.Shared/wwwroot/lib/bootstrap/`, served to both hosts as `_content/GeoAssets.Shared/lib/bootstrap/dist/css/bootstrap.min.css`) is loaded *before* `geoassets.css` in both `index.html` files, with `data-bs-theme="dark"` set on `<html>`. `geoassets.css` re-maps Bootstrap's `--bs-*` custom properties under `[data-bs-theme="dark"]` to the tokens above (`--bs-primary` → `--accent`, `--bs-tertiary-bg`/`--bs-secondary-bg` → `--panel-bg`, `--bs-border-color` → `--panel-border`, `--bs-secondary-color` → `--text-secondary`, `--bs-success`/`--bs-danger` → `--success`/`--danger`) so Bootstrap components render in-brand. Note: Bootstrap's own per-component vars (e.g. `--bs-btn-bg`, `--bs-nav-pills-link-active-bg`) are hardcoded in the stock CSS rather than derived from `--bs-primary`, so components that rely on Bootstrap's primary color (buttons, active nav-pills, dropdowns) still need a small scoped override when they're built — the token bridge only covers the base/reboot layer.
+
 ## Pull Requests
 
 - When an Agent (Claude Code Action or otherwise) opens a PR implementing a Jira ticket, the PR title must be prefixed with that ticket's key, e.g. `XD01-8: Add REST-backed IServiceOrderRepository client`
