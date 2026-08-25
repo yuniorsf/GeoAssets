@@ -31,4 +31,7 @@ public sealed class RoleSyncOptions
     /// token GeoAssets reads the <c>roles</c> claim from depends on <c>Identity:Backend</c>.
     /// </summary>
     public string[] TargetApplicationClientIds { get; set; } = [];
+
+    /// <summary>Exposes the credential portion as a <see cref="GraphCredentialOptions"/> for other Graph-backed providers to reuse (XD01-67).</summary>
+    public GraphCredentialOptions ToCredential() => new(TenantId, ClientId, ClientSecret);
 }

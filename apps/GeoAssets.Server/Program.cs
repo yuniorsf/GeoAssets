@@ -92,6 +92,10 @@ builder.Services.AddGeoAuthorizationPolicyBridge();
 // Graph-backed provider to pass here.
 builder.Services.AddRoleAssignmentProvider(builder.Configuration);
 
+// User invitation provider (XD01-59 Phase 3) — no-op until Invitation:Enabled configures the
+// real, Graph-backed provider (XD01-67), reusing the RoleSync credential above.
+builder.Services.AddUserInvitationProvider(builder.Configuration);
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration

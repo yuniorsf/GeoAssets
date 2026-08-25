@@ -1,4 +1,5 @@
 using GeoAssets.Identity.Authorization.Services;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Server;
 
@@ -15,7 +16,8 @@ namespace GeoAssets.Server;
 /// </summary>
 public static class GeoAssetsRoleAssignmentExtensions
 {
-    private const string GraphHttpClientName = "GeoAssetsGraphRoleSync";
+    /// <summary>Shared named Graph HttpClient — <c>GeoAssetsUserInvitationExtensions</c> (XD01-67) reuses the same name.</summary>
+    internal const string GraphHttpClientName = "GeoAssetsGraphRoleSync";
 
     public static IServiceCollection AddRoleAssignmentProvider(
         this IServiceCollection services,
@@ -36,7 +38,11 @@ public static class GeoAssetsRoleAssignmentExtensions
         }
 
         services.AddSingleton(options);
-        services.AddSingleton<IGraphAccessTokenProvider>(new MsalGraphAccessTokenProvider(options));
+        // TryAdd, not Add: GeoAssetsUserInvitationExtensions.AddUserInvitationProvider (XD01-67)
+        // may have already registered this against the same RoleSync credential — whichever
+        // extension method runs first wins, so only one MSAL confidential-client instance is
+        // ever built regardless of call order.
+        services.TryAddSingleton<IGraphAccessTokenProvider>(new MsalGraphAccessTokenProvider(options.ToCredential()));
         services.AddHttpClient(GraphHttpClientName, c => c.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"));
         services.AddSingleton<IRoleAssignmentProvider>(sp => new EntraGraphRoleAssignmentProvider(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient(GraphHttpClientName),
