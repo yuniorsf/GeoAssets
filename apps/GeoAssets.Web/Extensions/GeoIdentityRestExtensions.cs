@@ -27,6 +27,10 @@ namespace GeoAssets.Web.Extensions;
 /// config; <see cref="IRoleSyncStatusProvider"/> is how the UI tells which). Deliberately not
 /// registered by <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> — the in-memory backend
 /// has no server round-trip, so role sync can never be functional there.
+///
+/// Also registers <see cref="IPendingInvitationRepository"/>/<see cref="IUserClaimRepository"/>
+/// (XD01-70) — <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> registers its own
+/// in-memory implementations of both separately, so these Rest ones are never used there.
 /// </summary>
 public static class GeoIdentityRestExtensions
 {
@@ -49,6 +53,12 @@ public static class GeoIdentityRestExtensions
 
         services.AddScoped<IRoleSyncStatusProvider>(sp =>
             new RestRoleSyncStatusProvider(CreateIdentityClient(sp)));
+
+        services.AddScoped<IPendingInvitationRepository>(sp =>
+            new RestPendingInvitationRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IUserClaimRepository>(sp =>
+            new RestUserClaimRepository(CreateIdentityClient(sp)));
 
         return services;
     }
