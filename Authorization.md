@@ -396,7 +396,7 @@ Authorization Hardening.
 | Ticket | Title | Status |
 |---|---|---|
 | XD01-4 | Dynamic actor / organization-based dispatch routing — authorization rule gap | **Done** |
-| XD01-12 | AuthN: federated JWT validation (Entra External ID) | To Do |
+| XD01-12 | AuthN: validate Azure AD JWT bearer tokens in `GeoAssets.Server` (CIAM) | **Done** |
 | XD01-13 | AuthZ bridge: `IAuthorizationPolicyProvider`/`Handler` over `IGeoAuthorizationService` | To Do |
 | XD01-14 | Wire EF Core identity backend into `GeoAssets.Server` + Postgres | To Do |
 | XD01-15 | Protect REST/WFS/WMS endpoints with permission policies | To Do |
@@ -407,7 +407,7 @@ Authorization Hardening.
 | XD01-20 | Data model: `OrganizationId` on owned resources + `OrganizationGrant` | To Do |
 | XD01-21 | Resource-aware authorization: `AuthorizationHandler` for features/asset-types | To Do |
 | XD01-22 | `ServiceOrderRules`: `CrossOrgGrantRule` for cross-org service order access | To Do |
-| XD01-23 | Federated authentication: Google/Microsoft-personal/org-SSO + `Organization` resolution | To Do |
+| XD01-23 | Federated authentication: Google/Microsoft-personal/org-SSO + `Organization` resolution | **Done** — merged into XD01-19, later split back out as XD01-49, resolved Done-without-implementing (see §9) |
 | XD01-24 | Wire `GeoAssets.Workflow` into `GeoAssets.MAUI` (unrelated gap, surfaced while auditing XD01-5) | To Do |
 
 Statuses as of 2026-08-04 — check Jira for current state before relying on this table.
@@ -416,8 +416,16 @@ Statuses as of 2026-08-04 — check Jira for current state before relying on thi
 
 ## 9. Open questions
 
-- **JIT org resolution for social logins** (§5): no organization assigned by
-  default, or self-service join flow? Blocks finalizing XD01-23.
+- ~~**JIT org resolution for social logins** (§5): no organization assigned by
+  default, or self-service join flow? Blocks finalizing XD01-23.~~ **Resolved
+  2026-08-25 (XD01-49):** moot, not answered — registration in GeoAssets is
+  permanently invitation-only (self-service sign-up is disabled server-side,
+  XD01-65), so there is no social/federated self-registration surface for this
+  question to apply to. `PendingInvitation` carries no org/role field by design
+  (XD01-66); org/role assignment happens post-first-login via the existing
+  admin UI (XD01-63). The narrower, still-real gap this uncovered — the Rest
+  backend never persisted a JIT-provisioned `AppUser` at all — is tracked as
+  XD01-88, independent of federation or org resolution.
 - **`OrganizationGrant` admin UI**: not yet ticketed — flag if wanted before XD01-20
   ships.
 - **BFF/token-handler pattern**: considered as a stronger alternative to §3 (removes

@@ -38,9 +38,15 @@ namespace GeoAssets.Shared.Services;
 /// <see cref="IPendingInvitationRepository"/> optionally: it's never registered under
 /// <c>Identity:Backend=InMemory</c> in a functional sense (parity stub only), and — more
 /// importantly — this whole class is currently registered only under <c>InMemory</c> in the
-/// first place (see below), a pre-existing gap (XD01-12) this ticket does not resolve: the
-/// redirect gate as implemented here cannot fire at all against the Rest/production backend
-/// until that gap closes, since <c>UserProvisioningService</c> itself won't exist there yet.
+/// first place (see below): the redirect gate as implemented here cannot fire at all against
+/// the Rest/production backend, since <c>UserProvisioningService</c> itself won't exist there.
+/// XD01-88 gives that backend its own server-side JIT-provisioning path instead (inside
+/// <c>GeoAuthorizationService.GetAuthorizationContextAsync</c>), which fixes the data-layer bug
+/// (writes no longer reference a phantom, never-persisted user id) but does *not* restore the
+/// redirect UX under Rest — nothing there currently checks for a pending invitation on page
+/// load the way this class's InMemory-only call sites do. A Rest-compatible trigger for that
+/// (e.g. using the already-functional <see cref="IPendingInvitationRepository"/>/
+/// <c>NavigationManager</c> combination outside this class) is a separate, not-yet-filed gap.
 ///
 /// Registered as a singleton (only when <c>Identity:Backend</c> is <c>InMemory</c> — Rest has
 /// no local provisioning step) — lives in <c>GeoAssets.Shared</c> rather than
