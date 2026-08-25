@@ -83,3 +83,16 @@ public sealed record PendingInvitationDto(
 
 /// <summary>Admin write payload to create an invitation.</summary>
 public sealed record InvitationCreateDto(string Email, string DisplayName);
+
+/// <summary>Wire shape for a caller's own <c>UserClaim</c> (XD01-87, self-service).</summary>
+public sealed record UserClaimDto(Guid Id, string Type, string Value);
+
+/// <summary>
+/// Write payload to create a claim for the caller (XD01-87). <c>UserId</c> is deliberately
+/// absent — the server always uses the caller's own id from their auth context, never a
+/// client-supplied one.
+/// </summary>
+public sealed record UserClaimWriteDto(string Type, string Value);
+
+/// <summary>Write payload to update an existing claim's value (XD01-87). <c>Type</c> is immutable once created.</summary>
+public sealed record UserClaimUpdateDto(string Value);

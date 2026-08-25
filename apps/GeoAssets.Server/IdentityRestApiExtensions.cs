@@ -312,7 +312,83 @@ public static class IdentityRestApiExtensions
             return Results.NoContent();
         });
 
+        // ── User Claims (XD01-59 Phase 3, XD01-87) ──────────────────────────────
+
+        // All authenticated-only, self-service — every check is "is this MY claim", derived
+        // from the caller's own AuthorizationContext, never from a client-supplied user id. A
+        // claim that exists but isn't the caller's own is indistinguishable from one that
+        // doesn't exist at all (404, never 403), mirroring invitations/{id}/redeem's ownership
+        // philosophy (XD01-69) so ids can't be probed to learn what belongs to someone else.
+
+        routes.MapGet($"{prefix}/userclaims", async (IUserClaimRepository claimRepo, IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            var claims = await claimRepo.GetByUserIdAsync(ctx.User.Id);
+            return Results.Json(claims.Select(ToDto), _opts);
+        });
+
+        routes.MapGet($"{prefix}/userclaims/{{claimType}}", async (
+            string claimType, IUserClaimRepository claimRepo, IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            var claim = await claimRepo.GetAsync(ctx.User.Id, claimType);
+            return claim is null ? Results.NotFound() : Results.Json(ToDto(claim), _opts);
+        });
+
+        routes.MapPost($"{prefix}/userclaims", async (
+            UserClaimWriteDto dto, IUserClaimRepository claimRepo, IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            var claim = new UserClaim { UserId = ctx.User.Id, Type = dto.Type, Value = dto.Value };
+
+            await claimRepo.AddAsync(claim);
+            await claimRepo.SaveChangesAsync();
+            return Results.Json(ToDto(claim), _opts, statusCode: StatusCodes.Status201Created);
+        });
+
+        routes.MapPut($"{prefix}/userclaims/{{claimId}}", async (
+            Guid claimId, UserClaimUpdateDto dto, IUserClaimRepository claimRepo, IGeoAuthorizationService authService) =>
+        {
+            var claim = await FindOwnClaimAsync(claimRepo, authService, claimId);
+            if (claim is null) return Results.NotFound();
+
+            claim.Value = dto.Value;
+            await claimRepo.UpdateAsync(claim);
+            await claimRepo.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        routes.MapDelete($"{prefix}/userclaims/{{claimId}}", async (
+            Guid claimId, IUserClaimRepository claimRepo, IGeoAuthorizationService authService) =>
+        {
+            var claim = await FindOwnClaimAsync(claimRepo, authService, claimId);
+            if (claim is null) return Results.NotFound();
+
+            await claimRepo.RemoveAsync(claimId);
+            await claimRepo.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        routes.MapDelete($"{prefix}/userclaims", async (IUserClaimRepository claimRepo, IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            await claimRepo.RemoveAllAsync(ctx.User.Id);
+            await claimRepo.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         return routes;
+    }
+
+    // GetByUserIdAsync, not a direct by-id lookup — IUserClaimRepository has no "get claim by its
+    // own id" method, and filtering the caller's own list this way makes an unowned or unknown
+    // claimId equally (and correctly) come back empty, without needing a new repository method.
+    private static async Task<UserClaim?> FindOwnClaimAsync(
+        IUserClaimRepository claimRepo, IGeoAuthorizationService authService, Guid claimId)
+    {
+        var ctx = await authService.GetAuthorizationContextAsync();
+        var claims = await claimRepo.GetByUserIdAsync(ctx.User.Id);
+        return claims.FirstOrDefault(c => c.Id == claimId);
     }
 
     private static UserSummaryDto ToSummaryDto(AppUser u) =>
@@ -326,4 +402,6 @@ public static class IdentityRestApiExtensions
 
     private static PendingInvitationDto ToDto(PendingInvitation i) =>
         new(i.Id, i.Email, i.ExternalObjectId, i.InvitedByUserId, i.InvitedAt, i.RedeemedAt, i.Status);
+
+    private static UserClaimDto ToDto(UserClaim c) => new(c.Id, c.Type, c.Value);
 }

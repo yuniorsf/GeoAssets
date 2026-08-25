@@ -63,6 +63,8 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IPendingInvitationRepository>(new NeverCalledPendingInvitationRepository());
                     services.AddSingleton<IUserInvitationProvider>(new NullUserInvitationProvider());
                     services.AddSingleton<IInvitationEmailSender>(new NullInvitationEmailSender());
+                    // Same reasoning — the XD01-87 userclaims routes are in the same group.
+                    services.AddSingleton<IUserClaimRepository>(new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
                 });
                 webHost.Configure(app =>
                 {
@@ -357,6 +359,50 @@ public class IdentityRestApiExtensionsTests
         public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
+    /// <summary>Drives the XD01-87 userclaims endpoint tests below. Claims are keyed by owning
+    /// UserId — the endpoints under test derive "which user" from the caller's auth context, so
+    /// looking a claim up under the wrong key is exactly how the non-leakage tests prove it.</summary>
+    private sealed class FakeUserClaimRepository(IReadOnlyDictionary<Guid, List<UserClaim>> claimsByUser) : IUserClaimRepository
+    {
+        public UserClaim? Added { get; private set; }
+        public UserClaim? Updated { get; private set; }
+        public Guid? Removed { get; private set; }
+        public Guid? RemovedAllForUserId { get; private set; }
+        public bool SaveChangesCalled { get; private set; }
+
+        public Task<IReadOnlyList<UserClaim>> GetByUserIdAsync(Guid userId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<UserClaim>>(claimsByUser.GetValueOrDefault(userId) ?? []);
+        public Task<UserClaim?> GetAsync(Guid userId, string claimType, CancellationToken ct = default) =>
+            Task.FromResult((claimsByUser.GetValueOrDefault(userId) ?? []).FirstOrDefault(c => c.Type == claimType));
+        public Task AddAsync(UserClaim claim, CancellationToken ct = default)
+        {
+            Added = claim;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(UserClaim claim, CancellationToken ct = default)
+        {
+            Updated = claim;
+            return Task.CompletedTask;
+        }
+        public Task RemoveAsync(Guid claimId, CancellationToken ct = default)
+        {
+            Removed = claimId;
+            return Task.CompletedTask;
+        }
+        public Task RemoveAllAsync(Guid userId, CancellationToken ct = default)
+        {
+            RemovedAllForUserId = userId;
+            return Task.CompletedTask;
+        }
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<UserClaim>> GetByTypeAsync(string claimType, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
     private sealed class FakeUserInvitationProvider : IUserInvitationProvider
     {
         public (string Email, string DisplayName)? CreatedAccount { get; private set; }
@@ -401,7 +447,8 @@ public class IdentityRestApiExtensionsTests
         IGeoAuthorizationService authService, IRoleAssignmentProvider? roleSync = null,
         IPendingInvitationRepository? invitationRepo = null,
         IUserInvitationProvider? invitationProvider = null,
-        IInvitationEmailSender? invitationEmailSender = null)
+        IInvitationEmailSender? invitationEmailSender = null,
+        IUserClaimRepository? claimRepo = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -429,6 +476,7 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IPendingInvitationRepository>(invitationRepo ?? new NeverCalledPendingInvitationRepository());
                     services.AddSingleton<IUserInvitationProvider>(invitationProvider ?? new NullUserInvitationProvider());
                     services.AddSingleton<IInvitationEmailSender>(invitationEmailSender ?? new NullInvitationEmailSender());
+                    services.AddSingleton<IUserClaimRepository>(claimRepo ?? new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
                 });
                 webHost.Configure(app =>
                 {
@@ -1345,5 +1393,213 @@ public class IdentityRestApiExtensionsTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         invitationRepo.Updated.Should().BeNull();
         othersInvitation.Status.Should().Be(InvitationStatus.Pending);
+    }
+
+    // ── User Claims (XD01-59 Phase 3, XD01-87) ──────────────────────────────
+
+    private static UserClaim NewClaim(Guid userId, string type = "zone", string value = "north") => new()
+    {
+        Id     = Guid.NewGuid(),
+        UserId = userId,
+        Type   = type,
+        Value  = value,
+    };
+
+    private static FakeAuthorizationService AuthServiceFor(AppUser caller) =>
+        new(new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+
+    [Fact]
+    public async Task UserClaims_List_ReturnsOnlyTheCallersOwnClaims()
+    {
+        // Non-leakage: another user's claims must never appear in the caller's own list.
+        var caller = NewUser();
+        var ownClaim = NewClaim(caller.Id);
+        var othersClaim = NewClaim(Guid.NewGuid());
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>
+        {
+            [caller.Id]          = [ownClaim],
+            [othersClaim.UserId] = [othersClaim],
+        });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var claims = await client.GetFromJsonAsync<List<UserClaimDto>>("/api/identity/userclaims");
+
+        claims.Should().ContainSingle(c => c.Id == ownClaim.Id);
+    }
+
+    [Fact]
+    public async Task UserClaims_GetByType_Found_ReturnsClaim()
+    {
+        var caller = NewUser();
+        var claim = NewClaim(caller.Id, type: "department", value: "operations");
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [caller.Id] = [claim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<UserClaimDto>("/api/identity/userclaims/department");
+
+        dto.Should().NotBeNull();
+        dto!.Value.Should().Be("operations");
+    }
+
+    [Fact]
+    public async Task UserClaims_GetByType_NotFound_Returns404()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/userclaims/department");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserClaims_Create_AddsForTheCallerAndReturns201()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/identity/userclaims", new UserClaimWriteDto("phone", "+1-555-0100"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        claimRepo.Added.Should().NotBeNull();
+        claimRepo.Added!.UserId.Should().Be(caller.Id);
+        claimRepo.Added.Type.Should().Be("phone");
+        claimRepo.Added.Value.Should().Be("+1-555-0100");
+        claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UserClaims_Update_OwnClaim_UpdatesValueAndReturns204()
+    {
+        var caller = NewUser();
+        var claim = NewClaim(caller.Id, value: "old-value");
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [caller.Id] = [claim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/userclaims/{claim.Id}", new UserClaimUpdateDto("new-value"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        claimRepo.Updated.Should().NotBeNull();
+        claimRepo.Updated!.Value.Should().Be("new-value");
+        claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UserClaims_Update_UnknownClaimId_Returns404()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/userclaims/{Guid.NewGuid()}", new UserClaimUpdateDto("value"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserClaims_Update_SomeoneElsesClaim_Returns404AndDoesNotUpdate()
+    {
+        // Non-leakage: the caller must never update another user's claim by supplying its real id.
+        var caller = NewUser();
+        var othersClaim = NewClaim(Guid.NewGuid(), value: "untouched");
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [othersClaim.UserId] = [othersClaim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/userclaims/{othersClaim.Id}", new UserClaimUpdateDto("hacked"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        claimRepo.Updated.Should().BeNull();
+        othersClaim.Value.Should().Be("untouched");
+    }
+
+    [Fact]
+    public async Task UserClaims_Delete_OwnClaim_RemovesAndReturns204()
+    {
+        var caller = NewUser();
+        var claim = NewClaim(caller.Id);
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [caller.Id] = [claim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/identity/userclaims/{claim.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        claimRepo.Removed.Should().Be(claim.Id);
+        claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UserClaims_Delete_UnknownClaimId_Returns404()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/identity/userclaims/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserClaims_Delete_SomeoneElsesClaim_Returns404AndDoesNotRemove()
+    {
+        // Non-leakage: the caller must never delete another user's claim by supplying its real id.
+        var caller = NewUser();
+        var othersClaim = NewClaim(Guid.NewGuid());
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [othersClaim.UserId] = [othersClaim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/identity/userclaims/{othersClaim.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        claimRepo.Removed.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UserClaims_DeleteAll_RemovesAllForTheCallerAndReturns204()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync("/api/identity/userclaims");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        claimRepo.RemovedAllForUserId.Should().Be(caller.Id);
+        claimRepo.SaveChangesCalled.Should().BeTrue();
     }
 }
