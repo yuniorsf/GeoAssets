@@ -222,6 +222,96 @@ public static class IdentityRestApiExtensions
                 return Results.Json(names, _opts);
             }).RequireAuthorization("users:read");
 
+        // ── Invitations (XD01-59 Phase 3, XD01-69) ──────────────────────────────
+
+        // Authenticated-only, like rolesync/status — whether invitations are on isn't sensitive,
+        // and the admin page that asks already gates its own visibility on users:read.
+        routes.MapGet($"{prefix}/invitations/status",
+            (IUserInvitationProvider invitationProvider, IInvitationEmailSender invitationEmailSender) =>
+                Results.Json(new InvitationStatusDto(
+                    invitationProvider is not NullUserInvitationProvider &&
+                    invitationEmailSender is not NullInvitationEmailSender), _opts));
+
+        routes.MapGet($"{prefix}/invitations", async (IPendingInvitationRepository invitationRepo) =>
+        {
+            var invitations = await invitationRepo.GetAllPendingAsync();
+            return Results.Json(invitations.Select(ToDto), _opts);
+        }).RequireAuthorization("users:read");
+
+        routes.MapPost($"{prefix}/invitations", async (
+            InvitationCreateDto dto,
+            IUserInvitationProvider invitationProvider,
+            IInvitationEmailSender invitationEmailSender,
+            IPendingInvitationRepository invitationRepo,
+            IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            var externalObjectId = await invitationProvider.CreateInvitedAccountAsync(dto.Email, dto.DisplayName);
+
+            var invitation = new PendingInvitation
+            {
+                Email            = dto.Email,
+                ExternalObjectId = externalObjectId,
+                InvitedByUserId  = ctx.User.Id,
+                InvitedAt        = DateTime.UtcNow,
+                Status           = InvitationStatus.Pending,
+            };
+            await invitationRepo.AddAsync(invitation);
+            await invitationRepo.SaveChangesAsync();
+
+            // The account and PendingInvitation row above must not be rolled back if the email
+            // fails to send — an admin can still see the invitation in the pending list and
+            // resend/handle it manually. Surface the partial failure with a distinct status
+            // (202, not 201) rather than either losing that the email never went out or failing
+            // the whole request and orphaning an already-created provider account.
+            try
+            {
+                await invitationEmailSender.SendInvitationAsync(dto.Email, dto.DisplayName);
+            }
+            catch
+            {
+                return Results.Json(ToDto(invitation), _opts, statusCode: StatusCodes.Status202Accepted);
+            }
+
+            return Results.Json(ToDto(invitation), _opts, statusCode: StatusCodes.Status201Created);
+        }).RequireAuthorization("users:edit");
+
+        routes.MapDelete($"{prefix}/invitations/{{id}}", async (
+            Guid id, IPendingInvitationRepository invitationRepo, IUserInvitationProvider invitationProvider) =>
+        {
+            var invitation = await invitationRepo.GetByIdAsync(id);
+            if (invitation is null) return Results.NotFound();
+
+            await invitationProvider.RevokeInvitedAccountAsync(invitation.ExternalObjectId);
+
+            invitation.Status = InvitationStatus.Revoked;
+            await invitationRepo.UpdateAsync(invitation);
+            await invitationRepo.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization("users:edit");
+
+        // Authenticated-only — any signed-in user may redeem their own pending invitation.
+        // Ownership is proven by matching the caller's own ExternalObjectId (resolved server-side
+        // from their auth context) against the invitation's, never by trusting a client-supplied
+        // user id. A non-owner (or unknown id) gets 404 either way, so probing ids can't be used
+        // to learn whether a given invitation exists.
+        routes.MapPost($"{prefix}/invitations/{{id}}/redeem", async (
+            Guid id, IPendingInvitationRepository invitationRepo, IGeoAuthorizationService authService) =>
+        {
+            var invitation = await invitationRepo.GetByIdAsync(id);
+            if (invitation is null) return Results.NotFound();
+
+            var ctx = await authService.GetAuthorizationContextAsync();
+            if (invitation.ExternalObjectId != ctx.User.ExternalObjectId)
+                return Results.NotFound();
+
+            invitation.Status     = InvitationStatus.Redeemed;
+            invitation.RedeemedAt = DateTime.UtcNow;
+            await invitationRepo.UpdateAsync(invitation);
+            await invitationRepo.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         return routes;
     }
 
@@ -233,4 +323,7 @@ public static class IdentityRestApiExtensions
 
     private static PermissionDto ToDto(AppPermission p) =>
         new(p.Id, p.Code, p.Resource, p.Action, p.Description);
+
+    private static PendingInvitationDto ToDto(PendingInvitation i) =>
+        new(i.Id, i.Email, i.ExternalObjectId, i.InvitedByUserId, i.InvitedAt, i.RedeemedAt, i.Status);
 }

@@ -1,3 +1,5 @@
+using GeoAssets.Identity.Authorization.Models;
+
 namespace GeoAssets.Identity.Authorization.Services;
 
 /// <summary>
@@ -65,3 +67,19 @@ public sealed record PermissionDto(
 
 /// <summary>Wire shape for <c>GET /api/identity/rolesync/status</c> (XD01-63).</summary>
 public sealed record RoleSyncStatusDto(bool Enabled);
+
+/// <summary>Wire shape for <c>GET /api/identity/invitations/status</c> (XD01-69).</summary>
+public sealed record InvitationStatusDto(bool Enabled);
+
+/// <summary>Wire shape for a <c>PendingInvitation</c> row (XD01-69).</summary>
+public sealed record PendingInvitationDto(
+    Guid             Id,
+    string           Email,
+    string           ExternalObjectId,
+    Guid             InvitedByUserId,
+    DateTime         InvitedAt,
+    DateTime?        RedeemedAt,
+    InvitationStatus Status);
+
+/// <summary>Admin write payload to create an invitation.</summary>
+public sealed record InvitationCreateDto(string Email, string DisplayName);
