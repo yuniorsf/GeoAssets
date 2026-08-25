@@ -41,6 +41,7 @@ public static class GeoIdentityWasmExtensions
         services.AddScoped<IPermissionRepository,   InMemoryPermissionRepository>();
         services.AddScoped<IUserClaimRepository,    InMemoryUserClaimRepository>();
         services.AddScoped<IPolicyRepository,       InMemoryPolicyRepository>();
+        services.AddScoped<IPendingInvitationRepository, InMemoryPendingInvitationRepository>();
 
         // Authorization service
         services.AddScoped<IGeoAuthorizationService, GeoAuthorizationService>();
