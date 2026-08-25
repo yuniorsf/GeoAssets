@@ -1,6 +1,7 @@
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,19 @@ namespace GeoAssets.Shared.Services;
 /// provisioned user with no external role assignment gets a safe empty <c>Roles</c> list —
 /// see <see cref="GeoAssets.Identity.Authorization.Services.AuthorizationContext"/>.
 ///
+/// Redirect gate (XD01-59 Phase 3, XD01-71): after provisioning, checks for a <c>Pending</c>
+/// <see cref="PendingInvitation"/> matching the now-known <c>ExternalObjectId</c> and, if one
+/// exists, redirects to <c>/complete-profile</c> before the calling page renders. Runs on
+/// *every* call, not just first-time provisioning, so it keeps firing on each page load until
+/// the invitation is redeemed (see <c>CompleteProfile.razor</c>, XD01-71) or revoked — a
+/// half-finished profile shouldn't let someone into the rest of the app. Resolves
+/// <see cref="IPendingInvitationRepository"/> optionally: it's never registered under
+/// <c>Identity:Backend=InMemory</c> in a functional sense (parity stub only), and — more
+/// importantly — this whole class is currently registered only under <c>InMemory</c> in the
+/// first place (see below), a pre-existing gap (XD01-12) this ticket does not resolve: the
+/// redirect gate as implemented here cannot fire at all against the Rest/production backend
+/// until that gap closes, since <c>UserProvisioningService</c> itself won't exist there yet.
+///
 /// Registered as a singleton (only when <c>Identity:Backend</c> is <c>InMemory</c> — Rest has
 /// no local provisioning step) — lives in <c>GeoAssets.Shared</c> rather than
 /// <c>GeoAssets.Web</c> (despite the WASM-only registration) so routed pages in this project
@@ -40,18 +54,23 @@ namespace GeoAssets.Shared.Services;
 /// </summary>
 public sealed class UserProvisioningService : IAsyncDisposable
 {
+    private const string CompleteProfilePath = "/complete-profile";
+
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly IServiceScopeFactory        _scopeFactory;
     private readonly TimeProvider                _timeProvider;
+    private readonly NavigationManager           _navigation;
 
     public UserProvisioningService(
         AuthenticationStateProvider authStateProvider,
         IServiceScopeFactory        scopeFactory,
-        TimeProvider                timeProvider)
+        TimeProvider                timeProvider,
+        NavigationManager           navigation)
     {
         _authStateProvider = authStateProvider;
         _scopeFactory      = scopeFactory;
         _timeProvider      = timeProvider;
+        _navigation        = navigation;
         _authStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
     }
 
@@ -89,22 +108,45 @@ public sealed class UserProvisioningService : IAsyncDisposable
         if (current is null || string.IsNullOrEmpty(current.ExternalObjectId)) return;
 
         var existing = await userRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
-        if (existing is not null) return; // already provisioned
-
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var newUser = new AppUser
+        if (existing is null)
         {
-            ExternalObjectId = current.ExternalObjectId,
-            Email            = current.Email,
-            DisplayName      = current.DisplayName,
-            CreatedAt        = now,
-            LastLoginAt      = now,
-        };
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var newUser = new AppUser
+            {
+                ExternalObjectId = current.ExternalObjectId,
+                Email            = current.Email,
+                DisplayName      = current.DisplayName,
+                CreatedAt        = now,
+                LastLoginAt      = now,
+            };
 
-        await userRepo.AddAsync(newUser);
-        await userRepo.SaveChangesAsync();
+            await userRepo.AddAsync(newUser);
+            await userRepo.SaveChangesAsync();
 
-        Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.ExternalObjectId})");
+            Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.ExternalObjectId})");
+        }
+
+        // Runs regardless of whether this call just provisioned the user or found them already
+        // provisioned — a pending invitation can exist (and matter) on any visit, not only the
+        // very first one.
+        await RedirectToCompleteProfileIfPendingAsync(scope.ServiceProvider, current.ExternalObjectId);
+    }
+
+    private async Task RedirectToCompleteProfileIfPendingAsync(IServiceProvider services, string externalObjectId)
+    {
+        // Optionally resolved — see the class doc comment: not functionally reachable under
+        // InMemory, and this must not break JIT provisioning itself when it's absent.
+        var invitationRepo = services.GetService<IPendingInvitationRepository>();
+        if (invitationRepo is null) return;
+
+        // Don't redirect to the page we might already be on — also guards against a redirect
+        // loop if CompleteProfile.razor itself ever calls EnsureProvisionedAsync.
+        if (_navigation.Uri.EndsWith(CompleteProfilePath, StringComparison.OrdinalIgnoreCase)) return;
+
+        var invitation = await invitationRepo.GetByExternalObjectIdAsync(externalObjectId);
+        if (invitation is null || invitation.Status != InvitationStatus.Pending) return;
+
+        _navigation.NavigateTo(CompleteProfilePath);
     }
 
     public ValueTask DisposeAsync()

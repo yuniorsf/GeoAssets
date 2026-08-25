@@ -31,6 +31,12 @@ namespace GeoAssets.Web.Extensions;
 /// Also registers <see cref="IPendingInvitationRepository"/>/<see cref="IUserClaimRepository"/>
 /// (XD01-70) — <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> registers its own
 /// in-memory implementations of both separately, so these Rest ones are never used there.
+///
+/// Also registers <see cref="IInvitationStatusProvider"/>/<see cref="IInvitationClient"/>
+/// (XD01-71) — the create/revoke/redeem business operations and the "is this really
+/// Graph/ACS-backed" status check that sit alongside <see cref="IPendingInvitationRepository"/>'s
+/// plain CRUD. Same reasoning as role sync: never registered under
+/// <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c>.
 /// </summary>
 public static class GeoIdentityRestExtensions
 {
@@ -59,6 +65,12 @@ public static class GeoIdentityRestExtensions
 
         services.AddScoped<IUserClaimRepository>(sp =>
             new RestUserClaimRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IInvitationStatusProvider>(sp =>
+            new RestInvitationStatusProvider(CreateIdentityClient(sp)));
+
+        services.AddScoped<IInvitationClient>(sp =>
+            new RestInvitationClient(CreateIdentityClient(sp)));
 
         return services;
     }
