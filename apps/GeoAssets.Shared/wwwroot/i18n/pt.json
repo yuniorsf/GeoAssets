@@ -176,5 +176,24 @@
 
   "admin.permissions.title": "Permissões",
   "admin.permissions.empty": "Nenhuma permissão encontrada.",
-  "admin.permissions.hint": "As permissões são somente leitura — atribua-as a uma função na página Funções."
+  "admin.permissions.hint": "As permissões são somente leitura — atribua-as a uma função na página Funções.",
+
+  "admin.invitations.title": "Convites",
+  "admin.invitations.empty": "Nenhum convite pendente.",
+  "admin.invitations.inviteTitle": "Convidar usuário",
+  "admin.invitations.invite": "Convidar",
+  "admin.invitations.inviting": "Convidando…",
+  "admin.invitations.inviteError": "Não foi possível enviar este convite. Tente novamente em instantes.",
+  "admin.invitations.email": "E-mail",
+  "admin.invitations.displayName": "Nome de exibição",
+  "admin.invitations.revoke": "Revogar",
+  "admin.invitations.revokeTitle": "Revogar convite",
+  "admin.invitations.revokeConfirm": "Revogar o convite de «{0}»? A pessoa não poderá mais concluir o cadastro.",
+
+  "admin.completeProfile.title": "Complete seu perfil",
+  "admin.completeProfile.intro": "Só mais alguns detalhes antes de começar.",
+  "admin.completeProfile.phone": "Número de telefone",
+  "admin.completeProfile.continueButton": "Continuar",
+  "admin.completeProfile.saving": "Salvando…",
+  "admin.completeProfile.saveError": "Não foi possível salvar seu perfil. Tente novamente em instantes."
 }

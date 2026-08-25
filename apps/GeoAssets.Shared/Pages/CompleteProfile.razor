@@ -1,0 +1,129 @@
+@page "/complete-profile"
+@attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using System.ComponentModel.DataAnnotations
+@using GeoAssets.Identity.Authentication
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Repositories
+@using GeoAssets.Identity.Authorization.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.DependencyInjection
+@inject ICurrentUserAccessor CurrentUserAccessor
+@inject IUserRepository UserRepo
+@inject IUserClaimRepository ClaimRepository
+@inject IServiceProvider ServiceProvider
+@inject NavigationManager Navigation
+
+<div class="geoassets-app">
+    <main class="order-main">
+        @if (_loading)
+        {
+            <div class="empty-state">@L["app.loading"]</div>
+        }
+        else
+        {
+            <h1>@L["admin.completeProfile.title"]</h1>
+            <p>@L["admin.completeProfile.intro"]</p>
+
+            <EditForm Model="@_editModel" OnValidSubmit="HandleSaveAsync">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>@L["admin.completeProfile.phone"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.Phone" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors">@_error</p>
+                }
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit" disabled="@_saving">
+                        @(_saving ? L["admin.completeProfile.saving"] : L["admin.completeProfile.continueButton"])
+                    </button>
+                </div>
+            </EditForm>
+        }
+    </main>
+</div>
+
+@code {
+    // Matches the ticket's own example — the only field this phase collects (deferred to
+    // implementation, not architecture, per the ticket's scope notes).
+    private const string PhoneClaimType = "phone";
+
+    private sealed class ProfileEditModel
+    {
+        public string Phone { get; set; } = string.Empty;
+    }
+
+    private ProfileEditModel _editModel = new();
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private AppUser? _appUser;
+    private PendingInvitation? _pendingInvitation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentUserAccessor.GetCurrentUserAsync();
+        if (current is null || string.IsNullOrEmpty(current.ExternalObjectId))
+        {
+            _loading = false;
+            return;
+        }
+
+        // The redirect gate (UserProvisioningService) only ever sends someone here after
+        // provisioning them, so this should always find a row — but a user reaching this page
+        // by typing the URL directly, without going through the gate, is handled gracefully:
+        // HandleSaveAsync below simply no-ops the claim write if _appUser is still null.
+        _appUser = await UserRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
+
+        // Optionally resolved — never registered under Identity:Backend=InMemory (XD01-70/-71).
+        var invitationRepo = ServiceProvider.GetService<IPendingInvitationRepository>();
+        _pendingInvitation = invitationRepo is null
+            ? null
+            : await invitationRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
+
+        _loading = false;
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            if (_appUser is not null && !string.IsNullOrWhiteSpace(_editModel.Phone))
+            {
+                await ClaimRepository.AddAsync(new UserClaim
+                {
+                    UserId = _appUser.Id,
+                    Type   = PhoneClaimType,
+                    Value  = _editModel.Phone,
+                });
+                await ClaimRepository.SaveChangesAsync();
+            }
+
+            if (_pendingInvitation is not null)
+            {
+                var invitationClient = ServiceProvider.GetService<IInvitationClient>();
+                if (invitationClient is not null)
+                    await invitationClient.RedeemInvitationAsync(_pendingInvitation.Id);
+            }
+
+            Navigation.NavigateTo("/");
+        }
+        catch (Exception)
+        {
+            _error = L["admin.completeProfile.saveError"];
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

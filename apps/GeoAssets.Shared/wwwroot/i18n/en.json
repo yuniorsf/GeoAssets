@@ -176,5 +176,24 @@
 
   "admin.permissions.title": "Permissions",
   "admin.permissions.empty": "No permissions found.",
-  "admin.permissions.hint": "Permissions are read-only — assign them to a role from the Roles page."
+  "admin.permissions.hint": "Permissions are read-only — assign them to a role from the Roles page.",
+
+  "admin.invitations.title": "Invitations",
+  "admin.invitations.empty": "No pending invitations.",
+  "admin.invitations.inviteTitle": "Invite user",
+  "admin.invitations.invite": "Invite",
+  "admin.invitations.inviting": "Inviting…",
+  "admin.invitations.inviteError": "Couldn't send this invitation. Try again shortly.",
+  "admin.invitations.email": "Email",
+  "admin.invitations.displayName": "Display name",
+  "admin.invitations.revoke": "Revoke",
+  "admin.invitations.revokeTitle": "Revoke invitation",
+  "admin.invitations.revokeConfirm": "Revoke the invitation for «{0}»? They will no longer be able to complete registration.",
+
+  "admin.completeProfile.title": "Complete your profile",
+  "admin.completeProfile.intro": "Just a couple more details before you get started.",
+  "admin.completeProfile.phone": "Phone number",
+  "admin.completeProfile.continueButton": "Continue",
+  "admin.completeProfile.saving": "Saving…",
+  "admin.completeProfile.saveError": "Couldn't save your profile. Try again shortly."
 }

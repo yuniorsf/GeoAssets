@@ -1,0 +1,95 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using System.ComponentModel.DataAnnotations
+@using GeoAssets.Identity.Authorization.Services
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+
+@if (Visible)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box" @onclick:stopPropagation="true">
+            <h6>@L["admin.invitations.inviteTitle"]</h6>
+
+            <EditForm Model="@_editModel" OnValidSubmit="HandleInviteAsync">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>@L["admin.invitations.email"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.Email" />
+                </div>
+
+                <div class="form-group">
+                    <label>@L["admin.invitations.displayName"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.DisplayName" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors">@_error</p>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel" disabled="@_inviting">@L["assets.cancel"]</button>
+                    <button class="btn btn-primary btn-sm" type="submit" disabled="@_inviting">
+                        @(_inviting ? L["admin.invitations.inviting"] : L["admin.invitations.invite"])
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback OnInvited { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private sealed class InviteEditModel
+    {
+        [Required, EmailAddress] public string Email { get; set; } = string.Empty;
+        [Required] public string DisplayName { get; set; } = string.Empty;
+    }
+
+    private InviteEditModel _editModel = new();
+    private bool _inviting;
+    private string? _error;
+
+    protected override void OnParametersSet()
+    {
+        // Reset whenever the dialog is (re)opened, so a previous attempt's input/error doesn't
+        // linger the next time it's shown.
+        if (Visible)
+        {
+            _editModel = new InviteEditModel();
+            _error = null;
+        }
+    }
+
+    private async Task HandleInviteAsync()
+    {
+        var client = ServiceProvider.GetService<IInvitationClient>();
+        if (client is null) return;
+
+        _inviting = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            await client.CreateInvitationAsync(_editModel.Email, _editModel.DisplayName);
+            await OnInvited.InvokeAsync();
+        }
+        catch (Exception)
+        {
+            // The Graph/ACS credential or network is genuinely allowed to fail here — surface
+            // it without closing the dialog, matching RoleForm's RegisterInEntraAsync precedent.
+            _error = L["admin.invitations.inviteError"];
+        }
+        finally
+        {
+            _inviting = false;
+        }
+    }
+
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+}

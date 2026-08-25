@@ -20,6 +20,7 @@
         @if (_authorized == true)
         {
             <UserList @ref="_list" SelectedUserId="@_selected?.Id" OnUserSelected="OnUserSelected" />
+            <InvitationsPanel />
         }
     </aside>
 
