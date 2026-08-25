@@ -11,7 +11,16 @@ public sealed class InvitationOptions
 {
     /// <summary>
     /// Master switch. When false (the default), <see cref="GeoAssetsUserInvitationExtensions.AddUserInvitationProvider"/>
-    /// registers <see cref="GeoAssets.Identity.Authorization.Services.NullUserInvitationProvider"/> instead.
+    /// and <see cref="GeoAssetsInvitationEmailExtensions.AddInvitationEmailSender"/> register
+    /// <see cref="GeoAssets.Identity.Authorization.Services.NullUserInvitationProvider"/> and
+    /// <see cref="GeoAssets.Identity.Authorization.Services.NullInvitationEmailSender"/> instead.
     /// </summary>
     public bool Enabled { get; set; }
+
+    /// <summary>
+    /// The app's normal sign-in page URL, linked from the invitation email (XD01-68). The
+    /// invitee clicks "Forgot password?" there to set their password via Entra's own
+    /// Email-OTP SSPR flow — no bespoke invitation token/link is needed.
+    /// </summary>
+    public string PublicWebAppUrl { get; set; } = string.Empty;
 }

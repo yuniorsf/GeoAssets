@@ -96,6 +96,10 @@ builder.Services.AddRoleAssignmentProvider(builder.Configuration);
 // real, Graph-backed provider (XD01-67), reusing the RoleSync credential above.
 builder.Services.AddUserInvitationProvider(builder.Configuration);
 
+// Invitation email sender (XD01-59 Phase 3) — no-op until Invitation:Enabled configures the
+// real, ACS-backed sender (XD01-68).
+builder.Services.AddInvitationEmailSender(builder.Configuration);
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration
