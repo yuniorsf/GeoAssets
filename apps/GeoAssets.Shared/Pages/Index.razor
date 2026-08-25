@@ -38,30 +38,27 @@
             <h1>GeoAssets</h1>
         </div>
 
-        <NavMenu ShowAdmin="@_showAdminNavLink"
-                 ShowProviders="@_showProviders"
-                 ShowLayers="@_showLayers"
-                 ShowAssetList="@_showAssetList"
-                 OnToggleProviders="ToggleProviders"
-                 OnToggleLayers="ToggleLayers"
-                 OnToggleAssetList="ToggleAssetList" />
-
-        @if (_showProviders)
-        {
-            <ProviderPoolPanel @ref="_providerPoolPanel" MapDivId="@_mapDivId" />
-        }
-
-        @if (_showLayers)
-        {
-            <LayerManager MapDivId="@_mapDivId" />
-        }
-
-        @if (_showAssetList)
-        {
-            <AssetList SelectedFeatureId="@_selectedFeature?.Id"
-                       OnFeatureSelected="OnFeatureSelected"
-                       OnFeatureDeleted="OnFeatureDeletedFromList" />
-        }
+        <div class="sidebar-scrollable">
+            <NavMenu ShowAdmin="@_showAdminNavLink"
+                     ShowProviders="@_showProviders"
+                     ShowLayers="@_showLayers"
+                     ShowAssetList="@_showAssetList"
+                     OnToggleProviders="ToggleProviders"
+                     OnToggleLayers="ToggleLayers"
+                     OnToggleAssetList="ToggleAssetList">
+                <ProvidersPanel>
+                    <ProviderPoolPanel @ref="_providerPoolPanel" MapDivId="@_mapDivId" />
+                </ProvidersPanel>
+                <LayersPanel>
+                    <LayerManager MapDivId="@_mapDivId" />
+                </LayersPanel>
+                <AssetListPanel>
+                    <AssetList SelectedFeatureId="@_selectedFeature?.Id"
+                               OnFeatureSelected="OnFeatureSelected"
+                               OnFeatureDeleted="OnFeatureDeletedFromList" />
+                </AssetListPanel>
+            </NavMenu>
+        </div>
     </aside>
 
     <!-- Content column: topbar + map area -->
@@ -141,9 +138,12 @@
     private IReadOnlyList<string> _userRoles = [];
     private bool _showAdminNavLink;
 
-    private bool _showProviders  = true;
-    private bool _showLayers     = true;
-    private bool _showAssetList  = true;
+    private enum SidebarPanel { None, Providers, Layers, AssetList }
+    private SidebarPanel _activePanel = SidebarPanel.AssetList;
+
+    private bool _showProviders => _activePanel == SidebarPanel.Providers;
+    private bool _showLayers    => _activePanel == SidebarPanel.Layers;
+    private bool _showAssetList => _activePanel == SidebarPanel.AssetList;
 
     // ─── Context menu state ────────────────────────────────────────────────
 
@@ -232,9 +232,15 @@
 
     // ─── Nav panel toggles ────────────────────────────────────────────────
 
-    private void ToggleProviders()  { _showProviders  = !_showProviders;  StateHasChanged(); }
-    private void ToggleLayers()     { _showLayers     = !_showLayers;     StateHasChanged(); }
-    private void ToggleAssetList()  { _showAssetList  = !_showAssetList;  StateHasChanged(); }
+    private void ToggleProviders() => SetActivePanel(SidebarPanel.Providers);
+    private void ToggleLayers()    => SetActivePanel(SidebarPanel.Layers);
+    private void ToggleAssetList() => SetActivePanel(SidebarPanel.AssetList);
+
+    private void SetActivePanel(SidebarPanel panel)
+    {
+        _activePanel = _activePanel == panel ? SidebarPanel.None : panel;
+        StateHasChanged();
+    }
 
     // ─── Boot ─────────────────────────────────────────────────────────────
 

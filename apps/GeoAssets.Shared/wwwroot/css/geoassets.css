@@ -158,6 +158,8 @@ html, body {
 
 .geo-nav-sublink { font-size: 0.8rem; }
 
+.geo-nav-panel { margin: 4px 0 8px; }
+
 /* ─── Content Column (topbar + map area) ────────────────────────────────── */
 
 .content-column {

@@ -22,11 +22,19 @@
                     @onclick="OnToggleLayers">
                 @L["map.layers"]
             </button>
+            @if (ShowLayers)
+            {
+                <div class="geo-nav-panel">@LayersPanel</div>
+            }
             <button type="button"
                     class="nav-link geo-nav-sublink @(ShowAssetList ? "active" : "")"
                     @onclick="OnToggleAssetList">
                 @L["assets.title"]
             </button>
+            @if (ShowAssetList)
+            {
+                <div class="geo-nav-panel">@AssetListPanel</div>
+            }
         </div>
     }
 
@@ -39,6 +47,10 @@
             @onclick="OnToggleProviders">
         <span class="geo-nav-icon">🔌</span> @L["pool.title"]
     </button>
+    @if (ShowProviders)
+    {
+        <div class="geo-nav-panel">@ProvidersPanel</div>
+    }
 
     @if (ShowAdmin)
     {
@@ -69,6 +81,10 @@
     [Parameter] public EventCallback OnToggleProviders { get; set; }
     [Parameter] public EventCallback OnToggleLayers { get; set; }
     [Parameter] public EventCallback OnToggleAssetList { get; set; }
+
+    [Parameter] public RenderFragment? ProvidersPanel { get; set; }
+    [Parameter] public RenderFragment? LayersPanel { get; set; }
+    [Parameter] public RenderFragment? AssetListPanel { get; set; }
 
     private bool _assetsExpanded;
     private bool _identityExpanded;
