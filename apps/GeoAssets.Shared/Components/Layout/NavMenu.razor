@@ -10,32 +10,24 @@
 
     <div class="geo-nav-section-label">@L["nav.management"]</div>
 
-    <button type="button" class="nav-link geo-nav-toggle" @onclick="ToggleAssetsGroup">
-        <span class="geo-nav-icon">📦</span> @L["nav.assets"]
-        <span class="geo-nav-chevron">@(_assetsExpanded ? "▾" : "▸")</span>
+    <button type="button"
+            class="nav-link geo-nav-toggle @(ShowLayers ? "active" : "")"
+            @onclick="OnToggleLayers">
+        <span class="geo-nav-icon">🧱</span> @L["map.layers"]
     </button>
-    @if (_assetsExpanded)
+    @if (ShowLayers)
     {
-        <div class="geo-nav-subitems">
-            <button type="button"
-                    class="nav-link geo-nav-sublink @(ShowLayers ? "active" : "")"
-                    @onclick="OnToggleLayers">
-                @L["map.layers"]
-            </button>
-            @if (ShowLayers)
-            {
-                <div class="geo-nav-panel">@LayersPanel</div>
-            }
-            <button type="button"
-                    class="nav-link geo-nav-sublink @(ShowAssetList ? "active" : "")"
-                    @onclick="OnToggleAssetList">
-                @L["assets.title"]
-            </button>
-            @if (ShowAssetList)
-            {
-                <div class="geo-nav-panel">@AssetListPanel</div>
-            }
-        </div>
+        <div class="geo-nav-panel">@LayersPanel</div>
+    }
+
+    <button type="button"
+            class="nav-link geo-nav-toggle @(ShowAssetList ? "active" : "")"
+            @onclick="OnToggleAssetList">
+        <span class="geo-nav-icon">📦</span> @L["assets.title"]
+    </button>
+    @if (ShowAssetList)
+    {
+        <div class="geo-nav-panel">@AssetListPanel</div>
     }
 
     <NavLink class="nav-link" href="service-orders">
@@ -86,24 +78,17 @@
     [Parameter] public RenderFragment? LayersPanel { get; set; }
     [Parameter] public RenderFragment? AssetListPanel { get; set; }
 
-    private bool _assetsExpanded;
     private bool _identityExpanded;
 
     protected override void OnInitialized()
     {
         base.OnInitialized();
         _identityExpanded = ShouldExpandIdentityGroup(Nav.ToBaseRelativePath(Nav.Uri));
-        _assetsExpanded   = ShouldExpandAssetsGroup(ShowLayers, ShowAssetList);
     }
 
-    private void ToggleAssetsGroup()   => _assetsExpanded   = !_assetsExpanded;
     private void ToggleIdentityGroup() => _identityExpanded = !_identityExpanded;
 
     /// <summary>Identity is expanded by default when the active route is one of its own sub-items.</summary>
     public static bool ShouldExpandIdentityGroup(string relativePath) =>
         relativePath.TrimStart('/').StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Assets is expanded by default when either of its panels is currently shown.</summary>
-    public static bool ShouldExpandAssetsGroup(bool showLayers, bool showAssetList) =>
-        showLayers || showAssetList;
 }

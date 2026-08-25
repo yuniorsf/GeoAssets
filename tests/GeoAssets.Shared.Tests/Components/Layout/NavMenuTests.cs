@@ -18,12 +18,4 @@ public class NavMenuTests
     [InlineData("administration", false)]
     public void ShouldExpandIdentityGroup_MatchesOnlyAdminSubRoutes(string relativePath, bool expected) =>
         NavMenu.ShouldExpandIdentityGroup(relativePath).Should().Be(expected);
-
-    [Theory]
-    [InlineData(true, true, true)]
-    [InlineData(true, false, true)]
-    [InlineData(false, true, true)]
-    [InlineData(false, false, false)]
-    public void ShouldExpandAssetsGroup_ExpandsWhenEitherPanelIsShown(bool showLayers, bool showAssetList, bool expected) =>
-        NavMenu.ShouldExpandAssetsGroup(showLayers, showAssetList).Should().Be(expected);
 }
