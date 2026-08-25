@@ -1,0 +1,94 @@
+@namespace GeoAssets.Shared.Components.Layout
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject NavigationManager Nav
+
+<nav class="nav nav-pills flex-column geo-nav">
+
+    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+        <span class="geo-nav-icon">🗺️</span> @L["nav.overview"]
+    </NavLink>
+
+    <div class="geo-nav-section-label">@L["nav.management"]</div>
+
+    <button type="button"
+            class="nav-link geo-nav-toggle @(ShowLayers ? "active" : "")"
+            @onclick="OnToggleLayers">
+        <span class="geo-nav-icon">🧱</span> @L["map.layers"]
+    </button>
+    @if (ShowLayers)
+    {
+        <div class="geo-nav-panel">@LayersPanel</div>
+    }
+
+    <button type="button"
+            class="nav-link geo-nav-toggle @(ShowAssetList ? "active" : "")"
+            @onclick="OnToggleAssetList">
+        <span class="geo-nav-icon">📦</span> @L["assets.title"]
+    </button>
+    @if (ShowAssetList)
+    {
+        <div class="geo-nav-panel">@AssetListPanel</div>
+    }
+
+    <NavLink class="nav-link" href="service-orders">
+        <span class="geo-nav-icon">🗂️</span> @L["orders.title"]
+    </NavLink>
+
+    <button type="button"
+            class="nav-link geo-nav-toggle @(ShowProviders ? "active" : "")"
+            @onclick="OnToggleProviders">
+        <span class="geo-nav-icon">🔌</span> @L["pool.title"]
+    </button>
+    @if (ShowProviders)
+    {
+        <div class="geo-nav-panel">@ProvidersPanel</div>
+    }
+
+    @if (ShowAdmin)
+    {
+        <div class="geo-nav-section-label">@L["nav.administration"]</div>
+
+        <button type="button" class="nav-link geo-nav-toggle" @onclick="ToggleIdentityGroup">
+            <span class="geo-nav-icon">🛡️</span> @L["nav.identity"]
+            <span class="geo-nav-chevron">@(_identityExpanded ? "▾" : "▸")</span>
+        </button>
+        @if (_identityExpanded)
+        {
+            <div class="geo-nav-subitems">
+                <NavLink class="nav-link geo-nav-sublink" href="admin/users">@L["admin.users.title"]</NavLink>
+                <NavLink class="nav-link geo-nav-sublink" href="admin/roles">@L["admin.roles.title"]</NavLink>
+                <NavLink class="nav-link geo-nav-sublink" href="admin/permissions">@L["admin.permissions.title"]</NavLink>
+            </div>
+        }
+    }
+
+</nav>
+
+@code {
+    [Parameter] public bool ShowAdmin { get; set; }
+    [Parameter] public bool ShowProviders { get; set; }
+    [Parameter] public bool ShowLayers { get; set; }
+    [Parameter] public bool ShowAssetList { get; set; }
+
+    [Parameter] public EventCallback OnToggleProviders { get; set; }
+    [Parameter] public EventCallback OnToggleLayers { get; set; }
+    [Parameter] public EventCallback OnToggleAssetList { get; set; }
+
+    [Parameter] public RenderFragment? ProvidersPanel { get; set; }
+    [Parameter] public RenderFragment? LayersPanel { get; set; }
+    [Parameter] public RenderFragment? AssetListPanel { get; set; }
+
+    private bool _identityExpanded;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _identityExpanded = ShouldExpandIdentityGroup(Nav.ToBaseRelativePath(Nav.Uri));
+    }
+
+    private void ToggleIdentityGroup() => _identityExpanded = !_identityExpanded;
+
+    /// <summary>Identity is expanded by default when the active route is one of its own sub-items.</summary>
+    public static bool ShouldExpandIdentityGroup(string relativePath) =>
+        relativePath.TrimStart('/').StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+}

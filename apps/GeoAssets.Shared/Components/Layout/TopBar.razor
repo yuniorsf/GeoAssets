@@ -1,0 +1,104 @@
+@namespace GeoAssets.Shared.Components.Layout
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject IThemeService ThemeService
+
+<header class="topbar">
+    <div class="topbar-cluster">
+
+        <div class="btn-group topbar-theme-toggle" role="group" aria-label="@L["nav.theme"]">
+            <button type="button"
+                    class="btn btn-sm @(ThemeService.Mode == ThemeMode.Light ? "btn-primary" : "btn-outline")"
+                    title="@L["nav.theme.light"]"
+                    @onclick="() => SetTheme(ThemeMode.Light)">☀️</button>
+            <button type="button"
+                    class="btn btn-sm @(ThemeService.Mode == ThemeMode.System ? "btn-primary" : "btn-outline")"
+                    title="@L["nav.theme.system"]"
+                    @onclick="() => SetTheme(ThemeMode.System)">🖥️</button>
+            <button type="button"
+                    class="btn btn-sm @(ThemeService.Mode == ThemeMode.Dark ? "btn-primary" : "btn-outline")"
+                    title="@L["nav.theme.dark"]"
+                    @onclick="() => SetTheme(ThemeMode.Dark)">🌙</button>
+        </div>
+
+        <div class="vr"></div>
+
+        <button type="button" class="btn-icon topbar-settings" title="@L["nav.settings"] (@L["nav.comingSoon"])">
+            ⚙️
+        </button>
+
+        @if (!string.IsNullOrWhiteSpace(OrganizationName))
+        {
+            <div class="vr"></div>
+            <span class="topbar-org">🏢 @OrganizationName</span>
+        }
+
+        <div class="vr"></div>
+
+        <div class="topbar-usermenu">
+            <button type="button" class="topbar-usermenu-trigger" @onclick="ToggleUserMenu">
+                <span class="topbar-avatar">👤</span>
+                <span class="topbar-username">@UserDisplayName</span>
+            </button>
+
+            @if (_userMenuOpen)
+            {
+                <div class="topbar-menu-backdrop" @onclick="CloseUserMenu"></div>
+                <div class="dropdown-menu show topbar-dropdown-menu" @onclick:stopPropagation="true">
+                    <div class="topbar-dropdown-header">
+                        <div class="topbar-dropdown-name">@UserDisplayName</div>
+                        @if (Roles.Count > 0)
+                        {
+                            <div class="topbar-dropdown-role">@L["nav.role"]: @string.Join(", ", Roles)</div>
+                        }
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <button type="button" class="dropdown-item" @onclick="HandleSignOut">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        @L["app.signOut"]
+                    </button>
+                </div>
+            }
+        </div>
+
+    </div>
+</header>
+
+@code {
+    [Parameter] public string UserDisplayName { get; set; } = string.Empty;
+    [Parameter] public string? OrganizationName { get; set; }
+    [Parameter] public IReadOnlyList<string> Roles { get; set; } = [];
+
+    [Parameter] public EventCallback OnSignOut { get; set; }
+
+    private bool _userMenuOpen;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        ThemeService.ThemeChanged += OnThemeChanged;
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private async Task SetTheme(ThemeMode mode) => await ThemeService.SetModeAsync(mode);
+
+    private void ToggleUserMenu() => _userMenuOpen = !_userMenuOpen;
+    private void CloseUserMenu()  => _userMenuOpen = false;
+
+    private async Task HandleSignOut()
+    {
+        CloseUserMenu();
+        await OnSignOut.InvokeAsync();
+    }
+
+    public override void Dispose()
+    {
+        ThemeService.ThemeChanged -= OnThemeChanged;
+        base.Dispose();
+    }
+}

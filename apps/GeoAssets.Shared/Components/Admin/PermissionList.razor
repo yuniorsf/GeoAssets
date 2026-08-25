@@ -1,0 +1,46 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IPermissionRepository Repository
+
+<div class="sidebar-section">
+    <h6>@L["admin.permissions.title"] (@_permissions.Count)</h6>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (_permissions.Count == 0)
+    {
+        <div class="empty-state"><p>@L["admin.permissions.empty"]</p></div>
+    }
+    else
+    {
+        @foreach (var group in _permissions.GroupBy(p => p.Resource).OrderBy(g => g.Key))
+        {
+            <div class="permission-group">
+                <h6>@group.Key</h6>
+                @foreach (var permission in group.OrderBy(p => p.Action))
+                {
+                    <div class="permission-toggle permission-toggle--static">
+                        <span>@permission.Code</span>
+                        <span class="permission-description">@permission.Description</span>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<AppPermission> _permissions = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _permissions = [.. await Repository.GetAllAsync()];
+        _loading = false;
+    }
+}

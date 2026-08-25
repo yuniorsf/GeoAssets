@@ -12,6 +12,7 @@ using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
+using GeoAssets.Shared.Theming;
 using GeoAssets.Web;
 using GeoAssets.Web.Extensions;
 using GeoAssets.Web.Services;
@@ -36,8 +37,13 @@ if (builder.HostEnvironment.IsDevelopment())
     using var localSettingsHttp = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
     try
     {
-        var localSettingsStream = await localSettingsHttp.GetStreamAsync("appsettings.Local.json");
-        builder.Configuration.AddJsonStream(localSettingsStream);
+        // GetStreamAsync returns a stream backed by the browser's fetch API, which only
+        // supports async reads — AddJsonStream parses synchronously (JsonDocument.Parse),
+        // which throws "net_http_synchronous_reads_not_supported" the moment the file is
+        // actually present. Materialize the content as a string first (fully async), then
+        // hand AddJsonStream a plain in-memory stream, which supports synchronous reads.
+        var localSettingsJson = await localSettingsHttp.GetStringAsync("appsettings.Local.json");
+        builder.Configuration.AddJsonStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(localSettingsJson)));
     }
     catch (HttpRequestException)
     {
@@ -61,8 +67,9 @@ builder.Services.Configure<SessionConfig>(opts =>
     builder.Configuration.GetSection("Session").Bind(opts));
 builder.Services.AddScoped<SessionTimeoutService>();
 
-// ── Auth navigation (MSAL logout/login wrappers) ─────────────────────────────G
-builder.Services.AddScoped<IAuthNavigationService, MsalAuthNavigationService>();
+// ── Auth navigation (Blazor remote-auth login/logout wrappers — vendor-agnostic per
+// BlazorRemoteAuthNavigationService's doc comment, XD01-50) ──────────────────────────────────
+builder.Services.AddScoped<IAuthNavigationService, BlazorRemoteAuthNavigationService>();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(TimeProvider.System);
@@ -75,6 +82,9 @@ builder.Services.AddGeoAssetsLocalization(opts =>
     opts.DefaultCulture    = "es";
     opts.SupportedCultures = ["es", "en", "pt"];
 });
+
+// ── Theming (dark/light/system, XD01-76) ────────────────────────────────────────
+builder.Services.AddGeoAssetsTheming();
 builder.Services.AddScoped<AppInsightsService>();
 builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppInsightsService>());
 

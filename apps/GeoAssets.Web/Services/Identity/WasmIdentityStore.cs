@@ -11,14 +11,15 @@ namespace GeoAssets.Web.Services.Identity;
 /// </summary>
 public sealed class WasmIdentityStore
 {
-    public List<Organization>   Organizations   { get; } = [];
-    public List<AppGroup>       Groups          { get; } = [];
-    public List<UserGroup>      UserGroups      { get; } = [];
-    public List<AppUser>        Users           { get; } = [];
-    public List<AppRole>        Roles           { get; } = [];
-    public List<AppPermission>  Permissions     { get; } = [];
-    public List<UserClaim>      UserClaims      { get; } = [];
-    public List<UserRole>       UserRoles       { get; } = [];
-    public List<RolePermission> RolePermissions { get; } = [];
-    public List<AppPolicy>      Policies        { get; } = [];
+    public List<Organization>      Organizations      { get; } = [];
+    public List<AppGroup>          Groups             { get; } = [];
+    public List<UserGroup>         UserGroups         { get; } = [];
+    public List<AppUser>           Users              { get; } = [];
+    public List<AppRole>           Roles              { get; } = [];
+    public List<AppPermission>     Permissions        { get; } = [];
+    public List<UserClaim>         UserClaims         { get; } = [];
+    public List<UserRole>          UserRoles          { get; } = [];
+    public List<RolePermission>    RolePermissions    { get; } = [];
+    public List<AppPolicy>         Policies           { get; } = [];
+    public List<PendingInvitation> PendingInvitations { get; } = [];
 }

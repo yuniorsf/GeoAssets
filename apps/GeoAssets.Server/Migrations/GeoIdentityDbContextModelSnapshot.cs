@@ -273,6 +273,44 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("OrganizationGrants", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Identity.Authorization.Models.PendingInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ExternalObjectId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<DateTime>("InvitedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InvitedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RedeemedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalObjectId")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("PendingInvitations", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Identity.Authorization.Models.PolicyRequirement", b =>
                 {
                     b.Property<Guid>("Id")

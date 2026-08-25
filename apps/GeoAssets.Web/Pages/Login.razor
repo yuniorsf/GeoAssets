@@ -51,12 +51,12 @@
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        background: #11111b;
+        background: var(--bs-body-bg);
         font-family: system-ui, -apple-system, sans-serif;
     }
     .login-card {
-        background: #1e1e2e;
-        border: 1px solid #313244;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
         border-radius: 16px;
         padding: 2.5rem 3rem;
         width: 100%;
@@ -65,10 +65,10 @@
         box-shadow: 0 24px 64px rgba(0,0,0,.5);
     }
     .login-logo   { font-size: 3.5rem; margin-bottom: .5rem; }
-    .login-title  { color: #cdd6f4; font-size: 1.8rem; font-weight: 700; margin: 0 0 .25rem; }
-    .login-subtitle { color: #6c7086; font-size: .9rem; margin: 0 0 1.5rem; }
-    .login-divider  { border: none; border-top: 1px solid #313244; margin: 0 0 1.5rem; }
-    .login-description { color: #a6adc8; font-size: .9rem; line-height: 1.6; margin-bottom: 1.75rem; }
+    .login-title  { color: var(--text-primary); font-size: 1.8rem; font-weight: 700; margin: 0 0 .25rem; }
+    .login-subtitle { color: var(--text-secondary); font-size: .9rem; margin: 0 0 1.5rem; }
+    .login-divider  { border: none; border-top: 1px solid var(--panel-border); margin: 0 0 1.5rem; }
+    .login-description { color: var(--text-secondary); font-size: .9rem; line-height: 1.6; margin-bottom: 1.75rem; }
     .login-btn {
         display: flex;
         align-items: center;
@@ -76,20 +76,20 @@
         gap: .75rem;
         width: 100%;
         padding: .8rem 1.5rem;
-        background: #89b4fa;
-        color: #11111b;
+        background: var(--accent);
+        color: var(--on-accent);
         border: none;
         border-radius: 8px;
         font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background .15s;
+        transition: opacity .15s;
     }
-    .login-btn:hover  { background: #b4d0fb; }
-    .login-btn:active { background: #74a8fa; }
+    .login-btn:hover  { opacity: .85; }
+    .login-btn:active { opacity: .7; }
     .ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
-    .login-error  { color: #f38ba8; font-size: .85rem; margin-top: 1rem; }
-    .login-footer { color: #45475a; font-size: .78rem; margin-top: 1.75rem; line-height: 1.5; }
+    .login-error  { color: var(--danger); font-size: .85rem; margin-top: 1rem; }
+    .login-footer { color: var(--text-secondary); font-size: .78rem; margin-top: 1.75rem; line-height: 1.5; opacity: .7; }
 </style>
 
 @code {

@@ -29,13 +29,13 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(10);
+        (await db.Permissions.CountAsync()).Should().Be(16);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
 
     [Fact]
-    public async Task SeedAsync_AdministratorRole_IsLinkedToAllTenPermissions()
+    public async Task SeedAsync_AdministratorRole_IsLinkedToAllSixteenPermissions()
     {
         // Guards the ChangeTracker lookup in AddRoleAsync: permissions and roles are
         // added in the *same* SaveChanges batch, so a naive database-only lookup for
@@ -51,7 +51,7 @@ public class GeoIdentitySeederTests
         var adminRolePermissionCount = await db.RolePermissions
             .CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId);
 
-        adminRolePermissionCount.Should().Be(10);
+        adminRolePermissionCount.Should().Be(16);
     }
 
     [Fact]
@@ -67,11 +67,11 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(10);
+        (await db.Permissions.CountAsync()).Should().Be(16);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
-            .Should().Be(10);
+            .Should().Be(16);
     }
 
     [Fact]
@@ -90,5 +90,59 @@ public class GeoIdentitySeederTests
             .ToListAsync();
 
         readOnlyPermissionCodes.Should().BeEquivalentTo(["serviceorders:read", "features:read"]);
+    }
+
+    private static readonly string[] IdentityAdminPermissionCodes =
+    [
+        "users:read", "users:edit",
+        "roles:read", "roles:edit", "roles:delete",
+        "permissions:read"
+    ];
+
+    [Fact]
+    public async Task SeedAsync_IdentityAdminPermissions_AllSixCodesExist()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var seededCodes = await db.Permissions.Select(p => p.Code).ToListAsync();
+
+        seededCodes.Should().Contain(IdentityAdminPermissionCodes);
+    }
+
+    [Fact]
+    public async Task SeedAsync_IdentityAdminPermissions_GrantedToAdministratorOnly()
+    {
+        // Explicit scope-leak guard: XD01-54 Phase 1 restricts the new identity admin
+        // permissions to Administrator. If a future edit accidentally copies them onto
+        // another built-in role, this test catches it.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var adminCodes = await db.RolePermissions
+            .Where(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+        adminCodes.Should().Contain(IdentityAdminPermissionCodes);
+
+        var nonAdminRoleIds = new[]
+        {
+            GeoIdentitySeeder.SupervisorRoleId,
+            GeoIdentitySeeder.TechnicianRoleId,
+            GeoIdentitySeeder.ReadOnlyRoleId
+        };
+        var nonAdminCodes = await db.RolePermissions
+            .Where(rp => nonAdminRoleIds.Contains(rp.RoleId))
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+        nonAdminCodes.Should().NotContain(IdentityAdminPermissionCodes);
     }
 }

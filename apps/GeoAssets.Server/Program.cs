@@ -88,6 +88,10 @@ builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
 // the same policy engine the Blazor client already uses.
 builder.Services.AddGeoAuthorizationPolicyBridge();
 
+// Role assignment provider (XD01-59 Phase 2) — no-op until XD01-62 lands a real,
+// Graph-backed provider to pass here.
+builder.Services.AddRoleAssignmentProvider(builder.Configuration);
+
 // ── CORS ——────────────────────────────────────────────────────────────────────
 // Allow the Blazor WASM dev server origins configured in appsettings.json.
 var allowedOrigins = builder.Configuration

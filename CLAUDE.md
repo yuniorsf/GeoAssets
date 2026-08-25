@@ -24,6 +24,8 @@
 | Purpose | Path |
 |---|---|
 | Main page | `apps/GeoAssets.Shared/Pages/Index.razor` |
+| Nav menu | `apps/GeoAssets.Shared/Components/Layout/NavMenu.razor` |
+| Top bar | `apps/GeoAssets.Shared/Components/Layout/TopBar.razor` |
 | Map component | `apps/GeoAssets.Shared/Components/Map/MapContainer.razor` |
 | Context menu | `apps/GeoAssets.Shared/Components/Map/MapContextMenu.razor` |
 | Draw toolbar | `apps/GeoAssets.Shared/Components/Map/DrawToolbar.razor` |
@@ -71,14 +73,29 @@
 - `MapContextMenu.razor`: `position:fixed` at click coords, z-1500; backdrop div z-1400 closes on outside click
 - `<MapContextMenu>` and `<ConfirmDialog>` rendered **outside** `.map-area` in `Index.razor` so `position:fixed` works correctly
 
-## CSS Design System (Catppuccin Mocha)
+## CSS Design System (Catppuccin Mocha / Latte)
 
 ```
---panel-bg: #1e1e2e      --accent: #89b4fa     --danger: #f38ba8
---panel-border: #313244  --success: #a6e3a1    --text-primary: #cdd6f4
+Dark (Mocha)                            Light (Latte)
+--panel-bg: #1e1e2e      --accent: #89b4fa     --panel-bg: #eff1f5      --accent: #1e66f5
+--panel-border: #313244  --danger: #f38ba8     --panel-border: #ccd0da  --danger: #d20f39
+--text-primary: #cdd6f4  --success: #a6e3a1    --text-primary: #4c4f69  --success: #40a02b
+--text-secondary: #6c7086 --warning: #f9e2af    --text-secondary: #6c6f85 --warning: #df8e1d
 ```
 
-Layout: sidebar (340px fixed) + map-area (flex:1). Overlays use `position:absolute` z-1000. Dialogs use `position:fixed` z-2000.
+Layout: sidebar (340px fixed) + content-column (flex:1, topbar + map-area). Overlays use `position:absolute` z-1000. Dialogs use `position:fixed` z-2000.
+
+Bootstrap 5.3 (vendored at `apps/GeoAssets.Shared/wwwroot/lib/bootstrap/`, served to both hosts as `_content/GeoAssets.Shared/lib/bootstrap/dist/css/bootstrap.min.css`) is loaded *before* `geoassets.css` in both `index.html` files. `geoassets.css` re-maps Bootstrap's `--bs-*` custom properties under `[data-bs-theme="dark"]`/`[data-bs-theme="light"]` to the tokens above (`--bs-primary` → `--accent`, `--bs-tertiary-bg`/`--bs-secondary-bg` → `--panel-bg`, `--bs-border-color` → `--panel-border`, `--bs-secondary-color` → `--text-secondary`, `--bs-success`/`--bs-danger` → `--success`/`--danger`) so Bootstrap components render in-brand. Note: Bootstrap's own per-component vars (e.g. `--bs-btn-bg`, `--bs-nav-pills-link-active-bg`) are hardcoded in the stock CSS rather than derived from `--bs-primary`, so components that rely on Bootstrap's primary color (buttons, active nav-pills, dropdowns) still need a small scoped override when they're built — the token bridge only covers the base/reboot layer.
+
+Also theme-scoped: `--on-accent` (text/icon color for content on top of `--accent`/`--danger`/`--success` — near-black in Mocha since those are light pastels, near-white in Latte since they're saturated) and `--surface-tint-weak`/`--surface-tint`/`--surface-tint-strong` (hover/subtle-background tints — white-alpha in Mocha, black-alpha in Latte). Use these instead of hardcoding a color that only looks right in one theme.
+
+## Theming (dark / light / system)
+
+- `IThemeService` (`core/GeoAssets.Core/Theming/`) + `BlazorThemeService` (`apps/GeoAssets.Shared/Theming/`) — same interface-in-Core/implementation-in-Shared split as `ICultureService`/`BlazorCultureService`. `Mode` is the user's selection (`ThemeMode.Light`/`Dark`/`System`); `SetModeAsync` persists to `localStorage["geoassets.theme"]` and applies `data-bs-theme` on `<html>` via JS interop.
+- **Flash prevention**: a small inline `<script>` in the `<head>` of *both* `index.html` files resolves the same stored-preference-or-`prefers-color-scheme` logic synchronously, before first paint — this is what actually prevents the flash, since Blazor WASM's boot is too slow to rely on `App.razor`'s `OnInitializedAsync`. Keep that script's logic in sync with `BlazorThemeService.ResolveTheme` if either changes.
+- `App.razor` calls `ThemeService.InitAsync()` (mirroring `CultureService.InitAsync()`) to sync the C# `Mode`/`ResolvedTheme` state to whatever the inline script already applied — it's a no-op re-application of the same value, not a second source of truth.
+- The topbar's theme toggle (`TopBar.razor`) is a 3-button Bootstrap `btn-group` (Light/System/Dark).
+- Only wired into `GeoAssets.Web` (`Program.cs` + `App.razor`) — `GeoAssets.MAUI`'s `MauiProgram.cs`/`WebApp.razor` don't register `IThemeService` (or `ICultureService`, or any auth service — MAUI's DI for `GeoAssets.Shared`'s shared components is a pre-existing, broader gap, not something any single UI ticket has closed). The FOUC-prevention inline script is duplicated into MAUI's `index.html` anyway since it's plain JS with no DI dependency.
 
 ## Pull Requests
 
@@ -89,7 +106,7 @@ Layout: sidebar (340px fixed) + map-area (flex:1). Overlays use `position:absolu
 
 - All geometry follows RFC 7946 GeoJSON ([longitude, latitude] order)
 - Razor components: `EventCallback<T>` up, `[Parameter]` down
-- No Bootstrap — bespoke CSS only
+- Bootstrap is allowed and is the base for component styling in `GeoAssets.Shared` (used by both Web and MAUI); layer bespoke CSS in `geoassets.css` on top for anything Bootstrap doesn't cover — don't hand-roll styles Bootstrap already provides
 - The only loaded JS file is `geoassets.js` (IIFE); `mapInterop.js` and `drawInterop.js` are legacy drafts — do not reference them
 - Do not add features, refactor, or clean up code beyond what is asked
 - Do not add comments or docstrings to code you did not change

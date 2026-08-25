@@ -1,5 +1,6 @@
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.Shared.Services;
 using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Identity.InMemory;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,11 @@ namespace GeoAssets.Web.Extensions;
 /// <c>"ServiceOrders:Backend"</c> already switches that module. <c>ICurrentUserAccessor</c>
 /// is registered once in Program.cs regardless of backend, since both need to know "who is
 /// the current user" from the same MSAL auth state.
+///
+/// Deliberately does not register <c>IRoleAssignmentProvider</c>/<c>IRoleSyncStatusProvider</c>
+/// (XD01-63) — this backend has no server round-trip, so role sync can never be functional here;
+/// the admin UI resolves both optionally and hides its "Register in Entra"/"Assign in Entra"
+/// controls when they're absent.
 /// </summary>
 public static class GeoIdentityWasmExtensions
 {
@@ -35,6 +41,7 @@ public static class GeoIdentityWasmExtensions
         services.AddScoped<IPermissionRepository,   InMemoryPermissionRepository>();
         services.AddScoped<IUserClaimRepository,    InMemoryUserClaimRepository>();
         services.AddScoped<IPolicyRepository,       InMemoryPolicyRepository>();
+        services.AddScoped<IPendingInvitationRepository, InMemoryPendingInvitationRepository>();
 
         // Authorization service
         services.AddScoped<IGeoAuthorizationService, GeoAuthorizationService>();

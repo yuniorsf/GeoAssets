@@ -1,0 +1,84 @@
+@page "/admin/users"
+@attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.AspNetCore.Authorization
+@using GeoAssets.Identity.Authorization.Models
+@using GeoAssets.Identity.Authorization.Services
+@using GeoAssets.Shared.Components.Admin
+@using Microsoft.Extensions.DependencyInjection
+@inject IGeoAuthorizationService AuthService
+@inject IServiceProvider ServiceProvider
+
+<div class="geoassets-app">
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="btn-icon" title="@L["orders.backToMap"]">←</a>
+            <h1>@L["admin.users.title"]</h1>
+        </div>
+
+        @if (_authorized == true)
+        {
+            <UserList @ref="_list" SelectedUserId="@_selected?.Id" OnUserSelected="OnUserSelected" />
+        }
+    </aside>
+
+    <main class="order-main">
+        @if (_authorized is null)
+        {
+            <div class="empty-state">@L["app.loading"]</div>
+        }
+        else if (_authorized == false)
+        {
+            <div class="empty-state">@L["admin.accessDenied"]</div>
+        }
+        else if (_selected is not null)
+        {
+            <UserDetail User="@_selected" OnSaved="OnUserSaved" OnCancel="() => _selected = null" />
+        }
+        else
+        {
+            <div class="empty-state">@L["admin.users.selectPrompt"]</div>
+        }
+    </main>
+</div>
+
+@code {
+    private UserList? _list;
+    private AppUser? _selected;
+    private bool? _authorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Ensure the local user record exists before checking authorization. Only relevant
+        // under Identity:Backend=InMemory (Rest has no local provisioning step, so the service
+        // isn't registered there — resolved optionally to avoid breaking that backend).
+        var provisioning = ServiceProvider.GetService<UserProvisioningService>();
+        if (provisioning is not null)
+            await provisioning.EnsureProvisionedAsync();
+
+        try
+        {
+            _authorized = await AuthService.HasPermissionAsync("users:read");
+        }
+        catch (Exception ex)
+        {
+            // Fail closed: if the authorization check itself can't be answered (e.g. the
+            // identity backend is unreachable), don't show admin functionality.
+            Console.Error.WriteLine($"[AdminUsers] Failed to resolve authorization: {ex.Message}");
+            _authorized = false;
+        }
+    }
+
+    private void OnUserSelected(AppUser user)
+    {
+        _selected = user;
+        StateHasChanged();
+    }
+
+    private async Task OnUserSaved()
+    {
+        _selected = null;
+        if (_list is not null) await _list.RefreshAsync();
+    }
+}

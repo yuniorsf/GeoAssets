@@ -1,8 +1,10 @@
 @using GeoAssets.Shared.Pages
 @using GeoAssets.Web.Shared
 @using GeoAssets.Shared.Localization
+@using GeoAssets.Shared.Theming
 @inject BlazorCultureService CultureService
 @inject HttpJsonStringLocalizer Localizer
+@inject BlazorThemeService ThemeService
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly"
@@ -13,7 +15,7 @@
                     <RedirectToLogin />
                 </NotAuthorized>
                 <Authorizing>
-                    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#11111b;color:#cdd6f4;font-family:system-ui">
+                    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bs-body-bg);color:var(--text-primary);font-family:system-ui">
                         <p>Verificando autenticación…</p>
                     </div>
                 </Authorizing>
@@ -21,7 +23,7 @@
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
-            <p style="text-align:center;margin-top:2rem;color:#cdd6f4">Página no encontrada.</p>
+            <p style="text-align:center;margin-top:2rem;color:var(--text-primary)">Página no encontrada.</p>
         </NotFound>
     </Router>
 
@@ -39,5 +41,11 @@
         // before any component renders so there is no flash of untranslated keys.
         await CultureService.InitAsync();
         await Localizer.LoadAsync(CultureService.CurrentCulture);
+
+        // Syncs C# state (topbar active-button display) to whatever the inline script in
+        // index.html already applied to data-bs-theme before first paint — see
+        // BlazorThemeService's doc comment for why the flash is actually prevented there,
+        // not here.
+        await ThemeService.InitAsync();
     }
 }

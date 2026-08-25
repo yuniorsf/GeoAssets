@@ -1,8 +1,28 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-bs-theme="dark">
 
 <head>
     <meta charset="utf-8" />
+
+    <!-- Resolves the theme (dark/light/system) synchronously before first paint, so there's no
+         flash of the wrong theme while the WASM runtime boots (App.razor's own ThemeService.InitAsync
+         only runs once Blazor starts, by which point the browser has already painted this page —
+         see BlazorThemeService's doc comment). Must stay in sync with BlazorThemeService.ResolveTheme. -->
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('geoassets.theme');
+                var mode = stored || 'system';
+                var theme = mode === 'system'
+                    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                    : mode;
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            } catch (e) {
+                // localStorage/matchMedia unavailable — keep the static dark default below.
+            }
+        })();
+    </script>
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GeoAssets — GIS Multiplataforma</title>
     <base href="/" />
@@ -14,6 +34,9 @@
     <!-- Leaflet-Geoman CSS -->
     <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css" />
 
+    <!-- Bootstrap 5 (from Shared RCL) — loaded before geoassets.css so the Catppuccin token bridge below wins the cascade -->
+    <link rel="stylesheet" href="_content/GeoAssets.Shared/lib/bootstrap/dist/css/bootstrap.min.css" />
+
     <!-- GeoAssets styles (from Shared RCL) -->
     <link rel="stylesheet" href="_content/GeoAssets.Shared/css/geoassets.css" />
 
@@ -22,7 +45,7 @@
 
 <body>
     <div id="app">
-        <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#11111b;color:#cdd6f4;font-family:system-ui">
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bs-body-bg);color:var(--text-primary);font-family:system-ui">
             <div style="text-align:center">
                 <div style="font-size:3rem;margin-bottom:1rem">🗺️</div>
                 <p>Cargando GeoAssets...</p>
@@ -30,7 +53,7 @@
         </div>
     </div>
 
-    <div id="blazor-error-ui" style="display:none;position:fixed;bottom:0;width:100%;background:#f38ba8;color:#11111b;padding:8px 16px;text-align:center;z-index:9999">
+    <div id="blazor-error-ui" style="display:none;position:fixed;bottom:0;width:100%;background:var(--danger);color:var(--on-accent);padding:8px 16px;text-align:center;z-index:9999">
         Ha ocurrido un error.
         <a href="." style="font-weight:bold">Recargar</a>
         <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;float:right">✕</span>

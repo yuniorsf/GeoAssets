@@ -6,7 +6,18 @@ namespace GeoAssets.Web.Services.Identity.InMemory;
 public sealed class InMemoryRoleRepository(WasmIdentityStore store) : IRoleRepository
 {
     public Task<AppRole?> GetByIdAsync(Guid id, CancellationToken ct = default)
-        => Task.FromResult(store.Roles.FirstOrDefault(r => r.Id == id));
+    {
+        var role = store.Roles.FirstOrDefault(r => r.Id == id);
+        // RolePermissions is never kept in sync by Grant/RevokePermissionAsync below (they only
+        // touch the flat store.RolePermissions list) — populate it here from that list so
+        // callers (e.g. the identity admin UI, XD01-58) can read a role's current permissions
+        // the same way regardless of which IRoleRepository is active.
+        if (role is not null)
+            role.RolePermissions = [.. store.RolePermissions
+                .Where(rp => rp.RoleId == id)
+                .Select(rp => new RolePermission { RoleId = rp.RoleId, PermissionId = rp.PermissionId })];
+        return Task.FromResult(role);
+    }
 
     public Task<AppRole?> GetByNameAsync(string name, CancellationToken ct = default)
         => Task.FromResult(store.Roles.FirstOrDefault(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));

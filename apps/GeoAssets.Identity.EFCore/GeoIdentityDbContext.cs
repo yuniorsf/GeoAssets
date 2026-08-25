@@ -37,6 +37,7 @@ public class GeoIdentityDbContext(DbContextOptions<GeoIdentityDbContext> options
     public DbSet<AppPolicy>         Policies        => Set<AppPolicy>();
     public DbSet<PolicyRequirement> PolicyRequirements => Set<PolicyRequirement>();
     public DbSet<OrganizationGrant> OrganizationGrants => Set<OrganizationGrant>();
+    public DbSet<PendingInvitation> PendingInvitations => Set<PendingInvitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

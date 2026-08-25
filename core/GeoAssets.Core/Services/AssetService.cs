@@ -14,6 +14,7 @@ public sealed class AssetService : IAssetService
     private readonly TimeProvider _timeProvider;
     private CancellationTokenSource _saveCts = new();
     private string _collectionName = "Mis Activos GIS";
+    private bool _disposed;
 
     public AssetService(IAssetProvider repository, IStorageService storage, TimeProvider timeProvider)
     {
@@ -100,6 +101,10 @@ public sealed class AssetService : IAssetService
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
+
         _repository.CollectionChanged -= OnCollectionChanged;
         await _saveCts.CancelAsync();
         _saveCts.Dispose();
