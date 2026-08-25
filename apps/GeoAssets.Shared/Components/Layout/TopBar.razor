@@ -1,12 +1,23 @@
 @namespace GeoAssets.Shared.Components.Layout
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject IThemeService ThemeService
 
 <header class="topbar">
     <div class="topbar-cluster">
 
-        <div class="btn-group topbar-theme-toggle" role="group" aria-label="@L["nav.theme"]" title="@L["nav.comingSoon"]">
-            <button type="button" class="btn btn-sm btn-outline">☀️</button>
-            <button type="button" class="btn btn-sm btn-primary">🌙</button>
+        <div class="btn-group topbar-theme-toggle" role="group" aria-label="@L["nav.theme"]">
+            <button type="button"
+                    class="btn btn-sm @(ThemeService.Mode == ThemeMode.Light ? "btn-primary" : "btn-outline")"
+                    title="@L["nav.theme.light"]"
+                    @onclick="() => SetTheme(ThemeMode.Light)">☀️</button>
+            <button type="button"
+                    class="btn btn-sm @(ThemeService.Mode == ThemeMode.System ? "btn-primary" : "btn-outline")"
+                    title="@L["nav.theme.system"]"
+                    @onclick="() => SetTheme(ThemeMode.System)">🖥️</button>
+            <button type="button"
+                    class="btn btn-sm @(ThemeService.Mode == ThemeMode.Dark ? "btn-primary" : "btn-outline")"
+                    title="@L["nav.theme.dark"]"
+                    @onclick="() => SetTheme(ThemeMode.Dark)">🌙</button>
         </div>
 
         <div class="vr"></div>
@@ -66,6 +77,16 @@
 
     private bool _userMenuOpen;
 
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        ThemeService.ThemeChanged += OnThemeChanged;
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private async Task SetTheme(ThemeMode mode) => await ThemeService.SetModeAsync(mode);
+
     private void ToggleUserMenu() => _userMenuOpen = !_userMenuOpen;
     private void CloseUserMenu()  => _userMenuOpen = false;
 
@@ -73,5 +94,11 @@
     {
         CloseUserMenu();
         await OnSignOut.InvokeAsync();
+    }
+
+    public override void Dispose()
+    {
+        ThemeService.ThemeChanged -= OnThemeChanged;
+        base.Dispose();
     }
 }

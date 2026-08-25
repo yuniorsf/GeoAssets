@@ -2,27 +2,73 @@
 
 :root {
     --sidebar-width: 340px;
+
+    /* Catppuccin Mocha (dark) — the app's default/fallback palette. Overridden by
+       [data-bs-theme="light"] below (Catppuccin Latte) when the user picks light/system. */
     --panel-bg: #1e1e2e;
     --panel-border: #313244;
     --accent: #89b4fa;
     --danger: #f38ba8;
     --success: #a6e3a1;
+    --warning: #f9e2af;
     --text-primary: #cdd6f4;
     --text-secondary: #6c7086;
+
+    /* Text/icon color for content sitting ON TOP of --accent/--danger/--success. Mocha's
+       accent colors are light pastels, so near-black reads correctly on them; Latte's are
+       darker/saturated and need the reverse — see the light block. */
+    --on-accent: #11111b;
+
+    /* Subtle surface differentiation (hover states, input backgrounds, badges) — a light
+       tint on dark surfaces, a dark tint on light ones (see the light block). */
+    --surface-tint-weak:   rgba(255,255,255,0.04);
+    --surface-tint:        rgba(255,255,255,0.05);
+    --surface-tint-strong: rgba(255,255,255,0.08);
 }
 
-/* ─── Bootstrap 5 token bridge (Catppuccin Mocha) ───────────────────────────
-   GeoAssets always runs in the dark palette (data-bs-theme="dark" on <html>).
+/* ─── Bootstrap 5 token bridge (Catppuccin Mocha / Latte) ───────────────────
    Re-map Bootstrap's --bs-* variables to the tokens above so Bootstrap
    components render in-brand without per-component overrides. Bootstrap
-   itself sets these under the same [data-bs-theme=dark] selector, so this
-   rule must be loaded after bootstrap.min.css to win the cascade. */
+   itself sets these under the same [data-bs-theme=...] selectors, so these
+   rules must be loaded after bootstrap.min.css to win the cascade. */
 [data-bs-theme="dark"] {
     --bs-body-bg: #11111b;
     --bs-body-color: var(--text-primary);
     --bs-emphasis-color: var(--text-primary);
     --bs-primary: var(--accent);
     --bs-primary-rgb: 137, 180, 250;
+    --bs-secondary-color: var(--text-secondary);
+    --bs-tertiary-bg: var(--panel-bg);
+    --bs-secondary-bg: var(--panel-bg);
+    --bs-border-color: var(--panel-border);
+    --bs-success: var(--success);
+    --bs-danger: var(--danger);
+    --bs-link-color: var(--accent);
+    --bs-link-hover-color: var(--accent);
+}
+
+/* Catppuccin Latte (light) — same roles as the Mocha block above, mirrored:
+   base→panel-bg, surface0→panel-border, blue→accent, red→danger, green→success,
+   text→text-primary, subtext0→text-secondary, crust→body background. */
+[data-bs-theme="light"] {
+    --panel-bg: #eff1f5;
+    --panel-border: #ccd0da;
+    --accent: #1e66f5;
+    --danger: #d20f39;
+    --success: #40a02b;
+    --warning: #df8e1d;
+    --text-primary: #4c4f69;
+    --text-secondary: #6c6f85;
+    --on-accent: #ffffff;
+    --surface-tint-weak:   rgba(0,0,0,0.04);
+    --surface-tint:        rgba(0,0,0,0.05);
+    --surface-tint-strong: rgba(0,0,0,0.08);
+
+    --bs-body-bg: #dce0e8;
+    --bs-body-color: var(--text-primary);
+    --bs-emphasis-color: var(--text-primary);
+    --bs-primary: var(--accent);
+    --bs-primary-rgb: 30, 102, 245;
     --bs-secondary-color: var(--text-secondary);
     --bs-tertiary-bg: var(--panel-bg);
     --bs-secondary-bg: var(--panel-bg);
@@ -40,7 +86,7 @@ html, body {
     padding: 0;
     height: 100%;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #11111b;
+    background: var(--bs-body-bg);
     color: var(--text-primary);
 }
 
@@ -118,11 +164,11 @@ html, body {
     cursor: pointer;
 }
 
-.geo-nav .nav-link:hover { background: rgba(255,255,255,0.05); }
+.geo-nav .nav-link:hover { background: var(--surface-tint); }
 
 .geo-nav .nav-link.active {
     background: var(--accent);
-    color: #11111b;
+    color: var(--on-accent);
 }
 
 .geo-nav button.nav-link {
@@ -217,7 +263,7 @@ html, body {
     cursor: pointer;
 }
 
-.topbar-usermenu-trigger:hover { background: rgba(255,255,255,0.05); }
+.topbar-usermenu-trigger:hover { background: var(--surface-tint); }
 
 .topbar-avatar { font-size: 1.1rem; }
 
@@ -264,7 +310,7 @@ html, body {
 }
 
 .dropdown-item:hover, .dropdown-item:focus {
-    background: rgba(255,255,255,0.05);
+    background: var(--surface-tint);
     color: var(--text-primary);
 }
 
@@ -340,7 +386,7 @@ html, body {
     transition: background 0.12s;
 }
 
-.asset-list-item:hover { background: rgba(255,255,255,0.05); }
+.asset-list-item:hover { background: var(--surface-tint); }
 .asset-list-item.selected { background: rgba(137, 180, 250, 0.15); }
 
 .asset-color-dot {
@@ -362,7 +408,7 @@ html, body {
     font-size: 0.7rem;
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(255,255,255,0.08);
+    background: var(--surface-tint-strong);
     color: var(--text-secondary);
 }
 
@@ -407,7 +453,7 @@ html, body {
 .form-control {
     width: 100%;
     padding: 7px 10px;
-    background: rgba(255,255,255,0.05);
+    background: var(--surface-tint);
     border: 1px solid var(--panel-border);
     border-radius: 6px;
     color: var(--text-primary);
@@ -439,9 +485,9 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 }
 
 .btn:hover { opacity: 0.85; }
-.btn-primary   { background: var(--accent); color: #11111b; border-color: var(--accent); }
+.btn-primary   { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .btn-secondary { background: transparent; color: var(--text-primary); border-color: var(--panel-border); }
-.btn-danger    { background: var(--danger); color: #11111b; border-color: var(--danger); }
+.btn-danger    { background: var(--danger); color: var(--on-accent); border-color: var(--danger); }
 .btn-outline   { background: transparent; color: var(--accent); border-color: var(--accent); }
 .btn-sm        { padding: 4px 10px; font-size: 0.78rem; }
 .btn-icon      { padding: 4px 8px; background: transparent; border: none; cursor: pointer; color: var(--text-secondary); }
@@ -453,7 +499,7 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     display: flex;
     gap: 6px;
     align-items: center;
-    background: rgba(255,255,255,0.04);
+    background: var(--surface-tint-weak);
     border: 1px solid var(--panel-border);
     border-radius: 6px;
     padding: 6px 10px;
@@ -713,7 +759,7 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     transition: background 0.12s;
 }
 
-.order-list-item:hover { background: rgba(255,255,255,0.05); }
+.order-list-item:hover { background: var(--surface-tint); }
 .order-list-item.selected { background: rgba(137, 180, 250, 0.15); }
 
 .order-status-dot {
@@ -727,7 +773,7 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 .order-status-draft      { background: var(--text-secondary); }
 .order-status-pending     { background: var(--accent); }
 .order-status-inprogress  { background: var(--accent); }
-.order-status-onhold      { background: #f9e2af; }
+.order-status-onhold      { background: var(--warning); }
 .order-status-completed   { background: var(--success); }
 .order-status-cancelled   { background: var(--danger); }
 
@@ -743,7 +789,7 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     font-size: 0.7rem;
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(255,255,255,0.08);
+    background: var(--surface-tint-strong);
     color: var(--text-secondary);
     white-space: nowrap;
 }
@@ -924,7 +970,7 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     transition: background 0.1s;
 }
 
-.ctx-item:hover            { background: rgba(255,255,255,0.08); }
+.ctx-item:hover            { background: var(--surface-tint-strong); }
 .ctx-item.ctx-danger       { color: var(--danger); }
 .ctx-item.ctx-danger:hover { background: rgba(243,139,168,0.12); }
 

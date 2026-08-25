@@ -49,21 +49,21 @@
         align-items: center;
         justify-content: center;
         height: 100vh;
-        background: #11111b;
-        color: #cdd6f4;
+        background: var(--bs-body-bg);
+        color: var(--text-primary);
         font-family: system-ui, sans-serif;
         gap: 1rem;
     }
     .auth-state-icon { font-size: 3rem; }
     .auth-spinner {
         width: 32px; height: 32px;
-        border: 3px solid #313244;
-        border-top-color: #89b4fa;
+        border: 3px solid var(--panel-border);
+        border-top-color: var(--accent);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
     }
     @@keyframes spin { to { transform: rotate(360deg); } }
-    .auth-state-screen a { color: #89b4fa; }
+    .auth-state-screen a { color: var(--accent); }
 </style>
 
 @code {

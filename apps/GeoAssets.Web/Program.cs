@@ -12,6 +12,7 @@ using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
+using GeoAssets.Shared.Theming;
 using GeoAssets.Web;
 using GeoAssets.Web.Extensions;
 using GeoAssets.Web.Services;
@@ -81,6 +82,9 @@ builder.Services.AddGeoAssetsLocalization(opts =>
     opts.DefaultCulture    = "es";
     opts.SupportedCultures = ["es", "en", "pt"];
 });
+
+// ── Theming (dark/light/system, XD01-76) ────────────────────────────────────────
+builder.Services.AddGeoAssetsTheming();
 builder.Services.AddScoped<AppInsightsService>();
 builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppInsightsService>());
 

@@ -3,6 +3,25 @@
 
 <head>
     <meta charset="utf-8" />
+
+    <!-- Resolves the theme (dark/light/system) synchronously before first paint — see the
+         matching comment in apps/GeoAssets.Web/wwwroot/index.html. Must stay in sync with
+         BlazorThemeService.ResolveTheme. -->
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('geoassets.theme');
+                var mode = stored || 'system';
+                var theme = mode === 'system'
+                    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                    : mode;
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            } catch (e) {
+                // localStorage/matchMedia unavailable — keep the static dark default below.
+            }
+        })();
+    </script>
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GeoAssets</title>
     <base href="/" />

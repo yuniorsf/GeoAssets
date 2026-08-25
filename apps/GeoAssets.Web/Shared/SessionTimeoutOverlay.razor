@@ -32,8 +32,8 @@
     }
     @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .sto-card {
-        background: #1e1e2e;
-        border: 1px solid #313244;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
         border-radius: 16px;
         padding: 2.5rem 2.5rem;
         max-width: 360px;
@@ -42,12 +42,12 @@
         box-shadow: 0 32px 80px rgba(0,0,0,.6);
     }
     .sto-icon      { font-size: 3rem; margin-bottom: .5rem; }
-    .sto-title     { color: #cdd6f4; font-size: 1.4rem; font-weight: 700; margin: 0 0 .75rem; }
-    .sto-body      { color: #a6adc8; font-size: .9rem; margin: .25rem 0; }
+    .sto-title     { color: var(--text-primary); font-size: 1.4rem; font-weight: 700; margin: 0 0 .75rem; }
+    .sto-body      { color: var(--text-secondary); font-size: .9rem; margin: .25rem 0; }
     .sto-countdown {
         font-size: 3.5rem;
         font-weight: 800;
-        color: #f38ba8;
+        color: var(--danger);
         line-height: 1;
         margin: .75rem 0;
     }
@@ -55,16 +55,16 @@
         margin-top: 1.25rem;
         width: 100%;
         padding: .75rem;
-        background: #89b4fa;
-        color: #11111b;
+        background: var(--accent);
+        color: var(--on-accent);
         border: none;
         border-radius: 8px;
         font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background .15s;
+        transition: opacity .15s;
     }
-    .sto-btn:hover { background: #b4d0fb; }
+    .sto-btn:hover { opacity: .85; }
 </style>
 
 @code {
