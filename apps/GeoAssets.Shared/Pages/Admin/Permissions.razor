@@ -48,7 +48,18 @@
         // isn't registered there — resolved optionally to avoid breaking that backend).
         var provisioning = ServiceProvider.GetService<UserProvisioningService>();
         if (provisioning is not null)
+        {
             await provisioning.EnsureProvisionedAsync();
+        }
+        else
+        {
+            // Rest backend: UserProvisioningService isn't registered (no local provisioning
+            // step), but the pending-invitation redirect check has no such restriction
+            // (InvitationRedirectGate, XD01-89) — call it directly so an invited caller still
+            // gets redirected to /complete-profile.
+            var redirectGate = ServiceProvider.GetRequiredService<InvitationRedirectGate>();
+            await redirectGate.RedirectIfPendingAsync();
+        }
 
         try
         {

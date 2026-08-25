@@ -47,8 +47,10 @@ public static class GeoIdentityWasmExtensions
         services.AddScoped<IGeoAuthorizationService, GeoAuthorizationService>();
 
         // JIT user provisioning on auth state change — only meaningful against a writable
-        // (in-memory) user repository; the Rest backend has no provisioning endpoint (XD01-12's
-        // federated-auth/JIT-provisioning follow-up covers that for the real backend).
+        // (in-memory) user repository; the Rest backend provisions server-side instead
+        // (GeoAuthorizationService.GetAuthorizationContextAsync, XD01-88) and gets its
+        // pending-invitation redirect check from the backend-agnostic InvitationRedirectGate
+        // (XD01-89) rather than this class.
         // Scoped (not singleton) because AuthenticationStateProvider in WASM
         // depends on scoped MSAL options. In Blazor WASM, host.Services is the
         // root scope so this scoped service lives for the entire session.

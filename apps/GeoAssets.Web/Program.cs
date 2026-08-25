@@ -121,6 +121,12 @@ if (identityUseRest)
 else
     builder.Services.AddGeoIdentityWasmDev();
 
+// Pending-invitation redirect check (XD01-89) — backend-agnostic, so registered here rather
+// than inside either AddGeoIdentityRest or AddGeoIdentityWasmDev: its dependencies
+// (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager) are already
+// registered by both branches above.
+builder.Services.AddScoped<InvitationRedirectGate>();
+
 builder.Services.AddGeoAssetsRest();
 builder.Services.AddGeoAssetsWfs();
 builder.Services.AddGeoAssetsWms();

@@ -1,7 +1,6 @@
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,19 +33,14 @@ namespace GeoAssets.Shared.Services;
 /// exists, redirects to <c>/complete-profile</c> before the calling page renders. Runs on
 /// *every* call, not just first-time provisioning, so it keeps firing on each page load until
 /// the invitation is redeemed (see <c>CompleteProfile.razor</c>, XD01-71) or revoked — a
-/// half-finished profile shouldn't let someone into the rest of the app. Resolves
-/// <see cref="IPendingInvitationRepository"/> optionally: it's never registered under
-/// <c>Identity:Backend=InMemory</c> in a functional sense (parity stub only), and — more
-/// importantly — this whole class is currently registered only under <c>InMemory</c> in the
-/// first place (see below): the redirect gate as implemented here cannot fire at all against
-/// the Rest/production backend, since <c>UserProvisioningService</c> itself won't exist there.
-/// XD01-88 gives that backend its own server-side JIT-provisioning path instead (inside
-/// <c>GeoAuthorizationService.GetAuthorizationContextAsync</c>), which fixes the data-layer bug
-/// (writes no longer reference a phantom, never-persisted user id) but does *not* restore the
-/// redirect UX under Rest — nothing there currently checks for a pending invitation on page
-/// load the way this class's InMemory-only call sites do. A Rest-compatible trigger for that
-/// (e.g. using the already-functional <see cref="IPendingInvitationRepository"/>/
-/// <c>NavigationManager</c> combination outside this class) is a separate, not-yet-filed gap.
+/// half-finished profile shouldn't let someone into the rest of the app. As of XD01-89 the
+/// check itself lives in <see cref="InvitationRedirectGate"/> (this class delegates to it) so
+/// it can also run under the Rest/production backend, where this whole class is never
+/// registered in the first place (see below) — XD01-88 separately gives that backend its own
+/// server-side JIT-provisioning path (inside
+/// <c>GeoAuthorizationService.GetAuthorizationContextAsync</c>), fixing the data-layer bug
+/// (writes no longer reference a phantom, never-persisted user id) that the redirect alone
+/// doesn't address.
 ///
 /// Registered as a singleton (only when <c>Identity:Backend</c> is <c>InMemory</c> — Rest has
 /// no local provisioning step) — lives in <c>GeoAssets.Shared</c> rather than
@@ -60,23 +54,18 @@ namespace GeoAssets.Shared.Services;
 /// </summary>
 public sealed class UserProvisioningService : IAsyncDisposable
 {
-    private const string CompleteProfilePath = "/complete-profile";
-
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly IServiceScopeFactory        _scopeFactory;
     private readonly TimeProvider                _timeProvider;
-    private readonly NavigationManager           _navigation;
 
     public UserProvisioningService(
         AuthenticationStateProvider authStateProvider,
         IServiceScopeFactory        scopeFactory,
-        TimeProvider                timeProvider,
-        NavigationManager           navigation)
+        TimeProvider                timeProvider)
     {
         _authStateProvider = authStateProvider;
         _scopeFactory      = scopeFactory;
         _timeProvider      = timeProvider;
-        _navigation        = navigation;
         _authStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
     }
 
@@ -134,25 +123,10 @@ public sealed class UserProvisioningService : IAsyncDisposable
 
         // Runs regardless of whether this call just provisioned the user or found them already
         // provisioned — a pending invitation can exist (and matter) on any visit, not only the
-        // very first one.
-        await RedirectToCompleteProfileIfPendingAsync(scope.ServiceProvider, current.ExternalObjectId);
-    }
-
-    private async Task RedirectToCompleteProfileIfPendingAsync(IServiceProvider services, string externalObjectId)
-    {
-        // Optionally resolved — see the class doc comment: not functionally reachable under
-        // InMemory, and this must not break JIT provisioning itself when it's absent.
-        var invitationRepo = services.GetService<IPendingInvitationRepository>();
-        if (invitationRepo is null) return;
-
-        // Don't redirect to the page we might already be on — also guards against a redirect
-        // loop if CompleteProfile.razor itself ever calls EnsureProvisionedAsync.
-        if (_navigation.Uri.EndsWith(CompleteProfilePath, StringComparison.OrdinalIgnoreCase)) return;
-
-        var invitation = await invitationRepo.GetByExternalObjectIdAsync(externalObjectId);
-        if (invitation is null || invitation.Status != InvitationStatus.Pending) return;
-
-        _navigation.NavigateTo(CompleteProfilePath);
+        // very first one. Delegates to InvitationRedirectGate (XD01-89) — same logic, now
+        // shared with the Rest backend, which never runs this class at all.
+        var redirectGate = scope.ServiceProvider.GetRequiredService<InvitationRedirectGate>();
+        await redirectGate.RedirectIfPendingAsync();
     }
 
     public ValueTask DisposeAsync()

@@ -18,6 +18,9 @@ namespace GeoAssets.Web.Tests.Identity;
 /// sourced from the external provider's roles claim instead, consumed by
 /// <c>GeoAuthorizationService</c> (see <c>GeoAssets.Identity.Tests</c> for that side) — and
 /// (XD01-71) the redirect-to-/complete-profile gate for a caller with a pending invitation.
+/// As of XD01-89 the redirect check itself is delegated to <c>InvitationRedirectGate</c>
+/// (see <c>InvitationRedirectGateTests</c>), so these gate tests now prove the delegation
+/// preserves InMemory behavior byte-for-byte, not the check logic itself.
 ///
 /// Exercises the public <c>EnsureProvisionedAsync</c> path directly rather than the reactive
 /// <c>AuthenticationStateChanged</c> subscription — that handler is <c>async void</c>, which
@@ -53,20 +56,24 @@ public class UserProvisioningServiceTests
     private static (UserProvisioningService Sut, WasmIdentityStore Store, TestNavigationManager Navigation) BuildSut(
         CurrentUser? currentUser, bool registerInvitationRepo = true, string initialUri = "https://localhost/")
     {
-        var store = new WasmIdentityStore();
-        var services = new ServiceCollection();
+        var store      = new WasmIdentityStore();
+        var navigation = new TestNavigationManager(initialUri);
+        var services   = new ServiceCollection();
         services.AddSingleton<ICurrentUserAccessor>(new FakeCurrentUserAccessor(currentUser));
         services.AddSingleton<IUserRepository>(new InMemoryUserRepository(store, TimeProvider.System));
         if (registerInvitationRepo)
             services.AddSingleton<IPendingInvitationRepository>(new InMemoryPendingInvitationRepository(store));
+        // Mirrors production DI (Program.cs registers NavigationManager via the WASM host and
+        // InvitationRedirectGate unconditionally, XD01-89) — ProvisionAsync now resolves the
+        // gate from the same per-call scope as IUserRepository/ICurrentUserAccessor.
+        services.AddSingleton<NavigationManager>(navigation);
+        services.AddScoped<InvitationRedirectGate>();
         var provider = services.BuildServiceProvider();
 
-        var navigation = new TestNavigationManager(initialUri);
         var sut = new UserProvisioningService(
             new TestAuthenticationStateProvider(),
             provider.GetRequiredService<IServiceScopeFactory>(),
-            TimeProvider.System,
-            navigation);
+            TimeProvider.System);
 
         return (sut, store, navigation);
     }
@@ -198,9 +205,10 @@ public class UserProvisioningServiceTests
     [Fact]
     public async Task EnsureProvisionedAsync_NoInvitationRepositoryRegistered_DoesNotThrowOrRedirect()
     {
-        // The Rest backend doesn't register UserProvisioningService at all today (XD01-12), but
-        // this proves the gate itself degrades safely if IPendingInvitationRepository is ever
-        // simply absent from the container, rather than throwing.
+        // The Rest backend doesn't register UserProvisioningService at all (see
+        // InvitationRedirectGateTests for its own equivalent coverage, XD01-89), but this
+        // proves the gate degrades safely if IPendingInvitationRepository is ever simply
+        // absent from the container, rather than throwing.
         var (sut, _, navigation) = BuildSut(new CurrentUser("user-1", "a@example.com", "Ada", []), registerInvitationRepo: false);
 
         var act = () => sut.EnsureProvisionedAsync();
