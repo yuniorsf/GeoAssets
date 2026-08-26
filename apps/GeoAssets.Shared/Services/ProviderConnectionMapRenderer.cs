@@ -12,9 +12,10 @@ namespace GeoAssets.Shared.Services;
 /// instead means this keeps working once panel items are resolved generically (XD01-85), with
 /// no way to hold a typed <c>@ref</c> to them.
 ///
-/// Not yet consumed anywhere — nothing force-resolves this Scoped service, so it never actually
-/// runs today. XD01-84 wires it in and removes the old <c>@ref</c>-based path once this is
-/// proven to cover the same behavior.
+/// Registered in both <c>Program.cs</c> (Web) and <c>MauiProgram.cs</c>, and force-resolved once
+/// in <c>Index.razor</c>'s <c>OnInitializedAsync</c> (XD01-84) — a Scoped service is never
+/// instantiated by DI registration alone, so something has to ask for it to start the
+/// <see cref="IProviderPool.EntryAdded"/> subscription.
 /// </summary>
 public sealed class ProviderConnectionMapRenderer : IDisposable
 {

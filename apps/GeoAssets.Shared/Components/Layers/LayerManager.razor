@@ -3,6 +3,7 @@
 @using GeoAssets.Core.Interfaces
 @inject IAssetProvider Repository
 @inject IMapInterop MapInterop
+@inject ICurrentMapContext MapContext
 
 <div class="sidebar-section">
     <h6>@L["map.layers"]</h6>
@@ -44,8 +45,6 @@
 </div>
 
 @code {
-    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
-
     private readonly Dictionary<Guid, bool> _visibility = [];
     private bool _addingNew;
     private string _newTypeName = string.Empty;
@@ -60,7 +59,7 @@
     private async Task ToggleLayer(AssetType type, bool visible)
     {
         _visibility[type.Id] = visible;
-        await MapInterop.SetLayerVisibilityAsync(MapDivId, type.Id.ToString(), visible);
+        await MapInterop.SetLayerVisibilityAsync(MapContext.MapDivId, type.Id.ToString(), visible);
     }
 
     private void SaveNewType()

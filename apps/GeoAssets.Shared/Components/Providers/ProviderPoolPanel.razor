@@ -3,6 +3,7 @@
 @using Microsoft.Extensions.Logging
 @inject IProviderPool Pool
 @inject IMapInterop MapInterop
+@inject ICurrentMapContext MapContext
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
@@ -83,12 +84,9 @@
 <!-- Provider connect dialog — position:fixed so it escapes the sidebar's overflow:hidden -->
 <ProviderConnectDialog Visible="_showConnectDialog"
                        IsBootMode="false"
-                       OnClose="EventCallback.Factory.Create(this, CloseConnectDialog)"
-                       OnProviderConnected="EventCallback.Factory.Create<ProviderEntry>(this, HandleProviderConnected)" />
+                       OnClose="EventCallback.Factory.Create(this, CloseConnectDialog)" />
 
 @code {
-    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
-
     private readonly Dictionary<Guid, string> _messages = [];
     private Guid?  _editingId;
     private string _editingName = string.Empty;
@@ -112,28 +110,6 @@
     private void OpenConnectDialog()  => _showConnectDialog = true;
     private void CloseConnectDialog() => _showConnectDialog = false;
 
-    /// <summary>
-    /// Renders a newly connected provider onto the map. Called both from this panel's
-    /// own "add provider" dialog and from the boot-time <see cref="ProviderConnectDialog"/>
-    /// in <c>Index.razor</c>, since the latter connects via <c>IBootLoader</c> directly
-    /// and has no other path to trigger the initial WMS layer / feature render.
-    /// </summary>
-    public async Task HandleProviderConnected(ProviderEntry entry)
-    {
-        _showConnectDialog = false;
-        if (entry.Provider is IWmsProvider wms)
-        {
-            await MapInterop.AddWmsLayerAsync(MapDivId, entry.Id.ToString(),
-                wms.WmsBaseUrl,
-                new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
-        }
-        else
-        {
-            foreach (var f in entry.Provider.GetAll())
-                await MapInterop.RenderFeatureAsync(MapDivId, f);
-        }
-    }
-
     // ── Show / Hide ───────────────────────────────────────────────────────────
 
     private async Task ToggleEnabledAsync(ProviderEntry entry)
@@ -142,21 +118,21 @@
         {
             Pool.Disable(entry.Id);
             if (entry.Provider is IWmsProvider)
-                await MapInterop.RemoveWmsLayerAsync(MapDivId, entry.Id.ToString());
+                await MapInterop.RemoveWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString());
             else
                 foreach (var f in entry.Provider.GetAll())
-                    await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+                    await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
         }
         else
         {
             Pool.Enable(entry.Id);
             if (entry.Provider is IWmsProvider wms)
-                await MapInterop.AddWmsLayerAsync(MapDivId, entry.Id.ToString(),
+                await MapInterop.AddWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString(),
                     wms.WmsBaseUrl,
                     new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
             else
                 foreach (var f in entry.Provider.GetAll())
-                    await MapInterop.RenderFeatureAsync(MapDivId, f);
+                    await MapInterop.RenderFeatureAsync(MapContext.MapDivId, f);
         }
     }
 
@@ -219,7 +195,7 @@
 
             if (entry.IsEnabled)
                 foreach (var f in imported.Features)
-                    await MapInterop.RenderFeatureAsync(MapDivId, f);
+                    await MapInterop.RenderFeatureAsync(MapContext.MapDivId, f);
 
             _messages[entry.Id] = L.GetString("import.successMsg", ev.File.Name, imported.Features.Count);
 
@@ -276,10 +252,10 @@
     {
         if (entry.IsActive) return;
         if (entry.Provider is IWmsProvider)
-            await MapInterop.RemoveWmsLayerAsync(MapDivId, entry.Id.ToString());
+            await MapInterop.RemoveWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString());
         else
             foreach (var f in entry.Provider.GetAll())
-                await MapInterop.RemoveFeatureAsync(MapDivId, f.Id);
+                await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);
     }

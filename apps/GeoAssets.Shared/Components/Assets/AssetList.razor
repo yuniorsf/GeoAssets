@@ -3,6 +3,7 @@
 @using GeoAssets.Core.Interfaces
 @implements IDisposable
 @inject IAssetProvider Repository
+@inject IFeatureSelectionState Selection
 
 <div class="sidebar-section">
     <h6>@L["assets.title"] (@_filtered.Count)</h6>
@@ -32,7 +33,7 @@
             @foreach (var feature in _filtered)
             {
                 var color = GetColor(feature.Properties.AssetTypeId);
-                <div class="asset-list-item @(SelectedFeatureId == feature.Id ? "selected" : "")"
+                <div class="asset-list-item @(Selection.Selected?.Id == feature.Id ? "selected" : "")"
                      @onclick="() => SelectFeature(feature)">
                     <span class="asset-color-dot" style="background:@color"></span>
                     <span class="asset-name">@(string.IsNullOrEmpty(feature.Properties.Name) ? L["assets.noName"] : feature.Properties.Name)</span>
@@ -54,10 +55,6 @@
                OnCancel="CancelDelete" />
 
 @code {
-    [Parameter] public string? SelectedFeatureId { get; set; }
-    [Parameter] public EventCallback<GeoFeature> OnFeatureSelected { get; set; }
-    [Parameter] public EventCallback<GeoFeature> OnFeatureDeleted { get; set; }
-
     private List<GeoFeature> _filtered = [];
     private string _searchQuery = string.Empty;
     private string _typeFilter = string.Empty;
@@ -89,16 +86,17 @@
     private void OnSearch(string query)    { _searchQuery = query;  RefreshList(); }
     private void OnTypeFilter(ChangeEventArgs e) { _typeFilter = e.Value?.ToString() ?? string.Empty; RefreshList(); }
 
-    private async Task SelectFeature(GeoFeature f) => await OnFeatureSelected.InvokeAsync(f);
+    private void SelectFeature(GeoFeature f) => Selection.Select(f);
 
     private void RequestDelete(GeoFeature f) { _pendingDelete = f; _deleteConfirmVisible = true; }
     private void CancelDelete()             { _pendingDelete = null; _deleteConfirmVisible = false; }
 
-    private async Task ConfirmDelete()
+    private void ConfirmDelete()
     {
         if (_pendingDelete is null) return;
+        var wasSelected = Selection.Selected?.Id == _pendingDelete.Id;
         Repository.Delete(_pendingDelete.Id);
-        await OnFeatureDeleted.InvokeAsync(_pendingDelete);
+        if (wasSelected) Selection.Clear();
         _pendingDelete = null;
         _deleteConfirmVisible = false;
     }

@@ -9,7 +9,7 @@ public static class PanelStateServiceExtensions
     /// Registers the cross-cutting state services (<see cref="IFeatureSelectionState"/>,
     /// <see cref="ICurrentMapContext"/>) that let panel-type menu items become self-sufficient
     /// via DI instead of receiving bespoke parameters from whatever page hosts them (XD01-84).
-    /// Not yet called from <c>Program.cs</c>/<c>MauiProgram.cs</c> — no consumer exists yet.
+    /// Called from both <c>Program.cs</c> (Web) and <c>MauiProgram.cs</c>.
     /// </summary>
     public static IServiceCollection AddGeoAssetsPanelState(this IServiceCollection services)
     {

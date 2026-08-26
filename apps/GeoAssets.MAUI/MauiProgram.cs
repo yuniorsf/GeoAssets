@@ -57,6 +57,12 @@ public static class MauiProgram
         // Blazor Web before OTel is wired up client-side.
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IProviderPool, ProviderPool>();
+
+        // Cross-cutting panel state (XD01-82/83) — same self-sufficient-DI wiring as
+        // apps/GeoAssets.Web/Program.cs (XD01-84).
+        builder.Services.AddGeoAssetsPanelState();
+        builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
             new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
