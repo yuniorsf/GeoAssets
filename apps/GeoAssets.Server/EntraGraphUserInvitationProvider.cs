@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -55,12 +56,19 @@ public sealed class EntraGraphUserInvitationProvider : IUserInvitationProvider
         return dto.Id;
     }
 
+    // A 404 here means the account is already gone (e.g. deleted out-of-band, XD01-94) — the
+    // goal of this call ("this account should not be able to sign in") is already satisfied,
+    // so it's tolerated rather than treated as a failure, unlike every other non-success status.
     public async Task RevokeInvitedAccountAsync(string externalObjectId, CancellationToken ct = default)
-        => await SendAsync(HttpMethod.Patch, $"users/{externalObjectId}", new { accountEnabled = false }, ct);
+        => await SendAsync(
+            HttpMethod.Patch, $"users/{externalObjectId}", new { accountEnabled = false }, ct,
+            toleratesNotFound: true);
 
     // ── Graph mechanics ───────────────────────────────────────────────────────
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string relativeUrl, object body, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method, string relativeUrl, object body, CancellationToken ct,
+        bool toleratesNotFound = false)
     {
         var token = await _tokenProvider.GetAccessTokenAsync(ct);
         var request = new HttpRequestMessage(method, relativeUrl)
@@ -70,6 +78,9 @@ public sealed class EntraGraphUserInvitationProvider : IUserInvitationProvider
         };
 
         var response = await _graph.SendAsync(request, ct);
+        if (toleratesNotFound && response.StatusCode == HttpStatusCode.NotFound)
+            return response;
+
         response.EnsureSuccessStatusCode();
         return response;
     }

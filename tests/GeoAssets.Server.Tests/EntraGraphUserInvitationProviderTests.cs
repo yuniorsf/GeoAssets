@@ -139,6 +139,20 @@ public class EntraGraphUserInvitationProviderTests
         handler.Requests[1].RequestUri!.ToString().Should().Be("https://graph.microsoft.com/v1.0/users/external-oid-b");
     }
 
+    [Fact]
+    public async Task RevokeInvitedAccountAsync_GraphReturns404_DoesNotThrow()
+    {
+        // XD01-94: the Graph account was already deleted out-of-band (e.g. manual cleanup) —
+        // the goal ("this account can't sign in") is already satisfied, so this must not throw.
+        // Fails without the fix (EnsureSuccessStatusCode would throw HttpRequestException).
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var sut = BuildSut(handler);
+
+        var act = () => sut.RevokeInvitedAccountAsync("already-deleted-oid");
+
+        await act.Should().NotThrowAsync();
+    }
+
     // ── Error handling ─────────────────────────────────────────────────
 
     [Fact]
@@ -148,6 +162,18 @@ public class EntraGraphUserInvitationProviderTests
         var sut = BuildSut(handler);
 
         var act = () => sut.CreateInvitedAccountAsync("invitee@example.com", "Invitee Name");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
+
+    [Fact]
+    public async Task RevokeInvitedAccountAsync_GraphReturnsForbidden_ThrowsHttpRequestException()
+    {
+        // Only 404 ("already gone") is tolerated — every other Graph error must still surface.
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        var sut = BuildSut(handler);
+
+        var act = () => sut.RevokeInvitedAccountAsync("external-oid-1");
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }
