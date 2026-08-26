@@ -183,8 +183,18 @@
             // step), but the pending-invitation redirect check has no such restriction
             // (InvitationRedirectGate, XD01-89) — call it directly so an invited caller still
             // gets redirected to /complete-profile.
-            var redirectGate = ServiceProvider.GetRequiredService<InvitationRedirectGate>();
-            await redirectGate.RedirectIfPendingAsync();
+            try
+            {
+                var redirectGate = ServiceProvider.GetRequiredService<InvitationRedirectGate>();
+                await redirectGate.RedirectIfPendingAsync();
+            }
+            catch (Exception ex)
+            {
+                // The redirect is a convenience, not a hard requirement to render this page —
+                // a token/network failure here (e.g. no admin consent yet for the identity API
+                // scope) must not take down the map page itself.
+                Console.Error.WriteLine($"[Index] Failed to check pending invitation: {ex.Message}");
+            }
         }
 
         try
