@@ -2,7 +2,7 @@
 
 **Status: `future` — do not use or recommend yet.** Ships in C# 15 with the
 .NET 11 preview cycle; GA targeted **November 2026**. .NET 11 is an STS
-release, not LTS — GeoAssets targets **.NET 9**. Revisit this file and
+release, not LTS — GeoAssets targets **.NET 10**. Revisit this file and
 re-evaluate the codebase once .NET 11 reaches GA (see Jira ticket tracking
 this).
 

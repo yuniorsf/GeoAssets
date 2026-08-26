@@ -2,7 +2,7 @@
 
 ## Stack
 
-- .NET 9 / Blazor WebAssembly (Web) + MAUI (mobile/desktop)
+- .NET 10 / Blazor WebAssembly (Web) + MAUI (mobile/desktop)
 - Razor Class Library: `GeoAssets.Shared` (components, CSS, JS)
 - Core library: `GeoAssets.Core` (models, services, interfaces)
 - Provider: `GeoAssets.Provider.PostgreSQL` (EF Core + Npgsql + PostGIS — server-side only)

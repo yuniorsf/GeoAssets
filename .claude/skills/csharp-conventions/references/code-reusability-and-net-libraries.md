@@ -2,7 +2,7 @@
 
 **Status: `current`** — general engineering practice; the .NET Standard vs.
 target-framework guidance and the OpenAPI/Swashbuckle note are current as of
-.NET 9+, which GeoAssets already meets.
+.NET 9+ — GeoAssets targets .NET 10.
 
 **Source**: Gabriel Baptista & Francesco Abbruzzese, *Software Architecture with
 C# 14 and .NET 10*, 5th Edition (Packt Publishing, 2026), Chapter 5
@@ -136,5 +136,5 @@ refactor to eliminate duplication and reduce complexity, not to add features.
   once the Phase 1 authorization work in `Authorization.md` starts protecting
   those endpoints and documenting the permission model matters), the
   first-party `Microsoft.AspNetCore.OpenApi` package is the current
-  Microsoft-recommended default for a .NET 9+ host like this one, not
+  Microsoft-recommended default for a .NET 10 host like this one, not
   Swashbuckle.

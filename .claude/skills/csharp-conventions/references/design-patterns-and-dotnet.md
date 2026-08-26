@@ -1,7 +1,7 @@
 # Design patterns, SOLID, and dependency injection in .NET
 
 **Status: `current`** — GoF patterns and SOLID are timeless; the DI/.NET Generic
-Host and cloud-pattern material is current .NET 9/10 guidance.
+Host and cloud-pattern material is current .NET 10 guidance.
 
 **Source**: Gabriel Baptista & Francesco Abbruzzese, *Software Architecture with
 C# 14 and .NET 10*, 5th Edition (Packt Publishing, 2026), Chapter 6 "Design
