@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.InMemory;
 using Xunit;
@@ -75,6 +76,37 @@ public class ProviderPoolTests
         sut.Changed += (_, _) => fired = true;
         sut.Add("A", Provider());
         fired.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Add_FiresEntryAddedWithTheNewEntry()
+    {
+        // XD01-83: EntryAdded is the pool-level replacement for the @ref-based boot-flow
+        // coupling — fails without the fix (event doesn't exist / never fires).
+        var sut = new ProviderPool();
+        ProviderEntry? received = null;
+        sut.EntryAdded += (_, entry) => received = entry;
+
+        var added = sut.Add("A", Provider());
+
+        received.Should().BeSameAs(added);
+    }
+
+    [Fact]
+    public void Add_DoesNotFireEntryAddedOnUnrelatedMutations()
+    {
+        // EntryAdded must stay distinct from Changed — SetActive/Enable/etc. must not
+        // double-fire the map render this event is meant to drive.
+        var sut = new ProviderPool();
+        var entry = sut.Add("A", Provider());
+        var entryAddedCount = 0;
+        sut.EntryAdded += (_, _) => entryAddedCount++;
+
+        sut.SetActive(entry.Id);
+        sut.Rename(entry.Id, "B");
+        sut.Disable(entry.Id);
+
+        entryAddedCount.Should().Be(0);
     }
 
     // ── SetActive ─────────────────────────────────────────────────────────────

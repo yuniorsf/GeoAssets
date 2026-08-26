@@ -40,4 +40,12 @@ public interface IProviderPool
 
     /// <summary>Fires whenever pool state changes (entry added, removed, or state updated).</summary>
     event EventHandler? Changed;
+
+    /// <summary>
+    /// Fires when a new entry is added via <see cref="Add"/>, with that entry. Kept distinct
+    /// from <see cref="Changed"/> (which also fires on <see cref="SetActive"/>/<see cref="Enable"/>/
+    /// etc.) so a listener that only cares about newly-connected providers — e.g. rendering the
+    /// initial map layer — doesn't double-fire on unrelated mutations.
+    /// </summary>
+    event EventHandler<ProviderEntry>? EntryAdded;
 }
