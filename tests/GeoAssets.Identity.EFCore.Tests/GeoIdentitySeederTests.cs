@@ -55,6 +55,37 @@ public class GeoIdentitySeederTests
     }
 
     [Fact]
+    public async Task SeedAsync_ExistingRoleMissingNewlyAddedGrant_BackfillsIt()
+    {
+        // XD01-90 regression test: simulates an environment seeded before a permission was
+        // added to a role's code-level list — the role and its Permission row both already
+        // exist, but the RolePermission linking them doesn't. Without the fix, AddRoleAsync's
+        // early-return on "role already exists" would skip the grant loop entirely and this
+        // grant would never backfill, exactly as happened in production.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var usersReadGrant = await db.RolePermissions
+            .Include(rp => rp.Permission)
+            .SingleAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "users:read");
+        db.RolePermissions.Remove(usersReadGrant);
+        await db.SaveChangesAsync();
+        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(15);
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var adminCodes = await db.RolePermissions
+            .Where(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+        adminCodes.Should().Contain("users:read");
+        adminCodes.Should().HaveCount(16);
+    }
+
+    [Fact]
     public async Task SeedAsync_CalledTwice_IsIdempotent()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");

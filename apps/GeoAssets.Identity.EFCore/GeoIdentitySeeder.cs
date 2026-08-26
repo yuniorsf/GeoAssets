@@ -151,9 +151,18 @@ public static class GeoIdentitySeeder
         GeoIdentityDbContext db, Guid id, string name, string description, bool isBuiltIn,
         CancellationToken ct, params string[] permissionCodes)
     {
-        if (await db.Roles.AnyAsync(r => r.Id == id, ct)) return;
+        if (!await db.Roles.AnyAsync(r => r.Id == id, ct))
+            db.Roles.Add(new AppRole { Id = id, Name = name, Description = description, IsBuiltIn = isBuiltIn });
 
-        db.Roles.Add(new AppRole { Id = id, Name = name, Description = description, IsBuiltIn = isBuiltIn });
+        // Backfill any grants missing from an already-existing role too (XD01-90), not just
+        // ones just created above — a role's intended permission list can grow in a later
+        // code change after an environment was already seeded once, and previously that
+        // change never reached a role that already existed by this point.
+        var grantedPermissionIds = (await db.RolePermissions
+            .Where(rp => rp.RoleId == id)
+            .Select(rp => rp.PermissionId)
+            .ToListAsync(ct))
+            .ToHashSet();
 
         // Permissions were seeded (and possibly still pending SaveChanges) earlier in the
         // same unit of work — read from the change tracker, not the database, to see them.
@@ -161,7 +170,7 @@ public static class GeoIdentitySeeder
         {
             var perm = db.ChangeTracker.Entries<AppPermission>().Select(e => e.Entity).FirstOrDefault(p => p.Code == code)
                     ?? await db.Permissions.FirstOrDefaultAsync(p => p.Code == code, ct);
-            if (perm is not null)
+            if (perm is not null && !grantedPermissionIds.Contains(perm.Id))
                 db.RolePermissions.Add(new RolePermission { RoleId = id, PermissionId = perm.Id });
         }
     }
