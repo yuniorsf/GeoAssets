@@ -9,7 +9,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.Extensions.DependencyInjection
 @inject ICurrentUserAccessor CurrentUserAccessor
-@inject IUserRepository UserRepo
+@inject IGeoAuthorizationService AuthService
 @inject IUserClaimRepository ClaimRepository
 @inject IServiceProvider ServiceProvider
 @inject NavigationManager Navigation
@@ -62,7 +62,7 @@
     private bool _loading = true;
     private bool _saving;
     private string? _error;
-    private AppUser? _appUser;
+    private Guid? _appUserId;
     private PendingInvitation? _pendingInvitation;
 
     protected override async Task OnInitializedAsync()
@@ -75,10 +75,13 @@
         }
 
         // The redirect gate (UserProvisioningService) only ever sends someone here after
-        // provisioning them, so this should always find a row — but a user reaching this page
-        // by typing the URL directly, without going through the gate, is handled gracefully:
-        // HandleSaveAsync below simply no-ops the claim write if _appUser is still null.
-        _appUser = await UserRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
+        // provisioning them. IGeoAuthorizationService.GetAuthorizationContextAsync() — the
+        // same self-service "who am I" call every other page uses — resolves (JIT-provisioning
+        // if needed, per GeoAuthorizationService) the caller's own AppUser id. Unlike
+        // IUserRepository.GetByExternalObjectIdAsync, this works under both the InMemory and
+        // Rest backends: RestUserRepository has no matching server endpoint for that lookup
+        // and throws NotSupportedException (XD01-93).
+        _appUserId = await ResolveAppUserIdAsync(AuthService);
 
         // Optionally resolved — never registered under Identity:Backend=InMemory (XD01-70/-71).
         var invitationRepo = ServiceProvider.GetService<IPendingInvitationRepository>();
@@ -89,6 +92,18 @@
         _loading = false;
     }
 
+    /// <summary>
+    /// Resolves the current caller's own <see cref="AppUser.Id"/> via the shared authorization
+    /// context — the only lookup that works under both the InMemory and Rest backends (XD01-93).
+    /// </summary>
+    public static async Task<Guid> ResolveAppUserIdAsync(
+        IGeoAuthorizationService authService,
+        CancellationToken        ct = default)
+    {
+        var ctx = await authService.GetAuthorizationContextAsync(ct);
+        return ctx.User.Id;
+    }
+
     private async Task HandleSaveAsync()
     {
         _saving = true;
@@ -97,11 +112,11 @@
 
         try
         {
-            if (_appUser is not null && !string.IsNullOrWhiteSpace(_editModel.Phone))
+            if (_appUserId is { } appUserId && !string.IsNullOrWhiteSpace(_editModel.Phone))
             {
                 await ClaimRepository.AddAsync(new UserClaim
                 {
-                    UserId = _appUser.Id,
+                    UserId = appUserId,
                     Type   = PhoneClaimType,
                     Value  = _editModel.Phone,
                 });
