@@ -232,6 +232,21 @@ public static class IdentityRestApiExtensions
                     invitationProvider is not NullUserInvitationProvider &&
                     invitationEmailSender is not NullInvitationEmailSender), _opts));
 
+        // Authenticated-only, self-service — "is there a Pending invitation for ME", derived
+        // from the caller's own AuthorizationContext, never from a client-supplied id (XD01-92).
+        // Distinct from the admin list below (users:read): a just-invited caller has no
+        // permissions yet by design (XD01-19, no default role granted), so the redirect gate
+        // that drives them to /complete-profile (InvitationRedirectGate, XD01-89) can only ever
+        // work if checking "my own" invitation doesn't require an admin permission they'll never
+        // have. Mirrors the userclaims endpoints' ownership philosophy further below.
+        routes.MapGet($"{prefix}/invitations/me", async (
+            IPendingInvitationRepository invitationRepo, IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            var invitation = await invitationRepo.GetByExternalObjectIdAsync(ctx.User.ExternalObjectId);
+            return invitation is null ? Results.NotFound() : Results.Json(ToDto(invitation), _opts);
+        });
+
         routes.MapGet($"{prefix}/invitations", async (IPendingInvitationRepository invitationRepo) =>
         {
             var invitations = await invitationRepo.GetAllPendingAsync();

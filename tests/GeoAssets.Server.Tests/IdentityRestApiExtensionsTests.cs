@@ -356,7 +356,9 @@ public class IdentityRestApiExtensionsTests
             return Task.CompletedTask;
         }
 
-        public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) =>
+            Task.FromResult(invitations.Values.FirstOrDefault(i =>
+                i.Status == InvitationStatus.Pending && i.ExternalObjectId == externalObjectId));
     }
 
     /// <summary>Drives the XD01-87 userclaims endpoint tests below. Claims are keyed by owning
@@ -1211,6 +1213,69 @@ public class IdentityRestApiExtensionsTests
         var response = await client.GetAsync("/api/identity/invitations");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Invitations_Me_HasOwnPendingInvitation_ReturnsItWithNoPermissionRequired()
+    {
+        // The whole point of this endpoint (XD01-92): a just-invited caller has zero
+        // permissions by design (XD01-19), so FakePermissionAuthorizationService granting
+        // nothing must still succeed here, unlike the admin list above.
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var ownInvitation = NewInvitation(externalObjectId: "caller-oid");
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [ownInvitation.Id] = ownInvitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/invitations/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var dto = await response.Content.ReadFromJsonAsync<PendingInvitationDto>();
+        dto!.Id.Should().Be(ownInvitation.Id);
+    }
+
+    [Fact]
+    public async Task Invitations_Me_NoOwnInvitation_Returns404()
+    {
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService,
+            invitationRepo: new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>()));
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/invitations/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Invitations_Me_NeverReturnsSomeoneElsesInvitation()
+    {
+        // Non-leakage: this endpoint has no client-supplied id to probe, but confirms the
+        // caller's own (absent) invitation is what's checked, not any invitation that happens
+        // to exist in the repository.
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var othersInvitation = NewInvitation(externalObjectId: "someone-else-oid");
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [othersInvitation.Id] = othersInvitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/invitations/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

@@ -67,30 +67,51 @@ public class RestPendingInvitationRepositoryTests
     }
 
     [Fact]
-    public async Task GetByExternalObjectIdAsync_MatchingPendingInvitation_ReturnsIt()
+    public async Task GetByExternalObjectIdAsync_OwnPendingInvitationExists_ReturnsIt()
     {
+        // XD01-92: calls the self-service GET /invitations/me endpoint, not the admin list —
+        // the admin list requires users:read, a permission the redirect gate's only real
+        // caller (a just-invited, zero-permissions user) never has.
         var dto = NewDto(externalObjectId: "target-oid");
-        var handler = new FakeHttpMessageHandler(_ => JsonResponse(new List<PendingInvitationDto> { dto }));
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse(dto));
         var sut = Sut(handler);
 
         var invitation = await sut.GetByExternalObjectIdAsync("target-oid");
 
         invitation.Should().NotBeNull();
         invitation!.ExternalObjectId.Should().Be("target-oid");
+        handler.Requests.Single().RequestUri!.AbsolutePath.Should().Be("/invitations/me");
     }
 
     [Fact]
-    public async Task GetByExternalObjectIdAsync_AlreadyRedeemed_ReturnsNull()
+    public async Task GetByExternalObjectIdAsync_NoOwnPendingInvitation_ReturnsNull()
     {
-        // The redirect gate (XD01-71) must stop redirecting once an invitation is redeemed —
-        // since GET /invitations only ever lists Pending rows, a redeemed one simply isn't in
-        // the list anymore, which is exactly the "stop firing" signal the gate needs.
-        var handler = new FakeHttpMessageHandler(_ => JsonResponse(new List<PendingInvitationDto>()));
+        // Covers both "never invited" and "already redeemed/revoked" — the server-side
+        // /invitations/me endpoint 404s for both, since it only ever resolves a Pending row.
+        // The redirect gate (XD01-71/89) needs exactly this "stop firing" signal once redeemed.
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
         var sut = Sut(handler);
 
-        var invitation = await sut.GetByExternalObjectIdAsync("already-redeemed-oid");
+        var invitation = await sut.GetByExternalObjectIdAsync("no-invitation-oid");
 
         invitation.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByExternalObjectIdAsync_ParameterIsIgnored_AlwaysChecksTheCallersOwnInvitation()
+    {
+        // Documented assumption (XD01-92): this method's externalObjectId parameter is never
+        // sent to the server — /invitations/me resolves "my own" from the caller's
+        // authenticated identity server-side, regardless of what's passed here.
+        var dto = NewDto(externalObjectId: "the-actual-caller-oid");
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse(dto));
+        var sut = Sut(handler);
+
+        var invitation = await sut.GetByExternalObjectIdAsync("some-other-id-entirely");
+
+        invitation.Should().NotBeNull();
+        invitation!.ExternalObjectId.Should().Be("the-actual-caller-oid");
+        handler.Requests.Single().RequestUri!.Query.Should().BeEmpty();
     }
 
     [Fact]
