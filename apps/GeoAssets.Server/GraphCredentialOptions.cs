@@ -7,4 +7,4 @@ namespace GeoAssets.Server;
 /// Sync" credential (XD01-65 extends that one app registration's permissions rather than
 /// provisioning a second one) instead of standing up a second MSAL confidential-client instance.
 /// </summary>
-public sealed record GraphCredentialOptions(string TenantId, string ClientId, string ClientSecret);
+public sealed record GraphCredentialOptions(string TenantId, string TenantDomain, string ClientId, string ClientSecret);

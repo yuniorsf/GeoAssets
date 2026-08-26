@@ -169,8 +169,19 @@ dotnet user-secrets set "AcsEmail:ConnectionString" "<connection string from ste
 dotnet user-secrets set "AcsEmail:FromAddress"       "<verified FromAddress from step 6>"
 ```
 
-No new Graph secret is needed — `RoleSync:TenantId`/`ClientId`/`ClientSecret`
-from XD01-60 are reused as-is for the extra permissions granted in steps 2–3.
+`RoleSync:TenantId`/`ClientId`/`ClientSecret` from XD01-60 are reused as-is
+for the extra permissions granted in steps 2–3 — no new Graph *credential* is
+needed. One new Graph *config value* is needed though (XD01-91):
+`identities[].issuer` on the local-account creation call Graph makes for each
+invitee must be the tenant's **domain name**, not its GUID — Graph rejects a
+GUID there with `400 Bad Request`. Capture it from the Entra admin center's
+tenant overview (or any UPN issued by this tenant, e.g.
+`someone@geoassets.onmicrosoft.com`):
+
+```bash
+dotnet user-secrets set "RoleSync:TenantDomain" "<your tenant's default domain, e.g. geoassets.onmicrosoft.com>"
+```
+
 In deployed environments, use whatever secret store this project's existing
 `AzureAdCiam` production secrets already live in.
 

@@ -43,7 +43,7 @@ public sealed class EntraGraphUserInvitationProvider : IUserInvitationProvider
                 new
                 {
                     signInType       = "emailAddress",
-                    issuer           = _credential.TenantId,
+                    issuer           = _credential.TenantDomain,
                     issuerAssignedId = email,
                 },
             },

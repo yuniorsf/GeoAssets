@@ -9,6 +9,7 @@ namespace GeoAssets.Server.Tests;
 public class EntraGraphUserInvitationProviderTests
 {
     private const string TenantId = "94bb6627-6a6f-4219-b6d2-ce9ca5e82215";
+    private const string TenantDomain = "geoassets.onmicrosoft.com";
 
     private sealed class StubGraphAccessTokenProvider(string token = "test-token") : IGraphAccessTokenProvider
     {
@@ -19,7 +20,7 @@ public class EntraGraphUserInvitationProviderTests
         new(
             new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/v1.0/") },
             new StubGraphAccessTokenProvider(),
-            new GraphCredentialOptions(TenantId, "client-id", "client-secret"));
+            new GraphCredentialOptions(TenantId, TenantDomain, "client-id", "client-secret"));
 
     private static JsonObject ReadBody(HttpRequestMessage request)
     {
@@ -55,8 +56,25 @@ public class EntraGraphUserInvitationProviderTests
 
         var identity = body["identities"]!.AsArray()[0]!;
         identity["signInType"]!.GetValue<string>().Should().Be("emailAddress");
-        identity["issuer"]!.GetValue<string>().Should().Be(TenantId);
+        identity["issuer"]!.GetValue<string>().Should().Be(TenantDomain);
         identity["issuerAssignedId"]!.GetValue<string>().Should().Be("invitee@example.com");
+    }
+
+    [Fact]
+    public async Task CreateInvitedAccountAsync_IdentityIssuer_IsTheTenantDomainNotTheGuid()
+    {
+        // XD01-91 regression test: Graph's Local Account identity creation rejects a GUID for
+        // identities[].issuer with 400 Bad Request — it must be the tenant's domain name. Fails
+        // without the fix (would assert TenantId, the GUID, instead).
+        var handler = new FakeHttpMessageHandler(_ =>
+            JsonResponse(HttpStatusCode.Created, new JsonObject { ["id"] = "new-external-oid" }));
+        var sut = BuildSut(handler);
+
+        await sut.CreateInvitedAccountAsync("invitee@example.com", "Invitee Name");
+
+        var issuer = ReadBody(handler.Requests[0])["identities"]!.AsArray()[0]!["issuer"]!.GetValue<string>();
+        issuer.Should().Be(TenantDomain);
+        issuer.Should().NotBe(TenantId);
     }
 
     [Fact]
