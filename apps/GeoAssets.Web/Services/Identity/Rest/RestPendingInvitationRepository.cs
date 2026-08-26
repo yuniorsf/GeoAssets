@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -52,10 +52,14 @@ public sealed class RestPendingInvitationRepository(HttpClient http) : IPendingI
     public async Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default)
     {
         var response = await http.GetAsync("invitations/me", ct);
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
-        var dto = await response.Content.ReadFromJsonAsync<PendingInvitationDto>(ct);
+        // No pending invitation is a 200 with an empty body (Results.Json writes nothing for a
+        // null value), not a 404 — so an empty body here means "none", not a parse error.
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (string.IsNullOrEmpty(body)) return null;
+
+        var dto = JsonSerializer.Deserialize<PendingInvitationDto>(body, JsonSerializerOptions.Web);
         return dto is null ? null : ToInvitation(dto);
     }
 

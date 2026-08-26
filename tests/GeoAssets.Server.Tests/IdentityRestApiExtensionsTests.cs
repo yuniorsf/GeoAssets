@@ -1240,8 +1240,10 @@ public class IdentityRestApiExtensionsTests
     }
 
     [Fact]
-    public async Task Invitations_Me_NoOwnInvitation_Returns404()
+    public async Task Invitations_Me_NoOwnInvitation_Returns200WithNullBody()
     {
+        // No pending invitation is the expected outcome for most callers, not an error — this
+        // must never 404 (that would show up as a browser-logged network error).
         var caller = NewUser(externalObjectId: "caller-oid");
         var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
         var authService = new FakeAuthorizationService(
@@ -1253,7 +1255,9 @@ public class IdentityRestApiExtensionsTests
 
         var response = await client.GetAsync("/api/identity/invitations/me");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().BeEmpty();
     }
 
     [Fact]
@@ -1275,7 +1279,9 @@ public class IdentityRestApiExtensionsTests
 
         var response = await client.GetAsync("/api/identity/invitations/me");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().BeEmpty();
     }
 
     [Fact]

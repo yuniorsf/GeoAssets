@@ -239,12 +239,16 @@ public static class IdentityRestApiExtensions
         // that drives them to /complete-profile (InvitationRedirectGate, XD01-89) can only ever
         // work if checking "my own" invitation doesn't require an admin permission they'll never
         // have. Mirrors the userclaims endpoints' ownership philosophy further below.
+        //
+        // Always 200, never 404: having no pending invitation is the expected outcome for almost
+        // every authenticated caller (anyone not mid-onboarding), not an error — a 404 shows up
+        // as a browser-logged network error regardless of how gracefully the client handles it.
         routes.MapGet($"{prefix}/invitations/me", async (
             IPendingInvitationRepository invitationRepo, IGeoAuthorizationService authService) =>
         {
             var ctx = await authService.GetAuthorizationContextAsync();
             var invitation = await invitationRepo.GetByExternalObjectIdAsync(ctx.User.ExternalObjectId);
-            return invitation is null ? Results.NotFound() : Results.Json(ToDto(invitation), _opts);
+            return Results.Json(invitation is null ? null : ToDto(invitation), _opts);
         });
 
         routes.MapGet($"{prefix}/invitations", async (IPendingInvitationRepository invitationRepo) =>

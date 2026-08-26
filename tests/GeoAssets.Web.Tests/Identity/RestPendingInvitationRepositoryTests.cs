@@ -87,9 +87,10 @@ public class RestPendingInvitationRepositoryTests
     public async Task GetByExternalObjectIdAsync_NoOwnPendingInvitation_ReturnsNull()
     {
         // Covers both "never invited" and "already redeemed/revoked" — the server-side
-        // /invitations/me endpoint 404s for both, since it only ever resolves a Pending row.
+        // /invitations/me endpoint returns 200 with a null body for both, since it only ever
+        // resolves a Pending row (never a 404 — that's not an error case for this endpoint).
         // The redirect gate (XD01-71/89) needs exactly this "stop firing" signal once redeemed.
-        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse<PendingInvitationDto?>(null));
         var sut = Sut(handler);
 
         var invitation = await sut.GetByExternalObjectIdAsync("no-invitation-oid");
