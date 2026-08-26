@@ -30,6 +30,11 @@ public sealed class OrgResourceAuthorizationHandler(
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context, OrgResourceRequirement requirement, IOrgOwnedResource resource)
     {
+        // Same reasoning as GeoAuthorizationHandler: this handler can run even when the
+        // route-level RequireAuthorization requirement hasn't succeeded yet, and
+        // IGeoAuthorizationService throws for an anonymous caller rather than returning false.
+        if (context.User.Identity?.IsAuthenticated != true) return;
+
         if (!await authorizationService.HasPermissionAsync(requirement.PermissionCode))
             return;
 
