@@ -127,11 +127,17 @@ app.UseGeoAssetsAuthentication();
 
 app.UseGeoAssetsObservability();
 
+// Interim toggle (XD01-95): the in-app Leaflet map loads WMS tiles via plain <img> elements,
+// which can never carry a bearer token, so features:read can't actually be enforced against
+// this app's own map yet. Defaults to false (open) — see Wms:RequireAuthentication in
+// appsettings.json and WmsEndpointExtensions.MapWmsApi's doc comment.
+var wmsRequireAuthentication = app.Configuration.GetValue("Wms:RequireAuthentication", defaultValue: false);
+
 // Expose all GeoAssets REST endpoints under /api/geoassets
 // Endpoints: GET/POST /features, GET/PUT/DELETE /features/{id},
 //            POST /features/bulk, POST /features/load, DELETE /features,
 //            GET/POST /asset-types, DELETE /asset-types/{id}
-app.MapGeoAssetsApi();
+app.MapGeoAssetsApi(wmsRequireAuthentication: wmsRequireAuthentication);
 
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
@@ -144,6 +150,6 @@ app.MapIdentityApi();
 // Standalone OGC endpoints for external GIS clients (CORS not required
 // for server-to-server or native desktop tools).
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
-app.MapWmsApi();  // GET /wms — OGC WMS 1.1.1
+app.MapWmsApi(requireAuthentication: wmsRequireAuthentication);  // GET /wms — OGC WMS 1.1.1
 
 app.Run();

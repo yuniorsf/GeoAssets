@@ -70,7 +70,10 @@ public class EndpointAuthorizationTests
         public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private static async Task<TestServer> BuildServerAsync(params string[] grantedPermissions)
+    private static Task<TestServer> BuildServerAsync(params string[] grantedPermissions) =>
+        BuildServerAsync(wmsRequireAuthentication: true, grantedPermissions);
+
+    private static async Task<TestServer> BuildServerAsync(bool wmsRequireAuthentication, params string[] grantedPermissions)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -105,7 +108,7 @@ public class EndpointAuthorizationTests
                     {
                         endpoints.MapGeoAssetsApi();
                         endpoints.MapWfsApi();
-                        endpoints.MapWmsApi();
+                        endpoints.MapWmsApi(requireAuthentication: wmsRequireAuthentication);
                     });
                 });
             })
@@ -255,5 +258,23 @@ public class EndpointAuthorizationTests
         var response = await client.GetAsync("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Wms_RequireAuthenticationDisabled_AllowsAnonymousAccess()
+    {
+        // Interim toggle (XD01-95): the in-app Leaflet map can't attach a bearer token to its
+        // <img>-based tile requests, so Wms:RequireAuthentication=false must actually let an
+        // anonymous caller reach the handler, not just change the default. An unsupported
+        // REQUEST value needs no database access (unlike GetCapabilities/GetMap/GetFeatureInfo —
+        // out of scope for this authorization-gating test, see the class comment above), so a
+        // 400 here proves the request got past authorization; a 401/403 would mean the flag had
+        // no effect.
+        using var server = await BuildServerAsync(wmsRequireAuthentication: false);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=Nonsense");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 }
