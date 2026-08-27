@@ -30,7 +30,9 @@
       "Bash(node -e \"require.resolve\\('playwright'\\)\")",
       "Bash(npm ls *)",
       "Bash(psql -h localhost -p 5432 -U postgres -d geoassets -c ' *)",
-      "Bash(psql -h localhost -p 5432 -U postgres -d geoassets -c 'SELECT \"Code\" FROM \"Permissions\" ORDER BY \"Code\";')"
+      "Bash(psql -h localhost -p 5432 -U postgres -d geoassets -c 'SELECT \"Code\" FROM \"Permissions\" ORDER BY \"Code\";')",
+      "Bash(set -e)",
+      "Bash(rm -rf __TRACKED_VAR__/ui-ux-pro-max-skill)"
     ]
   }
 }
