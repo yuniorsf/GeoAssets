@@ -106,6 +106,7 @@ Also theme-scoped: `--on-accent` (text/icon color for content on top of `--accen
 
 - All geometry follows RFC 7946 GeoJSON ([longitude, latitude] order)
 - Razor components: `EventCallback<T>` up, `[Parameter]` down
+- Every Razor component/page ships as a markup-only `.razor` file plus a `.razor.cs` code-behind partial class, regardless of the component's size — see `apps/GeoAssets.MAUI/WebApp.razor`/`WebApp.razor.cs` for the target shape (tracked by XD01-101)
 - Bootstrap is allowed and is the base for component styling in `GeoAssets.Shared` (used by both Web and MAUI); layer bespoke CSS in `geoassets.css` on top for anything Bootstrap doesn't cover — don't hand-roll styles Bootstrap already provides
 - The only loaded JS file is `geoassets.js` (IIFE); `mapInterop.js` and `drawInterop.js` are legacy drafts — do not reference them
 - Do not add features, refactor, or clean up code beyond what is asked
