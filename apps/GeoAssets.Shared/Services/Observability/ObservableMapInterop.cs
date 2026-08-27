@@ -46,6 +46,7 @@ public sealed class ObservableMapInterop(
 
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom)           => inner.InitializeMapAsync(divId, lat, lon, zoom);
     public Task DestroyMapAsync(string divId)                                               => inner.DestroyMapAsync(divId);
+    public Task InvalidateSizeAsync(string divId)                                            => inner.InvalidateSizeAsync(divId);
     public Task RenderFeatureAsync(string divId, GeoFeature feature)                        => inner.RenderFeatureAsync(divId, feature);
     public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)   => inner.RenderAllFeaturesAsync(divId, features);
     public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)         => inner.RenderAllFeaturesRawJsonAsync(divId, rawFeaturesJson);

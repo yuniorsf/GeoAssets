@@ -328,6 +328,10 @@ window.GeoAssets = (function () {
         if (mode === 'webgl') _initWebGL(divId);
     }
 
+    function invalidateSize(divId) {
+        _maps[divId]?.map.invalidateSize();
+    }
+
     function destroyMap(divId) {
         const state = _maps[divId];
         if (state) {
@@ -704,6 +708,7 @@ window.GeoAssets = (function () {
     return {
         initializeMap,
         destroyMap,
+        invalidateSize,
         registerHandlers,
         enableDraw,
         disableDraw,

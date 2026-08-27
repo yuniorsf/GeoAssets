@@ -79,6 +79,7 @@ public class ProviderConnectionMapRendererTests
 
         public Task InitializeMapAsync(string divId, double lat, double lon, int zoom) => throw new NotSupportedException();
         public Task DestroyMapAsync(string divId) => throw new NotSupportedException();
+        public Task InvalidateSizeAsync(string divId) => throw new NotSupportedException();
         public Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features) => throw new NotSupportedException();
         public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features) => throw new NotSupportedException();
         public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) => throw new NotSupportedException();

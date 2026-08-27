@@ -42,6 +42,7 @@ public interface IMapInterop
     // --- Lifecycle ---
     Task InitializeMapAsync(string divId, double lat, double lon, int zoom);
     Task DestroyMapAsync(string divId);
+    Task InvalidateSizeAsync(string divId);
 
     // --- Feature rendering ---
     Task RenderFeatureAsync(string divId, GeoFeature feature);
