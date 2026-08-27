@@ -1,12 +1,22 @@
 @namespace GeoAssets.MAUI
+@using GeoAssets.MAUI.Pages
 @using GeoAssets.Shared.Pages
 
-<Router AppAssembly="@typeof(WebApp).Assembly"
-        AdditionalAssemblies="@(new[] { typeof(GeoAssets.Shared.Pages.Index).Assembly })">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" />
-    </Found>
-    <NotFound>
-        <p>Página no encontrada.</p>
-    </NotFound>
-</Router>
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(WebApp).Assembly"
+            AdditionalAssemblies="@(new[] { typeof(GeoAssets.Shared.Pages.Index).Assembly })">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData">
+                <NotAuthorized>
+                    <MauiLogin />
+                </NotAuthorized>
+                <Authorizing>
+                    <p>Verificando autenticación…</p>
+                </Authorizing>
+            </AuthorizeRouteView>
+        </Found>
+        <NotFound>
+            <p>Página no encontrada.</p>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

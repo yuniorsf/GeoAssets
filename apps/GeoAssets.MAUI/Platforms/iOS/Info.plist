@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- .NET MAUI auto-generates a base Info.plist (CFBundleIdentifier/CFBundleDisplayName/
+     CFBundleShortVersionString etc.) from GeoAssets.MAUI.csproj's ApplicationId/ApplicationTitle/
+     ApplicationDisplayVersion when this file is absent, and still injects those same values onto
+     whatever Info.plist is provided here — so only the delta this app actually needs belongs in
+     this file (XD01-52): CFBundleURLTypes registers the "msauth.com.geoassets.app" scheme that
+     MSAL.NET's WithDefaultRedirectUri() computes for iOS/MacCatalyst (bundle ID from
+     ApplicationId, matches the AzureAdCiamMaui comment in appsettings.json — no placeholder
+     needed here, unlike Android's manifest, since a bundle ID is already fixed at build time),
+     so the OS routes the system-browser sign-in callback back into the app via
+     AppDelegate.OpenUrl. The baseline UIDeviceFamily/orientation keys below are the same ones
+     `dotnet new maui` scaffolds by default. -->
+<plist version="1.0">
+<dict>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.geoassets.app.msal</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>msauth.com.geoassets.app</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

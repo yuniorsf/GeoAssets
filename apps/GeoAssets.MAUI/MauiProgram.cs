@@ -1,11 +1,15 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
+using GeoAssets.Identity.Authentication;
+using GeoAssets.MAUI.Extensions;
+using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -62,6 +66,23 @@ public static class MauiProgram
         // apps/GeoAssets.Web/Program.cs (XD01-84).
         builder.Services.AddGeoAssetsPanelState();
         builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+
+        // ── Authentication (XD01-52: MSAL.NET public-client flow, provider-agnostic seam per
+        // XD01-48 — see EntraCiamMauiAuthenticationProvider) ────────────────────────────────
+        builder.Services.AddAuthorizationCore();
+        builder.Services.AddGeoAssetsMauiAuthentication(builder.Configuration);
+        builder.Services.AddScoped<MauiMsalAuthenticationStateProvider>();
+        builder.Services.AddScoped<AuthenticationStateProvider>(
+            sp => sp.GetRequiredService<MauiMsalAuthenticationStateProvider>());
+        builder.Services.AddScoped<ICurrentUserAccessor, MauiCurrentUserAccessor>();
+        builder.Services.AddScoped<IAuthNavigationService, MauiAuthNavigationService>();
+
+        // Attaches a silently-acquired bearer token to the "GeoAssetsServer" named HttpClient —
+        // see MsalAuthorizationHandler's doc comment: no current caller requests this client by
+        // name, registered ahead of MAUI gaining a REST call site against GeoAssets.Server.
+        builder.Services.AddTransient<MsalAuthorizationHandler>();
+        builder.Services.AddHttpClient("GeoAssetsServer")
+            .AddHttpMessageHandler<MsalAuthorizationHandler>();
 
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(

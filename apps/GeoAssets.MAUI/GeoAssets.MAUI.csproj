@@ -22,6 +22,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.51" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.51" />
+    <!-- MSAL.NET public-client interactive/silent token acquisition (XD01-52) — version pinned
+         to match apps/GeoAssets.Server/GeoAssets.Server.csproj's existing reference. -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.87.0" />
   </ItemGroup>
 
   <PropertyGroup>
