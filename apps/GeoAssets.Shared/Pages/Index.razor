@@ -8,13 +8,11 @@
 @using GeoAssets.Core.Models.Geometry
 @using GeoAssets.Core.Services
 @using GeoAssets.Shared.Components.Assets
-@using GeoAssets.Shared.Components.Layers
 @using GeoAssets.Shared.Components.Map
 @using GeoAssets.Shared.Components.Providers
 @using GeoAssets.Shared.Components.Shared
 @using GeoAssets.Identity.Authentication
 @using GeoAssets.Identity.Authorization.Repositories
-@using GeoAssets.Identity.Authorization.Services
 @using Microsoft.Extensions.DependencyInjection
 @implements IAsyncDisposable
 @inject IAssetProvider Repository
@@ -24,7 +22,6 @@
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAuthNavigationService AuthNav
-@inject IGeoAuthorizationService AuthService
 @inject ICurrentUserAccessor CurrentUserAccessor
 @inject IUserRepository UserRepository
 @inject IServiceProvider ServiceProvider
@@ -40,23 +37,7 @@
         </div>
 
         <div class="sidebar-scrollable">
-            <NavMenu ShowAdmin="@_showAdminNavLink"
-                     ShowProviders="@_showProviders"
-                     ShowLayers="@_showLayers"
-                     ShowAssetList="@_showAssetList"
-                     OnToggleProviders="ToggleProviders"
-                     OnToggleLayers="ToggleLayers"
-                     OnToggleAssetList="ToggleAssetList">
-                <ProvidersPanel>
-                    <ProviderPoolPanel />
-                </ProvidersPanel>
-                <LayersPanel>
-                    <LayerManager />
-                </LayersPanel>
-                <AssetListPanel>
-                    <AssetList />
-                </AssetListPanel>
-            </NavMenu>
+            <NavMenu />
         </div>
     </aside>
 
@@ -130,14 +111,6 @@
     private string _userDisplayName = string.Empty;
     private string? _organizationName;
     private IReadOnlyList<string> _userRoles = [];
-    private bool _showAdminNavLink;
-
-    private enum SidebarPanel { None, Providers, Layers, AssetList }
-    private SidebarPanel _activePanel = SidebarPanel.AssetList;
-
-    private bool _showProviders => _activePanel == SidebarPanel.Providers;
-    private bool _showLayers    => _activePanel == SidebarPanel.Layers;
-    private bool _showAssetList => _activePanel == SidebarPanel.AssetList;
 
     // ─── Context menu state ────────────────────────────────────────────────
 
@@ -204,18 +177,6 @@
 
         try
         {
-            _showAdminNavLink = await AuthService.HasPermissionAsync("users:read");
-        }
-        catch (Exception ex)
-        {
-            // Showing the admin nav icon is optional — a failure here (e.g. the identity
-            // backend being unreachable) must not take down the map page itself.
-            Console.Error.WriteLine($"[Index] Failed to resolve admin nav visibility: {ex.Message}");
-            _showAdminNavLink = false;
-        }
-
-        try
-        {
             var currentUser = await CurrentUserAccessor.GetCurrentUserAsync();
             _userRoles = currentUser?.ExternalRoles ?? [];
 
@@ -255,18 +216,6 @@
     }
 
     private void SignOut() => AuthNav.NavigateToLogout();
-
-    // ─── Nav panel toggles ────────────────────────────────────────────────
-
-    private void ToggleProviders() => SetActivePanel(SidebarPanel.Providers);
-    private void ToggleLayers()    => SetActivePanel(SidebarPanel.Layers);
-    private void ToggleAssetList() => SetActivePanel(SidebarPanel.AssetList);
-
-    private void SetActivePanel(SidebarPanel panel)
-    {
-        _activePanel = _activePanel == panel ? SidebarPanel.None : panel;
-        StateHasChanged();
-    }
 
     // ─── Selection ────────────────────────────────────────────────────────
 

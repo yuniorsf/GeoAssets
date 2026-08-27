@@ -1,94 +1,155 @@
 @namespace GeoAssets.Shared.Components.Layout
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Services
+@using Microsoft.Extensions.DependencyInjection
+@inject MenuRegistry Registry
+@inject IServiceProvider ServiceProvider
 @inject NavigationManager Nav
 
 <nav class="nav nav-pills flex-column geo-nav">
-
-    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-        <span class="geo-nav-icon">🗺️</span> @L["nav.overview"]
-    </NavLink>
-
-    <div class="geo-nav-section-label">@L["nav.management"]</div>
-
-    <button type="button"
-            class="nav-link geo-nav-toggle @(ShowLayers ? "active" : "")"
-            @onclick="OnToggleLayers">
-        <span class="geo-nav-icon">🧱</span> @L["map.layers"]
-    </button>
-    @if (ShowLayers)
+    @foreach (var node in _tree)
     {
-        <div class="geo-nav-panel">@LayersPanel</div>
+        @RenderNode(node)
     }
-
-    <button type="button"
-            class="nav-link geo-nav-toggle @(ShowAssetList ? "active" : "")"
-            @onclick="OnToggleAssetList">
-        <span class="geo-nav-icon">📦</span> @L["assets.title"]
-    </button>
-    @if (ShowAssetList)
-    {
-        <div class="geo-nav-panel">@AssetListPanel</div>
-    }
-
-    <NavLink class="nav-link" href="service-orders">
-        <span class="geo-nav-icon">🗂️</span> @L["orders.title"]
-    </NavLink>
-
-    <button type="button"
-            class="nav-link geo-nav-toggle @(ShowProviders ? "active" : "")"
-            @onclick="OnToggleProviders">
-        <span class="geo-nav-icon">🔌</span> @L["pool.title"]
-    </button>
-    @if (ShowProviders)
-    {
-        <div class="geo-nav-panel">@ProvidersPanel</div>
-    }
-
-    @if (ShowAdmin)
-    {
-        <div class="geo-nav-section-label">@L["nav.administration"]</div>
-
-        <button type="button" class="nav-link geo-nav-toggle" @onclick="ToggleIdentityGroup">
-            <span class="geo-nav-icon">🛡️</span> @L["nav.identity"]
-            <span class="geo-nav-chevron">@(_identityExpanded ? "▾" : "▸")</span>
-        </button>
-        @if (_identityExpanded)
-        {
-            <div class="geo-nav-subitems">
-                <NavLink class="nav-link geo-nav-sublink" href="admin/users">@L["admin.users.title"]</NavLink>
-                <NavLink class="nav-link geo-nav-sublink" href="admin/roles">@L["admin.roles.title"]</NavLink>
-                <NavLink class="nav-link geo-nav-sublink" href="admin/permissions">@L["admin.permissions.title"]</NavLink>
-            </div>
-        }
-    }
-
 </nav>
 
 @code {
-    [Parameter] public bool ShowAdmin { get; set; }
-    [Parameter] public bool ShowProviders { get; set; }
-    [Parameter] public bool ShowLayers { get; set; }
-    [Parameter] public bool ShowAssetList { get; set; }
+    // Matches AssetListMenuItem.Id — Index.razor's old SidebarPanel.AssetList default (that
+    // panel opens on first load, before this ticket).
+    private const string DefaultOpenPanelId = "assets";
 
-    [Parameter] public EventCallback OnToggleProviders { get; set; }
-    [Parameter] public EventCallback OnToggleLayers { get; set; }
-    [Parameter] public EventCallback OnToggleAssetList { get; set; }
+    private IReadOnlyList<MenuNode> _tree = [];
+    private HashSet<string> _expandedGroupIds = new(StringComparer.Ordinal);
+    private string? _openPanelId = DefaultOpenPanelId;
 
-    [Parameter] public RenderFragment? ProvidersPanel { get; set; }
-    [Parameter] public RenderFragment? LayersPanel { get; set; }
-    [Parameter] public RenderFragment? AssetListPanel { get; set; }
-
-    private bool _identityExpanded;
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        base.OnInitialized();
-        _identityExpanded = ShouldExpandIdentityGroup(Nav.ToBaseRelativePath(Nav.Uri));
+        await base.OnInitializedAsync();
+
+        // IGeoAuthorizationService isn't registered on every host (e.g. GeoAssets.MAUI today) —
+        // resolved optionally via IServiceProvider rather than @inject, since @inject would throw
+        // at component-initialization time (before this method even runs) on a host where it's
+        // unregistered. FilterByPermissionAsync treats a null service the same as a failed check:
+        // hide the item, don't crash.
+        var authService = ServiceProvider.GetService<IGeoAuthorizationService>();
+
+        var fullTree = MenuTreeBuilder.Build(Registry.All);
+        _tree = await FilterByPermissionAsync(fullTree, authService);
+        _expandedGroupIds = new HashSet<string>(
+            MenuTreeBuilder.ComputeExpandedGroupIds(_tree, Nav.ToBaseRelativePath(Nav.Uri)),
+            StringComparer.Ordinal);
     }
 
-    private void ToggleIdentityGroup() => _identityExpanded = !_identityExpanded;
+    /// <summary>
+    /// Recursively drops any node whose <see cref="MenuItemBase.RequiredPermission"/> check fails
+    /// — and its whole subtree with it, matching today's single check gating Identidad and all 3
+    /// of its children together. A null <paramref name="authService"/> or a thrown exception from
+    /// <see cref="IGeoAuthorizationService.HasPermissionAsync"/> both degrade to "hide the item",
+    /// not a crash — showing the admin nav icon (or any permission-gated item) is optional, the
+    /// same tradeoff Index.razor's own HasPermissionAsync("users:read") call already made.
+    /// </summary>
+    public static async Task<IReadOnlyList<MenuNode>> FilterByPermissionAsync(
+        IReadOnlyList<MenuNode> nodes, IGeoAuthorizationService? authService)
+    {
+        var result = new List<MenuNode>(nodes.Count);
 
-    /// <summary>Identity is expanded by default when the active route is one of its own sub-items.</summary>
-    public static bool ShouldExpandIdentityGroup(string relativePath) =>
-        relativePath.TrimStart('/').StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+        foreach (var node in nodes)
+        {
+            if (node.Item.RequiredPermission is { } permission)
+            {
+                var allowed = false;
+                if (authService is not null)
+                {
+                    try
+                    {
+                        allowed = await authService.HasPermissionAsync(permission);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine(
+                            $"[NavMenu] Failed to evaluate permission '{permission}' for item '{node.Item.Id}': {ex.Message}");
+                    }
+                }
+
+                if (!allowed) continue;
+            }
+
+            var filteredChildren = await FilterByPermissionAsync(node.Children, authService);
+            result.Add(node with { Children = filteredChildren });
+        }
+
+        return result;
+    }
+
+    private void ToggleGroup(string groupId)
+    {
+        if (!_expandedGroupIds.Remove(groupId))
+            _expandedGroupIds.Add(groupId);
+    }
+
+    private void TogglePanel(string panelId) =>
+        _openPanelId = _openPanelId == panelId ? null : panelId;
+
+    private RenderFragment RenderNode(MenuNode node) =>
+    @<text>
+        @switch (node.Item)
+        {
+            case MenuSectionItem section:
+                <div class="geo-nav-section-label">@L[section.LabelKey]</div>
+                break;
+
+            case MenuGroupItem group:
+                var isExpanded = _expandedGroupIds.Contains(group.Id);
+                <button type="button" class="nav-link geo-nav-toggle" @onclick="() => ToggleGroup(group.Id)">
+                    @if (group.Icon is not null)
+                    {
+                        <span class="geo-nav-icon">@group.Icon</span>
+                    }
+                    @L[group.LabelKey]
+                    <span class="geo-nav-chevron">@(isExpanded ? "▾" : "▸")</span>
+                </button>
+                if (isExpanded)
+                {
+                    <div class="geo-nav-subitems">
+                        @foreach (var child in node.Children)
+                        {
+                            @RenderNode(child)
+                        }
+                    </div>
+                }
+                break;
+
+            case MenuPageItem pageItem:
+                <NavLink class="@("nav-link" + (pageItem.ParentId is not null ? " geo-nav-sublink" : ""))"
+                         href="@pageItem.RouteHref"
+                         Match="@(pageItem.Match == MenuLinkMatch.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    @if (pageItem.Icon is not null)
+                    {
+                        <span class="geo-nav-icon">@pageItem.Icon</span>
+                    }
+                    @L[pageItem.LabelKey]
+                </NavLink>
+                break;
+
+            case MenuPanelItem panel:
+                var isOpen = _openPanelId == panel.Id;
+                <button type="button" class="nav-link geo-nav-toggle @(isOpen ? "active" : "")" @onclick="() => TogglePanel(panel.Id)">
+                    @if (panel.Icon is not null)
+                    {
+                        <span class="geo-nav-icon">@panel.Icon</span>
+                    }
+                    @L[panel.LabelKey]
+                </button>
+                if (isOpen)
+                {
+                    <div class="geo-nav-panel">
+                        @if (typeof(IComponent).IsAssignableFrom(panel.ComponentType))
+                        {
+                            <DynamicComponent Type="panel.ComponentType" />
+                        }
+                    </div>
+                }
+                break;
+        }
+    </text>;
 }

@@ -1,5 +1,6 @@
 using Blazored.LocalStorage;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authentication;
@@ -10,6 +11,7 @@ using GeoAssets.Provider.WMS;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
+using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Theming;
@@ -146,6 +148,11 @@ builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 // subscription — merely registering it here isn't enough to make it run.
 builder.Services.AddGeoAssetsPanelState();
 builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+
+// Left-nav menu (XD01-79/85) — discovers every concrete MenuItemBase in the assembly holding
+// OverviewMenuItem/LayersMenuItem/etc. and assembles them into the MenuRegistry NavMenu.razor
+// builds its tree from.
+builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
 
 // Proxy follows the active pool entry; wrapped by the attribute-schema-validating
 // decorator (XD01-10), then the observable decorator.

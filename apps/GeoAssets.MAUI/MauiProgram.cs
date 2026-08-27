@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
 using GeoAssets.Identity.Authentication;
@@ -7,6 +8,7 @@ using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -66,6 +68,11 @@ public static class MauiProgram
         // apps/GeoAssets.Web/Program.cs (XD01-84).
         builder.Services.AddGeoAssetsPanelState();
         builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+
+        // Left-nav menu (XD01-79/85) — same wiring as apps/GeoAssets.Web/Program.cs. NavMenu
+        // tolerates the absence of IGeoAuthorizationService (not registered here), so this alone
+        // is enough for MAUI to render the same 6 items minus anything permission-gated.
+        builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
 
         // ── Authentication (XD01-52: MSAL.NET public-client flow, provider-agnostic seam per
         // XD01-48 — see EntraCiamMauiAuthenticationProvider) ────────────────────────────────
