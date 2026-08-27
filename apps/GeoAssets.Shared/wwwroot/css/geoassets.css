@@ -318,6 +318,8 @@ html, body {
 
 .dropdown-divider { border-top-color: var(--panel-border); }
 
+.route-content { flex: 1; display: flex; overflow: hidden; }
+
 /* ─── Map ────────────────────────────────────────────────────────────────── */
 
 .map-area {

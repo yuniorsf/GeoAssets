@@ -5,7 +5,7 @@
 @inject IMapInterop MapInterop
 @inject IFeatureSelectionState Selection
 
-<main class="map-area">
+<main class="map-area" style="@(Hidden ? "display:none" : null)">
     <DrawToolbar @ref="_drawToolbar"
                  MapDivId="@_mapDivId"
                  OnDrawModeChanged="OnDrawModeChanged" />
@@ -54,7 +54,7 @@
 @code {
     private const string _mapDivId = "geoassets-map";
 
-    /// <summary>Whether this workspace's container is currently CSS-hidden by its host (e.g. a persistent layout).</summary>
+    /// <summary>Whether this workspace's host route is not the active one (e.g. a persistent layout navigated elsewhere) — hides the container via CSS instead of unmounting it, so the map survives navigation.</summary>
     [Parameter] public bool Hidden { get; set; }
 
     private MapContainer? _mapContainer;

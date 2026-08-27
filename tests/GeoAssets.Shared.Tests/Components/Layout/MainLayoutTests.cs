@@ -2,12 +2,12 @@ using FluentAssertions;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
+using GeoAssets.Shared.Components.Layout;
 using Xunit;
-using PageIndex = GeoAssets.Shared.Pages.Index;
 
-namespace GeoAssets.Shared.Tests.Pages;
+namespace GeoAssets.Shared.Tests.Components.Layout;
 
-public class IndexTests
+public class MainLayoutTests
 {
     private static readonly CurrentUser SampleUser = new(
         ExternalObjectId: "oid-123",
@@ -77,7 +77,7 @@ public class IndexTests
     {
         var userRepo = new StubUserRepository(userToReturn: null);
 
-        var result = await PageIndex.ResolveOrganizationNameAsync(SampleUser, organizationRepo: null, userRepo);
+        var result = await MainLayout.ResolveOrganizationNameAsync(SampleUser, organizationRepo: null, userRepo);
 
         result.Should().BeNull();
     }
@@ -88,7 +88,7 @@ public class IndexTests
         var userRepo = new StubUserRepository(userToReturn: null);
         var orgRepo  = new StubOrganizationRepository(organizationToReturn: null);
 
-        var result = await PageIndex.ResolveOrganizationNameAsync(currentUser: null, orgRepo, userRepo);
+        var result = await MainLayout.ResolveOrganizationNameAsync(currentUser: null, orgRepo, userRepo);
 
         result.Should().BeNull();
     }
@@ -99,7 +99,7 @@ public class IndexTests
         var userRepo = new StubUserRepository(userToReturn: null);
         var orgRepo  = new StubOrganizationRepository(organizationToReturn: null);
 
-        var result = await PageIndex.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
+        var result = await MainLayout.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
 
         result.Should().BeNull();
     }
@@ -116,7 +116,7 @@ public class IndexTests
         var userRepo = new StubUserRepository(appUser);
         var orgRepo  = new StubOrganizationRepository(organizationToReturn: null);
 
-        var result = await PageIndex.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
+        var result = await MainLayout.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
 
         result.Should().BeNull();
     }
@@ -134,7 +134,7 @@ public class IndexTests
         var userRepo = new StubUserRepository(appUser);
         var orgRepo  = new StubOrganizationRepository(organizationToReturn: null);
 
-        var result = await PageIndex.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
+        var result = await MainLayout.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
 
         result.Should().BeNull();
     }
@@ -158,7 +158,7 @@ public class IndexTests
         var userRepo = new StubUserRepository(appUser);
         var orgRepo  = new StubOrganizationRepository(organization);
 
-        var result = await PageIndex.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
+        var result = await MainLayout.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
 
         result.Should().Be("Empresa Eléctrica del Norte");
     }
