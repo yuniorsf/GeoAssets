@@ -6,5 +6,11 @@
 
   "GeoAssetsServer": {
     "ApiScope": "api://YOUR_SERVER_API_CLIENT_ID/access_as_user"
+  },
+
+  "Observability": {
+    "AzureMonitor": {
+      "ConnectionString": "InstrumentationKey=YOUR_INSTRUMENTATION_KEY;IngestionEndpoint=YOUR_INGESTION_ENDPOINT"
+    }
   }
 }

@@ -24,6 +24,7 @@ using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.JSInterop;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -213,5 +214,15 @@ if (serviceOrdersUseRest)
     var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
     await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
 }
+
+// Application Insights (XD01-53) — initialized from configuration instead of the connection
+// string being hardcoded in wwwroot/index.html, which (unlike appsettings.json) is served
+// verbatim with zero fetch/parse step, so a hardcoded value there is committed and live the
+// moment anyone opens the page source. No-op (appInsightsInterop.init checks for a falsy arg)
+// until AzureAdCiam's own gitignored appsettings.Local.json override pattern supplies a real one.
+var appInsightsConnectionString = builder.Configuration["Observability:AzureMonitor:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+    await host.Services.GetRequiredService<IJSRuntime>()
+        .InvokeVoidAsync("appInsightsInterop.init", appInsightsConnectionString);
 
 await host.RunAsync();
