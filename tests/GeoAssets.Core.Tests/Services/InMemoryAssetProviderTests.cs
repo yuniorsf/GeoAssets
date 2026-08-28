@@ -421,6 +421,104 @@ public class InMemoryAssetProviderTests
         sut.GetAssetTypes().Should().HaveCount(3);
     }
 
+    // ── GetLayers ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetLayers_NewInstance_ReturnsEmpty()
+    {
+        new InMemoryAssetProvider().GetLayers().Should().BeEmpty();
+    }
+
+    // ── AddLayer ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AddLayer_NewId_IsAdded()
+    {
+        var sut = new InMemoryAssetProvider();
+        sut.AddLayer(new Layer { Name = "Custom" });
+        sut.GetLayers().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddLayer_DuplicateId_NotAddedAgain()
+    {
+        var sut = new InMemoryAssetProvider();
+        var id = Guid.NewGuid();
+        sut.AddLayer(new Layer { Id = id, Name = "First" });
+        sut.AddLayer(new Layer { Id = id, Name = "Duplicate" });
+        sut.GetLayers().Should().ContainSingle();
+    }
+
+    // ── DeleteLayer ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DeleteLayer_ExistingId_IsRemoved()
+    {
+        var sut = new InMemoryAssetProvider();
+        var id = Guid.NewGuid();
+        sut.AddLayer(new Layer { Id = id, Name = "Custom" });
+        sut.DeleteLayer(id);
+        sut.GetLayers().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeleteLayer_UnknownId_NoEffect()
+    {
+        var sut = new InMemoryAssetProvider();
+        sut.AddLayer(new Layer { Name = "Custom" });
+        sut.DeleteLayer(Guid.NewGuid());
+        sut.GetLayers().Should().ContainSingle();
+    }
+
+    // ── GetLayerRules ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetLayerRules_NewInstance_ReturnsEmpty()
+    {
+        new InMemoryAssetProvider().GetLayerRules().Should().BeEmpty();
+    }
+
+    // ── AddLayerRule ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AddLayerRule_NewId_IsAdded()
+    {
+        var sut = new InMemoryAssetProvider();
+        sut.AddLayerRule(new LayerRule());
+        sut.GetLayerRules().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddLayerRule_DuplicateId_NotAddedAgain()
+    {
+        var sut = new InMemoryAssetProvider();
+        var id = Guid.NewGuid();
+        sut.AddLayerRule(new LayerRule { Id = id, Priority = 1 });
+        sut.AddLayerRule(new LayerRule { Id = id, Priority = 2 });
+        sut.GetLayerRules().Should().ContainSingle();
+    }
+
+    // ── DeleteLayerRule ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DeleteLayerRule_ExistingId_IsRemoved()
+    {
+        var sut = new InMemoryAssetProvider();
+        var id = Guid.NewGuid();
+        sut.AddLayerRule(new LayerRule { Id = id });
+        sut.DeleteLayerRule(id);
+        sut.GetLayerRules().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeleteLayerRule_UnknownId_NoEffect()
+    {
+        var sut = new InMemoryAssetProvider();
+        sut.AddLayerRule(new LayerRule());
+        sut.DeleteLayerRule(Guid.NewGuid());
+        sut.GetLayerRules().Should().ContainSingle();
+    }
+
     // ── GetWithin ─────────────────────────────────────────────────────────────
 
     [Fact]

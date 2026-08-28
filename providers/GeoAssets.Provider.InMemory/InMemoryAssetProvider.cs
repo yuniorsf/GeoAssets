@@ -10,6 +10,8 @@ public sealed class InMemoryAssetProvider : IAssetProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
+    private readonly List<Layer> _layers = [];
+    private readonly List<LayerRule> _layerRules = [];
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -112,6 +114,41 @@ public sealed class InMemoryAssetProvider : IAssetProvider
         var type = _assetTypes.FirstOrDefault(t => t.Id == id && !t.IsBuiltIn);
         if (type is not null)
             _assetTypes.Remove(type);
+    }
+
+    // ── Layer management ─────────────────────────────────────────────────────
+    // Not yet part of IAssetProvider — the interface addition and resolution logic land in XD01-111.
+
+    public IReadOnlyList<Layer> GetLayers() => [.. _layers];
+
+    public void AddLayer(Layer layer)
+    {
+        if (_layers.All(l => l.Id != layer.Id))
+            _layers.Add(layer);
+    }
+
+    public void DeleteLayer(Guid id)
+    {
+        var layer = _layers.FirstOrDefault(l => l.Id == id);
+        if (layer is not null)
+            _layers.Remove(layer);
+    }
+
+    // ── Layer rule management ────────────────────────────────────────────────
+
+    public IReadOnlyList<LayerRule> GetLayerRules() => [.. _layerRules];
+
+    public void AddLayerRule(LayerRule layerRule)
+    {
+        if (_layerRules.All(r => r.Id != layerRule.Id))
+            _layerRules.Add(layerRule);
+    }
+
+    public void DeleteLayerRule(Guid id)
+    {
+        var rule = _layerRules.FirstOrDefault(r => r.Id == id);
+        if (rule is not null)
+            _layerRules.Remove(rule);
     }
 
     // ── Spatial queries ───────────────────────────────────────────────────────
