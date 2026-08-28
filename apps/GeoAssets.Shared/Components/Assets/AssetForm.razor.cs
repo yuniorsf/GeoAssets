@@ -1,4 +1,5 @@
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using Microsoft.AspNetCore.Components;
 
@@ -11,6 +12,12 @@ public partial class AssetForm
     [Parameter] public EventCallback<GeoFeature> OnSave { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
+    /// <summary>
+    /// v1 "snap-adjacent" radius for auto-linking (XD01-118) — ~11m at the equator. A tunable
+    /// heuristic, not a spec'd value; not tied to the type-aware Geoman snapping XD01-119 will add.
+    /// </summary>
+    public const double SnapDistanceDegrees = 0.0001;
+
     private string GeometryLabel => Feature?.Geometry switch
     {
         Core.Models.Geometry.GeoPoint      => L["map.draw.point"],
@@ -20,6 +27,10 @@ public partial class AssetForm
     };
 
     private IReadOnlyList<string> _attributeErrors = [];
+
+    private GeoFeature? _lastFeature;
+    private GeoFeature? _autoLinkCandidate;
+    private bool _autoLinkRejected;
 
     private AssetType? SelectedAssetType =>
         Feature is null ? null : Repository.GetAssetTypes().FirstOrDefault(t => t.Id.ToString() == Feature.Properties.AssetTypeId);
@@ -41,13 +52,52 @@ public partial class AssetForm
                 .Any(f => e.Contains(f.Key, StringComparison.OrdinalIgnoreCase)))]
             : _attributeErrors;
 
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Feature, _lastFeature)) return;
+        _lastFeature = Feature;
+        _autoLinkRejected = false;
+        _autoLinkCandidate = IsNew && Feature?.Geometry is GeoPoint point
+            ? FindAutoLinkCandidate(point, Repository.GetNearby(point, SnapDistanceDegrees), Repository.GetIntersecting(point))
+            : null;
+    }
+
+    /// <summary>
+    /// v1 auto-link heuristic (XD01-118): a newly-placed <see cref="GeoPoint"/>-typed feature
+    /// links to a nearby/intersecting <see cref="GeoLineString"/>-typed feature, but only when
+    /// there's exactly one such candidate — 0 or 2+ candidates intentionally take no action (a
+    /// "Connect to…" picker for the multi-candidate case is XD01-120, out of scope here). Static
+    /// so it's directly unit-testable without rendering or an <c>IAssetProvider</c>.
+    /// </summary>
+    public static GeoFeature? FindAutoLinkCandidate(
+        GeoGeometry? geometry, IReadOnlyList<GeoFeature> nearby, IReadOnlyList<GeoFeature> intersecting)
+    {
+        if (geometry is not GeoPoint) return null;
+
+        var candidates = nearby.Concat(intersecting)
+            .Where(f => f.Geometry is GeoLineString)
+            .DistinctBy(f => f.Id)
+            .ToList();
+
+        return candidates.Count == 1 ? candidates[0] : null;
+    }
+
+    private string AutoLinkCandidateName =>
+        string.IsNullOrEmpty(_autoLinkCandidate?.Properties.Name) ? L["assets.noName"] : _autoLinkCandidate!.Properties.Name;
+
+    private void RejectAutoLink() => _autoLinkRejected = true;
+
     private async Task HandleSave()
     {
         if (Feature is null) return;
         var now = Clock.GetUtcNow().UtcDateTime;
         Feature.Properties.UpdatedAt = now;
         if (IsNew)
+        {
             Feature.Properties.CreatedAt = now;
+            if (_autoLinkCandidate is not null && !_autoLinkRejected)
+                Feature.Topology.Add(new TopoEdge { TargetId = _autoLinkCandidate.Id, Kind = "connected-to", Weight = 1.0 });
+        }
 
         try
         {

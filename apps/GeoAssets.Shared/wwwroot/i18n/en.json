@@ -79,6 +79,8 @@
   "form.descriptionPlaceholder": "Optional description",
   "form.geometry": "Geometry",
   "form.attributeErrors": "Custom attributes are invalid for this asset type:",
+  "form.autoLinkMessage": "Auto-linked to «{0}»",
+  "form.autoLinkUndo": "Remove auto-link",
 
   "app.signOut": "Sign out",
   "app.defaultUser": "User",

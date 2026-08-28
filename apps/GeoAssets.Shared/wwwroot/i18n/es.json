@@ -79,6 +79,8 @@
   "form.descriptionPlaceholder": "Descripción opcional",
   "form.geometry": "Geometría",
   "form.attributeErrors": "Los atributos personalizados no son válidos para este tipo de activo:",
+  "form.autoLinkMessage": "Auto-vinculado a «{0}»",
+  "form.autoLinkUndo": "Quitar auto-vínculo",
 
   "app.signOut": "Cerrar sesión",
   "app.defaultUser": "Usuario",

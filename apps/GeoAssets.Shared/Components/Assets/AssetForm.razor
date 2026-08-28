@@ -8,6 +8,14 @@
     <div>
         <h5>@(IsNew ? L["form.newAsset"] : L["form.editAsset"])</h5>
 
+        @if (IsNew && _autoLinkCandidate is not null && !_autoLinkRejected)
+        {
+            <div class="autolink-banner attribute-success">
+                <span>🔗 @L.GetString("form.autoLinkMessage", AutoLinkCandidateName)</span>
+                <button type="button" class="btn-icon" @onclick="RejectAutoLink" title="@L["form.autoLinkUndo"]">✕</button>
+            </div>
+        }
+
         <EditForm Model="@Feature.Properties" OnValidSubmit="HandleSave">
             <DataAnnotationsValidator />
 

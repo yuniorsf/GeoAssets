@@ -798,6 +798,16 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     color: var(--text-primary);
 }
 
+/* ─── AssetForm auto-link banner (XD01-118) ─────────────────────────────── */
+
+.autolink-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
 /* ─── Identity Admin (XD01-58) ──────────────────────────────────────────── */
 
 .badge-builtin {
