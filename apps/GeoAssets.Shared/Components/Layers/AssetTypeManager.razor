@@ -1,0 +1,110 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models.Geometry
+@inject IAssetProvider Repository
+@inject IMapInterop MapInterop
+@inject ICurrentMapContext MapContext
+
+<div class="sidebar-section">
+    <h6>@L["map.layers"]</h6>
+
+    <div class="geo-tabs">
+        <button type="button" class="geo-tab @(_activeTab == "types" ? "active" : "")" @onclick="ShowTypesTab">@L["map.layers.tabTypes"]</button>
+        <button type="button" class="geo-tab @(_activeTab == "styles" ? "active" : "")" @onclick="ShowStylesTab">@L["map.layers.tabStyles"]</button>
+    </div>
+
+    @if (_activeTab == "types")
+    {
+        <div class="asset-list">
+            @foreach (var type in Repository.GetAssetTypes())
+            {
+                var isVisible = _visibility.TryGetValue(type.Id, out var v) ? v : true;
+                <div class="layer-row">
+                    <input type="checkbox"
+                           checked="@isVisible"
+                           @onchange="e => ToggleLayer(type, (bool)(e.Value ?? true))" />
+                    <span class="asset-color-dot" style="background:@type.Color"></span>
+                    <span style="font-size:0.87rem;flex:1;cursor:pointer" @onclick="() => ToggleExpand(type.Id)">
+                        @type.Name
+                        @if (type.IsBuiltIn)
+                        {
+                            <span class="badge-builtin">@L["map.layers.builtinType"]</span>
+                        }
+                    </span>
+                    @if (!type.IsBuiltIn)
+                    {
+                        <button class="btn-icon" @onclick="() => DeleteType(type)" title="@L["map.layers.deleteType"]">✕</button>
+                    }
+                </div>
+
+                @if (_expandedTypeId == type.Id)
+                {
+                    <div class="layer-detail">
+                        <div class="layer-detail-info">
+                            @L["map.layers.allowedGeometry"]: @(type.AllowedGeometryType is { } g ? GeometryTypeLabel(g) : L["map.layers.anyGeometry"])
+                            <br />
+                            @L["map.layers.defaultLayer"]: @(Repository.GetLayers().FirstOrDefault(l => l.Id == type.DefaultLayerId)?.Name ?? L["map.layers.noneOption"])
+                        </div>
+                        <LayerRuleEditor AssetType="type" />
+                    </div>
+                }
+            }
+        </div>
+
+        @if (_addingNew)
+        {
+            <div class="attr-row" style="margin-top:8px">
+                <input class="form-control"
+                       placeholder="@L["map.layers.typePlaceholder"]"
+                       @bind="_newTypeName" />
+                <input type="color" @bind="_newTypeColor" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["map.layers.allowedGeometry"]</label>
+                <select class="form-control" @onchange="e => OnNewTypeAllowedGeometryChanged(e.Value?.ToString())">
+                    <option value="">@L["map.layers.anyGeometry"]</option>
+                    <option value="Point">@L["map.draw.point"]</option>
+                    <option value="LineString">@L["map.draw.line"]</option>
+                    <option value="Polygon">@L["map.draw.polygon"]</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>@L["map.layers.defaultLayer"]</label>
+                <select class="form-control" @onchange="e => OnNewTypeDefaultLayerChanged(e.Value?.ToString())">
+                    <option value="">@L["map.layers.noneOption"]</option>
+                    @foreach (var layer in LayersForGeometry(_newTypeAllowedGeometry))
+                    {
+                        <option value="@layer.Id">@layer.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>@L["map.layers.attributesSchema"]</label>
+                <textarea class="form-control" rows="3" @bind="_newTypeAttributesSchemaJson"></textarea>
+            </div>
+
+            @if (_newTypeSchemaError is not null)
+            {
+                <div class="attribute-errors"><strong>@_newTypeSchemaError</strong></div>
+            }
+
+            <div class="form-actions">
+                <button class="btn btn-primary btn-sm" @onclick="SaveNewType" type="button">✓</button>
+                <button class="btn btn-secondary btn-sm" @onclick="ResetNewTypeForm" type="button">✕</button>
+            </div>
+        }
+        else
+        {
+            <button class="btn btn-outline btn-sm" style="margin-top:8px" @onclick="() => _addingNew = true" type="button">
+                @L["map.layers.newType"]
+            </button>
+        }
+    }
+    else
+    {
+        <LayerStyleEditor />
+    }
+</div>

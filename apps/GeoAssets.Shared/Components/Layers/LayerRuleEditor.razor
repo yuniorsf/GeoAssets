@@ -1,0 +1,71 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models
+@inject IAssetProvider Repository
+
+<div class="section-header-row">
+    <h6>@L["map.layers.rules.title"]</h6>
+    <button class="btn-icon" title="@L["map.layers.rules.newRule"]" @onclick="() => _addingNew = true">＋</button>
+</div>
+
+@{ var rules = Repository.GetLayerRules(AssetType.Id).OrderBy(r => r.Priority).ToList(); }
+
+@if (rules.Count == 0 && !_addingNew)
+{
+    <p style="font-size:0.8rem;color:var(--text-secondary)">@L["map.layers.rules.noRules"]</p>
+}
+
+@for (var i = 0; i < rules.Count; i++)
+{
+    var rule = rules[i];
+    var isFirst = i == 0;
+    var isLast = i == rules.Count - 1;
+    <div class="layer-row">
+        <button class="btn-icon" disabled="@isFirst" @onclick="() => MoveUp(rule)" title="@L["map.layers.rules.moveUp"]">↑</button>
+        <button class="btn-icon" disabled="@isLast" @onclick="() => MoveDown(rule)" title="@L["map.layers.rules.moveDown"]">↓</button>
+        <span style="font-size:0.87rem;flex:1">
+            @LayerName(rule.LayerId)
+            <br />
+            <span style="font-size:0.72rem;color:var(--text-secondary)">
+                @string.Join(" AND ", rule.Conditions.Select(c => $"{c.Attribute} {OperatorSymbol(c.Operator)} {c.Value}"))
+            </span>
+        </span>
+        <button class="btn-icon" @onclick="() => DeleteRule(rule)" title="@L["map.layers.rules.delete"]">✕</button>
+    </div>
+}
+
+@if (_addingNew)
+{
+    <div class="form-group">
+        <label>@L["map.layers.rules.layer"]</label>
+        <select class="form-control" @onchange="e => OnNewRuleLayerChanged(e.Value?.ToString())">
+            <option value="">@L["map.layers.rules.none"]</option>
+            @foreach (var layer in Repository.GetLayers())
+            {
+                <option value="@layer.Id">@layer.Name</option>
+            }
+        </select>
+    </div>
+
+    @foreach (var condition in _newRuleConditions)
+    {
+        <div class="attr-row">
+            <input class="form-control" placeholder="@L["map.layers.rules.condition.attribute"]" @bind="condition.Attribute" />
+            <select class="form-control" @onchange="e => condition.Operator = Enum.Parse<LayerRuleOperator>(e.Value!.ToString()!)">
+                <option value="Equals">=</option>
+                <option value="NotEquals">≠</option>
+                <option value="GreaterThanOrEqual">≥</option>
+                <option value="LessThanOrEqual">≤</option>
+            </select>
+            <input class="form-control" placeholder="@L["map.layers.rules.condition.value"]" @bind="condition.Value" />
+            <button class="btn-icon" @onclick="() => RemoveCondition(condition)">✕</button>
+        </div>
+    }
+
+    <button class="btn btn-outline btn-sm" @onclick="AddCondition" type="button">@L["map.layers.rules.addCondition"]</button>
+
+    <div class="form-actions">
+        <button class="btn btn-primary btn-sm" @onclick="SaveNewRule" type="button">✓</button>
+        <button class="btn btn-secondary btn-sm" @onclick="ResetForm" type="button">✕</button>
+    </div>
+}

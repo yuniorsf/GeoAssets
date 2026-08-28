@@ -141,7 +141,7 @@ builder.Services.AddSingleton<ProviderPluginRegistry>();
 // Boot loader — orchestrates the first-run provider selection flow.
 builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 
-// Cross-cutting panel state (XD01-82/83) — lets LayerManager/ProviderPoolPanel/AssetList/
+// Cross-cutting panel state (XD01-82/83) — lets AssetTypeManager/ProviderPoolPanel/AssetList/
 // Index self-inject their map-context and selection state instead of receiving them as
 // parameters/EventCallbacks from whatever page hosts them (XD01-84). ProviderConnectionMapRenderer
 // is force-resolved once in Index.razor's OnInitializedAsync to start its IProviderPool.EntryAdded

@@ -72,7 +72,7 @@ public class ConcreteMenuItemsTests
     [Fact]
     public void PanelItems_ComponentTypesAreRealBlazorComponents()
     {
-        new LayersMenuItem().ComponentType.Should().Be(typeof(LayerManager));
+        new LayersMenuItem().ComponentType.Should().Be(typeof(AssetTypeManager));
         new AssetListMenuItem().ComponentType.Should().Be(typeof(AssetList));
         new CollectionsMenuItem().ComponentType.Should().Be(typeof(ProviderPoolPanel));
     }

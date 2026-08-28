@@ -610,6 +610,38 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 
 .layer-row input[type="checkbox"] { cursor: pointer; }
 
+.geo-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.geo-tab {
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.geo-tab:hover { color: var(--text-primary); }
+.geo-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.layer-detail {
+    margin: 4px 0 10px 18px;
+    padding: 8px 0 8px 10px;
+    border-left: 2px solid var(--panel-border);
+}
+
+.layer-detail-info {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
 /* ─── Custom Attribute Editor ───────────────────────────────────────────── */
 
 .attr-row {
