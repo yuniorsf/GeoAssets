@@ -11,6 +11,35 @@ public interface IAssetProvider
     IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId);
     IReadOnlyList<GeoFeature> Search(string query);
 
+    /// <summary>
+    /// Returns a filtered, sorted, paged slice of assets plus the true total matching count.
+    /// Default implementation falls back to <see cref="GetAll"/>/<see cref="Search"/> plus
+    /// in-memory LINQ <c>Skip</c>/<c>Take</c> — providers backed by a queryable store (e.g.
+    /// PostgreSQL) should override this with a server-side query that never materializes the
+    /// full collection.
+    /// </summary>
+    Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
+    {
+        IEnumerable<GeoFeature> filtered = string.IsNullOrWhiteSpace(query.SearchText)
+            ? GetAll()
+            : Search(query.SearchText);
+
+        if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
+            filtered = filtered.Where(f => f.Properties.AssetTypeId == query.AssetTypeId);
+
+        filtered = query.SortBy switch
+        {
+            "name"      => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name)      : filtered.OrderBy(f => f.Properties.Name),
+            "createdAt" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.CreatedAt) : filtered.OrderBy(f => f.Properties.CreatedAt),
+            "updatedAt" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.UpdatedAt) : filtered.OrderBy(f => f.Properties.UpdatedAt),
+            _           => query.SortDescending ? filtered.OrderByDescending(f => f.Id)                   : filtered.OrderBy(f => f.Id)
+        };
+
+        var matching = filtered.ToList();
+        var page     = matching.Skip(query.Skip).Take(query.Take).ToList();
+        return Task.FromResult(new PagedResult<GeoFeature> { Items = page, TotalCount = matching.Count });
+    }
+
     // ── Spatial queries (NTS-backed) ──────────────────────────────────────────
 
     /// <summary>Returns features whose geometry is entirely within <paramref name="bounds"/>.</summary>

@@ -42,6 +42,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public IReadOnlyList<GeoFeature>                GetAll()                                            => inner.GetAll();
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)                 => inner.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                                => inner.Search(query);
+    public Task<PagedResult<GeoFeature>>            GetPageAsync(AssetQuery query)                     => inner.GetPageAsync(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                      => inner.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)              => inner.GetIntersecting(geometry);
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);

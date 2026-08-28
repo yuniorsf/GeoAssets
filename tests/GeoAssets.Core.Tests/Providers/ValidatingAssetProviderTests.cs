@@ -77,6 +77,19 @@ public class ValidatingAssetProviderTests
     }
 
     [Fact]
+    public async Task GetPageAsync_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        inner.Add(Feature("a", AssetType.Point.Id.ToString()));
+        var sut = new ValidatingAssetProvider(inner);
+
+        var result = await sut.GetPageAsync(new AssetQuery());
+
+        result.Items.Should().ContainSingle();
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
     public void GetWithin_DelegatesToInner()
     {
         var inner = new InMemoryAssetProvider();

@@ -68,6 +68,7 @@ public sealed class ActiveAssetProvider : IAssetProvider
     public IReadOnlyList<GeoFeature>                GetAll()                                          => _current.GetAll();
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)               => _current.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                              => _current.Search(query);
+    public Task<PagedResult<GeoFeature>>            GetPageAsync(AssetQuery query)                   => _current.GetPageAsync(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                    => _current.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)            => _current.GetIntersecting(geometry);
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => _current.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);

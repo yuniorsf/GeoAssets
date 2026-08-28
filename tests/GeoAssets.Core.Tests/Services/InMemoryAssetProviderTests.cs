@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Provider.InMemory;
@@ -153,6 +154,158 @@ public class InMemoryAssetProviderTests
         var sut = new InMemoryAssetProvider();
         sut.Add(new GeoFeature { Id = "a", Properties = { Name = "Tower" } });
         sut.Search("bridge").Should().BeEmpty();
+    }
+
+    // ── GetPageAsync (IAssetProvider default interface method) ───────────────────
+
+    [Fact]
+    public async Task GetPageAsync_NoSearchText_PagesOverGetAll()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(Feature("a"));
+        sut.Add(Feature("b"));
+        sut.Add(Feature("c"));
+
+        var result = await sut.GetPageAsync(new AssetQuery { Skip = 1, Take = 1 });
+
+        result.Items.Should().ContainSingle();
+        result.TotalCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_WithSearchText_FiltersViaSearch()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { Name = "Main Tower" } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { Name = "Bridge" } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SearchText = "tower" });
+
+        result.Items.Should().ContainSingle().Which.Id.Should().Be("a");
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_FiltersByAssetTypeId()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(Feature("a", "type-1"));
+        sut.Add(Feature("b", "type-2"));
+
+        var result = await sut.GetPageAsync(new AssetQuery { AssetTypeId = "type-1" });
+
+        result.Items.Should().ContainSingle().Which.Id.Should().Be("a");
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_TotalCount_ReflectsFilteredCountNotJustPageSize()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        for (var i = 0; i < 5; i++)
+            sut.Add(Feature($"f{i}", "type-1"));
+        sut.Add(Feature("other", "type-2"));
+
+        var result = await sut.GetPageAsync(new AssetQuery { AssetTypeId = "type-1", Take = 2 });
+
+        result.Items.Should().HaveCount(2);
+        result.TotalCount.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortByName_Ascending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { Name = "Bravo" } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { Name = "Alpha" } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortBy = "name" });
+
+        result.Items.Select(f => f.Id).Should().Equal("b", "a");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortByName_Descending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { Name = "Bravo" } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { Name = "Alpha" } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortBy = "name", SortDescending = true });
+
+        result.Items.Select(f => f.Id).Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortByCreatedAt_Ascending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { CreatedAt = new DateTime(2026, 1, 2) } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { CreatedAt = new DateTime(2026, 1, 1) } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortBy = "createdAt" });
+
+        result.Items.Select(f => f.Id).Should().Equal("b", "a");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortByCreatedAt_Descending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { CreatedAt = new DateTime(2026, 1, 2) } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { CreatedAt = new DateTime(2026, 1, 1) } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortBy = "createdAt", SortDescending = true });
+
+        result.Items.Select(f => f.Id).Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortByUpdatedAt_Ascending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { UpdatedAt = new DateTime(2026, 1, 2) } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { UpdatedAt = new DateTime(2026, 1, 1) } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortBy = "updatedAt" });
+
+        result.Items.Select(f => f.Id).Should().Equal("b", "a");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SortByUpdatedAt_Descending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(new GeoFeature { Id = "a", Properties = { UpdatedAt = new DateTime(2026, 1, 2) } });
+        sut.Add(new GeoFeature { Id = "b", Properties = { UpdatedAt = new DateTime(2026, 1, 1) } });
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortBy = "updatedAt", SortDescending = true });
+
+        result.Items.Select(f => f.Id).Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_NoSortBy_DefaultsToOrderById_Ascending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(Feature("b"));
+        sut.Add(Feature("a"));
+
+        var result = await sut.GetPageAsync(new AssetQuery());
+
+        result.Items.Select(f => f.Id).Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_NoSortBy_Descending_OrdersByIdDescending()
+    {
+        IAssetProvider sut = new InMemoryAssetProvider();
+        sut.Add(Feature("a"));
+        sut.Add(Feature("b"));
+
+        var result = await sut.GetPageAsync(new AssetQuery { SortDescending = true });
+
+        result.Items.Select(f => f.Id).Should().Equal("b", "a");
     }
 
     // ── Add ────────────────────────────────────────────────────────────────────

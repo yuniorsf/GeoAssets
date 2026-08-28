@@ -69,6 +69,7 @@ public sealed class ObservableAssetProvider(
     public GeoFeature?                              GetById(string id)                                    => inner.GetById(id);
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)                   => inner.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                                  => inner.Search(query);
+    public Task<PagedResult<GeoFeature>>            GetPageAsync(AssetQuery query)                       => inner.GetPageAsync(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                        => inner.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)                => inner.GetIntersecting(geometry);
 public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees)   => inner.GetNearby(center, distanceDegrees);

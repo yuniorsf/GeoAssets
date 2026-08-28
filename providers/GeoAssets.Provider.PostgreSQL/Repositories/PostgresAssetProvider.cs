@@ -125,6 +125,42 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
             .OrderBy(f => f.Geometry!.Distance(center))];
 
+    // ── Paged/filtered queries ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pushes filtering, counting and paging to PostgreSQL — never touches <see cref="Cache"/>
+    /// and never materializes the full <c>geo_entity</c> table, unlike every other read on this
+    /// class. Uses a dedicated short-lived <see cref="GeoAssetsDbContext"/>, mirroring
+    /// <see cref="GetInBoundsAsync"/>, so concurrent page requests don't share a context.
+    /// </summary>
+    public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
+    {
+        await using var db = new GeoAssetsDbContext(_dbOptions);
+        IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
+            rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
+
+        if (!string.IsNullOrWhiteSpace(query.SearchText))
+        {
+            var pattern = $"%{query.SearchText}%";
+            rows = rows.Where(r => EF.Functions.ILike(r.Name, pattern) || EF.Functions.ILike(r.Description, pattern));
+        }
+
+        var totalCount = await rows.CountAsync();
+
+        rows = query.SortBy switch
+        {
+            "name"      => query.SortDescending ? rows.OrderByDescending(r => r.Name)      : rows.OrderBy(r => r.Name),
+            "createdAt" => query.SortDescending ? rows.OrderByDescending(r => r.CreatedAt) : rows.OrderBy(r => r.CreatedAt),
+            "updatedAt" => query.SortDescending ? rows.OrderByDescending(r => r.UpdatedAt) : rows.OrderBy(r => r.UpdatedAt),
+            _           => query.SortDescending ? rows.OrderByDescending(r => r.Id)        : rows.OrderBy(r => r.Id)
+        };
+
+        var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync();
+        return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
+    }
+
     // ── Topology ───────────────────────────────────────────────────────────────
 
     public IReadOnlyList<GeoFeature> GetNeighbors(string id) =>
