@@ -48,6 +48,12 @@
   "assets.deleteTitle": "Delete asset",
   "assets.deleteConfirm": "Delete «{0}»? This action cannot be undone.",
 
+  "assetsTable.title": "Assets table",
+  "assetsTable.empty": "No assets match your search.",
+  "assetsTable.previous": "Previous",
+  "assetsTable.next": "Next",
+  "assetsTable.pagerSummary": "Showing {0} of {1} — page {2} of {3}",
+
   "search.clear": "Clear",
 
   "attrs.title": "Custom attributes",

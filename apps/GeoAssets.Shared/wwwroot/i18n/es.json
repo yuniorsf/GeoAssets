@@ -48,6 +48,12 @@
   "assets.deleteTitle": "Eliminar activo",
   "assets.deleteConfirm": "¿Eliminar «{0}»? Esta acción no se puede deshacer.",
 
+  "assetsTable.title": "Tabla de activos",
+  "assetsTable.empty": "Ningún activo coincide con tu búsqueda.",
+  "assetsTable.previous": "Anterior",
+  "assetsTable.next": "Siguiente",
+  "assetsTable.pagerSummary": "Mostrando {0} de {1} — página {2} de {3}",
+
   "search.clear": "Limpiar",
 
   "attrs.title": "Atributos personalizados",

@@ -23,6 +23,7 @@ public class ConcreteMenuItemsTests
         new ManagementSectionItem(),
         new LayersMenuItem(),
         new AssetListMenuItem(),
+        new AssetsTableMenuItem(),
         new ServiceOrdersMenuItem(),
         new CollectionsMenuItem(),
         new AdministrationSectionItem(),
@@ -38,7 +39,7 @@ public class ConcreteMenuItemsTests
         var tree = MenuTreeBuilder.Build(AllItems);
 
         tree.Select(n => n.Item.Id).Should().Equal(
-            "overview", "management", "layers", "assets", "service-orders",
+            "overview", "management", "layers", "assets", "assets-table", "service-orders",
             "collections", "administration", "identity");
     }
 
@@ -84,5 +85,11 @@ public class ConcreteMenuItemsTests
 
         overview.RouteHref.Should().BeEmpty();
         overview.Match.Should().Be(MenuLinkMatch.Exact);
+    }
+
+    [Fact]
+    public void AssetsTableMenuItem_RouteHref_PointsToAssetsTablePage()
+    {
+        new AssetsTableMenuItem().RouteHref.Should().Be("assets/table");
     }
 }
