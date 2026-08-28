@@ -3,7 +3,6 @@
 @layout MainLayout
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using Microsoft.AspNetCore.Authorization
-@using GeoAssets.Identity.Authorization.Models
 @using GeoAssets.Identity.Authorization.Services
 @using GeoAssets.Shared.Components.Admin
 @inject IGeoAuthorizationService AuthService
@@ -47,52 +46,3 @@
         <div class="empty-state">@L["admin.roles.selectPrompt"]</div>
     }
 </main>
-
-@code {
-    private RoleList? _list;
-    private Guid? _selectedRoleId;
-    private bool _showCreateForm;
-    private bool? _authorized;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            _authorized = await AuthService.HasPermissionAsync("roles:read");
-        }
-        catch (Exception ex)
-        {
-            // Fail closed: if the authorization check itself can't be answered (e.g. the
-            // identity backend is unreachable), don't show admin functionality.
-            Console.Error.WriteLine($"[AdminRoles] Failed to resolve authorization: {ex.Message}");
-            _authorized = false;
-        }
-    }
-
-    private void OnRoleSelected(AppRole role)
-    {
-        _selectedRoleId = role.Id;
-        _showCreateForm = false;
-        StateHasChanged();
-    }
-
-    private void OnCreateRequested()
-    {
-        _selectedRoleId = null;
-        _showCreateForm = true;
-        StateHasChanged();
-    }
-
-    private async Task OnRoleSaved(Guid roleId)
-    {
-        _showCreateForm = false;
-        _selectedRoleId = roleId;
-        if (_list is not null) await _list.RefreshAsync();
-    }
-
-    private async Task OnRoleDeleted()
-    {
-        _selectedRoleId = null;
-        if (_list is not null) await _list.RefreshAsync();
-    }
-}

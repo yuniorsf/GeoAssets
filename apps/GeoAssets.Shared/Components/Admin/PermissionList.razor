@@ -1,5 +1,4 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
-@using GeoAssets.Identity.Authorization.Models
 @using GeoAssets.Identity.Authorization.Repositories
 @inject IPermissionRepository Repository
 
@@ -33,14 +32,3 @@
         }
     }
 </div>
-
-@code {
-    private List<AppPermission> _permissions = [];
-    private bool _loading = true;
-
-    protected override async Task OnInitializedAsync()
-    {
-        _permissions = [.. await Repository.GetAllAsync()];
-        _loading = false;
-    }
-}
