@@ -42,14 +42,23 @@
                        value="@GeometryLabel" />
             </div>
 
-            <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
+            @if (HasSchema)
+            {
+                <SchemaDrivenAttributeEditor Schema="@SelectedAssetTypeSchema"
+                                              Attributes="@Feature.Properties.CustomAttributes"
+                                              Errors="@_attributeErrors" />
+            }
+            else
+            {
+                <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
+            }
 
-            @if (_attributeErrors.Count > 0)
+            @if (UnmatchedAttributeErrors.Count > 0)
             {
                 <div class="attribute-errors">
                     <strong>@L["form.attributeErrors"]</strong>
                     <ul>
-                        @foreach (var error in _attributeErrors)
+                        @foreach (var error in UnmatchedAttributeErrors)
                         {
                             <li>@error</li>
                         }
