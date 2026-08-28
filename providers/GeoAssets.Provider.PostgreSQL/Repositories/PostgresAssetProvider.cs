@@ -230,6 +230,9 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Color     = r.Color,
                 IconUrl   = r.IconUrl,
                 IsBuiltIn = r.IsBuiltIn,
+                IsProtected = r.IsProtected,
+                AllowedGeometryType = r.AllowedGeometryType,
+                DefaultLayerId = r.DefaultLayerId,
                 AttributesSchemaJson = r.AttributesSchemaJson,
                 OrganizationId = r.OrganizationId
             }).ToList();
@@ -246,6 +249,9 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Color     = assetType.Color,
             IconUrl   = assetType.IconUrl,
             IsBuiltIn = assetType.IsBuiltIn,
+            IsProtected = assetType.IsProtected,
+            AllowedGeometryType = assetType.AllowedGeometryType,
+            DefaultLayerId = assetType.DefaultLayerId,
             AttributesSchemaJson = assetType.AttributesSchemaJson,
             OrganizationId = assetType.OrganizationId
         });
@@ -281,7 +287,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Name             = row.Name,
                 AssetTypeId      = row.AssetTypeId,
                 Description      = row.Description,
-                LayerId          = row.LayerId,
+                LayerId          = row.LayerId?.ToString() ?? string.Empty,
                 OrganizationId   = row.OrganizationId,
                 CreatedAt        = row.CreatedAt,
                 UpdatedAt        = row.UpdatedAt,
@@ -299,7 +305,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Name                 = f.Properties.Name,
             AssetTypeId          = f.Properties.AssetTypeId,
             Description          = f.Properties.Description,
-            LayerId              = f.Properties.LayerId,
+            LayerId              = string.IsNullOrEmpty(f.Properties.LayerId) ? null : Guid.Parse(f.Properties.LayerId),
             OrganizationId       = f.Properties.OrganizationId,
             CreatedAt            = f.Properties.CreatedAt,
             UpdatedAt            = f.Properties.UpdatedAt,

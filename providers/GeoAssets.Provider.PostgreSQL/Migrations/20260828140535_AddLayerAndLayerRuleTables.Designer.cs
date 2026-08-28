@@ -3,6 +3,7 @@ using System;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GeoAssets.Provider.PostgreSQL.Migrations
 {
     [DbContext(typeof(GeoAssetsDbContext))]
-    partial class GeoAssetsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828140535_AddLayerAndLayerRuleTables")]
+    partial class AddLayerAndLayerRuleTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,9 +47,6 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasColumnType("character varying(32)")
                         .HasDefaultValue("#3388ff");
 
-                    b.Property<Guid?>("DefaultLayerId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("IconUrl")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -73,8 +73,6 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DefaultLayerId");
 
                     b.HasIndex("OrganizationId");
 
@@ -109,66 +107,6 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             IsBuiltIn = true,
                             IsProtected = true,
                             Name = "Área",
-                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0000-000000000004"),
-                            AllowedGeometryType = 0,
-                            Color = "#3388ff",
-                            DefaultLayerId = new Guid("00000000-0000-0000-0001-000000000001"),
-                            IconUrl = "",
-                            IsBuiltIn = true,
-                            IsProtected = false,
-                            Name = "Poste",
-                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0000-000000000005"),
-                            AllowedGeometryType = 0,
-                            Color = "#3388ff",
-                            DefaultLayerId = new Guid("00000000-0000-0000-0001-000000000002"),
-                            IconUrl = "",
-                            IsBuiltIn = true,
-                            IsProtected = false,
-                            Name = "Transformador",
-                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0000-000000000006"),
-                            AllowedGeometryType = 1,
-                            Color = "#3388ff",
-                            DefaultLayerId = new Guid("00000000-0000-0000-0001-000000000003"),
-                            IconUrl = "",
-                            IsBuiltIn = true,
-                            IsProtected = false,
-                            Name = "Línea de baja tensión",
-                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0000-000000000007"),
-                            AllowedGeometryType = 0,
-                            Color = "#3388ff",
-                            DefaultLayerId = new Guid("00000000-0000-0000-0001-000000000004"),
-                            IconUrl = "",
-                            IsBuiltIn = true,
-                            IsProtected = false,
-                            Name = "Punto de descarga de agua",
-                            OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0000-000000000008"),
-                            AllowedGeometryType = 0,
-                            Color = "#3388ff",
-                            DefaultLayerId = new Guid("00000000-0000-0000-0001-000000000005"),
-                            IconUrl = "",
-                            IsBuiltIn = true,
-                            IsProtected = false,
-                            Name = "Interruptor",
                             OrganizationId = new Guid("00000000-0000-0000-0000-000000000000")
                         });
                 });
@@ -210,8 +148,12 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasColumnType("geometry")
                         .HasColumnName("geom");
 
-                    b.Property<Guid?>("LayerId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("LayerId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -299,68 +241,6 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("layer", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0001-000000000001"),
-                            Color = "#8b5a2b",
-                            FillColor = "#3388ff",
-                            FillOpacity = 0.20000000000000001,
-                            GeometryType = 0,
-                            IconUrl = "",
-                            Name = "Poste",
-                            Radius = 6.0,
-                            Weight = 3.0
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0001-000000000002"),
-                            Color = "#e67e22",
-                            FillColor = "#3388ff",
-                            FillOpacity = 0.20000000000000001,
-                            GeometryType = 0,
-                            IconUrl = "",
-                            Name = "Transformador",
-                            Radius = 8.0,
-                            Weight = 3.0
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0001-000000000003"),
-                            Color = "#f1c40f",
-                            FillColor = "#3388ff",
-                            FillOpacity = 0.20000000000000001,
-                            GeometryType = 1,
-                            IconUrl = "",
-                            Name = "Línea de baja tensión",
-                            Radius = 8.0,
-                            Weight = 2.0
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0001-000000000004"),
-                            Color = "#3498db",
-                            FillColor = "#3388ff",
-                            FillOpacity = 0.20000000000000001,
-                            GeometryType = 0,
-                            IconUrl = "",
-                            Name = "Punto de descarga de agua",
-                            Radius = 6.0,
-                            Weight = 3.0
-                        },
-                        new
-                        {
-                            Id = new Guid("00000000-0000-0000-0001-000000000005"),
-                            Color = "#e74c3c",
-                            FillColor = "#3388ff",
-                            FillOpacity = 0.20000000000000001,
-                            GeometryType = 0,
-                            IconUrl = "",
-                            Name = "Interruptor",
-                            Radius = 7.0,
-                            Weight = 3.0
-                        });
                 });
 
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.LayerRuleConditionRow", b =>
@@ -416,30 +296,13 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                     b.ToTable("layer_rule", (string)null);
                 });
 
-            modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.AssetTypeRow", b =>
-                {
-                    b.HasOne("GeoAssets.Provider.PostgreSQL.Entities.LayerRow", "DefaultLayer")
-                        .WithMany()
-                        .HasForeignKey("DefaultLayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("DefaultLayer");
-                });
-
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.GeoEntityRow", b =>
                 {
                     b.HasOne("GeoAssets.Provider.PostgreSQL.Entities.AssetTypeRow", "AssetType")
                         .WithMany()
                         .HasForeignKey("AssetTypeId1");
 
-                    b.HasOne("GeoAssets.Provider.PostgreSQL.Entities.LayerRow", "Layer")
-                        .WithMany()
-                        .HasForeignKey("LayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("AssetType");
-
-                    b.Navigation("Layer");
                 });
 
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.LayerRuleConditionRow", b =>
