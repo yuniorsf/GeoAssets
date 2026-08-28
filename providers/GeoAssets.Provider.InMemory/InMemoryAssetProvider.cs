@@ -117,7 +117,6 @@ public sealed class InMemoryAssetProvider : IAssetProvider
     }
 
     // ── Layer management ─────────────────────────────────────────────────────
-    // Not yet part of IAssetProvider — the interface addition and resolution logic land in XD01-111.
 
     public IReadOnlyList<Layer> GetLayers() => [.. _layers];
 
@@ -136,7 +135,8 @@ public sealed class InMemoryAssetProvider : IAssetProvider
 
     // ── Layer rule management ────────────────────────────────────────────────
 
-    public IReadOnlyList<LayerRule> GetLayerRules() => [.. _layerRules];
+    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) =>
+        [.. _layerRules.Where(r => r.AssetTypeId == assetTypeId)];
 
     public void AddLayerRule(LayerRule layerRule)
     {

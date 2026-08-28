@@ -43,6 +43,12 @@ public class ProviderConnectionMapRendererTests
         public IReadOnlyList<AssetType> GetAssetTypes() => throw new NotSupportedException();
         public void AddAssetType(AssetType assetType) => throw new NotSupportedException();
         public void DeleteAssetType(Guid id) => throw new NotSupportedException();
+        public IReadOnlyList<Layer> GetLayers() => throw new NotSupportedException();
+        public void AddLayer(Layer layer) => throw new NotSupportedException();
+        public void DeleteLayer(Guid id) => throw new NotSupportedException();
+        public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => throw new NotSupportedException();
+        public void AddLayerRule(LayerRule layerRule) => throw new NotSupportedException();
+        public void DeleteLayerRule(Guid id) => throw new NotSupportedException();
 
         public event EventHandler<GeoFeature>? FeatureAdded;
         public event EventHandler<GeoFeature>? FeatureUpdated;

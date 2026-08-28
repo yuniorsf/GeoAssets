@@ -83,6 +83,8 @@ public sealed class ActiveAssetProvider : IAssetProvider
     public bool                                     HasCycles()                                       => _current.HasCycles();
     public IReadOnlyList<GeoFeature>                TopologicalSort()                                 => _current.TopologicalSort();
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                   => _current.GetAssetTypes();
+    public IReadOnlyList<Layer>                     GetLayers()                                       => _current.GetLayers();
+    public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                   => _current.GetLayerRules(assetTypeId);
 
     public void Add(GeoFeature feature)                    => _current.Add(feature);
     public void Update(GeoFeature feature)                 => _current.Update(feature);
@@ -92,4 +94,8 @@ public sealed class ActiveAssetProvider : IAssetProvider
     public void LoadAll(IEnumerable<GeoFeature> features)  => _current.LoadAll(features);
     public void AddAssetType(AssetType assetType)          => _current.AddAssetType(assetType);
     public void DeleteAssetType(Guid id)                   => _current.DeleteAssetType(id);
+    public void AddLayer(Layer layer)                      => _current.AddLayer(layer);
+    public void DeleteLayer(Guid id)                       => _current.DeleteLayer(id);
+    public void AddLayerRule(LayerRule layerRule)          => _current.AddLayerRule(layerRule);
+    public void DeleteLayerRule(Guid id)                   => _current.DeleteLayerRule(id);
 }

@@ -66,6 +66,14 @@ public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider
     public void AddAssetType(AssetType assetType)             { }
     public void DeleteAssetType(Guid id)                      { }
 
+    // ── Layers — empty (styling is server-side raster rendering) ─────────────
+    public IReadOnlyList<Layer> GetLayers()                   => [];
+    public void AddLayer(Layer layer)                         { }
+    public void DeleteLayer(Guid id)                          { }
+    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => [];
+    public void AddLayerRule(LayerRule layerRule)              { }
+    public void DeleteLayerRule(Guid id)                       { }
+
     // ── Writes — silently ignored (read-only WMS provider) ───────────────────
     public void Add(GeoFeature feature)                       { }
     public void Update(GeoFeature feature)                    { }

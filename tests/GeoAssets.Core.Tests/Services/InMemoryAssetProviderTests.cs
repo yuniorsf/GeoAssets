@@ -475,7 +475,7 @@ public class InMemoryAssetProviderTests
     [Fact]
     public void GetLayerRules_NewInstance_ReturnsEmpty()
     {
-        new InMemoryAssetProvider().GetLayerRules().Should().BeEmpty();
+        new InMemoryAssetProvider().GetLayerRules(Guid.Empty).Should().BeEmpty();
     }
 
     // ── AddLayerRule ───────────────────────────────────────────────────────────
@@ -485,7 +485,7 @@ public class InMemoryAssetProviderTests
     {
         var sut = new InMemoryAssetProvider();
         sut.AddLayerRule(new LayerRule());
-        sut.GetLayerRules().Should().ContainSingle();
+        sut.GetLayerRules(Guid.Empty).Should().ContainSingle();
     }
 
     [Fact]
@@ -495,7 +495,19 @@ public class InMemoryAssetProviderTests
         var id = Guid.NewGuid();
         sut.AddLayerRule(new LayerRule { Id = id, Priority = 1 });
         sut.AddLayerRule(new LayerRule { Id = id, Priority = 2 });
-        sut.GetLayerRules().Should().ContainSingle();
+        sut.GetLayerRules(Guid.Empty).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GetLayerRules_FiltersByAssetTypeId()
+    {
+        var sut = new InMemoryAssetProvider();
+        var typeA = Guid.NewGuid();
+        var typeB = Guid.NewGuid();
+        sut.AddLayerRule(new LayerRule { AssetTypeId = typeA });
+        sut.AddLayerRule(new LayerRule { AssetTypeId = typeB });
+
+        sut.GetLayerRules(typeA).Should().ContainSingle().Which.AssetTypeId.Should().Be(typeA);
     }
 
     // ── DeleteLayerRule ────────────────────────────────────────────────────────
@@ -507,7 +519,7 @@ public class InMemoryAssetProviderTests
         var id = Guid.NewGuid();
         sut.AddLayerRule(new LayerRule { Id = id });
         sut.DeleteLayerRule(id);
-        sut.GetLayerRules().Should().BeEmpty();
+        sut.GetLayerRules(Guid.Empty).Should().BeEmpty();
     }
 
     [Fact]
@@ -516,7 +528,7 @@ public class InMemoryAssetProviderTests
         var sut = new InMemoryAssetProvider();
         sut.AddLayerRule(new LayerRule());
         sut.DeleteLayerRule(Guid.NewGuid());
-        sut.GetLayerRules().Should().ContainSingle();
+        sut.GetLayerRules(Guid.Empty).Should().ContainSingle();
     }
 
     // ── GetWithin ─────────────────────────────────────────────────────────────

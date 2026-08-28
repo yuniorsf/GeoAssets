@@ -102,6 +102,16 @@ public interface IAssetProvider
     void AddAssetType(AssetType assetType);
     void DeleteAssetType(Guid id);
 
+    // Layer management
+    IReadOnlyList<Layer> GetLayers();
+    void AddLayer(Layer layer);
+    void DeleteLayer(Guid id);
+
+    // Layer rule management
+    IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId);
+    void AddLayerRule(LayerRule layerRule);
+    void DeleteLayerRule(Guid id);
+
     event EventHandler<GeoFeature>? FeatureAdded;
     event EventHandler<GeoFeature>? FeatureUpdated;
     event EventHandler<string>? FeatureDeleted;

@@ -29,6 +29,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     // In-memory cache — rebuilt on first use and after writes
     private Dictionary<string, GeoFeature>? _cache;
     private List<AssetType>? _typeCache;
+    private List<Layer>? _layerCache;
+    private List<LayerRule>? _layerRuleCache;
 
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
 
@@ -266,6 +268,108 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         _db.AssetTypes.Remove(row);
         SaveChanges();
         _typeCache = null;
+    }
+
+    // ── Layers ─────────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<Layer> GetLayers()
+    {
+        _layerCache ??= _db.Layers.AsNoTracking()
+            .Select(r => new Layer
+            {
+                Id          = r.Id,
+                Name        = r.Name,
+                GeometryType = r.GeometryType,
+                Color       = r.Color,
+                Radius      = r.Radius,
+                IconUrl     = r.IconUrl,
+                Weight      = r.Weight,
+                DashArray   = r.DashArray,
+                FillColor   = r.FillColor,
+                FillOpacity = r.FillOpacity
+            }).ToList();
+        return [.. _layerCache];
+    }
+
+    public void AddLayer(Layer layer)
+    {
+        if (_db.Layers.Find(layer.Id) is not null) return;
+        _db.Layers.Add(new LayerRow
+        {
+            Id          = layer.Id,
+            Name        = layer.Name,
+            GeometryType = layer.GeometryType,
+            Color       = layer.Color,
+            Radius      = layer.Radius,
+            IconUrl     = layer.IconUrl,
+            Weight      = layer.Weight,
+            DashArray   = layer.DashArray,
+            FillColor   = layer.FillColor,
+            FillOpacity = layer.FillOpacity
+        });
+        SaveChanges();
+        _layerCache = null;
+    }
+
+    public void DeleteLayer(Guid id)
+    {
+        var row = _db.Layers.Find(id);
+        if (row is null) return;
+        _db.Layers.Remove(row);
+        SaveChanges();
+        _layerCache = null;
+    }
+
+    // ── Layer rules ────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId)
+    {
+        _layerRuleCache ??= _db.LayerRules.AsNoTracking()
+            .Include(r => r.Conditions)
+            .ToList()
+            .Select(r => new LayerRule
+            {
+                Id          = r.Id,
+                AssetTypeId = r.AssetTypeId,
+                LayerId     = r.LayerId,
+                Priority    = r.Priority,
+                Conditions  = [.. r.Conditions.Select(c => new LayerRuleCondition
+                {
+                    Attribute = c.Attribute,
+                    Operator  = c.Operator,
+                    Value     = c.Value
+                })]
+            }).ToList();
+        return [.. _layerRuleCache.Where(r => r.AssetTypeId == assetTypeId)];
+    }
+
+    public void AddLayerRule(LayerRule layerRule)
+    {
+        if (_db.LayerRules.Find(layerRule.Id) is not null) return;
+        _db.LayerRules.Add(new LayerRuleRow
+        {
+            Id          = layerRule.Id,
+            AssetTypeId = layerRule.AssetTypeId,
+            LayerId     = layerRule.LayerId,
+            Priority    = layerRule.Priority,
+            Conditions  = [.. layerRule.Conditions.Select(c => new LayerRuleConditionRow
+            {
+                Attribute = c.Attribute,
+                Operator  = c.Operator,
+                Value     = c.Value
+            })]
+        });
+        SaveChanges();
+        _layerRuleCache = null;
+    }
+
+    public void DeleteLayerRule(Guid id)
+    {
+        var row = _db.LayerRules.Find(id);
+        if (row is null) return;
+        _db.LayerRules.Remove(row);
+        SaveChanges();
+        _layerRuleCache = null;
     }
 
     // ── Mapping ────────────────────────────────────────────────────────────────

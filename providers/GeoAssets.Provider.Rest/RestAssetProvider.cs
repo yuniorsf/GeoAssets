@@ -128,6 +128,8 @@ public sealed class RestAssetProvider : IAssetProvider
     public bool                                     HasCycles()                                     => _cache.HasCycles();
     public IReadOnlyList<GeoFeature>                TopologicalSort()                              => _cache.TopologicalSort();
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                 => _cache.GetAssetTypes();
+    public IReadOnlyList<Layer>                     GetLayers()                                     => _cache.GetLayers();
+    public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                 => _cache.GetLayerRules(assetTypeId);
 
     // ── Writes — cache-first + fire-and-forget HTTP sync ──────────────────
 
@@ -179,4 +181,13 @@ public sealed class RestAssetProvider : IAssetProvider
         _cache.DeleteAssetType(id);
         _ = _http.DeleteAsync($"asset-types/{id}");
     }
+
+    /// <summary>
+    /// Cache-only — no server endpoint for layers exists yet, so unlike the other write methods
+    /// this doesn't forward over HTTP. Revisit once the server gains a <c>layers</c> route.
+    /// </summary>
+    public void AddLayer(Layer layer)             => _cache.AddLayer(layer);
+    public void DeleteLayer(Guid id)              => _cache.DeleteLayer(id);
+    public void AddLayerRule(LayerRule layerRule) => _cache.AddLayerRule(layerRule);
+    public void DeleteLayerRule(Guid id)          => _cache.DeleteLayerRule(id);
 }
