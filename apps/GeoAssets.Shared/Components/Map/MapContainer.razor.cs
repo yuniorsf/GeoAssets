@@ -73,16 +73,34 @@ public partial class MapContainer
             return;
         }
 
-        feature.Properties.AssetTypeId = feature.Geometry switch
+        var pendingTypeId = PendingType.AssetTypeId;
+        if (pendingTypeId is null)
+        {
+            // No type-first selection was pending (the user drew via one of DrawToolbar's 3 raw
+            // geometry buttons) — fall back to the original geometry-based inference so those
+            // buttons keep working exactly as before XD01-117.
+            Logger.LogDebug("OnFeatureDrawnFromJs — no pending AssetType, falling back to geometry-based inference");
+        }
+        feature.Properties.AssetTypeId = ResolveDrawnAssetTypeId(feature.Geometry, pendingTypeId);
+        PendingType.Clear();
+
+        Logger.LogDebug("Feature drawn — id={Id} type={Type}", feature.Id, feature.Geometry?.GetType().Name);
+        await OnFeatureDrawn.InvokeAsync(feature);
+    }
+
+    /// <summary>
+    /// Resolves the <c>AssetTypeId</c> for a newly drawn feature: <paramref name="pendingAssetTypeId"/>
+    /// (set by <c>DrawToolbar</c>'s type palette, XD01-117) when present, otherwise the original
+    /// geometry-based inference — the 3 built-in generic types, for draws made via DrawToolbar's 3
+    /// raw geometry buttons. Static so it's directly unit-testable without rendering.
+    /// </summary>
+    public static string ResolveDrawnAssetTypeId(GeoGeometry? geometry, string? pendingAssetTypeId) =>
+        pendingAssetTypeId ?? geometry switch
         {
             GeoLineString => AssetType.Line.Id.ToString(),
             GeoPolygon    => AssetType.Area.Id.ToString(),
             _             => AssetType.Point.Id.ToString()
         };
-
-        Logger.LogDebug("Feature drawn — id={Id} type={Type}", feature.Id, feature.Geometry?.GetType().Name);
-        await OnFeatureDrawn.InvokeAsync(feature);
-    }
 
     [JSInvokable("OnFeatureEditedFromJs")]
     public async Task OnFeatureEditedFromJs(string featureId, string geometryJson)

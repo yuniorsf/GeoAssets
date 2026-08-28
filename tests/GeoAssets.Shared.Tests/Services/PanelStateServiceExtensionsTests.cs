@@ -43,6 +43,24 @@ public class PanelStateServiceExtensionsTests
     }
 
     [Fact]
+    public void AddGeoAssetsPanelState_RegistersPendingDrawTypeStateAsScoped()
+    {
+        var services = new ServiceCollection();
+        services.AddGeoAssetsPanelState();
+        using var provider = services.BuildServiceProvider();
+
+        using var scope1 = provider.CreateScope();
+        var first  = scope1.ServiceProvider.GetRequiredService<IPendingDrawTypeState>();
+        var second = scope1.ServiceProvider.GetRequiredService<IPendingDrawTypeState>();
+
+        using var scope2 = provider.CreateScope();
+        var thirdInAnotherScope = scope2.ServiceProvider.GetRequiredService<IPendingDrawTypeState>();
+
+        first.Should().BeSameAs(second);
+        first.Should().NotBeSameAs(thirdInAnotherScope);
+    }
+
+    [Fact]
     public void AddGeoAssetsPanelState_ResolvedServices_AreTheExpectedImplementations()
     {
         var services = new ServiceCollection();
@@ -51,5 +69,6 @@ public class PanelStateServiceExtensionsTests
 
         provider.GetRequiredService<IFeatureSelectionState>().Should().BeOfType<FeatureSelectionState>();
         provider.GetRequiredService<ICurrentMapContext>().Should().BeOfType<CurrentMapContext>();
+        provider.GetRequiredService<IPendingDrawTypeState>().Should().BeOfType<PendingDrawTypeState>();
     }
 }

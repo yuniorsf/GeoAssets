@@ -62,6 +62,10 @@
   "attrs.addAttribute": "+ Añadir atributo",
 
   "draw.label": "Dibujar:",
+  "draw.chooseType": "Elegir tipo",
+  "draw.typeSearch": "Buscar tipos de activo...",
+  "draw.anyGeometryHint": "Este tipo no tiene forma fija — usa un botón de forma en su lugar",
+  "draw.orLabel": "o:",
   "draw.point.title": "Añadir punto",
   "draw.line.title": "Trazar línea",
   "draw.polygon.title": "Dibujar polígono",

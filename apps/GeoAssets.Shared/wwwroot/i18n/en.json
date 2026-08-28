@@ -62,6 +62,10 @@
   "attrs.addAttribute": "+ Add attribute",
 
   "draw.label": "Draw:",
+  "draw.chooseType": "Choose type",
+  "draw.typeSearch": "Search asset types...",
+  "draw.anyGeometryHint": "This type has no fixed shape — use a shape button instead",
+  "draw.orLabel": "or:",
   "draw.point.title": "Add point",
   "draw.line.title": "Draw line",
   "draw.polygon.title": "Draw polygon",

@@ -389,6 +389,65 @@ html, body {
 .draw-btn.active { background: rgba(137, 180, 250, 0.2); border-color: var(--accent); color: var(--accent); }
 .draw-btn.cancel  { color: var(--danger); border-color: var(--danger); }
 
+/* ─── Draw Toolbar: AssetType palette (XD01-117) ────────────────────────── */
+
+.draw-type-picker { position: relative; }
+
+.draw-type-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.82rem;
+}
+.draw-type-trigger:hover { background: rgba(137, 180, 250, 0.1); border-color: var(--accent); }
+.draw-type-trigger.active { background: rgba(137, 180, 250, 0.2); border-color: var(--accent); color: var(--accent); }
+
+.draw-type-backdrop { position: fixed; inset: 0; z-index: 1400; }
+
+.draw-type-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 1500;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 220px;
+    max-height: 320px;
+    padding: 8px;
+}
+
+.draw-type-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    max-height: 260px;
+}
+
+.draw-type-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: left;
+}
+.draw-type-row:hover:not(:disabled) { background: var(--surface-tint); }
+.draw-type-row.active { background: rgba(137, 180, 250, 0.15); }
+.draw-type-row:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ─── Asset List ─────────────────────────────────────────────────────────── */
 
 .asset-list {
