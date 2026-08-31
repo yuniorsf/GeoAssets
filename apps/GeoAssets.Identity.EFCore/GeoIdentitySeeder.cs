@@ -79,6 +79,13 @@ public static class GeoIdentitySeeder
             P("roles:edit",             "roles",         "edit",       "Crear y editar roles, y gestionar sus permisos"),
             P("roles:delete",           "roles",         "delete",     "Eliminar roles personalizados"),
             P("permissions:read",       "permissions",   "read",       "Ver el catálogo de permisos"),
+
+            // XD01-128: Organizations/Groups admin CRUD — Administrator-only for now, same
+            // precedent as the XD01-55 block above.
+            P("organizations:read",     "organizations", "read",       "Ver organizaciones"),
+            P("organizations:edit",     "organizations", "edit",       "Crear y editar organizaciones"),
+            P("groups:read",            "groups",        "read",       "Ver grupos"),
+            P("groups:edit",            "groups",        "edit",       "Crear y editar grupos, y gestionar sus miembros"),
         };
 
         var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct);
@@ -96,7 +103,8 @@ public static class GeoIdentitySeeder
             "serviceorders:complete", "serviceorders:cancel",
             "features:read", "features:edit", "features:delete",
             "reports:export", "users:manage",
-            "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read");
+            "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read",
+            "organizations:read", "organizations:edit", "groups:read", "groups:edit");
 
         await AddRoleAsync(db, SupervisorRoleId, "Supervisor",      "Gestión de órdenes y supervisión", isBuiltIn: true, ct,
             "serviceorders:create", "serviceorders:read", "serviceorders:assign",

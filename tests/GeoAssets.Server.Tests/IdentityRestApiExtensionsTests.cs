@@ -47,6 +47,7 @@ public class IdentityRestApiExtensionsTests
                 webHost.ConfigureServices(services =>
                 {
                     services.AddRouting();
+                    services.AddSingleton(TimeProvider.System);
                     services.AddSingleton(authService);
                     services.AddSingleton(policyRepo);
                     // MapIdentityApi() maps the XD01-56 admin routes in the same group as
@@ -65,6 +66,9 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IInvitationEmailSender>(new NullInvitationEmailSender());
                     // Same reasoning — the XD01-87 userclaims routes are in the same group.
                     services.AddSingleton<IUserClaimRepository>(new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
+                    // Same reasoning — the XD01-128 organizations/groups routes are in the same group.
+                    services.AddSingleton<IOrganizationRepository>(new NeverCalledOrganizationRepository());
+                    services.AddSingleton<IGroupRepository>(new NeverCalledGroupRepository());
                 });
                 webHost.Configure(app =>
                 {
@@ -277,11 +281,105 @@ public class IdentityRestApiExtensionsTests
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
+    private sealed class FakeAdminOrganizationRepository(
+        IReadOnlyDictionary<Guid, Organization> orgs, IReadOnlyDictionary<Guid, List<AppUser>> orgUsers) : IOrganizationRepository
+    {
+        public Organization? Added { get; private set; }
+        public Organization? Updated { get; private set; }
+        public bool SaveChangesCalled { get; private set; }
+
+        public Task<Organization?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult(orgs.GetValueOrDefault(id));
+        public Task<IReadOnlyList<Organization>> GetAllAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Organization>>(orgs.Values.ToList());
+        public Task<IReadOnlyList<AppUser>> GetUsersAsync(Guid organizationId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<AppUser>>(orgUsers.GetValueOrDefault(organizationId) ?? []);
+        public Task AddAsync(Organization organization, CancellationToken ct = default)
+        {
+            Added = organization;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(Organization organization, CancellationToken ct = default)
+        {
+            Updated = organization;
+            return Task.CompletedTask;
+        }
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<Organization?> GetBySlugAsync(string slug, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeAdminGroupRepository(
+        IReadOnlyDictionary<Guid, AppGroup> groups, IReadOnlyDictionary<Guid, List<AppUser>> groupMembers) : IGroupRepository
+    {
+        public AppGroup? Added { get; private set; }
+        public AppGroup? Updated { get; private set; }
+        public (Guid GroupId, Guid UserId, string? AddedBy)? MemberAdded { get; private set; }
+        public (Guid GroupId, Guid UserId)? MemberRemoved { get; private set; }
+        public bool SaveChangesCalled { get; private set; }
+
+        public Task<AppGroup?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult(groups.GetValueOrDefault(id));
+        public Task<IReadOnlyList<AppGroup>> GetAllAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<AppGroup>>(groups.Values.ToList());
+        public Task<IReadOnlyList<AppUser>> GetMembersAsync(Guid groupId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<AppUser>>(groupMembers.GetValueOrDefault(groupId) ?? []);
+        public Task AddAsync(AppGroup group, CancellationToken ct = default)
+        {
+            Added = group;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(AppGroup group, CancellationToken ct = default)
+        {
+            Updated = group;
+            return Task.CompletedTask;
+        }
+        public Task AddMemberAsync(Guid groupId, Guid userId, string? addedBy = null, CancellationToken ct = default)
+        {
+            MemberAdded = (groupId, userId, addedBy);
+            return Task.CompletedTask;
+        }
+        public Task RemoveMemberAsync(Guid groupId, Guid userId, CancellationToken ct = default)
+        {
+            MemberRemoved = (groupId, userId);
+            return Task.CompletedTask;
+        }
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<AppGroup>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppGroup>> GetGroupsForUserAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
     private static AppRole NewRole(string name = "Custom", bool isBuiltIn = false) =>
         new() { Id = Guid.NewGuid(), Name = name, Description = "desc", IsBuiltIn = isBuiltIn };
 
     private static AppPermission NewPermission(string code) =>
         new() { Id = Guid.NewGuid(), Code = code, Resource = code.Split(':')[0], Action = code.Split(':')[1], Description = code };
+
+    private static Organization NewOrganization(string name = "Empresa Test", string slug = "test") => new()
+    {
+        Id        = Guid.NewGuid(),
+        Name      = name,
+        Slug      = slug,
+        IsActive  = true,
+        CreatedAt = DateTime.UtcNow,
+    };
+
+    private static AppGroup NewGroup(string name = "Cuadrilla Norte") => new()
+    {
+        Id        = Guid.NewGuid(),
+        Name      = name,
+        IsActive  = true,
+        CreatedAt = DateTime.UtcNow,
+    };
 
     /// <summary>Records what was called and returns a caller-configurable role list — drives
     /// the XD01-63 rolesync endpoint tests below.</summary>
@@ -325,6 +423,35 @@ public class IdentityRestApiExtensionsTests
         public Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task AddAsync(PendingInvitation invitation, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(PendingInvitation invitation, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    /// <summary>Never actually invoked — registered purely so the XD01-128 organizations
+    /// endpoints' delegate metadata can be built for tests that never touch them.</summary>
+    private sealed class NeverCalledOrganizationRepository : IOrganizationRepository
+    {
+        public Task<Organization?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<Organization?> GetBySlugAsync(string slug, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Organization>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppUser>> GetUsersAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AddAsync(Organization organization, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(Organization organization, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    /// <summary>Never actually invoked — registered purely so the XD01-128 groups endpoints'
+    /// delegate metadata can be built for tests that never touch them.</summary>
+    private sealed class NeverCalledGroupRepository : IGroupRepository
+    {
+        public Task<AppGroup?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppGroup>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppGroup>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppGroup>> GetGroupsForUserAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppUser>> GetMembersAsync(Guid groupId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AddAsync(AppGroup group, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(AppGroup group, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AddMemberAsync(Guid groupId, Guid userId, string? addedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task RemoveMemberAsync(Guid groupId, Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
@@ -450,7 +577,9 @@ public class IdentityRestApiExtensionsTests
         IPendingInvitationRepository? invitationRepo = null,
         IUserInvitationProvider? invitationProvider = null,
         IInvitationEmailSender? invitationEmailSender = null,
-        IUserClaimRepository? claimRepo = null)
+        IUserClaimRepository? claimRepo = null,
+        IOrganizationRepository? orgRepo = null,
+        IGroupRepository? groupRepo = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -459,6 +588,7 @@ public class IdentityRestApiExtensionsTests
                 webHost.ConfigureServices(services =>
                 {
                     services.AddRouting();
+                    services.AddSingleton(TimeProvider.System);
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization();
@@ -479,6 +609,8 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IUserInvitationProvider>(invitationProvider ?? new NullUserInvitationProvider());
                     services.AddSingleton<IInvitationEmailSender>(invitationEmailSender ?? new NullInvitationEmailSender());
                     services.AddSingleton<IUserClaimRepository>(claimRepo ?? new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
+                    services.AddSingleton<IOrganizationRepository>(orgRepo ?? new NeverCalledOrganizationRepository());
+                    services.AddSingleton<IGroupRepository>(groupRepo ?? new NeverCalledGroupRepository());
                 });
                 webHost.Configure(app =>
                 {
@@ -957,6 +1089,405 @@ public class IdentityRestApiExtensionsTests
         var response = await client.GetAsync("/api/identity/permissions");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // ── Organizations (XD01-128) ────────────────────────────────────────────
+
+    private static async Task<TestServer> BuildOrgServerAsync(
+        IOrganizationRepository orgRepo, IGeoAuthorizationService authService) =>
+        await BuildAdminServerAsync(
+            new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
+            new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
+            new FakeAdminPermissionRepository([]), authService, orgRepo: orgRepo);
+
+    [Fact]
+    public async Task Organizations_List_Authorized_ReturnsAll()
+    {
+        var org = NewOrganization();
+        var orgRepo = new FakeAdminOrganizationRepository(
+            new Dictionary<Guid, Organization> { [org.Id] = org }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:read"));
+        using var client = AuthenticatedClient(server);
+
+        var dtos = await client.GetFromJsonAsync<List<OrganizationDto>>("/api/identity/organizations");
+
+        dtos.Should().ContainSingle(d => d.Id == org.Id && d.Name == org.Name && d.Slug == org.Slug);
+    }
+
+    [Fact]
+    public async Task Organizations_List_Forbidden_Returns403()
+    {
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync("/api/identity/organizations");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Organizations_GetById_Authorized_ReturnsOrganization()
+    {
+        var org = NewOrganization();
+        var orgRepo = new FakeAdminOrganizationRepository(
+            new Dictionary<Guid, Organization> { [org.Id] = org }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:read"));
+        using var client = AuthenticatedClient(server);
+
+        var dto = await client.GetFromJsonAsync<OrganizationDto>($"/api/identity/organizations/{org.Id}");
+
+        dto.Should().NotBeNull();
+        dto!.Id.Should().Be(org.Id);
+        dto.Slug.Should().Be(org.Slug);
+    }
+
+    [Fact]
+    public async Task Organizations_GetById_NotFound_Returns404()
+    {
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:read"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync($"/api/identity/organizations/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Organizations_GetById_Forbidden_Returns403()
+    {
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync($"/api/identity/organizations/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Organizations_GetUsers_Authorized_ReturnsMembers()
+    {
+        var org = NewOrganization();
+        var user = NewUser();
+        var orgRepo = new FakeAdminOrganizationRepository(
+            new Dictionary<Guid, Organization> { [org.Id] = org },
+            new Dictionary<Guid, List<AppUser>> { [org.Id] = [user] });
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:read"));
+        using var client = AuthenticatedClient(server);
+
+        var dtos = await client.GetFromJsonAsync<List<UserSummaryDto>>($"/api/identity/organizations/{org.Id}/users");
+
+        dtos.Should().ContainSingle(d => d.Id == user.Id);
+    }
+
+    [Fact]
+    public async Task Organizations_GetUsers_Forbidden_Returns403()
+    {
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync($"/api/identity/organizations/{Guid.NewGuid()}/users");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Organizations_Create_Authorized_ReturnsCreated()
+    {
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:edit"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/identity/organizations",
+            new OrganizationWriteDto("Empresa Eléctrica", "een", "desc", true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        orgRepo.Added.Should().NotBeNull();
+        orgRepo.Added!.Name.Should().Be("Empresa Eléctrica");
+        orgRepo.Added.Slug.Should().Be("een");
+        orgRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Organizations_Create_Forbidden_Returns403()
+    {
+        // Non-leakage: organizations:read must not also unlock write access.
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:read"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/identity/organizations",
+            new OrganizationWriteDto("Empresa Eléctrica", "een", "desc", true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        orgRepo.Added.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Organizations_Update_Authorized_UpdatesFields()
+    {
+        var org = NewOrganization();
+        var orgRepo = new FakeAdminOrganizationRepository(
+            new Dictionary<Guid, Organization> { [org.Id] = org }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:edit"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PutAsJsonAsync($"/api/identity/organizations/{org.Id}",
+            new OrganizationWriteDto("Renamed", "renamed", "new desc", false));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        orgRepo.Updated.Should().NotBeNull();
+        orgRepo.Updated!.Name.Should().Be("Renamed");
+        orgRepo.Updated.Slug.Should().Be("renamed");
+        orgRepo.Updated.IsActive.Should().BeFalse();
+        orgRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Organizations_Update_NotFound_Returns404()
+    {
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:edit"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PutAsJsonAsync($"/api/identity/organizations/{Guid.NewGuid()}",
+            new OrganizationWriteDto("X", "x", null, true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Organizations_Update_Forbidden_Returns403()
+    {
+        var org = NewOrganization();
+        var orgRepo = new FakeAdminOrganizationRepository(
+            new Dictionary<Guid, Organization> { [org.Id] = org }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PutAsJsonAsync($"/api/identity/organizations/{org.Id}",
+            new OrganizationWriteDto("X", "x", null, true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // ── Groups (XD01-128) ────────────────────────────────────────────────────
+
+    private static async Task<TestServer> BuildGroupServerAsync(
+        IGroupRepository groupRepo, IGeoAuthorizationService authService) =>
+        await BuildAdminServerAsync(
+            new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
+            new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
+            new FakeAdminPermissionRepository([]), authService, groupRepo: groupRepo);
+
+    [Fact]
+    public async Task Groups_List_Authorized_ReturnsAll()
+    {
+        var group = NewGroup();
+        var groupRepo = new FakeAdminGroupRepository(
+            new Dictionary<Guid, AppGroup> { [group.Id] = group }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:read"));
+        using var client = AuthenticatedClient(server);
+
+        var dtos = await client.GetFromJsonAsync<List<GroupDto>>("/api/identity/groups");
+
+        dtos.Should().ContainSingle(d => d.Id == group.Id && d.Name == group.Name);
+    }
+
+    [Fact]
+    public async Task Groups_List_Forbidden_Returns403()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync("/api/identity/groups");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Groups_GetById_NotFound_Returns404()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:read"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync($"/api/identity/groups/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Groups_GetMembers_Authorized_ReturnsMembers()
+    {
+        var group = NewGroup();
+        var user = NewUser();
+        var groupRepo = new FakeAdminGroupRepository(
+            new Dictionary<Guid, AppGroup> { [group.Id] = group },
+            new Dictionary<Guid, List<AppUser>> { [group.Id] = [user] });
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:read"));
+        using var client = AuthenticatedClient(server);
+
+        var dtos = await client.GetFromJsonAsync<List<UserSummaryDto>>($"/api/identity/groups/{group.Id}/members");
+
+        dtos.Should().ContainSingle(d => d.Id == user.Id);
+    }
+
+    [Fact]
+    public async Task Groups_GetMembers_Forbidden_Returns403()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync($"/api/identity/groups/{Guid.NewGuid()}/members");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Groups_Create_Authorized_ReturnsCreated()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:edit"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/identity/groups",
+            new GroupWriteDto("Cuadrilla Norte", "desc", null, true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        groupRepo.Added.Should().NotBeNull();
+        groupRepo.Added!.Name.Should().Be("Cuadrilla Norte");
+        groupRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Groups_Create_Forbidden_Returns403()
+    {
+        // Non-leakage: groups:read must not also unlock write access.
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:read"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/identity/groups",
+            new GroupWriteDto("Cuadrilla Norte", "desc", null, true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        groupRepo.Added.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Groups_Update_Authorized_UpdatesFields()
+    {
+        var group = NewGroup();
+        var groupRepo = new FakeAdminGroupRepository(
+            new Dictionary<Guid, AppGroup> { [group.Id] = group }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:edit"));
+        using var client = AuthenticatedClient(server);
+        var orgId = Guid.NewGuid();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/groups/{group.Id}",
+            new GroupWriteDto("Renamed", "new desc", orgId, false));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        groupRepo.Updated.Should().NotBeNull();
+        groupRepo.Updated!.Name.Should().Be("Renamed");
+        groupRepo.Updated.OrganizationId.Should().Be(orgId);
+        groupRepo.Updated.IsActive.Should().BeFalse();
+        groupRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Groups_Update_NotFound_Returns404()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:edit"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PutAsJsonAsync($"/api/identity/groups/{Guid.NewGuid()}",
+            new GroupWriteDto("X", null, null, true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Groups_Update_Forbidden_Returns403()
+    {
+        var group = NewGroup();
+        var groupRepo = new FakeAdminGroupRepository(
+            new Dictionary<Guid, AppGroup> { [group.Id] = group }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PutAsJsonAsync($"/api/identity/groups/{group.Id}",
+            new GroupWriteDto("X", null, null, true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Groups_AddMember_Authorized_RecordsCallerAsAddedByAndReturns204()
+    {
+        var group = NewGroup();
+        var user = NewUser();
+        var caller = NewUser("admin@example.com");
+        var groupRepo = new FakeAdminGroupRepository(
+            new Dictionary<Guid, AppGroup> { [group.Id] = group }, new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(
+            groupRepo, new FakePermissionAuthorizationService("groups:edit") { CurrentUser = caller });
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync($"/api/identity/groups/{group.Id}/members/{user.Id}", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        groupRepo.MemberAdded.Should().Be((group.Id, user.Id, caller.Id.ToString()));
+        groupRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Groups_AddMember_Forbidden_Returns403()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsync($"/api/identity/groups/{Guid.NewGuid()}/members/{Guid.NewGuid()}", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        groupRepo.MemberAdded.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Groups_RemoveMember_Authorized_Returns204()
+    {
+        var groupId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:edit"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync($"/api/identity/groups/{groupId}/members/{userId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        groupRepo.MemberRemoved.Should().Be((groupId, userId));
+        groupRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Groups_RemoveMember_Forbidden_Returns403()
+    {
+        var groupRepo = new FakeAdminGroupRepository(new Dictionary<Guid, AppGroup>(), new Dictionary<Guid, List<AppUser>>());
+        using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync($"/api/identity/groups/{Guid.NewGuid()}/members/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        groupRepo.MemberRemoved.Should().BeNull();
     }
 
     // ── Role Sync (XD01-59 Phase 2, XD01-63) ────────────────────────────────
