@@ -1,0 +1,47 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject IServiceProvider ServiceProvider
+
+@if (_enabled)
+{
+    <div class="sidebar-section">
+        <div class="section-header-row">
+            <h6>@L["admin.invitations.title"] (@_invitations.Count)</h6>
+            <button class="btn-icon" title="@L["admin.invitations.inviteTitle"]" @onclick="() => _showInviteDialog = true">＋</button>
+        </div>
+    </div>
+
+    <div class="sidebar-scrollable">
+        @if (_loading)
+        {
+            <div class="empty-state"><p>@L["app.loading"]</p></div>
+        }
+        else if (_invitations.Count == 0)
+        {
+            <div class="empty-state"><p>@L["admin.invitations.empty"]</p></div>
+        }
+        else
+        {
+            <div class="asset-list">
+                @foreach (var invitation in _invitations)
+                {
+                    <div class="asset-list-item">
+                        <span class="asset-name">@invitation.Email</span>
+                        <span class="badge-builtin">@invitation.Status</span>
+                        <button class="btn-icon" title="@L["admin.invitations.revoke"]" @onclick="() => RequestRevoke(invitation)">×</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <InviteUserDialog Visible="_showInviteDialog"
+                       OnInvited="OnInvited"
+                       OnCancel="() => _showInviteDialog = false" />
+
+    <ConfirmDialog Visible="_showRevokeConfirm"
+                   Title="@L["admin.invitations.revokeTitle"]"
+                   Message="@L.GetString("admin.invitations.revokeConfirm", _toRevoke?.Email ?? string.Empty)"
+                   ConfirmLabel="@L["admin.invitations.revoke"]"
+                   OnConfirm="ConfirmRevokeAsync"
+                   OnCancel="() => _showRevokeConfirm = false" />
+}

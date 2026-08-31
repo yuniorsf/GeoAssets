@@ -18,12 +18,12 @@ internal sealed class MsalGraphAccessTokenProvider : IGraphAccessTokenProvider
 
     private readonly IConfidentialClientApplication _app;
 
-    public MsalGraphAccessTokenProvider(RoleSyncOptions options)
+    public MsalGraphAccessTokenProvider(GraphCredentialOptions credential)
     {
         _app = ConfidentialClientApplicationBuilder
-            .Create(options.ClientId)
-            .WithClientSecret(options.ClientSecret)
-            .WithTenantId(options.TenantId)
+            .Create(credential.ClientId)
+            .WithClientSecret(credential.ClientSecret)
+            .WithTenantId(credential.TenantId)
             .Build();
     }
 

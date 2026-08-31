@@ -1,0 +1,52 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@implements IAsyncDisposable
+@inject IAssetProvider Repository
+@inject AssetService AssetSvc
+@inject IMapInterop MapInterop
+@inject IFeatureSelectionState Selection
+
+<main class="map-area" style="@(Hidden ? "display:none" : null)">
+    <DrawToolbar @ref="_drawToolbar"
+                 MapDivId="@_mapDivId"
+                 OnDrawModeChanged="OnDrawModeChanged" />
+
+    <MapContainer @ref="_mapContainer"
+                  DivId="@_mapDivId"
+                  InitLat="18.5"
+                  InitLon="-69.9"
+                  InitZoom="7"
+                  OnFeatureDrawn="OnFeatureDrawn"
+                  OnFeatureEdited="OnFeatureEdited"
+                  OnFeatureClicked="OnFeatureClicked"
+                  OnFeatureContextMenu="OnFeatureContextMenu" />
+
+    <!-- Properties Panel -->
+    @if (Selection.Selected is not null)
+    {
+        <div class="properties-panel">
+            <AssetForm @ref="_assetForm"
+                       Feature="@Selection.Selected"
+                       IsNew="@Selection.IsNew"
+                       OnSave="OnFeatureSaved"
+                       OnCancel="ClosePanel" />
+        </div>
+    }
+</main>
+
+<!-- Map context menu (rendered outside map-area so fixed positioning works correctly) -->
+<MapContextMenu Visible="_contextVisible"
+                X="_contextX"
+                Y="_contextY"
+                ShowSave="Selection.Selected?.Id == _contextFeatureId"
+                OnEdit="ContextMenuEdit"
+                OnSave="ContextMenuSave"
+                OnDelete="ContextMenuDelete"
+                OnClose="CloseContextMenu" />
+
+<!-- Delete confirmation triggered from context menu -->
+<ConfirmDialog Visible="_showDeleteConfirm"
+               Title="@L["assets.deleteTitle"]"
+               Message="@L.GetString("assets.deleteConfirm", _pendingDeleteName)"
+               ConfirmLabel="@L["assets.delete"]"
+               OnConfirm="ConfirmContextDelete"
+               OnCancel="() => { _showDeleteConfirm = false; StateHasChanged(); }" />

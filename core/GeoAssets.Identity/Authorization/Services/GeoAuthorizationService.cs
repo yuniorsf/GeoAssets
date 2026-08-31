@@ -10,7 +10,8 @@ namespace GeoAssets.Identity.Authorization.Services;
 /// Flow per authorization check:
 ///   1. Resolve current user via <see cref="ICurrentUserAccessor.GetCurrentUserAsync"/>
 ///   2. Look up <see cref="AppUser"/> by ExternalObjectId in the repository
-///   3. If user not yet provisioned, returns an empty (no-permissions) context (safe default)
+///   3. If user not yet provisioned, JIT-provisions one now (XD01-88) — this is the only
+///      provisioning path for the Rest backend, which has no client-side equivalent
 ///   4. Load claims from the DB / store; source roles from the external provider's roles
 ///      claim (<see cref="CurrentUser.ExternalRoles"/>, XD01-19) rather than the local
 ///      <c>UserRole</c> assignment table, then resolve each role name's permissions via
@@ -67,29 +68,34 @@ public class GeoAuthorizationService(
 
         var user = await userRepository.GetByExternalObjectIdAsync(current.ExternalObjectId, ct);
 
-        // User not yet provisioned — return empty context (safe default).
-        // Provisioning is handled by the host (e.g. UserProvisioningService in WASM).
         if (user is null)
         {
-            return new AuthorizationContext
+            // JIT-provision (XD01-88): the WASM client-side path (UserProvisioningService)
+            // never runs against this Server host, so this is the only place a Rest-backend
+            // caller's AppUser row gets created. Mirrors UserProvisioningService.ProvisionAsync
+            // field-for-field — OrganizationId stays null; org/role assignment happens
+            // post-first-login via the existing admin UI (XD01-63), never resolved
+            // automatically here (see XD01-49's resolution for why that's permanent, not a gap).
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            user = new AppUser
             {
-                User        = new AppUser
-                {
-                    ExternalObjectId = current.ExternalObjectId,
-                    Email            = current.Email,
-                    DisplayName      = current.DisplayName,
-                    CreatedAt        = timeProvider.GetUtcNow().UtcDateTime
-                },
-                Roles       = [],
-                Claims      = [],
-                Permissions = []
+                ExternalObjectId = current.ExternalObjectId,
+                Email            = current.Email,
+                DisplayName      = current.DisplayName,
+                CreatedAt        = now,
+                LastLoginAt      = now,
             };
-        }
 
-        // Update last-login stamp (fire-and-forget; no await to keep the path fast)
-        user.LastLoginAt = timeProvider.GetUtcNow().UtcDateTime;
-        await userRepository.UpdateAsync(user, ct);
-        await userRepository.SaveChangesAsync(ct);
+            await userRepository.AddAsync(user, ct);
+            await userRepository.SaveChangesAsync(ct);
+        }
+        else
+        {
+            // Update last-login stamp
+            user.LastLoginAt = timeProvider.GetUtcNow().UtcDateTime;
+            await userRepository.UpdateAsync(user, ct);
+            await userRepository.SaveChangesAsync(ct);
+        }
 
         var claims = await claimRepository.GetByUserIdAsync(user.Id, ct);
 
@@ -97,7 +103,9 @@ public class GeoAuthorizationService(
         // UserRole assignment table. The permission each role name grants still resolves
         // against the local AppRole/RolePermission tables — a role name with no matching
         // local AppRole (not yet created by an admin) simply contributes no permissions,
-        // rather than failing the whole lookup.
+        // rather than failing the whole lookup. Runs for a just-provisioned user too (not just
+        // already-provisioned ones), so a brand-new caller's very first request already reflects
+        // their real permissions instead of reporting an empty set until a second round-trip.
         var roles = current.ExternalRoles;
         var permissions = new List<AppPermission>();
         foreach (var roleName in roles)

@@ -328,6 +328,10 @@ window.GeoAssets = (function () {
         if (mode === 'webgl') _initWebGL(divId);
     }
 
+    function invalidateSize(divId) {
+        _maps[divId]?.map.invalidateSize();
+    }
+
     function destroyMap(divId) {
         const state = _maps[divId];
         if (state) {
@@ -415,10 +419,31 @@ window.GeoAssets = (function () {
     }
 
     /**
+     * Resolves the effective style for a feature: the per-feature Layer style resolved
+     * server-side (.NET, via LayerResolver) when present, else the pre-existing per-AssetType
+     * default (colorMap) — same fallback the app used before per-feature style resolution existed.
+     */
+    function _effectiveStyle(feature, colorMap, resolvedStyle) {
+        if (resolvedStyle) {
+            return {
+                color: resolvedStyle.color,
+                weight: resolvedStyle.weight,
+                radius: resolvedStyle.radius,
+                fillColor: resolvedStyle.fillColor,
+                fillOpacity: resolvedStyle.fillOpacity,
+                dashArray: resolvedStyle.dashArray || null,
+                iconUrl: resolvedStyle.iconUrl || null
+            };
+        }
+        const color = (colorMap && colorMap[feature.properties?.assetTypeId]) || '#3388ff';
+        return { color, weight: 3, radius: 8, fillColor: color, fillOpacity: 0.35, dashArray: null, iconUrl: null };
+    }
+
+    /**
      * Renders a feature using Leaflet's SVG or Canvas renderer.
      * Used by renderMode === 'leaflet' and renderMode === 'canvas'.
      */
-    function _renderLeaflet(state, feature, color) {
+    function _renderLeaflet(state, feature, style) {
         const id          = feature.id;
         const props       = feature.properties || {};
         const assetTypeId = props.assetTypeId || 'default';
@@ -433,10 +458,16 @@ window.GeoAssets = (function () {
 
         const layer = L.geoJSON(feature, {
             ...extra,
-            style: () => ({ color, weight: 3, opacity: 0.9, fillOpacity: 0.35 }),
-            pointToLayer: (_f, latlng) => L.circleMarker(latlng, {
-                radius: 8, color, fillColor: color, fillOpacity: 0.7, weight: 2, ...extra
+            style: () => ({
+                color: style.color, weight: style.weight, opacity: 0.9,
+                fillColor: style.fillColor, fillOpacity: style.fillOpacity, dashArray: style.dashArray
             }),
+            pointToLayer: (_f, latlng) => style.iconUrl
+                ? L.marker(latlng, { icon: L.icon({ iconUrl: style.iconUrl, iconSize: [25, 25], iconAnchor: [12, 25] }) })
+                : L.circleMarker(latlng, {
+                    radius: style.radius, color: style.color, fillColor: style.fillColor,
+                    fillOpacity: style.fillOpacity, weight: style.weight, ...extra
+                  }),
             onEachFeature: (_f, l) => _bindEvents(state, l, id, props)
         });
 
@@ -477,18 +508,20 @@ window.GeoAssets = (function () {
         state.featureLayers.set(id, evtLayer);
     }
 
-    function renderFeature(divId, featureJson, colorMap) {
+    function renderFeature(divId, featureJson, colorMap, resolvedStyle) {
         const state = _maps[divId];
         if (!state) return;
 
         const feature = typeof featureJson === 'string' ? JSON.parse(featureJson) : featureJson;
-        const color   = (colorMap && colorMap[feature.properties?.assetTypeId]) || '#3388ff';
+        const style   = _effectiveStyle(feature, colorMap, resolvedStyle);
 
         if (state.renderMode === 'webgl') {
-            _addWebGLFeature(divId, state, feature, color);
+            // WebGL mode only varies by color today (see _addWebGLFeature) — weight/radius/
+            // fillOpacity/dashArray/icon stay at their existing hardcoded values in that mode.
+            _addWebGLFeature(divId, state, feature, style.color);
             _scheduleRedraw(divId);
         } else {
-            _renderLeaflet(state, feature, color);
+            _renderLeaflet(state, feature, style);
         }
     }
 
@@ -502,7 +535,7 @@ window.GeoAssets = (function () {
      * Batch-render path: adds all features then does a single WebGL redraw,
      * avoiding redundant redraws after every individual feature.
      */
-    function renderFeatureBatch(divId, featuresJson, colorMap) {
+    function renderFeatureBatch(divId, featuresJson, colorMap, styleMap) {
         const state    = _maps[divId];
         if (!state) return;
         const features = typeof featuresJson === 'string' ? JSON.parse(featuresJson) : featuresJson;
@@ -510,12 +543,12 @@ window.GeoAssets = (function () {
 
         if (state.renderMode === 'webgl') {
             features.forEach(f => {
-                const color = (colorMap && colorMap[f.properties?.assetTypeId]) || '#3388ff';
-                _addWebGLFeature(divId, state, f, color);
+                const style = _effectiveStyle(f, colorMap, styleMap && styleMap[f.id]);
+                _addWebGLFeature(divId, state, f, style.color);
             });
             _scheduleRedraw(divId); // one RAF draw covers the entire batch
         } else {
-            features.forEach(f => renderFeature(divId, f, colorMap));
+            features.forEach(f => renderFeature(divId, f, colorMap, styleMap && styleMap[f.id]));
         }
     }
 
@@ -704,6 +737,7 @@ window.GeoAssets = (function () {
     return {
         initializeMap,
         destroyMap,
+        invalidateSize,
         registerHandlers,
         enableDraw,
         disableDraw,

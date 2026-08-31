@@ -77,6 +77,19 @@ public class ValidatingAssetProviderTests
     }
 
     [Fact]
+    public async Task GetPageAsync_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        inner.Add(Feature("a", AssetType.Point.Id.ToString()));
+        var sut = new ValidatingAssetProvider(inner);
+
+        var result = await sut.GetPageAsync(new AssetQuery());
+
+        result.Items.Should().ContainSingle();
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
     public void GetWithin_DelegatesToInner()
     {
         var inner = new InMemoryAssetProvider();
@@ -333,6 +346,105 @@ public class ValidatingAssetProviderTests
         inner.GetById("a")!.Properties.CustomAttributes.Should().ContainKey("diameter_mm");
     }
 
+    // ── Add / Update geometry-shape validation (XD01-111) ────────────────────────
+
+    [Fact]
+    public void Add_UnknownAssetType_SkipsGeometryValidation()
+    {
+        var inner = new InMemoryAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var feature = Feature("a", Guid.NewGuid().ToString());
+        feature.Geometry = new GeoPoint(1, 1);
+
+        sut.Add(feature);
+
+        inner.GetById("a").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Add_UnrestrictedAssetType_AcceptsAnyGeometry()
+    {
+        var inner = new InMemoryAssetProvider();
+        var assetType = new AssetType { Name = "Any shape" }; // AllowedGeometryType null
+        inner.AddAssetType(assetType);
+        var sut = new ValidatingAssetProvider(inner);
+        var feature = Feature("a", assetType.Id.ToString());
+        feature.Geometry = new GeoLineString([(0d, 0d), (1d, 1d)]);
+
+        sut.Add(feature);
+
+        inner.GetById("a").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Add_NoGeometryYet_SkipsGeometryValidation()
+    {
+        var inner = new InMemoryAssetProvider();
+        var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
+        inner.AddAssetType(assetType);
+        var sut = new ValidatingAssetProvider(inner);
+        var feature = Feature("a", assetType.Id.ToString()); // Geometry is null
+
+        sut.Add(feature);
+
+        inner.GetById("a").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Add_MatchingGeometry_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
+        inner.AddAssetType(assetType);
+        var sut = new ValidatingAssetProvider(inner);
+        var feature = Feature("a", assetType.Id.ToString());
+        feature.Geometry = new GeoPoint(1, 1);
+
+        sut.Add(feature);
+
+        inner.GetById("a").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Add_MismatchedGeometry_ThrowsAndDoesNotCallInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
+        inner.AddAssetType(assetType);
+        var sut = new ValidatingAssetProvider(inner);
+        var feature = Feature("a", assetType.Id.ToString());
+        feature.Geometry = new GeoLineString([(0d, 0d), (1d, 1d)]);
+
+        var act = () => sut.Add(feature);
+
+        act.Should().Throw<GeoFeatureGeometryMismatchException>()
+            .Which.Should().Match<GeoFeatureGeometryMismatchException>(e =>
+                e.AssetTypeId == assetType.Id &&
+                e.Expected == GeometryType.Point &&
+                e.Actual == GeometryType.LineString);
+        inner.GetById("a").Should().BeNull();
+    }
+
+    [Fact]
+    public void Update_MismatchedGeometry_ThrowsAndDoesNotCallInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
+        inner.AddAssetType(assetType);
+        var original = Feature("a", assetType.Id.ToString());
+        original.Geometry = new GeoPoint(1, 1);
+        inner.Add(original);
+        var sut = new ValidatingAssetProvider(inner);
+
+        var updated = Feature("a", assetType.Id.ToString());
+        updated.Geometry = new GeoPolygon([(0d, 0d), (1d, 0d), (1d, 1d), (0d, 0d)]);
+
+        var act = () => sut.Update(updated);
+
+        act.Should().Throw<GeoFeatureGeometryMismatchException>();
+        inner.GetById("a")!.Geometry!.GeometryType.Should().Be(GeometryType.Point);
+    }
+
     // ── Other write pass-through ────────────────────────────────────────────────
 
     [Fact]
@@ -404,6 +516,77 @@ public class ValidatingAssetProviderTests
         sut.DeleteAssetType(type.Id);
 
         inner.GetAssetTypes().Should().NotContain(t => t.Id == type.Id);
+    }
+
+    [Fact]
+    public void GetLayers_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        inner.AddLayer(new Layer { Name = "Custom" });
+        var sut = new ValidatingAssetProvider(inner);
+
+        sut.GetLayers().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddLayer_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var layer = new Layer { Name = "Custom" };
+
+        sut.AddLayer(layer);
+
+        inner.GetLayers().Should().Contain(l => l.Id == layer.Id);
+    }
+
+    [Fact]
+    public void DeleteLayer_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var layer = new Layer { Name = "Custom" };
+        inner.AddLayer(layer);
+        var sut = new ValidatingAssetProvider(inner);
+
+        sut.DeleteLayer(layer.Id);
+
+        inner.GetLayers().Should().NotContain(l => l.Id == layer.Id);
+    }
+
+    [Fact]
+    public void GetLayerRules_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var assetTypeId = Guid.NewGuid();
+        inner.AddLayerRule(new LayerRule { AssetTypeId = assetTypeId });
+        var sut = new ValidatingAssetProvider(inner);
+
+        sut.GetLayerRules(assetTypeId).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddLayerRule_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var rule = new LayerRule();
+
+        sut.AddLayerRule(rule);
+
+        inner.GetLayerRules(rule.AssetTypeId).Should().Contain(r => r.Id == rule.Id);
+    }
+
+    [Fact]
+    public void DeleteLayerRule_DelegatesToInner()
+    {
+        var inner = new InMemoryAssetProvider();
+        var rule = new LayerRule();
+        inner.AddLayerRule(rule);
+        var sut = new ValidatingAssetProvider(inner);
+
+        sut.DeleteLayerRule(rule.Id);
+
+        inner.GetLayerRules(rule.AssetTypeId).Should().NotContain(r => r.Id == rule.Id);
     }
 
     // ── Events (forwarded) ───────────────────────────────────────────────────────
@@ -507,6 +690,12 @@ public class ValidatingAssetProviderTests
         public IReadOnlyList<AssetType> GetAssetTypes() => [];
         public void AddAssetType(AssetType assetType) { }
         public void DeleteAssetType(Guid id) { }
+        public IReadOnlyList<Layer> GetLayers() => [];
+        public void AddLayer(Layer layer) { }
+        public void DeleteLayer(Guid id) { }
+        public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => [];
+        public void AddLayerRule(LayerRule layerRule) { }
+        public void DeleteLayerRule(Guid id) { }
         public event EventHandler<GeoFeature>? FeatureAdded { add { } remove { } }
         public event EventHandler<GeoFeature>? FeatureUpdated { add { } remove { } }
         public event EventHandler<string>? FeatureDeleted { add { } remove { } }

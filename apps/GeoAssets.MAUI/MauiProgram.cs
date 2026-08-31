@@ -1,11 +1,17 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
+using GeoAssets.Identity.Authentication;
+using GeoAssets.MAUI.Extensions;
+using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -57,6 +63,34 @@ public static class MauiProgram
         // Blazor Web before OTel is wired up client-side.
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IProviderPool, ProviderPool>();
+
+        // Cross-cutting panel state (XD01-82/83) — same self-sufficient-DI wiring as
+        // apps/GeoAssets.Web/Program.cs (XD01-84).
+        builder.Services.AddGeoAssetsPanelState();
+        builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+
+        // Left-nav menu (XD01-79/85) — same wiring as apps/GeoAssets.Web/Program.cs. NavMenu
+        // tolerates the absence of IGeoAuthorizationService (not registered here), so this alone
+        // is enough for MAUI to render the same 6 items minus anything permission-gated.
+        builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
+
+        // ── Authentication (XD01-52: MSAL.NET public-client flow, provider-agnostic seam per
+        // XD01-48 — see EntraCiamMauiAuthenticationProvider) ────────────────────────────────
+        builder.Services.AddAuthorizationCore();
+        builder.Services.AddGeoAssetsMauiAuthentication(builder.Configuration);
+        builder.Services.AddScoped<MauiMsalAuthenticationStateProvider>();
+        builder.Services.AddScoped<AuthenticationStateProvider>(
+            sp => sp.GetRequiredService<MauiMsalAuthenticationStateProvider>());
+        builder.Services.AddScoped<ICurrentUserAccessor, MauiCurrentUserAccessor>();
+        builder.Services.AddScoped<IAuthNavigationService, MauiAuthNavigationService>();
+
+        // Attaches a silently-acquired bearer token to the "GeoAssetsServer" named HttpClient —
+        // see MsalAuthorizationHandler's doc comment: no current caller requests this client by
+        // name, registered ahead of MAUI gaining a REST call site against GeoAssets.Server.
+        builder.Services.AddTransient<MsalAuthorizationHandler>();
+        builder.Services.AddHttpClient("GeoAssetsServer")
+            .AddHttpMessageHandler<MsalAuthorizationHandler>();
+
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
             new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),

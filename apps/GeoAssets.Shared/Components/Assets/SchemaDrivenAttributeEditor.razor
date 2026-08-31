@@ -1,0 +1,56 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+@foreach (var field in Fields)
+{
+    <div class="form-group">
+        <label>@field.Label@(field.Required ? " *" : "")</label>
+
+        @switch (field.Kind)
+        {
+            case SchemaFieldKind.Boolean:
+                <input type="checkbox"
+                       checked="@IsChecked(field.Key)"
+                       @onchange="e => SetValue(field.Key, ((bool)(e.Value ?? false)).ToString())" />
+                break;
+
+            case SchemaFieldKind.Enum:
+                <select class="form-control"
+                        value="@GetValue(field.Key)"
+                        @onchange="e => SetValue(field.Key, e.Value?.ToString() ?? string.Empty)">
+                    <option value=""></option>
+                    @foreach (var option in field.EnumValues ?? [])
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </select>
+                break;
+
+            case SchemaFieldKind.Integer:
+            case SchemaFieldKind.Number:
+                <input class="form-control" type="number"
+                       min="@field.Minimum" max="@field.Maximum"
+                       step="@(field.Kind == SchemaFieldKind.Integer ? "1" : "any")"
+                       value="@GetValue(field.Key)"
+                       @onchange="e => SetValue(field.Key, e.Value?.ToString() ?? string.Empty)" />
+                break;
+
+            default:
+                <input class="form-control" type="text"
+                       value="@GetValue(field.Key)"
+                       @onchange="e => SetValue(field.Key, e.Value?.ToString() ?? string.Empty)" />
+                break;
+        }
+
+        @if (ErrorsFor(field).Count > 0)
+        {
+            <div class="attribute-errors">
+                <ul>
+                    @foreach (var error in ErrorsFor(field))
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+}

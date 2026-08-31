@@ -1,6 +1,5 @@
 @page "/login"
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 
@@ -91,27 +90,3 @@
     .login-error  { color: var(--danger); font-size: .85rem; margin-top: 1rem; }
     .login-footer { color: var(--text-secondary); font-size: .78rem; margin-top: 1.75rem; line-height: 1.5; opacity: .7; }
 </style>
-
-@code {
-    private string? _errorMessage;
-
-    protected override async Task OnInitializedAsync()
-    {
-        // If already authenticated, redirect to home
-        var state = await AuthStateProvider.GetAuthenticationStateAsync();
-        if (state.User.Identity?.IsAuthenticated == true)
-            Nav.NavigateTo("/");
-    }
-
-    private void SignIn()
-    {
-        try
-        {
-            Nav.NavigateToLogin("authentication/login");
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Error al iniciar sesión: {ex.Message}";
-        }
-    }
-}

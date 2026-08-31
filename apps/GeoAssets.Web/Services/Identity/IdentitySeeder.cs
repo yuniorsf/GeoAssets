@@ -142,10 +142,12 @@ public sealed class IdentitySeeder(WasmIdentityStore store, TimeProvider timePro
 
     private void AddRole(Guid id, string name, string description, bool isBuiltIn, params string[] permissionCodes)
     {
-        if (store.Roles.Any(r => r.Id == id)) return;
+        if (!store.Roles.Any(r => r.Id == id))
+            store.Roles.Add(new AppRole { Id = id, Name = name, Description = description, IsBuiltIn = isBuiltIn });
 
-        store.Roles.Add(new AppRole { Id = id, Name = name, Description = description, IsBuiltIn = isBuiltIn });
-
+        // Backfill any grants missing from an already-existing role too (XD01-90), not just
+        // ones just created above — mirrors GeoIdentitySeeder.AddRoleAsync (the Server/EF
+        // equivalent of this class).
         foreach (var code in permissionCodes)
         {
             var perm = store.Permissions.FirstOrDefault(p => p.Code == code);

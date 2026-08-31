@@ -59,6 +59,12 @@ public class IdentityRestApiExtensionsTests
                         new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()));
                     services.AddSingleton<IPermissionRepository>(new FakeAdminPermissionRepository([]));
                     services.AddSingleton<IRoleAssignmentProvider>(new NullRoleAssignmentProvider());
+                    // Same reasoning — the XD01-69 invitations routes are in the same group.
+                    services.AddSingleton<IPendingInvitationRepository>(new NeverCalledPendingInvitationRepository());
+                    services.AddSingleton<IUserInvitationProvider>(new NullUserInvitationProvider());
+                    services.AddSingleton<IInvitationEmailSender>(new NullInvitationEmailSender());
+                    // Same reasoning — the XD01-87 userclaims routes are in the same group.
+                    services.AddSingleton<IUserClaimRepository>(new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
                 });
                 webHost.Configure(app =>
                 {
@@ -71,12 +77,13 @@ public class IdentityRestApiExtensionsTests
         return host.GetTestServer();
     }
 
-    private static AppUser NewUser(string email = "user@example.com") => new()
+    private static AppUser NewUser(string email = "user@example.com", string externalObjectId = "") => new()
     {
-        Id          = Guid.NewGuid(),
-        Email       = email,
-        DisplayName = "Test User",
-        CreatedAt   = DateTime.UtcNow,
+        Id               = Guid.NewGuid(),
+        Email            = email,
+        DisplayName      = "Test User",
+        CreatedAt        = DateTime.UtcNow,
+        ExternalObjectId = externalObjectId,
     };
 
     [Fact]
@@ -159,15 +166,20 @@ public class IdentityRestApiExtensionsTests
     // ── XD01-56: Users/Roles/Permissions admin endpoints ────────────────────────
 
     /// <summary>Grants exactly the permission codes it's constructed with — drives the
-    /// authorized/forbidden split for each endpoint test below.</summary>
+    /// authorized/forbidden split for each endpoint test below. <see cref="CurrentUser"/> backs
+    /// <see cref="GetAuthorizationContextAsync"/> for endpoints (e.g. invitations create) that
+    /// need both a permission check and the caller's own identity in the same request.</summary>
     private sealed class FakePermissionAuthorizationService(params string[] grantedCodes) : IGeoAuthorizationService
     {
+        public AppUser CurrentUser { get; init; } = NewUser("caller@example.com");
+
         public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default) => Task.FromResult(grantedCodes.Contains(permissionCode));
         public Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) =>
+            Task.FromResult(new AuthorizationContext { User = CurrentUser, Roles = [], Claims = [], Permissions = grantedCodes });
     }
 
     private sealed class FakeAdminUserRepository(IReadOnlyDictionary<Guid, AppUser> users, IReadOnlyDictionary<Guid, List<AppRole>> roles) : IUserRepository
@@ -304,6 +316,129 @@ public class IdentityRestApiExtensionsTests
             => Task.FromResult(AssignedRoleNamesToReturn);
     }
 
+    /// <summary>Never actually invoked — registered purely so invitations endpoints' delegate
+    /// metadata can be built for tests that never touch them (see BuildAdminServerAsync).</summary>
+    private sealed class NeverCalledPendingInvitationRepository : IPendingInvitationRepository
+    {
+        public Task<PendingInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AddAsync(PendingInvitation invitation, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(PendingInvitation invitation, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    /// <summary>Drives the XD01-69 invitations endpoint tests below.</summary>
+    private sealed class FakePendingInvitationRepository(IReadOnlyDictionary<Guid, PendingInvitation> invitations) : IPendingInvitationRepository
+    {
+        public PendingInvitation? Added { get; private set; }
+        public PendingInvitation? Updated { get; private set; }
+        public bool SaveChangesCalled { get; private set; }
+
+        public Task<PendingInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult(invitations.GetValueOrDefault(id));
+        public Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<PendingInvitation>>(
+                invitations.Values.Where(i => i.Status == InvitationStatus.Pending).ToList());
+        public Task AddAsync(PendingInvitation invitation, CancellationToken ct = default)
+        {
+            Added = invitation;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(PendingInvitation invitation, CancellationToken ct = default)
+        {
+            Updated = invitation;
+            return Task.CompletedTask;
+        }
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) =>
+            Task.FromResult(invitations.Values.FirstOrDefault(i =>
+                i.Status == InvitationStatus.Pending && i.ExternalObjectId == externalObjectId));
+    }
+
+    /// <summary>Drives the XD01-87 userclaims endpoint tests below. Claims are keyed by owning
+    /// UserId — the endpoints under test derive "which user" from the caller's auth context, so
+    /// looking a claim up under the wrong key is exactly how the non-leakage tests prove it.</summary>
+    private sealed class FakeUserClaimRepository(IReadOnlyDictionary<Guid, List<UserClaim>> claimsByUser) : IUserClaimRepository
+    {
+        public UserClaim? Added { get; private set; }
+        public UserClaim? Updated { get; private set; }
+        public Guid? Removed { get; private set; }
+        public Guid? RemovedAllForUserId { get; private set; }
+        public bool SaveChangesCalled { get; private set; }
+
+        public Task<IReadOnlyList<UserClaim>> GetByUserIdAsync(Guid userId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<UserClaim>>(claimsByUser.GetValueOrDefault(userId) ?? []);
+        public Task<UserClaim?> GetAsync(Guid userId, string claimType, CancellationToken ct = default) =>
+            Task.FromResult((claimsByUser.GetValueOrDefault(userId) ?? []).FirstOrDefault(c => c.Type == claimType));
+        public Task AddAsync(UserClaim claim, CancellationToken ct = default)
+        {
+            Added = claim;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(UserClaim claim, CancellationToken ct = default)
+        {
+            Updated = claim;
+            return Task.CompletedTask;
+        }
+        public Task RemoveAsync(Guid claimId, CancellationToken ct = default)
+        {
+            Removed = claimId;
+            return Task.CompletedTask;
+        }
+        public Task RemoveAllAsync(Guid userId, CancellationToken ct = default)
+        {
+            RemovedAllForUserId = userId;
+            return Task.CompletedTask;
+        }
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<UserClaim>> GetByTypeAsync(string claimType, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeUserInvitationProvider : IUserInvitationProvider
+    {
+        public (string Email, string DisplayName)? CreatedAccount { get; private set; }
+        public string ExternalObjectIdToReturn { get; init; } = "new-external-oid";
+        public string? RevokedExternalObjectId { get; private set; }
+
+        public Task<string> CreateInvitedAccountAsync(string email, string displayName, CancellationToken ct = default)
+        {
+            CreatedAccount = (email, displayName);
+            return Task.FromResult(ExternalObjectIdToReturn);
+        }
+
+        public Task RevokeInvitedAccountAsync(string externalObjectId, CancellationToken ct = default)
+        {
+            RevokedExternalObjectId = externalObjectId;
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Set <see cref="ThrowOnSend"/> to simulate an ACS send failure without touching
+    /// the account/invitation-row that were already created before the send is attempted.</summary>
+    private sealed class FakeInvitationEmailSender : IInvitationEmailSender
+    {
+        public (string ToEmail, string DisplayName)? Sent { get; private set; }
+        public bool ThrowOnSend { get; init; }
+
+        public Task SendInvitationAsync(string toEmail, string displayName, CancellationToken ct = default)
+        {
+            if (ThrowOnSend) throw new InvalidOperationException("Simulated ACS send failure.");
+            Sent = (toEmail, displayName);
+            return Task.CompletedTask;
+        }
+    }
+
     /// <summary>
     /// Real ASP.NET Core auth pipeline (AddGeoAuthorizationPolicyBridge + a no-op scheme),
     /// mirroring GeoAuthorizationPolicyBridgeEndToEndTests — needed because, unlike /me and
@@ -311,7 +446,11 @@ public class IdentityRestApiExtensionsTests
     /// </summary>
     private static async Task<TestServer> BuildAdminServerAsync(
         IUserRepository userRepo, IRoleRepository roleRepo, IPermissionRepository permissionRepo,
-        IGeoAuthorizationService authService, IRoleAssignmentProvider? roleSync = null)
+        IGeoAuthorizationService authService, IRoleAssignmentProvider? roleSync = null,
+        IPendingInvitationRepository? invitationRepo = null,
+        IUserInvitationProvider? invitationProvider = null,
+        IInvitationEmailSender? invitationEmailSender = null,
+        IUserClaimRepository? claimRepo = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -334,6 +473,12 @@ public class IdentityRestApiExtensionsTests
                     // be resolvable even though these tests never call /policies.
                     services.AddSingleton<IPolicyRepository>(new FakePolicyRepository([]));
                     services.AddSingleton<IRoleAssignmentProvider>(roleSync ?? new NullRoleAssignmentProvider());
+                    // Same reasoning — invitations endpoints are mapped by the same MapIdentityApi()
+                    // call, so these three must be resolvable even for tests that never touch them.
+                    services.AddSingleton<IPendingInvitationRepository>(invitationRepo ?? new NeverCalledPendingInvitationRepository());
+                    services.AddSingleton<IUserInvitationProvider>(invitationProvider ?? new NullUserInvitationProvider());
+                    services.AddSingleton<IInvitationEmailSender>(invitationEmailSender ?? new NullInvitationEmailSender());
+                    services.AddSingleton<IUserClaimRepository>(claimRepo ?? new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
                 });
                 webHost.Configure(app =>
                 {
@@ -976,5 +1121,556 @@ public class IdentityRestApiExtensionsTests
         var response = await client.GetAsync("/api/identity/rolesync/users/ext-oid-1/roles");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // ── Invitations (XD01-59 Phase 3, XD01-69) ──────────────────────────────
+
+    private static PendingInvitation NewInvitation(
+        string email = "invitee@example.com", string externalObjectId = "invitee-oid",
+        InvitationStatus status = InvitationStatus.Pending) => new()
+    {
+        Id               = Guid.NewGuid(),
+        Email            = email,
+        ExternalObjectId = externalObjectId,
+        InvitedByUserId  = Guid.NewGuid(),
+        InvitedAt        = DateTime.UtcNow,
+        Status           = status,
+    };
+
+    [Fact]
+    public async Task Invitations_Status_BothProvidersReal_ReturnsEnabled()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService(),
+            invitationProvider: new FakeUserInvitationProvider(), invitationEmailSender: new FakeInvitationEmailSender());
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<InvitationStatusDto>("/api/identity/invitations/status");
+
+        dto.Should().NotBeNull();
+        dto!.Enabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Invitations_Status_BothProvidersNull_ReturnsDisabled()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<InvitationStatusDto>("/api/identity/invitations/status");
+
+        dto.Should().NotBeNull();
+        dto!.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Invitations_Status_OnlyOneProviderReal_ReturnsDisabled()
+    {
+        // Proves the status check requires *both* the account provider and the email sender to
+        // be real — a half-configured Invitation feature (e.g. XD01-67 wired but XD01-68 isn't)
+        // must not report itself as usable.
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService(),
+            invitationProvider: new FakeUserInvitationProvider());
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<InvitationStatusDto>("/api/identity/invitations/status");
+
+        dto.Should().NotBeNull();
+        dto!.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Invitations_List_Authorized_ReturnsOnlyPendingInvitations()
+    {
+        var pending = NewInvitation(status: InvitationStatus.Pending);
+        var redeemed = NewInvitation(status: InvitationStatus.Redeemed);
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [pending.Id] = pending, [redeemed.Id] = redeemed });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:read"),
+            invitationRepo: invitationRepo);
+        using var client = AuthenticatedClient(server);
+
+        var dtos = await client.GetFromJsonAsync<List<PendingInvitationDto>>("/api/identity/invitations");
+
+        dtos.Should().ContainSingle(d => d.Id == pending.Id);
+    }
+
+    [Fact]
+    public async Task Invitations_List_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync("/api/identity/invitations");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Invitations_Me_HasOwnPendingInvitation_ReturnsItWithNoPermissionRequired()
+    {
+        // The whole point of this endpoint (XD01-92): a just-invited caller has zero
+        // permissions by design (XD01-19), so FakePermissionAuthorizationService granting
+        // nothing must still succeed here, unlike the admin list above.
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var ownInvitation = NewInvitation(externalObjectId: "caller-oid");
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [ownInvitation.Id] = ownInvitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/invitations/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var dto = await response.Content.ReadFromJsonAsync<PendingInvitationDto>();
+        dto!.Id.Should().Be(ownInvitation.Id);
+    }
+
+    [Fact]
+    public async Task Invitations_Me_NoOwnInvitation_Returns200WithNullBody()
+    {
+        // No pending invitation is the expected outcome for most callers, not an error — this
+        // must never 404 (that would show up as a browser-logged network error).
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService,
+            invitationRepo: new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>()));
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/invitations/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Invitations_Me_NeverReturnsSomeoneElsesInvitation()
+    {
+        // Non-leakage: this endpoint has no client-supplied id to probe, but confirms the
+        // caller's own (absent) invitation is what's checked, not any invitation that happens
+        // to exist in the repository.
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var othersInvitation = NewInvitation(externalObjectId: "someone-else-oid");
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [othersInvitation.Id] = othersInvitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/invitations/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Invitations_Create_Authorized_CreatesAccountPersistsRowAndSendsEmail_Returns201()
+    {
+        var caller = NewUser("admin@example.com");
+        var invitationProvider = new FakeUserInvitationProvider { ExternalObjectIdToReturn = "new-invitee-oid" };
+        var emailSender = new FakeInvitationEmailSender();
+        var invitationRepo = new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit") { CurrentUser = caller },
+            invitationRepo: invitationRepo, invitationProvider: invitationProvider, invitationEmailSender: emailSender);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/identity/invitations", new InvitationCreateDto("invitee@example.com", "Invitee Name"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        invitationProvider.CreatedAccount.Should().Be(("invitee@example.com", "Invitee Name"));
+        emailSender.Sent.Should().Be(("invitee@example.com", "Invitee Name"));
+        invitationRepo.Added.Should().NotBeNull();
+        invitationRepo.Added!.Email.Should().Be("invitee@example.com");
+        invitationRepo.Added.ExternalObjectId.Should().Be("new-invitee-oid");
+        invitationRepo.Added.InvitedByUserId.Should().Be(caller.Id);
+        invitationRepo.Added.Status.Should().Be(InvitationStatus.Pending);
+        invitationRepo.SaveChangesCalled.Should().BeTrue();
+
+        var dto = await response.Content.ReadFromJsonAsync<PendingInvitationDto>();
+        dto!.ExternalObjectId.Should().Be("new-invitee-oid");
+    }
+
+    [Fact]
+    public async Task Invitations_Create_EmailSendFails_StillPersistsInvitation_Returns202()
+    {
+        // The account + PendingInvitation row must survive a failed email send — losing track of
+        // an already-created provider account would be worse than a merely-undelivered email.
+        var invitationProvider = new FakeUserInvitationProvider();
+        var emailSender = new FakeInvitationEmailSender { ThrowOnSend = true };
+        var invitationRepo = new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"),
+            invitationRepo: invitationRepo, invitationProvider: invitationProvider, invitationEmailSender: emailSender);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/identity/invitations", new InvitationCreateDto("invitee@example.com", "Invitee Name"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        invitationRepo.Added.Should().NotBeNull();
+        invitationRepo.Added!.Status.Should().Be(InvitationStatus.Pending);
+        invitationRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Invitations_Create_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/identity/invitations", new InvitationCreateDto("invitee@example.com", "Invitee Name"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Invitations_Delete_Authorized_RevokesAccountAndMarksRevoked_Returns204()
+    {
+        var invitation = NewInvitation(externalObjectId: "invitee-oid-1");
+        var invitationProvider = new FakeUserInvitationProvider();
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [invitation.Id] = invitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"),
+            invitationRepo: invitationRepo, invitationProvider: invitationProvider);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync($"/api/identity/invitations/{invitation.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        invitationProvider.RevokedExternalObjectId.Should().Be("invitee-oid-1");
+        invitationRepo.Updated.Should().NotBeNull();
+        invitationRepo.Updated!.Status.Should().Be(InvitationStatus.Revoked);
+        invitationRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Invitations_Delete_NotFound_Returns404()
+    {
+        var invitationProvider = new FakeUserInvitationProvider();
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"),
+            invitationRepo: new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>()),
+            invitationProvider: invitationProvider);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync($"/api/identity/invitations/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        invitationProvider.RevokedExternalObjectId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Invitations_Delete_Forbidden_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync($"/api/identity/invitations/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Invitations_Redeem_OwnInvitation_MarksRedeemedAndReturns204()
+    {
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var invitation = NewInvitation(externalObjectId: "caller-oid");
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [invitation.Id] = invitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsync($"/api/identity/invitations/{invitation.Id}/redeem", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        invitationRepo.Updated.Should().NotBeNull();
+        invitationRepo.Updated!.Status.Should().Be(InvitationStatus.Redeemed);
+        invitationRepo.Updated.RedeemedAt.Should().NotBeNull();
+        invitationRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Invitations_Redeem_NotFound_Returns404()
+    {
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService,
+            invitationRepo: new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>()));
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsync($"/api/identity/invitations/{Guid.NewGuid()}/redeem", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Invitations_Redeem_SomeoneElsesInvitation_Returns404AndDoesNotRedeem()
+    {
+        // Non-leakage: the caller must never redeem an invitation belonging to a different
+        // ExternalObjectId, even when they supply that invitation's real id directly.
+        var caller = NewUser(externalObjectId: "caller-oid");
+        var othersInvitation = NewInvitation(externalObjectId: "someone-else-oid");
+        var invitationRepo = new FakePendingInvitationRepository(
+            new Dictionary<Guid, PendingInvitation> { [othersInvitation.Id] = othersInvitation });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        var authService = new FakeAuthorizationService(
+            new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsync($"/api/identity/invitations/{othersInvitation.Id}/redeem", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        invitationRepo.Updated.Should().BeNull();
+        othersInvitation.Status.Should().Be(InvitationStatus.Pending);
+    }
+
+    // ── User Claims (XD01-59 Phase 3, XD01-87) ──────────────────────────────
+
+    private static UserClaim NewClaim(Guid userId, string type = "zone", string value = "north") => new()
+    {
+        Id     = Guid.NewGuid(),
+        UserId = userId,
+        Type   = type,
+        Value  = value,
+    };
+
+    private static FakeAuthorizationService AuthServiceFor(AppUser caller) =>
+        new(new AuthorizationContext { User = caller, Roles = [], Claims = [], Permissions = [] });
+
+    [Fact]
+    public async Task UserClaims_List_ReturnsOnlyTheCallersOwnClaims()
+    {
+        // Non-leakage: another user's claims must never appear in the caller's own list.
+        var caller = NewUser();
+        var ownClaim = NewClaim(caller.Id);
+        var othersClaim = NewClaim(Guid.NewGuid());
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>
+        {
+            [caller.Id]          = [ownClaim],
+            [othersClaim.UserId] = [othersClaim],
+        });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var claims = await client.GetFromJsonAsync<List<UserClaimDto>>("/api/identity/userclaims");
+
+        claims.Should().ContainSingle(c => c.Id == ownClaim.Id);
+    }
+
+    [Fact]
+    public async Task UserClaims_GetByType_Found_ReturnsClaim()
+    {
+        var caller = NewUser();
+        var claim = NewClaim(caller.Id, type: "department", value: "operations");
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [caller.Id] = [claim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var dto = await client.GetFromJsonAsync<UserClaimDto>("/api/identity/userclaims/department");
+
+        dto.Should().NotBeNull();
+        dto!.Value.Should().Be("operations");
+    }
+
+    [Fact]
+    public async Task UserClaims_GetByType_NotFound_Returns404()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync("/api/identity/userclaims/department");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserClaims_Create_AddsForTheCallerAndReturns201()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/identity/userclaims", new UserClaimWriteDto("phone", "+1-555-0100"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        claimRepo.Added.Should().NotBeNull();
+        claimRepo.Added!.UserId.Should().Be(caller.Id);
+        claimRepo.Added.Type.Should().Be("phone");
+        claimRepo.Added.Value.Should().Be("+1-555-0100");
+        claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UserClaims_Update_OwnClaim_UpdatesValueAndReturns204()
+    {
+        var caller = NewUser();
+        var claim = NewClaim(caller.Id, value: "old-value");
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [caller.Id] = [claim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/userclaims/{claim.Id}", new UserClaimUpdateDto("new-value"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        claimRepo.Updated.Should().NotBeNull();
+        claimRepo.Updated!.Value.Should().Be("new-value");
+        claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UserClaims_Update_UnknownClaimId_Returns404()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/userclaims/{Guid.NewGuid()}", new UserClaimUpdateDto("value"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserClaims_Update_SomeoneElsesClaim_Returns404AndDoesNotUpdate()
+    {
+        // Non-leakage: the caller must never update another user's claim by supplying its real id.
+        var caller = NewUser();
+        var othersClaim = NewClaim(Guid.NewGuid(), value: "untouched");
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [othersClaim.UserId] = [othersClaim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.PutAsJsonAsync($"/api/identity/userclaims/{othersClaim.Id}", new UserClaimUpdateDto("hacked"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        claimRepo.Updated.Should().BeNull();
+        othersClaim.Value.Should().Be("untouched");
+    }
+
+    [Fact]
+    public async Task UserClaims_Delete_OwnClaim_RemovesAndReturns204()
+    {
+        var caller = NewUser();
+        var claim = NewClaim(caller.Id);
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [caller.Id] = [claim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/identity/userclaims/{claim.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        claimRepo.Removed.Should().Be(claim.Id);
+        claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UserClaims_Delete_UnknownClaimId_Returns404()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/identity/userclaims/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserClaims_Delete_SomeoneElsesClaim_Returns404AndDoesNotRemove()
+    {
+        // Non-leakage: the caller must never delete another user's claim by supplying its real id.
+        var caller = NewUser();
+        var othersClaim = NewClaim(Guid.NewGuid());
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>> { [othersClaim.UserId] = [othersClaim] });
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/identity/userclaims/{othersClaim.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        claimRepo.Removed.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UserClaims_DeleteAll_RemovesAllForTheCallerAndReturns204()
+    {
+        var caller = NewUser();
+        var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>());
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync("/api/identity/userclaims");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        claimRepo.RemovedAllForUserId.Should().Be(caller.Id);
+        claimRepo.SaveChangesCalled.Should().BeTrue();
     }
 }

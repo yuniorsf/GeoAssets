@@ -1,7 +1,7 @@
 # Code quality metrics, safe coding, and static analysis
 
 **Status: `current`** — general C#/.NET engineering practice, not gated by a
-language or runtime version. Applies as-is on .NET 9 / C# 13 and GeoAssets'
+language or runtime version. Applies as-is on .NET 10 / C# 14 and GeoAssets'
 configured `LangVersion 14`.
 
 **Source**: Gabriel Baptista & Francesco Abbruzzese, *Software Architecture with

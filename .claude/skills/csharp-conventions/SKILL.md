@@ -3,7 +3,7 @@ name: csharp-conventions
 description: >-
   C# and .NET engineering conventions, design patterns, and language-feature
   guidance distilled from external books and articles, curated for the
-  GeoAssets codebase (.NET 9). Use when writing or reviewing C# code,
+  GeoAssets codebase (.NET 10). Use when writing or reviewing C# code,
   choosing between design patterns or type-hierarchy shapes, or evaluating
   whether a new C#/.NET language feature is safe to adopt.
 ---
@@ -20,13 +20,13 @@ conversation.
 
 - `references/` holds one file per topic. Read only the file relevant to the
   task at hand — don't load the whole set speculatively.
-- Every entry records **status**: `current` (usable today on .NET 9 / C# 13)
+- Every entry records **status**: `current` (usable today on .NET 10 / C# 14)
   or `future` (depends on a language/runtime version GeoAssets doesn't
   target yet).
 
 ## Before recommending anything from a `future` entry
 
-GeoAssets targets **.NET 9**. Any entry marked `future` describes a
+GeoAssets targets **.NET 10**. Any entry marked `future` describes a
 preview or unshipped feature. Do not:
 - suggest it as the fix for a current code review or design question,
 - write code that uses it,

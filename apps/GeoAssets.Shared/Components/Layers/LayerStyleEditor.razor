@@ -1,0 +1,74 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models.Geometry
+@inject IAssetProvider Repository
+
+<div class="section-header-row">
+    <h6>@L["map.layers.tabStyles"]</h6>
+    <button class="btn-icon" title="@L["map.layers.styles.newLayer"]" @onclick="() => _addingNew = true">＋</button>
+</div>
+
+<div class="asset-list">
+    @foreach (var layer in Repository.GetLayers())
+    {
+        <div class="layer-row">
+            <span class="asset-color-dot" style="background:@(layer.GeometryType == GeometryType.Polygon ? layer.FillColor : layer.Color)"></span>
+            <span style="font-size:0.87rem;flex:1">@layer.Name</span>
+            <span class="asset-type-badge">@GeometryTypeLabel(layer.GeometryType)</span>
+            <button class="btn-icon" @onclick="() => DeleteLayer(layer)" title="@L["map.layers.styles.delete"]">✕</button>
+        </div>
+    }
+</div>
+
+@if (_addingNew)
+{
+    <div class="form-group">
+        <input class="form-control" placeholder="@L["map.layers.styles.namePlaceholder"]" @bind="_name" />
+    </div>
+
+    <div class="form-group">
+        <label>@L["map.layers.allowedGeometry"]</label>
+        <select class="form-control" @onchange="e => OnGeometryTypeChanged(e.Value?.ToString())">
+            <option value="Point">@L["map.draw.point"]</option>
+            <option value="LineString">@L["map.draw.line"]</option>
+            <option value="Polygon">@L["map.draw.polygon"]</option>
+        </select>
+    </div>
+
+    @if (_geometryType == GeometryType.Point)
+    {
+        <div class="attr-row">
+            <input type="color" @bind="_color" title="@L["map.layers.styles.color"]" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
+            <input class="form-control" type="number" step="1" min="1" placeholder="@L["map.layers.styles.radius"]" @bind="_radius" />
+        </div>
+        <div class="form-group">
+            <input class="form-control" placeholder="@L["map.layers.styles.icon"]" @bind="_iconUrl" />
+        </div>
+    }
+    else if (_geometryType == GeometryType.LineString)
+    {
+        <div class="attr-row">
+            <input type="color" @bind="_color" title="@L["map.layers.styles.color"]" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
+            <input class="form-control" type="number" step="1" min="1" placeholder="@L["map.layers.styles.weight"]" @bind="_weight" />
+        </div>
+        <div class="form-group">
+            <input class="form-control" placeholder="@L["map.layers.styles.dashArray"]" @bind="_dashArray" />
+        </div>
+    }
+    else if (_geometryType == GeometryType.Polygon)
+    {
+        <div class="attr-row">
+            <input type="color" @bind="_color" title="@L["map.layers.styles.color"]" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
+            <input class="form-control" type="number" step="1" min="1" placeholder="@L["map.layers.styles.weight"]" @bind="_weight" />
+        </div>
+        <div class="attr-row">
+            <input type="color" @bind="_fillColor" title="@L["map.layers.styles.fillColor"]" style="width:36px;height:34px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--panel-border);background:transparent" />
+            <input class="form-control" type="number" step="0.05" min="0" max="1" placeholder="@L["map.layers.styles.fillOpacity"]" @bind="_fillOpacity" />
+        </div>
+    }
+
+    <div class="form-actions">
+        <button class="btn btn-primary btn-sm" @onclick="SaveNewLayer" type="button">✓</button>
+        <button class="btn btn-secondary btn-sm" @onclick="ResetForm" type="button">✕</button>
+    </div>
+}

@@ -1,94 +1,81 @@
 @namespace GeoAssets.Shared.Components.Layout
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject MenuRegistry Registry
+@inject IServiceProvider ServiceProvider
 @inject NavigationManager Nav
 
 <nav class="nav nav-pills flex-column geo-nav">
-
-    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-        <span class="geo-nav-icon">🗺️</span> @L["nav.overview"]
-    </NavLink>
-
-    <div class="geo-nav-section-label">@L["nav.management"]</div>
-
-    <button type="button"
-            class="nav-link geo-nav-toggle @(ShowLayers ? "active" : "")"
-            @onclick="OnToggleLayers">
-        <span class="geo-nav-icon">🧱</span> @L["map.layers"]
-    </button>
-    @if (ShowLayers)
+    @foreach (var node in _tree)
     {
-        <div class="geo-nav-panel">@LayersPanel</div>
+        @RenderNode(node)
     }
-
-    <button type="button"
-            class="nav-link geo-nav-toggle @(ShowAssetList ? "active" : "")"
-            @onclick="OnToggleAssetList">
-        <span class="geo-nav-icon">📦</span> @L["assets.title"]
-    </button>
-    @if (ShowAssetList)
-    {
-        <div class="geo-nav-panel">@AssetListPanel</div>
-    }
-
-    <NavLink class="nav-link" href="service-orders">
-        <span class="geo-nav-icon">🗂️</span> @L["orders.title"]
-    </NavLink>
-
-    <button type="button"
-            class="nav-link geo-nav-toggle @(ShowProviders ? "active" : "")"
-            @onclick="OnToggleProviders">
-        <span class="geo-nav-icon">🔌</span> @L["pool.title"]
-    </button>
-    @if (ShowProviders)
-    {
-        <div class="geo-nav-panel">@ProvidersPanel</div>
-    }
-
-    @if (ShowAdmin)
-    {
-        <div class="geo-nav-section-label">@L["nav.administration"]</div>
-
-        <button type="button" class="nav-link geo-nav-toggle" @onclick="ToggleIdentityGroup">
-            <span class="geo-nav-icon">🛡️</span> @L["nav.identity"]
-            <span class="geo-nav-chevron">@(_identityExpanded ? "▾" : "▸")</span>
-        </button>
-        @if (_identityExpanded)
-        {
-            <div class="geo-nav-subitems">
-                <NavLink class="nav-link geo-nav-sublink" href="admin/users">@L["admin.users.title"]</NavLink>
-                <NavLink class="nav-link geo-nav-sublink" href="admin/roles">@L["admin.roles.title"]</NavLink>
-                <NavLink class="nav-link geo-nav-sublink" href="admin/permissions">@L["admin.permissions.title"]</NavLink>
-            </div>
-        }
-    }
-
 </nav>
 
 @code {
-    [Parameter] public bool ShowAdmin { get; set; }
-    [Parameter] public bool ShowProviders { get; set; }
-    [Parameter] public bool ShowLayers { get; set; }
-    [Parameter] public bool ShowAssetList { get; set; }
+    // RenderNode stays here rather than in NavMenu.razor.cs: it returns a RenderFragment built
+    // via the `@<text>` Razor template syntax below, which only the Razor compiler understands —
+    // a plain .cs partial can't contain it. Every other member of this component lives in
+    // NavMenu.razor.cs (XD01-102).
+    private RenderFragment RenderNode(MenuNode node) =>
+    @<text>
+        @switch (node.Item)
+        {
+            case MenuSectionItem section:
+                <div class="geo-nav-section-label">@L[section.LabelKey]</div>
+                break;
 
-    [Parameter] public EventCallback OnToggleProviders { get; set; }
-    [Parameter] public EventCallback OnToggleLayers { get; set; }
-    [Parameter] public EventCallback OnToggleAssetList { get; set; }
+            case MenuGroupItem group:
+                var isExpanded = _expandedGroupIds.Contains(group.Id);
+                <button type="button" class="nav-link geo-nav-toggle" @onclick="() => ToggleGroup(group.Id)">
+                    @if (group.Icon is not null)
+                    {
+                        <span class="geo-nav-icon">@group.Icon</span>
+                    }
+                    @L[group.LabelKey]
+                    <span class="geo-nav-chevron">@(isExpanded ? "▾" : "▸")</span>
+                </button>
+                if (isExpanded)
+                {
+                    <div class="geo-nav-subitems">
+                        @foreach (var child in node.Children)
+                        {
+                            @RenderNode(child)
+                        }
+                    </div>
+                }
+                break;
 
-    [Parameter] public RenderFragment? ProvidersPanel { get; set; }
-    [Parameter] public RenderFragment? LayersPanel { get; set; }
-    [Parameter] public RenderFragment? AssetListPanel { get; set; }
+            case MenuPageItem pageItem:
+                <NavLink class="@("nav-link" + (pageItem.ParentId is not null ? " geo-nav-sublink" : ""))"
+                         href="@pageItem.RouteHref"
+                         Match="@(pageItem.Match == MenuLinkMatch.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    @if (pageItem.Icon is not null)
+                    {
+                        <span class="geo-nav-icon">@pageItem.Icon</span>
+                    }
+                    @L[pageItem.LabelKey]
+                </NavLink>
+                break;
 
-    private bool _identityExpanded;
-
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-        _identityExpanded = ShouldExpandIdentityGroup(Nav.ToBaseRelativePath(Nav.Uri));
-    }
-
-    private void ToggleIdentityGroup() => _identityExpanded = !_identityExpanded;
-
-    /// <summary>Identity is expanded by default when the active route is one of its own sub-items.</summary>
-    public static bool ShouldExpandIdentityGroup(string relativePath) =>
-        relativePath.TrimStart('/').StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+            case MenuPanelItem panel:
+                var isOpen = _openPanelId == panel.Id;
+                <button type="button" class="nav-link geo-nav-toggle @(isOpen ? "active" : "")" @onclick="() => TogglePanel(panel.Id)">
+                    @if (panel.Icon is not null)
+                    {
+                        <span class="geo-nav-icon">@panel.Icon</span>
+                    }
+                    @L[panel.LabelKey]
+                </button>
+                if (isOpen)
+                {
+                    <div class="geo-nav-panel">
+                        @if (typeof(IComponent).IsAssignableFrom(panel.ComponentType))
+                        {
+                            <DynamicComponent Type="panel.ComponentType" />
+                        }
+                    </div>
+                }
+                break;
+        }
+    </text>;
 }

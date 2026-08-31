@@ -2,7 +2,7 @@
 
 ## Stack
 
-- .NET 9 / Blazor WebAssembly (Web) + MAUI (mobile/desktop)
+- .NET 10 / Blazor WebAssembly (Web) + MAUI (mobile/desktop)
 - Razor Class Library: `GeoAssets.Shared` (components, CSS, JS)
 - Core library: `GeoAssets.Core` (models, services, interfaces)
 - Provider: `GeoAssets.Provider.PostgreSQL` (EF Core + Npgsql + PostGIS — server-side only)
@@ -95,7 +95,7 @@ Also theme-scoped: `--on-accent` (text/icon color for content on top of `--accen
 - **Flash prevention**: a small inline `<script>` in the `<head>` of *both* `index.html` files resolves the same stored-preference-or-`prefers-color-scheme` logic synchronously, before first paint — this is what actually prevents the flash, since Blazor WASM's boot is too slow to rely on `App.razor`'s `OnInitializedAsync`. Keep that script's logic in sync with `BlazorThemeService.ResolveTheme` if either changes.
 - `App.razor` calls `ThemeService.InitAsync()` (mirroring `CultureService.InitAsync()`) to sync the C# `Mode`/`ResolvedTheme` state to whatever the inline script already applied — it's a no-op re-application of the same value, not a second source of truth.
 - The topbar's theme toggle (`TopBar.razor`) is a 3-button Bootstrap `btn-group` (Light/System/Dark).
-- Only wired into `GeoAssets.Web` (`Program.cs` + `App.razor`) — `GeoAssets.MAUI`'s `MauiProgram.cs`/`WebApp.razor` don't register `IThemeService` (or `ICultureService`, or any auth service — MAUI's DI for `GeoAssets.Shared`'s shared components is a pre-existing, broader gap, not something any single UI ticket has closed). The FOUC-prevention inline script is duplicated into MAUI's `index.html` anyway since it's plain JS with no DI dependency.
+- Only wired into `GeoAssets.Web` (`Program.cs` + `App.razor`) — `GeoAssets.MAUI`'s `MauiProgram.cs`/`WebApp.razor` don't register `IThemeService` or `ICultureService` (MAUI's DI for these two remains a pre-existing gap; `ICurrentUserAccessor`/`IAuthNavigationService` were closed for MAUI by XD01-52's MSAL.NET wiring — see `EntraCiamMauiAuthenticationProvider`). The FOUC-prevention inline script is duplicated into MAUI's `index.html` anyway since it's plain JS with no DI dependency.
 
 ## Pull Requests
 
@@ -106,6 +106,7 @@ Also theme-scoped: `--on-accent` (text/icon color for content on top of `--accen
 
 - All geometry follows RFC 7946 GeoJSON ([longitude, latitude] order)
 - Razor components: `EventCallback<T>` up, `[Parameter]` down
+- Every Razor component/page ships as a markup-only `.razor` file plus a `.razor.cs` code-behind partial class, regardless of the component's size — see `apps/GeoAssets.MAUI/WebApp.razor`/`WebApp.razor.cs` for the target shape (tracked by XD01-101). **Exception**: `apps/GeoAssets.MAUI/Pages/MauiLogin.razor` stays single-file. `GeoAssets.MAUI`'s Razor toolchain (`Sdk="Microsoft.NET.Sdk"` + `UseMaui=true`, via `Microsoft.AspNetCore.Components.WebView.Maui`) doesn't reliably wire markup that reads a `.razor.cs`-declared field back to that field — confirmed by a field used only in markup (`disabled="@_signingIn"`) triggering a false "unused" warning once moved to code-behind, a warning that does *not* reproduce with the identical pattern in `GeoAssets.Shared` (`Microsoft.NET.Sdk.Razor`) or `GeoAssets.Web` (`Microsoft.NET.Sdk.BlazorWebAssembly`) — evidence of degraded codegen specific to this project, not a Roslyn quirk. A `[Inject]`-in-code-behind workaround does fix the `@inject`-property-visibility half of the problem, but the markup-binding warning persists and couldn't be runtime-verified (no MAUI simulator/device in this environment), so the split was not applied rather than risk a silent regression in an auth-critical flow. See XD01-121 for the investigation.
 - Bootstrap is allowed and is the base for component styling in `GeoAssets.Shared` (used by both Web and MAUI); layer bespoke CSS in `geoassets.css` on top for anything Bootstrap doesn't cover — don't hand-roll styles Bootstrap already provides
 - The only loaded JS file is `geoassets.js` (IIFE); `mapInterop.js` and `drawInterop.js` are legacy drafts — do not reference them
 - Do not add features, refactor, or clean up code beyond what is asked

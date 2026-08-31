@@ -1,65 +1,34 @@
 @page "/admin/permissions"
 @attribute [Authorize]
+@layout MainLayout
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using Microsoft.AspNetCore.Authorization
 @using GeoAssets.Identity.Authorization.Services
 @using GeoAssets.Shared.Components.Admin
-@using Microsoft.Extensions.DependencyInjection
 @inject IGeoAuthorizationService AuthService
-@inject IServiceProvider ServiceProvider
 
-<div class="geoassets-app">
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <h1>@L["admin.permissions.title"]</h1>
+    </div>
 
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <a href="/" class="btn-icon" title="@L["orders.backToMap"]">←</a>
-            <h1>@L["admin.permissions.title"]</h1>
-        </div>
-
-        @if (_authorized == true)
-        {
-            <PermissionList />
-        }
-    </aside>
-
-    <main class="order-main">
-        @if (_authorized is null)
-        {
-            <div class="empty-state">@L["app.loading"]</div>
-        }
-        else if (_authorized == false)
-        {
-            <div class="empty-state">@L["admin.accessDenied"]</div>
-        }
-        else
-        {
-            <div class="empty-state">@L["admin.permissions.hint"]</div>
-        }
-    </main>
-</div>
-
-@code {
-    private bool? _authorized;
-
-    protected override async Task OnInitializedAsync()
+    @if (_authorized == true)
     {
-        // Ensure the local user record exists before checking authorization. Only relevant
-        // under Identity:Backend=InMemory (Rest has no local provisioning step, so the service
-        // isn't registered there — resolved optionally to avoid breaking that backend).
-        var provisioning = ServiceProvider.GetService<UserProvisioningService>();
-        if (provisioning is not null)
-            await provisioning.EnsureProvisionedAsync();
-
-        try
-        {
-            _authorized = await AuthService.HasPermissionAsync("permissions:read");
-        }
-        catch (Exception ex)
-        {
-            // Fail closed: if the authorization check itself can't be answered (e.g. the
-            // identity backend is unreachable), don't show admin functionality.
-            Console.Error.WriteLine($"[AdminPermissions] Failed to resolve authorization: {ex.Message}");
-            _authorized = false;
-        }
+        <PermissionList />
     }
-}
+</aside>
+
+<main class="order-main">
+    @if (_authorized is null)
+    {
+        <div class="empty-state">@L["app.loading"]</div>
+    }
+    else if (_authorized == false)
+    {
+        <div class="empty-state">@L["admin.accessDenied"]</div>
+    }
+    else
+    {
+        <div class="empty-state">@L["admin.permissions.hint"]</div>
+    }
+</main>

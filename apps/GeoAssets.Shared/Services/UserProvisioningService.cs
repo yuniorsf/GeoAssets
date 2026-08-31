@@ -28,6 +28,20 @@ namespace GeoAssets.Shared.Services;
 /// provisioned user with no external role assignment gets a safe empty <c>Roles</c> list —
 /// see <see cref="GeoAssets.Identity.Authorization.Services.AuthorizationContext"/>.
 ///
+/// Redirect gate (XD01-59 Phase 3, XD01-71): after provisioning, checks for a <c>Pending</c>
+/// <see cref="PendingInvitation"/> matching the now-known <c>ExternalObjectId</c> and, if one
+/// exists, redirects to <c>/complete-profile</c> before the calling page renders. Runs on
+/// *every* call, not just first-time provisioning, so it keeps firing on each page load until
+/// the invitation is redeemed (see <c>CompleteProfile.razor</c>, XD01-71) or revoked — a
+/// half-finished profile shouldn't let someone into the rest of the app. As of XD01-89 the
+/// check itself lives in <see cref="InvitationRedirectGate"/> (this class delegates to it) so
+/// it can also run under the Rest/production backend, where this whole class is never
+/// registered in the first place (see below) — XD01-88 separately gives that backend its own
+/// server-side JIT-provisioning path (inside
+/// <c>GeoAuthorizationService.GetAuthorizationContextAsync</c>), fixing the data-layer bug
+/// (writes no longer reference a phantom, never-persisted user id) that the redirect alone
+/// doesn't address.
+///
 /// Registered as a singleton (only when <c>Identity:Backend</c> is <c>InMemory</c> — Rest has
 /// no local provisioning step) — lives in <c>GeoAssets.Shared</c> rather than
 /// <c>GeoAssets.Web</c> (despite the WASM-only registration) so routed pages in this project
@@ -89,22 +103,30 @@ public sealed class UserProvisioningService : IAsyncDisposable
         if (current is null || string.IsNullOrEmpty(current.ExternalObjectId)) return;
 
         var existing = await userRepo.GetByExternalObjectIdAsync(current.ExternalObjectId);
-        if (existing is not null) return; // already provisioned
-
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var newUser = new AppUser
+        if (existing is null)
         {
-            ExternalObjectId = current.ExternalObjectId,
-            Email            = current.Email,
-            DisplayName      = current.DisplayName,
-            CreatedAt        = now,
-            LastLoginAt      = now,
-        };
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var newUser = new AppUser
+            {
+                ExternalObjectId = current.ExternalObjectId,
+                Email            = current.Email,
+                DisplayName      = current.DisplayName,
+                CreatedAt        = now,
+                LastLoginAt      = now,
+            };
 
-        await userRepo.AddAsync(newUser);
-        await userRepo.SaveChangesAsync();
+            await userRepo.AddAsync(newUser);
+            await userRepo.SaveChangesAsync();
 
-        Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.ExternalObjectId})");
+            Console.WriteLine($"[UserProvisioningService] Provisioned user: {current.Email} ({current.ExternalObjectId})");
+        }
+
+        // Runs regardless of whether this call just provisioned the user or found them already
+        // provisioned — a pending invitation can exist (and matter) on any visit, not only the
+        // very first one. Delegates to InvitationRedirectGate (XD01-89) — same logic, now
+        // shared with the Rest backend, which never runs this class at all.
+        var redirectGate = scope.ServiceProvider.GetRequiredService<InvitationRedirectGate>();
+        await redirectGate.RedirectIfPendingAsync();
     }
 
     public ValueTask DisposeAsync()

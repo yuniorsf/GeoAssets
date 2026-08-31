@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .NET MAUI auto-generates a base manifest (package name, versionCode/Name, application
+     label/icon, <uses-sdk>) from GeoAssets.MAUI.csproj's ApplicationId/ApplicationDisplayVersion
+     etc. when this file is absent, and still injects those same values onto whatever manifest is
+     provided here — so only the delta this app actually needs belongs in this file (XD01-52):
+     the redirect-URI intent-filter MSAL.NET's Android flow needs to route the system-browser
+     sign-in callback back into the app via com.microsoft.identity.client.BrowserTabActivity
+     (a class provided by the Microsoft.Identity.Client Android binding itself — not authored
+     here, only declared).
+
+     IMPORTANT: android:scheme below MUST be updated to "msal" + the real AzureAdCiamMaui:ClientId
+     configured in appsettings.json — Android redirect URIs are static (baked into the manifest at
+     build time), unlike the Authority/ClientId values MSAL reads from configuration at runtime.
+     See the AzureAdCiamMaui comment in appsettings.json. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application>
+    <activity
+        android:name="com.microsoft.identity.client.BrowserTabActivity"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="msalYOUR_MAUI_NATIVE_CLIENT_ID" android:host="auth" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

@@ -42,6 +42,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public IReadOnlyList<GeoFeature>                GetAll()                                            => inner.GetAll();
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)                 => inner.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                                => inner.Search(query);
+    public Task<PagedResult<GeoFeature>>            GetPageAsync(AssetQuery query)                     => inner.GetPageAsync(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                      => inner.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)              => inner.GetIntersecting(geometry);
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
@@ -57,18 +58,22 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public bool                                     HasCycles()                                        => inner.HasCycles();
     public IReadOnlyList<GeoFeature>                TopologicalSort()                                  => inner.TopologicalSort();
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                    => inner.GetAssetTypes();
+    public IReadOnlyList<Layer>                     GetLayers()                                        => inner.GetLayers();
+    public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                    => inner.GetLayerRules(assetTypeId);
 
     // ── Write ────────────────────────────────────────────────────────────────────
 
     public void Add(GeoFeature feature)
     {
         ValidateAttributes(feature);
+        ValidateGeometry(feature);
         inner.Add(feature);
     }
 
     public void Update(GeoFeature feature)
     {
         ValidateAttributes(feature);
+        ValidateGeometry(feature);
         inner.Update(feature);
     }
 
@@ -86,12 +91,32 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
             GeoFeatureAttributeValidator.EnsureValid(assetType, feature.Properties.CustomAttributes);
     }
 
+    /// <summary>
+    /// No-op when the asset type is unknown, its <see cref="AssetType.AllowedGeometryType"/> is
+    /// unrestricted (<c>null</c>), or the feature has no geometry yet — same "unrestricted by
+    /// default" convention as <see cref="ValidateAttributes"/>.
+    /// </summary>
+    private void ValidateGeometry(GeoFeature feature)
+    {
+        var assetType = inner.GetAssetTypes()
+            .FirstOrDefault(t => t.Id.ToString() == feature.Properties.AssetTypeId);
+        if (assetType?.AllowedGeometryType is not { } allowed || feature.Geometry is null)
+            return;
+
+        if (feature.Geometry.GeometryType != allowed)
+            throw new GeoFeatureGeometryMismatchException(assetType.Id, allowed, feature.Geometry.GeometryType);
+    }
+
     public void AddRange(IEnumerable<GeoFeature> features) => inner.AddRange(features);
     public void Delete(string id)                          => inner.Delete(id);
     public void Clear()                                    => inner.Clear();
     public void LoadAll(IEnumerable<GeoFeature> features)  => inner.LoadAll(features);
     public void AddAssetType(AssetType assetType)          => inner.AddAssetType(assetType);
     public void DeleteAssetType(Guid id)                   => inner.DeleteAssetType(id);
+    public void AddLayer(Layer layer)                      => inner.AddLayer(layer);
+    public void DeleteLayer(Guid id)                       => inner.DeleteLayer(id);
+    public void AddLayerRule(LayerRule layerRule)          => inner.AddLayerRule(layerRule);
+    public void DeleteLayerRule(Guid id)                   => inner.DeleteLayerRule(id);
 
     // ── Events (forwarded) ─────────────────────────────────────────────────────
 

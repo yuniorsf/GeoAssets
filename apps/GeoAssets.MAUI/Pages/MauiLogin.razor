@@ -1,0 +1,114 @@
+@* Rendered inline inside WebApp.razor's <NotAuthorized> block — not a routed @page, since MAUI's
+   sign-in is a direct MSAL call (see MauiMsalAuthenticationStateProvider), not a URL to navigate
+   to like Web's routed Pages/Login.razor. Visual style mirrors that page's login card. *@
+@using GeoAssets.MAUI.Services.Identity
+@inject MauiMsalAuthenticationStateProvider AuthStateProvider
+
+<div class="login-root">
+
+    <div class="login-card">
+
+        <div class="login-logo">🗺️</div>
+        <h1 class="login-title">GeoAssets</h1>
+        <p class="login-subtitle">Gestión de activos geoespaciales</p>
+
+        <hr class="login-divider" />
+
+        <p class="login-description">
+            Inicia sesión con tu cuenta organizacional de Microsoft para acceder
+            al sistema de gestión de activos GIS.
+        </p>
+
+        <button class="login-btn" @onclick="SignInAsync" disabled="@_signingIn">
+            <svg class="ms-logo" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+                <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            @(_signingIn ? "Iniciando sesión…" : "Ingresar con Microsoft")
+        </button>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="login-error">⚠️ @_errorMessage</div>
+        }
+
+        <p class="login-footer">
+            El acceso está restringido a usuarios autorizados.<br />
+            Contacta al administrador si necesitas acceso.
+        </p>
+    </div>
+
+</div>
+
+<style>
+    .login-root {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: var(--bs-body-bg);
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+    .login-card {
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 16px;
+        padding: 2.5rem 3rem;
+        width: 100%;
+        max-width: 420px;
+        text-align: center;
+        box-shadow: 0 24px 64px rgba(0,0,0,.5);
+    }
+    .login-logo   { font-size: 3.5rem; margin-bottom: .5rem; }
+    .login-title  { color: var(--text-primary); font-size: 1.8rem; font-weight: 700; margin: 0 0 .25rem; }
+    .login-subtitle { color: var(--text-secondary); font-size: .9rem; margin: 0 0 1.5rem; }
+    .login-divider  { border: none; border-top: 1px solid var(--panel-border); margin: 0 0 1.5rem; }
+    .login-description { color: var(--text-secondary); font-size: .9rem; line-height: 1.6; margin-bottom: 1.75rem; }
+    .login-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        width: 100%;
+        padding: .8rem 1.5rem;
+        background: var(--accent);
+        color: var(--on-accent);
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity .15s;
+    }
+    .login-btn:hover:not(:disabled)  { opacity: .85; }
+    .login-btn:active:not(:disabled) { opacity: .7; }
+    .login-btn:disabled { opacity: .6; cursor: default; }
+    .ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
+    .login-error  { color: var(--danger); font-size: .85rem; margin-top: 1rem; }
+    .login-footer { color: var(--text-secondary); font-size: .78rem; margin-top: 1.75rem; line-height: 1.5; opacity: .7; }
+</style>
+
+@code {
+    private bool _signingIn;
+    private string? _errorMessage;
+
+    private async Task SignInAsync()
+    {
+        _signingIn = true;
+        _errorMessage = null;
+        try
+        {
+            await AuthStateProvider.SignInInteractiveAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error al iniciar sesión: {ex.Message}";
+        }
+        finally
+        {
+            _signingIn = false;
+        }
+    }
+}

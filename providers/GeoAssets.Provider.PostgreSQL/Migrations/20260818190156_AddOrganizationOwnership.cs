@@ -25,27 +25,6 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                 nullable: false,
                 defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
 
-            migrationBuilder.UpdateData(
-                table: "asset_type",
-                keyColumn: "Id",
-                keyValue: new Guid("00000000-0000-0000-0000-000000000001"),
-                columns: new string[0],
-                values: new object[0]);
-
-            migrationBuilder.UpdateData(
-                table: "asset_type",
-                keyColumn: "Id",
-                keyValue: new Guid("00000000-0000-0000-0000-000000000002"),
-                columns: new string[0],
-                values: new object[0]);
-
-            migrationBuilder.UpdateData(
-                table: "asset_type",
-                keyColumn: "Id",
-                keyValue: new Guid("00000000-0000-0000-0000-000000000003"),
-                columns: new string[0],
-                values: new object[0]);
-
             migrationBuilder.CreateIndex(
                 name: "IX_geo_entity_OrganizationId",
                 table: "geo_entity",

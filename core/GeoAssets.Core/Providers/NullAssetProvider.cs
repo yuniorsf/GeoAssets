@@ -37,6 +37,8 @@ internal sealed class NullAssetProvider : IAssetProvider
     public bool                                     HasCycles()                                     => false;
     public IReadOnlyList<GeoFeature>                TopologicalSort()                               => [];
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                 => [];
+    public IReadOnlyList<Layer>                     GetLayers()                                     => [];
+    public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                 => [];
 
     public void Add(GeoFeature feature)                    { }
     public void Update(GeoFeature feature)                 { }
@@ -46,4 +48,8 @@ internal sealed class NullAssetProvider : IAssetProvider
     public void LoadAll(IEnumerable<GeoFeature> features)  { }
     public void AddAssetType(AssetType assetType)          { }
     public void DeleteAssetType(Guid id)                   { }
+    public void AddLayer(Layer layer)                      { }
+    public void DeleteLayer(Guid id)                       { }
+    public void AddLayerRule(LayerRule layerRule)          { }
+    public void DeleteLayerRule(Guid id)                   { }
 }

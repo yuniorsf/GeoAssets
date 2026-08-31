@@ -100,6 +100,8 @@ public sealed class WfsAssetProvider : IAssetProvider
     public bool                                     HasCycles()                                    => _cache.HasCycles();
     public IReadOnlyList<GeoFeature>                TopologicalSort()                             => _cache.TopologicalSort();
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                => _cache.GetAssetTypes();
+    public IReadOnlyList<Layer>                     GetLayers()                                    => _cache.GetLayers();
+    public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                => _cache.GetLayerRules(assetTypeId);
 
     // ── Spatial viewport query — live WFS request ────────────────────────────
 
@@ -141,6 +143,10 @@ public sealed class WfsAssetProvider : IAssetProvider
     public void LoadAll(IEnumerable<GeoFeature> features)  => LogReadOnly();
     public void AddAssetType(AssetType assetType) => LogReadOnly();
     public void DeleteAssetType(Guid id)          => LogReadOnly();
+    public void AddLayer(Layer layer)             => LogReadOnly();
+    public void DeleteLayer(Guid id)              => LogReadOnly();
+    public void AddLayerRule(LayerRule layerRule) => LogReadOnly();
+    public void DeleteLayerRule(Guid id)          => LogReadOnly();
 
     private void LogReadOnly() =>
         _logger.LogWarning(

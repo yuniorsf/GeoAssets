@@ -36,11 +36,21 @@ public static class WmsEndpointExtensions
     private static readonly byte[] _emptyTilePng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
 
+    /// <param name="requireAuthentication">
+    /// Temporary interim toggle (XD01-95): the in-app Leaflet map loads tiles via plain
+    /// <c>&lt;img&gt;</c> elements, which can never carry a bearer token, so
+    /// <c>features:read</c> can't actually be enforced against this app's own map today.
+    /// Driven by <c>Wms:RequireAuthentication</c> in configuration (defaults to <c>false</c> —
+    /// open — until a real fix is designed and implemented in the follow-up ticket XD01-95
+    /// links to). Defaults to <c>true</c> here so any other caller of this method stays
+    /// secure-by-default unless it explicitly opts out.
+    /// </param>
     public static IEndpointRouteBuilder MapWmsApi(
         this IEndpointRouteBuilder routes,
-        string route = "/wms")
+        string route = "/wms",
+        bool   requireAuthentication = true)
     {
-        routes.MapGet(route, async (HttpRequest req, WmsPostGisRenderer renderer, CancellationToken ct) =>
+        var group = routes.MapGet(route, async (HttpRequest req, WmsPostGisRenderer renderer, CancellationToken ct) =>
         {
             string Param(string key)
             {
@@ -67,8 +77,12 @@ public static class WmsEndpointExtensions
                 // Return a transparent 1×1 PNG so the browser doesn't log a network error.
                 return Results.Bytes(_emptyTilePng, "image/png");
             }
-        })
-            .RequireAuthorization("features:read");
+        });
+
+        if (requireAuthentication)
+            group.RequireAuthorization("features:read");
+        else
+            group.AllowAnonymous();
 
         return routes;
     }

@@ -1,7 +1,5 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
-@using GeoAssets.Core.Models
 @using GeoAssets.Core.Interfaces
-@using GeoAssets.Core.Services
 @inject IAssetProvider Repository
 @inject TimeProvider Clock
 
@@ -9,6 +7,14 @@
 {
     <div>
         <h5>@(IsNew ? L["form.newAsset"] : L["form.editAsset"])</h5>
+
+        @if (IsNew && _autoLinkCandidate is not null && !_autoLinkRejected)
+        {
+            <div class="autolink-banner attribute-success">
+                <span>🔗 @L.GetString("form.autoLinkMessage", AutoLinkCandidateName)</span>
+                <button type="button" class="btn-icon" @onclick="RejectAutoLink" title="@L["form.autoLinkUndo"]">✕</button>
+            </div>
+        }
 
         <EditForm Model="@Feature.Properties" OnValidSubmit="HandleSave">
             <DataAnnotationsValidator />
@@ -44,14 +50,23 @@
                        value="@GeometryLabel" />
             </div>
 
-            <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
+            @if (HasSchema)
+            {
+                <SchemaDrivenAttributeEditor Schema="@SelectedAssetTypeSchema"
+                                              Attributes="@Feature.Properties.CustomAttributes"
+                                              Errors="@_attributeErrors" />
+            }
+            else
+            {
+                <CustomAttributeEditor Attributes="@Feature.Properties.CustomAttributes" />
+            }
 
-            @if (_attributeErrors.Count > 0)
+            @if (UnmatchedAttributeErrors.Count > 0)
             {
                 <div class="attribute-errors">
                     <strong>@L["form.attributeErrors"]</strong>
                     <ul>
-                        @foreach (var error in _attributeErrors)
+                        @foreach (var error in UnmatchedAttributeErrors)
                         {
                             <li>@error</li>
                         }
@@ -65,51 +80,4 @@
             </div>
         </EditForm>
     </div>
-}
-
-@code {
-    [Parameter] public GeoFeature? Feature { get; set; }
-    [Parameter] public bool IsNew { get; set; }
-    [Parameter] public EventCallback<GeoFeature> OnSave { get; set; }
-    [Parameter] public EventCallback OnCancel { get; set; }
-
-    private string GeometryLabel => Feature?.Geometry switch
-    {
-        Core.Models.Geometry.GeoPoint      => L["map.draw.point"],
-        Core.Models.Geometry.GeoLineString => L["map.draw.line"],
-        Core.Models.Geometry.GeoPolygon    => L["map.draw.polygon"],
-        _                                  => "—"
-    };
-
-    private IReadOnlyList<string> _attributeErrors = [];
-
-    private async Task HandleSave()
-    {
-        if (Feature is null) return;
-        var now = Clock.GetUtcNow().UtcDateTime;
-        Feature.Properties.UpdatedAt = now;
-        if (IsNew)
-            Feature.Properties.CreatedAt = now;
-
-        try
-        {
-            if (IsNew)
-                Repository.Add(Feature);
-            else
-                Repository.Update(Feature);
-        }
-        catch (GeoFeatureAttributeValidationException ex)
-        {
-            _attributeErrors = ex.Errors;
-            return;
-        }
-
-        _attributeErrors = [];
-        await OnSave.InvokeAsync(Feature);
-    }
-
-    /// <summary>Allows a parent component to programmatically submit the form (e.g. from a context menu).</summary>
-    public Task SaveAsync() => HandleSave();
-
-    private async Task Cancel() => await OnCancel.InvokeAsync();
 }

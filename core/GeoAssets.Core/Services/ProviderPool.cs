@@ -12,6 +12,7 @@ public sealed class ProviderPool : IProviderPool
     private readonly List<ProviderEntry> _entries = [];
 
     public event EventHandler? Changed;
+    public event EventHandler<ProviderEntry>? EntryAdded;
 
     public IReadOnlyList<ProviderEntry> All    => _entries;
     public ProviderEntry                Active => _entries.First(e => e.IsActive);
@@ -27,6 +28,7 @@ public sealed class ProviderPool : IProviderPool
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
+        EntryAdded?.Invoke(this, entry);
         return entry;
     }
 

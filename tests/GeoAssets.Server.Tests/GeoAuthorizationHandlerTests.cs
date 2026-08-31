@@ -26,8 +26,10 @@ public class GeoAuthorizationHandlerTests
     private static GeoAuthorizationHandler Sut(Func<string, bool> evaluate) =>
         new(new FakeAuthorizationService(evaluate), NullLogger<GeoAuthorizationHandler>.Instance);
 
+    // Authenticated by default — these tests exercise the requirement's own policy-evaluation
+    // logic, not the authentication guard (covered separately below).
     private static AuthorizationHandlerContext Context(GeoPolicyRequirement requirement) =>
-        new([requirement], new ClaimsPrincipal(new ClaimsIdentity()), resource: null);
+        new([requirement], new ClaimsPrincipal(new ClaimsIdentity(authenticationType: "TestAuth")), resource: null);
 
     [Fact]
     public async Task HandleRequirementAsync_PolicySatisfied_Succeeds()
@@ -61,6 +63,27 @@ public class GeoAuthorizationHandlerTests
         var handler = Sut(name => throw new KeyNotFoundException($"Policy '{name}' not found."));
         var requirement = new GeoPolicyRequirement("DoesNotExist");
         var context = Context(requirement);
+
+        var act = () => handler.HandleAsync(context);
+
+        await act.Should().NotThrowAsync();
+        context.HasSucceeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_AnonymousCaller_DeniesWithoutCallingTheAuthorizationService()
+    {
+        // Regression: GeoAuthorizationPolicyProvider pairs every named policy with
+        // RequireAuthenticatedUser(), but ASP.NET Core still runs this handler even when that
+        // paired requirement hasn't succeeded — the production IGeoAuthorizationService throws
+        // for an anonymous caller instead of returning false, so this must never call it. Fails
+        // without the fix (the fake would throw, and HandleAsync would propagate that instead of
+        // denying cleanly).
+        var handler = Sut(_ => throw new InvalidOperationException(
+            "Must not evaluate the policy for an anonymous caller."));
+        var requirement = new GeoPolicyRequirement("CanEditFeatures");
+        var context = new AuthorizationHandlerContext(
+            [requirement], new ClaimsPrincipal(new ClaimsIdentity()), resource: null);
 
         var act = () => handler.HandleAsync(context);
 

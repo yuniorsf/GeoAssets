@@ -1,0 +1,58 @@
+@namespace GeoAssets.Shared.Components.Layout
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using GeoAssets.Core.Localization
+@using GeoAssets.Identity.Authentication
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IJsonStringLocalizer L
+@inject IBootLoader BootLoader
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IAuthNavigationService AuthNav
+@inject ICurrentUserAccessor CurrentUserAccessor
+@inject IUserRepository UserRepository
+@inject IServiceProvider ServiceProvider
+
+<div class="geoassets-app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <span style="font-size:1.4rem">🗺️</span>
+            <h1>GeoAssets</h1>
+        </div>
+
+        <div class="sidebar-scrollable">
+            @if (_identityResolved)
+            {
+                <NavMenu />
+            }
+        </div>
+    </aside>
+
+    <!-- Content column: topbar + map area -->
+    <div class="content-column">
+        <TopBar UserDisplayName="@_userDisplayName"
+                OrganizationName="@_organizationName"
+                Roles="@_userRoles"
+                OnSignOut="SignOut" />
+
+        <!-- Hidden on every route but the map's own — kept mounted so Leaflet survives navigation
+             instead of being torn down and rebuilt (XD01-97/XD01-98's enabling plumbing). -->
+        <MapWorkspace Hidden="@(!_isMapRoute)" />
+
+        <!-- Hidden on the map route: both this and MapWorkspace's own .map-area are flex:1
+             siblings, so an unconditionally-visible empty route-content would otherwise steal
+             half of .content-column's height from the map via flexbox space distribution. -->
+        <div class="route-content" style="@(_isMapRoute ? "display:none" : null)">
+            @if (_identityResolved)
+            {
+                @Body
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Provider boot dialog — shown on first launch until a data source is connected.
+     Backdrop click is ignored in boot mode; user must make an explicit choice. -->
+<ProviderConnectDialog Visible="@(!BootLoader.IsBootComplete)" IsBootMode="true" />

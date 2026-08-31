@@ -1,5 +1,6 @@
 using Blazored.LocalStorage;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authentication;
@@ -10,6 +11,7 @@ using GeoAssets.Provider.WMS;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
+using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Theming;
@@ -24,6 +26,7 @@ using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.JSInterop;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -121,6 +124,12 @@ if (identityUseRest)
 else
     builder.Services.AddGeoIdentityWasmDev();
 
+// Pending-invitation redirect check (XD01-89) — backend-agnostic, so registered here rather
+// than inside either AddGeoIdentityRest or AddGeoIdentityWasmDev: its dependencies
+// (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager) are already
+// registered by both branches above.
+builder.Services.AddScoped<InvitationRedirectGate>();
+
 builder.Services.AddGeoAssetsRest();
 builder.Services.AddGeoAssetsWfs();
 builder.Services.AddGeoAssetsWms();
@@ -131,6 +140,19 @@ builder.Services.AddSingleton<ProviderPluginRegistry>();
 
 // Boot loader — orchestrates the first-run provider selection flow.
 builder.Services.AddScoped<IBootLoader, BootLoaderService>();
+
+// Cross-cutting panel state (XD01-82/83) — lets AssetTypeManager/ProviderPoolPanel/AssetList/
+// Index self-inject their map-context and selection state instead of receiving them as
+// parameters/EventCallbacks from whatever page hosts them (XD01-84). ProviderConnectionMapRenderer
+// is force-resolved once in Index.razor's OnInitializedAsync to start its IProviderPool.EntryAdded
+// subscription — merely registering it here isn't enough to make it run.
+builder.Services.AddGeoAssetsPanelState();
+builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+
+// Left-nav menu (XD01-79/85) — discovers every concrete MenuItemBase in the assembly holding
+// OverviewMenuItem/LayersMenuItem/etc. and assembles them into the MenuRegistry NavMenu.razor
+// builds its tree from.
+builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
 
 // Proxy follows the active pool entry; wrapped by the attribute-schema-validating
 // decorator (XD01-10), then the observable decorator.
@@ -199,5 +221,15 @@ if (serviceOrdersUseRest)
     var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
     await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
 }
+
+// Application Insights (XD01-53) — initialized from configuration instead of the connection
+// string being hardcoded in wwwroot/index.html, which (unlike appsettings.json) is served
+// verbatim with zero fetch/parse step, so a hardcoded value there is committed and live the
+// moment anyone opens the page source. No-op (appInsightsInterop.init checks for a falsy arg)
+// until AzureAdCiam's own gitignored appsettings.Local.json override pattern supplies a real one.
+var appInsightsConnectionString = builder.Configuration["Observability:AzureMonitor:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+    await host.Services.GetRequiredService<IJSRuntime>()
+        .InvokeVoidAsync("appInsightsInterop.init", appInsightsConnectionString);
 
 await host.RunAsync();

@@ -19,6 +19,14 @@ public sealed class RoleSyncOptions
     /// <summary>Tenant ID of the GeoAssets Entra External ID (CIAM) tenant.</summary>
     public string TenantId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Domain name of the same tenant (e.g. <c>geoassets.onmicrosoft.com</c>), as distinct from
+    /// <see cref="TenantId"/>'s GUID — required by Graph's Local Account identity creation
+    /// (<c>identities[].issuer</c>, XD01-91), which rejects a GUID there. Visible in the Entra
+    /// admin center's tenant overview, or in any UPN issued by this tenant.
+    /// </summary>
+    public string TenantDomain { get; set; } = string.Empty;
+
     /// <summary>Client (Application) ID of the "GeoAssets Role Sync" app registration itself.</summary>
     public string ClientId { get; set; } = string.Empty;
 
@@ -31,4 +39,7 @@ public sealed class RoleSyncOptions
     /// token GeoAssets reads the <c>roles</c> claim from depends on <c>Identity:Backend</c>.
     /// </summary>
     public string[] TargetApplicationClientIds { get; set; } = [];
+
+    /// <summary>Exposes the credential portion as a <see cref="GraphCredentialOptions"/> for other Graph-backed providers to reuse (XD01-67).</summary>
+    public GraphCredentialOptions ToCredential() => new(TenantId, TenantDomain, ClientId, ClientSecret);
 }

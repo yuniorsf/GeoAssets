@@ -1,3 +1,5 @@
+using GeoAssets.Core.Models.Geometry;
+
 namespace GeoAssets.Provider.PostgreSQL.Entities;
 
 /// <summary>EF Core entity that maps to the <c>asset_type</c> table.</summary>
@@ -8,6 +10,12 @@ public sealed class AssetTypeRow
     public string Color     { get; set; } = "#3388ff";
     public string IconUrl   { get; set; } = string.Empty;
     public bool   IsBuiltIn { get; set; } = false;
+    public bool   IsProtected { get; set; } = false;
+    public GeometryType? AllowedGeometryType { get; set; }
+    public Guid?  DefaultLayerId { get; set; }
     public string? AttributesSchemaJson { get; set; }
     public Guid   OrganizationId { get; set; } = Guid.Empty;
+
+    // ── Navigation ──────────────────────────────────────────────────────────────
+    public LayerRow? DefaultLayer { get; set; }
 }

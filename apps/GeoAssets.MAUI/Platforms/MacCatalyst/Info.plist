@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Same rationale as Platforms/iOS/Info.plist (XD01-52) — MacCatalyst is a separate TFM/bundle
+     from iOS despite sharing most iOS APIs, so it needs its own CFBundleURLTypes registration for
+     MSAL.NET's "msauth.com.geoassets.app" redirect scheme (bundle ID from ApplicationId). -->
+<plist version="1.0">
+<dict>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.geoassets.app.msal</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>msauth.com.geoassets.app</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

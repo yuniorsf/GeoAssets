@@ -1,0 +1,37 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject IServiceProvider ServiceProvider
+
+@if (Visible)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box" @onclick:stopPropagation="true">
+            <h6>@L["admin.invitations.inviteTitle"]</h6>
+
+            <EditForm Model="@_editModel" OnValidSubmit="HandleInviteAsync">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>@L["admin.invitations.email"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.Email" />
+                </div>
+
+                <div class="form-group">
+                    <label>@L["admin.invitations.displayName"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.DisplayName" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors">@_error</p>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel" disabled="@_inviting">@L["assets.cancel"]</button>
+                    <button class="btn btn-primary btn-sm" type="submit" disabled="@_inviting">
+                        @(_inviting ? L["admin.invitations.inviting"] : L["admin.invitations.invite"])
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}

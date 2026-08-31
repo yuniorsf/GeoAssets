@@ -18,8 +18,13 @@ namespace GeoAssets.Web.Extensions;
 /// Also registers <see cref="IUserRepository"/>/<see cref="IRoleRepository"/>/
 /// <see cref="IPermissionRepository"/> (XD01-57) for the identity admin UI (XD01-54 Phase 1)
 /// to consume — previously undone because the identity API was read-only. Does not register
-/// <c>UserProvisioningService</c>: JIT user provisioning against this backend isn't possible
-/// (that's tracked separately, see XD01-12's federated-auth/JIT-provisioning follow-up note).
+/// <c>UserProvisioningService</c>: it has no server round-trip to provision against, and — as
+/// of XD01-88 — isn't the mechanism for this backend anyway. JIT provisioning against Rest is
+/// instead the server's own job, inside <c>GeoAuthorizationService.GetAuthorizationContextAsync</c>
+/// (XD01-88; previously a real gap, tracked at the time under a stale "XD01-12" citation —
+/// XD01-12 was JWT bearer-token validation only. Federation/organization-resolution scope some
+/// earlier notes also pointed at here was XD01-49, resolved Done-without-implementing: this
+/// system's registration is permanently invitation-only, so that scope never applied).
 ///
 /// Also registers <see cref="IRoleAssignmentProvider"/>/<see cref="IRoleSyncStatusProvider"/>
 /// (XD01-63) — thin HTTP proxies to the server's own <see cref="IRoleAssignmentProvider"/>
@@ -27,6 +32,16 @@ namespace GeoAssets.Web.Extensions;
 /// config; <see cref="IRoleSyncStatusProvider"/> is how the UI tells which). Deliberately not
 /// registered by <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> — the in-memory backend
 /// has no server round-trip, so role sync can never be functional there.
+///
+/// Also registers <see cref="IPendingInvitationRepository"/>/<see cref="IUserClaimRepository"/>
+/// (XD01-70) — <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> registers its own
+/// in-memory implementations of both separately, so these Rest ones are never used there.
+///
+/// Also registers <see cref="IInvitationStatusProvider"/>/<see cref="IInvitationClient"/>
+/// (XD01-71) — the create/revoke/redeem business operations and the "is this really
+/// Graph/ACS-backed" status check that sit alongside <see cref="IPendingInvitationRepository"/>'s
+/// plain CRUD. Same reasoning as role sync: never registered under
+/// <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c>.
 /// </summary>
 public static class GeoIdentityRestExtensions
 {
@@ -49,6 +64,18 @@ public static class GeoIdentityRestExtensions
 
         services.AddScoped<IRoleSyncStatusProvider>(sp =>
             new RestRoleSyncStatusProvider(CreateIdentityClient(sp)));
+
+        services.AddScoped<IPendingInvitationRepository>(sp =>
+            new RestPendingInvitationRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IUserClaimRepository>(sp =>
+            new RestUserClaimRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IInvitationStatusProvider>(sp =>
+            new RestInvitationStatusProvider(CreateIdentityClient(sp)));
+
+        services.AddScoped<IInvitationClient>(sp =>
+            new RestInvitationClient(CreateIdentityClient(sp)));
 
         return services;
     }

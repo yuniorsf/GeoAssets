@@ -1,24 +1,75 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Core.Interfaces
+@using GeoAssets.Core.Models
 @using GeoAssets.Core.Models.Geometry
 @inject IMapInterop MapInterop
+@inject IAssetProvider Repository
+@inject IPendingDrawTypeState PendingType
 
 <div class="draw-toolbar">
     <span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px">@L["draw.label"]</span>
 
-    <button class="draw-btn @(_active == GeometryType.Point ? "active" : "")"
+    <div class="draw-type-picker">
+        <button type="button" class="draw-type-trigger @(SelectedType is not null ? "active" : "")" @onclick="TogglePalette">
+            @if (SelectedType is { } selected)
+            {
+                var style = ResolveStyle(selected);
+                <span class="asset-color-dot" style="background:@(style?.Color ?? selected.Color)"></span>
+                <span>@selected.Name</span>
+            }
+            else
+            {
+                <span>🏷️ @L["draw.chooseType"]</span>
+            }
+        </button>
+
+        @if (_paletteOpen)
+        {
+            <div class="draw-type-backdrop" @onclick="ClosePalette"></div>
+            <div class="dropdown-menu show draw-type-dropdown" @onclick:stopPropagation="true">
+                <input type="text"
+                       class="form-control form-control-sm"
+                       placeholder="@L["draw.typeSearch"]"
+                       @bind="_search" @bind:event="oninput" />
+
+                <div class="draw-type-list">
+                    @foreach (var type in FilteredTypes)
+                    {
+                        var style = ResolveStyle(type);
+                        var disabled = type.AllowedGeometryType is null;
+                        <button type="button"
+                                class="draw-type-row @(SelectedType?.Id == type.Id ? "active" : "")"
+                                disabled="@disabled"
+                                title="@(disabled ? L["draw.anyGeometryHint"] : type.Name)"
+                                @onclick="() => SelectType(type)">
+                            <span class="asset-color-dot" style="background:@(style?.Color ?? type.Color)"></span>
+                            <span>@type.Name</span>
+                        </button>
+                    }
+                    @if (FilteredTypes.Count == 0)
+                    {
+                        <div class="empty-state" style="padding:8px">@L["assets.noResults"]</div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <span style="font-size:0.8rem;color:var(--text-secondary);margin:0 2px">@L["draw.orLabel"]</span>
+
+    <button class="draw-btn @(_active == GeometryType.Point && SelectedType is null ? "active" : "")"
             @onclick="() => ToggleMode(GeometryType.Point)"
             title="@L["draw.point.title"]">
         📍 @L["map.draw.point"]
     </button>
 
-    <button class="draw-btn @(_active == GeometryType.LineString ? "active" : "")"
+    <button class="draw-btn @(_active == GeometryType.LineString && SelectedType is null ? "active" : "")"
             @onclick="() => ToggleMode(GeometryType.LineString)"
             title="@L["draw.line.title"]">
         〰️ @L["map.draw.line"]
     </button>
 
-    <button class="draw-btn @(_active == GeometryType.Polygon ? "active" : "")"
+    <button class="draw-btn @(_active == GeometryType.Polygon && SelectedType is null ? "active" : "")"
             @onclick="() => ToggleMode(GeometryType.Polygon)"
             title="@L["draw.polygon.title"]">
         ⬡ @L["map.draw.polygon"]
@@ -29,36 +80,3 @@
         <button class="draw-btn cancel" @onclick="Cancel" title="@L["draw.cancel.title"]">@L["draw.cancel"]</button>
     }
 </div>
-
-@code {
-    [Parameter] public string MapDivId { get; set; } = "geoassets-map";
-    [Parameter] public EventCallback<GeometryType?> OnDrawModeChanged { get; set; }
-
-    private GeometryType? _active;
-
-    private async Task ToggleMode(GeometryType mode)
-    {
-        if (_active == mode)
-        {
-            await Cancel();
-            return;
-        }
-
-        _active = mode;
-        await MapInterop.EnableDrawModeAsync(MapDivId, mode);
-        await OnDrawModeChanged.InvokeAsync(mode);
-    }
-
-    private async Task Cancel()
-    {
-        _active = null;
-        await MapInterop.DisableDrawModeAsync(MapDivId);
-        await OnDrawModeChanged.InvokeAsync(null);
-    }
-
-    public void ResetMode()
-    {
-        _active = null;
-        StateHasChanged();
-    }
-}

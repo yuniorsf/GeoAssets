@@ -21,10 +21,20 @@ public class GeoAuthorizationServiceTests
         public Task<CurrentUser?> GetCurrentUserAsync(CancellationToken ct = default) => Task.FromResult(user);
     }
 
-    private sealed class FakeUserRepository(AppUser? user) : IUserRepository
+    /// <summary>Mutable spy: <see cref="AddAsync"/> both records what was added (matching the
+    /// <c>FakeAdminUserRepository</c>/<c>FakePendingInvitationRepository</c> idiom used
+    /// elsewhere) and updates what subsequent <see cref="GetByExternalObjectIdAsync"/> calls
+    /// return, so a test can prove a JIT-provisioned user is actually found again on a second
+    /// call (XD01-88) — not just that <c>AddAsync</c> was called once.</summary>
+    private sealed class FakeUserRepository(AppUser? initialUser) : IUserRepository
     {
+        private AppUser? _user = initialUser;
+
+        public AppUser? Added { get; private set; }
+        public bool SaveChangesCalled { get; private set; }
+
         public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) => Task.FromResult(user);
+        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) => Task.FromResult(_user);
         public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
@@ -35,11 +45,24 @@ public class GeoAuthorizationServiceTests
         public Task<IReadOnlyList<AppRole>> GetRolesAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppPermission>> GetEffectivePermissionsAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task AddAsync(AppUser user, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task UpdateAsync(AppUser user, CancellationToken ct = default) => Task.CompletedTask;
+        public Task AddAsync(AppUser user, CancellationToken ct = default)
+        {
+            Added = user;
+            _user = user;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(AppUser user, CancellationToken ct = default)
+        {
+            _user = user;
+            return Task.CompletedTask;
+        }
         public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCalled = true;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeUserClaimRepository(IReadOnlyList<UserClaim> claims) : IUserClaimRepository
@@ -104,6 +127,23 @@ public class GeoAuthorizationServiceTests
             roleRepository ?? new FakeRoleRepository(),
             TimeProvider.System);
 
+    /// <summary>Like <see cref="Sut"/>, but also hands back the <see cref="FakeUserRepository"/>
+    /// spy — needed by the XD01-88 JIT-provisioning tests below to inspect what got persisted.</summary>
+    private static (GeoAuthorizationService Sut, FakeUserRepository UserRepo) SutWithUserRepo(
+        CurrentUser currentUser, AppUser? provisionedUser, FakeRoleRepository? roleRepository = null,
+        IReadOnlyList<UserClaim>? claims = null)
+    {
+        var userRepo = new FakeUserRepository(provisionedUser);
+        var sut = new GeoAuthorizationService(
+            new FakeCurrentUserAccessor(currentUser),
+            userRepo,
+            new FakeUserClaimRepository(claims ?? []),
+            new FakePolicyRepository(),
+            roleRepository ?? new FakeRoleRepository(),
+            TimeProvider.System);
+        return (sut, userRepo);
+    }
+
     private static AppUser ProvisionedUser(string externalObjectId) => new()
     {
         ExternalObjectId = externalObjectId,
@@ -112,15 +152,66 @@ public class GeoAuthorizationServiceTests
         CreatedAt        = DateTime.UtcNow,
     };
 
+    // ── JIT provisioning (XD01-88) ──────────────────────────────────────────
+
     [Fact]
-    public async Task GetAuthorizationContextAsync_UnprovisionedUser_ReturnsEmptyContext()
+    public async Task GetAuthorizationContextAsync_UnprovisionedUser_PersistsNewAppUserAndSavesChanges()
     {
-        var sut = Sut(new CurrentUser("user-1", "a@example.com", "Ada", ["Supervisor"]), provisionedUser: null);
+        var (sut, userRepo) = SutWithUserRepo(new CurrentUser("user-1", "a@example.com", "Ada", []), provisionedUser: null);
+
+        await sut.GetAuthorizationContextAsync();
+
+        userRepo.Added.Should().NotBeNull();
+        userRepo.Added!.ExternalObjectId.Should().Be("user-1");
+        userRepo.Added.Email.Should().Be("a@example.com");
+        userRepo.Added.DisplayName.Should().Be("Ada");
+        userRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_UnprovisionedUser_OrganizationIdStaysNull()
+    {
+        var (sut, _) = SutWithUserRepo(new CurrentUser("user-1", "a@example.com", "Ada", []), provisionedUser: null);
 
         var ctx = await sut.GetAuthorizationContextAsync();
 
-        ctx.Roles.Should().BeEmpty();
-        ctx.Permissions.Should().BeEmpty();
+        ctx.User.OrganizationId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_UnprovisionedUser_RolesAndPermissionsResolveOnTheSameFirstCall()
+    {
+        // Before the fix, a brand-new caller's first request always reported an empty
+        // Roles/Permissions set (hardcoded on the early-return) even though their token already
+        // carried an ExternalRoles claim, forcing a second round-trip before real permissions
+        // applied. Now that provisioning falls through into the normal resolution path instead
+        // of early-returning, this should just work on the first call.
+        var roleRepo = new FakeRoleRepository();
+        roleRepo.AddRole("Supervisor", "serviceorders:assign");
+        var (sut, _) = SutWithUserRepo(
+            new CurrentUser("user-1", "a@example.com", "Ada", ["Supervisor"]), provisionedUser: null, roleRepo);
+
+        var ctx = await sut.GetAuthorizationContextAsync();
+
+        ctx.Roles.Should().BeEquivalentTo(["Supervisor"]);
+        ctx.Permissions.Should().BeEquivalentTo(["serviceorders:assign"]);
+    }
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_CalledTwiceForSameUnprovisionedCaller_ReturnsTheSamePersistedUserId()
+    {
+        // The regression this ticket exists for: before the fix, GetAuthorizationContextAsync
+        // returned a fresh, never-persisted Guid on every call for an unprovisioned caller — any
+        // write keyed on ctx.User.Id (e.g. POST /invitations, POST /userclaims) referenced a
+        // phantom id a second call couldn't even find again, orphaning the write. This test
+        // would fail without the fix: ctx2.User.Id would differ from ctx1.User.Id.
+        var (sut, _) = SutWithUserRepo(new CurrentUser("user-1", "a@example.com", "Ada", []), provisionedUser: null);
+
+        var ctx1 = await sut.GetAuthorizationContextAsync();
+        var ctx2 = await sut.GetAuthorizationContextAsync();
+
+        ctx1.User.Id.Should().NotBe(Guid.Empty);
+        ctx2.User.Id.Should().Be(ctx1.User.Id);
     }
 
     [Fact]

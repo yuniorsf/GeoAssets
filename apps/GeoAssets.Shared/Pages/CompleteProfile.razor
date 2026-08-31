@@ -1,0 +1,46 @@
+@page "/complete-profile"
+@attribute [Authorize]
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authentication
+@using GeoAssets.Identity.Authorization.Repositories
+@using GeoAssets.Identity.Authorization.Services
+@using Microsoft.AspNetCore.Authorization
+@inject ICurrentUserAccessor CurrentUserAccessor
+@inject IGeoAuthorizationService AuthService
+@inject IUserClaimRepository ClaimRepository
+@inject IServiceProvider ServiceProvider
+@inject NavigationManager Navigation
+
+<div class="geoassets-app">
+    <main class="order-main">
+        @if (_loading)
+        {
+            <div class="empty-state">@L["app.loading"]</div>
+        }
+        else
+        {
+            <h1>@L["admin.completeProfile.title"]</h1>
+            <p>@L["admin.completeProfile.intro"]</p>
+
+            <EditForm Model="@_editModel" OnValidSubmit="HandleSaveAsync">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>@L["admin.completeProfile.phone"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.Phone" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors">@_error</p>
+                }
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit" disabled="@_saving">
+                        @(_saving ? L["admin.completeProfile.saving"] : L["admin.completeProfile.continueButton"])
+                    </button>
+                </div>
+            </EditForm>
+        }
+    </main>
+</div>

@@ -76,8 +76,10 @@ public class OrgResourceAuthorizationHandlerTests
         new(new FakeAuthorizationService(permissions, userOrganizationId, roles ?? []),
             new FakeOrganizationGrantRepository(grants ?? []));
 
+    // Authenticated by default — these tests exercise the requirement's own org/permission/grant
+    // logic, not the authentication guard (covered separately below).
     private static AuthorizationHandlerContext Context(OrgResourceRequirement requirement, IOrgOwnedResource resource) =>
-        new([requirement], new ClaimsPrincipal(new ClaimsIdentity()), resource);
+        new([requirement], new ClaimsPrincipal(new ClaimsIdentity(authenticationType: "TestAuth")), resource);
 
     private static OrganizationGrant Grant(
         Guid granteeOrgId, Guid resourceOrgId, IEnumerable<string> allowedActions,
@@ -92,6 +94,40 @@ public class OrgResourceAuthorizationHandlerTests
         GrantedAt              = DateTime.UtcNow,
         IsActive               = true,
     };
+
+    // ── Anonymous caller ──────────────────────────────────────────────────────
+
+    private sealed class ThrowingAuthorizationService : IGeoAuthorizationService
+    {
+        public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Must not evaluate permissions for an anonymous caller.");
+        public Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_AnonymousCaller_DeniesWithoutCallingTheAuthorizationService()
+    {
+        // Regression: the route-level RequireAuthorization requirement may not have
+        // succeeded yet when this handler runs (ASP.NET Core evaluates every requirement's
+        // handler regardless), and the production IGeoAuthorizationService throws for an
+        // anonymous caller instead of returning false — this must never call it. Fails without
+        // the fix (the fake would throw, and HandleAsync would propagate that instead of
+        // denying cleanly).
+        var handler = new OrgResourceAuthorizationHandler(
+            new ThrowingAuthorizationService(), new FakeOrganizationGrantRepository([]));
+        var resource = new AssetType { OrganizationId = Guid.NewGuid() };
+        var context = new AuthorizationHandlerContext(
+            [new OrgResourceRequirement("features:read")], new ClaimsPrincipal(new ClaimsIdentity()), resource);
+
+        var act = () => handler.HandleAsync(context);
+
+        await act.Should().NotThrowAsync();
+        context.HasSucceeded.Should().BeFalse();
+    }
 
     // ── Same organization ─────────────────────────────────────────────────────
 

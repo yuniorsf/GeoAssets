@@ -43,6 +43,12 @@ public sealed class GeoFeatureProperties
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Per-feature style override — the highest-priority entry in the <see cref="Layer"/>
+    /// resolution chain (ahead of any matching <see cref="LayerRule"/> and the asset type's
+    /// <see cref="AssetType.DefaultLayerId"/>). Empty means no override; resolution logic
+    /// lands in XD01-111.
+    /// </summary>
     [JsonPropertyName("layerId")]
     public string LayerId { get; set; } = string.Empty;
 

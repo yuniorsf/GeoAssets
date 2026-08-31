@@ -29,6 +29,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     // In-memory cache — rebuilt on first use and after writes
     private Dictionary<string, GeoFeature>? _cache;
     private List<AssetType>? _typeCache;
+    private List<Layer>? _layerCache;
+    private List<LayerRule>? _layerRuleCache;
 
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
 
@@ -122,6 +124,42 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         [.. Cache.Values
             .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
             .OrderBy(f => f.Geometry!.Distance(center))];
+
+    // ── Paged/filtered queries ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pushes filtering, counting and paging to PostgreSQL — never touches <see cref="Cache"/>
+    /// and never materializes the full <c>geo_entity</c> table, unlike every other read on this
+    /// class. Uses a dedicated short-lived <see cref="GeoAssetsDbContext"/>, mirroring
+    /// <see cref="GetInBoundsAsync"/>, so concurrent page requests don't share a context.
+    /// </summary>
+    public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
+    {
+        await using var db = new GeoAssetsDbContext(_dbOptions);
+        IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
+            rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
+
+        if (!string.IsNullOrWhiteSpace(query.SearchText))
+        {
+            var pattern = $"%{query.SearchText}%";
+            rows = rows.Where(r => EF.Functions.ILike(r.Name, pattern) || EF.Functions.ILike(r.Description, pattern));
+        }
+
+        var totalCount = await rows.CountAsync();
+
+        rows = query.SortBy switch
+        {
+            "name"      => query.SortDescending ? rows.OrderByDescending(r => r.Name)      : rows.OrderBy(r => r.Name),
+            "createdAt" => query.SortDescending ? rows.OrderByDescending(r => r.CreatedAt) : rows.OrderBy(r => r.CreatedAt),
+            "updatedAt" => query.SortDescending ? rows.OrderByDescending(r => r.UpdatedAt) : rows.OrderBy(r => r.UpdatedAt),
+            _           => query.SortDescending ? rows.OrderByDescending(r => r.Id)        : rows.OrderBy(r => r.Id)
+        };
+
+        var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync();
+        return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
+    }
 
     // ── Topology ───────────────────────────────────────────────────────────────
 
@@ -230,6 +268,9 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Color     = r.Color,
                 IconUrl   = r.IconUrl,
                 IsBuiltIn = r.IsBuiltIn,
+                IsProtected = r.IsProtected,
+                AllowedGeometryType = r.AllowedGeometryType,
+                DefaultLayerId = r.DefaultLayerId,
                 AttributesSchemaJson = r.AttributesSchemaJson,
                 OrganizationId = r.OrganizationId
             }).ToList();
@@ -246,6 +287,9 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Color     = assetType.Color,
             IconUrl   = assetType.IconUrl,
             IsBuiltIn = assetType.IsBuiltIn,
+            IsProtected = assetType.IsProtected,
+            AllowedGeometryType = assetType.AllowedGeometryType,
+            DefaultLayerId = assetType.DefaultLayerId,
             AttributesSchemaJson = assetType.AttributesSchemaJson,
             OrganizationId = assetType.OrganizationId
         });
@@ -260,6 +304,108 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         _db.AssetTypes.Remove(row);
         SaveChanges();
         _typeCache = null;
+    }
+
+    // ── Layers ─────────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<Layer> GetLayers()
+    {
+        _layerCache ??= _db.Layers.AsNoTracking()
+            .Select(r => new Layer
+            {
+                Id          = r.Id,
+                Name        = r.Name,
+                GeometryType = r.GeometryType,
+                Color       = r.Color,
+                Radius      = r.Radius,
+                IconUrl     = r.IconUrl,
+                Weight      = r.Weight,
+                DashArray   = r.DashArray,
+                FillColor   = r.FillColor,
+                FillOpacity = r.FillOpacity
+            }).ToList();
+        return [.. _layerCache];
+    }
+
+    public void AddLayer(Layer layer)
+    {
+        if (_db.Layers.Find(layer.Id) is not null) return;
+        _db.Layers.Add(new LayerRow
+        {
+            Id          = layer.Id,
+            Name        = layer.Name,
+            GeometryType = layer.GeometryType,
+            Color       = layer.Color,
+            Radius      = layer.Radius,
+            IconUrl     = layer.IconUrl,
+            Weight      = layer.Weight,
+            DashArray   = layer.DashArray,
+            FillColor   = layer.FillColor,
+            FillOpacity = layer.FillOpacity
+        });
+        SaveChanges();
+        _layerCache = null;
+    }
+
+    public void DeleteLayer(Guid id)
+    {
+        var row = _db.Layers.Find(id);
+        if (row is null) return;
+        _db.Layers.Remove(row);
+        SaveChanges();
+        _layerCache = null;
+    }
+
+    // ── Layer rules ────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId)
+    {
+        _layerRuleCache ??= _db.LayerRules.AsNoTracking()
+            .Include(r => r.Conditions)
+            .ToList()
+            .Select(r => new LayerRule
+            {
+                Id          = r.Id,
+                AssetTypeId = r.AssetTypeId,
+                LayerId     = r.LayerId,
+                Priority    = r.Priority,
+                Conditions  = [.. r.Conditions.Select(c => new LayerRuleCondition
+                {
+                    Attribute = c.Attribute,
+                    Operator  = c.Operator,
+                    Value     = c.Value
+                })]
+            }).ToList();
+        return [.. _layerRuleCache.Where(r => r.AssetTypeId == assetTypeId)];
+    }
+
+    public void AddLayerRule(LayerRule layerRule)
+    {
+        if (_db.LayerRules.Find(layerRule.Id) is not null) return;
+        _db.LayerRules.Add(new LayerRuleRow
+        {
+            Id          = layerRule.Id,
+            AssetTypeId = layerRule.AssetTypeId,
+            LayerId     = layerRule.LayerId,
+            Priority    = layerRule.Priority,
+            Conditions  = [.. layerRule.Conditions.Select(c => new LayerRuleConditionRow
+            {
+                Attribute = c.Attribute,
+                Operator  = c.Operator,
+                Value     = c.Value
+            })]
+        });
+        SaveChanges();
+        _layerRuleCache = null;
+    }
+
+    public void DeleteLayerRule(Guid id)
+    {
+        var row = _db.LayerRules.Find(id);
+        if (row is null) return;
+        _db.LayerRules.Remove(row);
+        SaveChanges();
+        _layerRuleCache = null;
     }
 
     // ── Mapping ────────────────────────────────────────────────────────────────
@@ -281,7 +427,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
                 Name             = row.Name,
                 AssetTypeId      = row.AssetTypeId,
                 Description      = row.Description,
-                LayerId          = row.LayerId,
+                LayerId          = row.LayerId?.ToString() ?? string.Empty,
                 OrganizationId   = row.OrganizationId,
                 CreatedAt        = row.CreatedAt,
                 UpdatedAt        = row.UpdatedAt,
@@ -299,7 +445,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
             Name                 = f.Properties.Name,
             AssetTypeId          = f.Properties.AssetTypeId,
             Description          = f.Properties.Description,
-            LayerId              = f.Properties.LayerId,
+            LayerId              = string.IsNullOrEmpty(f.Properties.LayerId) ? null : Guid.Parse(f.Properties.LayerId),
             OrganizationId       = f.Properties.OrganizationId,
             CreatedAt            = f.Properties.CreatedAt,
             UpdatedAt            = f.Properties.UpdatedAt,

@@ -37,9 +37,12 @@ namespace  GeoAssets.Server;
 /// </summary>
 public static class GeoAssetsRestApiExtensions
 {
+    /// <param name="wmsRequireAuthentication">Forwarded to <see cref="WmsEndpointExtensions.MapWmsApi"/>
+    /// for the <c>{prefix}/wms</c> alias mounted below — see that method's own doc comment (XD01-95).</param>
     public static IEndpointRouteBuilder MapGeoAssetsApi(
         this IEndpointRouteBuilder routes,
-        string prefix = "/api/geoassets")
+        string prefix = "/api/geoassets",
+        bool   wmsRequireAuthentication = true)
     {
         var opts = GeoJsonSerializer.GetOptions();
 
@@ -174,7 +177,7 @@ public static class GeoAssetsRestApiExtensions
         // Blazor WASM clients can reach them without separate CORS origin entries.
         // External OGC clients can also use the standalone /wfs and /wms routes.
         routes.MapWfsApi(route: $"{prefix}/wfs");
-        routes.MapWmsApi(route: $"{prefix}/wms");
+        routes.MapWmsApi(route: $"{prefix}/wms", requireAuthentication: wmsRequireAuthentication);
 
         return routes;
     }

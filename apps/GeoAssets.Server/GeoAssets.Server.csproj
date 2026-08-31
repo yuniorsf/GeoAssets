@@ -25,6 +25,9 @@
          (XD01-62) — already a transitive dependency of Microsoft.Identity.Web above; pinned
          explicitly here since this project calls into it directly. -->
     <PackageReference Include="Microsoft.Identity.Client" Version="4.87.0" />
+    <!-- AcsEmailInvitationSender (XD01-68) — sends the invite-only registration email via the
+         Azure Communication Services Email resource provisioned per XD01-65. -->
+    <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup>

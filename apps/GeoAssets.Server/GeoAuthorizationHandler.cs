@@ -32,6 +32,13 @@ public sealed class GeoAuthorizationHandler(
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context, GeoPolicyRequirement requirement)
     {
+        // GeoAuthorizationPolicyProvider pairs every named policy with the framework's own
+        // RequireAuthenticatedUser() requirement — but ASP.NET Core runs every requirement's
+        // handler regardless of whether an earlier one already failed, so an anonymous caller
+        // still reaches here. IGeoAuthorizationService assumes an authenticated context and
+        // throws otherwise; deny cleanly instead of letting that propagate as an unhandled 500.
+        if (context.User.Identity?.IsAuthenticated != true) return;
+
         var isPermissionCode = requirement.PolicyName.Contains(':');
 
         bool satisfied;

@@ -14,7 +14,10 @@ public sealed class GeoEntityRow
     public string Name          { get; set; } = string.Empty;
     public string AssetTypeId   { get; set; } = string.Empty;
     public string Description   { get; set; } = string.Empty;
-    public string LayerId       { get; set; } = string.Empty;
+
+    /// <summary>Per-feature style override — see <c>GeoFeatureProperties.LayerId</c>. <c>null</c> means no override.</summary>
+    public Guid?  LayerId       { get; set; }
+
     public Guid   OrganizationId { get; set; } = Guid.Empty;
     public required DateTime CreatedAt { get; set; }
     public required DateTime UpdatedAt { get; set; }
@@ -30,4 +33,5 @@ public sealed class GeoEntityRow
 
     // ── Navigation ──────────────────────────────────────────────────────────────
     public AssetTypeRow? AssetType { get; set; }
+    public LayerRow? Layer { get; set; }
 }
