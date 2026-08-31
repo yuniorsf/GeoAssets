@@ -42,6 +42,14 @@ namespace GeoAssets.Web.Extensions;
 /// Graph/ACS-backed" status check that sit alongside <see cref="IPendingInvitationRepository"/>'s
 /// plain CRUD. Same reasoning as role sync: never registered under
 /// <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c>.
+///
+/// Also registers <see cref="IOrganizationRepository"/>/<see cref="IGroupRepository"/>
+/// (XD01-128) — full admin CRUD against the server's <c>/organizations</c>/<c>/groups</c>
+/// endpoints, closing the gap left by <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c>'s
+/// in-memory-only equivalents. <see cref="IPolicyRepository"/> is also registered here for the
+/// first time — like <see cref="IPermissionRepository"/>, policies are code-seeded and read-only
+/// (<c>GeoIdentitySeeder.SeedPoliciesAsync</c>), so <c>RestPolicyRepository</c> only implements
+/// the one existing <c>GET /policies</c> endpoint.
 /// </summary>
 public static class GeoIdentityRestExtensions
 {
@@ -58,6 +66,15 @@ public static class GeoIdentityRestExtensions
 
         services.AddScoped<IPermissionRepository>(sp =>
             new RestPermissionRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IOrganizationRepository>(sp =>
+            new RestOrganizationRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IGroupRepository>(sp =>
+            new RestGroupRepository(CreateIdentityClient(sp)));
+
+        services.AddScoped<IPolicyRepository>(sp =>
+            new RestPolicyRepository(CreateIdentityClient(sp)));
 
         services.AddScoped<IRoleAssignmentProvider>(sp =>
             new RestRoleAssignmentProvider(CreateIdentityClient(sp)));
