@@ -35,7 +35,13 @@ public static class WorkflowRestServiceExtensions
 
     private static HttpClient BuildClient(IServiceProvider sp, string baseUrl)
     {
-        var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+        // Named (not the anonymous default) so a host's auth handler on this name also covers
+        // ServiceOrders/OrderType calls — same reasoning as RestProviderFactory.BuildClient and
+        // GeoIdentityRestExtensions.CreateIdentityClient. GeoAssets.Web attaches its CIAM
+        // AuthorizationMessageHandler only to "GeoAssetsServer" (Program.cs, XD01-17); the
+        // anonymous client this used to request never carried a token, so every call 401'd
+        // against GeoAssets.Server's FallbackPolicy.RequireAuthenticatedUser() (XD01-127).
+        var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeoAssetsServer");
         client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
         return client;
     }
