@@ -58,7 +58,9 @@ public class ServiceOrderRulesEndpointTests
                 {
                     services.AddRouting();
                     services.AddOrderTypeRegistry();
-                    services.AddWorkflowInMemory();
+                    services.AddSingleton<IOrderTypeRepository, FakeOrderTypeRepository>();
+                    services.AddSingleton<IServiceOrderRepository>(sp =>
+                        new ValidatingServiceOrderRepository(new FakeServiceOrderRepository(), sp.GetService<OrderTypeRegistry>()));
                     services.AddServiceOrderRules();
                     services.AddScoped<ServerWorkflowPrincipalFactory>();
                     services.AddSingleton<IGeoAuthorizationService>(

@@ -3,15 +3,16 @@ using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Selection;
 using GeoAssets.Workflow.Selection.Strategies;
+using GeoAssets.Workflow.Tests.Orders;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Selection;
 
 public class FeatureSelectionRegistryTests
 {
-    private static async Task<InMemoryServiceOrderRepository> RepositoryWithParentAsync(params GeoFeature[] features)
+    private static async Task<FakeServiceOrderRepository> RepositoryWithParentAsync(params GeoFeature[] features)
     {
-        var repo = new InMemoryServiceOrderRepository();
+        var repo = new FakeServiceOrderRepository();
         var parent = new ServiceOrder { Title = "Parent" }.WithFeatures(features, TimeProvider.System);
         await repo.AddAsync(parent);
         return repo;

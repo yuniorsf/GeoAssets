@@ -5,6 +5,7 @@ using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -47,7 +48,9 @@ public class ServiceOrdersReadAuthorizationTests
                 {
                     services.AddRouting();
                     services.AddOrderTypeRegistry();
-                    services.AddWorkflowInMemory();
+                    services.AddSingleton<IOrderTypeRepository, FakeOrderTypeRepository>();
+                    services.AddSingleton<IServiceOrderRepository>(sp =>
+                        new ValidatingServiceOrderRepository(new FakeServiceOrderRepository(), sp.GetService<OrderTypeRegistry>()));
                     services.AddServiceOrderRules();
                     services.AddScoped<ServerWorkflowPrincipalFactory>();
                     services.AddAuthentication("Test")

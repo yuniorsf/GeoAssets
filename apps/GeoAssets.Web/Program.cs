@@ -178,27 +178,14 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
     sp.GetRequiredService<ILogger<ObservableAssetService>>(),
     sp.GetRequiredService<TimeProvider>()));
 
-// ── Service Order workflow — in-memory (default) or REST-backed via GeoAssets.Server,
-// switched by "ServiceOrders:Backend" config ("InMemory" | "Rest"; env var override:
-// ServiceOrders__Backend). In-memory stays the default so the app still runs with zero
-// config against a Postgres server (XD01-8). When "Rest", OrderTypes are also loaded from
-// the server below, overlaying the seeded defaults — see AddWorkflowRest's doc comment.
+// ── Service Order workflow — REST-backed via GeoAssets.Server (XD01-8). OrderTypes are also
+// loaded from the server below, overlaying the seeded defaults — see AddWorkflowRest's doc
+// comment. InMemory removed as an option (XD01-129) — Rest is the only supported backend.
 builder.Services.AddOrderTypeRegistry();
 
-var serviceOrdersBackend = builder.Configuration["ServiceOrders:Backend"] ?? "InMemory";
-var serviceOrdersUseRest = string.Equals(serviceOrdersBackend, "Rest", StringComparison.OrdinalIgnoreCase);
-
-if (serviceOrdersUseRest)
-{
-    var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
-        ?? throw new InvalidOperationException(
-            "ServiceOrders:Backend is 'Rest' but ServiceOrders:ApiBaseUrl is not configured.");
-    builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
-}
-else
-{
-    builder.Services.AddWorkflowInMemory();
-}
+var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
+    ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
+builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
@@ -215,12 +202,9 @@ if (!identityUseRest)
     host.Services.GetRequiredService<UserProvisioningService>();
 }
 
-if (serviceOrdersUseRest)
-{
-    var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
-    var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
-    await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
-}
+var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
+var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
+await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
 
 // Application Insights (XD01-53) — initialized from configuration instead of the connection
 // string being hardcoded in wwwroot/index.html, which (unlike appsettings.json) is served

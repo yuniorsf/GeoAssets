@@ -5,7 +5,7 @@ namespace GeoAssets.Workflow.Orders;
 ///
 /// Implementations:
 ///   • <c>EFOrderTypeRepository</c> — EF Core (SQL Server, SQLite, etc.)
-///   • <c>InMemoryOrderTypeRepository</c> — in-memory for tests and WASM
+///   • <c>RestOrderTypeRepository</c> — HTTP client against GeoAssets.Server (XD01-8)
 /// </summary>
 public interface IOrderTypeRepository
 {

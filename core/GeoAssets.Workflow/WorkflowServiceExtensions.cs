@@ -11,27 +11,6 @@ namespace GeoAssets.Workflow;
 public static class WorkflowServiceExtensions
 {
     /// <summary>
-    /// Registers only the in-memory implementations (no database required).
-    /// Useful for unit tests and WASM hosts.
-    /// </summary>
-    public static IServiceCollection AddWorkflowInMemory(this IServiceCollection services)
-    {
-        services.AddSingleton<InMemoryServiceOrderRepository>();
-        services.AddSingleton<IServiceOrderRepository>(sp =>
-            new ValidatingServiceOrderRepository(
-                sp.GetRequiredService<InMemoryServiceOrderRepository>(),
-                sp.GetService<OrderTypeRegistry>()));
-
-        // Read-only or write-only consumers can depend on just the piece they need
-        // instead of the full IServiceOrderRepository.
-        services.AddSingleton<IServiceOrderReader>(sp => sp.GetRequiredService<IServiceOrderRepository>());
-        services.AddSingleton<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
-
-        services.AddSingleton<IOrderTypeRepository, InMemoryOrderTypeRepository>();
-        return services;
-    }
-
-    /// <summary>
     /// Registers the <see cref="OrderTypeRegistry"/> as a singleton pre-populated
     /// with the built-in order types plus any caller additions.
     ///

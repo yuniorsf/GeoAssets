@@ -5,8 +5,8 @@ namespace GeoAssets.Workflow.Rest;
 
 /// <summary>
 /// DI registration for the REST-backed <see cref="IServiceOrderRepository"/>/<see cref="IOrderTypeRepository"/>
-/// (XD01-8) — the Postgres-backed alternative to <c>AddWorkflowInMemory</c> for hosts that talk to
-/// <c>GeoAssets.Server</c> instead of holding state client-side.
+/// (XD01-8) — <c>GeoAssets.Web</c>'s sole Service Order/OrderType registration (XD01-129), always
+/// pointed at <c>GeoAssets.Server</c> instead of holding state client-side.
 /// </summary>
 public static class WorkflowRestServiceExtensions
 {

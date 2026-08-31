@@ -83,7 +83,7 @@ public static class CustomSelectionStrategy
                 typeof(CustomSelectionStrategy).Assembly        // este assembly → descubre las clases de abajo
             ]);
 
-        var orderRepo = new InMemoryServiceOrderRepository();
+        var orderRepo = new DemoServiceOrderRepository();
 
         // ── 3. Listar todas las estrategias disponibles ──────────────────────
 
@@ -238,6 +238,46 @@ public static class CustomSelectionStrategy
         foreach (var child in await repo.GetChildrenAsync(order.Id))
             await PrintHierarchy(child, repo, indent + 1);
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Demo-only ServiceOrder store — the old InMemoryServiceOrderRepository was
+//  removed from GeoAssets.Workflow (XD01-129); this implements just the two
+//  members this example actually exercises (AddAsync, GetChildrenAsync).
+// ═══════════════════════════════════════════════════════════════════════════
+
+file sealed class DemoServiceOrderRepository : IServiceOrderRepository
+{
+    private readonly Dictionary<string, IServiceOrder> _store = [];
+
+    public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
+    {
+        _store[order.Id] = order;
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.ParentOrderId == parentId)]);
+
+    public event EventHandler<IServiceOrder>? OrderAdded;
+    public event EventHandler<IServiceOrder>? OrderUpdated;
+    public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
+    public event EventHandler<string>? OrderDeleted;
+
+    public Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(string targetId, DispatchTargetType targetType, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task DeleteAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

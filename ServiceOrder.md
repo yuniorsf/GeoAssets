@@ -801,8 +801,8 @@ triggered the attempt.
 ## 12. Registering the module
 
 ```csharp
-// In-memory (WASM hosts, tests) — no database required.
-services.AddWorkflowInMemory();
+// REST-backed (WASM hosts) — talks to GeoAssets.Server, no local database (XD01-129).
+services.AddWorkflowRest(apiBaseUrl);
 services.AddOrderTypeRegistry();           // seeds "inspection", "maintenance", "emergency-repair"
 services.AddWorkflowNotifications();       // no-op publisher by default
 services.AddServiceOrderRules();           // one consistently configured singleton for every caller
@@ -817,12 +817,14 @@ services.AddWorkflowAgents(builder.Configuration);
 // or: services.AddWorkflowAgents(opts => opts.Agents["agent-hydro-01"] = new() { RoleNames = ["AutomationAgent"] });
 ```
 
-Both `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register
-`IServiceOrderRepository` as a `ValidatingServiceOrderRepository` wrapping the
-concrete implementation, and separately register `IServiceOrderReader` /
-`IServiceOrderWriter` pointing at that same instance. `AddWorkflowPersistence()`
-additionally wraps that in an outermost `ObservableServiceOrderRepository` — see
-§7 — which requires `AddGeoAssetsObservability` to have been called first.
+`AddWorkflowPersistence()` registers `IServiceOrderRepository` as a
+`ValidatingServiceOrderRepository` wrapping the concrete implementation, and
+separately registers `IServiceOrderReader` / `IServiceOrderWriter` pointing at
+that same instance; it additionally wraps that in an outermost
+`ObservableServiceOrderRepository` — see §7 — which requires
+`AddGeoAssetsObservability` to have been called first. `AddWorkflowRest()` does
+neither wrapper (no validation decorator, no observability decorator) — a known
+gap, not by design.
 
 `AddServiceOrderRules()` exists specifically because, before it, every caller
 hand-constructed its own `ServiceOrderRules` — a real risk of a human-facing host
@@ -954,18 +956,18 @@ code/API, same as before).
 
 ## 15. Host UI (Blazor Web)
 
-`apps/GeoAssets.Web` wires the module with either the in-memory implementation
-(default) or a REST-backed one talking to `GeoAssets.Server` (XD01-8, §15.1),
-switched by a `ServiceOrders:Backend` config flag — no runtime picker like assets'
-provider pool, deliberately, to keep this pass's footprint small:
+`apps/GeoAssets.Web` wires the module with the REST-backed implementation talking
+to `GeoAssets.Server` (XD01-8, §15.1) — the only supported backend. The earlier
+in-memory implementation and its `ServiceOrders:Backend` config flag were removed
+(XD01-129): no runtime picker like assets' provider pool, deliberately, to keep
+this footprint small.
 
 ```csharp
 builder.Services.AddOrderTypeRegistry();
 
-if (config["ServiceOrders:Backend"] == "Rest")
-    builder.Services.AddWorkflowRest(config["ServiceOrders:ApiBaseUrl"]!);
-else
-    builder.Services.AddWorkflowInMemory();  // default — zero-config, no Postgres required
+var serviceOrdersApiBaseUrl = config["ServiceOrders:ApiBaseUrl"]
+    ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
+builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
@@ -1027,12 +1029,14 @@ concurrency check would silently stop detecting concurrent writers. Mirrors the
 same problem `GeoAssets.Workflow.EFCore.Tests`' `SqliteTestDbContext` already
 solves for SQLite with its own trigger.
 
-`GeoAssets.Web` opts into this backend via `ServiceOrders:Backend = "Rest"` +
-`ServiceOrders:ApiBaseUrl` config (`appsettings.Development.json` has a commented
-example) — `RestServiceOrderRepository`/`RestOrderTypeRepository`
+`GeoAssets.Web` always uses this backend, configured via
+`ServiceOrders:ApiBaseUrl` (XD01-129 — this used to be an opt-in behind
+`ServiceOrders:Backend = "Rest"`, with in-memory as the zero-config default;
+that flag and its in-memory alternative are gone) —
+`RestServiceOrderRepository`/`RestOrderTypeRepository`
 (`workflow/GeoAssets.Workflow.Rest`) implement the same
-`IServiceOrderRepository`/`IOrderTypeRepository` interfaces the in-memory/EF
-backends do. Unlike `RestAssetProvider` (cache-first, fire-and-forget writes),
+`IServiceOrderRepository`/`IOrderTypeRepository` interfaces the EF backend
+does. Unlike `RestAssetProvider` (cache-first, fire-and-forget writes),
 this client is direct and non-caching — every call awaits its own HTTP round trip
 and propagates `ServiceOrderConcurrencyException`/`KeyNotFoundException`/
 `InvalidServiceOrderTransitionException`/`ServiceOrderAttributeValidationException`
@@ -1079,10 +1083,11 @@ the rule that declined. Order Type CRUD is unchanged: that's configuration data,
 not a per-order action this engine governs.
 
 `tests/GeoAssets.Server.Tests/ServiceOrderRulesEndpointTests.cs` exercises the
-real `MapServiceOrdersApi()` endpoints end-to-end against `AddWorkflowInMemory()`,
-including non-leakage checks (e.g. being an order's creator doesn't also grant
-`Dispatch`; being its creator doesn't grant `Complete` on an order assigned to
-someone else).
+real `MapServiceOrdersApi()` endpoints end-to-end against a `FakeServiceOrderRepository`
+(the old `AddWorkflowInMemory()` registration this test host used was removed,
+XD01-129), including non-leakage checks (e.g. being an order's creator doesn't
+also grant `Dispatch`; being its creator doesn't grant `Complete` on an order
+assigned to someone else).
 
 ---
 

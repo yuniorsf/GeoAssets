@@ -73,7 +73,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetByIdAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -83,7 +83,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetAllAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -93,7 +93,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetRootsAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -103,7 +103,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetChildrenAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("parent"));
         await inner.AddAsync(new ServiceOrder { Id = "child", ParentOrderId = "parent" });
         var sut = new ValidatingServiceOrderRepository(inner);
@@ -114,7 +114,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetParentAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("parent"));
         await inner.AddAsync(new ServiceOrder { Id = "child", ParentOrderId = "parent" });
         var sut = new ValidatingServiceOrderRepository(inner);
@@ -125,7 +125,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetByStatusAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a", ServiceOrderStatus.Pending));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -135,7 +135,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetByAssigneeAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(new ServiceOrder { Id = "a", AssignedTo = "tech-1" });
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -145,7 +145,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetByCreatorAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(new ServiceOrder { Id = "a", CreatedBy = "alice" });
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -155,7 +155,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetByOrderTypeAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(new ServiceOrder { Id = "a", OrderTypeId = "inspection" });
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -165,7 +165,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetByDateRangeAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(new ServiceOrder { Id = "a", CreatedAt = new DateTime(2026, 1, 15) });
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -175,7 +175,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task GetDispatchedToAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a").DispatchTo("user-1", DispatchTargetType.User, "supervisor-1", TimeProvider.System));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -185,7 +185,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task AddAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         var sut = new ValidatingServiceOrderRepository(inner);
 
         await sut.AddAsync(Order("a"));
@@ -196,7 +196,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task AppendDispatchAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -208,7 +208,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task DeleteAsync_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
@@ -222,7 +222,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task OrderAdded_ForwardsAndCanBeUnsubscribed()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         var sut = new ValidatingServiceOrderRepository(inner);
         var count = 0;
         EventHandler<IServiceOrder> handler = (_, _) => count++;
@@ -239,7 +239,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task OrderUpdated_ForwardsAndCanBeUnsubscribed()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
         var count = 0;
@@ -257,7 +257,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task OrderStatusChanged_ForwardsAndCanBeUnsubscribed()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a", ServiceOrderStatus.Draft));
         var sut = new ValidatingServiceOrderRepository(inner);
         var count = 0;
@@ -275,7 +275,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task OrderDeleted_ForwardsAndCanBeUnsubscribed()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         await inner.AddAsync(Order("a"));
         await inner.AddAsync(Order("b"));
         var sut = new ValidatingServiceOrderRepository(inner);
@@ -483,7 +483,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task AddAsync_NoRegistry_SkipsAttributeValidation()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         var sut = new ValidatingServiceOrderRepository(inner);
 
         var order = new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" };
@@ -495,7 +495,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task AddAsync_OrderTypeNotRegistered_SkipsAttributeValidation()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
 
         var order = new ServiceOrder { Id = "a", OrderTypeId = "unregistered-type" };
@@ -507,7 +507,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task AddAsync_ValidAttributes_DelegatesToInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
 
         var order = new ServiceOrder
@@ -524,7 +524,7 @@ public class ValidatingServiceOrderRepositoryTests
     [Fact]
     public async Task AddAsync_InvalidAttributes_ThrowsAndDoesNotCallInner()
     {
-        var inner = new InMemoryServiceOrderRepository();
+        var inner = new FakeServiceOrderRepository();
         var sut = new ValidatingServiceOrderRepository(inner, RegistryWithSchema());
 
         var order = new ServiceOrder { Id = "a", OrderTypeId = "emergency-repair" };
