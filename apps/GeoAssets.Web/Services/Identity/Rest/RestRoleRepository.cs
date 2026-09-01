@@ -94,7 +94,7 @@ public sealed class RestRoleRepository(HttpClient http) : IRoleRepository
     // RoleDetailDto.PermissionIds has no direct AppRole property — surfaced via
     // RolePermissions (PermissionId only, no Permission nav) so callers (e.g. the identity
     // admin UI, XD01-58) can read a role's current permissions the same way regardless of
-    // which IRoleRepository is active; see the matching fix in InMemoryRoleRepository.
+    // which IRoleRepository is active.
     private static AppRole ToRole(RoleDetailDto dto) => new()
     {
         Id              = dto.Id,

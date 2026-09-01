@@ -42,15 +42,17 @@ namespace GeoAssets.Shared.Services;
 /// (writes no longer reference a phantom, never-persisted user id) that the redirect alone
 /// doesn't address.
 ///
-/// Registered as a singleton (only when <c>Identity:Backend</c> is <c>InMemory</c> — Rest has
-/// no local provisioning step) — lives in <c>GeoAssets.Shared</c> rather than
-/// <c>GeoAssets.Web</c> (despite the WASM-only registration) so routed pages in this project
-/// (e.g. the identity admin pages, XD01-58) can call <see cref="EnsureProvisionedAsync"/>
-/// directly; <c>GeoAssets.Shared</c> cannot reference <c>GeoAssets.Web</c>. Initialized in
-/// Program.cs:
-/// <code>
-///   host.Services.GetRequiredService&lt;UserProvisioningService&gt;();
-/// </code>
+/// Not currently registered anywhere — <c>AddGeoIdentityRest</c> (the sole identity
+/// registration since XD01-130 removed the in-memory backend) has no local provisioning step
+/// of its own (Rest provisions server-side instead, XD01-88). Kept, rather than deleted, as
+/// available infrastructure: it's backend-agnostic (depends only on
+/// <see cref="IUserRepository"/>/<see cref="IPendingInvitationRepository"/>), and every call
+/// site (<c>MainLayout.OnInitializedAsync</c>) already resolves it optionally via
+/// <c>GetService&lt;UserProvisioningService&gt;()</c>, falling back to
+/// <see cref="InvitationRedirectGate"/> directly when it's absent — exactly what happens today.
+/// Lives in <c>GeoAssets.Shared</c> rather than <c>GeoAssets.Web</c> so routed pages in this
+/// project (e.g. the identity admin pages, XD01-58) can call <see cref="EnsureProvisionedAsync"/>
+/// directly; <c>GeoAssets.Shared</c> cannot reference <c>GeoAssets.Web</c>.
 /// </summary>
 public sealed class UserProvisioningService : IAsyncDisposable
 {

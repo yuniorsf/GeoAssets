@@ -4,8 +4,6 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Shared.Services;
-using GeoAssets.Web.Services.Identity;
-using GeoAssets.Web.Services.Identity.InMemory;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +18,7 @@ namespace GeoAssets.Web.Tests.Identity;
 /// (XD01-71) the redirect-to-/complete-profile gate for a caller with a pending invitation.
 /// As of XD01-89 the redirect check itself is delegated to <c>InvitationRedirectGate</c>
 /// (see <c>InvitationRedirectGateTests</c>), so these gate tests now prove the delegation
-/// preserves InMemory behavior byte-for-byte, not the check logic itself.
+/// preserves the original behavior byte-for-byte, not the check logic itself.
 ///
 /// Exercises the public <c>EnsureProvisionedAsync</c> path directly rather than the reactive
 /// <c>AuthenticationStateChanged</c> subscription — that handler is <c>async void</c>, which
@@ -53,16 +51,76 @@ public class UserProvisioningServiceTests
         protected override void NavigateToCore(string uri, NavigationOptions options) => NavigatedTo.Add(uri);
     }
 
-    private static (UserProvisioningService Sut, WasmIdentityStore Store, TestNavigationManager Navigation) BuildSut(
+    /// <summary>
+    /// Minimal state holder replacing <c>WasmIdentityStore</c> (removed in XD01-130) — just the
+    /// two collections these tests actually assert against.
+    /// </summary>
+    private sealed class FakeIdentityStore
+    {
+        public List<AppUser> Users { get; } = [];
+        public List<UserRole> UserRoles { get; } = [];
+        public List<PendingInvitation> PendingInvitations { get; } = [];
+    }
+
+    /// <summary>
+    /// Replaces <c>InMemoryUserRepository</c> (removed in XD01-130) — only implements what
+    /// <see cref="UserProvisioningService.ProvisionAsync"/> actually calls
+    /// (<c>GetByExternalObjectIdAsync</c>, <c>AddAsync</c>, <c>SaveChangesAsync</c>); every
+    /// other member throws, matching this repo's <c>RestXxxRepository</c> convention for
+    /// members a given implementation doesn't need to support.
+    /// </summary>
+    private sealed class FakeUserRepository(FakeIdentityStore store) : IUserRepository
+    {
+        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) =>
+            Task.FromResult(store.Users.FirstOrDefault(u => u.ExternalObjectId == oid));
+
+        public Task AddAsync(AppUser user, CancellationToken ct = default)
+        {
+            store.Users.Add(user);
+            return Task.CompletedTask;
+        }
+
+        public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppUser>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppRole>> GetRolesAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AppPermission>> GetEffectivePermissionsAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(AppUser user, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Replaces <c>InMemoryPendingInvitationRepository</c> (removed in XD01-130) — only
+    /// implements what <see cref="InvitationRedirectGate.RedirectIfPendingAsync"/> actually
+    /// calls (<c>GetByExternalObjectIdAsync</c>).
+    /// </summary>
+    private sealed class FakePendingInvitationRepository(FakeIdentityStore store) : IPendingInvitationRepository
+    {
+        public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) =>
+            Task.FromResult(store.PendingInvitations.FirstOrDefault(i => i.ExternalObjectId == externalObjectId));
+
+        public Task<PendingInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AddAsync(PendingInvitation invitation, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(PendingInvitation invitation, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private static (UserProvisioningService Sut, FakeIdentityStore Store, TestNavigationManager Navigation) BuildSut(
         CurrentUser? currentUser, bool registerInvitationRepo = true, string initialUri = "https://localhost/")
     {
-        var store      = new WasmIdentityStore();
+        var store      = new FakeIdentityStore();
         var navigation = new TestNavigationManager(initialUri);
         var services   = new ServiceCollection();
         services.AddSingleton<ICurrentUserAccessor>(new FakeCurrentUserAccessor(currentUser));
-        services.AddSingleton<IUserRepository>(new InMemoryUserRepository(store, TimeProvider.System));
+        services.AddSingleton<IUserRepository>(new FakeUserRepository(store));
         if (registerInvitationRepo)
-            services.AddSingleton<IPendingInvitationRepository>(new InMemoryPendingInvitationRepository(store));
+            services.AddSingleton<IPendingInvitationRepository>(new FakePendingInvitationRepository(store));
         // Mirrors production DI (Program.cs registers NavigationManager via the WASM host and
         // InvitationRedirectGate unconditionally, XD01-89) — ProvisionAsync now resolves the
         // gate from the same per-call scope as IUserRepository/ICurrentUserAccessor.

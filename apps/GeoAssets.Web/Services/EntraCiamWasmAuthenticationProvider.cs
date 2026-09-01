@@ -17,12 +17,10 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
 {
     public void AddAuthentication(IServiceCollection services, IConfiguration configuration)
     {
-        // Only meaningful under Identity:Backend=Rest — InMemory never calls GeoAssets.Server,
-        // and GeoAssetsServer:ApiScope is a public-repo placeholder ("api://YOUR_SERVER_API_
-        // CLIENT_ID/access_as_user") until someone configures a real CIAM app for it, which
-        // would break the interactive login itself if requested unconditionally.
-        var identityUseRest = string.Equals(
-            configuration["Identity:Backend"], "Rest", StringComparison.OrdinalIgnoreCase);
+        // GeoAssetsServer:ApiScope is a public-repo placeholder ("api://YOUR_SERVER_API_
+        // CLIENT_ID/access_as_user") until someone configures a real CIAM app for it — guard on
+        // it actually being set rather than requesting a placeholder scope unconditionally,
+        // which would break the interactive login itself.
         var serverApiScope = configuration["GeoAssetsServer:ApiScope"];
 
         services.AddMsalAuthentication(options =>
@@ -38,7 +36,7 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
             // Program.cs's "GeoAssetsServer" HttpClient registration) 400s against the CIAM
             // token endpoint on every call instead of ever succeeding — CIAM doesn't silently
             // expand a refresh token's scope via the refresh_token grant.
-            if (identityUseRest && !string.IsNullOrWhiteSpace(serverApiScope))
+            if (!string.IsNullOrWhiteSpace(serverApiScope))
                 options.ProviderOptions.DefaultAccessTokenScopes.Add(serverApiScope);
         })
         // See RolesClaimsPrincipalFactory's doc comment — the default factory doesn't split

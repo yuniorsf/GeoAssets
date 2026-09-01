@@ -112,22 +112,13 @@ builder.Services.AddHttpClient("GeoAssetsServer")
         return handler;
     });
 
-// ── GeoAssets Identity — in-memory dev/demo seed (default) or HTTP-backed against
-// GeoAssets.Server (XD01-18), switched by "Identity:Backend" config ("InMemory" | "Rest";
-// env var override: Identity__Backend). In-memory stays the default so the app still runs
-// with zero config against a Postgres server, mirroring "ServiceOrders:Backend" below.
-var identityBackend = builder.Configuration["Identity:Backend"] ?? "InMemory";
-var identityUseRest = string.Equals(identityBackend, "Rest", StringComparison.OrdinalIgnoreCase);
+// ── GeoAssets Identity — HTTP-backed against GeoAssets.Server (XD01-18). InMemory removed
+// as an option (XD01-130) — Rest is the only supported backend.
+builder.Services.AddGeoIdentityRest();
 
-if (identityUseRest)
-    builder.Services.AddGeoIdentityRest();
-else
-    builder.Services.AddGeoIdentityWasmDev();
-
-// Pending-invitation redirect check (XD01-89) — backend-agnostic, so registered here rather
-// than inside either AddGeoIdentityRest or AddGeoIdentityWasmDev: its dependencies
-// (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager) are already
-// registered by both branches above.
+// Pending-invitation redirect check (XD01-89) — registered here (not inside AddGeoIdentityRest)
+// since its dependencies (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager)
+// are already registered above.
 builder.Services.AddScoped<InvitationRedirectGate>();
 
 builder.Services.AddGeoAssetsRest();
@@ -195,12 +186,6 @@ var host = builder.Build();
 
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("GeoAssets starting — environment: {Environment}", builder.HostEnvironment.Environment);
-
-if (!identityUseRest)
-{
-    host.Services.GetRequiredService<IdentitySeeder>().Seed();
-    host.Services.GetRequiredService<UserProvisioningService>();
-}
 
 var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
 var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
