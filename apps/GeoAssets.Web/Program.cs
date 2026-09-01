@@ -99,6 +99,15 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 // Collection" (InMemory) plugin option itself is gone (XD01-131).
 builder.Services.AddSingleton<IProviderPool, ProviderPool>();
 
+// GeoAssets.Server base URL — required by every Rest-backed domain (Assets' RestProviderPlugin,
+// ServiceOrders' RestServiceOrderRepository, Identity's Rest repositories) and by the
+// AuthorizationMessageHandler below. No InMemory/dev fallback remains after XD01-129/XD01-130/
+// XD01-131 removed every non-Rest option, so a missing value must fail fast here — rather than
+// silently authorizing requests against an empty-string URL, which used to leave every call to
+// GeoAssets.Server unauthenticated instead of visibly broken (XD01-132).
+var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
+    ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
+
 // AuthorizationMessageHandler (MSAL) attaches the CIAM access token to the "GeoAssetsServer"
 // named HttpClient that RestProviderFactory requests (XD01-17) — scoped to the configured,
 // trusted GeoAssets.Server origin only, never to arbitrary REST URLs a user might type into
@@ -108,7 +117,7 @@ builder.Services.AddHttpClient("GeoAssetsServer")
     {
         var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
         handler.ConfigureHandler(
-            authorizedUrls: [builder.Configuration["GeoAssetsServer:BaseUrl"] ?? ""],
+            authorizedUrls: [geoAssetsServerBaseUrl],
             scopes:         [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
         return handler;
     });
