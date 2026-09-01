@@ -1,7 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Provider.InMemory;
+using GeoAssets.Shared.Tests;
 using GeoAssets.Shared.Services;
 using Xunit;
 
@@ -23,7 +23,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_UnknownAssetType_OmitsFeature()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var feature = Feature("a", Guid.NewGuid());
 
         var map = MapInteropService.BuildStyleMap(repo, [feature]);
@@ -34,7 +34,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_KnownAssetTypeButNothingResolves_OmitsFeature()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var assetType = new AssetType { Name = "Plain" }; // no DefaultLayerId, no rules
         repo.AddAssetType(assetType);
         var feature = Feature("a", assetType.Id);
@@ -49,7 +49,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_DefaultLayerResolves_MapsFeatureToLayerStyle()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var layer = new Layer { Name = "Default", GeometryType = GeometryType.Point, Color = "#ff0000", Radius = 6 };
         repo.AddLayer(layer);
         var assetType = new AssetType { Name = "Pole", DefaultLayerId = layer.Id };
@@ -69,7 +69,7 @@ public class MapInteropServiceTests
         // Reproduces the ticket's acceptance criterion directly: two features of the same
         // AssetType but with CustomAttributes matching different LayerRules resolve to
         // visibly different styles.
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var steelLayer = new Layer { Name = "Steel", Color = "#111111", Weight = 5 };
         var woodLayer = new Layer { Name = "Wood", Color = "#8b5a2b", Weight = 2 };
         repo.AddLayer(steelLayer);
@@ -106,7 +106,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_PerFeatureLayerIdOverride_TakesPriorityOverDefault()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var defaultLayer = new Layer { Name = "Default", Color = "#3388ff" };
         var overrideLayer = new Layer { Name = "Override", Color = "#00ff00" };
         repo.AddLayer(defaultLayer);
@@ -125,7 +125,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_LayerWithNoDashArrayOrIcon_MapsToNull()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var layer = new Layer { Name = "Plain" }; // DashArray/IconUrl left at their empty defaults
         repo.AddLayer(layer);
         var assetType = new AssetType { Name = "Pole", DefaultLayerId = layer.Id };
@@ -141,7 +141,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_LayerWithDashArrayAndIcon_MapsThemThrough()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var layer = new Layer { Name = "Line", DashArray = "5, 5", IconUrl = "/icons/pole.png" };
         repo.AddLayer(layer);
         var assetType = new AssetType { Name = "Wire", DefaultLayerId = layer.Id };
@@ -159,7 +159,7 @@ public class MapInteropServiceTests
     [Fact]
     public void BuildStyleMap_MultipleFeatures_OnlyResolvedOnesAppearInMap()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         var layer = new Layer { Name = "Default", Color = "#123456" };
         repo.AddLayer(layer);
         var withDefault = new AssetType { Name = "HasDefault", DefaultLayerId = layer.Id };

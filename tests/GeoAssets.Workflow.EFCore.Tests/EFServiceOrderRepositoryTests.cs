@@ -1,7 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Selection;
@@ -137,7 +136,7 @@ public class EFServiceOrderRepositoryTests
     public async Task GetByIdAsync_WithAssetProvider_HydratesFeatures()
     {
         using var fixture = new SqliteFixture();
-        var assets = new InMemoryAssetProvider();
+        var assets = new TestAssetProvider();
         assets.Add(new GeoFeature { Id = "f1", Geometry = new GeoPoint(0, 0) });
         var repo = new EFServiceOrderRepository(fixture.Context, assets);
 

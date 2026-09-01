@@ -1,5 +1,5 @@
+using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.PostgreSQL;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace GeoAssets.Providers.Utils;
 
 /// <summary>
-/// Imports a GeoJSON file into an <see cref="InMemoryAssetProvider"/> and then
+/// Imports a GeoJSON file into an in-memory staging buffer and then
 /// exports all features and asset types to a PostgreSQL database on Azure.
 ///
 /// Typical usage:
@@ -48,7 +48,7 @@ public sealed class GeoJsonToPostgresImporter
             ?? throw new InvalidOperationException($"Failed to parse GeoJSON file: {geoJsonPath}");
 
         // Stage features in-memory
-        var staging = new InMemoryAssetProvider();
+        var staging = new StagingBuffer();
         staging.LoadAll(collection.Features);
         foreach (var assetType in collection.Metadata.AssetTypes)
             staging.AddAssetType(assetType);
@@ -70,5 +70,33 @@ public sealed class GeoJsonToPostgresImporter
             if (postgres is IAsyncDisposable asyncDisposable)
                 await asyncDisposable.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// Minimal in-memory staging buffer sized to exactly what <see cref="ImportAsync"/> needs
+    /// (<see cref="LoadAll"/>, <see cref="AddAssetType"/>, <see cref="GetAssetTypes"/>,
+    /// <see cref="GetAll"/>) — replaces the shared, general-purpose
+    /// <c>InMemoryAssetProvider</c> (removed in XD01-131).
+    /// </summary>
+    private sealed class StagingBuffer
+    {
+        private readonly Dictionary<string, GeoFeature> _features = [];
+        private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
+
+        public void LoadAll(IEnumerable<GeoFeature> features)
+        {
+            _features.Clear();
+            foreach (var f in features) _features[f.Id] = f;
+        }
+
+        public void AddAssetType(AssetType assetType)
+        {
+            if (_assetTypes.All(t => t.Id != assetType.Id))
+                _assetTypes.Add(assetType);
+        }
+
+        public IReadOnlyList<AssetType> GetAssetTypes() => [.. _assetTypes];
+
+        public IReadOnlyList<GeoFeature> GetAll() => [.. _features.Values];
     }
 }

@@ -17,7 +17,6 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
 
 namespace GeoAssets.Examples.Topology;
 
@@ -45,7 +44,7 @@ public static class ElectricCircuit
 
         // ── 3. Load into repository ──────────────────────────────────────────────
 
-        var repo = new InMemoryAssetProvider();
+        var repo = new DemoAssetStore();
         foreach (var f in new[] { generator, transformer, cableA, junction, loadFactory, loadHospital })
             repo.Add(f);
 
@@ -107,4 +106,24 @@ public static class ElectricCircuit
             Metadata = new() { ["voltage"] = voltage, ["current"] = current }
         });
     }
+}
+
+/// <summary>
+/// Demo-only store — the old InMemoryAssetProvider was removed from
+/// GeoAssets.Provider.InMemory (XD01-131); this implements just the topology queries this
+/// example actually exercises, delegating to the real TopoGraph helper (unaffected by the
+/// removal), the same way the deleted class did.
+/// </summary>
+file sealed class DemoAssetStore
+{
+    private readonly Dictionary<string, GeoFeature> _features = [];
+
+    public void Add(GeoFeature feature) => _features[feature.Id] = feature;
+
+    public bool HasCycles() => TopoGraph.HasCycles(_features.Values);
+    public IReadOnlyList<GeoFeature> TopologicalSort() => TopoGraph.TopologicalSort(_features.Values);
+    public IReadOnlyList<GeoFeature> GetDescendants(string featureId) => TopoGraph.GetDescendants(featureId, _features.Values);
+    public IReadOnlyList<GeoFeature> GetNeighbors(string featureId) => TopoGraph.GetNeighbors(featureId, _features.Values);
+    public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) => TopoGraph.FindShortestPath(fromId, toId, _features.Values);
+    public IReadOnlyList<GeoFeature> GetAncestors(string featureId) => TopoGraph.GetAncestors(featureId, _features.Values);
 }

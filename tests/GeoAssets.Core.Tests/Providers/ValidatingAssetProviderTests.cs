@@ -5,7 +5,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
+using GeoAssets.Core.Tests;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Providers;
@@ -37,7 +37,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetById_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
 
@@ -47,7 +47,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetAll_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
 
@@ -57,7 +57,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetByAssetType_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
 
@@ -67,7 +67,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Search_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var feature = Feature("a", AssetType.Point.Id.ToString());
         feature.Properties.Name = "Downtown Hydrant";
         inner.Add(feature);
@@ -79,7 +79,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public async Task GetPageAsync_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
 
@@ -92,7 +92,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetWithin_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var feature = new GeoFeature { Id = "a", Geometry = new GeoPoint(1, 1) };
         inner.Add(feature);
         var sut = new ValidatingAssetProvider(inner);
@@ -104,7 +104,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetIntersecting_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var feature = new GeoFeature { Id = "a", Geometry = new GeoPoint(1, 1) };
         inner.Add(feature);
         var sut = new ValidatingAssetProvider(inner);
@@ -116,7 +116,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public async Task GetInBoundsAsync_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Geometry = new GeoPoint(1, 1) });
         var sut = new ValidatingAssetProvider(inner);
 
@@ -126,7 +126,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public async Task GetInBoundsJsonAsync_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Geometry = new GeoPoint(1, 1) });
         var sut = new ValidatingAssetProvider(inner);
 
@@ -139,10 +139,10 @@ public class ValidatingAssetProviderTests
     [Fact]
     public async Task GetInBoundsRawJsonAsync_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
-        // InMemoryAssetProvider doesn't override the raw-JSON default (returns null) —
+        // TestAssetProvider doesn't override the raw-JSON default (returns null) —
         // this still proves the decorator forwards the call instead of short-circuiting.
         (await sut.GetInBoundsRawJsonAsync(0, 0, 2, 2)).Should().BeNull();
     }
@@ -150,7 +150,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetNearby_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Geometry = new GeoPoint(0, 0) });
         var sut = new ValidatingAssetProvider(inner);
 
@@ -160,7 +160,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetNeighbors_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b" }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -171,7 +171,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetDescendants_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b" }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -182,7 +182,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetAncestors_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b" }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -193,7 +193,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void FindPath_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b" }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -204,7 +204,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void FindShortestPath_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b", Weight = 1 }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -215,7 +215,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetConnectedComponents_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b" }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -226,7 +226,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void HasCycles_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "a" }] });
         var sut = new ValidatingAssetProvider(inner);
 
@@ -236,7 +236,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void TopologicalSort_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(new GeoFeature { Id = "a", Topology = [new TopoEdge { TargetId = "b" }] });
         inner.Add(new GeoFeature { Id = "b" });
         var sut = new ValidatingAssetProvider(inner);
@@ -247,7 +247,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetAssetTypes_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         sut.GetAssetTypes().Should().BeEquivalentTo(AssetType.Defaults);
@@ -258,7 +258,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_UnknownAssetType_SkipsValidation()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         sut.Add(Feature("a", Guid.NewGuid().ToString()));
@@ -269,7 +269,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_AssetTypeWithNoSchema_SkipsValidation()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         sut.Add(Feature("a", AssetType.Point.Id.ToString()));
@@ -280,7 +280,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_ValidAttributes_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = SchemaAssetType();
         inner.AddAssetType(assetType);
         var sut = new ValidatingAssetProvider(inner);
@@ -296,7 +296,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_InvalidAttributes_ThrowsAndDoesNotCallInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = SchemaAssetType();
         inner.AddAssetType(assetType);
         var sut = new ValidatingAssetProvider(inner);
@@ -313,7 +313,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Update_ValidAttributes_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = SchemaAssetType();
         inner.AddAssetType(assetType);
         inner.Add(Feature("a", assetType.Id.ToString()));
@@ -330,7 +330,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Update_InvalidAttributes_ThrowsAndDoesNotCallInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = SchemaAssetType();
         inner.AddAssetType(assetType);
         var original = Feature("a", assetType.Id.ToString());
@@ -351,7 +351,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_UnknownAssetType_SkipsGeometryValidation()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
         var feature = Feature("a", Guid.NewGuid().ToString());
         feature.Geometry = new GeoPoint(1, 1);
@@ -364,7 +364,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_UnrestrictedAssetType_AcceptsAnyGeometry()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = new AssetType { Name = "Any shape" }; // AllowedGeometryType null
         inner.AddAssetType(assetType);
         var sut = new ValidatingAssetProvider(inner);
@@ -379,7 +379,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_NoGeometryYet_SkipsGeometryValidation()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
         inner.AddAssetType(assetType);
         var sut = new ValidatingAssetProvider(inner);
@@ -393,7 +393,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_MatchingGeometry_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
         inner.AddAssetType(assetType);
         var sut = new ValidatingAssetProvider(inner);
@@ -408,7 +408,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Add_MismatchedGeometry_ThrowsAndDoesNotCallInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
         inner.AddAssetType(assetType);
         var sut = new ValidatingAssetProvider(inner);
@@ -428,7 +428,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Update_MismatchedGeometry_ThrowsAndDoesNotCallInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetType = new AssetType { Name = "Hydrant", AllowedGeometryType = GeometryType.Point };
         inner.AddAssetType(assetType);
         var original = Feature("a", assetType.Id.ToString());
@@ -450,7 +450,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void AddRange_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         sut.AddRange([Feature("a", AssetType.Point.Id.ToString())]);
@@ -461,7 +461,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Delete_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
 
@@ -473,7 +473,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void Clear_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
 
@@ -485,7 +485,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void LoadAll_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         sut.LoadAll([Feature("a", AssetType.Point.Id.ToString())]);
@@ -496,7 +496,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void AddAssetType_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
         var type = new AssetType { Name = "Custom" };
 
@@ -508,7 +508,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void DeleteAssetType_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var type = new AssetType { Name = "Custom" };
         inner.AddAssetType(type);
         var sut = new ValidatingAssetProvider(inner);
@@ -521,7 +521,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetLayers_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.AddLayer(new Layer { Name = "Custom" });
         var sut = new ValidatingAssetProvider(inner);
 
@@ -531,7 +531,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void AddLayer_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
         var layer = new Layer { Name = "Custom" };
 
@@ -543,7 +543,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void DeleteLayer_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var layer = new Layer { Name = "Custom" };
         inner.AddLayer(layer);
         var sut = new ValidatingAssetProvider(inner);
@@ -556,7 +556,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void GetLayerRules_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var assetTypeId = Guid.NewGuid();
         inner.AddLayerRule(new LayerRule { AssetTypeId = assetTypeId });
         var sut = new ValidatingAssetProvider(inner);
@@ -567,7 +567,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void AddLayerRule_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
         var rule = new LayerRule();
 
@@ -579,7 +579,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void DeleteLayerRule_DelegatesToInner()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var rule = new LayerRule();
         inner.AddLayerRule(rule);
         var sut = new ValidatingAssetProvider(inner);
@@ -594,7 +594,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void FeatureAdded_SubscribeThenUnsubscribe_ForwardsThenStops()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
         var count = 0;
         void Handler(object? _, GeoFeature f) => count++;
@@ -610,7 +610,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void FeatureUpdated_SubscribeThenUnsubscribe_ForwardsThenStops()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
         var count = 0;
@@ -627,7 +627,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void FeatureDeleted_SubscribeThenUnsubscribe_ForwardsThenStops()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         inner.Add(Feature("b", AssetType.Point.Id.ToString()));
         var sut = new ValidatingAssetProvider(inner);
@@ -645,7 +645,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public void CollectionChanged_SubscribeThenUnsubscribe_ForwardsThenStops()
     {
-        var inner = new InMemoryAssetProvider();
+        var inner = new TestAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
         var count = 0;
         void Handler(object? _, EventArgs e) => count++;

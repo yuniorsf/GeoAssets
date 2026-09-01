@@ -4,7 +4,6 @@ using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authentication;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.WFS;
 using GeoAssets.Provider.WMS;
@@ -93,10 +92,12 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
 
-// Asset provider — in-memory cache + REST API client, wrapped by the observable decorator.
+// Asset provider — REST API client, wrapped by the observable decorator.
 // TODO: add a "loading" state to the UI while the provider initializes and remove the "Loading..." placeholder from the map.
 // TODO: load by configuration and support multiple provider types (e.g. in-memory for dev, REST for prod).
-builder.Services.AddGeoAssetsInMemory();
+// Provider pool — still needed by Rest/WFS/WMS/Shapefile plugins even though the "Local
+// Collection" (InMemory) plugin option itself is gone (XD01-131).
+builder.Services.AddSingleton<IProviderPool, ProviderPool>();
 
 // AuthorizationMessageHandler (MSAL) attaches the CIAM access token to the "GeoAssetsServer"
 // named HttpClient that RestProviderFactory requests (XD01-17) — scoped to the configured,

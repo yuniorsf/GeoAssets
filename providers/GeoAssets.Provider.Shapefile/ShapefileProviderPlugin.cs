@@ -1,6 +1,5 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
-using GeoAssets.Provider.InMemory;
 
 namespace GeoAssets.Provider.Shapefile;
 
@@ -42,7 +41,7 @@ public sealed class ShapefileProviderPlugin : IProviderPlugin
 
         var features = ShapefileParser.ParseZip(content);
 
-        var provider = new InMemoryAssetProvider();
+        var provider = new ShapefileFeatureStore();
         provider.AddRange(features);
 
         return Task.FromResult<IAssetProvider>(provider);

@@ -1,14 +1,14 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
+using GeoAssets.Core.Tests;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Services;
 
 public class ProviderPoolTests
 {
-    private static InMemoryAssetProvider Provider() => new();
+    private static TestAssetProvider Provider() => new();
 
     // ── All ───────────────────────────────────────────────────────────────────
 

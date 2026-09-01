@@ -22,10 +22,10 @@
 //   Planta Potabilizadora ──▶ Válvula Principal ──▶ Hidrante Norte
 //                                               └──▶ Hidrante Sur
 // ────────────────────────────────────────────────────────────────────────────
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Selection;
 using GeoAssets.Workflow.Selection.Strategies;
@@ -38,7 +38,7 @@ public static class CustomSelectionStrategy
     {
         // ── 1. Preparar el repositorio con dos capas de activos ──────────────
 
-        var repo = new InMemoryAssetProvider();
+        var repo = new DemoAssetStore();
 
         // Capa eléctrica
         var subestacion   = Node("Subestación",          -66.90, 10.50, "electrica");
@@ -238,6 +238,65 @@ public static class CustomSelectionStrategy
         foreach (var child in await repo.GetChildrenAsync(order.Id))
             await PrintHierarchy(child, repo, indent + 1);
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Demo-only asset store — the old InMemoryAssetProvider was removed from
+//  GeoAssets.Provider.InMemory (XD01-131); this implements just the five
+//  members this example actually exercises (Add, GetAll, GetById,
+//  GetAncestors, GetDescendants) — every other IAssetProvider member throws,
+//  matching this repo's RestXxxRepository convention for an implementation
+//  that doesn't need to support a given member.
+// ═══════════════════════════════════════════════════════════════════════════
+
+file sealed class DemoAssetStore : IAssetProvider
+{
+    private readonly Dictionary<string, GeoFeature> _features = [];
+
+    public void Add(GeoFeature feature) => _features[feature.Id] = feature;
+
+    public IReadOnlyList<GeoFeature> GetAll() => [.. _features.Values];
+
+    public GeoFeature? GetById(string id) => _features.GetValueOrDefault(id);
+
+    public IReadOnlyList<GeoFeature> GetAncestors(string featureId) =>
+        TopoGraph.GetAncestors(featureId, _features.Values);
+
+    public IReadOnlyList<GeoFeature> GetDescendants(string featureId) =>
+        TopoGraph.GetDescendants(featureId, _features.Values);
+
+    public event EventHandler<GeoFeature>? FeatureAdded;
+    public event EventHandler<GeoFeature>? FeatureUpdated;
+    public event EventHandler<string>? FeatureDeleted;
+    public event EventHandler? CollectionChanged;
+
+    public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> Search(string query) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) => throw new NotSupportedException();
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat) => throw new NotSupportedException();
+    public Task<IReadOnlyList<System.Text.Json.JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> GetNeighbors(string featureId) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) => throw new NotSupportedException();
+    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() => throw new NotSupportedException();
+    public bool HasCycles() => throw new NotSupportedException();
+    public IReadOnlyList<GeoFeature> TopologicalSort() => throw new NotSupportedException();
+    public void Update(GeoFeature feature) => throw new NotSupportedException();
+    public void AddRange(IEnumerable<GeoFeature> features) => throw new NotSupportedException();
+    public void Delete(string id) => throw new NotSupportedException();
+    public void Clear() => throw new NotSupportedException();
+    public void LoadAll(IEnumerable<GeoFeature> features) => throw new NotSupportedException();
+    public IReadOnlyList<AssetType> GetAssetTypes() => throw new NotSupportedException();
+    public void AddAssetType(AssetType assetType) => throw new NotSupportedException();
+    public void DeleteAssetType(Guid id) => throw new NotSupportedException();
+    public IReadOnlyList<Layer> GetLayers() => throw new NotSupportedException();
+    public void AddLayer(Layer layer) => throw new NotSupportedException();
+    public void DeleteLayer(Guid id) => throw new NotSupportedException();
+    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => throw new NotSupportedException();
+    public void AddLayerRule(LayerRule layerRule) => throw new NotSupportedException();
+    public void DeleteLayerRule(Guid id) => throw new NotSupportedException();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

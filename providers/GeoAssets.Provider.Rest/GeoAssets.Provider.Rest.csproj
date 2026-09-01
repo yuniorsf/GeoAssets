@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
-    <ProjectReference Include="..\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
   </ItemGroup>
 

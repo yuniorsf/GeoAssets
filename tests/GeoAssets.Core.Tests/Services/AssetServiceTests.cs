@@ -2,7 +2,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
+using GeoAssets.Core.Tests;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -65,7 +65,7 @@ public class AssetServiceTests
     public async Task CollectionChanged_BeforeDebounceElapses_DoesNotSave()
     {
         var timeProvider = new FakeTimeProvider();
-        var repository = new InMemoryAssetProvider(timeProvider);
+        var repository = new TestAssetProvider(timeProvider);
         var storage = new RecordingStorageService();
         await using var sut = new AssetService(repository, storage, timeProvider);
 
@@ -81,7 +81,7 @@ public class AssetServiceTests
     public async Task CollectionChanged_AtDebounceElapsed_SavesOnce()
     {
         var timeProvider = new FakeTimeProvider();
-        var repository = new InMemoryAssetProvider(timeProvider);
+        var repository = new TestAssetProvider(timeProvider);
         var storage = new RecordingStorageService();
         await using var sut = new AssetService(repository, storage, timeProvider);
 
@@ -99,7 +99,7 @@ public class AssetServiceTests
     public async Task RapidMutations_ResetDebounce_OnlySavesOnceAfterLastMutation()
     {
         var timeProvider = new FakeTimeProvider();
-        var repository = new InMemoryAssetProvider(timeProvider);
+        var repository = new TestAssetProvider(timeProvider);
         var storage = new RecordingStorageService();
         await using var sut = new AssetService(repository, storage, timeProvider);
 

@@ -7,7 +7,6 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -88,7 +87,7 @@ public class EndpointAuthorizationTests
                     services.AddGeoAuthorizationPolicyBridge();
                     services.AddSingleton<IGeoAuthorizationService>(new FakeAuthorizationService([.. grantedPermissions]));
                     services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
-                    services.AddSingleton<IAssetProvider>(new InMemoryAssetProvider());
+                    services.AddSingleton<IAssetProvider>(new TestAssetProvider());
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
                     services.AddSingleton<WmsPostGisRenderer>();
                 });
