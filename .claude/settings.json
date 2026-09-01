@@ -32,7 +32,8 @@
       "Bash(psql -h localhost -p 5432 -U postgres -d geoassets -c ' *)",
       "Bash(psql -h localhost -p 5432 -U postgres -d geoassets -c 'SELECT \"Code\" FROM \"Permissions\" ORDER BY \"Code\";')",
       "Bash(set -e)",
-      "Bash(rm -rf __TRACKED_VAR__/ui-ux-pro-max-skill)"
+      "Bash(rm -rf __TRACKED_VAR__/ui-ux-pro-max-skill)",
+      "Bash(awk '/^\\\\?\\\\?/{print $2}')"
     ]
   }
 }
