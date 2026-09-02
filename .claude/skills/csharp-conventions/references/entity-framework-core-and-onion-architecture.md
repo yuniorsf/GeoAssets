@@ -91,6 +91,25 @@ manually — the database only needs to return the columns actually selected,
 and it also respects Onion architecture's layer isolation (outer layers
 shouldn't necessarily see raw domain entities).
 
+## Collection-expression syntax breaks inside an expression tree (CS9175)
+
+Collection-expression syntax (`[.. someSequence]`) is LINQ-to-Objects-only —
+the compiler rejects it (`CS9175: An expression tree may not contain a
+collection expression`) inside a `.Select(...)` lambda still running against
+an `IQueryable` (i.e. before materialization), because that lambda gets
+compiled to an expression tree for translation to SQL rather than executed
+directly. This bites specifically when a projection maps a row's *nested*
+navigation collection (e.g. a child `Include`d collection) using `[.. ]`
+syntax — a flat/scalar projection never triggers it.
+
+Fix: materialize with `.ToList()`/`.ToListAsync()` *before* the `.Select`
+that builds the collection expression, so that `.Select` runs as
+LINQ-to-Objects instead of being translated. This does mean the outer query
+can no longer stay `IQueryable` past that point — acceptable for a
+`.Include(...).ToList().Select(...)` chain that was already fetching full
+rows, but worth noticing if the projection was meant to stay
+server-translatable (e.g. for further filtering/paging downstream).
+
 ## The core Onion-architecture tension: EF entities want to be anemic, aggregates don't
 
 EF Core entities need publicly read/write properties for its own
@@ -209,3 +228,9 @@ instead of living in a separate table.
   actually re-syncs `GeoEntityRow` from a mutated `GeoFeature` correctly,
   since that's exactly the gap this pattern is prone to if the two objects
   drift independently.
+- `PostgresAssetProvider.GetLayerRules` is the concrete CS9175 case above:
+  it projects each `LayerRuleRow`'s `Include`d `Conditions` navigation into
+  a `LayerRuleCondition` collection via `[.. r.Conditions.Select(...)]`,
+  which only compiles because `.ToList()` runs right after
+  `.Include(r => r.Conditions)` and before the `.Select` that builds the
+  collection expression (XD01-122).
