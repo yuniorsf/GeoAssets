@@ -199,7 +199,22 @@ logger.LogInformation("GeoAssets starting — environment: {Environment}", build
 
 var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
 var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
-await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
+try
+{
+    await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
+}
+catch (AccessTokenNotAvailableException)
+{
+    // Runs before host.RunAsync() starts the render tree, so a fresh session with no cached
+    // MSAL token can't complete the interactive login redirect that AuthorizationMessageHandler
+    // would normally trigger from inside a rendered component — it just throws here instead
+    // (XD01-134). AddOrderTypeRegistry() already seeded the built-in defaults synchronously, so
+    // booting with those and skipping the server-persisted overlay is safe: the post-login page
+    // reload re-runs this same call with a real token and picks up the full list then.
+    logger.LogWarning(
+        "Could not load server-persisted order types — user not yet authenticated; " +
+        "continuing with built-in defaults only.");
+}
 
 // Application Insights (XD01-53) — initialized from configuration instead of the connection
 // string being hardcoded in wwwroot/index.html, which (unlike appsettings.json) is served
