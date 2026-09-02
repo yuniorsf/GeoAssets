@@ -208,7 +208,8 @@ public class IdentityRestApiExtensionsTests
             return Task.CompletedTask;
         }
 
-        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) =>
+            Task.FromResult(users.Values.FirstOrDefault(u => u.ExternalObjectId == oid));
         public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
@@ -716,6 +717,54 @@ public class IdentityRestApiExtensionsTests
         using var client = AuthenticatedClient(server);
 
         var response = await client.GetAsync($"/api/identity/users/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Users_GetByExternalId_Authorized_ReturnsDetailWithRoleIds()
+    {
+        var user = NewUser(externalObjectId: "oid-abc-123");
+        var role = NewRole("Supervisor", isBuiltIn: true);
+        var userRepo = new FakeAdminUserRepository(
+            new Dictionary<Guid, AppUser> { [user.Id] = user },
+            new Dictionary<Guid, List<AppRole>> { [user.Id] = [role] });
+        using var server = await BuildAdminServerAsync(
+            userRepo, new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
+            new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("users:read"));
+        using var client = AuthenticatedClient(server);
+
+        var dto = await client.GetFromJsonAsync<UserDetailDto>("/api/identity/users/by-external-id/oid-abc-123");
+
+        dto.Should().NotBeNull();
+        dto!.Id.Should().Be(user.Id);
+        dto.RoleIds.Should().ContainSingle().Which.Should().Be(role.Id);
+    }
+
+    [Fact]
+    public async Task Users_GetByExternalId_NotFound_Returns404()
+    {
+        using var server = await BuildAdminServerAsync(
+            new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
+            new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
+            new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("users:read"));
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync("/api/identity/users/by-external-id/no-such-oid");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Users_GetByExternalId_Forbidden_Returns403()
+    {
+        using var server = await BuildAdminServerAsync(
+            new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
+            new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
+            new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.GetAsync("/api/identity/users/by-external-id/oid-abc-123");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }

@@ -91,6 +91,25 @@ public static class IdentityRestApiExtensions
             return Results.Json(dto, _opts);
         }).RequireAuthorization("users:read");
 
+        routes.MapGet($"{prefix}/users/by-external-id/{{oid}}", async (string oid, IUserRepository userRepo) =>
+        {
+            var user = await userRepo.GetByExternalObjectIdAsync(oid);
+            if (user is null) return Results.NotFound();
+
+            var roles = await userRepo.GetRolesAsync(user.Id);
+            var dto = new UserDetailDto(
+                Id:             user.Id,
+                Email:          user.Email,
+                DisplayName:    user.DisplayName,
+                IsActive:       user.IsActive,
+                OrganizationId: user.OrganizationId,
+                CreatedAt:      user.CreatedAt,
+                LastLoginAt:    user.LastLoginAt,
+                RoleIds:        roles.Select(r => r.Id).ToList());
+
+            return Results.Json(dto, _opts);
+        }).RequireAuthorization("users:read");
+
         routes.MapPut($"{prefix}/users/{{id}}", async (Guid id, UserUpdateDto dto, IUserRepository userRepo) =>
         {
             var user = await userRepo.GetByIdAsync(id);
