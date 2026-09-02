@@ -996,9 +996,7 @@ Cancel, Annotate) — the UI never offers an action the current user can't perfo
 | `ServiceOrderDetail.razor` | Read-only fields, rule-gated action buttons, dispatch/action-log timeline |
 | `ServiceOrderDispatchDialog.razor` | Target type/id/note modal for `AppendDispatchAsync` |
 
-**In-memory backend limitation:** orders are lost on page refresh/app restart —
-session-scoped only. See §15.1 for the durable alternative. `apps/GeoAssets.MAUI`
-has no Service Order UI at all yet (neither backend is wired there) — a separate,
+`apps/GeoAssets.MAUI` has no Service Order UI at all yet — a separate,
 unscheduled follow-up.
 
 ### 15.1 Postgres-backed persistence via GeoAssets.Server (XD01-8)
