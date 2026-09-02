@@ -132,6 +132,10 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     /// and never materializes the full <c>geo_entity</c> table, unlike every other read on this
     /// class. Uses a dedicated short-lived <see cref="GeoAssetsDbContext"/>, mirroring
     /// <see cref="GetInBoundsAsync"/>, so concurrent page requests don't share a context.
+    /// <see cref="AssetQuery.SearchText"/> matches <c>Name</c>, <c>Description</c>, and
+    /// <see cref="GeoFeatureProperties.CustomAttributes"/> keys/values — the same fields
+    /// <see cref="Search"/> matches — for parity across <see cref="IAssetProvider"/>
+    /// implementers (XD01-123).
     /// </summary>
     public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
     {
@@ -144,7 +148,23 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {
             var pattern = $"%{query.SearchText}%";
-            rows = rows.Where(r => EF.Functions.ILike(r.Name, pattern) || EF.Functions.ILike(r.Description, pattern));
+
+            // custom_attributes is jsonb — jsonb_each_text expands it into key/value rows so
+            // ILIKE can match real attribute keys/values, unlike ILIKE-ing the raw JSON text
+            // (which would match JSON syntax, not attribute content). Matches Search()'s
+            // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider implementers.
+            var matchingAttributeIds = await db.Database
+                .SqlQuery<string>($"""
+                    SELECT DISTINCT ge."Id"
+                    FROM geo_entity ge, jsonb_each_text(ge.custom_attributes) AS attr(key, value)
+                    WHERE attr.key ILIKE {pattern} OR attr.value ILIKE {pattern}
+                    """)
+                .ToListAsync();
+
+            rows = rows.Where(r =>
+                EF.Functions.ILike(r.Name, pattern) ||
+                EF.Functions.ILike(r.Description, pattern) ||
+                matchingAttributeIds.Contains(r.Id));
         }
 
         var totalCount = await rows.CountAsync();
