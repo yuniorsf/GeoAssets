@@ -173,15 +173,28 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
             case HttpStatusCode.BadRequest:
                 var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-                if (body.TryGetProperty("errors", out var errorsEl))
+                // Most 400s here are structured (Results.BadRequest(new { ... })) — the two
+                // property-based shapes below. But some server-side validation failures return
+                // Results.BadRequest("plain message") instead (e.g. "Invalid service order.",
+                // "Unknown order type '{id}'") — a bare JSON string, not an object. TryGetProperty
+                // throws on a non-object element, so that shape must be handled explicitly rather
+                // than assumed away.
+                if (body.ValueKind == JsonValueKind.Object)
                 {
-                    var orderTypeId = body.TryGetProperty("orderTypeId", out var idEl) ? idEl.GetString() ?? "" : "";
-                    var errors = errorsEl.EnumerateArray().Select(e => e.GetString() ?? "").ToList();
-                    throw new ServiceOrderAttributeValidationException(orderTypeId, errors);
-                }
+                    if (body.TryGetProperty("errors", out var errorsEl))
+                    {
+                        var orderTypeId = body.TryGetProperty("orderTypeId", out var idEl) ? idEl.GetString() ?? "" : "";
+                        var errors = errorsEl.EnumerateArray().Select(e => e.GetString() ?? "").ToList();
+                        throw new ServiceOrderAttributeValidationException(orderTypeId, errors);
+                    }
 
-                if (body.TryGetProperty("from", out var fromEl) && body.TryGetProperty("to", out var toEl))
-                    throw new InvalidServiceOrderTransitionException(fromEl.GetString() ?? "", toEl.GetString() ?? "");
+                    if (body.TryGetProperty("from", out var fromEl) && body.TryGetProperty("to", out var toEl))
+                        throw new InvalidServiceOrderTransitionException(fromEl.GetString() ?? "", toEl.GetString() ?? "");
+                }
+                else if (body.ValueKind == JsonValueKind.String)
+                {
+                    throw new InvalidOperationException(body.GetString() ?? "Bad request.");
+                }
 
                 response.EnsureSuccessStatusCode();
                 break;
