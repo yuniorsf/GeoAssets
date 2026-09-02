@@ -15,7 +15,12 @@ public sealed record AssetQuery
 
     public int Take { get; init; } = 50;
 
-    /// <summary>One of <c>"name"</c>, <c>"createdAt"</c>, <c>"updatedAt"</c>. <c>null</c> sorts by <c>Id</c>.</summary>
+    /// <summary>
+    /// One of <c>"name"</c>, <c>"createdAt"</c>, <c>"updatedAt"</c>. <c>null</c> or any other,
+    /// unrecognized value falls back to sorting by <c>Id</c> — every <see cref="Interfaces.IAssetProvider"/>
+    /// implementer must always produce a total order over the result set, since paging
+    /// (<see cref="Skip"/>/<see cref="Take"/>) over an unordered query is undefined behavior.
+    /// </summary>
     public string? SortBy { get; init; }
 
     public bool SortDescending { get; init; }

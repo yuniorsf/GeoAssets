@@ -16,7 +16,10 @@ public interface IAssetProvider
     /// Default implementation falls back to <see cref="GetAll"/>/<see cref="Search"/> plus
     /// in-memory LINQ <c>Skip</c>/<c>Take</c> — providers backed by a queryable store (e.g.
     /// PostgreSQL) should override this with a server-side query that never materializes the
-    /// full collection.
+    /// full collection. See <see cref="AssetQuery.SortBy"/> for the enumerated sort values and
+    /// the <c>Id</c> fallback ordering — every override must implement the same values and
+    /// fallback as this default implementation, to keep <see cref="AssetQuery.SortBy"/>'s
+    /// contract identical regardless of which provider is active.
     /// </summary>
     Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
     {
