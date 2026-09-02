@@ -33,7 +33,25 @@
       "Bash(psql -h localhost -p 5432 -U postgres -d geoassets -c 'SELECT \"Code\" FROM \"Permissions\" ORDER BY \"Code\";')",
       "Bash(set -e)",
       "Bash(rm -rf __TRACKED_VAR__/ui-ux-pro-max-skill)",
-      "Bash(awk '/^\\\\?\\\\?/{print $2}')"
+      "Bash(awk '/^\\\\?\\\\?/{print $2}')",
+      "Bash(nohup dotnet run --project apps/GeoAssets.Web/GeoAssets.Web.csproj --urls http://localhost:5299)",
+      "Bash(echo \"started with PID $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5299/ --max-time 5)",
+      "Bash(curl -s http://localhost:5299/appsettings.json)",
+      "Bash(curl -s http://localhost:5299/appsettings.Development.json)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5299/appsettings.Local.json)",
+      "Bash(curl -s http://localhost:5299/_framework/blazor.boot.json)",
+      "Bash(curl -s http://localhost:5299/)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"GeoAssets.Web.csproj\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5299/ --max-time 5)",
+      "Bash(pkill -f \"GeoAssets.Web.csproj\" 2>/dev/null; sleep 1 *)",
+      "Bash(curl -sI http://localhost:5299/_framework/dotnet.js --max-time 5)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5299/_framework/dotnet.js --max-time 5)",
+      "Bash(~/.dotnet/tools/dotnet-ef migrations *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }
