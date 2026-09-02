@@ -93,13 +93,19 @@ public static class ServiceOrdersRestApiExtensions
         // ── Service Orders — writes ─────────────────────────────────────────────
 
         routes.MapPost($"{prefix}/service-orders", async (
-            HttpRequest req, IServiceOrderRepository repo, IOrderTypeRepository orderTypeRepo,
+            HttpRequest req, IServiceOrderRepository repo, OrderTypeRegistry orderTypeRegistry,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
             var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts);
             if (order is null) return Results.BadRequest("Invalid service order.");
 
-            var orderType = await orderTypeRepo.GetByIdAsync(order.OrderTypeId);
+            // Looks up OrderTypeRegistry (the seeded-defaults + DB-persisted-overlay singleton,
+            // AddOrderTypeRegistry()/LoadRegistryFromDbAsync in Program.cs) rather than
+            // IOrderTypeRepository (raw DB rows only) — the 3 built-in order types are seeded in
+            // code, never written to the database, so checking the repository directly rejected
+            // every built-in type as "unknown" even though OrderTypes.All (the client's own view
+            // of the same registry) correctly listed them as creatable.
+            var orderType = orderTypeRegistry.Find(order.OrderTypeId);
             if (orderType is null) return Results.BadRequest($"Unknown order type '{order.OrderTypeId}'.");
 
             var principal = await principalFactory.CreateAsync();

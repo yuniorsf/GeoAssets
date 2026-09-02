@@ -129,6 +129,51 @@ public class ServiceOrderRulesEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
+    [Fact]
+    public async Task Create_BuiltInOrderTypeNeverPersistedToDatabase_Returns201()
+    {
+        // Regression test: built-in order types ("inspection"/"maintenance"/"emergency-repair")
+        // are seeded into OrderTypeRegistry in code (WorkflowServiceExtensions.SeedDefaultOrderTypes)
+        // and never written to the database — BuildServerAsync above never adds "emergency-repair"
+        // to orderTypeRepo, only "inspection" (and only for the CreationPolicies override those
+        // tests need). If the create endpoint looked the order type up via IOrderTypeRepository
+        // instead of OrderTypeRegistry, this would 400 with "Unknown order type" even though the
+        // type is real and listed as creatable everywhere else in the app.
+        var (server, _, _) = await BuildServerAsync(Guid.NewGuid(), "Administrator");
+        using var client = server.CreateClient();
+        var order = new ServiceOrder
+        {
+            Title       = "Emergency repair",
+            OrderTypeId = "emergency-repair",
+            CreatedBy   = Guid.NewGuid().ToString(),
+            Status      = ServiceOrderStatus.Draft,
+        };
+        var body = JsonContent.Create(order);
+
+        var response = await client.PostAsync("/api/workflow/service-orders", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task Create_UnknownOrderType_Returns400()
+    {
+        var (server, _, _) = await BuildServerAsync(Guid.NewGuid(), "Administrator");
+        using var client = server.CreateClient();
+        var order = new ServiceOrder
+        {
+            Title       = "Bogus",
+            OrderTypeId = "does-not-exist",
+            CreatedBy   = Guid.NewGuid().ToString(),
+            Status      = ServiceOrderStatus.Draft,
+        };
+        var body = JsonContent.Create(order);
+
+        var response = await client.PostAsync("/api/workflow/service-orders", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     // ── PUT /service-orders/{id} (Annotate) ───────────────────────────────────
 
     [Fact]
