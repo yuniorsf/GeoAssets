@@ -40,7 +40,7 @@ valve failure downstream," "repair this hydrant." An order:
 ```mermaid
 flowchart TB
     subgraph Host["Host application"]
-        UI["Blazor Web UI<br/>(wired — /service-orders, see §15)<br/>MAUI UI (not yet wired — see §16)"]
+        UI["Blazor Web UI<br/>(wired — /service-orders, see §15)<br/>MAUI UI (wired via the same Shared components, see §15)"]
     end
 
     subgraph Core["core/GeoAssets.Workflow  (no infrastructure dependencies)"]
@@ -1008,8 +1008,20 @@ Cancel, Annotate) — the UI never offers an action the current user can't perfo
 | `ServiceOrderDetail.razor` | Read-only fields, rule-gated action buttons, dispatch/action-log timeline |
 | `ServiceOrderDispatchDialog.razor` | Target type/id/note modal for `AppendDispatchAsync` |
 
-`apps/GeoAssets.MAUI` has no Service Order UI at all yet — a separate,
-unscheduled follow-up.
+`apps/GeoAssets.MAUI` reuses these same `GeoAssets.Shared` components as-is —
+`WebApp.razor`'s `Router` already scans the whole `GeoAssets.Shared` assembly, so
+`/service-orders` becomes reachable the moment the DI graph it needs is registered
+(XD01-24). `MauiProgram.cs` wires `AddOrderTypeRegistry()`/`AddWorkflowRest()`/
+`AddServiceOrderRules()`/`WorkflowPrincipalFactory` the same way `Program.cs` does
+for Web, plus two MAUI-only pieces the Shared components transitively require but
+that no MAUI host registered before: a small MAUI-local port of
+`IGeoAuthorizationService` (`RestGeoAuthorizationService`, duplicated rather than
+shared — see its doc comment — since the Web original lives inside the
+non-referenceable `GeoAssets.Web` app project), and `NoOpJsonStringLocalizer`, a
+stand-in `IJsonStringLocalizer` that returns every key unchanged (MAUI has no real
+translation loader yet — a separate, unscheduled follow-up per
+`IJsonStringLocalizer`'s own doc comment) so `LocalizedComponentBase`-derived
+components render instead of throwing on a missing registration.
 
 ### 15.1 Postgres-backed persistence via GeoAssets.Server (XD01-8)
 
