@@ -50,7 +50,10 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5299/_framework/dotnet.js --max-time 5)",
       "Bash(~/.dotnet/tools/dotnet-ef migrations *)",
       "Edit(/.claude/skills/csharp-conventions/**)",
-      "Bash(uuidgen)"
+      "Bash(uuidgen)",
+      "Bash(gh repo *)",
+      "mcp__atlassian__getJiraIssueRemoteIssueLinks",
+      "Edit(/.claude/skills/jira-conventions/**)"
     ],
     "additionalDirectories": [
       "/tmp"
