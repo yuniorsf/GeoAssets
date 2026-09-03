@@ -28,6 +28,19 @@ public interface IServiceOrder : IOrgOwnedResource
     /// </summary>
     string OrderTypeId { get; }
 
+    // ── Concurrency ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Opaque optimistic-concurrency token, set by the repository whenever an order is
+    /// read from the store — never interpreted, only compared. A caller that supplies the
+    /// value it last read back to <see cref="IServiceOrderWriter.UpdateAsync"/> lets the
+    /// store detect a write that happened after that read, no matter how long ago it was
+    /// (XD01-26); empty means the order was never actually read from a store (e.g. freshly
+    /// constructed, or the result of <see cref="IServiceOrderWriter.AddAsync"/>, which
+    /// doesn't hand the assigned token back), and is treated as "no precondition."
+    /// </summary>
+    byte[] RowVersion { get; }
+
     // ── Workflow metadata ─────────────────────────────────────────────────────
 
     string               Status   { get; }

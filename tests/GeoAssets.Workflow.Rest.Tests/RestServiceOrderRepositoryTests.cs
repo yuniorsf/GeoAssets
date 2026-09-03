@@ -409,6 +409,7 @@ public class RestServiceOrderRepositoryTests
     private sealed class FakeServiceOrder : IServiceOrder
     {
         public string Id => "fake";
+        public byte[] RowVersion => [];
         public string Title => "";
         public string Description => "";
         public string OrderTypeId => "inspection";

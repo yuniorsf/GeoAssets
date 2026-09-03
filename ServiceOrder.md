@@ -497,15 +497,25 @@ classDiagram
   runs inside Blazor WASM (`GeoAssets.Web/Program.cs`) and
   `GeoAssets.Infrastructure.Observability` carries an ASP.NET Core
   `FrameworkReference` a WASM client can't take on.
-- **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts.**
-  `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`) is compared at save time;
-  a `DbUpdateConcurrencyException` is translated to `ServiceOrderConcurrencyException`
-  so two writers racing on the same order's `UpdateAsync` fail loudly instead of
-  silently overwriting each other. This detects conflicts between writes that overlap
-  *within* the EF-backed repository's own read-then-save window — it does not (yet)
-  round-trip a version token through the caller, so it doesn't catch the "held a
-  stale in-memory copy for minutes, then saved" scenario. `InMemoryServiceOrderRepository`
-  has no equivalent check.
+- **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts,
+  including a caller that held a stale in-memory copy across an arbitrary gap (XD01-26).**
+  `IServiceOrder.RowVersion` carries `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`)
+  out to every reader (`ServiceOrderMapper.ToDomain`), and `UpdateAsync` sets it as EF's
+  `OriginalValue` for the tracked entity before saving — so the generated `UPDATE ... WHERE
+  RowVersion = @original` compares against whatever the *caller* actually read, not merely
+  whatever `UpdateAsync`'s own fresh internal re-query happened to see moments earlier. A
+  mismatch — another writer changed the order after the caller's read, however long ago —
+  raises `DbUpdateConcurrencyException`, translated to `ServiceOrderConcurrencyException`
+  (already mapped end-to-end to HTTP 409 by `ServiceOrdersRestApiExtensions`/
+  `RestServiceOrderRepository`, so this protection applies over REST too with no transport
+  changes). A caller that supplies an empty `RowVersion` (e.g. an order fresh from `AddAsync`,
+  never re-read) falls back to the narrower same-call-window check only. `ServiceOrderDetail.razor`'s
+  `AssignToMe` is the one production UI write path that reads across a render-cycle boundary and
+  now round-trips the token via `BuildSnapshot()`. `FakeServiceOrderRepository`/
+  `SnapshottingServiceOrderRepository` (test doubles) and `ValidatingServiceOrderRepository`
+  (decorator) deliberately don't implement or duplicate this check — see their own doc comments;
+  it's `EFServiceOrderRepository`-specific, since only a real backing store has a true current
+  value to compare against.
 
 ---
 
@@ -856,7 +866,7 @@ mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
 rests on.
 
-`GeoAssets.Workflow.EFCore.Tests` (77 test cases) covers `EFServiceOrderRepository`
+`GeoAssets.Workflow.EFCore.Tests` (79 test cases) covers `EFServiceOrderRepository`
 and `EFOrderTypeRepository` (all CRUD, hierarchy, filtered queries, the
 `ServiceOrderConcurrencyException` conflict path, and cascade-delete of an order
 type's child collections) against a **real SQLite in-memory database**
@@ -1160,15 +1170,14 @@ documented:
   outside the suite by design, each now documenting at its own definition *why* it's
   an intentional exception rather than an oversight, closed by
   [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
+- **The concurrency check only covered races within the EF repository's own
+  read-then-save window**, not a caller holding a stale copy across a longer gap. The
+  `RowVersion` detection itself was done ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7));
+  `IServiceOrder.RowVersion` now round-trips it through every reader and back through
+  `UpdateAsync` (§7), closed by [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
 
 What's still genuinely open:
 
-- **The concurrency check (§7) only covers races within the EF repository's own
-  read-then-save window**, not a caller holding a stale copy across a longer gap —
-  see §7 for the distinction. The `RowVersion` detection itself is done
-  ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7)); round-tripping a version
-  token through the caller so a longer-held stale copy is also caught is tracked
-  separately as [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
 - **No same-organization gate exists for `ServiceOrder` access — only an
   additional cross-org allow path.** `CrossOrgGrantRule` (§5, XD01-22) is
   deliberately an allow-contributor only, per its own design: a caller from a

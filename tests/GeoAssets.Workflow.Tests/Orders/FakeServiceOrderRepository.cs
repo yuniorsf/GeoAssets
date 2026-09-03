@@ -17,7 +17,9 @@ namespace GeoAssets.Workflow.Tests.Orders;
 /// <c>ChildOrderIds</c> the caller set on the order instance. Tests relying on hierarchy-read
 /// correctness should use <c>EFServiceOrderRepository</c> (covered by the shared
 /// <c>GeoAssets.Workflow.TestKit.ServiceOrderRepositoryContractTests</c> suite, see XD01-27) or
-/// populate <c>ChildOrderIds</c> by hand.
+/// populate <c>ChildOrderIds</c> by hand. Also does not implement optimistic-concurrency
+/// semantics — it never populates or checks <c>RowVersion</c> (XD01-26 is
+/// <c>EFServiceOrderRepository</c>-specific, no real backing store here to enforce against).
 /// </summary>
 public sealed class FakeServiceOrderRepository : IServiceOrderRepository
 {

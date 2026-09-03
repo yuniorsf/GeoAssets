@@ -109,6 +109,7 @@ public partial class ServiceOrderDetail
         return new ServiceOrder
         {
             Id            = order.Id,
+            RowVersion    = order.RowVersion,
             Title         = order.Title,
             Description   = order.Description,
             OrderTypeId   = order.OrderTypeId,

@@ -17,7 +17,9 @@ namespace GeoAssets.Workflow.Agents.Tests.TestDoubles;
 /// <c>DispatchServiceOrderExecutorTests</c> — its one call site — never exercises illegal
 /// transitions or hierarchy reads through it. See XD01-27; the shared contract suite that
 /// mechanically checks both rules (<c>GeoAssets.Workflow.TestKit.ServiceOrderRepositoryContractTests</c>)
-/// intentionally does not run against this type.
+/// intentionally does not run against this type. Also never populates or checks
+/// <c>RowVersion</c> (XD01-26) — no real backing store here for optimistic concurrency to
+/// mean anything against.
 /// </summary>
 public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
 {

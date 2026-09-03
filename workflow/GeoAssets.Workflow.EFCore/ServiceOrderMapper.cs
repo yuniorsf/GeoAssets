@@ -115,6 +115,7 @@ internal static class ServiceOrderMapper
         var order = new ServiceOrder
         {
             Id            = record.Id,
+            RowVersion    = record.RowVersion,
             Title         = record.Title,
             Description   = record.Description,
             OrderTypeId   = record.OrderTypeId,
