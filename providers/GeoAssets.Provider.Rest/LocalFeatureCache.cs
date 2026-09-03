@@ -1,6 +1,5 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Core.Services;
 
 namespace GeoAssets.Provider.Rest;
 
@@ -56,30 +55,6 @@ internal sealed class LocalFeatureCache
         [.. _features.Values
             .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
             .OrderBy(f => f.Geometry!.Distance(center))];
-
-    // ── Topology queries ──────────────────────────────────────────────────────
-
-    public IReadOnlyList<GeoFeature> GetNeighbors(string featureId) =>
-        TopoGraph.GetNeighbors(featureId, _features.Values);
-
-    public IReadOnlyList<GeoFeature> GetDescendants(string featureId) =>
-        TopoGraph.GetDescendants(featureId, _features.Values);
-
-    public IReadOnlyList<GeoFeature> GetAncestors(string featureId) =>
-        TopoGraph.GetAncestors(featureId, _features.Values);
-
-    public IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) =>
-        TopoGraph.FindPath(fromId, toId, _features.Values);
-
-    public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) =>
-        TopoGraph.FindShortestPath(fromId, toId, _features.Values);
-
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() =>
-        TopoGraph.GetConnectedComponents(_features.Values);
-
-    public bool HasCycles() => TopoGraph.HasCycles(_features.Values);
-
-    public IReadOnlyList<GeoFeature> TopologicalSort() => TopoGraph.TopologicalSort(_features.Values);
 
     // ── Asset types / layers ─────────────────────────────────────────────────
 

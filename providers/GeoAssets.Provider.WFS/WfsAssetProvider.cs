@@ -90,14 +90,6 @@ public sealed class WfsAssetProvider : IAssetProvider
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                 => _cache.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)         => _cache.GetIntersecting(geometry);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg)=> _cache.GetNearby(center, distanceDeg);
-    public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                => _cache.GetNeighbors(featureId);
-    public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)              => _cache.GetDescendants(featureId);
-    public IReadOnlyList<GeoFeature>                GetAncestors(string featureId)                => _cache.GetAncestors(featureId);
-    public IReadOnlyList<GeoFeature>                FindPath(string fromId, string toId)          => _cache.FindPath(fromId, toId);
-    public IReadOnlyList<GeoFeature>                FindShortestPath(string fromId, string toId)  => _cache.FindShortestPath(fromId, toId);
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents()                      => _cache.GetConnectedComponents();
-    public bool                                     HasCycles()                                    => _cache.HasCycles();
-    public IReadOnlyList<GeoFeature>                TopologicalSort()                             => _cache.TopologicalSort();
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                => _cache.GetAssetTypes();
     public IReadOnlyList<Layer>                     GetLayers()                                    => _cache.GetLayers();
     public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                => _cache.GetLayerRules(assetTypeId);

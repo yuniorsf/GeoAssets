@@ -1,8 +1,8 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Services;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -16,8 +16,10 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// PostgreSQL + PostGIS implementation of <see cref="IAssetProvider"/>.
 /// Each instance owns its own <see cref="GeoAssetsDbContext"/> (scoped to one
 /// logical collection / repository pool entry).
-/// Topology and spatial graph queries fall back to the NTS-backed helpers from
-/// <see cref="TopoGraph"/>.
+/// Topology queries use <see cref="IAssetProvider"/>'s default implementation
+/// (<see cref="GeoAssets.Core.Services.TopoGraph"/> over <see cref="GetAll"/>) rather
+/// than an explicit override — this provider's <see cref="GetAll"/> already returns the
+/// exact same <see cref="Cache"/> those would have queried directly (XD01-135).
 /// </summary>
 public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 {
@@ -180,32 +182,6 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync();
         return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
     }
-
-    // ── Topology ───────────────────────────────────────────────────────────────
-
-    public IReadOnlyList<GeoFeature> GetNeighbors(string id) =>
-        TopoGraph.GetNeighbors(id, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> GetDescendants(string id) =>
-        TopoGraph.GetDescendants(id, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> GetAncestors(string id) =>
-        TopoGraph.GetAncestors(id, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) =>
-        TopoGraph.FindPath(fromId, toId, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) =>
-        TopoGraph.FindShortestPath(fromId, toId, Cache.Values);
-
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() =>
-        TopoGraph.GetConnectedComponents(Cache.Values);
-
-    public bool HasCycles() =>
-        TopoGraph.HasCycles(Cache.Values);
-
-    public IReadOnlyList<GeoFeature> TopologicalSort() =>
-        TopoGraph.TopologicalSort(Cache.Values);
 
     // ── Write ──────────────────────────────────────────────────────────────────
 
