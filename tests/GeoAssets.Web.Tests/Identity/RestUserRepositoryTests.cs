@@ -57,6 +57,35 @@ public class RestUserRepositoryTests
     }
 
     [Fact]
+    public async Task GetByExternalObjectIdAsync_Found_MapsAllFields()
+    {
+        var orgId = Guid.NewGuid();
+        var dto = new UserDetailDto(
+            Id: Guid.NewGuid(), Email: "user@example.com", DisplayName: "Test User", IsActive: true,
+            OrganizationId: orgId, CreatedAt: new DateTime(2026, 1, 1), LastLoginAt: null, RoleIds: []);
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse(dto));
+        var sut = Sut(handler);
+
+        var user = await sut.GetByExternalObjectIdAsync("oid-abc-123");
+
+        user.Should().NotBeNull();
+        user!.Id.Should().Be(dto.Id);
+        user.OrganizationId.Should().Be(orgId);
+        handler.Requests.Single().RequestUri!.AbsolutePath.Should().Be("/users/by-external-id/oid-abc-123");
+    }
+
+    [Fact]
+    public async Task GetByExternalObjectIdAsync_NotFound_ReturnsNull()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var sut = Sut(handler);
+
+        var user = await sut.GetByExternalObjectIdAsync("no-such-oid");
+
+        user.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetAllAsync_MapsSummaries_WithDefaultCreatedAt()
     {
         var summary = new UserSummaryDto(Guid.NewGuid(), "user@example.com", "Test User", true, null);
@@ -108,7 +137,6 @@ public class RestUserRepositoryTests
 
     public static IEnumerable<object[]> UnsupportedMethods()
     {
-        yield return [Call((IUserRepository r) => r.GetByExternalObjectIdAsync("oid"))];
         yield return [Call((IUserRepository r) => r.GetByEmailAsync("user@example.com"))];
         yield return [Call((IUserRepository r) => r.GetByRoleAsync("Administrator"))];
         yield return [Call((IUserRepository r) => r.GetByOrganizationAsync(Guid.NewGuid()))];

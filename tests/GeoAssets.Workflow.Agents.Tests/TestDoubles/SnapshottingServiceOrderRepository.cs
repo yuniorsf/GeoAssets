@@ -9,6 +9,17 @@ namespace GeoAssets.Workflow.Agents.Tests.TestDoubles;
 /// <see cref="InMemoryServiceOrderRepository"/> which aliases the exact instance it was given.
 /// Use this whenever a test needs to prove something was actually persisted, not merely that
 /// an in-memory reference was mutated in place.
+///
+/// Deliberately does <b>not</b> honor <see cref="IServiceOrderRepository"/>'s correctness
+/// contract: <see cref="AppendActionAsync"/> sets <c>Status</c> directly with no
+/// <c>ServiceOrderTransitions.IsValid</c> check, and no read method recomputes
+/// <c>ChildOrderIds</c> from <c>ParentOrderId</c>. Safe only because
+/// <c>DispatchServiceOrderExecutorTests</c> — its one call site — never exercises illegal
+/// transitions or hierarchy reads through it. See XD01-27; the shared contract suite that
+/// mechanically checks both rules (<c>GeoAssets.Workflow.TestKit.ServiceOrderRepositoryContractTests</c>)
+/// intentionally does not run against this type. Also never populates or checks
+/// <c>RowVersion</c> (XD01-26) — no real backing store here for optimistic concurrency to
+/// mean anything against.
 /// </summary>
 public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
 {

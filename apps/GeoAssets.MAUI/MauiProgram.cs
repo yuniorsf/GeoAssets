@@ -1,16 +1,21 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Localization;
 using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.MAUI.Extensions;
 using GeoAssets.MAUI.Services.Identity;
+using GeoAssets.MAUI.Services.Localization;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
+using GeoAssets.Workflow;
+using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -85,11 +90,41 @@ public static class MauiProgram
         builder.Services.AddScoped<IAuthNavigationService, MauiAuthNavigationService>();
 
         // Attaches a silently-acquired bearer token to the "GeoAssetsServer" named HttpClient —
-        // see MsalAuthorizationHandler's doc comment: no current caller requests this client by
-        // name, registered ahead of MAUI gaining a REST call site against GeoAssets.Server.
+        // see MsalAuthorizationHandler's doc comment. Identity authorization and the Service
+        // Order workflow (both below) are this client's first real callers (XD01-24).
         builder.Services.AddTransient<MsalAuthorizationHandler>();
         builder.Services.AddHttpClient("GeoAssetsServer")
             .AddHttpMessageHandler<MsalAuthorizationHandler>();
+
+        // Identity authorization — REST-backed against GeoAssets.Server, same shape as
+        // apps/GeoAssets.Web/Extensions/GeoIdentityRestExtensions.AddGeoIdentityRest, but only
+        // the one piece WorkflowPrincipalFactory (below) actually needs — see
+        // RestGeoAuthorizationService's doc comment for why this is a small duplicated copy
+        // instead of a shared registration (XD01-24).
+        var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
+            ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
+        builder.Services.AddScoped<IGeoAuthorizationService>(sp =>
+        {
+            var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeoAssetsServer");
+            client.BaseAddress = new Uri(geoAssetsServerBaseUrl.TrimEnd('/') + "/api/identity/");
+            return new RestGeoAuthorizationService(client);
+        });
+
+        // Localization stand-in (XD01-24) — see NoOpJsonStringLocalizer's doc comment: MAUI has
+        // no real translation loader yet, so LocalizedComponentBase-derived components (Service
+        // Orders among them) get raw i18n keys instead of throwing on a missing registration.
+        builder.Services.AddSingleton<IJsonStringLocalizer, NoOpJsonStringLocalizer>();
+
+        // Service Order workflow — REST-backed via GeoAssets.Server, same pattern as
+        // apps/GeoAssets.Web/Program.cs (XD01-24, XD01-8 originally for Web).
+        builder.Services.AddOrderTypeRegistry();
+
+        var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
+            ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
+        builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
+
+        builder.Services.AddServiceOrderRules();
+        builder.Services.AddScoped<WorkflowPrincipalFactory>();
 
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(

@@ -44,9 +44,9 @@ public partial class MainLayout
                         ?? user.Identity?.Name
                         ?? L["app.defaultUser"];
 
-        // Ensure the local user record exists before checking authorization. Only relevant
-        // under Identity:Backend=InMemory (Rest has no local provisioning step, so the service
-        // isn't registered there — resolved optionally to avoid breaking that backend).
+        // Ensure the local user record exists before checking authorization. UserProvisioningService
+        // isn't registered by AddGeoIdentityRest (Rest handles provisioning server-side instead,
+        // XD01-88) — resolved optionally so this still works if it's ever registered again.
         var provisioning = ServiceProvider.GetService<UserProvisioningService>();
         if (provisioning is not null)
         {
@@ -54,10 +54,9 @@ public partial class MainLayout
         }
         else
         {
-            // Rest backend: UserProvisioningService isn't registered (no local provisioning
-            // step), but the pending-invitation redirect check has no such restriction
-            // (InvitationRedirectGate, XD01-89) — call it directly so an invited caller still
-            // gets redirected to /complete-profile.
+            // UserProvisioningService isn't registered, but the pending-invitation redirect
+            // check has no such restriction (InvitationRedirectGate, XD01-89) — call it
+            // directly so an invited caller still gets redirected to /complete-profile.
             try
             {
                 var redirectGate = ServiceProvider.GetRequiredService<InvitationRedirectGate>();
@@ -77,9 +76,8 @@ public partial class MainLayout
             var currentUser = await CurrentUserAccessor.GetCurrentUserAsync();
             _userRoles = currentUser?.ExternalRoles ?? [];
 
-            // IOrganizationRepository is only registered under Identity:Backend=InMemory
-            // (see GeoIdentityRestExtensions) — resolved optionally so the Rest backend,
-            // which has no org endpoint yet, just shows the topbar without an org name.
+            // Resolved optionally so a host that doesn't register IOrganizationRepository for
+            // some reason just shows the topbar without an org name instead of failing to render.
             var organizationRepo = ServiceProvider.GetService<IOrganizationRepository>();
             _organizationName = await ResolveOrganizationNameAsync(currentUser, organizationRepo, UserRepository);
         }
@@ -96,8 +94,7 @@ public partial class MainLayout
     /// <summary>
     /// Resolves the display name of the current user's organization for the topbar.
     /// Returns <c>null</c> whenever an org name can't be determined — no organization
-    /// repository registered (e.g. Identity:Backend=Rest, XD01-77 tracks a real org
-    /// endpoint there), no current user, or the user has no organization assigned yet.
+    /// repository registered, no current user, or the user has no organization assigned yet.
     /// </summary>
     public static async Task<string?> ResolveOrganizationNameAsync(
         CurrentUser?             currentUser,

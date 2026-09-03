@@ -40,7 +40,7 @@ valve failure downstream," "repair this hydrant." An order:
 ```mermaid
 flowchart TB
     subgraph Host["Host application"]
-        UI["Blazor Web UI<br/>(wired — /service-orders, see §15)<br/>MAUI UI (not yet wired — see §16)"]
+        UI["Blazor Web UI<br/>(wired — /service-orders, see §15)<br/>MAUI UI (wired via the same Shared components, see §15)"]
     end
 
     subgraph Core["core/GeoAssets.Workflow  (no infrastructure dependencies)"]
@@ -477,6 +477,14 @@ classDiagram
   `SnapshottingServiceOrderRepository` (see §9), does *not* get this protection when
   used unwrapped — a live, if low-stakes, reminder that this contract is still
   enforced by convention for any repository that isn't wrapped, not by the compiler.
+  A shared contract-test suite (`GeoAssets.Workflow.TestKit`'s
+  `ServiceOrderRepositoryContractTests`, run unwrapped against `EFServiceOrderRepository`
+  in `GeoAssets.Workflow.EFCore.Tests`) now mechanically checks both rules — transition-legality
+  rejection and `ChildOrderIds` derivation from `ParentOrderId` on every read — closing
+  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27) for that implementation. The
+  convention-only caveat remains true and intentional for `FakeServiceOrderRepository`,
+  `SnapshottingServiceOrderRepository`, and `RestServiceOrderRepository`, each documented
+  at its own definition as an explicit exception rather than an oversight.
 - **`ObservableServiceOrderRepository`** decorates any inner repository with
   tracing/metrics/logging for status transitions — a span + a
   `geoassets.orders.transitions` metric (via `GeoAssetsActivitySource`/
@@ -489,15 +497,25 @@ classDiagram
   runs inside Blazor WASM (`GeoAssets.Web/Program.cs`) and
   `GeoAssets.Infrastructure.Observability` carries an ASP.NET Core
   `FrameworkReference` a WASM client can't take on.
-- **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts.**
-  `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`) is compared at save time;
-  a `DbUpdateConcurrencyException` is translated to `ServiceOrderConcurrencyException`
-  so two writers racing on the same order's `UpdateAsync` fail loudly instead of
-  silently overwriting each other. This detects conflicts between writes that overlap
-  *within* the EF-backed repository's own read-then-save window — it does not (yet)
-  round-trip a version token through the caller, so it doesn't catch the "held a
-  stale in-memory copy for minutes, then saved" scenario. `InMemoryServiceOrderRepository`
-  has no equivalent check.
+- **`EFServiceOrderRepository.UpdateAsync` detects optimistic-concurrency conflicts,
+  including a caller that held a stale in-memory copy across an arbitrary gap (XD01-26).**
+  `IServiceOrder.RowVersion` carries `ServiceOrderRecord.RowVersion` (EF `.IsRowVersion()`)
+  out to every reader (`ServiceOrderMapper.ToDomain`), and `UpdateAsync` sets it as EF's
+  `OriginalValue` for the tracked entity before saving — so the generated `UPDATE ... WHERE
+  RowVersion = @original` compares against whatever the *caller* actually read, not merely
+  whatever `UpdateAsync`'s own fresh internal re-query happened to see moments earlier. A
+  mismatch — another writer changed the order after the caller's read, however long ago —
+  raises `DbUpdateConcurrencyException`, translated to `ServiceOrderConcurrencyException`
+  (already mapped end-to-end to HTTP 409 by `ServiceOrdersRestApiExtensions`/
+  `RestServiceOrderRepository`, so this protection applies over REST too with no transport
+  changes). A caller that supplies an empty `RowVersion` (e.g. an order fresh from `AddAsync`,
+  never re-read) falls back to the narrower same-call-window check only. `ServiceOrderDetail.razor`'s
+  `AssignToMe` is the one production UI write path that reads across a render-cycle boundary and
+  now round-trips the token via `BuildSnapshot()`. `FakeServiceOrderRepository`/
+  `SnapshottingServiceOrderRepository` (test doubles) and `ValidatingServiceOrderRepository`
+  (decorator) deliberately don't implement or duplicate this check — see their own doc comments;
+  it's `EFServiceOrderRepository`-specific, since only a real backing store has a true current
+  value to compare against.
 
 ---
 
@@ -801,8 +819,8 @@ triggered the attempt.
 ## 12. Registering the module
 
 ```csharp
-// In-memory (WASM hosts, tests) — no database required.
-services.AddWorkflowInMemory();
+// REST-backed (WASM hosts) — talks to GeoAssets.Server, no local database (XD01-129).
+services.AddWorkflowRest(apiBaseUrl);
 services.AddOrderTypeRegistry();           // seeds "inspection", "maintenance", "emergency-repair"
 services.AddWorkflowNotifications();       // no-op publisher by default
 services.AddServiceOrderRules();           // one consistently configured singleton for every caller
@@ -817,12 +835,14 @@ services.AddWorkflowAgents(builder.Configuration);
 // or: services.AddWorkflowAgents(opts => opts.Agents["agent-hydro-01"] = new() { RoleNames = ["AutomationAgent"] });
 ```
 
-Both `AddWorkflowInMemory()` and `AddWorkflowPersistence()` register
-`IServiceOrderRepository` as a `ValidatingServiceOrderRepository` wrapping the
-concrete implementation, and separately register `IServiceOrderReader` /
-`IServiceOrderWriter` pointing at that same instance. `AddWorkflowPersistence()`
-additionally wraps that in an outermost `ObservableServiceOrderRepository` — see
-§7 — which requires `AddGeoAssetsObservability` to have been called first.
+`AddWorkflowPersistence()` registers `IServiceOrderRepository` as a
+`ValidatingServiceOrderRepository` wrapping the concrete implementation, and
+separately registers `IServiceOrderReader` / `IServiceOrderWriter` pointing at
+that same instance; it additionally wraps that in an outermost
+`ObservableServiceOrderRepository` — see §7 — which requires
+`AddGeoAssetsObservability` to have been called first. `AddWorkflowRest()` does
+neither wrapper (no validation decorator, no observability decorator) — a known
+gap, not by design.
 
 `AddServiceOrderRules()` exists specifically because, before it, every caller
 hand-constructed its own `ServiceOrderRules` — a real risk of a human-facing host
@@ -846,7 +866,7 @@ mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
 rests on.
 
-`GeoAssets.Workflow.EFCore.Tests` (69 test cases) covers `EFServiceOrderRepository`
+`GeoAssets.Workflow.EFCore.Tests` (79 test cases) covers `EFServiceOrderRepository`
 and `EFOrderTypeRepository` (all CRUD, hierarchy, filtered queries, the
 `ServiceOrderConcurrencyException` conflict path, and cascade-delete of an order
 type's child collections) against a **real SQLite in-memory database**
@@ -864,7 +884,11 @@ SQLite-incompatible `HasColumnType("nvarchar(max)")` calls on the JSON columns
 so this was a no-op on SQL Server and a syntax error under SQLite). The EFCore test
 project references its production counterpart via `InternalsVisibleTo`, letting
 `SqliteTestDbContext` layer that one SQLite-only default onto the otherwise-internal
-`ServiceOrderRecord` entity without changing its visibility.
+`ServiceOrderRecord` entity without changing its visibility. 8 of those 77 cases
+(`EFServiceOrderRepositoryContractTests`) come from `GeoAssets.Workflow.TestKit`'s
+`ServiceOrderRepositoryContractTests` — a shared, reusable `IServiceOrderRepository`
+correctness suite (transition-legality rejection + `ChildOrderIds` derivation) any
+implementation can subclass to opt into (see §7, XD01-27).
 
 These five projects (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
 `GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
@@ -954,18 +978,18 @@ code/API, same as before).
 
 ## 15. Host UI (Blazor Web)
 
-`apps/GeoAssets.Web` wires the module with either the in-memory implementation
-(default) or a REST-backed one talking to `GeoAssets.Server` (XD01-8, §15.1),
-switched by a `ServiceOrders:Backend` config flag — no runtime picker like assets'
-provider pool, deliberately, to keep this pass's footprint small:
+`apps/GeoAssets.Web` wires the module with the REST-backed implementation talking
+to `GeoAssets.Server` (XD01-8, §15.1) — the only supported backend. The earlier
+in-memory implementation and its `ServiceOrders:Backend` config flag were removed
+(XD01-129): no runtime picker like assets' provider pool, deliberately, to keep
+this footprint small.
 
 ```csharp
 builder.Services.AddOrderTypeRegistry();
 
-if (config["ServiceOrders:Backend"] == "Rest")
-    builder.Services.AddWorkflowRest(config["ServiceOrders:ApiBaseUrl"]!);
-else
-    builder.Services.AddWorkflowInMemory();  // default — zero-config, no Postgres required
+var serviceOrdersApiBaseUrl = config["ServiceOrders:ApiBaseUrl"]
+    ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
+builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
@@ -994,10 +1018,20 @@ Cancel, Annotate) — the UI never offers an action the current user can't perfo
 | `ServiceOrderDetail.razor` | Read-only fields, rule-gated action buttons, dispatch/action-log timeline |
 | `ServiceOrderDispatchDialog.razor` | Target type/id/note modal for `AppendDispatchAsync` |
 
-**In-memory backend limitation:** orders are lost on page refresh/app restart —
-session-scoped only. See §15.1 for the durable alternative. `apps/GeoAssets.MAUI`
-has no Service Order UI at all yet (neither backend is wired there) — a separate,
-unscheduled follow-up.
+`apps/GeoAssets.MAUI` reuses these same `GeoAssets.Shared` components as-is —
+`WebApp.razor`'s `Router` already scans the whole `GeoAssets.Shared` assembly, so
+`/service-orders` becomes reachable the moment the DI graph it needs is registered
+(XD01-24). `MauiProgram.cs` wires `AddOrderTypeRegistry()`/`AddWorkflowRest()`/
+`AddServiceOrderRules()`/`WorkflowPrincipalFactory` the same way `Program.cs` does
+for Web, plus two MAUI-only pieces the Shared components transitively require but
+that no MAUI host registered before: a small MAUI-local port of
+`IGeoAuthorizationService` (`RestGeoAuthorizationService`, duplicated rather than
+shared — see its doc comment — since the Web original lives inside the
+non-referenceable `GeoAssets.Web` app project), and `NoOpJsonStringLocalizer`, a
+stand-in `IJsonStringLocalizer` that returns every key unchanged (MAUI has no real
+translation loader yet — a separate, unscheduled follow-up per
+`IJsonStringLocalizer`'s own doc comment) so `LocalizedComponentBase`-derived
+components render instead of throwing on a missing registration.
 
 ### 15.1 Postgres-backed persistence via GeoAssets.Server (XD01-8)
 
@@ -1027,12 +1061,14 @@ concurrency check would silently stop detecting concurrent writers. Mirrors the
 same problem `GeoAssets.Workflow.EFCore.Tests`' `SqliteTestDbContext` already
 solves for SQLite with its own trigger.
 
-`GeoAssets.Web` opts into this backend via `ServiceOrders:Backend = "Rest"` +
-`ServiceOrders:ApiBaseUrl` config (`appsettings.Development.json` has a commented
-example) — `RestServiceOrderRepository`/`RestOrderTypeRepository`
+`GeoAssets.Web` always uses this backend, configured via
+`ServiceOrders:ApiBaseUrl` (XD01-129 — this used to be an opt-in behind
+`ServiceOrders:Backend = "Rest"`, with in-memory as the zero-config default;
+that flag and its in-memory alternative are gone) —
+`RestServiceOrderRepository`/`RestOrderTypeRepository`
 (`workflow/GeoAssets.Workflow.Rest`) implement the same
-`IServiceOrderRepository`/`IOrderTypeRepository` interfaces the in-memory/EF
-backends do. Unlike `RestAssetProvider` (cache-first, fire-and-forget writes),
+`IServiceOrderRepository`/`IOrderTypeRepository` interfaces the EF backend
+does. Unlike `RestAssetProvider` (cache-first, fire-and-forget writes),
 this client is direct and non-caching — every call awaits its own HTTP round trip
 and propagates `ServiceOrderConcurrencyException`/`KeyNotFoundException`/
 `InvalidServiceOrderTransitionException`/`ServiceOrderAttributeValidationException`
@@ -1079,10 +1115,11 @@ the rule that declined. Order Type CRUD is unchanged: that's configuration data,
 not a per-order action this engine governs.
 
 `tests/GeoAssets.Server.Tests/ServiceOrderRulesEndpointTests.cs` exercises the
-real `MapServiceOrdersApi()` endpoints end-to-end against `AddWorkflowInMemory()`,
-including non-leakage checks (e.g. being an order's creator doesn't also grant
-`Dispatch`; being its creator doesn't grant `Complete` on an order assigned to
-someone else).
+real `MapServiceOrdersApi()` endpoints end-to-end against a `FakeServiceOrderRepository`
+(the old `AddWorkflowInMemory()` registration this test host used was removed,
+XD01-129), including non-leakage checks (e.g. being an order's creator doesn't
+also grant `Dispatch`; being its creator doesn't grant `Complete` on an order
+assigned to someone else).
 
 ---
 
@@ -1124,23 +1161,23 @@ documented:
   server-side only (the Blazor client's own `WorkflowPrincipal` doesn't resolve
   grants yet — no REST endpoint exposes them), closed by
   [XD01-22](https://xdicor.atlassian.net/browse/XD01-22).
+- **`IServiceOrderRepository`'s correctness contract was enforced by convention, not
+  the compiler** — a shared, reusable contract-test suite
+  (`GeoAssets.Workflow.TestKit`'s `ServiceOrderRepositoryContractTests`, §7/§13) now
+  mechanically checks transition-legality rejection and `ChildOrderIds` derivation,
+  run unwrapped against `EFServiceOrderRepository`. `FakeServiceOrderRepository`,
+  `SnapshottingServiceOrderRepository`, and `RestServiceOrderRepository` remain
+  outside the suite by design, each now documenting at its own definition *why* it's
+  an intentional exception rather than an oversight, closed by
+  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
+- **The concurrency check only covered races within the EF repository's own
+  read-then-save window**, not a caller holding a stale copy across a longer gap. The
+  `RowVersion` detection itself was done ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7));
+  `IServiceOrder.RowVersion` now round-trips it through every reader and back through
+  `UpdateAsync` (§7), closed by [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
 
 What's still genuinely open:
 
-- **The concurrency check (§7) only covers races within the EF repository's own
-  read-then-save window**, not a caller holding a stale copy across a longer gap —
-  see §7 for the distinction. The `RowVersion` detection itself is done
-  ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7)); round-tripping a version
-  token through the caller so a longer-held stale copy is also caught is tracked
-  separately as [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
-- **`IServiceOrderRepository`'s correctness contract is enforced by convention, not
-  the compiler.** A third implementation, `SnapshottingServiceOrderRepository`
-  (test-only, added alongside the agent work), doesn't recompute `ChildOrderIds` or
-  enforce transition legality, and is used unwrapped in
-  `DispatchServiceOrderExecutorTests.cs` (`GeoAssets.Workflow.Agents.Tests`) —
-  correctly, for what those tests check, but it's live evidence that any *real* new
-  implementation would need to remember the same rules by hand. Tracked as
-  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
 - **No same-organization gate exists for `ServiceOrder` access — only an
   additional cross-org allow path.** `CrossOrgGrantRule` (§5, XD01-22) is
   deliberately an allow-contributor only, per its own design: a caller from a

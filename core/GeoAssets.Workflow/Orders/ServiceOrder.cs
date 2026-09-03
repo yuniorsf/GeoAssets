@@ -17,6 +17,10 @@ public sealed class ServiceOrder : IServiceOrder
     public string Description { get; set;  } = string.Empty;
     public string OrderTypeId { get; set;  } = string.Empty;
 
+    // ── Concurrency ────────────────────────────────────────────────────────────
+
+    public byte[] RowVersion { get; init; } = [];
+
     // ── Workflow metadata ─────────────────────────────────────────────────────
 
     public string               Status   { get; set; } = ServiceOrderStatus.Draft;

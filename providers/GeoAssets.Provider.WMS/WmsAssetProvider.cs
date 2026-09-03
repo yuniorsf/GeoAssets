@@ -51,15 +51,9 @@ public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider
     public Task<string?>                            GetInBoundsRawJsonAsync(double a, double b, double c, double d)
         => Task.FromResult<string?>(null);
 
-    // ── Topology — always empty ───────────────────────────────────────────────
-    public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                 => [];
-    public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)               => [];
-    public IReadOnlyList<GeoFeature>                GetAncestors(string featureId)                 => [];
-    public IReadOnlyList<GeoFeature>                FindPath(string fromId, string toId)           => [];
-    public IReadOnlyList<GeoFeature>                FindShortestPath(string fromId, string toId)   => [];
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents()                       => [];
-    public bool                                     HasCycles()                                     => false;
-    public IReadOnlyList<GeoFeature>                TopologicalSort()                              => [];
+    // Topology queries use IAssetProvider's default implementation (TopoGraph over
+    // GetAll()) — GetAll() above already returns [], producing the same empty result
+    // the explicit stubs used to return directly (XD01-135).
 
     // ── Asset types — empty (types are managed by the WMS server) ────────────
     public IReadOnlyList<AssetType> GetAssetTypes()           => [.. AssetType.Defaults];

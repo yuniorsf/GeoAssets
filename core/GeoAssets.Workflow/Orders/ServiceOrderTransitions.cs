@@ -6,10 +6,9 @@ namespace GeoAssets.Workflow.Orders;
 /// "who is allowed" gate.
 ///
 /// Consulted by every write path that can change <see cref="IServiceOrder.Status"/>
-/// (<c>InMemoryServiceOrderRepository</c> and <c>EFServiceOrderRepository</c>'s
-/// <c>UpdateAsync</c>/<c>AppendActionAsync</c>, and <see cref="ServiceOrder.Transition"/>),
-/// so the workflow graph has a single source of truth instead of being reimplemented
-/// ad hoc wherever a status check happens to be needed.
+/// (<c>EFServiceOrderRepository</c>'s <c>UpdateAsync</c>/<c>AppendActionAsync</c>, and
+/// <see cref="ServiceOrder.Transition"/>), so the workflow graph has a single source of truth
+/// instead of being reimplemented ad hoc wherever a status check happens to be needed.
 ///
 /// The two-argument <see cref="IsValid(string, string)"/> overload always validates
 /// against the global default graph below. The <see cref="IsValid(OrderType?, string, string)"/>

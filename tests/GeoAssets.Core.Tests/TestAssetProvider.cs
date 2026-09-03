@@ -1,12 +1,19 @@
 using System.Text.Json;
-using GeoAssets.Core.Services;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Services;
 
-namespace GeoAssets.Provider.InMemory;
+namespace GeoAssets.Core.Tests;
 
-public sealed class InMemoryAssetProvider : IAssetProvider
+/// <summary>
+/// Full, faithful <see cref="IAssetProvider"/> test double — replaces the shared,
+/// general-purpose <c>InMemoryAssetProvider</c> (removed in XD01-131) as this project's fixture
+/// for "a real working store", used wherever a test needs genuine add/query/topology behavior
+/// rather than a stub. Topology queries delegate to the real <see cref="TopoGraph"/> static
+/// helper (unaffected by the removal), the same way the deleted class did.
+/// </summary>
+internal sealed class TestAssetProvider : IAssetProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
@@ -14,16 +21,8 @@ public sealed class InMemoryAssetProvider : IAssetProvider
     private readonly List<LayerRule> _layerRules = [];
     private readonly TimeProvider _timeProvider;
 
-    /// <summary>
-    /// <paramref name="timeProvider"/> defaults to <see cref="TimeProvider.System"/> because this
-    /// type is constructed directly (no DI) at dozens of call sites across providers, plugins, and
-    /// tests that don't care about clock behavior — only tests exercising <see cref="Update"/>/
-    /// <see cref="AddRange"/> timestamp behavior need to pass a fake one explicitly.
-    /// </summary>
-    public InMemoryAssetProvider(TimeProvider? timeProvider = null)
-    {
+    public TestAssetProvider(TimeProvider? timeProvider = null) =>
         _timeProvider = timeProvider ?? TimeProvider.System;
-    }
 
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;
@@ -33,8 +32,7 @@ public sealed class InMemoryAssetProvider : IAssetProvider
     public GeoFeature? GetById(string id) =>
         _features.TryGetValue(id, out var f) ? f : null;
 
-    public IReadOnlyList<GeoFeature> GetAll() =>
-        [.. _features.Values];
+    public IReadOnlyList<GeoFeature> GetAll() => [.. _features.Values];
 
     public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) =>
         [.. _features.Values.Where(f => f.Properties.AssetTypeId == assetTypeId)];
@@ -96,8 +94,7 @@ public sealed class InMemoryAssetProvider : IAssetProvider
     public void LoadAll(IEnumerable<GeoFeature> features)
     {
         _features.Clear();
-        foreach (var f in features)
-            _features[f.Id] = f;
+        foreach (var f in features) _features[f.Id] = f;
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -112,43 +109,34 @@ public sealed class InMemoryAssetProvider : IAssetProvider
     public void DeleteAssetType(Guid id)
     {
         var type = _assetTypes.FirstOrDefault(t => t.Id == id && !t.IsBuiltIn);
-        if (type is not null)
-            _assetTypes.Remove(type);
+        if (type is not null) _assetTypes.Remove(type);
     }
-
-    // ── Layer management ─────────────────────────────────────────────────────
 
     public IReadOnlyList<Layer> GetLayers() => [.. _layers];
 
     public void AddLayer(Layer layer)
     {
-        if (_layers.All(l => l.Id != layer.Id))
-            _layers.Add(layer);
+        if (_layers.All(l => l.Id != layer.Id)) _layers.Add(layer);
     }
 
     public void DeleteLayer(Guid id)
     {
         var layer = _layers.FirstOrDefault(l => l.Id == id);
-        if (layer is not null)
-            _layers.Remove(layer);
+        if (layer is not null) _layers.Remove(layer);
     }
-
-    // ── Layer rule management ────────────────────────────────────────────────
 
     public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) =>
         [.. _layerRules.Where(r => r.AssetTypeId == assetTypeId)];
 
     public void AddLayerRule(LayerRule layerRule)
     {
-        if (_layerRules.All(r => r.Id != layerRule.Id))
-            _layerRules.Add(layerRule);
+        if (_layerRules.All(r => r.Id != layerRule.Id)) _layerRules.Add(layerRule);
     }
 
     public void DeleteLayerRule(Guid id)
     {
         var rule = _layerRules.FirstOrDefault(r => r.Id == id);
-        if (rule is not null)
-            _layerRules.Remove(rule);
+        if (rule is not null) _layerRules.Remove(rule);
     }
 
     // ── Spatial queries ───────────────────────────────────────────────────────
@@ -199,9 +187,7 @@ public sealed class InMemoryAssetProvider : IAssetProvider
     public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() =>
         TopoGraph.GetConnectedComponents(_features.Values);
 
-    public bool HasCycles() =>
-        TopoGraph.HasCycles(_features.Values);
+    public bool HasCycles() => TopoGraph.HasCycles(_features.Values);
 
-    public IReadOnlyList<GeoFeature> TopologicalSort() =>
-        TopoGraph.TopologicalSort(_features.Values);
+    public IReadOnlyList<GeoFeature> TopologicalSort() => TopoGraph.TopologicalSort(_features.Values);
 }

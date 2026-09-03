@@ -4,7 +4,6 @@ using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authentication;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.WFS;
 using GeoAssets.Provider.WMS;
@@ -93,10 +92,21 @@ builder.Services.AddScoped<IAnalyticsService>(sp => sp.GetRequiredService<AppIns
 
 // ── GeoAssets core services ───────────────────────────────────────────────────
 
-// Asset provider — in-memory cache + REST API client, wrapped by the observable decorator.
+// Asset provider — REST API client, wrapped by the observable decorator.
 // TODO: add a "loading" state to the UI while the provider initializes and remove the "Loading..." placeholder from the map.
 // TODO: load by configuration and support multiple provider types (e.g. in-memory for dev, REST for prod).
-builder.Services.AddGeoAssetsInMemory();
+// Provider pool — still needed by Rest/WFS/WMS/Shapefile plugins even though the "Local
+// Collection" (InMemory) plugin option itself is gone (XD01-131).
+builder.Services.AddSingleton<IProviderPool, ProviderPool>();
+
+// GeoAssets.Server base URL — required by every Rest-backed domain (Assets' RestProviderPlugin,
+// ServiceOrders' RestServiceOrderRepository, Identity's Rest repositories) and by the
+// AuthorizationMessageHandler below. No InMemory/dev fallback remains after XD01-129/XD01-130/
+// XD01-131 removed every non-Rest option, so a missing value must fail fast here — rather than
+// silently authorizing requests against an empty-string URL, which used to leave every call to
+// GeoAssets.Server unauthenticated instead of visibly broken (XD01-132).
+var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
+    ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
 
 // AuthorizationMessageHandler (MSAL) attaches the CIAM access token to the "GeoAssetsServer"
 // named HttpClient that RestProviderFactory requests (XD01-17) — scoped to the configured,
@@ -107,27 +117,18 @@ builder.Services.AddHttpClient("GeoAssetsServer")
     {
         var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
         handler.ConfigureHandler(
-            authorizedUrls: [builder.Configuration["GeoAssetsServer:BaseUrl"] ?? ""],
+            authorizedUrls: [geoAssetsServerBaseUrl],
             scopes:         [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
         return handler;
     });
 
-// ── GeoAssets Identity — in-memory dev/demo seed (default) or HTTP-backed against
-// GeoAssets.Server (XD01-18), switched by "Identity:Backend" config ("InMemory" | "Rest";
-// env var override: Identity__Backend). In-memory stays the default so the app still runs
-// with zero config against a Postgres server, mirroring "ServiceOrders:Backend" below.
-var identityBackend = builder.Configuration["Identity:Backend"] ?? "InMemory";
-var identityUseRest = string.Equals(identityBackend, "Rest", StringComparison.OrdinalIgnoreCase);
+// ── GeoAssets Identity — HTTP-backed against GeoAssets.Server (XD01-18). InMemory removed
+// as an option (XD01-130) — Rest is the only supported backend.
+builder.Services.AddGeoIdentityRest();
 
-if (identityUseRest)
-    builder.Services.AddGeoIdentityRest();
-else
-    builder.Services.AddGeoIdentityWasmDev();
-
-// Pending-invitation redirect check (XD01-89) — backend-agnostic, so registered here rather
-// than inside either AddGeoIdentityRest or AddGeoIdentityWasmDev: its dependencies
-// (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager) are already
-// registered by both branches above.
+// Pending-invitation redirect check (XD01-89) — registered here (not inside AddGeoIdentityRest)
+// since its dependencies (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager)
+// are already registered above.
 builder.Services.AddScoped<InvitationRedirectGate>();
 
 builder.Services.AddGeoAssetsRest();
@@ -178,27 +179,14 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
     sp.GetRequiredService<ILogger<ObservableAssetService>>(),
     sp.GetRequiredService<TimeProvider>()));
 
-// ── Service Order workflow — in-memory (default) or REST-backed via GeoAssets.Server,
-// switched by "ServiceOrders:Backend" config ("InMemory" | "Rest"; env var override:
-// ServiceOrders__Backend). In-memory stays the default so the app still runs with zero
-// config against a Postgres server (XD01-8). When "Rest", OrderTypes are also loaded from
-// the server below, overlaying the seeded defaults — see AddWorkflowRest's doc comment.
+// ── Service Order workflow — REST-backed via GeoAssets.Server (XD01-8). OrderTypes are also
+// loaded from the server below, overlaying the seeded defaults — see AddWorkflowRest's doc
+// comment. InMemory removed as an option (XD01-129) — Rest is the only supported backend.
 builder.Services.AddOrderTypeRegistry();
 
-var serviceOrdersBackend = builder.Configuration["ServiceOrders:Backend"] ?? "InMemory";
-var serviceOrdersUseRest = string.Equals(serviceOrdersBackend, "Rest", StringComparison.OrdinalIgnoreCase);
-
-if (serviceOrdersUseRest)
-{
-    var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
-        ?? throw new InvalidOperationException(
-            "ServiceOrders:Backend is 'Rest' but ServiceOrders:ApiBaseUrl is not configured.");
-    builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
-}
-else
-{
-    builder.Services.AddWorkflowInMemory();
-}
+var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
+    ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
+builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
@@ -209,17 +197,23 @@ var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("GeoAssets starting — environment: {Environment}", builder.HostEnvironment.Environment);
 
-if (!identityUseRest)
+var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
+var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
+try
 {
-    host.Services.GetRequiredService<IdentitySeeder>().Seed();
-    host.Services.GetRequiredService<UserProvisioningService>();
-}
-
-if (serviceOrdersUseRest)
-{
-    var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
-    var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
     await orderTypeRegistry.LoadFromAsync(orderTypeRepo);
+}
+catch (AccessTokenNotAvailableException)
+{
+    // Runs before host.RunAsync() starts the render tree, so a fresh session with no cached
+    // MSAL token can't complete the interactive login redirect that AuthorizationMessageHandler
+    // would normally trigger from inside a rendered component — it just throws here instead
+    // (XD01-134). AddOrderTypeRegistry() already seeded the built-in defaults synchronously, so
+    // booting with those and skipping the server-persisted overlay is safe: the post-login page
+    // reload re-runs this same call with a real token and picks up the full list then.
+    logger.LogWarning(
+        "Could not load server-persisted order types — user not yet authenticated; " +
+        "continuing with built-in defaults only.");
 }
 
 // Application Insights (XD01-53) — initialized from configuration instead of the connection

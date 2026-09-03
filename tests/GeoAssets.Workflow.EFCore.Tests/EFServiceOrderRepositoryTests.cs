@@ -1,7 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Selection;
@@ -19,9 +18,11 @@ public class EFServiceOrderRepositoryTests
         string? assignedTo = null,
         string orderTypeId = "inspection",
         string? parentOrderId = null,
-        DateTime? createdAt = null) => new()
+        DateTime? createdAt = null,
+        byte[]? rowVersion = null) => new()
     {
         Id            = id,
+        RowVersion    = rowVersion ?? [],
         Status        = status,
         CreatedBy     = createdBy,
         AssignedTo    = assignedTo,
@@ -33,6 +34,7 @@ public class EFServiceOrderRepositoryTests
     private sealed class FakeServiceOrder : IServiceOrder
     {
         public string Id { get; init; } = Guid.NewGuid().ToString();
+        public byte[] RowVersion { get; init; } = [];
         public string Title { get; init; } = string.Empty;
         public string Description { get; init; } = string.Empty;
         public string OrderTypeId { get; init; } = string.Empty;
@@ -137,7 +139,7 @@ public class EFServiceOrderRepositoryTests
     public async Task GetByIdAsync_WithAssetProvider_HydratesFeatures()
     {
         using var fixture = new SqliteFixture();
-        var assets = new InMemoryAssetProvider();
+        var assets = new TestAssetProvider();
         assets.Add(new GeoFeature { Id = "f1", Geometry = new GeoPoint(0, 0) });
         var repo = new EFServiceOrderRepository(fixture.Context, assets);
 
@@ -492,6 +494,68 @@ public class EFServiceOrderRepositoryTests
 
         await act.Should().ThrowAsync<ServiceOrderConcurrencyException>()
             .Where(e => e.OrderId == "a");
+    }
+
+    /// <summary>
+    /// Unlike <see cref="UpdateAsync_ConcurrentWriters_ThrowsServiceOrderConcurrencyException"/>
+    /// (which incidentally catches its race only because both calls share one DbContext's change
+    /// tracker), this reads the stale copy through a context that is disposed long before the
+    /// later write — the same shape as two separate HTTP requests (or a UI panel held open across
+    /// an arbitrary gap) each getting their own scoped DbContext. Proves XD01-26's actual target
+    /// scenario: without round-tripping RowVersion, this save would succeed and silently overwrite
+    /// the other writer's change.
+    /// </summary>
+    [Fact]
+    public async Task UpdateAsync_StaleRowVersionFromLongDisposedContext_ThrowsServiceOrderConcurrencyException()
+    {
+        using var fixture = new SqliteFixture();
+        var seedRepo = new EFServiceOrderRepository(fixture.Context);
+        await seedRepo.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+
+        byte[] staleRowVersion;
+        using (var readerContext = fixture.NewContext())
+        {
+            var read = (ServiceOrder)(await new EFServiceOrderRepository(readerContext).GetByIdAsync("a"))!;
+            staleRowVersion = read.RowVersion;
+        }
+        // readerContext is disposed here — nothing about the later write shares its tracker.
+
+        using (var otherWriterContext = fixture.NewContext())
+        {
+            var otherWriterRepo = new EFServiceOrderRepository(otherWriterContext);
+            var toUpdate = (ServiceOrder)(await otherWriterRepo.GetByIdAsync("a"))!;
+            toUpdate.Title = "Changed by someone else";
+            await otherWriterRepo.UpdateAsync(toUpdate);
+        }
+
+        using var lateContext = fixture.NewContext();
+        var lateRepo = new EFServiceOrderRepository(lateContext);
+        var staleSnapshot = Order("a", status: ServiceOrderStatus.Draft, rowVersion: staleRowVersion);
+
+        var act = () => lateRepo.UpdateAsync(staleSnapshot);
+
+        await act.Should().ThrowAsync<ServiceOrderConcurrencyException>()
+            .Where(e => e.OrderId == "a");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_FreshRowVersionFromSeparateContext_Succeeds()
+    {
+        using var fixture = new SqliteFixture();
+        var seedRepo = new EFServiceOrderRepository(fixture.Context);
+        await seedRepo.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
+
+        using var readerContext = fixture.NewContext();
+        var currentRowVersion = (await new EFServiceOrderRepository(readerContext).GetByIdAsync("a"))!.RowVersion;
+
+        using var writerContext = fixture.NewContext();
+        var writerRepo = new EFServiceOrderRepository(writerContext);
+        var freshSnapshot = Order("a", status: ServiceOrderStatus.Pending, rowVersion: currentRowVersion);
+
+        await writerRepo.UpdateAsync(freshSnapshot);
+
+        var reloaded = await writerRepo.GetByIdAsync("a");
+        reloaded!.Status.Should().Be(ServiceOrderStatus.Pending);
     }
 
     // ── AppendDispatchAsync ─────────────────────────────────────────────────────

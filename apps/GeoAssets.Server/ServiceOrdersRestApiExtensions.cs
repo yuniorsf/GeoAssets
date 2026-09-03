@@ -29,6 +29,16 @@ namespace GeoAssets.Server;
 /// as the closest existing verb — see the deny-reason "reason" field returned on 403 for
 /// exactly which rule declined. Order Type CRUD is unchanged/ungated: that's configuration
 /// data, not a per-order action <c>ServiceOrderRules</c> governs.
+///
+/// Reads additionally call <c>.RequireAuthorization("serviceorders:read")</c> (XD01-127) —
+/// a raw <c>AppPermission.Code</c> already seeded and granted to every built-in role
+/// (<c>GeoIdentitySeeder</c>), resolved the same way as the Identity endpoints' per-route
+/// codes (XD01-15). Writes are deliberately left as-is rather than also gated by a raw
+/// permission code: <c>ServiceOrderRules</c> already evaluates the caller's permissions
+/// per-order (Creator/Assignee/Role rules, XD01-16), which a blanket
+/// <c>"serviceorders:edit"</c> check would not improve — and no such code exists in
+/// <c>GeoIdentitySeeder</c>, which seeds <c>create</c>/<c>read</c>/<c>assign</c>/
+/// <c>complete</c>/<c>cancel</c> instead.
 /// </summary>
 public static class ServiceOrdersRestApiExtensions
 {
@@ -41,55 +51,61 @@ public static class ServiceOrdersRestApiExtensions
         // ── Service Orders — reads ──────────────────────────────────────────────
 
         routes.MapGet($"{prefix}/service-orders", async (IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetAllAsync(), opts));
+            Results.Json(await repo.GetAllAsync(), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/roots", async (IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetRootsAsync(), opts));
+            Results.Json(await repo.GetRootsAsync(), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-status/{{status}}", async (string status, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByStatusAsync(status), opts));
+            Results.Json(await repo.GetByStatusAsync(status), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-assignee/{{userId}}", async (string userId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByAssigneeAsync(userId), opts));
+            Results.Json(await repo.GetByAssigneeAsync(userId), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-creator/{{userId}}", async (string userId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByCreatorAsync(userId), opts));
+            Results.Json(await repo.GetByCreatorAsync(userId), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-order-type/{{orderTypeId}}", async (string orderTypeId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByOrderTypeAsync(orderTypeId), opts));
+            Results.Json(await repo.GetByOrderTypeAsync(orderTypeId), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-date-range", async (DateTime from, DateTime to, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByDateRangeAsync(from, to), opts));
+            Results.Json(await repo.GetByDateRangeAsync(from, to), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/dispatched-to/{{targetId}}",
             async (string targetId, DispatchTargetType targetType, IServiceOrderRepository repo) =>
-                Results.Json(await repo.GetDispatchedToAsync(targetId, targetType), opts));
+                Results.Json(await repo.GetDispatchedToAsync(targetId, targetType), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/{{id}}", async (string id, IServiceOrderRepository repo) =>
         {
             var order = await repo.GetByIdAsync(id);
             return order is null ? Results.NotFound() : Results.Json(order, opts);
-        });
+        }).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/{{id}}/children", async (string id, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetChildrenAsync(id), opts));
+            Results.Json(await repo.GetChildrenAsync(id), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/{{id}}/parent", async (string id, IServiceOrderRepository repo) =>
         {
             var parent = await repo.GetParentAsync(id);
             return parent is null ? Results.NotFound() : Results.Json(parent, opts);
-        });
+        }).RequireAuthorization("serviceorders:read");
 
         // ── Service Orders — writes ─────────────────────────────────────────────
 
         routes.MapPost($"{prefix}/service-orders", async (
-            HttpRequest req, IServiceOrderRepository repo, IOrderTypeRepository orderTypeRepo,
+            HttpRequest req, IServiceOrderRepository repo, OrderTypeRegistry orderTypeRegistry,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
             var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts);
             if (order is null) return Results.BadRequest("Invalid service order.");
 
-            var orderType = await orderTypeRepo.GetByIdAsync(order.OrderTypeId);
+            // Looks up OrderTypeRegistry (the seeded-defaults + DB-persisted-overlay singleton,
+            // AddOrderTypeRegistry()/LoadRegistryFromDbAsync in Program.cs) rather than
+            // IOrderTypeRepository (raw DB rows only) — the 3 built-in order types are seeded in
+            // code, never written to the database, so checking the repository directly rejected
+            // every built-in type as "unknown" even though OrderTypes.All (the client's own view
+            // of the same registry) correctly listed them as creatable.
+            var orderType = orderTypeRegistry.Find(order.OrderTypeId);
             if (orderType is null) return Results.BadRequest($"Unknown order type '{order.OrderTypeId}'.");
 
             var principal = await principalFactory.CreateAsync();

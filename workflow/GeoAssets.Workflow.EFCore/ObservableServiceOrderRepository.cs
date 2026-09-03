@@ -11,9 +11,9 @@ namespace GeoAssets.Workflow.Persistence;
 /// Subscribes to the inner repository's <see cref="IServiceOrderRepository.OrderStatusChanged"/>
 /// event to record a <see cref="GeoAssetsActivitySource.StartOrderActivity"/> span and a
 /// <see cref="GeoAssetsMeter.RecordOrderTransition"/> metric for every transition that actually
-/// happens — reusing the event both <c>InMemoryServiceOrderRepository</c> and
-/// <c>EFServiceOrderRepository</c> already raise (only when the status genuinely changes) rather
-/// than duplicating that check here. <see cref="UpdateAsync"/>/<see cref="AppendActionAsync"/> are
+/// happens — reusing the event both <c>EFServiceOrderRepository</c> and
+/// <c>RestServiceOrderRepository</c> already raise (only when the status genuinely changes)
+/// rather than duplicating that check here. <see cref="UpdateAsync"/>/<see cref="AppendActionAsync"/> are
 /// additionally wrapped to log rejected transitions (<see cref="InvalidServiceOrderTransitionException"/>),
 /// which never reach <c>OrderStatusChanged</c> since the order was never actually updated.
 ///
@@ -25,7 +25,7 @@ namespace GeoAssets.Workflow.Persistence;
 /// <c>AddWorkflowPersistence</c>, the same requirement <c>KafkaOrderEventPublisher</c>/
 /// <c>ServiceBusOrderEventPublisher</c> already impose (XD01-32).
 ///
-/// Not applied to <c>AddWorkflowInMemory</c> (the Blazor WASM registration in
+/// Not applied to <c>AddWorkflowRest</c> (the Blazor WASM registration in
 /// <c>GeoAssets.Web/Program.cs</c>): <c>GeoAssets.Infrastructure.Observability</c> carries an
 /// ASP.NET Core <c>FrameworkReference</c> that a WASM client project can't take on — the same
 /// constraint documented on <c>ImportDiagnostics</c>, which exists specifically to be usable from

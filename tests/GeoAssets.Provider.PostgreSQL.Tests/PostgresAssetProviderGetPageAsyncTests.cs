@@ -103,6 +103,46 @@ public sealed class PostgresAssetProviderGetPageAsyncTests(PostgresContainerFixt
     }
 
     [Fact]
+    public async Task GetPageAsync_SearchText_MatchesCustomAttributeValue()
+    {
+        await ClearAsync();
+        await SeedAsync("""
+            INSERT INTO geo_entity ("Id", "Name", "AssetTypeId", "Description", custom_attributes)
+            VALUES
+                ('a', 'Main Tower', 'type-a', '', '{{"voltage": "220V"}}'),
+                ('b', 'Bridge', 'type-a', 'Riverside crossing', '{{}}'),
+                ('c', 'Substation', 'type-a', '', '{{"material": "steel"}}');
+            """);
+
+        await using var sut = CreateSut(fixture.CreateOptions());
+
+        var result = await sut.GetPageAsync(new AssetQuery { SearchText = "220v" });
+
+        result.Items.Should().ContainSingle().Which.Id.Should().Be("a");
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_SearchText_MatchesCustomAttributeKey()
+    {
+        await ClearAsync();
+        await SeedAsync("""
+            INSERT INTO geo_entity ("Id", "Name", "AssetTypeId", "Description", custom_attributes)
+            VALUES
+                ('a', 'Main Tower', 'type-a', '', '{{"voltage": "220V"}}'),
+                ('b', 'Bridge', 'type-a', 'Riverside crossing', '{{}}'),
+                ('c', 'Substation', 'type-a', '', '{{"material": "steel"}}');
+            """);
+
+        await using var sut = CreateSut(fixture.CreateOptions());
+
+        var result = await sut.GetPageAsync(new AssetQuery { SearchText = "MATERIAL" });
+
+        result.Items.Should().ContainSingle().Which.Id.Should().Be("c");
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetPageAsync_Skip_AdvancesPastAlreadyReturnedRows()
     {
         await ClearAsync();

@@ -5,8 +5,8 @@ namespace GeoAssets.Workflow.Rest;
 
 /// <summary>
 /// DI registration for the REST-backed <see cref="IServiceOrderRepository"/>/<see cref="IOrderTypeRepository"/>
-/// (XD01-8) — the Postgres-backed alternative to <c>AddWorkflowInMemory</c> for hosts that talk to
-/// <c>GeoAssets.Server</c> instead of holding state client-side.
+/// (XD01-8) — <c>GeoAssets.Web</c>'s sole Service Order/OrderType registration (XD01-129), always
+/// pointed at <c>GeoAssets.Server</c> instead of holding state client-side.
 /// </summary>
 public static class WorkflowRestServiceExtensions
 {
@@ -35,7 +35,13 @@ public static class WorkflowRestServiceExtensions
 
     private static HttpClient BuildClient(IServiceProvider sp, string baseUrl)
     {
-        var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+        // Named (not the anonymous default) so a host's auth handler on this name also covers
+        // ServiceOrders/OrderType calls — same reasoning as RestProviderFactory.BuildClient and
+        // GeoIdentityRestExtensions.CreateIdentityClient. GeoAssets.Web attaches its CIAM
+        // AuthorizationMessageHandler only to "GeoAssetsServer" (Program.cs, XD01-17); the
+        // anonymous client this used to request never carried a token, so every call 401'd
+        // against GeoAssets.Server's FallbackPolicy.RequireAuthenticatedUser() (XD01-127).
+        var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeoAssetsServer");
         client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
         return client;
     }

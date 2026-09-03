@@ -28,9 +28,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
-    <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
   </ItemGroup>
 
 </Project>

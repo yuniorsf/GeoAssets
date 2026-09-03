@@ -2,7 +2,6 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Provider.InMemory;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Provider.WFS;
@@ -10,8 +9,8 @@ namespace GeoAssets.Provider.WFS;
 /// <summary>
 /// Read-only <see cref="IAssetProvider"/> backed by an OGC WFS 2.0 endpoint.
 ///
-/// On initialisation all features are loaded from the WFS service and held in an
-/// <see cref="InMemoryAssetProvider"/> cache.  Most read operations are served from
+/// On initialisation all features are loaded from the WFS service and held in a
+/// <see cref="LocalFeatureCache"/>.  Most read operations are served from
 /// that cache.  <see cref="GetInBoundsAsync"/> issues a live WFS GetFeature request
 /// with a BBOX filter so PostGIS on the server does the spatial cut — only the
 /// features inside the current viewport travel over the wire.
@@ -24,7 +23,7 @@ public sealed class WfsAssetProvider : IAssetProvider
     private readonly WfsClient              _wfs;
     private readonly string                 _typeName;
     private readonly int                    _maxFeatures;
-    private readonly InMemoryAssetProvider  _cache = new();
+    private readonly LocalFeatureCache      _cache = new();
     private readonly ILogger<WfsAssetProvider> _logger;
 
     internal WfsAssetProvider(
@@ -91,14 +90,6 @@ public sealed class WfsAssetProvider : IAssetProvider
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                 => _cache.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)         => _cache.GetIntersecting(geometry);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg)=> _cache.GetNearby(center, distanceDeg);
-    public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                => _cache.GetNeighbors(featureId);
-    public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)              => _cache.GetDescendants(featureId);
-    public IReadOnlyList<GeoFeature>                GetAncestors(string featureId)                => _cache.GetAncestors(featureId);
-    public IReadOnlyList<GeoFeature>                FindPath(string fromId, string toId)          => _cache.FindPath(fromId, toId);
-    public IReadOnlyList<GeoFeature>                FindShortestPath(string fromId, string toId)  => _cache.FindShortestPath(fromId, toId);
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents()                      => _cache.GetConnectedComponents();
-    public bool                                     HasCycles()                                    => _cache.HasCycles();
-    public IReadOnlyList<GeoFeature>                TopologicalSort()                             => _cache.TopologicalSort();
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                => _cache.GetAssetTypes();
     public IReadOnlyList<Layer>                     GetLayers()                                    => _cache.GetLayers();
     public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                => _cache.GetLayerRules(assetTypeId);

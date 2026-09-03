@@ -6,11 +6,10 @@ namespace GeoAssets.Workflow.Orders;
 /// (<see cref="UpdateAsync"/>, <see cref="AppendActionAsync"/>), so a new implementation
 /// gets this guarantee automatically instead of having to reimplement the check itself.
 ///
-/// <see cref="InMemoryServiceOrderRepository"/> and <c>EFServiceOrderRepository</c>
-/// already validate directly and remain perfectly safe to use unwrapped — this decorator
-/// adds the same guarantee for any repository that doesn't, without requiring every
-/// implementer to remember to add it. <see cref="WorkflowServiceExtensions.AddWorkflowInMemory"/>
-/// and <c>AddWorkflowPersistence</c> register it by default.
+/// <c>EFServiceOrderRepository</c> already validates directly and remains perfectly safe to
+/// use unwrapped — this decorator adds the same guarantee for any repository that doesn't,
+/// without requiring every implementer to remember to add it. <c>AddWorkflowPersistence</c>
+/// registers it by default.
 /// </summary>
 public sealed class ValidatingServiceOrderRepository(
     IServiceOrderRepository inner,

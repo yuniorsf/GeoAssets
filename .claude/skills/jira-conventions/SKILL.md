@@ -57,9 +57,12 @@ immediately call `editJiraIssue` with the real, fully-formatted
 description. Use `getJiraIssue` to verify if there's any doubt the
 formatting landed correctly.
 
-## PR titles reference the ticket key
+## PR titles and commit subjects reference the ticket key
 
-See CLAUDE.md § Pull Requests — a PR implementing a ticket is titled
-`<TICKET-KEY>: <summary>`; a PR spanning multiple tickets is prefixed with
-the primary/parent key. This applies whether the PR closes an Epic child or
-the Epic itself.
+See CLAUDE.md § Pull Requests & Commits — a PR implementing a ticket is
+titled `<TICKET-KEY>: <summary>`; a PR spanning multiple tickets is
+prefixed with the primary/parent key. This applies whether the PR closes an
+Epic child or the Epic itself. Commit subjects end with `(TICKET-KEY)`
+instead of a prefix. Both patterns are what the **GitHub for Atlassian** app
+(connected to this repo) scans for to auto-populate a ticket's Development
+panel.

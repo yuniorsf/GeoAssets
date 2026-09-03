@@ -11,10 +11,11 @@ namespace GeoAssets.Server;
 /// server-side identity backend (<c>AddGeoIdentity()</c>, XD01-14) instead of client-only WASM state.
 ///
 /// <c>/me</c> and <c>/policies</c> require only an authenticated caller, via the global
-/// <c>AuthorizationOptions.FallbackPolicy</c> (XD01-12). The Users/Roles/Permissions admin
-/// endpoints (XD01-54 Phase 1) additionally call <c>.RequireAuthorization("resource:action")</c> —
-/// a raw <c>AppPermission.Code</c>, resolved by <see cref="GeoAuthorizationHandler"/> (XD01-15).
-/// Permissions are code-seeded and read-only.
+/// <c>AuthorizationOptions.FallbackPolicy</c> (XD01-12). The Users/Roles/Permissions/
+/// Organizations/Groups admin endpoints (XD01-54 Phase 1, XD01-128) additionally call
+/// <c>.RequireAuthorization("resource:action")</c> — a raw <c>AppPermission.Code</c>, resolved by
+/// <see cref="GeoAuthorizationHandler"/> (XD01-15). Permissions are code-seeded and read-only;
+/// Organizations/Groups are real admin-managed data with full CRUD, same shape as Users/Roles.
 ///
 /// Production role <em>membership</em> is still sourced from the external provider's roles claim,
 /// not the local <c>UserRole</c> table (XD01-19) — the <c>rolesync/*</c> endpoints (XD01-59 Phase
@@ -77,6 +78,25 @@ public static class IdentityRestApiExtensions
             if (user is null) return Results.NotFound();
 
             var roles = await userRepo.GetRolesAsync(id);
+            var dto = new UserDetailDto(
+                Id:             user.Id,
+                Email:          user.Email,
+                DisplayName:    user.DisplayName,
+                IsActive:       user.IsActive,
+                OrganizationId: user.OrganizationId,
+                CreatedAt:      user.CreatedAt,
+                LastLoginAt:    user.LastLoginAt,
+                RoleIds:        roles.Select(r => r.Id).ToList());
+
+            return Results.Json(dto, _opts);
+        }).RequireAuthorization("users:read");
+
+        routes.MapGet($"{prefix}/users/by-external-id/{{oid}}", async (string oid, IUserRepository userRepo) =>
+        {
+            var user = await userRepo.GetByExternalObjectIdAsync(oid);
+            if (user is null) return Results.NotFound();
+
+            var roles = await userRepo.GetRolesAsync(user.Id);
             var dto = new UserDetailDto(
                 Id:             user.Id,
                 Email:          user.Email,
@@ -183,6 +203,126 @@ public static class IdentityRestApiExtensions
             var permissions = await permissionRepo.GetAllAsync();
             return Results.Json(permissions.Select(ToDto), _opts);
         }).RequireAuthorization("permissions:read");
+
+        // ── Organizations (XD01-128) ────────────────────────────────────────────
+
+        routes.MapGet($"{prefix}/organizations", async (IOrganizationRepository orgRepo) =>
+        {
+            var orgs = await orgRepo.GetAllAsync();
+            return Results.Json(orgs.Select(ToDto), _opts);
+        }).RequireAuthorization("organizations:read");
+
+        routes.MapGet($"{prefix}/organizations/{{id}}", async (Guid id, IOrganizationRepository orgRepo) =>
+        {
+            var org = await orgRepo.GetByIdAsync(id);
+            return org is null ? Results.NotFound() : Results.Json(ToDto(org), _opts);
+        }).RequireAuthorization("organizations:read");
+
+        routes.MapGet($"{prefix}/organizations/{{id}}/users", async (Guid id, IOrganizationRepository orgRepo) =>
+        {
+            var users = await orgRepo.GetUsersAsync(id);
+            return Results.Json(users.Select(ToSummaryDto), _opts);
+        }).RequireAuthorization("organizations:read");
+
+        routes.MapPost($"{prefix}/organizations", async (
+            OrganizationWriteDto dto, IOrganizationRepository orgRepo, TimeProvider timeProvider) =>
+        {
+            var org = new Organization
+            {
+                Id          = Guid.NewGuid(),
+                Name        = dto.Name,
+                Slug        = dto.Slug,
+                Description = dto.Description,
+                IsActive    = dto.IsActive,
+                CreatedAt   = timeProvider.GetUtcNow().UtcDateTime,
+            };
+            await orgRepo.AddAsync(org);
+            await orgRepo.SaveChangesAsync();
+            return Results.Created($"{prefix}/organizations/{org.Id}", null);
+        }).RequireAuthorization("organizations:edit");
+
+        routes.MapPut($"{prefix}/organizations/{{id}}", async (Guid id, OrganizationWriteDto dto, IOrganizationRepository orgRepo) =>
+        {
+            var org = await orgRepo.GetByIdAsync(id);
+            if (org is null) return Results.NotFound();
+
+            org.Name        = dto.Name;
+            org.Slug        = dto.Slug;
+            org.Description = dto.Description;
+            org.IsActive    = dto.IsActive;
+
+            await orgRepo.UpdateAsync(org);
+            await orgRepo.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization("organizations:edit");
+
+        // ── Groups (XD01-128) ────────────────────────────────────────────────────
+
+        routes.MapGet($"{prefix}/groups", async (IGroupRepository groupRepo) =>
+        {
+            var groups = await groupRepo.GetAllAsync();
+            return Results.Json(groups.Select(ToDto), _opts);
+        }).RequireAuthorization("groups:read");
+
+        routes.MapGet($"{prefix}/groups/{{id}}", async (Guid id, IGroupRepository groupRepo) =>
+        {
+            var group = await groupRepo.GetByIdAsync(id);
+            return group is null ? Results.NotFound() : Results.Json(ToDto(group), _opts);
+        }).RequireAuthorization("groups:read");
+
+        routes.MapGet($"{prefix}/groups/{{id}}/members", async (Guid id, IGroupRepository groupRepo) =>
+        {
+            var members = await groupRepo.GetMembersAsync(id);
+            return Results.Json(members.Select(ToSummaryDto), _opts);
+        }).RequireAuthorization("groups:read");
+
+        routes.MapPost($"{prefix}/groups", async (
+            GroupWriteDto dto, IGroupRepository groupRepo, TimeProvider timeProvider) =>
+        {
+            var group = new AppGroup
+            {
+                Id             = Guid.NewGuid(),
+                Name           = dto.Name,
+                Description    = dto.Description,
+                OrganizationId = dto.OrganizationId,
+                IsActive       = dto.IsActive,
+                CreatedAt      = timeProvider.GetUtcNow().UtcDateTime,
+            };
+            await groupRepo.AddAsync(group);
+            await groupRepo.SaveChangesAsync();
+            return Results.Created($"{prefix}/groups/{group.Id}", null);
+        }).RequireAuthorization("groups:edit");
+
+        routes.MapPut($"{prefix}/groups/{{id}}", async (Guid id, GroupWriteDto dto, IGroupRepository groupRepo) =>
+        {
+            var group = await groupRepo.GetByIdAsync(id);
+            if (group is null) return Results.NotFound();
+
+            group.Name           = dto.Name;
+            group.Description    = dto.Description;
+            group.OrganizationId = dto.OrganizationId;
+            group.IsActive       = dto.IsActive;
+
+            await groupRepo.UpdateAsync(group);
+            await groupRepo.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization("groups:edit");
+
+        routes.MapPost($"{prefix}/groups/{{id}}/members/{{userId}}", async (
+            Guid id, Guid userId, IGroupRepository groupRepo, IGeoAuthorizationService authService) =>
+        {
+            var ctx = await authService.GetAuthorizationContextAsync();
+            await groupRepo.AddMemberAsync(id, userId, addedBy: ctx.User.Id.ToString());
+            await groupRepo.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization("groups:edit");
+
+        routes.MapDelete($"{prefix}/groups/{{id}}/members/{{userId}}", async (Guid id, Guid userId, IGroupRepository groupRepo) =>
+        {
+            await groupRepo.RemoveMemberAsync(id, userId);
+            await groupRepo.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization("groups:edit");
 
         // ── Role Sync (XD01-59 Phase 2, XD01-63) ────────────────────────────────
 
@@ -418,6 +558,12 @@ public static class IdentityRestApiExtensions
 
     private static PermissionDto ToDto(AppPermission p) =>
         new(p.Id, p.Code, p.Resource, p.Action, p.Description);
+
+    private static OrganizationDto ToDto(Organization o) =>
+        new(o.Id, o.Name, o.Slug, o.Description, o.IsActive, o.CreatedAt);
+
+    private static GroupDto ToDto(AppGroup g) =>
+        new(g.Id, g.Name, g.Description, g.OrganizationId, g.IsActive, g.CreatedAt);
 
     private static PendingInvitationDto ToDto(PendingInvitation i) =>
         new(i.Id, i.Email, i.ExternalObjectId, i.InvitedByUserId, i.InvitedAt, i.RedeemedAt, i.Status);

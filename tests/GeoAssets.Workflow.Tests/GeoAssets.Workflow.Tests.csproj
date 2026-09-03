@@ -24,7 +24,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
-    <ProjectReference Include="..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
   </ItemGroup>
 
 </Project>

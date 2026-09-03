@@ -97,10 +97,11 @@ Also theme-scoped: `--on-accent` (text/icon color for content on top of `--accen
 - The topbar's theme toggle (`TopBar.razor`) is a 3-button Bootstrap `btn-group` (Light/System/Dark).
 - Only wired into `GeoAssets.Web` (`Program.cs` + `App.razor`) — `GeoAssets.MAUI`'s `MauiProgram.cs`/`WebApp.razor` don't register `IThemeService` or `ICultureService` (MAUI's DI for these two remains a pre-existing gap; `ICurrentUserAccessor`/`IAuthNavigationService` were closed for MAUI by XD01-52's MSAL.NET wiring — see `EntraCiamMauiAuthenticationProvider`). The FOUC-prevention inline script is duplicated into MAUI's `index.html` anyway since it's plain JS with no DI dependency.
 
-## Pull Requests
+## Pull Requests & Commits
 
 - When an Agent (Claude Code Action or otherwise) opens a PR implementing a Jira ticket, the PR title must be prefixed with that ticket's key, e.g. `XD01-8: Add REST-backed IServiceOrderRepository client`
 - If a PR's changes span multiple tickets, prefix with the primary/parent ticket key
+- Commit subjects implementing a ticket end with `(TICKET-KEY)`, e.g. `feat(workflow): round-trip a concurrency version token through IServiceOrderRepository (XD01-26)` — the **GitHub for Atlassian** app (connected to this repo) scans commits/branches/PR titles for this pattern to auto-link them under the ticket's Development panel; it also makes `git log --grep` reliable for human traceability
 
 ## Conventions
 

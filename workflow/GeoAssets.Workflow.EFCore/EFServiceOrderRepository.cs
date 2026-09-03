@@ -124,6 +124,16 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         UpdateRecord(existing, so);
 
+        // Use the caller's own RowVersion — from whenever they last read this order — as the
+        // optimistic-concurrency precondition, instead of the value `existing` was just
+        // re-queried with a few lines above. That's what makes this catch a writer who has held
+        // a stale in-memory copy since a much earlier read, not just a race within this call's
+        // own read-then-save window (XD01-26). Empty means the caller never actually read the
+        // order from a store (e.g. immediately after AddAsync) — fall back to the previous,
+        // narrower behavior rather than rejecting the write.
+        if (so.RowVersion.Length > 0)
+            _db.Entry(existing).Property(e => e.RowVersion).OriginalValue = so.RowVersion;
+
         try
         {
             await _db.SaveChangesAsync(ct);

@@ -1,8 +1,8 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Services;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -16,8 +16,10 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// PostgreSQL + PostGIS implementation of <see cref="IAssetProvider"/>.
 /// Each instance owns its own <see cref="GeoAssetsDbContext"/> (scoped to one
 /// logical collection / repository pool entry).
-/// Topology and spatial graph queries fall back to the NTS-backed helpers from
-/// <see cref="TopoGraph"/>.
+/// Topology queries use <see cref="IAssetProvider"/>'s default implementation
+/// (<see cref="GeoAssets.Core.Services.TopoGraph"/> over <see cref="GetAll"/>) rather
+/// than an explicit override — this provider's <see cref="GetAll"/> already returns the
+/// exact same <see cref="Cache"/> those would have queried directly (XD01-135).
 /// </summary>
 public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 {
@@ -132,6 +134,10 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     /// and never materializes the full <c>geo_entity</c> table, unlike every other read on this
     /// class. Uses a dedicated short-lived <see cref="GeoAssetsDbContext"/>, mirroring
     /// <see cref="GetInBoundsAsync"/>, so concurrent page requests don't share a context.
+    /// <see cref="AssetQuery.SearchText"/> matches <c>Name</c>, <c>Description</c>, and
+    /// <see cref="GeoFeatureProperties.CustomAttributes"/> keys/values — the same fields
+    /// <see cref="Search"/> matches — for parity across <see cref="IAssetProvider"/>
+    /// implementers (XD01-123).
     /// </summary>
     public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
     {
@@ -144,7 +150,23 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {
             var pattern = $"%{query.SearchText}%";
-            rows = rows.Where(r => EF.Functions.ILike(r.Name, pattern) || EF.Functions.ILike(r.Description, pattern));
+
+            // custom_attributes is jsonb — jsonb_each_text expands it into key/value rows so
+            // ILIKE can match real attribute keys/values, unlike ILIKE-ing the raw JSON text
+            // (which would match JSON syntax, not attribute content). Matches Search()'s
+            // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider implementers.
+            var matchingAttributeIds = await db.Database
+                .SqlQuery<string>($"""
+                    SELECT DISTINCT ge."Id"
+                    FROM geo_entity ge, jsonb_each_text(ge.custom_attributes) AS attr(key, value)
+                    WHERE attr.key ILIKE {pattern} OR attr.value ILIKE {pattern}
+                    """)
+                .ToListAsync();
+
+            rows = rows.Where(r =>
+                EF.Functions.ILike(r.Name, pattern) ||
+                EF.Functions.ILike(r.Description, pattern) ||
+                matchingAttributeIds.Contains(r.Id));
         }
 
         var totalCount = await rows.CountAsync();
@@ -160,32 +182,6 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
         var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync();
         return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
     }
-
-    // ── Topology ───────────────────────────────────────────────────────────────
-
-    public IReadOnlyList<GeoFeature> GetNeighbors(string id) =>
-        TopoGraph.GetNeighbors(id, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> GetDescendants(string id) =>
-        TopoGraph.GetDescendants(id, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> GetAncestors(string id) =>
-        TopoGraph.GetAncestors(id, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) =>
-        TopoGraph.FindPath(fromId, toId, Cache.Values);
-
-    public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) =>
-        TopoGraph.FindShortestPath(fromId, toId, Cache.Values);
-
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() =>
-        TopoGraph.GetConnectedComponents(Cache.Values);
-
-    public bool HasCycles() =>
-        TopoGraph.HasCycles(Cache.Values);
-
-    public IReadOnlyList<GeoFeature> TopologicalSort() =>
-        TopoGraph.TopologicalSort(Cache.Values);
 
     // ── Write ──────────────────────────────────────────────────────────────────
 

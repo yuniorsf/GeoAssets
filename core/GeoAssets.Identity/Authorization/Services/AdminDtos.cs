@@ -65,6 +65,38 @@ public sealed record PermissionDto(
     string Action,
     string Description);
 
+/// <summary>Wire shape for an <c>Organization</c> row (XD01-128).</summary>
+public sealed record OrganizationDto(
+    Guid     Id,
+    string   Name,
+    string   Slug,
+    string?  Description,
+    bool     IsActive,
+    DateTime CreatedAt);
+
+/// <summary>Admin write payload for an organization (XD01-128).</summary>
+public sealed record OrganizationWriteDto(
+    string  Name,
+    string  Slug,
+    string? Description,
+    bool    IsActive);
+
+/// <summary>Wire shape for an <c>AppGroup</c> row (XD01-128).</summary>
+public sealed record GroupDto(
+    Guid     Id,
+    string   Name,
+    string?  Description,
+    Guid?    OrganizationId,
+    bool     IsActive,
+    DateTime CreatedAt);
+
+/// <summary>Admin write payload for a group (XD01-128).</summary>
+public sealed record GroupWriteDto(
+    string  Name,
+    string? Description,
+    Guid?   OrganizationId,
+    bool    IsActive);
+
 /// <summary>Wire shape for <c>GET /api/identity/rolesync/status</c> (XD01-63).</summary>
 public sealed record RoleSyncStatusDto(bool Enabled);
 

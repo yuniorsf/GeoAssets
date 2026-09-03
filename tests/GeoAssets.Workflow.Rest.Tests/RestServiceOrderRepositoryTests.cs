@@ -157,6 +157,26 @@ public class RestServiceOrderRepositoryTests
     }
 
     [Fact]
+    public async Task AddAsync_PlainStringBadRequest_ThrowsInvalidOperationExceptionWithServerMessage()
+    {
+        // Results.BadRequest("Unknown order type '...'") / Results.BadRequest("Invalid service
+        // order.") on the server return a bare JSON string, not an object — TryGetProperty
+        // throws on a non-object element, so this shape must not fall into the object-shaped
+        // branches above (regression test for the crash a real create-order 400 hit).
+        var handler = new FakeHttpMessageHandler(_ =>
+            JsonResponse(HttpStatusCode.BadRequest, "Unknown order type 'bogus-type'."));
+        var sut = Sut(handler);
+        var raised = false;
+        sut.OrderAdded += (_, _) => raised = true;
+
+        var act = () => sut.AddAsync(Order("a"));
+
+        var thrown = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
+        thrown.Message.Should().Be("Unknown order type 'bogus-type'.");
+        raised.Should().BeFalse();
+    }
+
+    [Fact]
     public void AddAsync_NonServiceOrderImplementation_ThrowsArgumentException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.Created));
@@ -389,6 +409,7 @@ public class RestServiceOrderRepositoryTests
     private sealed class FakeServiceOrder : IServiceOrder
     {
         public string Id => "fake";
+        public byte[] RowVersion => [];
         public string Title => "";
         public string Description => "";
         public string OrderTypeId => "inspection";

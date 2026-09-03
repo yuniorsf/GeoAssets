@@ -12,7 +12,6 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
-using GeoAssets.Provider.InMemory;
 
 namespace GeoAssets.Examples.Spatial;
 
@@ -34,7 +33,7 @@ public static class SpatialQueries
         var monument  = PointFeature("Monumento",         (-69.91,  18.47)); // inside park
         var station   = PointFeature("Estación Metro",    (-69.87,  18.47)); // far from park
 
-        var repo = new InMemoryAssetProvider();
+        var repo = new DemoAssetStore();
         foreach (var f in new[] { parkBoundary, mainRoad, hospital, school, monument, station })
             repo.Add(f);
 
@@ -121,4 +120,27 @@ public static class SpatialQueries
             Properties = new() { Name = name, AssetTypeId = AssetType.Point.Id.ToString() },
             Geometry   = new GeoPoint { Coordinates = [point.lon, point.lat] }
         };
+}
+
+/// <summary>
+/// Demo-only store — the old InMemoryAssetProvider was removed from
+/// GeoAssets.Provider.InMemory (XD01-131); this implements just the spatial queries this
+/// example actually exercises.
+/// </summary>
+file sealed class DemoAssetStore
+{
+    private readonly Dictionary<string, GeoFeature> _features = [];
+
+    public void Add(GeoFeature feature) => _features[feature.Id] = feature;
+
+    public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds) =>
+        [.. _features.Values.Where(f => f.Geometry is not null && f.Geometry.Within(bounds))];
+
+    public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) =>
+        [.. _features.Values.Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
+
+    public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) =>
+        [.. _features.Values
+            .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
+            .OrderBy(f => f.Geometry!.Distance(center))];
 }

@@ -28,14 +28,6 @@ internal sealed class NullAssetProvider : IAssetProvider
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double a, double b, double c, double d)     => Task.FromResult<IReadOnlyList<GeoFeature>>([]);
     public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double a, double b, double c, double d) => Task.FromResult<IReadOnlyList<JsonElement>>([]);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg) => [];
-    public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                 => [];
-    public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)               => [];
-    public IReadOnlyList<GeoFeature>                GetAncestors(string featureId)                 => [];
-    public IReadOnlyList<GeoFeature>                FindPath(string fromId, string toId)           => [];
-    public IReadOnlyList<GeoFeature>                FindShortestPath(string fromId, string toId)   => [];
-    public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents()                       => [];
-    public bool                                     HasCycles()                                     => false;
-    public IReadOnlyList<GeoFeature>                TopologicalSort()                               => [];
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                 => [];
     public IReadOnlyList<Layer>                     GetLayers()                                     => [];
     public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                 => [];

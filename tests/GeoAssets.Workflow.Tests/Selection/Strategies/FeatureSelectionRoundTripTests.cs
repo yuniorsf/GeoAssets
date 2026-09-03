@@ -2,7 +2,7 @@ using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Provider.InMemory;
+using GeoAssets.Workflow.Tests;
 using GeoAssets.Workflow.Selection;
 using GeoAssets.Workflow.Selection.Strategies;
 using Xunit;
@@ -32,7 +32,7 @@ public class FeatureSelectionRoundTripTests
     [Fact]
     public async Task BoundingBox_SurvivesRoundTrip()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         repo.Add(new GeoFeature { Id = "inside", Geometry = new GeoPoint(0, 0) });
         repo.Add(new GeoFeature { Id = "outside", Geometry = new GeoPoint(50, 50) });
 
@@ -57,7 +57,7 @@ public class FeatureSelectionRoundTripTests
     [Fact]
     public async Task Nearby_SurvivesRoundTrip()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         repo.Add(new GeoFeature { Id = "near", Geometry = new GeoPoint(0.1, 0.1) });
         repo.Add(new GeoFeature { Id = "far", Geometry = new GeoPoint(50, 50) });
 
@@ -83,7 +83,7 @@ public class FeatureSelectionRoundTripTests
     [Fact]
     public async Task AssetTypeFilter_SurvivesRoundTrip()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         repo.Add(new GeoFeature { Id = "match", Properties = new GeoFeatureProperties { AssetTypeId = "hydrant" } });
         repo.Add(new GeoFeature { Id = "nomatch", Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
 
@@ -105,7 +105,7 @@ public class FeatureSelectionRoundTripTests
     [Fact]
     public async Task TopologyReachability_SurvivesRoundTrip()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         repo.Add(new GeoFeature
         {
             Id = "seed",
@@ -136,7 +136,7 @@ public class FeatureSelectionRoundTripTests
     [Fact]
     public async Task Manual_SurvivesRoundTrip()
     {
-        var repo = new InMemoryAssetProvider();
+        var repo = new TestAssetProvider();
         repo.Add(new GeoFeature { Id = "f1" });
         repo.Add(new GeoFeature { Id = "f2" });
 

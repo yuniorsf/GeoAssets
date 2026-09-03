@@ -15,7 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\core\GeoAssets.Commands\GeoAssets.Commands.csproj" />
     <ProjectReference Include="..\..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
-    <ProjectReference Include="..\..\..\providers\GeoAssets.Provider.InMemory\GeoAssets.Provider.InMemory.csproj" />
     <ProjectReference Include="..\..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
   </ItemGroup>
 

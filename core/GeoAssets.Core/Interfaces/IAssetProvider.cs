@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Services;
 
 namespace GeoAssets.Core.Interfaces;
 
@@ -16,7 +17,10 @@ public interface IAssetProvider
     /// Default implementation falls back to <see cref="GetAll"/>/<see cref="Search"/> plus
     /// in-memory LINQ <c>Skip</c>/<c>Take</c> — providers backed by a queryable store (e.g.
     /// PostgreSQL) should override this with a server-side query that never materializes the
-    /// full collection.
+    /// full collection. See <see cref="AssetQuery.SortBy"/> for the enumerated sort values and
+    /// the <c>Id</c> fallback ordering — every override must implement the same values and
+    /// fallback as this default implementation, to keep <see cref="AssetQuery.SortBy"/>'s
+    /// contract identical regardless of which provider is active.
     /// </summary>
     Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
     {
@@ -79,39 +83,50 @@ public interface IAssetProvider
     IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees);
 
     // ── Topology queries (graph-backed) ───────────────────────────────────────
+    //
+    // Default implementations delegate to the static TopoGraph helper over GetAll() —
+    // every in-memory-cache-backed provider's GetAll() already returns the exact
+    // collection these once forwarded to explicitly, so this is behavior-preserving
+    // (XD01-135). Override only if a provider can push traversal server-side.
 
     /// <summary>Returns the direct downstream neighbors of <paramref name="featureId"/>.</summary>
-    IReadOnlyList<GeoFeature> GetNeighbors(string featureId);
+    IReadOnlyList<GeoFeature> GetNeighbors(string featureId) =>
+        TopoGraph.GetNeighbors(featureId, GetAll());
 
     /// <summary>Returns all features reachable from <paramref name="featureId"/> (BFS forward).</summary>
-    IReadOnlyList<GeoFeature> GetDescendants(string featureId);
+    IReadOnlyList<GeoFeature> GetDescendants(string featureId) =>
+        TopoGraph.GetDescendants(featureId, GetAll());
 
     /// <summary>Returns all features that can reach <paramref name="featureId"/> (BFS reverse).</summary>
-    IReadOnlyList<GeoFeature> GetAncestors(string featureId);
+    IReadOnlyList<GeoFeature> GetAncestors(string featureId) =>
+        TopoGraph.GetAncestors(featureId, GetAll());
 
     /// <summary>BFS shortest path (fewest hops) between two features. Empty when unreachable.</summary>
-    IReadOnlyList<GeoFeature> FindPath(string fromId, string toId);
+    IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) =>
+        TopoGraph.FindPath(fromId, toId, GetAll());
 
     /// <summary>
     /// Dijkstra shortest path (minimum total <see cref="TopoEdge.Weight"/>) between two features.
     /// Empty when unreachable.
     /// </summary>
-    IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId);
+    IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) =>
+        TopoGraph.FindShortestPath(fromId, toId, GetAll());
 
     /// <summary>
     /// Groups all features into weakly connected components (edge direction ignored).
     /// Isolated features each form their own single-element component.
     /// </summary>
-    IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents();
+    IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() =>
+        TopoGraph.GetConnectedComponents(GetAll());
 
     /// <summary>Returns <c>true</c> when the directed topology graph contains at least one cycle.</summary>
-    bool HasCycles();
+    bool HasCycles() => TopoGraph.HasCycles(GetAll());
 
     /// <summary>
     /// Returns features in topological (process) order — sources first.
     /// Throws <see cref="InvalidOperationException"/> when the graph contains cycles.
     /// </summary>
-    IReadOnlyList<GeoFeature> TopologicalSort();
+    IReadOnlyList<GeoFeature> TopologicalSort() => TopoGraph.TopologicalSort(GetAll());
 
     void Add(GeoFeature feature);
     void Update(GeoFeature feature);

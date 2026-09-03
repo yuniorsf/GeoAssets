@@ -39,7 +39,7 @@ public class EmergencyRepairAgentWorkflowTests
 
     private static async Task<(ServiceOrder Order, IServiceOrderRepository Repository)> RunWorkflowAsync(ServiceOrderRules rules)
     {
-        var repository = new ValidatingServiceOrderRepository(new InMemoryServiceOrderRepository());
+        var repository = new ValidatingServiceOrderRepository(new SnapshottingServiceOrderRepository());
         var workflow = EmergencyRepairAgentWorkflow.Build(
             repository, rules, OrderTypeRegistry(), AgentIdentity(), TimeProvider.System,
             TestObservability.Tracer, NullLoggerFactory.Instance);

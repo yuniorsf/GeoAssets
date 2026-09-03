@@ -31,7 +31,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_AgentLacksCreationGrant_ThrowsAndPersistsNothing()
     {
-        var writer = new InMemoryServiceOrderRepository();
+        var writer = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
         registry.Register(new OrderType
         {
@@ -52,7 +52,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_UnregisteredOrderType_ThrowsKeyNotFoundException()
     {
-        var writer   = new InMemoryServiceOrderRepository();
+        var writer   = new SnapshottingServiceOrderRepository();
         var executor = Executor(writer, new ServiceOrderRules(), new OrderTypeRegistry(), AgentIdentity("AutomationAgent"));
         var request  = new CreateServiceOrderRequest(AgentId, "widget-repair", "T", "crew-1", DispatchTargetType.Group);
 
@@ -65,7 +65,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_UnregisteredAgent_ThrowsKeyNotFoundException()
     {
-        var writer   = new InMemoryServiceOrderRepository();
+        var writer   = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
         registry.Register(new OrderType { Id = "emergency-repair", DisplayName = "Emergency" });
         var executor = Executor(writer, new ServiceOrderRules(), registry, AgentIdentity()); // no agents registered
@@ -79,7 +79,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_Authorized_PersistsOrderWithAgentAsCreator()
     {
-        var writer   = new InMemoryServiceOrderRepository();
+        var writer   = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
         registry.Register(new OrderType
         {
@@ -101,7 +101,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_OrderTypeDefinesInitialStateKey_NewOrderStartsThere()
     {
-        var writer   = new InMemoryServiceOrderRepository();
+        var writer   = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
         registry.Register(new OrderType
         {
@@ -124,7 +124,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_Authorized_RecordsSpanWithExpectedTags()
     {
-        var writer   = new InMemoryServiceOrderRepository();
+        var writer   = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
         registry.Register(new OrderType
         {
@@ -150,7 +150,7 @@ public class CreateServiceOrderExecutorTests
     [Fact]
     public async Task HandleAsync_AgentLacksCreationGrant_LogsWarningAndRecordsExceptionOnSpan()
     {
-        var writer = new InMemoryServiceOrderRepository();
+        var writer = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
         registry.Register(new OrderType
         {

@@ -2,7 +2,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Provider.InMemory;
+using GeoAssets.Shared.Tests;
 using GeoAssets.Shared.Components.Assets;
 using Xunit;
 
@@ -15,7 +15,7 @@ namespace GeoAssets.Shared.Tests.Components.Assets;
 /// AssetsTable/DrawToolbar/MapContainer). A second group of tests exercises the acceptance
 /// criterion end-to-end (a TopoEdge is persisted and retrievable via
 /// <see cref="IAssetProvider.GetNeighbors"/>) by composing the same
-/// building blocks <c>AssetForm.HandleSave</c> does, against a real <see cref="InMemoryAssetProvider"/>.
+/// building blocks <c>AssetForm.HandleSave</c> does, against a real <see cref="TestAssetProvider"/>.
 /// </summary>
 public class AssetFormTests
 {
@@ -126,7 +126,7 @@ public class AssetFormTests
     [Fact]
     public void AutoLinkedFeature_Saved_CreatesTopoEdge_VerifiableViaGetNeighbors()
     {
-        var repository = new InMemoryAssetProvider();
+        var repository = new TestAssetProvider();
         var wire = LineFeature("wire-1", (-0.0001, -0.0001), (0.0001, 0.0001));
         repository.Add(wire);
 
@@ -147,7 +147,7 @@ public class AssetFormTests
     [Fact]
     public void NoCandidate_Saved_CreatesNoTopoEdge_AndDoesNotError()
     {
-        var repository = new InMemoryAssetProvider();
+        var repository = new TestAssetProvider();
         var pole = PointFeature("pole-1", 50, 50); // far from anything else in the repository
 
         var geometry = (GeoPoint)pole.Geometry!;
@@ -166,7 +166,7 @@ public class AssetFormTests
     [Fact]
     public void TwoCandidates_Saved_CreatesNoTopoEdge_AndDoesNotError()
     {
-        var repository = new InMemoryAssetProvider();
+        var repository = new TestAssetProvider();
         repository.Add(LineFeature("wire-a", (-0.0001, -0.0001), (0.0001, 0.0001)));
         repository.Add(LineFeature("wire-b", (-0.0001, 0.0001), (0.0001, -0.0001)));
 

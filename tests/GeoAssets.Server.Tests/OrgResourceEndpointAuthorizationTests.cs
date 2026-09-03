@@ -7,7 +7,6 @@ using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Provider.InMemory;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -75,7 +74,7 @@ public class OrgResourceEndpointAuthorizationTests
     private static async Task<(TestServer Server, IAssetProvider Provider)> BuildServerAsync(
         Guid? userOrganizationId, IReadOnlyList<OrganizationGrant>? grants = null)
     {
-        var provider = new InMemoryAssetProvider();
+        var provider = new TestAssetProvider();
 
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>

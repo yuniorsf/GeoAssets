@@ -12,12 +12,16 @@ namespace GeoAssets.Web.Services.Identity.Rest;
 /// raw domain type — to/from the wire, the same reason <see cref="RestGeoAuthorizationService"/>
 /// does (EF navigation cycles make <see cref="AppUser"/> unsafe to serialize on the server side).
 ///
-/// Only the methods with a matching server endpoint are implemented. Users are JIT-provisioned
-/// on login (see <see cref="AppUser"/>'s doc comment) — there is no create-user endpoint, and
-/// role *assignment* is sourced from the external provider's roles claim, not this repository
-/// (XD01-19) — see XD01-54 Phase 2 for the provider-backed seam. Every other method throws
-/// <see cref="NotSupportedException"/>, matching the <c>FakePolicyRepository</c> idiom already
-/// used in the Server test suite for repository members no caller in this codebase reaches.
+/// Only the methods with a matching server endpoint are implemented — including
+/// <see cref="GetByExternalObjectIdAsync"/> (XD01-134 follow-up), which callers like
+/// <c>MainLayout</c> use to resolve the current user's own organization for the topbar; that
+/// endpoint requires <c>users:read</c> like the other admin lookups, so it only resolves for
+/// callers with that permission. Users are JIT-provisioned on login (see <see cref="AppUser"/>'s
+/// doc comment) — there is no create-user endpoint, and role *assignment* is sourced from the
+/// external provider's roles claim, not this repository (XD01-19) — see XD01-54 Phase 2 for the
+/// provider-backed seam. Every other method throws <see cref="NotSupportedException"/>, matching
+/// the <c>FakePolicyRepository</c> idiom already used in the Server test suite for repository
+/// members no caller in this codebase reaches.
 ///
 /// Like <see cref="Workflow.Rest.RestOrderTypeRepository"/>, each write here is already fully
 /// persisted server-side by the time its HTTP call returns (the server calls its own
@@ -33,6 +37,17 @@ public sealed class RestUserRepository(HttpClient http) : IUserRepository
 
         var dto = await response.Content.ReadFromJsonAsync<UserDetailDto>(ct)
             ?? throw new InvalidOperationException($"GET users/{id} returned an empty response.");
+        return ToUser(dto);
+    }
+
+    public async Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default)
+    {
+        var response = await http.GetAsync($"users/by-external-id/{Uri.EscapeDataString(oid)}", ct);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+
+        var dto = await response.Content.ReadFromJsonAsync<UserDetailDto>(ct)
+            ?? throw new InvalidOperationException($"GET users/by-external-id/{oid} returned an empty response.");
         return ToUser(dto);
     }
 
@@ -74,7 +89,6 @@ public sealed class RestUserRepository(HttpClient http) : IUserRepository
         CreatedAt      = default,
     };
 
-    public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<AppUser>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();

@@ -10,20 +10,19 @@ namespace GeoAssets.Shared.Services;
 /// Checks whether the current caller has a <see cref="InvitationStatus.Pending"/>
 /// <see cref="PendingInvitation"/> and, if so, redirects to <c>/complete-profile</c> —
 /// extracted from <see cref="UserProvisioningService.ProvisionAsync"/>'s redirect gate
-/// (XD01-71) so the check can also run under <c>Identity:Backend=Rest</c> (XD01-89), where
-/// <see cref="UserProvisioningService"/> itself is never registered even though
-/// <see cref="IPendingInvitationRepository"/> is fully functional there (XD01-70). This class
-/// has no backend-specific logic of its own — only its call sites differ by backend:
-/// <see cref="UserProvisioningService.ProvisionAsync"/> now delegates to
-/// <see cref="RedirectIfPendingAsync"/> instead of duplicating this logic (InMemory), and each
+/// (XD01-71/XD01-89) so the check runs regardless of whether
+/// <see cref="UserProvisioningService"/> itself is registered (XD01-130: it currently never
+/// is). This class has no backend-specific logic of its own:
+/// <see cref="UserProvisioningService.ProvisionAsync"/> delegates to
+/// <see cref="RedirectIfPendingAsync"/> instead of duplicating this logic, and each
 /// admin/index page's <c>OnInitializedAsync</c> calls it directly when
-/// <c>ServiceProvider.GetService&lt;UserProvisioningService&gt;()</c> is <c>null</c> (Rest).
+/// <c>ServiceProvider.GetService&lt;UserProvisioningService&gt;()</c> is <c>null</c> — the
+/// case today.
 ///
-/// Registered as scoped, unconditionally in <c>Program.cs</c> (not inside either
-/// <c>GeoIdentityWasmExtensions.AddGeoIdentityWasmDev</c> or
+/// Registered as scoped, unconditionally in <c>Program.cs</c> (not inside
 /// <c>GeoIdentityRestExtensions.AddGeoIdentityRest</c>) — its dependencies
 /// (<see cref="ICurrentUserAccessor"/>, <see cref="IPendingInvitationRepository"/>,
-/// <see cref="NavigationManager"/>) are already registered under both backends today.
+/// <see cref="NavigationManager"/>) are already registered there.
 ///
 /// Resolves <see cref="IPendingInvitationRepository"/> optionally via <see cref="IServiceProvider"/>
 /// rather than direct constructor injection, matching the pattern
