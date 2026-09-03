@@ -35,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
   </ItemGroup>
 
   <ItemGroup>
