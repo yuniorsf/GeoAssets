@@ -13,6 +13,11 @@ namespace GeoAssets.Workflow.Tests.Orders;
 /// <see cref="ValidatingServiceOrderRepository"/> (which validates before ever calling this
 /// inner store) or, to test illegal-transition rejection in isolation, the deliberately-naive
 /// <c>NaiveServiceOrderRepository</c> nested in <c>ValidatingServiceOrderRepositoryTests</c>.
+/// Also does not recompute <c>ChildOrderIds</c> from <c>ParentOrderId</c> — it stores whatever
+/// <c>ChildOrderIds</c> the caller set on the order instance. Tests relying on hierarchy-read
+/// correctness should use <c>EFServiceOrderRepository</c> (covered by the shared
+/// <c>GeoAssets.Workflow.TestKit.ServiceOrderRepositoryContractTests</c> suite, see XD01-27) or
+/// populate <c>ChildOrderIds</c> by hand.
 /// </summary>
 public sealed class FakeServiceOrderRepository : IServiceOrderRepository
 {

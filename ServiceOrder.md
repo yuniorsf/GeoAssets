@@ -477,6 +477,14 @@ classDiagram
   `SnapshottingServiceOrderRepository` (see §9), does *not* get this protection when
   used unwrapped — a live, if low-stakes, reminder that this contract is still
   enforced by convention for any repository that isn't wrapped, not by the compiler.
+  A shared contract-test suite (`GeoAssets.Workflow.TestKit`'s
+  `ServiceOrderRepositoryContractTests`, run unwrapped against `EFServiceOrderRepository`
+  in `GeoAssets.Workflow.EFCore.Tests`) now mechanically checks both rules — transition-legality
+  rejection and `ChildOrderIds` derivation from `ParentOrderId` on every read — closing
+  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27) for that implementation. The
+  convention-only caveat remains true and intentional for `FakeServiceOrderRepository`,
+  `SnapshottingServiceOrderRepository`, and `RestServiceOrderRepository`, each documented
+  at its own definition as an explicit exception rather than an oversight.
 - **`ObservableServiceOrderRepository`** decorates any inner repository with
   tracing/metrics/logging for status transitions — a span + a
   `geoassets.orders.transitions` metric (via `GeoAssetsActivitySource`/
@@ -848,7 +856,7 @@ mock of it, and specifically cover both authorization outcomes (agent fully
 granted vs. withheld `Dispatch`) plus the human-handoff scenario the whole design
 rests on.
 
-`GeoAssets.Workflow.EFCore.Tests` (69 test cases) covers `EFServiceOrderRepository`
+`GeoAssets.Workflow.EFCore.Tests` (77 test cases) covers `EFServiceOrderRepository`
 and `EFOrderTypeRepository` (all CRUD, hierarchy, filtered queries, the
 `ServiceOrderConcurrencyException` conflict path, and cascade-delete of an order
 type's child collections) against a **real SQLite in-memory database**
@@ -866,7 +874,11 @@ SQLite-incompatible `HasColumnType("nvarchar(max)")` calls on the JSON columns
 so this was a no-op on SQL Server and a syntax error under SQLite). The EFCore test
 project references its production counterpart via `InternalsVisibleTo`, letting
 `SqliteTestDbContext` layer that one SQLite-only default onto the otherwise-internal
-`ServiceOrderRecord` entity without changing its visibility.
+`ServiceOrderRecord` entity without changing its visibility. 8 of those 77 cases
+(`EFServiceOrderRepositoryContractTests`) come from `GeoAssets.Workflow.TestKit`'s
+`ServiceOrderRepositoryContractTests` — a shared, reusable `IServiceOrderRepository`
+correctness suite (transition-legality rejection + `ChildOrderIds` derivation) any
+implementation can subclass to opt into (see §7, XD01-27).
 
 These five projects (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
 `GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
@@ -1127,6 +1139,15 @@ documented:
   server-side only (the Blazor client's own `WorkflowPrincipal` doesn't resolve
   grants yet — no REST endpoint exposes them), closed by
   [XD01-22](https://xdicor.atlassian.net/browse/XD01-22).
+- **`IServiceOrderRepository`'s correctness contract was enforced by convention, not
+  the compiler** — a shared, reusable contract-test suite
+  (`GeoAssets.Workflow.TestKit`'s `ServiceOrderRepositoryContractTests`, §7/§13) now
+  mechanically checks transition-legality rejection and `ChildOrderIds` derivation,
+  run unwrapped against `EFServiceOrderRepository`. `FakeServiceOrderRepository`,
+  `SnapshottingServiceOrderRepository`, and `RestServiceOrderRepository` remain
+  outside the suite by design, each now documenting at its own definition *why* it's
+  an intentional exception rather than an oversight, closed by
+  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
 
 What's still genuinely open:
 
@@ -1136,14 +1157,6 @@ What's still genuinely open:
   ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7)); round-tripping a version
   token through the caller so a longer-held stale copy is also caught is tracked
   separately as [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
-- **`IServiceOrderRepository`'s correctness contract is enforced by convention, not
-  the compiler.** A third implementation, `SnapshottingServiceOrderRepository`
-  (test-only, added alongside the agent work), doesn't recompute `ChildOrderIds` or
-  enforce transition legality, and is used unwrapped in
-  `DispatchServiceOrderExecutorTests.cs` (`GeoAssets.Workflow.Agents.Tests`) —
-  correctly, for what those tests check, but it's live evidence that any *real* new
-  implementation would need to remember the same rules by hand. Tracked as
-  [XD01-27](https://xdicor.atlassian.net/browse/XD01-27).
 - **No same-organization gate exists for `ServiceOrder` access — only an
   additional cross-org allow path.** `CrossOrgGrantRule` (§5, XD01-22) is
   deliberately an allow-contributor only, per its own design: a caller from a

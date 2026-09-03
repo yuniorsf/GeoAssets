@@ -25,6 +25,12 @@ namespace GeoAssets.Workflow.Rest;
 /// no caller observes. <see cref="AppendActionAsync"/> reads the order's status before and after
 /// specifically to support this event, mirroring <c>EFServiceOrderRepository</c>'s own
 /// read-before/read-after shape.
+///
+/// Exempt by design from <see cref="IServiceOrderRepository"/>'s transition-legality/
+/// <c>ChildOrderIds</c> correctness contract (see XD01-27): both rules are the <em>server's</em>
+/// responsibility, enforced by its own <c>EFServiceOrderRepository</c>-backed store — this is a
+/// thin HTTP client that returns exactly what the server reports, so there is nothing for it to
+/// enforce independently.
 /// </summary>
 public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderRepository
 {
