@@ -93,6 +93,8 @@ public class ProviderConnectionMapRendererTests
         public Task ClearAllFeaturesAsync(string divId) => throw new NotSupportedException();
         public Task EnableDrawModeAsync(string divId, GeometryType mode) => throw new NotSupportedException();
         public Task DisableDrawModeAsync(string divId) => throw new NotSupportedException();
+        public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) => throw new NotSupportedException();
+        public Task ClearSnapTargetScopeAsync(string divId) => throw new NotSupportedException();
         public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) => throw new NotSupportedException();
         public Task RemoveTileLayerAsync(string divId, string layerId) => throw new NotSupportedException();
         public Task RemoveWmsLayerAsync(string divId, string layerId) => throw new NotSupportedException();

@@ -76,10 +76,10 @@ public partial class MapWorkspace
         if (mode.HasValue) ClosePanel();
     }
 
-    private void OnFeatureDrawn(GeoFeature feature)
+    private async Task OnFeatureDrawn(GeoFeature feature)
     {
         Selection.Select(feature, isNew: true);
-        _drawToolbar?.ResetMode();
+        if (_drawToolbar is not null) await _drawToolbar.ResetMode();
     }
 
     private void OnFeatureEdited(GeoFeature feature) => StateHasChanged();

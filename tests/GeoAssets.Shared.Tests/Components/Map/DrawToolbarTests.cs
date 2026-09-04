@@ -113,4 +113,45 @@ public class DrawToolbarTests
 
         result.Should().BeNull();
     }
+
+    // ── ResolveSnapScope (XD01-119) ─────────────────────────────────────────────
+
+    private static AssetType TypeOf(string name, GeometryType? geometry) => new()
+    {
+        Name = name,
+        AllowedGeometryType = geometry
+    };
+
+    [Fact]
+    public void ResolveSnapScope_PointGeometry_ReturnsLineStringTypeIdsOnly()
+    {
+        var wire = TypeOf("Wire", GeometryType.LineString);
+        var types = new[] { wire, TypeOf("Pole", GeometryType.Point), TypeOf("Zone", GeometryType.Polygon) };
+
+        var result = DrawToolbar.ResolveSnapScope(GeometryType.Point, types);
+
+        result.Should().Equal(wire.Id.ToString());
+    }
+
+    [Fact]
+    public void ResolveSnapScope_PointGeometry_NoLineStringTypes_ReturnsEmptyNotNull()
+    {
+        var types = new[] { TypeOf("Pole", GeometryType.Point), TypeOf("Zone", GeometryType.Polygon) };
+
+        var result = DrawToolbar.ResolveSnapScope(GeometryType.Point, types);
+
+        result.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(GeometryType.LineString)]
+    [InlineData(GeometryType.Polygon)]
+    public void ResolveSnapScope_NonPointGeometry_ReturnsNullMeaningUnscoped(GeometryType geometry)
+    {
+        var types = new[] { TypeOf("Wire", GeometryType.LineString), TypeOf("Pole", GeometryType.Point) };
+
+        var result = DrawToolbar.ResolveSnapScope(geometry, types);
+
+        result.Should().BeNull();
+    }
 }

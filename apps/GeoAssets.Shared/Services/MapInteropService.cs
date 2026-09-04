@@ -136,6 +136,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     public Task DisableDrawModeAsync(string divId) =>
         _js.InvokeVoidAsync($"{Ns}.disableDraw", divId).AsTask();
 
+    public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) =>
+        _js.InvokeVoidAsync($"{Ns}.setSnapTargetLayer", divId, allowedTargetAssetTypeIds).AsTask();
+
+    public Task ClearSnapTargetScopeAsync(string divId) =>
+        _js.InvokeVoidAsync($"{Ns}.clearSnapTargetScope", divId).AsTask();
+
     public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) =>
         _js.InvokeVoidAsync($"{Ns}.addTileLayer", divId, layerId, url, options).AsTask();
 

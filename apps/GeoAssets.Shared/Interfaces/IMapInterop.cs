@@ -61,6 +61,17 @@ public interface IMapInterop
     Task EnableDrawModeAsync(string divId, GeometryType mode);
     Task DisableDrawModeAsync(string divId);
 
+    /// <summary>
+    /// Scopes Geoman snap targets to only the layers of <paramref name="allowedTargetAssetTypeIds"/>
+    /// (an empty collection is a valid "nothing to snap to" scope). Call before
+    /// <see cref="EnableDrawModeAsync"/> so the scope applies to the session about to start; see
+    /// <see cref="ClearSnapTargetScopeAsync"/> to restore unscoped/global snapping.
+    /// </summary>
+    Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds);
+
+    /// <summary>Restores unscoped/global snapping — every rendered layer is a valid snap target again.</summary>
+    Task ClearSnapTargetScopeAsync(string divId);
+
     // --- Tile / WMS layers ---
     Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null);
     Task RemoveTileLayerAsync(string divId, string layerId);

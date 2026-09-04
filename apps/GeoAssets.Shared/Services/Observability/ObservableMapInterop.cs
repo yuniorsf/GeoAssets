@@ -54,6 +54,8 @@ public sealed class ObservableMapInterop(
     public Task ClearAllFeaturesAsync(string divId)                                   => inner.ClearAllFeaturesAsync(divId);
     public Task EnableDrawModeAsync(string divId, GeometryType mode)                  => inner.EnableDrawModeAsync(divId, mode);
     public Task DisableDrawModeAsync(string divId)                                    => inner.DisableDrawModeAsync(divId);
+    public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) => inner.SetSnapTargetLayerAsync(divId, allowedTargetAssetTypeIds);
+    public Task ClearSnapTargetScopeAsync(string divId)                               => inner.ClearSnapTargetScopeAsync(divId);
     public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) => inner.AddTileLayerAsync(divId, layerId, url, options);
     public Task RemoveTileLayerAsync(string divId, string layerId)                                            => inner.RemoveTileLayerAsync(divId, layerId);
     public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options)    => inner.AddWmsLayerAsync(divId, layerId, wmsBaseUrl, options);

@@ -322,7 +322,8 @@ window.GeoAssets = (function () {
             dotNetRef:      null,
             renderMode:     mode,
             canvasRenderer: mode === 'canvas' ? L.canvas({ padding: 0.5 }) : null,
-            webgl:          null
+            webgl:          null,
+            snapScope:      null        // Set<assetTypeId> | null — null means unscoped/global (XD01-119)
         };
 
         if (mode === 'webgl') _initWebGL(divId);
@@ -399,6 +400,50 @@ window.GeoAssets = (function () {
         if (!state || !state.map.pm) return;
         state.map.pm.disableDraw();
         state.map.pm.disableGlobalEditMode();
+    }
+
+    // ─── Type-Aware Snap Scoping (XD01-119) ─────────────────────────────────
+    // Geoman has no built-in "snap to only these layers/groups" option — snapping is either
+    // fully global (map.pm.setGlobalOptions) or opted out per individual layer via that layer's
+    // own `snapIgnore` option. Scoping to compatible AssetTypes is implemented by walking the
+    // existing per-AssetTypeId layerGroups partition (the same one setLayerVisibility uses) and
+    // stamping `snapIgnore` on every layer accordingly.
+
+    /** Invokes `cb` for every actual vector layer (Marker/Polyline/Polygon/...) reachable from
+     *  `layer`, recursing through nested LayerGroups — a rendered feature is an L.geoJSON
+     *  FeatureGroup wrapping the real primitive(s), and Geoman's snap list only inspects
+     *  primitives, never the wrapping group. */
+    function _forEachSnapCandidate(layer, cb) {
+        if (layer instanceof L.LayerGroup) layer.eachLayer(child => _forEachSnapCandidate(child, cb));
+        else cb(layer);
+    }
+
+    function _applySnapScope(state) {
+        state.layerGroups.forEach((group, assetTypeId) => {
+            const ignore = !!state.snapScope && !state.snapScope.has(assetTypeId);
+            _forEachSnapCandidate(group, l => { l.options.snapIgnore = ignore; });
+        });
+    }
+
+    /** Scopes snap targets to only the layers belonging to `allowedTargetAssetTypeIds` (an
+     *  empty array is a valid "nothing to snap to" scope, distinct from clearSnapTargetScope's
+     *  "unscoped"). Call before enableDraw for the scope to apply to that draw session — Geoman
+     *  caches its snap list per draw/edit instance and only rebuilds it once the session's
+     *  previous list has been invalidated (draw end / dragend). */
+    function setSnapTargetLayer(divId, allowedTargetAssetTypeIds) {
+        const state = _maps[divId];
+        if (!state) return;
+        state.snapScope = new Set(allowedTargetAssetTypeIds || []);
+        _applySnapScope(state);
+    }
+
+    /** Restores unscoped/global snapping — every rendered layer becomes a valid snap target
+     *  again. Call when a type-first draw session ends (feature placed or cancelled). */
+    function clearSnapTargetScope(divId) {
+        const state = _maps[divId];
+        if (!state) return;
+        state.snapScope = null;
+        _applySnapScope(state);
     }
 
     // ─── Feature Rendering ───────────────────────────────────────────────────
@@ -478,6 +523,14 @@ window.GeoAssets = (function () {
         }
         layer.addTo(group);
         state.featureLayers.set(id, layer);
+
+        // A snap scope may already be active (a type-first draw session started before this
+        // feature was rendered/re-rendered) — stamp it onto the new layer so it doesn't fall
+        // back to "always snappable" until the next full _applySnapScope pass.
+        if (state.snapScope) {
+            const ignore = !state.snapScope.has(assetTypeId);
+            _forEachSnapCandidate(layer, l => { l.options.snapIgnore = ignore; });
+        }
     }
 
     /**
@@ -741,6 +794,8 @@ window.GeoAssets = (function () {
         registerHandlers,
         enableDraw,
         disableDraw,
+        setSnapTargetLayer,
+        clearSnapTargetScope,
         renderFeature,
         renderAllFeatures,
         renderFeatureBatch,

@@ -80,9 +80,38 @@ public partial class DrawToolbar
         _active = geometry;
         ClosePalette();
 
+        await ApplySnapScope(geometry);
         await MapInterop.EnableDrawModeAsync(MapDivId, geometry);
         await OnDrawModeChanged.InvokeAsync(geometry);
     }
+
+    private Task ApplySnapScope(GeometryType geometry)
+    {
+        var scope = ResolveSnapScope(geometry, Repository.GetAssetTypes());
+        return scope is null
+            ? MapInterop.ClearSnapTargetScopeAsync(MapDivId)
+            : MapInterop.SetSnapTargetLayerAsync(MapDivId, scope);
+    }
+
+    /// <summary>
+    /// Resolves which AssetTypeIds are valid Geoman snap targets for a type-first draw of
+    /// <paramref name="geometry"/> (XD01-119) — <c>null</c> means "unscoped/global", a (possibly
+    /// empty) list means "restrict snapping to exactly these types". v1 mirrors XD01-118's own
+    /// compatibility heuristic (geometry-type based, not a dedicated AssetType-to-AssetType
+    /// registry — none exists) rather than inventing a new one: drawing a Point-type asset scopes
+    /// snapping to LineString-type layers only (e.g. a Pole snaps onto Wire, not onto an unrelated
+    /// Polygon). Drawing a LineString or Polygon-type asset leaves snapping unscoped — XD01-118
+    /// never defined a compatibility heuristic for those shapes either, so no behavior is invented
+    /// for them here. Static (params instead of reading <c>Repository</c> directly) so it's
+    /// directly unit-testable without rendering, matching <see cref="ResolveStyle(AssetType, IReadOnlyList{Layer}, IReadOnlyList{LayerRule})"/>.
+    /// </summary>
+    public static IReadOnlyCollection<string>? ResolveSnapScope(GeometryType geometry, IReadOnlyList<AssetType> types) =>
+        geometry != GeometryType.Point
+            ? null
+            : types
+                .Where(t => t.AllowedGeometryType == GeometryType.LineString)
+                .Select(t => t.Id.ToString())
+                .ToList();
 
     private async Task ToggleMode(GeometryType mode)
     {
@@ -98,6 +127,7 @@ public partial class DrawToolbar
         _active = mode;
         _selectedTypeId = null;
         PendingType.Clear();
+        await MapInterop.ClearSnapTargetScopeAsync(MapDivId);
         await MapInterop.EnableDrawModeAsync(MapDivId, mode);
         await OnDrawModeChanged.InvokeAsync(mode);
     }
@@ -107,15 +137,17 @@ public partial class DrawToolbar
         _active = null;
         _selectedTypeId = null;
         PendingType.Clear();
+        await MapInterop.ClearSnapTargetScopeAsync(MapDivId);
         await MapInterop.DisableDrawModeAsync(MapDivId);
         await OnDrawModeChanged.InvokeAsync(null);
     }
 
-    public void ResetMode()
+    public async Task ResetMode()
     {
         _active = null;
         _selectedTypeId = null;
         PendingType.Clear();
+        await MapInterop.ClearSnapTargetScopeAsync(MapDivId);
         StateHasChanged();
     }
 }
