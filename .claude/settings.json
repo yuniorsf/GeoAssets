@@ -57,7 +57,11 @@
       "Bash(curl -sL -o geoman.min.js \"https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js\")",
       "Bash(node -e ' *)",
       "WebFetch(domain:geoman.io)",
-      "Bash(grep -rln \": IMapInterop\\\\|IMapInterop$\" --include=\"*.cs\" /Users/yuniorsf/GeoAssets)"
+      "Bash(grep -rln \": IMapInterop\\\\|IMapInterop$\" --include=\"*.cs\" /Users/yuniorsf/GeoAssets)",
+      "Bash(export PGPASSWORD=*)",
+      "Bash(psql -h localhost -p 5432 -U postgres -c \"DROP DATABASE IF EXISTS geoassets_xd139_test;\")",
+      "Bash(psql -h localhost -p 5432 -U postgres -c \"CREATE DATABASE geoassets_xd139_test;\")",
+      "Bash(psql -h localhost -p 5432 -U postgres -d geoassets_xd139_test -c \"\\\\d \\\\\"Projects\\\\\"\")"
     ],
     "additionalDirectories": [
       "/tmp"
