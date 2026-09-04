@@ -36,6 +36,7 @@
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <ProjectReference Include="..\..\projects\GeoAssets.Projects.EFCore\GeoAssets.Projects.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
   </ItemGroup>
 

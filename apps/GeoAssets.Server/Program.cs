@@ -3,6 +3,7 @@ using GeoAssets.Core.Providers;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Projects;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
 using GeoAssets.Workflow;
@@ -59,6 +60,15 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     // ServiceOrderDbContext lives in GeoAssets.Workflow.EFCore (kept provider-agnostic —
     // see its own doc comment), so migrations targeting Postgres are generated into this
     // (Server) project instead, which already legitimately depends on Npgsql.
+    npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+
+// ── Project persistence (XD01-139) — its own ProjectDbContext (control-plane metadata,
+// not folded into GeoAssetsDbContext), same Postgres database/connection as everything else.
+builder.Services.AddProjectPersistence(o => o.UseNpgsql(
+    connectionString,
+    // ProjectDbContext lives in GeoAssets.Projects.EFCore (kept provider-agnostic, same
+    // reasoning as ServiceOrderDbContext above), so migrations targeting Postgres are
+    // generated into this (Server) project instead.
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
 
 // ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
