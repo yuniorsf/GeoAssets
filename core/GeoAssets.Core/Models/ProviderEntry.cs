@@ -12,6 +12,9 @@ public sealed class ProviderEntry
     public Guid   Id        { get; }      = Guid.NewGuid();
     public string Name      { get; set; } = string.Empty;
 
+    /// <summary>Explicit order of this entry within the pool.</summary>
+    public int Position { get; set; }
+
     /// <summary>Features from this entry are currently rendered on the map.</summary>
     public bool IsOpen    { get; set; }
 

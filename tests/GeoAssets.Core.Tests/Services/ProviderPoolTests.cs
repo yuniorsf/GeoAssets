@@ -109,6 +109,66 @@ public class ProviderPoolTests
         entryAddedCount.Should().Be(0);
     }
 
+    // ── RestoreEntry ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RestoreEntry_ReturnsEntryWithRestoredState()
+    {
+        var sut = new ProviderPool();
+        var entry = sut.RestoreEntry("A", Provider(), position: 2, isOpen: false, isEnabled: false, isActive: false);
+
+        entry.Name.Should().Be("A");
+        entry.Position.Should().Be(2);
+        entry.IsOpen.Should().BeFalse();
+        entry.IsEnabled.Should().BeFalse();
+        entry.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RestoreEntry_AddsToAll()
+    {
+        var sut = new ProviderPool();
+        var entry = sut.RestoreEntry("A", Provider(), 0, true, true, false);
+        sut.All.Should().ContainSingle().Which.Should().BeSameAs(entry);
+    }
+
+    [Fact]
+    public void RestoreEntry_IsActiveTrue_OtherEntriesBecomeInactive()
+    {
+        var sut = new ProviderPool();
+        var a = sut.Add("A", Provider());
+        sut.SetActive(a.Id);
+
+        var restored = sut.RestoreEntry("B", Provider(), 0, true, true, true);
+
+        a.IsActive.Should().BeFalse();
+        restored.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RestoreEntry_FiresChangedExactlyOnce()
+    {
+        var sut = new ProviderPool();
+        var count = 0;
+        sut.Changed += (_, _) => count++;
+        sut.RestoreEntry("A", Provider(), 0, true, true, true);
+        count.Should().Be(1);
+    }
+
+    [Fact]
+    public void RestoreEntry_FiresEntryAddedWithTheRestoredEntry()
+    {
+        // The map renderer subscribes to EntryAdded to render a provider's features; a
+        // restored entry needs the same treatment as one added via Add.
+        var sut = new ProviderPool();
+        ProviderEntry? received = null;
+        sut.EntryAdded += (_, entry) => received = entry;
+
+        var restored = sut.RestoreEntry("A", Provider(), 0, true, true, false);
+
+        received.Should().BeSameAs(restored);
+    }
+
     // ── SetActive ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -304,6 +364,114 @@ public class ProviderPoolTests
         sut.Changed += (_, _) => fired = true;
         sut.Disable(Guid.NewGuid());
         fired.Should().BeFalse();
+    }
+
+    // ── OpenAll ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void OpenAll_SetsIsOpenTrueOnEveryEntry()
+    {
+        var sut = new ProviderPool();
+        var a = sut.Add("A", Provider());
+        var b = sut.Add("B", Provider());
+        a.IsOpen = false;
+        b.IsOpen = false;
+
+        sut.OpenAll();
+
+        a.IsOpen.Should().BeTrue();
+        b.IsOpen.Should().BeTrue();
+    }
+
+    [Fact]
+    public void OpenAll_FiresChanged()
+    {
+        var sut = new ProviderPool();
+        sut.Add("A", Provider());
+        var fired = false;
+        sut.Changed += (_, _) => fired = true;
+        sut.OpenAll();
+        fired.Should().BeTrue();
+    }
+
+    // ── CloseAll ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CloseAll_SetsIsOpenFalseOnEveryEntry()
+    {
+        var sut = new ProviderPool();
+        var a = sut.Add("A", Provider());
+        var b = sut.Add("B", Provider());
+
+        sut.CloseAll();
+
+        a.IsOpen.Should().BeFalse();
+        b.IsOpen.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CloseAll_FiresChanged()
+    {
+        var sut = new ProviderPool();
+        sut.Add("A", Provider());
+        var fired = false;
+        sut.Changed += (_, _) => fired = true;
+        sut.CloseAll();
+        fired.Should().BeTrue();
+    }
+
+    // ── EnableAll ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void EnableAll_SetsIsEnabledTrueOnEveryEntry()
+    {
+        var sut = new ProviderPool();
+        var a = sut.Add("A", Provider());
+        var b = sut.Add("B", Provider());
+        a.IsEnabled = false;
+        b.IsEnabled = false;
+
+        sut.EnableAll();
+
+        a.IsEnabled.Should().BeTrue();
+        b.IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EnableAll_FiresChanged()
+    {
+        var sut = new ProviderPool();
+        sut.Add("A", Provider());
+        var fired = false;
+        sut.Changed += (_, _) => fired = true;
+        sut.EnableAll();
+        fired.Should().BeTrue();
+    }
+
+    // ── DisableAll ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DisableAll_SetsIsEnabledFalseOnEveryEntry()
+    {
+        var sut = new ProviderPool();
+        var a = sut.Add("A", Provider());
+        var b = sut.Add("B", Provider());
+
+        sut.DisableAll();
+
+        a.IsEnabled.Should().BeFalse();
+        b.IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DisableAll_FiresChanged()
+    {
+        var sut = new ProviderPool();
+        sut.Add("A", Provider());
+        var fired = false;
+        sut.Changed += (_, _) => fired = true;
+        sut.DisableAll();
+        fired.Should().BeTrue();
     }
 
     // ── Rename ────────────────────────────────────────────────────────────────

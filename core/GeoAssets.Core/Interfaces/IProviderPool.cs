@@ -18,6 +18,16 @@ public interface IProviderPool
     /// </summary>
     ProviderEntry Add(string name, IAssetProvider provider);
 
+    /// <summary>
+    /// Wraps an externally created provider in a pool entry with its full state restored in
+    /// one call — the reconnect-loop counterpart to <see cref="Add"/>, avoiding the visible
+    /// intermediate states of <see cref="Add"/> followed by separate <see cref="SetActive"/>/
+    /// <see cref="Open"/>/<see cref="Close"/>/<see cref="Enable"/>/<see cref="Disable"/> calls.
+    /// </summary>
+    ProviderEntry RestoreEntry(
+        string name, IAssetProvider provider, int position,
+        bool isOpen, bool isEnabled, bool isActive);
+
     /// <summary>Makes the given entry the active workspace; opens and enables it if needed.</summary>
     void SetActive(Guid id);
 
@@ -32,6 +42,18 @@ public interface IProviderPool
 
     /// <summary>Hides features of an open entry from the map without closing it.</summary>
     void Disable(Guid id);
+
+    /// <summary>Marks every current entry as open on the map.</summary>
+    void OpenAll();
+
+    /// <summary>Marks every current entry as closed.</summary>
+    void CloseAll();
+
+    /// <summary>Makes features of every open entry visible on the map.</summary>
+    void EnableAll();
+
+    /// <summary>Hides features of every entry from the map without closing them.</summary>
+    void DisableAll();
 
     void Rename(Guid id, string name);
 

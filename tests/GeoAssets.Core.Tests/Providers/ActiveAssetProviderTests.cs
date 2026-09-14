@@ -538,11 +538,16 @@ public class ActiveAssetProviderTests
         public IReadOnlyList<ProviderEntry> All => [];
         public ProviderEntry Active => throw new InvalidOperationException();
         public ProviderEntry Add(string name, IAssetProvider provider) => throw new NotSupportedException();
+        public ProviderEntry RestoreEntry(string name, IAssetProvider provider, int position, bool isOpen, bool isEnabled, bool isActive) => throw new NotSupportedException();
         public void SetActive(Guid id) { }
         public void Open(Guid id) { }
         public void Close(Guid id) { }
         public void Enable(Guid id) { }
         public void Disable(Guid id) { }
+        public void OpenAll() { }
+        public void CloseAll() { }
+        public void EnableAll() { }
+        public void DisableAll() { }
         public void Rename(Guid id, string name) { }
         public void Remove(Guid id) { }
         public event EventHandler? Changed;

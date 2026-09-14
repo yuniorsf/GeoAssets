@@ -32,6 +32,28 @@ public sealed class ProviderPool : IProviderPool
         return entry;
     }
 
+    public ProviderEntry RestoreEntry(
+        string name, IAssetProvider provider, int position,
+        bool isOpen, bool isEnabled, bool isActive)
+    {
+        if (isActive)
+            foreach (var e in _entries) e.IsActive = false;
+
+        var entry = new ProviderEntry
+        {
+            Name      = name,
+            Position  = position,
+            IsOpen    = isOpen,
+            IsEnabled = isEnabled,
+            IsActive  = isActive,
+            Provider  = provider
+        };
+        _entries.Add(entry);
+        Changed?.Invoke(this, EventArgs.Empty);
+        EntryAdded?.Invoke(this, entry);
+        return entry;
+    }
+
     public void SetActive(Guid id)
     {
         foreach (var e in _entries) e.IsActive = e.Id == id;
@@ -71,6 +93,30 @@ public sealed class ProviderPool : IProviderPool
         var entry = Find(id);
         if (entry is null) return;
         entry.IsEnabled = false;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void OpenAll()
+    {
+        foreach (var e in _entries) e.IsOpen = true;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void CloseAll()
+    {
+        foreach (var e in _entries) e.IsOpen = false;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void EnableAll()
+    {
+        foreach (var e in _entries) e.IsEnabled = true;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void DisableAll()
+    {
+        foreach (var e in _entries) e.IsEnabled = false;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
