@@ -559,4 +559,41 @@ public class ProviderPoolTests
         sut.Remove(Guid.NewGuid());
         fired.Should().BeFalse();
     }
+
+    // ── ClearAll ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ClearAll_RemovesEveryEntry_IncludingTheActiveOne()
+    {
+        // The point of ClearAll over Remove: Remove refuses to remove the active entry, which
+        // would make a full-pool reset impossible whenever something is active (always true
+        // once any entry has been added).
+        var sut = new ProviderPool();
+        var a = sut.Add("A", Provider());
+        sut.Add("B", Provider());
+        sut.SetActive(a.Id);
+
+        sut.ClearAll();
+
+        sut.All.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClearAll_FiresChanged()
+    {
+        var sut = new ProviderPool();
+        sut.Add("A", Provider());
+        var fired = false;
+        sut.Changed += (_, _) => fired = true;
+        sut.ClearAll();
+        fired.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ClearAll_EmptyPool_FiresChangedWithoutThrowing()
+    {
+        var sut = new ProviderPool();
+        var act = sut.ClearAll;
+        act.Should().NotThrow();
+    }
 }

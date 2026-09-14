@@ -550,6 +550,7 @@ public class ActiveAssetProviderTests
         public void DisableAll() { }
         public void Rename(Guid id, string name) { }
         public void Remove(Guid id) { }
+        public void ClearAll() { }
         public event EventHandler? Changed;
         public event EventHandler<ProviderEntry>? EntryAdded { add { } remove { } }
         public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);

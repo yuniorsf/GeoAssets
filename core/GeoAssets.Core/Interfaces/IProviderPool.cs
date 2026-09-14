@@ -60,6 +60,14 @@ public interface IProviderPool
     /// <summary>Removes the entry from the pool. The active entry cannot be removed.</summary>
     void Remove(Guid id);
 
+    /// <summary>
+    /// Removes every entry unconditionally, including the active one — unlike <see cref="Remove"/>.
+    /// For a caller about to repopulate the whole pool from scratch (e.g. <c>IProjectSessionService</c>
+    /// switching Projects or discarding changes via a fresh <see cref="RestoreEntry"/> pass), so
+    /// entries from the previous state aren't left stranded alongside the new ones.
+    /// </summary>
+    void ClearAll();
+
     /// <summary>Fires whenever pool state changes (entry added, removed, or state updated).</summary>
     event EventHandler? Changed;
 

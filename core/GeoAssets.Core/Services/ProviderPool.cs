@@ -136,5 +136,11 @@ public sealed class ProviderPool : IProviderPool
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    public void ClearAll()
+    {
+        _entries.Clear();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     private ProviderEntry? Find(Guid id) => _entries.FirstOrDefault(e => e.Id == id);
 }

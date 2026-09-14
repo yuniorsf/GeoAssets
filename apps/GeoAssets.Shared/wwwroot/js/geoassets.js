@@ -333,6 +333,12 @@ window.GeoAssets = (function () {
         _maps[divId]?.map.invalidateSize();
     }
 
+    // Re-centers/re-zooms an already-initialized map — initializeMap is idempotent (a no-op on
+    // an existing divId), so it can't be reused to apply a Project's ViewState on open/discard.
+    function setView(divId, lat, lon, zoom) {
+        _maps[divId]?.map.setView([lat, lon], zoom);
+    }
+
     function destroyMap(divId) {
         const state = _maps[divId];
         if (state) {
@@ -791,6 +797,7 @@ window.GeoAssets = (function () {
         initializeMap,
         destroyMap,
         invalidateSize,
+        setView,
         registerHandlers,
         enableDraw,
         disableDraw,

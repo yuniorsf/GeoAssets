@@ -44,6 +44,10 @@ public interface IMapInterop
     Task DestroyMapAsync(string divId);
     Task InvalidateSizeAsync(string divId);
 
+    /// <summary>Re-centers/re-zooms an already-initialized map — unlike <see cref="InitializeMapAsync"/>
+    /// (idempotent, a no-op once the map exists), this always applies.</summary>
+    Task SetViewAsync(string divId, double lat, double lon, int zoom);
+
     // --- Feature rendering ---
     Task RenderFeatureAsync(string divId, GeoFeature feature);
     Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features);

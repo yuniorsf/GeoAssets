@@ -51,6 +51,9 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     public Task InvalidateSizeAsync(string divId) =>
         _js.InvokeVoidAsync($"{Ns}.invalidateSize", divId).AsTask();
 
+    public Task SetViewAsync(string divId, double lat, double lon, int zoom) =>
+        _js.InvokeVoidAsync($"{Ns}.setView", divId, lat, lon, zoom).AsTask();
+
     public Task RenderFeatureAsync(string divId, GeoFeature feature)
     {
         var json = JsonSerializer.Serialize(feature, _interopOptions);
