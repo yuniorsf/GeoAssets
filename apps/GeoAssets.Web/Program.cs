@@ -8,6 +8,7 @@ using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.WFS;
 using GeoAssets.Provider.WMS;
 using GeoAssets.Provider.Shapefile;
+using GeoAssets.Projects.Rest;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Navigation;
@@ -190,6 +191,15 @@ builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
+
+// ── Project session (XD01-142) — REST-backed against GeoAssets.Server, same pattern as
+// the Service Order workflow above. IProjectSessionService owns the currently-open Project's
+// load/reconnect/dirty/save-discard/close-guard lifecycle; nothing calls OpenAsync yet (that's
+// XD01-145/146's job), this makes the service resolvable once they do.
+var projectsApiBaseUrl = builder.Configuration["Projects:ApiBaseUrl"]
+    ?? throw new InvalidOperationException("Projects:ApiBaseUrl is not configured.");
+builder.Services.AddProjectsRest(projectsApiBaseUrl);
+builder.Services.AddScoped<IProjectSessionService, BlazorProjectSessionService>();
 
 // ── Build + seed + run ────────────────────────────────────────────────────────
 var host = builder.Build();
