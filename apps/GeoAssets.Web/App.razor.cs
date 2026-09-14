@@ -14,5 +14,9 @@ public partial class App
         // BlazorThemeService's doc comment for why the flash is actually prevented there,
         // not here.
         await ThemeService.InitAsync();
+
+        // Loads the persisted autosave on/off + interval preference and starts the background
+        // tick loop (XD01-143) — a no-op until a Project is actually opened (XD01-145/146).
+        await AutosaveService.InitAsync();
     }
 }

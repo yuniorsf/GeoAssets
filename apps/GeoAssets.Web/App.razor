@@ -1,3 +1,4 @@
+@using GeoAssets.Core.Interfaces
 @using GeoAssets.Shared.Pages
 @using GeoAssets.Web.Shared
 @using GeoAssets.Shared.Localization
@@ -5,6 +6,7 @@
 @inject BlazorCultureService CultureService
 @inject HttpJsonStringLocalizer Localizer
 @inject BlazorThemeService ThemeService
+@inject IProjectAutosaveService AutosaveService
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly"

@@ -201,6 +201,11 @@ var projectsApiBaseUrl = builder.Configuration["Projects:ApiBaseUrl"]
 builder.Services.AddProjectsRest(projectsApiBaseUrl);
 builder.Services.AddScoped<IProjectSessionService, BlazorProjectSessionService>();
 
+// Project autosave (XD01-143) — silent background safety net on top of IProjectSessionService,
+// separate from the explicit close/logout guard. InitAsync (called from App.razor.cs) loads
+// the persisted on/off + interval preference and starts the tick loop.
+builder.Services.AddScoped<IProjectAutosaveService, ProjectAutosaveService>();
+
 // ── Build + seed + run ────────────────────────────────────────────────────────
 var host = builder.Build();
 
