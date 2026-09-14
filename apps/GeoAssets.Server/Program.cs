@@ -71,6 +71,10 @@ builder.Services.AddProjectPersistence(o => o.UseNpgsql(
     // generated into this (Server) project instead.
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
 
+// IProjectService (XD01-141) — copy-on-write fork-on-edit authorization for Project
+// mutations, layered on top of IProjectRepository above.
+builder.Services.AddScoped<IProjectService, ProjectService>();
+
 // ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
 // apps/GeoAssets.Web/Program.cs, so server-side enforcement and the client UI agree on
 // who can do what. ServerWorkflowPrincipalFactory builds the WorkflowPrincipal it evaluates
@@ -152,6 +156,10 @@ app.MapGeoAssetsApi(wmsRequireAuthentication: wmsRequireAuthentication);
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
 app.MapServiceOrdersApi();
+
+// Project REST endpoints under /api/projects (XD01-141) —
+// see ProjectsRestApiExtensions for the full endpoint list.
+app.MapProjectsApi();
 
 // Read-only identity/authorization endpoints under /api/identity (XD01-18) —
 // see IdentityRestApiExtensions for the full endpoint list.

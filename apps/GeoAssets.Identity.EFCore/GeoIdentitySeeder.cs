@@ -86,6 +86,18 @@ public static class GeoIdentitySeeder
             P("organizations:edit",     "organizations", "edit",       "Crear y editar organizaciones"),
             P("groups:read",            "groups",        "read",       "Ver grupos"),
             P("groups:edit",            "groups",        "edit",       "Crear y editar grupos, y gestionar sus miembros"),
+
+            // XD01-141: Project (working-configuration snapshot) authorization. Split per
+            // scope rather than one blanket "projects:edit" so a mutation on one scope
+            // (e.g. Providers) can copy-on-write fork a General Project independently of the
+            // caller's rights over the other scopes.
+            P("projects:read",              "projects", "read",              "Ver proyectos"),
+            P("projects:manage-providers",  "projects", "manage-providers",  "Gestionar proveedores conectados de un proyecto"),
+            P("projects:manage-asset-types","projects", "manage-asset-types","Gestionar el alcance de tipos de activo de un proyecto"),
+            P("projects:manage-layers",     "projects", "manage-layers",     "Gestionar el alcance de capas de un proyecto"),
+            P("projects:manage-view",       "projects", "manage-view",       "Gestionar la vista inicial de un proyecto"),
+            P("projects:rename",            "projects", "rename",            "Renombrar un proyecto"),
+            P("projects:delete",            "projects", "delete",            "Eliminar un proyecto"),
         };
 
         var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct);
@@ -104,19 +116,25 @@ public static class GeoIdentitySeeder
             "features:read", "features:edit", "features:delete",
             "reports:export", "users:manage",
             "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read",
-            "organizations:read", "organizations:edit", "groups:read", "groups:edit");
+            "organizations:read", "organizations:edit", "groups:read", "groups:edit",
+            "projects:read", "projects:manage-providers", "projects:manage-asset-types",
+            "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete");
 
         await AddRoleAsync(db, SupervisorRoleId, "Supervisor",      "Gestión de órdenes y supervisión", isBuiltIn: true, ct,
             "serviceorders:create", "serviceorders:read", "serviceorders:assign",
             "serviceorders:complete", "serviceorders:cancel",
-            "features:read", "features:edit", "reports:export");
+            "features:read", "features:edit", "reports:export",
+            "projects:read", "projects:manage-providers", "projects:manage-asset-types",
+            "projects:manage-layers", "projects:manage-view", "projects:rename");
 
         await AddRoleAsync(db, TechnicianRoleId, "FieldTechnician", "Ejecución de órdenes en campo",    isBuiltIn: true, ct,
             "serviceorders:read", "serviceorders:complete",
-            "features:read", "features:edit");
+            "features:read", "features:edit",
+            "projects:read");
 
         await AddRoleAsync(db, ReadOnlyRoleId,   "ReadOnly",        "Solo lectura, sin modificaciones", isBuiltIn: true, ct,
-            "serviceorders:read", "features:read");
+            "serviceorders:read", "features:read",
+            "projects:read");
     }
 
     // ── Policies ──────────────────────────────────────────────────────────────

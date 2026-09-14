@@ -29,13 +29,13 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(20);
+        (await db.Permissions.CountAsync()).Should().Be(27);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
 
     [Fact]
-    public async Task SeedAsync_AdministratorRole_IsLinkedToAllTwentyPermissions()
+    public async Task SeedAsync_AdministratorRole_IsLinkedToAllTwentySevenPermissions()
     {
         // Guards the ChangeTracker lookup in AddRoleAsync: permissions and roles are
         // added in the *same* SaveChanges batch, so a naive database-only lookup for
@@ -51,7 +51,7 @@ public class GeoIdentitySeederTests
         var adminRolePermissionCount = await db.RolePermissions
             .CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId);
 
-        adminRolePermissionCount.Should().Be(20);
+        adminRolePermissionCount.Should().Be(27);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class GeoIdentitySeederTests
             .SingleAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "users:read");
         db.RolePermissions.Remove(usersReadGrant);
         await db.SaveChangesAsync();
-        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(19);
+        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(26);
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -82,7 +82,7 @@ public class GeoIdentitySeederTests
             .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
             .ToListAsync();
         adminCodes.Should().Contain("users:read");
-        adminCodes.Should().HaveCount(20);
+        adminCodes.Should().HaveCount(27);
     }
 
     [Fact]
@@ -98,11 +98,11 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(20);
+        (await db.Permissions.CountAsync()).Should().Be(27);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
-            .Should().Be(20);
+            .Should().Be(27);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class GeoIdentitySeederTests
             .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
             .ToListAsync();
 
-        readOnlyPermissionCodes.Should().BeEquivalentTo(["serviceorders:read", "features:read"]);
+        readOnlyPermissionCodes.Should().BeEquivalentTo(["serviceorders:read", "features:read", "projects:read"]);
     }
 
     // XD01-55 (users/roles/permissions) + XD01-128 (organizations/groups) — same
@@ -179,5 +179,107 @@ public class GeoIdentitySeederTests
             .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
             .ToListAsync();
         nonAdminCodes.Should().NotContain(IdentityAdminPermissionCodes);
+    }
+
+    // ── XD01-141: projects:* permissions ─────────────────────────────────────
+
+    private static readonly string[] ProjectPermissionCodes =
+    [
+        "projects:read", "projects:manage-providers", "projects:manage-asset-types",
+        "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete"
+    ];
+
+    [Fact]
+    public async Task SeedAsync_ProjectsPermissions_AllSevenCodesExist()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var seededCodes = await db.Permissions.Select(p => p.Code).ToListAsync();
+
+        seededCodes.Should().Contain(ProjectPermissionCodes);
+    }
+
+    [Fact]
+    public async Task SeedAsync_ProjectsDelete_GrantedToAdministratorOnly()
+    {
+        // Scope-leak guard, same shape as SeedAsync_IdentityAdminPermissions_GrantedToAdministratorOnly:
+        // Supervisor gets the manage-*/rename projects codes but not delete, mirroring how
+        // Supervisor already lacks features:delete.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var adminCodes = await db.RolePermissions
+            .Where(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+        adminCodes.Should().Contain("projects:delete");
+
+        var nonAdminRoleIds = new[]
+        {
+            GeoIdentitySeeder.SupervisorRoleId,
+            GeoIdentitySeeder.TechnicianRoleId,
+            GeoIdentitySeeder.ReadOnlyRoleId
+        };
+        var nonAdminCodes = await db.RolePermissions
+            .Where(rp => nonAdminRoleIds.Contains(rp.RoleId))
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+        nonAdminCodes.Should().NotContain("projects:delete");
+    }
+
+    [Fact]
+    public async Task SeedAsync_SupervisorRole_HasProjectsManageAndRenameButNotDelete()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var supervisorCodes = await db.RolePermissions
+            .Where(rp => rp.RoleId == GeoIdentitySeeder.SupervisorRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+
+        supervisorCodes.Should().Contain([
+            "projects:read", "projects:manage-providers", "projects:manage-asset-types",
+            "projects:manage-layers", "projects:manage-view", "projects:rename"
+        ]);
+        supervisorCodes.Should().NotContain("projects:delete");
+    }
+
+    [Fact]
+    public async Task SeedAsync_TechnicianAndReadOnlyRoles_HaveOnlyProjectsRead()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var technicianProjectCodes = await db.RolePermissions
+            .Where(rp => rp.RoleId == GeoIdentitySeeder.TechnicianRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .Where(code => code.StartsWith("projects:"))
+            .ToListAsync();
+        technicianProjectCodes.Should().BeEquivalentTo(["projects:read"]);
+
+        var readOnlyProjectCodes = await db.RolePermissions
+            .Where(rp => rp.RoleId == GeoIdentitySeeder.ReadOnlyRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .Where(code => code.StartsWith("projects:"))
+            .ToListAsync();
+        readOnlyProjectCodes.Should().BeEquivalentTo(["projects:read"]);
     }
 }
