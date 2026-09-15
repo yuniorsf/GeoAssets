@@ -177,6 +177,35 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
         Saved?.Invoke(this, Current);
     }
 
+    // ── SaveAsAsync ("Save As") ───────────────────────────────────────────────
+
+    public async Task SaveAsAsync(string name, string description, CancellationToken ct = default)
+    {
+        EnsureOpen();
+
+        var parentId = Current!.Kind == ProjectKind.General
+            ? Current.Id
+            : Current.ParentProjectId ?? throw new InvalidOperationException(
+                "Current Project has no General ancestor to fork from.");
+
+        // Raw (possibly-null) working-copy scopes, not the resolved view — same reasoning as
+        // SaveAsync: a scope the caller never touched should keep inheriting from the new
+        // fork's parent, not get baked in as a permanent override.
+        var newProject = new Project
+        {
+            Name            = name,
+            Description     = description,
+            ParentProjectId = parentId,
+            Providers       = _liveRaw!.Providers,
+            AssetTypeScope  = _liveRaw.AssetTypeScope,
+            LayerScope      = _liveRaw.LayerScope,
+            ViewState       = _liveRaw.ViewState,
+        };
+
+        var created = await _client.CreateAsync(newProject, ct);
+        await OpenAsync(created.Id, ct);
+    }
+
     private static (bool Redirected, Guid TargetId) Track(Project result, Guid previousTargetId, bool alreadyRedirected) =>
         result.Id != previousTargetId ? (true, result.Id) : (alreadyRedirected, previousTargetId);
 

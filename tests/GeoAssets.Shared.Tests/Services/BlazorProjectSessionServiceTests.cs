@@ -35,6 +35,20 @@ public class BlazorProjectSessionServiceTests
         public Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_store.TryGetValue(id, out var p) ? Clone(p) : null);
 
+        public Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<Project> CreateAsync(Project project, CancellationToken ct = default)
+        {
+            var created = Clone(project);
+            created.Id = Guid.NewGuid();
+            created.Kind = ProjectKind.User;
+            var parent = _store[project.ParentProjectId!.Value];
+            created.OrganizationId = parent.OrganizationId;
+            _store[created.Id] = created;
+            return Task.FromResult(Clone(created));
+        }
+
         public Task<Project> UpdateProvidersAsync(Guid id, List<ProjectProviderEntry>? providers, CancellationToken ct = default) =>
             ApplyAsync(id, "providers", p => p.Providers = providers);
 
@@ -432,6 +446,72 @@ public class BlazorProjectSessionServiceTests
         // by this save) except ViewState, which was the one scope actually changed.
         sut.Current.ViewState!.Lat.Should().Be(5);
         sut.Current.AssetTypeScope.Should().BeEquivalentTo(general.AssetTypeScope);
+    }
+
+    // ── SaveAsAsync ("Save As") ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task SaveAsAsync_FromGeneralProject_CreatesUserForkAndOpensIt()
+    {
+        var general = GeneralProject();
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(general.Id);
+
+        await sut.SaveAsAsync("My Copy", "desc");
+
+        sut.Current.Should().NotBeNull();
+        sut.Current!.Id.Should().NotBe(general.Id);
+        sut.Current.Kind.Should().Be(ProjectKind.User);
+        sut.Current.ParentProjectId.Should().Be(general.Id);
+        sut.Current.Name.Should().Be("My Copy");
+    }
+
+    [Fact]
+    public async Task SaveAsAsync_CarriesOverTheLiveWorkingCopyNotTheResolvedView()
+    {
+        // Fails without the fix: persisting Current (resolved) instead of _liveRaw (raw) would
+        // bake in every untouched scope on the new fork instead of letting it keep inheriting.
+        var general = GeneralProject();
+        var fork = UserProjectAllScopesNull(general.Id);
+        var client = new FakeProjectClient(general, fork);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(fork.Id);
+
+        sut.SetViewState(new ProjectViewState { Lat = 1, Lon = 1, Zoom = 1 });
+        await sut.SaveAsAsync("My Second Copy", "desc");
+
+        sut.Current!.ParentProjectId.Should().Be(general.Id);
+        sut.Current.ViewState!.Lat.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SaveAsAsync_FromAnExistingUserFork_ForksTheSameGeneralAncestor()
+    {
+        var general = GeneralProject();
+        var fork = UserProjectAllScopesNull(general.Id);
+        var client = new FakeProjectClient(general, fork);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(fork.Id);
+
+        await sut.SaveAsAsync("Another Copy", "desc");
+
+        sut.Current!.ParentProjectId.Should().Be(general.Id);
+        sut.Current.Id.Should().NotBe(fork.Id);
+    }
+
+    [Fact]
+    public async Task SaveAsAsync_DoesNotMutateTheOriginallyOpenProject()
+    {
+        var general = GeneralProject();
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(general.Id);
+
+        await sut.SaveAsAsync("My Copy", "desc");
+
+        var originalStillExists = await client.GetByIdAsync(general.Id);
+        originalStillExists!.Name.Should().Be(general.Name);
     }
 
     // ── DiscardChangesAsync ───────────────────────────────────────────────────

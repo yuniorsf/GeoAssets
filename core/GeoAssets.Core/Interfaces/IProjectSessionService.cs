@@ -53,6 +53,18 @@ public interface IProjectSessionService
     /// <summary>Persists every scope that changed since the last checkpoint, then advances the baseline.</summary>
     Task SaveAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// "Save As" (XD01-145): creates a new <see cref="ProjectKind.User"/> Project — named
+    /// <paramref name="name"/>/<paramref name="description"/>, forked from the currently open
+    /// Project's General ancestor (itself, if <see cref="Current"/> is already
+    /// <see cref="ProjectKind.General"/>) — carrying over the live working copy's current
+    /// Providers/AssetTypeScope/LayerScope/ViewState (raw, not resolved — same reasoning as
+    /// <see cref="SaveAsync"/>: an untouched scope stays null, inheriting from the new fork's
+    /// parent, rather than being baked in). Then opens the newly created Project, which becomes
+    /// <see cref="Current"/>.
+    /// </summary>
+    Task SaveAsAsync(string name, string description, CancellationToken ct = default);
+
     /// <summary>Reverts the live working copy to the raw baseline and re-runs the reconnect flow.</summary>
     Task DiscardChangesAsync(CancellationToken ct = default);
 

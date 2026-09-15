@@ -22,6 +22,22 @@ public interface IProjectClient
     /// <summary>Returns null on a 404. Throws <see cref="UnauthorizedAccessException"/> on a 403.</summary>
     Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>Every Project (General and User) belonging to <paramref name="organizationId"/> —
+    /// callers filter by <see cref="Project.Kind"/>/<see cref="Project.CreatedByUserId"/> themselves
+    /// (e.g. XD01-145's ProjectPanel: the org's General Projects plus the caller's own forks).</summary>
+    Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a new <see cref="ProjectKind.User"/> Project ("Save As", XD01-145) forked from
+    /// <paramref name="project"/>.<see cref="Project.ParentProjectId"/> — must reference a
+    /// <see cref="ProjectKind.General"/> Project the caller can at least read. Only
+    /// <see cref="Project.Name"/>/<see cref="Project.Description"/>/<see cref="Project.Providers"/>/
+    /// <see cref="Project.AssetTypeScope"/>/<see cref="Project.LayerScope"/>/<see cref="Project.ViewState"/>
+    /// are read from <paramref name="project"/> — every other field (id, organization, owner, kind,
+    /// timestamps) is derived server-side.
+    /// </summary>
+    Task<Project> CreateAsync(Project project, CancellationToken ct = default);
+
     Task<Project> UpdateProvidersAsync(Guid id, List<ProjectProviderEntry>? providers, CancellationToken ct = default);
 
     Task<Project> UpdateAssetTypeScopeAsync(Guid id, ProjectAssetTypeScope? scope, CancellationToken ct = default);

@@ -31,6 +31,21 @@ public sealed class RestProjectClient(HttpClient http) : IProjectClient
         return await response.Content.ReadFromJsonAsync<Project>(_opts, ct);
     }
 
+    public async Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default)
+    {
+        var response = await http.GetAsync($"organization/{organizationId}", ct);
+        await EnsureSuccessAsync(response, organizationId);
+        return await response.Content.ReadFromJsonAsync<List<Project>>(_opts, ct) ?? [];
+    }
+
+    public async Task<Project> CreateAsync(Project project, CancellationToken ct = default)
+    {
+        var response = await http.PostAsJsonAsync(string.Empty, project, _opts, ct);
+        await EnsureSuccessAsync(response, project.ParentProjectId ?? Guid.Empty);
+        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct)
+            ?? throw new InvalidOperationException("Server returned an empty response for a successful Project create.");
+    }
+
     public Task<Project> UpdateProvidersAsync(Guid id, List<ProjectProviderEntry>? providers, CancellationToken ct = default)
         => PutScopeAsync(id, "providers", providers, ct);
 

@@ -268,4 +268,96 @@ public class ProjectsEndpointAuthorizationTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    // ── Create ("Save As", XD01-145) ──────────────────────────────────────────
+
+    [Fact]
+    public async Task PostProject_CallerCanReadParent_CreatesUserProjectOwnedByCaller()
+    {
+        var project = GeneralProject();
+        var callerId = Guid.NewGuid();
+        using var server = await BuildServerAsync(callerId, permissions: ["projects:read"], project);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/projects",
+            new Project { Name = "My Copy", Description = "desc", ParentProjectId = project.Id });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<Project>();
+        created!.Kind.Should().Be(ProjectKind.User);
+        created.ParentProjectId.Should().Be(project.Id);
+        created.CreatedByUserId.Should().Be(callerId);
+        created.OrganizationId.Should().Be(project.OrganizationId);
+        created.Name.Should().Be("My Copy");
+    }
+
+    [Fact]
+    public async Task PostProject_CallerLacksEvenRead_Returns403()
+    {
+        var project = GeneralProject();
+        using var server = await BuildServerAsync(Guid.NewGuid(), permissions: [], project);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/projects",
+            new Project { Name = "My Copy", ParentProjectId = project.Id });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task PostProject_ParentNotFound_Returns404()
+    {
+        var project = GeneralProject();
+        using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read"], project);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/projects",
+            new Project { Name = "My Copy", ParentProjectId = Guid.NewGuid() });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task PostProject_ParentIsAUserProject_Returns400_NoForkChains()
+    {
+        var general = GeneralProject();
+        using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read"], general);
+        using var client = AuthenticatedClient(server);
+
+        var firstResponse = await client.PostAsJsonAsync("/api/projects",
+            new Project { Name = "Fork", ParentProjectId = general.Id });
+        var fork = await firstResponse.Content.ReadFromJsonAsync<Project>();
+
+        var response = await client.PostAsJsonAsync("/api/projects",
+            new Project { Name = "Chained", ParentProjectId = fork!.Id });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostProject_MissingParentProjectId_Returns400()
+    {
+        var project = GeneralProject();
+        using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read"], project);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/projects", new Project { Name = "No Parent" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostProject_CarriesOverScopesFromRequestBody()
+    {
+        var project = GeneralProject();
+        using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read"], project);
+        using var client = AuthenticatedClient(server);
+        var viewState = new ProjectViewState { Lat = 5, Lon = 6, Zoom = 7 };
+
+        var response = await client.PostAsJsonAsync("/api/projects",
+            new Project { Name = "My Copy", ParentProjectId = project.Id, ViewState = viewState });
+
+        var created = await response.Content.ReadFromJsonAsync<Project>();
+        created!.ViewState!.Lat.Should().Be(5);
+    }
 }

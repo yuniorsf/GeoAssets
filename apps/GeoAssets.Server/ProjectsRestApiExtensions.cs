@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Authorization;
 
 namespace GeoAssets.Server;
@@ -55,6 +56,53 @@ public static class ProjectsRestApiExtensions
                     statusCode: StatusCodes.Status403Forbidden);
 
             return Results.Json(project, _opts);
+        })
+            .RequireAuthorization("projects:read");
+
+        // ── Create ("Save As", XD01-145) ─────────────────────────────────────────
+
+        routes.MapPost(prefix, async (
+            HttpRequest req, IProjectReader reader, IProjectWriter writer, TimeProvider timeProvider,
+            IAuthorizationService authz, IGeoAuthorizationService authService, HttpContext http) =>
+        {
+            var body = await JsonSerializer.DeserializeAsync<Project>(req.Body, _opts);
+            if (body?.ParentProjectId is not { } parentId)
+                return Results.BadRequest("ParentProjectId is required.");
+
+            var parent = await reader.GetByIdAsync(parentId);
+            if (parent is null) return Results.NotFound();
+            if (parent.Kind != ProjectKind.General)
+                return Results.BadRequest("Can only fork a General Project — no fork chains.");
+
+            var result = await authz.AuthorizeAsync(http.User, parent, new OrgResourceRequirement("projects:read"));
+            if (!result.Succeeded)
+                return Results.Json(new { reason = "Not authorized to fork this project." },
+                    statusCode: StatusCodes.Status403Forbidden);
+
+            var caller = await authService.GetAuthorizationContextAsync();
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            var project = new Project
+            {
+                Name            = body.Name,
+                Description     = body.Description,
+                OrganizationId  = parent.OrganizationId,
+                CreatedByUserId = caller.User.Id,
+                Kind            = ProjectKind.User,
+                ParentProjectId = parentId,
+                CreatedAt       = now,
+                UpdatedAt       = now,
+                Providers       = body.Providers,
+                AssetTypeScope  = body.AssetTypeScope,
+                LayerScope      = body.LayerScope,
+                ViewState       = body.ViewState,
+            };
+
+            await writer.AddAsync(project);
+            // Returns the created Project as the response body (not Results.Created's
+            // location-header-only convention used elsewhere in this codebase) — consistent
+            // with every other endpoint in this file, all of which return the resulting
+            // Project so RestProjectClient never needs a follow-up GET.
+            return Results.Json(project, _opts, statusCode: StatusCodes.Status201Created);
         })
             .RequireAuthorization("projects:read");
 

@@ -66,6 +66,64 @@ public class RestProjectClientTests
             .WithMessage("Not authorized to read this project.");
     }
 
+    // ── GetByOrganizationAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetByOrganizationAsync_ReturnsProjects()
+    {
+        var orgId = Guid.NewGuid();
+        var projects = new[] { SampleProject(), SampleProject() };
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, projects));
+        var sut = Sut(handler);
+
+        var result = await sut.GetByOrganizationAsync(orgId);
+
+        result.Should().HaveCount(2);
+        handler.Requests.Single().RequestUri!.AbsolutePath.Should().Be($"/organization/{orgId}");
+    }
+
+    [Fact]
+    public async Task GetByOrganizationAsync_EmptyBody_ReturnsEmptyList()
+    {
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, Array.Empty<Project>()));
+        var sut = Sut(handler);
+
+        var result = await sut.GetByOrganizationAsync(Guid.NewGuid());
+
+        result.Should().BeEmpty();
+    }
+
+    // ── CreateAsync ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_Success_ReturnsCreatedProjectAndPostsToRoot()
+    {
+        var parentId = Guid.NewGuid();
+        var created = new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, ParentProjectId = parentId, Name = "My Copy" };
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.Created, created));
+        var sut = Sut(handler);
+
+        var result = await sut.CreateAsync(new Project { Name = "My Copy", ParentProjectId = parentId });
+
+        result.Id.Should().Be(created.Id);
+        result.Kind.Should().Be(ProjectKind.User);
+        var request = handler.Requests.Single();
+        request.Method.Should().Be(HttpMethod.Post);
+        request.RequestUri!.AbsolutePath.Should().Be("/");
+    }
+
+    [Fact]
+    public async Task CreateAsync_Forbidden_ThrowsUnauthorizedAccessException()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+            JsonResponse(HttpStatusCode.Forbidden, new { reason = "Not authorized to fork this project." }));
+        var sut = Sut(handler);
+
+        var act = () => sut.CreateAsync(new Project { Name = "X", ParentProjectId = Guid.NewGuid() });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
     // ── UpdateProvidersAsync ──────────────────────────────────────────────────
 
     [Fact]

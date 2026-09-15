@@ -60,6 +60,7 @@ public class ProjectAutosaveServiceTests
         }
 
         public Task OpenAsync(Guid projectId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveAsAsync(string name, string description, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DiscardChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> RequestCloseAsync() => throw new NotSupportedException();
         public void SetAssetTypeScope(ProjectAssetTypeScope scope) => throw new NotSupportedException();
