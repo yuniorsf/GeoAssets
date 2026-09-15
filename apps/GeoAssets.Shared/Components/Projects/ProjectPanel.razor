@@ -1,0 +1,82 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Models
+@using Microsoft.AspNetCore.Components.Web
+@inject GeoAssets.Core.Interfaces.IProjectClient ProjectClient
+@inject GeoAssets.Core.Interfaces.IProjectSessionService Session
+@inject GeoAssets.Identity.Authorization.Services.IGeoAuthorizationService AuthService
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["projects.title"]</h6>
+    </div>
+
+    @if (_loading)
+    {
+        <p class="pool-entry-msg">@L["projects.loading"]</p>
+    }
+    else
+    {
+        <div class="pool-list">
+            <div class="geo-nav-section-label">@L["projects.general"]</div>
+            @if (_generalProjects.Count == 0)
+            {
+                <p class="pool-entry-msg">@L["projects.noGeneral"]</p>
+            }
+            @foreach (var p in _generalProjects)
+            {
+                var project = p;
+                <div class="pool-entry">
+                    <div class="layer-row">
+                        <span class="pool-entry-name @(Session.Current?.Id == project.Id ? "pool-entry-active" : "")"
+                              @onclick="() => OpenAsync(project)">
+                            @project.Name@(Session.Current?.Id == project.Id ? $" {L["projects.open"]}" : "")
+                        </span>
+                    </div>
+                </div>
+            }
+
+            <div class="geo-nav-section-label">@L["projects.myForks"]</div>
+            @if (_myForks.Count == 0)
+            {
+                <p class="pool-entry-msg">@L["projects.noForks"]</p>
+            }
+            @foreach (var p in _myForks)
+            {
+                var project = p;
+                <div class="pool-entry">
+                    <div class="layer-row">
+                        <span class="pool-entry-name @(Session.Current?.Id == project.Id ? "pool-entry-active" : "")"
+                              @onclick="() => OpenAsync(project)">
+                            @project.Name@(Session.Current?.Id == project.Id ? $" {L["projects.open"]}" : "")
+                        </span>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="section-header-row">
+            <button class="btn-icon" title="@L["projects.save"]" disabled="@(Session.Current is null)"
+                    @onclick="SaveAsync">💾</button>
+
+            @if (_showSaveAs)
+            {
+                <input class="form-control pool-name-input"
+                       value="@_saveAsName"
+                       @onchange="ev => _saveAsName = ev.Value?.ToString() ?? string.Empty"
+                       @onkeydown="HandleSaveAsKey" />
+                <button class="btn-icon" title="@L["projects.confirm"]" @onclick="ConfirmSaveAsAsync">✓</button>
+                <button class="btn-icon" title="@L["projects.cancel"]" @onclick="CancelSaveAs">✕</button>
+            }
+            else
+            {
+                <button class="btn-icon" title="@L["projects.saveAs"]" disabled="@(Session.Current is null)"
+                        @onclick="StartSaveAs">📄</button>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <p class="pool-entry-msg">@_message</p>
+        }
+    }
+</div>
