@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -225,7 +226,7 @@ public static class IdentityRestApiExtensions
         }).RequireAuthorization("organizations:read");
 
         routes.MapPost($"{prefix}/organizations", async (
-            OrganizationWriteDto dto, IOrganizationRepository orgRepo, TimeProvider timeProvider) =>
+            OrganizationWriteDto dto, IOrganizationRepository orgRepo, IProjectRepository projects, TimeProvider timeProvider) =>
         {
             var org = new Organization
             {
@@ -238,6 +239,11 @@ public static class IdentityRestApiExtensions
             };
             await orgRepo.AddAsync(org);
             await orgRepo.SaveChangesAsync();
+
+            // XD01-144: a brand-new org gets a usable default Project immediately, not just on
+            // the next server restart (when SeedDefaultProjectsAsync would otherwise catch it).
+            await DefaultProjectSeeder.EnsureDefaultProjectAsync(projects, org.Id, timeProvider);
+
             return Results.Created($"{prefix}/organizations/{org.Id}", null);
         }).RequireAuthorization("organizations:edit");
 

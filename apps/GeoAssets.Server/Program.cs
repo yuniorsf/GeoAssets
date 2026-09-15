@@ -135,6 +135,10 @@ await app.Services.LoadRegistryFromDbAsync();
 // Seed canonical identity roles/permissions/policies (idempotent, XD01-14).
 await app.Services.SeedGeoIdentityAsync();
 
+// Seed a default Project per organization (idempotent, XD01-144) — must run after identity
+// seeding above, since it needs the organizations that seeder creates.
+await app.Services.SeedDefaultProjectsAsync();
+
 app.UseCors();
 
 app.UseGeoAssetsAuthentication();

@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -69,6 +71,8 @@ public class IdentityRestApiExtensionsTests
                     // Same reasoning — the XD01-128 organizations/groups routes are in the same group.
                     services.AddSingleton<IOrganizationRepository>(new NeverCalledOrganizationRepository());
                     services.AddSingleton<IGroupRepository>(new NeverCalledGroupRepository());
+                    // Same reasoning — POST /organizations now also seeds a default Project (XD01-144).
+                    services.AddSingleton<IProjectRepository>(new NeverCalledProjectRepository());
                 });
                 webHost.Configure(app =>
                 {
@@ -456,6 +460,47 @@ public class IdentityRestApiExtensionsTests
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
+    /// <summary>Never actually invoked — registered purely so the XD01-144 default-Project-seed
+    /// call inside POST /organizations has an <see cref="IProjectRepository"/> to resolve, for
+    /// tests that never touch it.</summary>
+    private sealed class NeverCalledProjectRepository : IProjectRepository
+    {
+        public Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Project>> GetForksOfAsync(Guid parentProjectId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AddAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public event EventHandler<Project>? ProjectSaved;
+        public event EventHandler<Guid>? ProjectDeleted;
+    }
+
+    /// <summary>Drives the XD01-144 default-Project-seed assertion on org creation.</summary>
+    private sealed class RecordingProjectRepository : IProjectRepository
+    {
+        public List<Project> Added { get; } = [];
+
+        public Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Project>>([.. Added.Where(p => p.OrganizationId == organizationId)]);
+
+        public Task<IReadOnlyList<Project>> GetForksOfAsync(Guid parentProjectId, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task AddAsync(Project project, CancellationToken ct = default)
+        {
+            Added.Add(project);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public event EventHandler<Project>? ProjectSaved;
+        public event EventHandler<Guid>? ProjectDeleted;
+    }
+
     /// <summary>Drives the XD01-69 invitations endpoint tests below.</summary>
     private sealed class FakePendingInvitationRepository(IReadOnlyDictionary<Guid, PendingInvitation> invitations) : IPendingInvitationRepository
     {
@@ -580,7 +625,8 @@ public class IdentityRestApiExtensionsTests
         IInvitationEmailSender? invitationEmailSender = null,
         IUserClaimRepository? claimRepo = null,
         IOrganizationRepository? orgRepo = null,
-        IGroupRepository? groupRepo = null)
+        IGroupRepository? groupRepo = null,
+        IProjectRepository? projectRepo = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -612,6 +658,9 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IUserClaimRepository>(claimRepo ?? new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>()));
                     services.AddSingleton<IOrganizationRepository>(orgRepo ?? new NeverCalledOrganizationRepository());
                     services.AddSingleton<IGroupRepository>(groupRepo ?? new NeverCalledGroupRepository());
+                    // XD01-144: POST /organizations now also seeds a default Project — must be
+                    // resolvable even for tests that never hit that endpoint.
+                    services.AddSingleton<IProjectRepository>(projectRepo ?? new NeverCalledProjectRepository());
                 });
                 webHost.Configure(app =>
                 {
@@ -1143,11 +1192,11 @@ public class IdentityRestApiExtensionsTests
     // ── Organizations (XD01-128) ────────────────────────────────────────────
 
     private static async Task<TestServer> BuildOrgServerAsync(
-        IOrganizationRepository orgRepo, IGeoAuthorizationService authService) =>
+        IOrganizationRepository orgRepo, IGeoAuthorizationService authService, IProjectRepository? projectRepo = null) =>
         await BuildAdminServerAsync(
             new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
             new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
-            new FakeAdminPermissionRepository([]), authService, orgRepo: orgRepo);
+            new FakeAdminPermissionRepository([]), authService, orgRepo: orgRepo, projectRepo: projectRepo);
 
     [Fact]
     public async Task Organizations_List_Authorized_ReturnsAll()
@@ -1247,7 +1296,8 @@ public class IdentityRestApiExtensionsTests
     public async Task Organizations_Create_Authorized_ReturnsCreated()
     {
         var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
-        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:edit"));
+        using var server = await BuildOrgServerAsync(
+            orgRepo, new FakePermissionAuthorizationService("organizations:edit"), new RecordingProjectRepository());
         using var client = AuthenticatedClient(server);
 
         var response = await client.PostAsJsonAsync("/api/identity/organizations",
@@ -1258,6 +1308,25 @@ public class IdentityRestApiExtensionsTests
         orgRepo.Added!.Name.Should().Be("Empresa Eléctrica");
         orgRepo.Added.Slug.Should().Be("een");
         orgRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Organizations_Create_Authorized_SeedsADefaultProject()
+    {
+        // XD01-144: a brand-new org gets a usable default Project immediately, not just on
+        // the next server restart.
+        var orgRepo = new FakeAdminOrganizationRepository(new Dictionary<Guid, Organization>(), new Dictionary<Guid, List<AppUser>>());
+        var projectRepo = new RecordingProjectRepository();
+        using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:edit"), projectRepo);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync("/api/identity/organizations",
+            new OrganizationWriteDto("Empresa Eléctrica", "een", "desc", true));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var project = projectRepo.Added.Should().ContainSingle().Subject;
+        project.OrganizationId.Should().Be(orgRepo.Added!.Id);
+        project.Kind.Should().Be(ProjectKind.General);
     }
 
     [Fact]
