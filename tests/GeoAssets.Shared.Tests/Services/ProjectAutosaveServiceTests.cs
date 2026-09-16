@@ -47,6 +47,7 @@ public class ProjectAutosaveServiceTests
         public bool IsDirty { get; set; }
         public event EventHandler? DirtyChanged;
         public event EventHandler<Project>? Saved;
+        public event EventHandler? CurrentChanged;
         public Func<Task<ProjectCloseChoice>>? CloseRequested { get; set; }
 
         public int SaveCallCount { get; private set; }
@@ -62,6 +63,7 @@ public class ProjectAutosaveServiceTests
         public Task OpenAsync(Guid projectId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveAsAsync(string name, string description, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DiscardChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task CloseAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> RequestCloseAsync() => throw new NotSupportedException();
         public void SetAssetTypeScope(ProjectAssetTypeScope scope) => throw new NotSupportedException();
         public void SetLayerScope(ProjectLayerScope scope) => throw new NotSupportedException();

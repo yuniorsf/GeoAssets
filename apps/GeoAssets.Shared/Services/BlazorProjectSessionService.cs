@@ -55,6 +55,7 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
     public bool IsDirty { get; private set; }
     public event EventHandler? DirtyChanged;
     public event EventHandler<Project>? Saved;
+    public event EventHandler? CurrentChanged;
     public Func<Task<ProjectCloseChoice>>? CloseRequested { get; set; }
 
     // ── OpenAsync ─────────────────────────────────────────────────────────────
@@ -82,6 +83,7 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
 
         AttachPoolTracking();
         SetDirty(false);
+        CurrentChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private async Task<(Project Resolved, Project? Parent)> ResolveAsync(Project raw, CancellationToken ct)
@@ -175,6 +177,7 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
 
         SetDirty(false);
         Saved?.Invoke(this, Current);
+        if (redirected) CurrentChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // ── SaveAsAsync ("Save As") ───────────────────────────────────────────────
@@ -231,6 +234,23 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
 
         AttachPoolTracking();
         SetDirty(false);
+    }
+
+    // ── CloseAsync ────────────────────────────────────────────────────────────
+
+    public Task CloseAsync(CancellationToken ct = default)
+    {
+        DetachPoolTracking();
+
+        _rawBaseline = null;
+        _liveRaw     = null;
+        _parent      = null;
+        Current      = null;
+
+        _pool.ClearAll();
+        SetDirty(false);
+        CurrentChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
     }
 
     // ── RequestCloseAsync ─────────────────────────────────────────────────────

@@ -16,7 +16,21 @@ public partial class ProjectPanel
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
+        Session.CurrentChanged += OnSessionCurrentChanged;
         await LoadAsync();
+    }
+
+    // Keeps the General/My copies list's "active" marker correct when the open Project changes
+    // from outside this panel — e.g. TopBar's "Close Project" (XD01-146). Unlike OnInitializedAsync,
+    // an externally-raised event doesn't trigger Blazor's post-handler render on its own, so the
+    // reload is followed by an explicit StateHasChanged.
+    private void OnSessionCurrentChanged(object? sender, EventArgs e) =>
+        InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    public override void Dispose()
+    {
+        Session.CurrentChanged -= OnSessionCurrentChanged;
+        base.Dispose();
     }
 
     // ── Loading ───────────────────────────────────────────────────────────────
@@ -66,6 +80,7 @@ public partial class ProjectPanel
         _message = string.Empty;
         try
         {
+            if (!await Session.RequestCloseAsync()) return;
             await Session.OpenAsync(project.Id);
             await LoadAsync();
         }

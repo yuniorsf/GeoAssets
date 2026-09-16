@@ -552,6 +552,105 @@ public class BlazorProjectSessionServiceTests
         pool.All.Should().ContainSingle().Which.Name.Should().Be("A");
     }
 
+    // ── CloseAsync ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CloseAsync_UnloadsCurrentAndClearsDirty()
+    {
+        var general = GeneralProject();
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(general.Id);
+        sut.SetViewState(new ProjectViewState { Lat = 1, Lon = 1, Zoom = 1 });
+
+        await sut.CloseAsync();
+
+        sut.Current.Should().BeNull();
+        sut.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CloseAsync_DisconnectsEveryPooledProvider()
+    {
+        var general = GeneralProject();
+        general.Providers = [new ProjectProviderEntry { Name = "A", PluginId = "known-a", Position = 0 }];
+        var client = new FakeProjectClient(general);
+        var pool = new ProviderPool();
+        var sut = BuildSut(client, pool, out _, new FakeProviderPlugin("known-a"));
+        await sut.OpenAsync(general.Id);
+
+        await sut.CloseAsync();
+
+        pool.All.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CloseAsync_FiresCurrentChanged()
+    {
+        var general = GeneralProject();
+        var sut = BuildSut(new FakeProjectClient(general), new ProviderPool(), out _);
+        await sut.OpenAsync(general.Id);
+
+        var fired = false;
+        sut.CurrentChanged += (_, _) => fired = true;
+        await sut.CloseAsync();
+
+        fired.Should().BeTrue();
+    }
+
+    // ── CurrentChanged ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task OpenAsync_FiresCurrentChanged()
+    {
+        var general = GeneralProject();
+        var sut = BuildSut(new FakeProjectClient(general), new ProviderPool(), out _);
+
+        var fired = false;
+        sut.CurrentChanged += (_, _) => fired = true;
+        await sut.OpenAsync(general.Id);
+
+        fired.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SaveAsync_NoRedirect_DoesNotFireCurrentChanged()
+    {
+        var general = GeneralProject();
+        var sut = BuildSut(new FakeProjectClient(general), new ProviderPool(), out _);
+        await sut.OpenAsync(general.Id);
+        sut.SetViewState(new ProjectViewState { Lat = 1, Lon = 1, Zoom = 1 });
+
+        var fired = false;
+        sut.CurrentChanged += (_, _) => fired = true;
+        await sut.SaveAsync();
+
+        fired.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SaveAsync_CopyOnWriteRedirect_FiresCurrentChanged()
+    {
+        var general = GeneralProject();
+        var forkId = Guid.NewGuid();
+        var preexistingFork = new Project
+        {
+            Id = forkId, Kind = ProjectKind.User, ParentProjectId = general.Id,
+            OrganizationId = general.OrganizationId, CreatedByUserId = Guid.NewGuid(),
+        };
+        var client = new FakeProjectClient(general, preexistingFork);
+        client.RedirectTo[general.Id] = forkId;
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(general.Id);
+        sut.SetViewState(new ProjectViewState { Lat = 5, Lon = 5, Zoom = 5 });
+
+        var fired = false;
+        sut.CurrentChanged += (_, _) => fired = true;
+        await sut.SaveAsync();
+
+        fired.Should().BeTrue();
+    }
+
     // ── RequestCloseAsync ─────────────────────────────────────────────────────
 
     [Fact]

@@ -56,3 +56,7 @@
 <!-- Provider boot dialog — shown on first launch until a data source is connected.
      Backdrop click is ignored in boot mode; user must make an explicit choice. -->
 <ProviderConnectDialog Visible="@(!BootLoader.IsBootComplete)" IsBootMode="true" />
+
+<!-- Sole subscriber to IProjectSessionService.CloseRequested (XD01-146) — presents the
+     Save/Discard/Cancel choice for explicit Close, Project switching, and logout. -->
+<ProjectCloseGuardDialog />

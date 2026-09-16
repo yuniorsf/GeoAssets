@@ -31,6 +31,7 @@ public static class MenuRegistrationExtensions
         }
 
         services.AddSingleton<MenuRegistry>();
+        services.AddScoped<SidebarPanelState>();
 
         return services;
     }

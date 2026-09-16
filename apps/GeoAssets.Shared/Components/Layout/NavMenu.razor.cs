@@ -12,11 +12,15 @@ public partial class NavMenu
 
     private IReadOnlyList<MenuNode> _tree = [];
     private HashSet<string> _expandedGroupIds = new(StringComparer.Ordinal);
-    private string? _openPanelId = DefaultOpenPanelId;
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
+
+        // PanelState is shared (XD01-146, so TopBar's quick "Open" action can reveal this same
+        // panel) — only seed the default the first time anything opens it, not on every re-init.
+        PanelState.OpenPanelId ??= DefaultOpenPanelId;
+        PanelState.Changed += OnPanelStateChanged;
 
         // IGeoAuthorizationService isn't registered on every host (e.g. GeoAssets.MAUI today) —
         // resolved optionally via IServiceProvider rather than @inject, since @inject would throw
@@ -79,6 +83,11 @@ public partial class NavMenu
             _expandedGroupIds.Add(groupId);
     }
 
-    private void TogglePanel(string panelId) =>
-        _openPanelId = _openPanelId == panelId ? null : panelId;
+    private void OnPanelStateChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    public override void Dispose()
+    {
+        PanelState.Changed -= OnPanelStateChanged;
+        base.Dispose();
+    }
 }

@@ -33,6 +33,16 @@ public interface IProjectSessionService
     event EventHandler<Project>? Saved;
 
     /// <summary>
+    /// Raised whenever <see cref="Current"/> changes identity — <see cref="OpenAsync"/>,
+    /// <see cref="CloseAsync"/>, or a copy-on-write redirect mid-<see cref="SaveAsync"/>. Not
+    /// raised for a scope setter or a same-id <see cref="SaveAsync"/>, which only change
+    /// <see cref="Current"/>'s contents, not which Project is open — lets any UI showing "which
+    /// Project is open" (XD01-146) stay correct regardless of which component triggered the
+    /// switch or close.
+    /// </summary>
+    event EventHandler? CurrentChanged;
+
+    /// <summary>
     /// UI hook <see cref="RequestCloseAsync"/> invokes when the session is dirty — the
     /// subscriber must present a Save/Discard/Cancel choice to the user and return it. Actual
     /// dialog wiring belongs to a later ticket (XD01-137 child 2); this is the hook it wires
@@ -67,6 +77,13 @@ public interface IProjectSessionService
 
     /// <summary>Reverts the live working copy to the raw baseline and re-runs the reconnect flow.</summary>
     Task DiscardChangesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Unloads <see cref="Current"/> back to no Project open: disconnects every pooled provider
+    /// and clears the raw baseline/working-copy state. Does not check <see cref="IsDirty"/> or
+    /// prompt — callers (XD01-146) must resolve <see cref="RequestCloseAsync"/> first.
+    /// </summary>
+    Task CloseAsync(CancellationToken ct = default);
 
     /// <summary>
     /// The single choke point for explicit Close, switching Projects, and logout. Returns

@@ -8,7 +8,11 @@
             <p>@Message</p>
             <div class="dialog-actions">
                 <button class="btn btn-secondary btn-sm" @onclick="Cancel">@L["assets.cancel"]</button>
-                <button class="btn btn-danger btn-sm" @onclick="Confirm">@ConfirmLabel</button>
+                @if (!string.IsNullOrEmpty(SecondaryLabel))
+                {
+                    <button class="btn @SecondaryButtonClass btn-sm" @onclick="Secondary">@SecondaryLabel</button>
+                }
+                <button class="btn @ConfirmButtonClass btn-sm" @onclick="Confirm">@ConfirmLabel</button>
             </div>
         </div>
     </div>

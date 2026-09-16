@@ -1,6 +1,8 @@
 @namespace GeoAssets.Shared.Components.Layout
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @inject IThemeService ThemeService
+@inject IProjectSessionService Session
+@inject SidebarPanelState PanelState
 
 <header class="topbar">
     <div class="topbar-cluster">
@@ -21,6 +23,44 @@
         </div>
 
         <div class="vr"></div>
+
+        <div class="topbar-project-menu">
+            <button type="button" class="btn-icon topbar-project-trigger" title="@L["projects.title"]" @onclick="ToggleProjectMenu">
+                📁
+                @if (Session.Current is not null && Session.IsDirty)
+                {
+                    <span class="topbar-dirty-dot" title="@L["projects.unsavedChanges"]"></span>
+                }
+            </button>
+
+            @if (_projectMenuOpen)
+            {
+                <div class="topbar-menu-backdrop" @onclick="CloseProjectMenu"></div>
+                <div class="dropdown-menu show topbar-dropdown-menu" @onclick:stopPropagation="true">
+                    <div class="topbar-dropdown-header">
+                        <div class="topbar-dropdown-name">@(Session.Current?.Name ?? L["projects.noneOpen"])</div>
+                        @if (Session.Current is not null)
+                        {
+                            <div class="topbar-dropdown-role">@(Session.IsDirty ? L["projects.unsavedChanges"] : L["projects.allSaved"])</div>
+                        }
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <button type="button" class="dropdown-item" disabled="@(Session.Current is null || !Session.IsDirty)" @onclick="SaveProjectAsync">
+                        💾 @L["projects.save"]
+                    </button>
+                    <button type="button" class="dropdown-item" disabled="@(Session.Current is null)" @onclick="CloseProjectAsync">
+                        ✕ @L["projects.close"]
+                    </button>
+                    <button type="button" class="dropdown-item" @onclick="OpenProjectsPanel">
+                        📂 @L["projects.openSection"]
+                    </button>
+                    @if (!string.IsNullOrEmpty(_projectMenuMessage))
+                    {
+                        <p class="pool-entry-msg">@_projectMenuMessage</p>
+                    }
+                </div>
+            }
+        </div>
 
         <button type="button" class="btn-icon topbar-settings" title="@L["nav.settings"] (@L["nav.comingSoon"])">
             ⚙️

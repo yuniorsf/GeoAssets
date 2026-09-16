@@ -69,6 +69,20 @@ public class MenuRegistrationExtensionsTests
     }
 
     [Fact]
+    public void AddGeoAssetsNavigation_RegistersSidebarPanelState()
+    {
+        // XD01-146: TopBar's quick "Open" action and NavMenu both need to share the same
+        // SidebarPanelState instance per circuit — registered alongside MenuRegistry so every
+        // host calling AddGeoAssetsNavigation gets it without a separate DI line.
+        var services = new ServiceCollection();
+
+        services.AddGeoAssetsNavigation(ThisAssembly);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetService<SidebarPanelState>().Should().NotBeNull();
+    }
+
+    [Fact]
     public void AddGeoAssetsNavigation_DuplicateId_ThrowsWhenRegistryIsResolved()
     {
         // Fails without the fix: without duplicate detection, MenuRegistry would silently

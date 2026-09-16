@@ -3,6 +3,7 @@
 @inject MenuRegistry Registry
 @inject IServiceProvider ServiceProvider
 @inject NavigationManager Nav
+@inject SidebarPanelState PanelState
 
 <nav class="nav nav-pills flex-column geo-nav">
     @foreach (var node in _tree)
@@ -58,8 +59,8 @@
                 break;
 
             case MenuPanelItem panel:
-                var isOpen = _openPanelId == panel.Id;
-                <button type="button" class="nav-link geo-nav-toggle @(isOpen ? "active" : "")" @onclick="() => TogglePanel(panel.Id)">
+                var isOpen = PanelState.OpenPanelId == panel.Id;
+                <button type="button" class="nav-link geo-nav-toggle @(isOpen ? "active" : "")" @onclick="() => PanelState.Toggle(panel.Id)">
                     @if (panel.Icon is not null)
                     {
                         <span class="geo-nav-icon">@panel.Icon</span>

@@ -249,6 +249,20 @@ html, body {
     white-space: nowrap;
 }
 
+.topbar-project-menu { position: relative; }
+
+.topbar-project-trigger { position: relative; }
+
+.topbar-dirty-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warning);
+}
+
 .topbar-usermenu { position: relative; }
 
 .topbar-usermenu-trigger {

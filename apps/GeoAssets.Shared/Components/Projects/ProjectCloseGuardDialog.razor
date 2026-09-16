@@ -1,0 +1,12 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject GeoAssets.Core.Interfaces.IProjectSessionService Session
+
+<ConfirmDialog Visible="_visible"
+               Title="@L["projects.unsavedTitle"]"
+               Message="@L["projects.unsavedMessage"]"
+               ConfirmLabel="@L["projects.saveAndClose"]"
+               ConfirmButtonClass="btn-primary"
+               SecondaryLabel="@L["projects.discardAndClose"]"
+               OnConfirm="() => Resolve(ProjectCloseChoice.SaveAndClose)"
+               OnSecondary="() => Resolve(ProjectCloseChoice.DiscardAndClose)"
+               OnCancel="() => Resolve(ProjectCloseChoice.Cancel)" />
