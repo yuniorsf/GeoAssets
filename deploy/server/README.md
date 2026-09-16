@@ -32,14 +32,21 @@ docker compose up --build
 first time the app resolves `IAssetProvider`
 (`PostgresProviderFactory.Create`, `providers/GeoAssets.Provider.PostgreSQL/PostgresProviderFactory.cs:38`).
 
-`ServiceOrderDbContext` (workflow tables) does **not** auto-migrate — apply
-it manually once, from the repo root, after `postgres` is up:
+`ServiceOrderDbContext` (workflow tables) and `ProjectDbContext` (XD01-139
+Project persistence) do **not** auto-migrate — apply each manually once,
+from the repo root, after `postgres` is up:
 
 ```bash
 dotnet ef database update \
   --project apps/GeoAssets.Server \
   --startup-project apps/GeoAssets.Server \
   --context ServiceOrderDbContext \
+  --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
+
+dotnet ef database update \
+  --project apps/GeoAssets.Server \
+  --startup-project apps/GeoAssets.Server \
+  --context ProjectDbContext \
   --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
 ```
 
