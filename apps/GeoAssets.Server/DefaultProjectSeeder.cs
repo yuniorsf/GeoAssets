@@ -28,7 +28,10 @@ public static class DefaultProjectSeeder
     /// </summary>
     public static async Task SeedDefaultProjectsAsync(this IServiceProvider services, CancellationToken ct = default)
     {
-        using var scope = services.CreateScope();
+        // EFProjectRepository (resolved below via IProjectRepository) only implements
+        // IAsyncDisposable — a synchronous CreateScope()/Dispose() throws InvalidOperationException
+        // tearing it down, so this needs the async scope + async-using pair instead.
+        await using var scope = services.CreateAsyncScope();
         var projects = scope.ServiceProvider.GetRequiredService<IProjectRepository>();
         var organizations = scope.ServiceProvider.GetRequiredService<IOrganizationRepository>();
         var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();

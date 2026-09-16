@@ -42,6 +42,31 @@ public class DefaultProjectSeederTests
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
+    /// <summary>
+    /// Wraps <see cref="InMemoryProjectRepository"/> to mirror the real
+    /// <c>EFProjectRepository</c>'s disposal shape exactly: <see cref="IAsyncDisposable"/> only,
+    /// no <see cref="IDisposable"/>. Registering the plain in-memory fake as a singleton (as the
+    /// tests below did originally) never exercises scope disposal at all — a singleton survives
+    /// its creating scope's `Dispose()`/`DisposeAsync()` — so it couldn't have caught the
+    /// production bug where <c>DefaultProjectSeeder</c> used a synchronous <c>CreateScope()</c>
+    /// against a real, IAsyncDisposable-only scoped repository and blew up on disposal.
+    /// </summary>
+    private sealed class AsyncDisposableOnlyProjectRepository(InMemoryProjectRepository inner)
+        : IProjectRepository, IAsyncDisposable
+    {
+        public IReadOnlyList<Project> All => inner.All;
+        public event EventHandler<Project>? ProjectSaved { add => inner.ProjectSaved += value; remove => inner.ProjectSaved -= value; }
+        public event EventHandler<Guid>? ProjectDeleted { add => inner.ProjectDeleted += value; remove => inner.ProjectDeleted -= value; }
+        public Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default) => inner.GetByIdAsync(id, ct);
+        public Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct = default) => inner.GetAllAsync(ct);
+        public Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => inner.GetByOrganizationAsync(organizationId, ct);
+        public Task<IReadOnlyList<Project>> GetForksOfAsync(Guid parentProjectId, CancellationToken ct = default) => inner.GetForksOfAsync(parentProjectId, ct);
+        public Task AddAsync(Project project, CancellationToken ct = default) => inner.AddAsync(project, ct);
+        public Task UpdateAsync(Project project, CancellationToken ct = default) => inner.UpdateAsync(project, ct);
+        public Task DeleteAsync(Guid id, CancellationToken ct = default) => inner.DeleteAsync(id, ct);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private sealed class InMemoryOrganizationRepository(params Organization[] seed) : IOrganizationRepository
     {
         private readonly List<Organization> _orgs = [.. seed];
@@ -171,5 +196,27 @@ public class DefaultProjectSeederTests
         await services.SeedDefaultProjectsAsync();
 
         projectRepo.All.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task SeedDefaultProjectsAsync_ScopedAsyncDisposableOnlyRepository_DoesNotThrowOnScopeTeardown()
+    {
+        // Regression test: fails without the fix (CreateScope() + synchronous "using") with
+        // "'...' type only implements IAsyncDisposable. Use DisposeAsync to dispose the
+        // container." — the real EFProjectRepository is IAsyncDisposable-only, and a Scoped
+        // (not Singleton) registration is what actually makes the created scope responsible for
+        // disposing it, exercising the exact path that broke in production.
+        var org = Org();
+        var inner = new InMemoryProjectRepository();
+        var services = new ServiceCollection()
+            .AddScoped<IProjectRepository>(_ => new AsyncDisposableOnlyProjectRepository(inner))
+            .AddSingleton<IOrganizationRepository>(new InMemoryOrganizationRepository(org))
+            .AddSingleton<TimeProvider>(new FixedTimeProvider(DateTimeOffset.UtcNow))
+            .BuildServiceProvider();
+
+        var act = () => services.SeedDefaultProjectsAsync();
+
+        await act.Should().NotThrowAsync();
+        inner.All.Should().ContainSingle();
     }
 }
