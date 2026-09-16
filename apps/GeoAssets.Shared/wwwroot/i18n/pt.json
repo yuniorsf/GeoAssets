@@ -100,6 +100,12 @@
   "projects.saveAndClose": "Salvar",
   "projects.discardAndClose": "Descartar",
 
+  "autosave.toggle": "Salvamento automático",
+  "autosave.every": "A cada",
+  "autosave.minutes": "min",
+  "autosave.succeededAt": "Salvo automaticamente às {0}",
+  "autosave.failed": "Falha no salvamento automático: {0}",
+
   "pool.title": "Coleções",
   "pool.newCollection": "+ Nova coleção",
   "pool.namePlaceholder": "Nome da coleção",

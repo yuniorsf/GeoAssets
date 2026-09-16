@@ -307,6 +307,25 @@ html, body {
 .topbar-dropdown-header { padding: 6px 16px 4px; }
 .topbar-dropdown-name { font-size: 0.85rem; color: var(--text-primary); }
 .topbar-dropdown-role { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; }
+.topbar-dropdown-role.topbar-autosave-warning { color: var(--warning); }
+
+.topbar-autosave-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.topbar-autosave-toggle,
+.topbar-autosave-interval {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.topbar-autosave-interval input[type="number"] { width: 48px; }
 
 /* ─── Dropdown (Bootstrap) ───────────────────────────────────────────────── */
 

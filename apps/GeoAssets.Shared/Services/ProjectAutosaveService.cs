@@ -24,6 +24,7 @@ public sealed class ProjectAutosaveService : IProjectAutosaveService, IAsyncDisp
     public bool Enabled { get; private set; } = true;
     public int IntervalMinutes { get; private set; } = DefaultIntervalMinutes;
     public event EventHandler<Exception>? AutosaveFailed;
+    public event EventHandler<DateTimeOffset>? AutosaveSucceeded;
 
     public ProjectAutosaveService(
         IProjectSessionService session, IStorageService storage, TimeProvider timeProvider,
@@ -84,6 +85,7 @@ public sealed class ProjectAutosaveService : IProjectAutosaveService, IAsyncDisp
             try
             {
                 await _session.SaveAsync(ct);
+                AutosaveSucceeded?.Invoke(this, _timeProvider.GetUtcNow());
             }
             catch (Exception ex)
             {

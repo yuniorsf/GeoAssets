@@ -112,6 +112,12 @@
   "projects.saveAndClose": "Guardar",
   "projects.discardAndClose": "Descartar",
 
+  "autosave.toggle": "Guardado automático",
+  "autosave.every": "Cada",
+  "autosave.minutes": "min",
+  "autosave.succeededAt": "Guardado automáticamente {0}",
+  "autosave.failed": "Falló el guardado automático: {0}",
+
   "pool.title": "Colecciones",
   "pool.newCollection": "+ Nueva colección",
   "pool.namePlaceholder": "Nombre de colección",

@@ -2,6 +2,7 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @inject IThemeService ThemeService
 @inject IProjectSessionService Session
+@inject IProjectAutosaveService AutosaveService
 @inject SidebarPanelState PanelState
 
 <header class="topbar">
@@ -43,6 +44,10 @@
                         {
                             <div class="topbar-dropdown-role">@(Session.IsDirty ? L["projects.unsavedChanges"] : L["projects.allSaved"])</div>
                         }
+                        @if (_autosaveStatusMessage is not null)
+                        {
+                            <div class="topbar-dropdown-role @(_autosaveStatusIsError ? "topbar-autosave-warning" : "")">@_autosaveStatusMessage</div>
+                        }
                     </div>
                     <div class="dropdown-divider"></div>
                     <button type="button" class="dropdown-item" disabled="@(Session.Current is null || !Session.IsDirty)" @onclick="SaveProjectAsync">
@@ -54,6 +59,20 @@
                     <button type="button" class="dropdown-item" @onclick="OpenProjectsPanel">
                         📂 @L["projects.openSection"]
                     </button>
+                    <div class="dropdown-divider"></div>
+                    <div class="topbar-autosave-controls">
+                        <label class="topbar-autosave-toggle">
+                            <input type="checkbox" checked="@AutosaveService.Enabled" @onchange="OnAutosaveToggleChanged" />
+                            @L["autosave.toggle"]
+                        </label>
+                        <label class="topbar-autosave-interval">
+                            @L["autosave.every"]
+                            <input type="number" min="1" value="@AutosaveService.IntervalMinutes"
+                                   disabled="@(!AutosaveService.Enabled)"
+                                   @onchange="OnAutosaveIntervalChanged" />
+                            @L["autosave.minutes"]
+                        </label>
+                    </div>
                     @if (!string.IsNullOrEmpty(_projectMenuMessage))
                     {
                         <p class="pool-entry-msg">@_projectMenuMessage</p>

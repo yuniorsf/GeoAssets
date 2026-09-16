@@ -112,6 +112,12 @@
   "projects.saveAndClose": "Save",
   "projects.discardAndClose": "Discard",
 
+  "autosave.toggle": "Autosave",
+  "autosave.every": "Every",
+  "autosave.minutes": "min",
+  "autosave.succeededAt": "Autosaved {0}",
+  "autosave.failed": "Autosave failed: {0}",
+
   "pool.title": "Collections",
   "pool.newCollection": "+ New collection",
   "pool.namePlaceholder": "Collection name",

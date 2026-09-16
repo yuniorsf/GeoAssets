@@ -178,6 +178,24 @@ public class ProjectAutosaveServiceTests
         session.SaveCallCount.Should().Be(0);
     }
 
+    // ── Acceptance criterion: a successful autosave is visibly distinguishable from "nothing happened" ──
+
+    [Fact]
+    public async Task Tick_SaveSucceeds_FiresAutosaveSucceededWithTheTickTimestamp()
+    {
+        var session = new FakeProjectSessionService { Current = OpenProject(), IsDirty = true };
+        var timeProvider = new FakeTimeProvider();
+        var sut = Sut(session, timeProvider);
+        DateTimeOffset? observed = null;
+        sut.AutosaveSucceeded += (_, timestamp) => observed = timestamp;
+        await sut.InitAsync();
+
+        timeProvider.Advance(TimeSpan.FromMinutes(10));
+        await SettleSchedulerAsync();
+
+        observed.Should().Be(timeProvider.GetUtcNow());
+    }
+
     // ── Acceptance criterion: a SaveAsync failure surfaces a visible warning, never a silent no-op ──
 
     [Fact]
@@ -201,6 +219,29 @@ public class ProjectAutosaveServiceTests
         await SettleSchedulerAsync();
 
         observed.Should().BeOfType<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task Tick_SaveThrows_DoesNotFireAutosaveSucceeded()
+    {
+        // A failed tick must never also report success — the two states have to stay
+        // mutually exclusive so a subscriber can tell them apart.
+        var session = new FakeProjectSessionService
+        {
+            Current = OpenProject(),
+            IsDirty = true,
+            OnSave = () => throw new UnauthorizedAccessException("Not authorized (projects:manage-view) on this project."),
+        };
+        var timeProvider = new FakeTimeProvider();
+        var sut = Sut(session, timeProvider);
+        var succeededFired = false;
+        sut.AutosaveSucceeded += (_, _) => succeededFired = true;
+        await sut.InitAsync();
+
+        timeProvider.Advance(TimeSpan.FromMinutes(10));
+        await SettleSchedulerAsync();
+
+        succeededFired.Should().BeFalse();
     }
 
     [Fact]

@@ -18,6 +18,8 @@ public partial class TopBar
     private bool _userMenuOpen;
     private bool _projectMenuOpen;
     private string _projectMenuMessage = string.Empty;
+    private string? _autosaveStatusMessage;
+    private bool _autosaveStatusIsError;
 
     protected override void OnInitialized()
     {
@@ -26,6 +28,8 @@ public partial class TopBar
         Session.DirtyChanged += OnSessionChanged;
         Session.Saved += OnSessionSaved;
         Session.CurrentChanged += OnSessionChanged;
+        AutosaveService.AutosaveSucceeded += OnAutosaveSucceeded;
+        AutosaveService.AutosaveFailed += OnAutosaveFailed;
     }
 
     private void OnThemeChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
@@ -89,12 +93,39 @@ public partial class TopBar
         _projectMenuOpen = false;
     }
 
+    // ── Autosave toggle/interval + status indicator (XD01-147) ──────────────
+
+    private async Task OnAutosaveToggleChanged(ChangeEventArgs e) =>
+        await AutosaveService.SetEnabledAsync(e.Value is true);
+
+    private async Task OnAutosaveIntervalChanged(ChangeEventArgs e)
+    {
+        if (e.Value is string s && int.TryParse(s, out var minutes) && minutes > 0)
+            await AutosaveService.SetIntervalMinutesAsync(minutes);
+    }
+
+    private void OnAutosaveSucceeded(object? sender, DateTimeOffset timestamp)
+    {
+        _autosaveStatusIsError = false;
+        _autosaveStatusMessage = L.GetString("autosave.succeededAt", timestamp.ToLocalTime().ToString("HH:mm"));
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnAutosaveFailed(object? sender, Exception ex)
+    {
+        _autosaveStatusIsError = true;
+        _autosaveStatusMessage = L.GetString("autosave.failed", ex.Message);
+        InvokeAsync(StateHasChanged);
+    }
+
     public override void Dispose()
     {
         ThemeService.ThemeChanged -= OnThemeChanged;
         Session.DirtyChanged -= OnSessionChanged;
         Session.Saved -= OnSessionSaved;
         Session.CurrentChanged -= OnSessionChanged;
+        AutosaveService.AutosaveSucceeded -= OnAutosaveSucceeded;
+        AutosaveService.AutosaveFailed -= OnAutosaveFailed;
         base.Dispose();
     }
 }

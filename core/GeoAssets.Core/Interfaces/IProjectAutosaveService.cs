@@ -27,6 +27,12 @@ public interface IProjectAutosaveService
     /// </summary>
     event EventHandler<Exception>? AutosaveFailed;
 
+    /// <summary>
+    /// Fired with the tick's timestamp when an autosave tick's <see cref="IProjectSessionService.SaveAsync"/>
+    /// call succeeds — lets a subscriber show a subtle "Autosaved HH:MM" indicator.
+    /// </summary>
+    event EventHandler<DateTimeOffset>? AutosaveSucceeded;
+
     /// <summary>Loads the persisted enabled/interval preference and starts the background
     /// tick loop. Must be awaited once on app startup.</summary>
     Task InitAsync(CancellationToken ct = default);
