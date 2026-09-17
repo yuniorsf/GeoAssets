@@ -181,6 +181,7 @@
   "pool.connStrPlaceholder": "Nombre de conexión",
   "pool.connStrHint": "Host=...;Database=...;Username=...;Password=...",
   "pool.connStrRequired": "La cadena de conexión es obligatoria.",
+  "pool.fieldRequired": "{0} es obligatorio.",
   "pool.connect": "Conectar",
   "pool.connecting": "Conectando…",
   "pool.connectError": "Error al conectar: {0}",

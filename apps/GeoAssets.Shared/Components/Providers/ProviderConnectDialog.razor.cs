@@ -57,7 +57,11 @@ public partial class ProviderConnectDialog
 
         foreach (var f in _selected.ConfigFields.Where(f => f.Required))
         {
-            if (!_config.Has(f.Key))
+            var key = f.Type is ProviderFieldType.File or ProviderFieldType.BinaryFile
+                ? f.Key + "_content"
+                : f.Key;
+
+            if (!_config.Has(key))
             {
                 _error = L.GetString("pool.fieldRequired", f.Label);
                 return;

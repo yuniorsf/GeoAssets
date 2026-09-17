@@ -181,6 +181,7 @@
   "pool.connStrPlaceholder": "Connection name",
   "pool.connStrHint": "Host=...;Database=...;Username=...;Password=...",
   "pool.connStrRequired": "Connection string is required.",
+  "pool.fieldRequired": "{0} is required.",
   "pool.connect": "Connect",
   "pool.connecting": "Connecting…",
   "pool.connectError": "Connection failed: {0}",
