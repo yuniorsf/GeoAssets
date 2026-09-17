@@ -23,6 +23,15 @@ public interface IProjectSessionService
     /// <summary>The resolved Project currently open, or null if none is.</summary>
     Project? Current { get; }
 
+    /// <summary>
+    /// The raw (unresolved) working copy of the currently-open Project, or null if none is open
+    /// (XD01-148). Unlike <see cref="Current"/>, a scope here stays exactly as the server has it —
+    /// null means still inheriting from the parent General Project, non-null means personally
+    /// overridden. Always identical in content to <see cref="Current"/> for a
+    /// <see cref="ProjectKind.General"/> Project, where raw and resolved are the same thing.
+    /// </summary>
+    Project? RawCurrent { get; }
+
     /// <summary>True once anything has changed since the last open/save/discard checkpoint.</summary>
     bool IsDirty { get; }
 
@@ -104,4 +113,16 @@ public interface IProjectSessionService
 
     /// <summary>Overrides the ViewState on the live working copy and marks the session dirty.</summary>
     void SetViewState(ProjectViewState viewState);
+
+    /// <summary>
+    /// UX-only capability hint (XD01-148): does the current user appear to hold
+    /// <paramref name="permissionCode"/> on the open Project? Always <c>true</c> when no Project
+    /// is open or the open Project is the caller's own <see cref="ProjectKind.User"/> fork (they
+    /// own it outright, mirroring the server's ownership bypass for mutating a fork); otherwise
+    /// delegates to the caller's global permission grants, a coarse check with no per-project/
+    /// per-organization scoping. This only decides how a control looks before the user tries it —
+    /// the server-side authorization check remains the real boundary, and copy-on-write still
+    /// lets a denied mutation through as a fork.
+    /// </summary>
+    Task<bool> CanAsync(string permissionCode, CancellationToken ct = default);
 }

@@ -112,6 +112,14 @@
   "projects.saveAndClose": "Guardar",
   "projects.discardAndClose": "Descartar",
 
+  "projects.scopeOverrides": "Personalización",
+  "projects.scope.providers": "Proveedores",
+  "projects.scope.assetTypes": "Tipos de activo",
+  "projects.scope.layers": "Capas",
+  "projects.scope.view": "Vista inicial",
+  "projects.scope.personalized": "Personalizado",
+  "projects.scope.inherited": "Heredado",
+
   "autosave.toggle": "Guardado automático",
   "autosave.every": "Cada",
   "autosave.minutes": "min",
@@ -126,6 +134,7 @@
   "pool.enable": "Mostrar",
   "pool.disable": "Ocultar",
   "pool.setActive": "Activar como espacio de trabajo",
+  "pool.addProviderForkHint": "No tienes permiso para gestionar proveedores en este proyecto — agregar uno creará tu propia copia.",
   "pool.delete": "Eliminar colección",
   "pool.active": "★",
   "pool.skipBoot": "Omitir inicio",

@@ -4,6 +4,8 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -139,6 +141,30 @@ public class BlazorProjectSessionServiceTests
         public object? GetService(Type serviceType) => throw new NotSupportedException();
     }
 
+    /// <summary>Same shape as NavMenuTests' StubAuthorizationService — a lambda-driven fake for
+    /// the coarse, unscoped permission check <see cref="BlazorProjectSessionService.CanAsync"/>
+    /// delegates to (XD01-148).</summary>
+    private sealed class FakeGeoAuthorizationService(Func<string, bool>? hasPermission = null) : IGeoAuthorizationService
+    {
+        public Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default) =>
+            Task.FromResult(hasPermission?.Invoke(permissionCode) ?? false);
+
+        public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException();
+    }
+
     private sealed class FakeMapInterop : IMapInterop
     {
         public List<(string DivId, double Lat, double Lon, int Zoom)> SetViewCalls { get; } = [];
@@ -185,7 +211,19 @@ public class BlazorProjectSessionServiceTests
         var registry = new ProviderPluginRegistry(plugins);
         return new BlazorProjectSessionService(
             client, pool, registry, new ThrowingServiceProvider(), mapInterop,
-            new FakeMapContext(), NullLogger<BlazorProjectSessionService>.Instance);
+            new FakeMapContext(), new FakeGeoAuthorizationService(), NullLogger<BlazorProjectSessionService>.Instance);
+    }
+
+    /// <summary>Variant of <see cref="BuildSut(FakeProjectClient, ProviderPool, out FakeMapInterop, IProviderPlugin[])"/>
+    /// for the <see cref="BlazorProjectSessionService.CanAsync"/> tests (XD01-148), which need
+    /// control over what <see cref="IGeoAuthorizationService"/> reports.</summary>
+    private static BlazorProjectSessionService BuildSutWithAuth(
+        FakeProjectClient client, ProviderPool pool, IGeoAuthorizationService authService)
+    {
+        var registry = new ProviderPluginRegistry([]);
+        return new BlazorProjectSessionService(
+            client, pool, registry, new ThrowingServiceProvider(), new FakeMapInterop(),
+            new FakeMapContext(), authService, NullLogger<BlazorProjectSessionService>.Instance);
     }
 
     private static Project GeneralProject(Guid? id = null) => new()
@@ -725,5 +763,109 @@ public class BlazorProjectSessionServiceTests
         (await sut.RequestCloseAsync()).Should().BeFalse();
 
         sut.IsDirty.Should().BeTrue();
+    }
+
+    // ── RawCurrent (XD01-148) ─────────────────────────────────────────────────
+
+    [Fact]
+    public void RawCurrent_NoProjectOpen_IsNull()
+    {
+        var sut = BuildSut(new FakeProjectClient(), new ProviderPool(), out _);
+
+        sut.RawCurrent.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RawCurrent_GeneralProject_MatchesCurrent()
+    {
+        var general = GeneralProject();
+        var sut = BuildSut(new FakeProjectClient(general), new ProviderPool(), out _);
+
+        await sut.OpenAsync(general.Id);
+
+        sut.RawCurrent.Should().BeEquivalentTo(sut.Current);
+    }
+
+    [Fact]
+    public async Task RawCurrent_UserProjectWithNullScopes_StaysNullUnlikeTheResolvedCurrent()
+    {
+        // The whole point of RawCurrent: Current resolves null scopes from the parent, but
+        // RawCurrent must keep reporting them as null — that's what lets a UI tell "inherited"
+        // apart from "personalized". Fails without the fix (no way to observe this at all
+        // before RawCurrent existed).
+        var general = GeneralProject();
+        var fork = UserProjectAllScopesNull(general.Id);
+        var client = new FakeProjectClient(general, fork);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+
+        await sut.OpenAsync(fork.Id);
+
+        sut.Current!.AssetTypeScope.Should().NotBeNull();
+        sut.RawCurrent!.AssetTypeScope.Should().BeNull();
+        sut.RawCurrent.LayerScope.Should().BeNull();
+        sut.RawCurrent.ViewState.Should().BeNull();
+        sut.RawCurrent.Providers.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RawCurrent_AfterScopeSetter_ReflectsTheOverrideImmediately()
+    {
+        var general = GeneralProject();
+        var fork = UserProjectAllScopesNull(general.Id);
+        var client = new FakeProjectClient(general, fork);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+        await sut.OpenAsync(fork.Id);
+
+        sut.SetViewState(new ProjectViewState { Lat = 1, Lon = 2, Zoom = 3 });
+
+        sut.RawCurrent!.ViewState.Should().NotBeNull();
+        sut.RawCurrent.AssetTypeScope.Should().BeNull();
+    }
+
+    // ── CanAsync (XD01-148) ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CanAsync_NoProjectOpen_ReturnsTrue()
+    {
+        var sut = BuildSutWithAuth(new FakeProjectClient(), new ProviderPool(), new FakeGeoAuthorizationService(_ => false));
+
+        (await sut.CanAsync("projects:manage-providers")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CanAsync_OwnUserForkOpen_ReturnsTrueRegardlessOfPermission()
+    {
+        // Acceptance criterion (implicit): a user always has full rights on their own fork —
+        // gating only applies to the open General Project.
+        var general = GeneralProject();
+        var fork = UserProjectAllScopesNull(general.Id);
+        var client = new FakeProjectClient(general, fork);
+        var sut = BuildSutWithAuth(client, new ProviderPool(), new FakeGeoAuthorizationService(_ => false));
+        await sut.OpenAsync(fork.Id);
+
+        (await sut.CanAsync("projects:manage-providers")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CanAsync_GeneralProjectOpen_PermissionGranted_ReturnsTrue()
+    {
+        var general = GeneralProject();
+        var client = new FakeProjectClient(general);
+        var sut = BuildSutWithAuth(client, new ProviderPool(),
+            new FakeGeoAuthorizationService(code => code == "projects:manage-providers"));
+        await sut.OpenAsync(general.Id);
+
+        (await sut.CanAsync("projects:manage-providers")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CanAsync_GeneralProjectOpen_PermissionDenied_ReturnsFalse()
+    {
+        var general = GeneralProject();
+        var client = new FakeProjectClient(general);
+        var sut = BuildSutWithAuth(client, new ProviderPool(), new FakeGeoAuthorizationService(_ => false));
+        await sut.OpenAsync(general.Id);
+
+        (await sut.CanAsync("projects:manage-providers")).Should().BeFalse();
     }
 }

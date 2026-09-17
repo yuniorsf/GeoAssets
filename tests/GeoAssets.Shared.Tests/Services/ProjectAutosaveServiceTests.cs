@@ -68,6 +68,8 @@ public class ProjectAutosaveServiceTests
         public void SetAssetTypeScope(ProjectAssetTypeScope scope) => throw new NotSupportedException();
         public void SetLayerScope(ProjectLayerScope scope) => throw new NotSupportedException();
         public void SetViewState(ProjectViewState viewState) => throw new NotSupportedException();
+        public Project? RawCurrent => throw new NotSupportedException();
+        public Task<bool> CanAsync(string permissionCode, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private static ProjectAutosaveService Sut(

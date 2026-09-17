@@ -99,4 +99,45 @@ public class ProjectPanelTests
         myForks.Should().HaveCount(2);
         myForks.Should().Contain([forkA, forkB]);
     }
+
+    // ── DescribeScopeOverrides (XD01-148) ────────────────────────────────────
+
+    [Fact]
+    public void DescribeScopeOverrides_AllScopesNull_AllReportedAsNotOverridden()
+    {
+        var rawFork = UserFork(Guid.NewGuid(), Guid.NewGuid());
+
+        var result = ProjectPanel.DescribeScopeOverrides(rawFork);
+
+        result.Should().OnlyContain(s => !s.Overridden);
+        result.Select(s => s.ScopeKey).Should().BeEquivalentTo(["providers", "assetTypes", "layers", "view"]);
+    }
+
+    [Fact]
+    public void DescribeScopeOverrides_OnlyViewStateSet_ReportsExactlyThatOneAsOverridden()
+    {
+        // Literal acceptance criterion: a User Project with only ViewState overridden shows
+        // exactly that one scope as personalized and the other three as inherited.
+        var rawFork = UserFork(Guid.NewGuid(), Guid.NewGuid());
+        rawFork.ViewState = new ProjectViewState { Lat = 1, Lon = 2, Zoom = 3 };
+
+        var result = ProjectPanel.DescribeScopeOverrides(rawFork);
+
+        result.Single(s => s.ScopeKey == "view").Overridden.Should().BeTrue();
+        result.Where(s => s.ScopeKey != "view").Should().OnlyContain(s => !s.Overridden);
+    }
+
+    [Fact]
+    public void DescribeScopeOverrides_AllScopesSet_AllReportedAsOverridden()
+    {
+        var rawFork = UserFork(Guid.NewGuid(), Guid.NewGuid());
+        rawFork.Providers = [];
+        rawFork.AssetTypeScope = new ProjectAssetTypeScope();
+        rawFork.LayerScope = new ProjectLayerScope();
+        rawFork.ViewState = new ProjectViewState { Lat = 1, Lon = 2, Zoom = 3 };
+
+        var result = ProjectPanel.DescribeScopeOverrides(rawFork);
+
+        result.Should().OnlyContain(s => s.Overridden);
+    }
 }

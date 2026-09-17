@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -31,6 +32,7 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
     private readonly IServiceProvider _services;
     private readonly IMapInterop _mapInterop;
     private readonly ICurrentMapContext _mapContext;
+    private readonly IGeoAuthorizationService _authService;
     private readonly ILogger<BlazorProjectSessionService> _logger;
 
     private Project? _rawBaseline;
@@ -40,18 +42,20 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
     public BlazorProjectSessionService(
         IProjectClient client, IProviderPool pool, ProviderPluginRegistry registry,
         IServiceProvider services, IMapInterop mapInterop, ICurrentMapContext mapContext,
-        ILogger<BlazorProjectSessionService> logger)
+        IGeoAuthorizationService authService, ILogger<BlazorProjectSessionService> logger)
     {
-        _client     = client;
-        _pool       = pool;
-        _registry   = registry;
-        _services   = services;
-        _mapInterop = mapInterop;
-        _mapContext = mapContext;
-        _logger     = logger;
+        _client      = client;
+        _pool        = pool;
+        _registry    = registry;
+        _services    = services;
+        _mapInterop  = mapInterop;
+        _mapContext  = mapContext;
+        _authService = authService;
+        _logger      = logger;
     }
 
     public Project? Current { get; private set; }
+    public Project? RawCurrent => _liveRaw;
     public bool IsDirty { get; private set; }
     public event EventHandler? DirtyChanged;
     public event EventHandler<Project>? Saved;
@@ -296,6 +300,13 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
         Current!.ViewState  = viewState;
         SetDirty(true);
     }
+
+    // ── Capability hint (XD01-148) ────────────────────────────────────────────
+
+    public Task<bool> CanAsync(string permissionCode, CancellationToken ct = default) =>
+        Current is null || Current.Kind == ProjectKind.User
+            ? Task.FromResult(true)
+            : _authService.HasPermissionAsync(permissionCode, ct);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

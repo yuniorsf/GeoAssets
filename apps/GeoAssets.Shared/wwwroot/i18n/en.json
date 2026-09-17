@@ -112,6 +112,14 @@
   "projects.saveAndClose": "Save",
   "projects.discardAndClose": "Discard",
 
+  "projects.scopeOverrides": "Personalization",
+  "projects.scope.providers": "Providers",
+  "projects.scope.assetTypes": "Asset types",
+  "projects.scope.layers": "Layers",
+  "projects.scope.view": "Initial view",
+  "projects.scope.personalized": "Personalized",
+  "projects.scope.inherited": "Inherited",
+
   "autosave.toggle": "Autosave",
   "autosave.every": "Every",
   "autosave.minutes": "min",
@@ -126,6 +134,7 @@
   "pool.enable": "Show",
   "pool.disable": "Hide",
   "pool.setActive": "Set as active workspace",
+  "pool.addProviderForkHint": "You don't have permission to manage providers on this project — adding one will create your own copy.",
   "pool.delete": "Delete collection",
   "pool.active": "★",
   "pool.skipBoot": "Skip boot",

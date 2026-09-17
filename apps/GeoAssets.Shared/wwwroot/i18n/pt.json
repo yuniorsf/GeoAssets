@@ -100,6 +100,14 @@
   "projects.saveAndClose": "Salvar",
   "projects.discardAndClose": "Descartar",
 
+  "projects.scopeOverrides": "Personalização",
+  "projects.scope.providers": "Provedores",
+  "projects.scope.assetTypes": "Tipos de ativo",
+  "projects.scope.layers": "Camadas",
+  "projects.scope.view": "Vista inicial",
+  "projects.scope.personalized": "Personalizado",
+  "projects.scope.inherited": "Herdado",
+
   "autosave.toggle": "Salvamento automático",
   "autosave.every": "A cada",
   "autosave.minutes": "min",
@@ -114,6 +122,7 @@
   "pool.enable": "Mostrar",
   "pool.disable": "Ocultar",
   "pool.setActive": "Definir como espaço de trabalho",
+  "pool.addProviderForkHint": "Você não tem permissão para gerenciar provedores neste projeto — adicionar um criará sua própria cópia.",
   "pool.delete": "Excluir coleção",
   "pool.active": "★",
   "pool.skipBoot": "Pular inicialização",

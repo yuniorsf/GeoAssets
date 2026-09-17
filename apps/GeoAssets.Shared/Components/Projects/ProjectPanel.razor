@@ -54,6 +54,22 @@
             }
         </div>
 
+        @if (Session.Current?.Kind == ProjectKind.User && Session.RawCurrent is not null)
+        {
+            <div class="geo-nav-section-label">@L["projects.scopeOverrides"]</div>
+            <ul class="project-scope-list">
+                @foreach (var (scopeKey, overridden) in ProjectPanel.DescribeScopeOverrides(Session.RawCurrent))
+                {
+                    <li class="project-scope-item">
+                        <span>@L[$"projects.scope.{scopeKey}"]</span>
+                        <span class="project-scope-badge @(overridden ? "project-scope-badge--personalized" : "project-scope-badge--inherited")">
+                            @(overridden ? L["projects.scope.personalized"] : L["projects.scope.inherited"])
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+
         <div class="section-header-row">
             <button class="btn-icon" title="@L["projects.save"]" disabled="@(Session.Current is null)"
                     @onclick="SaveAsync">💾</button>

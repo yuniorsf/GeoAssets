@@ -685,6 +685,38 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     padding-left: 16px;
 }
 
+/* ─── Capability-aware gating & scope-override display (XD01-148) ──────────── */
+
+.btn-icon-hinted { opacity: 0.5; }
+
+.project-scope-list {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.project-scope-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    padding: 0 4px;
+}
+
+.project-scope-badge {
+    font-size: 0.68rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.project-scope-badge--personalized { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.project-scope-badge--inherited { background: var(--surface-tint-weak); color: var(--text-secondary); }
+
 .pool-connect-dialog {
     margin-top: 10px;
     padding: 10px;

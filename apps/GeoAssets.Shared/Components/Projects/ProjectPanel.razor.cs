@@ -73,6 +73,22 @@ public partial class ProjectPanel
         return (general, myForks);
     }
 
+    // ── Per-scope override-state display (XD01-148) ──────────────────────────
+
+    /// <summary>
+    /// For a User Project's raw (unresolved) working copy, reports which of the four scopes are
+    /// personally overridden (non-null) vs. still inheriting from the parent General Project
+    /// (null). Pure/static so it's directly unit-testable without a Blazor render tree — same
+    /// reasoning as <see cref="Categorize"/>.
+    /// </summary>
+    public static IReadOnlyList<(string ScopeKey, bool Overridden)> DescribeScopeOverrides(Project rawCurrent) =>
+    [
+        ("providers", rawCurrent.Providers is not null),
+        ("assetTypes", rawCurrent.AssetTypeScope is not null),
+        ("layers", rawCurrent.LayerScope is not null),
+        ("view", rawCurrent.ViewState is not null),
+    ];
+
     // ── Open ──────────────────────────────────────────────────────────────────
 
     private async Task OpenAsync(Project project)

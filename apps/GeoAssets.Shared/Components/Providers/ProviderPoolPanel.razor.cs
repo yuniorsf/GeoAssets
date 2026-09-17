@@ -3,27 +3,50 @@ using GeoAssets.Core.Models;
 using GeoAssets.Shared.Interfaces;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Components.Providers;
 
 public partial class ProviderPoolPanel
 {
+    private const string ManageProvidersPermission = "projects:manage-providers";
+
     private readonly Dictionary<Guid, string> _messages = [];
     private Guid?  _editingId;
     private string _editingName = string.Empty;
     private bool   _showConnectDialog;
+    private bool   _addProviderHinted;
+
+    // IProjectSessionService isn't registered on MAUI (Projects is a Web-only feature today) —
+    // resolved optionally via IServiceProvider, same defensive pattern as NavMenu's
+    // FilterByPermissionAsync, so this panel still renders there with gating simply switched off.
+    private IProjectSessionService? Session => Services.GetService<IProjectSessionService>();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override void OnInitialized() => Pool.Changed += OnPoolChanged;
 
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session is not null)
+        {
+            Session.CurrentChanged += OnSessionCurrentChanged;
+            await RefreshAddProviderGatingAsync();
+        }
+    }
+
     private void OnPoolChanged(object? _, EventArgs __) =>
         InvokeAsync(StateHasChanged);
+
+    private void OnSessionCurrentChanged(object? _, EventArgs __) =>
+        InvokeAsync(async () => { await RefreshAddProviderGatingAsync(); StateHasChanged(); });
 
     public override void Dispose()
     {
         Pool.Changed -= OnPoolChanged;
+        if (Session is not null)
+            Session.CurrentChanged -= OnSessionCurrentChanged;
         base.Dispose();
     }
 
@@ -31,6 +54,25 @@ public partial class ProviderPoolPanel
 
     private void OpenConnectDialog()  => _showConnectDialog = true;
     private void CloseConnectDialog() => _showConnectDialog = false;
+
+    // ── Capability-aware gating (XD01-148) ───────────────────────────────────
+
+    private async Task RefreshAddProviderGatingAsync()
+    {
+        if (Session is null) { _addProviderHinted = false; return; }
+        var canManage = await Session.CanAsync(ManageProvidersPermission);
+        _addProviderHinted = ShouldHintAsForkOnWrite(Session.Current?.Kind, canManage);
+    }
+
+    /// <summary>
+    /// Pure decision behind the "add provider" button's hinted styling — factored out as a
+    /// static method so it's directly unit-testable without a Blazor render tree (this repo has
+    /// no bUnit yet; matches ProjectPanel.Categorize's pattern). A control should only look
+    /// hinted on a General Project the caller can't manage — on their own User fork they always
+    /// have full rights, and when nothing is open there's nothing to gate.
+    /// </summary>
+    public static bool ShouldHintAsForkOnWrite(ProjectKind? openProjectKind, bool canManage) =>
+        openProjectKind == ProjectKind.General && !canManage;
 
     // ── Show / Hide ───────────────────────────────────────────────────────────
 

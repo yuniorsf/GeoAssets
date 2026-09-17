@@ -8,11 +8,14 @@
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
 @inject TimeProvider Clock
+@inject IServiceProvider Services
 
 <div class="sidebar-section">
     <div class="section-header-row">
         <h6>@L["pool.title"]</h6>
-        <button class="btn-icon" title="@L["pool.addProvider"]" @onclick="OpenConnectDialog">＋</button>
+        <button class="btn-icon @(_addProviderHinted ? "btn-icon-hinted" : "")"
+                title="@(_addProviderHinted ? L["pool.addProviderForkHint"] : L["pool.addProvider"])"
+                @onclick="OpenConnectDialog">＋</button>
     </div>
 
     <div class="pool-list">
