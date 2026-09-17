@@ -7,7 +7,16 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace GeoAssets.Provider.PostgreSQL.Migrations
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Seeds 5 <c>layer</c> rows (no organization ownership — <c>Layer</c> doesn't implement
+    /// <c>IOrgOwnedResource</c>) and 5 <c>asset_type</c> rows. The <c>asset_type</c> rows are
+    /// explicitly seeded with <c>OrganizationId = Guid.Empty</c> — the documented "no
+    /// organization assigned" sentinel (see <c>IOrgOwnedResource</c>, <c>AssetType.OrganizationId</c>)
+    /// that marks these as global built-in defaults, same as <c>AssetType.Point</c>/<c>Line</c>/<c>Area</c>.
+    /// <c>OrgResourceAuthorizationHandler</c> already treats that sentinel as unowned and always
+    /// passes the org check for it, and no asset-type query in this codebase filters by
+    /// <c>OrganizationId</c> today, so these rows are visible to every organization.
+    /// </summary>
     public partial class SeedDomainAssetTypesAndLayers : Migration
     {
         /// <inheritdoc />
@@ -27,14 +36,14 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
 
             migrationBuilder.InsertData(
                 table: "asset_type",
-                columns: new[] { "Id", "AllowedGeometryType", "attributes_schema", "Color", "DefaultLayerId", "IconUrl", "IsBuiltIn", "Name" },
+                columns: new[] { "Id", "AllowedGeometryType", "attributes_schema", "Color", "DefaultLayerId", "IconUrl", "IsBuiltIn", "Name", "OrganizationId" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0000-000000000004"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000001"), "", true, "Poste" },
-                    { new Guid("00000000-0000-0000-0000-000000000005"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000002"), "", true, "Transformador" },
-                    { new Guid("00000000-0000-0000-0000-000000000006"), 1, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000003"), "", true, "Línea de baja tensión" },
-                    { new Guid("00000000-0000-0000-0000-000000000007"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000004"), "", true, "Punto de descarga de agua" },
-                    { new Guid("00000000-0000-0000-0000-000000000008"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000005"), "", true, "Interruptor" }
+                    { new Guid("00000000-0000-0000-0000-000000000004"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000001"), "", true, "Poste", Guid.Empty },
+                    { new Guid("00000000-0000-0000-0000-000000000005"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000002"), "", true, "Transformador", Guid.Empty },
+                    { new Guid("00000000-0000-0000-0000-000000000006"), 1, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000003"), "", true, "Línea de baja tensión", Guid.Empty },
+                    { new Guid("00000000-0000-0000-0000-000000000007"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000004"), "", true, "Punto de descarga de agua", Guid.Empty },
+                    { new Guid("00000000-0000-0000-0000-000000000008"), 0, null, "#3388ff", new Guid("00000000-0000-0000-0001-000000000005"), "", true, "Interruptor", Guid.Empty }
                 });
         }
 
