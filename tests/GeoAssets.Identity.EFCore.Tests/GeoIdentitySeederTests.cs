@@ -282,4 +282,31 @@ public class GeoIdentitySeederTests
             .ToListAsync();
         readOnlyProjectCodes.Should().BeEquivalentTo(["projects:read"]);
     }
+
+    // ── XD01-156: Description is an i18n key, not literal text ──────────────────
+
+    [Fact]
+    public async Task SeedAsync_AllPermissionDescriptions_AreI18nKeysNotLiteralText()
+    {
+        // Regression guard: before XD01-156, Description held hardcoded Spanish text (e.g.
+        // "Ver proyectos"), so it always rendered in Spanish regardless of the signed-in
+        // user's culture. It must now be a stable "permissions.{resource}.{action}" key
+        // resolved via IJsonStringLocalizer in the UI (see PermissionList.razor).
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var permissions = await db.Permissions.ToListAsync();
+        permissions.Should().HaveCount(27);
+        foreach (var permission in permissions)
+        {
+            permission.Description.Should().StartWith("permissions.",
+                $"'{permission.Code}' description should be an i18n key, not literal text");
+            permission.Description.Should().NotContainAny([" ", "á", "é", "í", "ó", "ú", "ñ"],
+                $"'{permission.Code}' description should be a key, not literal (possibly Spanish) text");
+        }
+    }
 }

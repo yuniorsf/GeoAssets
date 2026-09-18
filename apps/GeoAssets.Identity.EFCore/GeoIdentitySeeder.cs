@@ -59,45 +59,48 @@ public static class GeoIdentitySeeder
 
     private static async Task SeedPermissionsAsync(GeoIdentityDbContext db, CancellationToken ct)
     {
+        // XD01-156: Description stores an i18n key (resolved via IJsonStringLocalizer in the
+        // UI, see PermissionList.razor) instead of literal text, so it can render in the
+        // signed-in user's culture. Translations live in wwwroot/i18n/{en,es,pt}.json.
         var perms = new[]
         {
-            P("serviceorders:create",   "serviceorders", "create",   "Crear nuevas órdenes de servicio"),
-            P("serviceorders:read",     "serviceorders", "read",     "Ver órdenes de servicio"),
-            P("serviceorders:assign",   "serviceorders", "assign",   "Asignar órdenes a técnicos"),
-            P("serviceorders:complete", "serviceorders", "complete", "Marcar órdenes como completadas"),
-            P("serviceorders:cancel",   "serviceorders", "cancel",   "Cancelar órdenes de servicio"),
-            P("features:read",          "features",      "read",     "Ver activos GIS"),
-            P("features:edit",          "features",      "edit",     "Editar activos GIS"),
-            P("features:delete",        "features",      "delete",   "Eliminar activos GIS"),
-            P("reports:export",         "reports",       "export",   "Exportar reportes"),
-            P("users:manage",           "users",         "manage",   "Gestionar usuarios y roles"),
+            P("serviceorders:create",   "serviceorders", "create",   "permissions.serviceorders.create"),
+            P("serviceorders:read",     "serviceorders", "read",     "permissions.serviceorders.read"),
+            P("serviceorders:assign",   "serviceorders", "assign",   "permissions.serviceorders.assign"),
+            P("serviceorders:complete", "serviceorders", "complete", "permissions.serviceorders.complete"),
+            P("serviceorders:cancel",   "serviceorders", "cancel",   "permissions.serviceorders.cancel"),
+            P("features:read",          "features",      "read",     "permissions.features.read"),
+            P("features:edit",          "features",      "edit",     "permissions.features.edit"),
+            P("features:delete",        "features",      "delete",   "permissions.features.delete"),
+            P("reports:export",         "reports",       "export",   "permissions.reports.export"),
+            P("users:manage",           "users",         "manage",   "permissions.users.manage"),
 
             // XD01-55: identity admin CRUD (XD01-54 Phase 1) — Administrator-only for now.
-            P("users:read",             "users",         "read",       "Ver usuarios"),
-            P("users:edit",             "users",         "edit",       "Editar usuarios y su estado"),
-            P("roles:read",             "roles",         "read",       "Ver roles"),
-            P("roles:edit",             "roles",         "edit",       "Crear y editar roles, y gestionar sus permisos"),
-            P("roles:delete",           "roles",         "delete",     "Eliminar roles personalizados"),
-            P("permissions:read",       "permissions",   "read",       "Ver el catálogo de permisos"),
+            P("users:read",             "users",         "read",       "permissions.users.read"),
+            P("users:edit",             "users",         "edit",       "permissions.users.edit"),
+            P("roles:read",             "roles",         "read",       "permissions.roles.read"),
+            P("roles:edit",             "roles",         "edit",       "permissions.roles.edit"),
+            P("roles:delete",           "roles",         "delete",     "permissions.roles.delete"),
+            P("permissions:read",       "permissions",   "read",       "permissions.permissions.read"),
 
             // XD01-128: Organizations/Groups admin CRUD — Administrator-only for now, same
             // precedent as the XD01-55 block above.
-            P("organizations:read",     "organizations", "read",       "Ver organizaciones"),
-            P("organizations:edit",     "organizations", "edit",       "Crear y editar organizaciones"),
-            P("groups:read",            "groups",        "read",       "Ver grupos"),
-            P("groups:edit",            "groups",        "edit",       "Crear y editar grupos, y gestionar sus miembros"),
+            P("organizations:read",     "organizations", "read",       "permissions.organizations.read"),
+            P("organizations:edit",     "organizations", "edit",       "permissions.organizations.edit"),
+            P("groups:read",            "groups",        "read",       "permissions.groups.read"),
+            P("groups:edit",            "groups",        "edit",       "permissions.groups.edit"),
 
             // XD01-141: Project (working-configuration snapshot) authorization. Split per
             // scope rather than one blanket "projects:edit" so a mutation on one scope
             // (e.g. Providers) can copy-on-write fork a General Project independently of the
             // caller's rights over the other scopes.
-            P("projects:read",              "projects", "read",              "Ver proyectos"),
-            P("projects:manage-providers",  "projects", "manage-providers",  "Gestionar proveedores conectados de un proyecto"),
-            P("projects:manage-asset-types","projects", "manage-asset-types","Gestionar el alcance de tipos de activo de un proyecto"),
-            P("projects:manage-layers",     "projects", "manage-layers",     "Gestionar el alcance de capas de un proyecto"),
-            P("projects:manage-view",       "projects", "manage-view",       "Gestionar la vista inicial de un proyecto"),
-            P("projects:rename",            "projects", "rename",            "Renombrar un proyecto"),
-            P("projects:delete",            "projects", "delete",            "Eliminar un proyecto"),
+            P("projects:read",              "projects", "read",              "permissions.projects.read"),
+            P("projects:manage-providers",  "projects", "manage-providers",  "permissions.projects.manageProviders"),
+            P("projects:manage-asset-types","projects", "manage-asset-types","permissions.projects.manageAssetTypes"),
+            P("projects:manage-layers",     "projects", "manage-layers",     "permissions.projects.manageLayers"),
+            P("projects:manage-view",       "projects", "manage-view",       "permissions.projects.manageView"),
+            P("projects:rename",            "projects", "rename",            "permissions.projects.rename"),
+            P("projects:delete",            "projects", "delete",            "permissions.projects.delete"),
         };
 
         var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct);

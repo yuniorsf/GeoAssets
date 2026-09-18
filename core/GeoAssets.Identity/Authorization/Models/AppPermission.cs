@@ -25,6 +25,7 @@ public sealed class AppPermission
     /// <summary>Action within the resource (e.g. "create", "read", "delete").</summary>
     public string Action      { get; set; } = string.Empty;
 
+    /// <summary>i18n key resolved against <c>wwwroot/i18n/{en,es,pt}.json</c> (e.g. <c>"permissions.projects.read"</c>), not literal text.</summary>
     public string Description { get; set; } = string.Empty;
 
     // ── Navigation ────────────────────────────────────────────────────────────
