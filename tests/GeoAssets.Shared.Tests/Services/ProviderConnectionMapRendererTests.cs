@@ -102,6 +102,8 @@ public class ProviderConnectionMapRendererTests
         public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => throw new NotSupportedException();
         public Task FitBoundsAsync(string divId, double[] bbox) => throw new NotSupportedException();
         public Task PanToFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
+        public Task HighlightFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
+        public Task ClearHighlightAsync(string divId, string featureId) => throw new NotSupportedException();
         public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) => throw new NotSupportedException();
     }
 

@@ -13,6 +13,13 @@ public partial class AssetForm
     [Parameter] public EventCallback OnCancel { get; set; }
 
     /// <summary>
+    /// Raised after a successful save when 2+ auto-link candidates were found (XD01-152) —
+    /// the host is responsible for surfacing the "Connect to…" picker and, on confirmation,
+    /// adding the chosen <see cref="TopoEdge"/>(s) via a follow-up <c>Repository.Update</c>.
+    /// </summary>
+    [Parameter] public EventCallback<(GeoFeature Feature, IReadOnlyList<GeoFeature> Candidates)> OnMultiCandidateFound { get; set; }
+
+    /// <summary>
     /// v1 "snap-adjacent" radius for auto-linking (XD01-118) — ~11m at the equator. A tunable
     /// heuristic, not a spec'd value; not tied to the type-aware Geoman snapping XD01-119 will add.
     /// </summary>
@@ -31,6 +38,7 @@ public partial class AssetForm
     private GeoFeature? _lastFeature;
     private GeoFeature? _autoLinkCandidate;
     private bool _autoLinkRejected;
+    private IReadOnlyList<GeoFeature> _multiCandidates = [];
 
     private AssetType? SelectedAssetType =>
         Feature is null ? null : Repository.GetAssetTypes().FirstOrDefault(t => t.Id.ToString() == Feature.Properties.AssetTypeId);
@@ -57,29 +65,45 @@ public partial class AssetForm
         if (ReferenceEquals(Feature, _lastFeature)) return;
         _lastFeature = Feature;
         _autoLinkRejected = false;
-        _autoLinkCandidate = IsNew && Feature?.Geometry is GeoPoint point
-            ? FindAutoLinkCandidate(point, Repository.GetNearby(point, SnapDistanceDegrees), Repository.GetIntersecting(point))
-            : null;
+        _autoLinkCandidate = null;
+        _multiCandidates = [];
+
+        if (IsNew && Feature?.Geometry is GeoPoint point)
+        {
+            var candidates = FindAutoLinkCandidates(point, Repository.GetNearby(point, SnapDistanceDegrees), Repository.GetIntersecting(point));
+            if (candidates.Count == 1) _autoLinkCandidate = candidates[0];
+            else if (candidates.Count >= 2) _multiCandidates = candidates;
+        }
     }
 
     /// <summary>
     /// v1 auto-link heuristic (XD01-118): a newly-placed <see cref="GeoPoint"/>-typed feature
     /// links to a nearby/intersecting <see cref="GeoLineString"/>-typed feature, but only when
-    /// there's exactly one such candidate — 0 or 2+ candidates intentionally take no action (a
-    /// "Connect to…" picker for the multi-candidate case is XD01-120, out of scope here). Static
-    /// so it's directly unit-testable without rendering or an <c>IAssetProvider</c>.
+    /// there's exactly one such candidate — 0 candidates intentionally takes no action, and 2+
+    /// candidates surfaces the "Connect to…" picker (XD01-152) instead. Static so it's directly
+    /// unit-testable without rendering or an <c>IAssetProvider</c>.
     /// </summary>
     public static GeoFeature? FindAutoLinkCandidate(
         GeoGeometry? geometry, IReadOnlyList<GeoFeature> nearby, IReadOnlyList<GeoFeature> intersecting)
     {
-        if (geometry is not GeoPoint) return null;
-
-        var candidates = nearby.Concat(intersecting)
-            .Where(f => f.Geometry is GeoLineString)
-            .DistinctBy(f => f.Id)
-            .ToList();
-
+        var candidates = FindAutoLinkCandidates(geometry, nearby, intersecting);
         return candidates.Count == 1 ? candidates[0] : null;
+    }
+
+    /// <summary>
+    /// The full deduplicated candidate set behind <see cref="FindAutoLinkCandidate"/> — every
+    /// nearby/intersecting <see cref="GeoLineString"/>-typed feature, regardless of count. Used
+    /// directly by <see cref="OnParametersSet"/> to detect the 2+-candidate case for the
+    /// multi-candidate picker (XD01-152). Static so it's directly unit-testable.
+    /// </summary>
+    public static IReadOnlyList<GeoFeature> FindAutoLinkCandidates(
+        GeoGeometry? geometry, IReadOnlyList<GeoFeature> nearby, IReadOnlyList<GeoFeature> intersecting)
+    {
+        if (geometry is not GeoPoint) return [];
+
+        return [.. nearby.Concat(intersecting)
+            .Where(f => f.Geometry is GeoLineString)
+            .DistinctBy(f => f.Id)];
     }
 
     private string AutoLinkCandidateName =>
@@ -114,6 +138,9 @@ public partial class AssetForm
 
         _attributeErrors = [];
         await OnSave.InvokeAsync(Feature);
+
+        if (IsNew && _multiCandidates.Count > 0)
+            await OnMultiCandidateFound.InvokeAsync((Feature, _multiCandidates));
     }
 
     /// <summary>Allows a parent component to programmatically submit the form (e.g. from a context menu).</summary>

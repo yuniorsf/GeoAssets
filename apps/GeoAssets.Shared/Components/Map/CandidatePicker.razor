@@ -1,0 +1,44 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+@if (Visible && _state is not null)
+{
+    <div class="candidate-picker">
+        <div class="candidate-picker-header">
+            @L.GetString("picker.candidateOf", _state.CurrentIndex + 1, _state.Candidates.Count)
+        </div>
+        <div class="candidate-picker-name">@CandidateName(_state.Current)</div>
+
+        <div class="candidate-picker-mode btn-group" role="group">
+            <button type="button"
+                    class="btn btn-sm @(_state.Mode == CandidatePickerMode.Single ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => SwitchMode(CandidatePickerMode.Single)">@L["picker.single"]</button>
+            <button type="button"
+                    class="btn btn-sm @(_state.Mode == CandidatePickerMode.Multiple ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => SwitchMode(CandidatePickerMode.Multiple)">@L["picker.multiple"]</button>
+        </div>
+
+        @if (_state.Mode == CandidatePickerMode.Multiple)
+        {
+            <div class="candidate-picker-multi">
+                <button type="button" class="btn btn-sm btn-secondary" @onclick="ToggleCurrentSelected">
+                    @(_state.IsSelected(_state.Current) ? L["picker.remove"] : L["picker.add"])
+                </button>
+                <span class="candidate-picker-count">@L.GetString("picker.selectedCount", _state.SelectedCount)</span>
+            </div>
+        }
+
+        <div class="candidate-picker-actions">
+            @if (_state.Mode == CandidatePickerMode.Single)
+            {
+                <button type="button" class="btn btn-primary" @onclick="Confirm">@L["picker.select"]</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary" disabled="@(_state.SelectedCount == 0)" @onclick="Confirm">
+                    @L.GetString("picker.link", _state.SelectedCount)
+                </button>
+            }
+            <button type="button" class="btn btn-secondary" @onclick="Cancel">@L["assets.cancel"]</button>
+        </div>
+    </div>
+}

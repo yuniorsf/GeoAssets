@@ -64,5 +64,7 @@ public sealed class ObservableMapInterop(
     public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible)                      => inner.SetLayerVisibilityAsync(divId, assetTypeId, visible);
     public Task FitBoundsAsync(string divId, double[] bbox)                           => inner.FitBoundsAsync(divId, bbox);
     public Task PanToFeatureAsync(string divId, string featureId)                     => inner.PanToFeatureAsync(divId, featureId);
+    public Task HighlightFeatureAsync(string divId, string featureId)                 => inner.HighlightFeatureAsync(divId, featureId);
+    public Task ClearHighlightAsync(string divId, string featureId)                   => inner.ClearHighlightAsync(divId, featureId);
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) => inner.RegisterEventHandlersAsync(divId, handlerRef);
 }

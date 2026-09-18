@@ -91,6 +91,17 @@ public interface IMapInterop
     Task FitBoundsAsync(string divId, double[] bbox);
     Task PanToFeatureAsync(string divId, string featureId);
 
+    /// <summary>
+    /// Applies a temporary highlight style to one already-rendered feature's layer (used by the
+    /// multi-candidate "Connect to…" picker, XD01-152, to show which candidate is currently
+    /// selected while cycling). A no-op in WebGL render mode — per-feature dynamic restyling
+    /// isn't supported by that renderer.
+    /// </summary>
+    Task HighlightFeatureAsync(string divId, string featureId);
+
+    /// <summary>Restores the style <see cref="HighlightFeatureAsync"/> overrode.</summary>
+    Task ClearHighlightAsync(string divId, string featureId);
+
     // --- Events raised back to .NET ---
     Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef);
 }

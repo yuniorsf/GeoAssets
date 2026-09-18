@@ -166,6 +166,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     public Task PanToFeatureAsync(string divId, string featureId) =>
         _js.InvokeVoidAsync($"{Ns}.panToFeature", divId, featureId).AsTask();
 
+    public Task HighlightFeatureAsync(string divId, string featureId) =>
+        _js.InvokeVoidAsync($"{Ns}.highlightFeature", divId, featureId).AsTask();
+
+    public Task ClearHighlightAsync(string divId, string featureId) =>
+        _js.InvokeVoidAsync($"{Ns}.clearHighlight", divId, featureId).AsTask();
+
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) =>
         _js.InvokeVoidAsync($"{Ns}.registerHandlers", divId, handlerRef).AsTask();
 

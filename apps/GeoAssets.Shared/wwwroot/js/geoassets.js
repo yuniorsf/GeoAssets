@@ -751,6 +751,40 @@ window.GeoAssets = (function () {
         }
     }
 
+    // ─── Candidate highlight (XD01-152 "Connect to…" picker) ─────────────────
+    // A no-op in WebGL mode — that renderer draws features to a canvas from
+    // state.webgl.features and has no per-feature Leaflet layer to restyle.
+
+    const HIGHLIGHT_STYLE = { color: '#f9e2af', weight: 5 };
+
+    function _firstSubLayer(layer) {
+        let first = null;
+        layer.eachLayer && layer.eachLayer(l => { if (!first) first = l; });
+        return first;
+    }
+
+    function highlightFeature(divId, featureId) {
+        const state = _maps[divId];
+        if (!state || state.renderMode === 'webgl') return;
+        const layer = state.featureLayers.get(featureId);
+        const sub = layer && _firstSubLayer(layer);
+        if (!sub || !sub.setStyle) return;
+        if (!sub._geoAssetsOriginalStyle) {
+            sub._geoAssetsOriginalStyle = { color: sub.options.color, weight: sub.options.weight };
+        }
+        sub.setStyle(HIGHLIGHT_STYLE);
+    }
+
+    function clearHighlight(divId, featureId) {
+        const state = _maps[divId];
+        if (!state || state.renderMode === 'webgl') return;
+        const layer = state.featureLayers.get(featureId);
+        const sub = layer && _firstSubLayer(layer);
+        if (!sub || !sub.setStyle || !sub._geoAssetsOriginalStyle) return;
+        sub.setStyle(sub._geoAssetsOriginalStyle);
+        delete sub._geoAssetsOriginalStyle;
+    }
+
     // ─── Browser Storage (Web only) ──────────────────────────────────────────
 
     function localStorageSave(key, value) { localStorage.setItem(key, value); }
@@ -815,6 +849,8 @@ window.GeoAssets = (function () {
         setLayerVisibility,
         fitBounds,
         panToFeature,
+        highlightFeature,
+        clearHighlight,
         localStorageSave,
         localStorageLoad,
         openGeoJsonFilePicker,

@@ -4,6 +4,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Shared.Tests;
 using GeoAssets.Shared.Components.Assets;
+using GeoAssets.Shared.Components.Map;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Components.Assets;
@@ -121,6 +122,64 @@ public class AssetFormTests
         result.Should().BeNull();
     }
 
+    // ── FindAutoLinkCandidates (plural — XD01-152) ─────────────────────────────
+
+    [Fact]
+    public void FindAutoLinkCandidates_NullGeometry_ReturnsEmpty()
+    {
+        var result = AssetForm.FindAutoLinkCandidates(null, nearby: [], intersecting: []);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindAutoLinkCandidates_GeometryNotAPoint_ReturnsEmpty()
+    {
+        var line = new GeoLineString([(0, 0), (1, 1)]);
+        var wire = LineFeature("wire-1", (0, 0), (1, 1));
+
+        var result = AssetForm.FindAutoLinkCandidates(line, nearby: [wire], intersecting: []);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindAutoLinkCandidates_TwoLineStringCandidates_ReturnsBoth()
+    {
+        // The behavior FindAutoLinkCandidate (singular) intentionally throws away — this is what
+        // AssetForm.OnParametersSet surfaces to the multi-candidate picker instead.
+        var point = new GeoPoint(0, 0);
+        var wireA = LineFeature("wire-a", (0, 0), (1, 1));
+        var wireB = LineFeature("wire-b", (0, 0), (-1, -1));
+
+        var result = AssetForm.FindAutoLinkCandidates(point, nearby: [wireA, wireB], intersecting: []);
+
+        result.Should().BeEquivalentTo([wireA, wireB]);
+    }
+
+    [Fact]
+    public void FindAutoLinkCandidates_SameCandidateInBothLists_DeduplicatedToOne()
+    {
+        var point = new GeoPoint(0, 0);
+        var wire = LineFeature("wire-1", (0, 0), (1, 1));
+
+        var result = AssetForm.FindAutoLinkCandidates(point, nearby: [wire], intersecting: [wire]);
+
+        result.Should().ContainSingle().Which.Should().BeSameAs(wire);
+    }
+
+    [Fact]
+    public void FindAutoLinkCandidates_NonLineStringCandidatesAreIgnored()
+    {
+        var point = new GeoPoint(0, 0);
+        var wireA = LineFeature("wire-a", (0, 0), (1, 1));
+        var otherPoint = PointFeature("pole-1", 0, 0);
+
+        var result = AssetForm.FindAutoLinkCandidates(point, nearby: [wireA, otherPoint], intersecting: []);
+
+        result.Should().ContainSingle().Which.Should().BeSameAs(wireA);
+    }
+
     // ── End-to-end: TopoEdge persisted and retrievable via GetNeighbors ────────
 
     [Fact]
@@ -181,6 +240,95 @@ public class AssetFormTests
         var act = () => repository.Add(pole);
 
         act.Should().NotThrow();
+        repository.GetNeighbors(pole.Id).Should().BeEmpty();
+    }
+
+    // ── End-to-end: multi-candidate picker confirms create the chosen TopoEdges (XD01-152) ────
+
+    [Fact]
+    public void TwoCandidates_ConfirmedSingleViaPicker_CreatesOneTopoEdge_VerifiableViaGetNeighbors()
+    {
+        var repository = new TestAssetProvider();
+        var wireA = LineFeature("wire-a", (-0.0001, -0.0001), (0.0001, 0.0001));
+        var wireB = LineFeature("wire-b", (-0.0001, 0.0001), (0.0001, -0.0001));
+        repository.Add(wireA);
+        repository.Add(wireB);
+
+        var pole = PointFeature("pole-1", 0, 0);
+        var geometry = (GeoPoint)pole.Geometry!;
+        var candidates = AssetForm.FindAutoLinkCandidates(
+            geometry,
+            repository.GetNearby(geometry, AssetForm.SnapDistanceDegrees),
+            repository.GetIntersecting(geometry));
+        candidates.Should().HaveCount(2);
+        repository.Add(pole); // asset saves immediately; edges are added post-confirm (XD01-151)
+
+        var picker = new CandidatePickerState(candidates);
+        picker.CycleNext(); // land on wire-b
+        var chosen = picker.Confirm(); // Single mode: only the current candidate
+
+        var saved = repository.GetById(pole.Id)!;
+        foreach (var c in chosen)
+            saved.Topology.Add(new TopoEdge { TargetId = c.Id, Kind = "connected-to", Weight = 1.0 });
+        repository.Update(saved);
+
+        repository.GetNeighbors(pole.Id).Should().ContainSingle().Which.Id.Should().Be(wireB.Id);
+    }
+
+    [Fact]
+    public void TwoCandidates_ConfirmedMultipleViaPicker_CreatesTopoEdgeForEachChosenCandidate()
+    {
+        var repository = new TestAssetProvider();
+        var wireA = LineFeature("wire-a", (-0.0001, -0.0001), (0.0001, 0.0001));
+        var wireB = LineFeature("wire-b", (-0.0001, 0.0001), (0.0001, -0.0001));
+        repository.Add(wireA);
+        repository.Add(wireB);
+
+        var pole = PointFeature("pole-1", 0, 0);
+        var geometry = (GeoPoint)pole.Geometry!;
+        var candidates = AssetForm.FindAutoLinkCandidates(
+            geometry,
+            repository.GetNearby(geometry, AssetForm.SnapDistanceDegrees),
+            repository.GetIntersecting(geometry));
+        repository.Add(pole);
+
+        var picker = new CandidatePickerState(candidates);
+        picker.SwitchMode(CandidatePickerMode.Multiple); // carries over the current candidate
+        picker.CycleNext();
+        picker.ToggleCurrentSelected(); // both candidates now selected
+        var chosen = picker.Confirm();
+        chosen.Should().HaveCount(2);
+
+        var saved = repository.GetById(pole.Id)!;
+        foreach (var c in chosen)
+            saved.Topology.Add(new TopoEdge { TargetId = c.Id, Kind = "connected-to", Weight = 1.0 });
+        repository.Update(saved);
+
+        repository.GetNeighbors(pole.Id).Should().HaveCount(2)
+            .And.Contain(f => f.Id == wireA.Id)
+            .And.Contain(f => f.Id == wireB.Id);
+    }
+
+    [Fact]
+    public void TwoCandidates_PickerCancelledWithoutConfirm_CreatesNoTopoEdge()
+    {
+        // Mirrors the abandon-path decision from XD01-151: declining/dismissing the picker
+        // leaves behavior equivalent to today's no-op — no edge is ever added because Confirm()
+        // is simply never called.
+        var repository = new TestAssetProvider();
+        repository.Add(LineFeature("wire-a", (-0.0001, -0.0001), (0.0001, 0.0001)));
+        repository.Add(LineFeature("wire-b", (-0.0001, 0.0001), (0.0001, -0.0001)));
+
+        var pole = PointFeature("pole-1", 0, 0);
+        var geometry = (GeoPoint)pole.Geometry!;
+        var candidates = AssetForm.FindAutoLinkCandidates(
+            geometry,
+            repository.GetNearby(geometry, AssetForm.SnapDistanceDegrees),
+            repository.GetIntersecting(geometry));
+        repository.Add(pole);
+
+        _ = new CandidatePickerState(candidates); // picker opened, then abandoned — never confirmed
+
         repository.GetNeighbors(pole.Id).Should().BeEmpty();
     }
 }

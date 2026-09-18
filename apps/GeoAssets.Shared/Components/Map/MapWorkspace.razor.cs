@@ -12,11 +12,18 @@ public partial class MapWorkspace
     /// <summary>Whether this workspace's host route is not the active one (e.g. a persistent layout navigated elsewhere) — hides the container via CSS instead of unmounting it, so the map survives navigation.</summary>
     [Parameter] public bool Hidden { get; set; }
 
-    private MapContainer? _mapContainer;
-    private DrawToolbar?  _drawToolbar;
-    private AssetForm?    _assetForm;
+    private MapContainer?    _mapContainer;
+    private DrawToolbar?     _drawToolbar;
+    private AssetForm?       _assetForm;
+    private CandidatePicker? _candidatePicker;
 
     private bool _wasHidden;
+
+    // ─── Candidate picker state (XD01-152) ─────────────────────────────────
+
+    private bool _pickerVisible;
+    private string? _pickerTargetFeatureId;
+    private IReadOnlyList<GeoFeature> _pickerCandidates = [];
 
     // ─── Context menu state ────────────────────────────────────────────────
 
@@ -64,6 +71,10 @@ public partial class MapWorkspace
     // already-existing feature into view.
     private void OnSelectionChanged() => InvokeAsync(async () =>
     {
+        // Selecting a different feature (map click, AssetList row, etc.) while the candidate
+        // picker is open is an implicit abandon — same silent no-op as declining/dismissing.
+        if (_pickerVisible) ClosePicker();
+
         StateHasChanged();
         if (Selection.Selected is { } feature && !Selection.IsNew)
             await (_mapContainer?.PanToFeatureAsync(feature.Id) ?? Task.CompletedTask);
@@ -90,9 +101,51 @@ public partial class MapWorkspace
 
     private void OnFeatureClicked(string featureId)
     {
+        // While the picker is open, clicking its target asset cycles candidates instead of
+        // reopening the properties panel for it.
+        if (_pickerVisible && featureId == _pickerTargetFeatureId)
+        {
+            _candidatePicker?.CycleNext();
+            return;
+        }
+
         var feature = Repository.GetById(featureId);
         if (feature is not null)
             OnFeatureSelected(feature);
+    }
+
+    // ─── Multi-candidate "Connect to…" picker (XD01-152) ───────────────────
+
+    private void OnMultiCandidateFound((GeoFeature Feature, IReadOnlyList<GeoFeature> Candidates) found)
+    {
+        _pickerTargetFeatureId = found.Feature.Id;
+        _pickerCandidates      = found.Candidates;
+        _pickerVisible         = true;
+        StateHasChanged();
+    }
+
+    private void OnCandidatesLinked(IReadOnlyList<GeoFeature> chosen)
+    {
+        if (_pickerTargetFeatureId is { } targetId && Repository.GetById(targetId) is { } feature)
+        {
+            foreach (var candidate in chosen)
+                feature.Topology.Add(new TopoEdge { TargetId = candidate.Id, Kind = "connected-to", Weight = 1.0 });
+            Repository.Update(feature);
+        }
+        ClosePicker();
+    }
+
+    private void CancelPicker() => ClosePicker();
+
+    private void ClosePicker()
+    {
+        if (_candidatePicker?.CurrentHighlighted is { } highlighted)
+            _ = MapInterop.ClearHighlightAsync(_mapDivId, highlighted.Id);
+
+        _pickerVisible          = false;
+        _pickerTargetFeatureId  = null;
+        _pickerCandidates       = [];
+        StateHasChanged();
     }
 
     // ─── Context menu ─────────────────────────────────────────────────────

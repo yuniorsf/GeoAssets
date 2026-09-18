@@ -28,7 +28,8 @@
                        Feature="@Selection.Selected"
                        IsNew="@Selection.IsNew"
                        OnSave="OnFeatureSaved"
-                       OnCancel="ClosePanel" />
+                       OnCancel="ClosePanel"
+                       OnMultiCandidateFound="OnMultiCandidateFound" />
         </div>
     }
 </main>
@@ -42,6 +43,14 @@
                 OnSave="ContextMenuSave"
                 OnDelete="ContextMenuDelete"
                 OnClose="CloseContextMenu" />
+
+<!-- Multi-candidate "Connect to…" picker (XD01-152), outside map-area so fixed positioning works -->
+<CandidatePicker @ref="_candidatePicker"
+                 Visible="_pickerVisible"
+                 Candidates="_pickerCandidates"
+                 MapDivId="@_mapDivId"
+                 OnLink="OnCandidatesLinked"
+                 OnCancel="CancelPicker" />
 
 <!-- Delete confirmation triggered from context menu -->
 <ConfirmDialog Visible="_showDeleteConfirm"
