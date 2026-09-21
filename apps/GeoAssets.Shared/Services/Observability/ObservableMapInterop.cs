@@ -42,15 +42,41 @@ public sealed class ObservableMapInterop(
             });
     }
 
+    public Task RenderFeatureAsync(string divId, GeoFeature feature) =>
+        TrackAsync(
+            "map.render_feature",
+            () => inner.RenderFeatureAsync(divId, feature),
+            before: span => span?.SetTag("feature.id", feature.Id)
+                                  .SetTag("map.div_id",  divId),
+            after: (_, elapsedMs) =>
+            {
+                ImportDiagnostics.RenderFeatureDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "MapInterop.RenderFeatureAsync — feature {FeatureId} in {ElapsedMs} ms",
+                    feature.Id, elapsedMs);
+            });
+
+    public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) =>
+        TrackAsync(
+            "map.render_all_raw_json",
+            () => inner.RenderAllFeaturesRawJsonAsync(divId, rawFeaturesJson),
+            before: span => span?.SetTag("payload.bytes", rawFeaturesJson.Length)
+                                  .SetTag("map.div_id",   divId),
+            after: (_, elapsedMs) =>
+            {
+                ImportDiagnostics.RenderRawJsonDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "MapInterop.RenderAllFeaturesRawJsonAsync — {PayloadBytes} B in {ElapsedMs} ms",
+                    rawFeaturesJson.Length, elapsedMs);
+            });
+
     // ── Pass-through ─────────────────────────────────────────────────────────
 
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom)           => inner.InitializeMapAsync(divId, lat, lon, zoom);
     public Task DestroyMapAsync(string divId)                                               => inner.DestroyMapAsync(divId);
     public Task InvalidateSizeAsync(string divId)                                            => inner.InvalidateSizeAsync(divId);
     public Task SetViewAsync(string divId, double lat, double lon, int zoom)                => inner.SetViewAsync(divId, lat, lon, zoom);
-    public Task RenderFeatureAsync(string divId, GeoFeature feature)                        => inner.RenderFeatureAsync(divId, feature);
     public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)   => inner.RenderAllFeaturesAsync(divId, features);
-    public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)         => inner.RenderAllFeaturesRawJsonAsync(divId, rawFeaturesJson);
     public Task RemoveFeatureAsync(string divId, string featureId)                    => inner.RemoveFeatureAsync(divId, featureId);
     public Task ClearAllFeaturesAsync(string divId)                                   => inner.ClearAllFeaturesAsync(divId);
     public Task EnableDrawModeAsync(string divId, GeometryType mode)                  => inner.EnableDrawModeAsync(divId, mode);

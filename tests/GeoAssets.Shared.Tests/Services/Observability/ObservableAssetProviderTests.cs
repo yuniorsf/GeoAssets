@@ -124,16 +124,21 @@ public class ObservableAssetProviderTests
     }
 
     [Fact]
-    public async Task GetPageAsync_DelegatesToInner()
+    public async Task GetPageAsync_EmitsSpanWithFeatureCountTag()
     {
         var inner = new TestAssetProvider();
         inner.Add(Feature("a", AssetType.Point.Id.ToString()));
         var sut = Sut(inner);
+        PagedResult<GeoFeature>? result = null;
 
-        var result = await sut.GetPageAsync(new AssetQuery());
+        var captured = CaptureSpan(() => result = sut.GetPageAsync(new AssetQuery()).GetAwaiter().GetResult());
 
-        result.Items.Should().ContainSingle();
+        result!.Items.Should().ContainSingle();
         result.TotalCount.Should().Be(1);
+        captured.Should().NotBeNull();
+        captured!.OperationName.Should().Be("repository.get_page");
+        captured.GetTagItem("feature.count").Should().Be(1);
+        captured.GetTagItem("total.count").Should().Be(1);
     }
 
     [Fact]
@@ -159,14 +164,20 @@ public class ObservableAssetProviderTests
     }
 
     [Fact]
-    public async Task GetInBoundsRawJsonAsync_DelegatesToInner()
+    public async Task GetInBoundsRawJsonAsync_EmitsSpanWithPayloadBytesTag()
     {
         var inner = new TestAssetProvider();
         var sut = Sut(inner);
+        string? result = null;
 
         // TestAssetProvider doesn't override the raw-JSON default (returns null) — this still
-        // proves the decorator forwards the call directly, unlike the instrumented members above.
-        (await sut.GetInBoundsRawJsonAsync(0, 0, 2, 2)).Should().BeNull();
+        // proves the decorator now instruments the call, unlike the plain pass-through it used to be.
+        var captured = CaptureSpan(() => result = sut.GetInBoundsRawJsonAsync(0, 0, 2, 2).GetAwaiter().GetResult());
+
+        result.Should().BeNull();
+        captured.Should().NotBeNull();
+        captured!.OperationName.Should().Be("repository.get_in_bounds_raw_json");
+        captured.GetTagItem("payload.bytes").Should().Be(0);
     }
 
     [Fact]

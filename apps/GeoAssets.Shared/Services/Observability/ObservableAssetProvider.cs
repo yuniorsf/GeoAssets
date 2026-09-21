@@ -49,7 +49,17 @@ public sealed class ObservableAssetProvider(
             });
 
     public Task<string?> GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
-        inner.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+        TrackAsync(
+            "repository.get_in_bounds_raw_json",
+            async () => await inner.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat),
+            after: (span, result, elapsedMs) =>
+            {
+                span?.SetTag("payload.bytes", result?.Length ?? 0);
+                ImportDiagnostics.GetInBoundsRawJsonDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "Repository.GetInBoundsRawJson — {PayloadBytes} B in {ElapsedMs} ms for bounds [{MinLon}, {MinLat}, {MaxLon}, {MaxLat}] (provider: {ProviderType})",
+                    result?.Length ?? 0, elapsedMs, minLon, minLat, maxLon, maxLat, inner.GetType().FullName);
+            });
 
     public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
         TrackAsync(
@@ -64,12 +74,25 @@ public sealed class ObservableAssetProvider(
                     result.Count, elapsedMs, minLon, minLat, maxLon, maxLat, inner.GetType().FullName);
             });
 
+    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query) =>
+        TrackAsync(
+            "repository.get_page",
+            async () => await inner.GetPageAsync(query),
+            after: (span, result, elapsedMs) =>
+            {
+                span?.SetTag("feature.count", result.Items.Count)
+                     .SetTag("total.count",   result.TotalCount);
+                ImportDiagnostics.GetPageDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "Repository.GetPageAsync — {ItemCount}/{TotalCount} features in {ElapsedMs} ms (provider: {ProviderType})",
+                    result.Items.Count, result.TotalCount, elapsedMs, inner.GetType().FullName);
+            });
+
     // ── Pass-through: reads ───────────────────────────────────────────────────
 
     public GeoFeature?                              GetById(string id)                                    => inner.GetById(id);
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)                   => inner.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                                  => inner.Search(query);
-    public Task<PagedResult<GeoFeature>>            GetPageAsync(AssetQuery query)                       => inner.GetPageAsync(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                        => inner.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)                => inner.GetIntersecting(geometry);
 public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees)   => inner.GetNearby(center, distanceDegrees);

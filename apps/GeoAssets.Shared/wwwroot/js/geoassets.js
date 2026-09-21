@@ -607,7 +607,9 @@ window.GeoAssets = (function () {
             });
             _scheduleRedraw(divId); // one RAF draw covers the entire batch
         } else {
+            const _batchStart = performance.now();
             features.forEach(f => renderFeature(divId, f, colorMap, styleMap && styleMap[f.id]));
+            console.log(`[GeoAssets] renderFeatureBatch (non-WebGL) — ${features.length} features in ${(performance.now() - _batchStart).toFixed(1)} ms`);
         }
     }
 

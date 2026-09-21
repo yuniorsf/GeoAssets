@@ -59,7 +59,19 @@ public partial class MapContainer
         InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
 
     private void OnCollectionChanged(object? _, EventArgs __) =>
-        InvokeAsync(() => MapInterop.RenderAllFeaturesAsync(DivId, Repository.GetAll()));
+        InvokeAsync(async () =>
+        {
+            var sw = Stopwatch.StartNew();
+            var features = Repository.GetAll();
+            var fetchMs = sw.Elapsed.TotalMilliseconds;
+            sw.Restart();
+
+            await MapInterop.RenderAllFeaturesAsync(DivId, features);
+            sw.Stop();
+            Logger.LogInformation(
+                "Collection changed — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
+                features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
+        });
 
     // ─── JS → .NET callbacks ─────────────────────────────────────────────
 

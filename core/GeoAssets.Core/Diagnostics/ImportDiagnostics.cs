@@ -79,4 +79,28 @@ public static class ImportDiagnostics
         _meter.CreateHistogram<double>(
             "geoassets.repository.getall_duration_ms", "ms",
             "Duration of IAssetProvider.GetAll.");
+
+    /// <summary>Duration of the <c>Repository.GetInBoundsRawJsonAsync</c> call, in milliseconds.</summary>
+    public static readonly Histogram<double> GetInBoundsRawJsonDurationMs =
+        _meter.CreateHistogram<double>(
+            "geoassets.repository.get_in_bounds_raw_json_duration_ms", "ms",
+            "Duration of IAssetProvider.GetInBoundsRawJsonAsync.");
+
+    /// <summary>Duration of the <c>Repository.GetPageAsync</c> call, in milliseconds.</summary>
+    public static readonly Histogram<double> GetPageDurationMs =
+        _meter.CreateHistogram<double>(
+            "geoassets.repository.get_page_duration_ms", "ms",
+            "Duration of IAssetProvider.GetPageAsync.");
+
+    /// <summary>Duration of the <c>MapInterop.RenderAllFeaturesRawJsonAsync</c> JS interop call, in milliseconds.</summary>
+    public static readonly Histogram<double> RenderRawJsonDurationMs =
+        _meter.CreateHistogram<double>(
+            "geoassets.map.render_raw_json_duration_ms", "ms",
+            "Duration of MapInterop.RenderAllFeaturesRawJsonAsync (JS interop).");
+
+    /// <summary>Duration of the <c>MapInterop.RenderFeatureAsync</c> single-feature JS interop call, in milliseconds.</summary>
+    public static readonly Histogram<double> RenderFeatureDurationMs =
+        _meter.CreateHistogram<double>(
+            "geoassets.map.render_feature_duration_ms", "ms",
+            "Duration of MapInterop.RenderFeatureAsync (JS interop, single feature).");
 }
