@@ -56,8 +56,14 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 
     private Dictionary<string, GeoFeature> LoadCacheFromDb()
     {
+        var startTimestamp = _timeProvider.GetTimestamp();
         var rows = _db.GeoEntities.AsNoTracking().ToList();
-        return rows.Select(MapToFeature).ToDictionary(f => f.Id);
+        var cache = rows.Select(MapToFeature).ToDictionary(f => f.Id);
+        var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+        _logger.LogInformation(
+            "PostgresAssetProvider.LoadCacheFromDb — {RowCount} rows in {ElapsedMs:F1} ms",
+            rows.Count, elapsedMs);
+        return cache;
     }
 
     private void InvalidateCache() => _cache = null;
@@ -452,9 +458,14 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
 
     private void SaveChanges()
     {
+        var startTimestamp = _timeProvider.GetTimestamp();
         try
         {
-            _db.SaveChanges();
+            var rowCount = _db.SaveChanges();
+            var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            _logger.LogInformation(
+                "PostgresAssetProvider.SaveChanges — {RowCount} rows in {ElapsedMs:F1} ms",
+                rowCount, elapsedMs);
         }
         catch (Exception ex)
         {
