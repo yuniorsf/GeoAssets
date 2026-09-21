@@ -434,15 +434,78 @@ public class BlazorProjectSessionServiceTests
     {
         var general = GeneralProject();
         var client = new FakeProjectClient(general);
-        var pool = new ProviderPool();
-        var sut = BuildSut(client, pool, out _);
+        var sut = BuildSut(client, new ProviderPool(), out _);
         await sut.OpenAsync(general.Id);
-        pool.Add("Untracked", new FakeAssetProvider()); // marks dirty via pool.Changed only
 
         await sut.SaveAsync();
 
         client.Calls.Should().BeEmpty();
         sut.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SaveAsync_PoolChangedWithNoExplicitScopeSetterCalled_PersistsProvidersScope()
+    {
+        // XD01-157: ProviderEntry couldn't round-trip into ProjectProviderEntry, so pool
+        // mutations marked the session dirty but SaveAsync silently discarded them — this is the
+        // ticket's own regression test. Fails without the fix (client.Calls stays empty).
+        var general = GeneralProject();
+        var client = new FakeProjectClient(general);
+        var pool = new ProviderPool();
+        var sut = BuildSut(client, pool, out _, new FakeProviderPlugin("known-a"));
+        await sut.OpenAsync(general.Id);
+
+        pool.Add("New", new FakeAssetProvider(), "known-a", new Dictionary<string, string> { ["url"] = "http://x" });
+        await sut.SaveAsync();
+
+        client.Calls.Should().ContainSingle().Which.Scope.Should().Be("providers");
+        var raw = await client.GetByIdAsync(general.Id);
+        var persisted = raw!.Providers.Should().ContainSingle().Subject;
+        persisted.Name.Should().Be("New");
+        persisted.PluginId.Should().Be("known-a");
+        persisted.Values.Should().ContainKey("url").WhoseValue.Should().Be("http://x");
+    }
+
+    [Fact]
+    public async Task SaveAsync_ReconnectedProvidersUntouched_MakesNoProvidersClientCall()
+    {
+        // Round-trip stability: opening a Project with existing Providers and saving without
+        // touching the pool must not spuriously re-persist Providers.
+        var general = GeneralProject();
+        general.Providers =
+        [
+            new ProjectProviderEntry
+            {
+                Name = "A", PluginId = "known-a", Position = 0,
+                Values = new Dictionary<string, string> { ["url"] = "http://x" },
+                IsOpen = true, IsEnabled = true, IsActive = true,
+            },
+        ];
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _, new FakeProviderPlugin("known-a"));
+        await sut.OpenAsync(general.Id);
+
+        await sut.SaveAsync();
+
+        client.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PoolChanged_RenameExistingEntry_UpdatesProvidersOnCurrent()
+    {
+        // Providers has no dedicated SetX setter like the other three scopes — OnPoolChanged is
+        // the only place Current.Providers gets refreshed, so a plain rename must flow through.
+        var general = GeneralProject();
+        general.Providers = [new ProjectProviderEntry { Name = "A", PluginId = "known-a", Position = 0 }];
+        var client = new FakeProjectClient(general);
+        var pool = new ProviderPool();
+        var sut = BuildSut(client, pool, out _, new FakeProviderPlugin("known-a"));
+        await sut.OpenAsync(general.Id);
+
+        pool.Rename(pool.All[0].Id, "Renamed");
+
+        sut.Current!.Providers.Should().ContainSingle().Which.Name.Should().Be("Renamed");
+        sut.IsDirty.Should().BeTrue();
     }
 
     [Fact]

@@ -15,8 +15,11 @@ public interface IProviderPool
     /// <summary>
     /// Wraps an externally created provider (e.g. PostgreSQL-backed) in a pool entry.
     /// Use this to connect any <see cref="IAssetProvider"/> implementation to the map.
+    /// <paramref name="pluginId"/>/<paramref name="values"/> are the reconnect config the
+    /// provider was created from (see <see cref="ProviderEntry.PluginId"/>/<see cref="ProviderEntry.Values"/>)
+    /// — omit only when there is no known plugin (e.g. tests).
     /// </summary>
-    ProviderEntry Add(string name, IAssetProvider provider);
+    ProviderEntry Add(string name, IAssetProvider provider, string pluginId = "", Dictionary<string, string>? values = null);
 
     /// <summary>
     /// Wraps an externally created provider in a pool entry with its full state restored in
@@ -26,7 +29,16 @@ public interface IProviderPool
     /// </summary>
     ProviderEntry RestoreEntry(
         string name, IAssetProvider provider, int position,
-        bool isOpen, bool isEnabled, bool isActive);
+        bool isOpen, bool isEnabled, bool isActive,
+        string pluginId = "", Dictionary<string, string>? values = null);
+
+    /// <summary>
+    /// Snapshots every entry's persistable state — name, plugin, reconnect values, position
+    /// (by <see cref="All"/> order), and open/enabled/active flags — into
+    /// <see cref="ProjectProviderEntry"/> rows. The <see cref="RestoreEntry"/> reconnect loop's
+    /// counterpart; used to materialize <c>Project.Providers</c> from live pool state for saving.
+    /// </summary>
+    List<ProjectProviderEntry> ToPersistedEntries();
 
     /// <summary>Makes the given entry the active workspace; opens and enables it if needed.</summary>
     void SetActive(Guid id);

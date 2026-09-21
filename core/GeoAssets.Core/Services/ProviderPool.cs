@@ -17,14 +17,16 @@ public sealed class ProviderPool : IProviderPool
     public IReadOnlyList<ProviderEntry> All    => _entries;
     public ProviderEntry                Active => _entries.First(e => e.IsActive);
 
-    public ProviderEntry Add(string name, IAssetProvider provider)
+    public ProviderEntry Add(string name, IAssetProvider provider, string pluginId = "", Dictionary<string, string>? values = null)
     {
         var entry = new ProviderEntry
         {
             Name      = name,
             IsOpen    = true,
             IsEnabled = true,
-            Provider  = provider
+            Provider  = provider,
+            PluginId  = pluginId,
+            Values    = values is null ? [] : new Dictionary<string, string>(values),
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -34,7 +36,8 @@ public sealed class ProviderPool : IProviderPool
 
     public ProviderEntry RestoreEntry(
         string name, IAssetProvider provider, int position,
-        bool isOpen, bool isEnabled, bool isActive)
+        bool isOpen, bool isEnabled, bool isActive,
+        string pluginId = "", Dictionary<string, string>? values = null)
     {
         if (isActive)
             foreach (var e in _entries) e.IsActive = false;
@@ -46,12 +49,34 @@ public sealed class ProviderPool : IProviderPool
             IsOpen    = isOpen,
             IsEnabled = isEnabled,
             IsActive  = isActive,
-            Provider  = provider
+            Provider  = provider,
+            PluginId  = pluginId,
+            Values    = values is null ? [] : new Dictionary<string, string>(values),
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
         EntryAdded?.Invoke(this, entry);
         return entry;
+    }
+
+    public List<ProjectProviderEntry> ToPersistedEntries()
+    {
+        var result = new List<ProjectProviderEntry>(_entries.Count);
+        for (var i = 0; i < _entries.Count; i++)
+        {
+            var e = _entries[i];
+            result.Add(new ProjectProviderEntry
+            {
+                Position  = i,
+                Name      = e.Name,
+                PluginId  = e.PluginId,
+                Values    = new Dictionary<string, string>(e.Values),
+                IsOpen    = e.IsOpen,
+                IsEnabled = e.IsEnabled,
+                IsActive  = e.IsActive,
+            });
+        }
+        return result;
     }
 
     public void SetActive(Guid id)

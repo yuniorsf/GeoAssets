@@ -84,7 +84,7 @@ public partial class ProviderConnectDialog
             {
                 var provider = await _selected.CreateAsync(_config, Services);
                 var name     = _config.Get("name", _selected.DisplayName);
-                var entry    = Pool.Add(name, provider);
+                var entry    = Pool.Add(name, provider, _selected.Id, _config.ToReconnectValues(_selected.ConfigFields));
 
                 Logger.LogInformation("Provider connected — plugin: {Plugin}, name: {Name}, features: {Count}",
                     _selected.Id, name, provider.GetAll().Count);

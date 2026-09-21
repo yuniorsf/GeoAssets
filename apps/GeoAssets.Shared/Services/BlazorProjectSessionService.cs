@@ -11,16 +11,6 @@ namespace GeoAssets.Shared.Services;
 /// <summary>
 /// Default <see cref="IProjectSessionService"/> — see that interface for the full contract
 /// (XD01-142).
-///
-/// <b>Known gap, deliberately out of scope here</b>: <see cref="IProviderPool.ProviderEntry"/>
-/// doesn't retain the <c>PluginId</c>/reconnect config values it was created from (only
-/// <c>ProjectProviderEntry</c>, the persisted shape, does) — so there is currently no reliable
-/// way to snapshot the live pool's actual state (renames, open/close/enable/disable, or newly
-/// connected entries) back into a <see cref="Project.Providers"/> list to persist. Dirty
-/// tracking still reacts to <see cref="IProviderPool.Changed"/> (so the UI/close-guard correctly
-/// sees unsaved pool changes), but <see cref="SaveAsync"/> does not attempt to round-trip them —
-/// doing so would require extending <c>ProviderEntry</c> with that metadata first, a separate,
-/// substantial follow-up.
 /// </summary>
 public sealed class BlazorProjectSessionService : IProjectSessionService, IDisposable
 {
@@ -122,7 +112,8 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
 
                 var config = new ProviderConfig(entry.Values);
                 var provider = await plugin.CreateAsync(config, _services, ct);
-                _pool.RestoreEntry(entry.Name, provider, entry.Position, entry.IsOpen, entry.IsEnabled, entry.IsActive);
+                _pool.RestoreEntry(entry.Name, provider, entry.Position, entry.IsOpen, entry.IsEnabled, entry.IsActive,
+                    entry.PluginId, entry.Values);
             }
             catch (Exception ex)
             {
@@ -148,7 +139,12 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
         var targetId = Current.Id;
         var redirected = false;
 
-        if (ScopeChanged(_liveRaw!.AssetTypeScope, _rawBaseline!.AssetTypeScope))
+        if (ScopeChanged(_liveRaw!.Providers, _rawBaseline!.Providers))
+        {
+            var result = await _client.UpdateProvidersAsync(targetId, _liveRaw.Providers, ct);
+            (redirected, targetId) = Track(result, targetId, redirected);
+        }
+        if (ScopeChanged(_liveRaw.AssetTypeScope, _rawBaseline.AssetTypeScope))
         {
             var result = await _client.UpdateAssetTypeScopeAsync(targetId, _liveRaw.AssetTypeScope, ct);
             (redirected, targetId) = Track(result, targetId, redirected);
@@ -318,7 +314,17 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
 
     private void AttachPoolTracking() => _pool.Changed += OnPoolChanged;
     private void DetachPoolTracking() => _pool.Changed -= OnPoolChanged;
-    private void OnPoolChanged(object? sender, EventArgs e) => SetDirty(true);
+
+    private void OnPoolChanged(object? sender, EventArgs e)
+    {
+        // Re-materialize on every change (not just the first) so SaveAsync always diffs against
+        // the pool's current state — there's no per-mutation setter for Providers the way the
+        // other three scopes have (SetAssetTypeScope/SetLayerScope/SetViewState).
+        var snapshot = _pool.ToPersistedEntries();
+        _liveRaw!.Providers = snapshot;
+        Current!.Providers  = snapshot;
+        SetDirty(true);
+    }
 
     private void SetDirty(bool value)
     {

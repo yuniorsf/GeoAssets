@@ -69,6 +69,37 @@ public class ProviderPoolTests
     }
 
     [Fact]
+    public void Add_NoPluginArgs_DefaultsToEmptyPluginIdAndValues()
+    {
+        var entry = new ProviderPool().Add("A", Provider());
+        entry.PluginId.Should().BeEmpty();
+        entry.Values.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Add_WithPluginIdAndValues_PopulatesThem()
+    {
+        // XD01-157: ProviderEntry must retain the reconnect config it was created from so it can
+        // round-trip into ProjectProviderEntry later — fails without the fix (fields don't exist).
+        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var entry = new ProviderPool().Add("A", Provider(), "rest", values);
+
+        entry.PluginId.Should().Be("rest");
+        entry.Values.Should().BeEquivalentTo(values);
+    }
+
+    [Fact]
+    public void Add_WithValues_StoresAnIndependentCopy()
+    {
+        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var entry = new ProviderPool().Add("A", Provider(), "rest", values);
+
+        values["url"] = "mutated";
+
+        entry.Values["url"].Should().Be("https://example.test");
+    }
+
+    [Fact]
     public void Add_FiresChanged()
     {
         var sut = new ProviderPool();
@@ -122,6 +153,29 @@ public class ProviderPoolTests
         entry.IsOpen.Should().BeFalse();
         entry.IsEnabled.Should().BeFalse();
         entry.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RestoreEntry_WithPluginIdAndValues_PopulatesThem()
+    {
+        // XD01-157: reconnect config must survive a restore, same as a fresh Add.
+        var sut = new ProviderPool();
+        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+
+        var entry = sut.RestoreEntry("A", Provider(), 0, true, true, false, "rest", values);
+
+        entry.PluginId.Should().Be("rest");
+        entry.Values.Should().BeEquivalentTo(values);
+    }
+
+    [Fact]
+    public void RestoreEntry_NoPluginArgs_DefaultsToEmptyPluginIdAndValues()
+    {
+        var sut = new ProviderPool();
+        var entry = sut.RestoreEntry("A", Provider(), 0, true, true, false);
+
+        entry.PluginId.Should().BeEmpty();
+        entry.Values.Should().BeEmpty();
     }
 
     [Fact]
@@ -595,5 +649,61 @@ public class ProviderPoolTests
         var sut = new ProviderPool();
         var act = sut.ClearAll;
         act.Should().NotThrow();
+    }
+
+    // ── ToPersistedEntries ────────────────────────────────────────────────────
+
+    [Fact]
+    public void ToPersistedEntries_EmptyPool_ReturnsEmptyList()
+    {
+        new ProviderPool().ToPersistedEntries().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ToPersistedEntries_MapsEveryFieldFromTheLiveEntry()
+    {
+        // XD01-157: this is the round-trip counterpart to RestoreEntry — fails without it (no
+        // way to turn live pool state back into the persisted ProjectProviderEntry shape).
+        var sut = new ProviderPool();
+        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var entry = sut.RestoreEntry("A", Provider(), 0, isOpen: true, isEnabled: false, isActive: true, "rest", values);
+
+        var persisted = sut.ToPersistedEntries().Should().ContainSingle().Subject;
+
+        persisted.Name.Should().Be(entry.Name);
+        persisted.PluginId.Should().Be("rest");
+        persisted.Values.Should().BeEquivalentTo(values);
+        persisted.IsOpen.Should().BeTrue();
+        persisted.IsEnabled.Should().BeFalse();
+        persisted.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToPersistedEntries_PositionsEntriesByPoolOrder()
+    {
+        var sut = new ProviderPool();
+        sut.Add("A", Provider());
+        sut.Add("B", Provider());
+        sut.Add("C", Provider());
+
+        var persisted = sut.ToPersistedEntries();
+
+        persisted.Select(p => (p.Name, p.Position)).Should().Equal(
+            ("A", 0), ("B", 1), ("C", 2));
+    }
+
+    [Fact]
+    public void ToPersistedEntries_ReturnsValuesAsAnIndependentCopy()
+    {
+        // Mutating the live entry's Values afterward must not reach back into an already-taken
+        // snapshot — SaveAsync holds onto the snapshot across an await.
+        var sut = new ProviderPool();
+        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var entry = sut.Add("A", Provider(), "rest", values);
+
+        var persisted = sut.ToPersistedEntries().Single();
+        entry.Values["url"] = "mutated";
+
+        persisted.Values["url"].Should().Be("https://example.test");
     }
 }

@@ -25,4 +25,15 @@ public sealed class ProviderEntry
     public bool IsActive  { get; set; }
 
     public IAssetProvider Provider { get; init; } = null!;
+
+    /// <summary>Plugin slug (<see cref="Interfaces.IProviderPlugin.Id"/>) this entry was
+    /// constructed from. Empty for entries added without a known plugin.</summary>
+    public string PluginId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Reconnect configuration this entry was constructed from — same credential-free shape as
+    /// <see cref="ProjectProviderEntry.Values"/>, which this mirrors so <see cref="Interfaces.IProviderPool.ToPersistedEntries"/>
+    /// can copy it directly.
+    /// </summary>
+    public Dictionary<string, string> Values { get; init; } = [];
 }

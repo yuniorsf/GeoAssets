@@ -537,8 +537,9 @@ public class ActiveAssetProviderTests
     {
         public IReadOnlyList<ProviderEntry> All => [];
         public ProviderEntry Active => throw new InvalidOperationException();
-        public ProviderEntry Add(string name, IAssetProvider provider) => throw new NotSupportedException();
-        public ProviderEntry RestoreEntry(string name, IAssetProvider provider, int position, bool isOpen, bool isEnabled, bool isActive) => throw new NotSupportedException();
+        public ProviderEntry Add(string name, IAssetProvider provider, string pluginId = "", Dictionary<string, string>? values = null) => throw new NotSupportedException();
+        public ProviderEntry RestoreEntry(string name, IAssetProvider provider, int position, bool isOpen, bool isEnabled, bool isActive, string pluginId = "", Dictionary<string, string>? values = null) => throw new NotSupportedException();
+        public List<ProjectProviderEntry> ToPersistedEntries() => throw new NotSupportedException();
         public void SetActive(Guid id) { }
         public void Open(Guid id) { }
         public void Close(Guid id) { }
