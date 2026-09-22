@@ -14,4 +14,11 @@
     <PackageReference Include="NetTopologySuite.IO.GeoJSON4STJ" Version="4.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- GeoAssets.Core.Tests: fakes implementing the internal IProviderDecorator for AssetProviderExtensions tests.
+         GeoAssets.Shared: ObservableAssetProvider implements IProviderDecorator (XD01-160). -->
+    <InternalsVisibleTo Include="GeoAssets.Core.Tests" />
+    <InternalsVisibleTo Include="GeoAssets.Shared" />
+  </ItemGroup>
+
 </Project>

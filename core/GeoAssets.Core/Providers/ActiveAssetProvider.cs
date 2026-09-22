@@ -13,10 +13,12 @@ namespace GeoAssets.Core.Providers;
 /// and fires <see cref="CollectionChanged"/> so all UI consumers (AssetList, AssetForm, etc.)
 /// refresh without knowing a switch occurred.
 /// </summary>
-public sealed class ActiveAssetProvider : IAssetProvider
+public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
 {
     private readonly IProviderPool _pool;
     private IAssetProvider _current;
+
+    IAssetProvider IProviderDecorator.Inner => _current;
 
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;

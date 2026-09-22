@@ -131,6 +131,7 @@ public static class MauiProgram
             new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
             sp.GetRequiredService<ILogger<ObservableAssetProvider>>(),
             sp.GetRequiredService<TimeProvider>()));
+        builder.Services.AddSingleton<FeatureRenderPipeline>();
         builder.Services.AddGeoAssetsPostgres();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
         builder.Services.Configure<MapInteropOptions>(

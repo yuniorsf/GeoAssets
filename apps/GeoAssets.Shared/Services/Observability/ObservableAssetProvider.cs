@@ -18,8 +18,10 @@ public sealed class ObservableAssetProvider(
     IAssetProvider inner,
     ILogger<ObservableAssetProvider> logger,
     TimeProvider timeProvider)
-    : ObservableDecoratorBase<ObservableAssetProvider>(logger, timeProvider), IAssetProvider
+    : ObservableDecoratorBase<ObservableAssetProvider>(logger, timeProvider), IAssetProvider, IProviderDecorator
 {
+    IAssetProvider IProviderDecorator.Inner => inner;
+
     // ── Instrumented ─────────────────────────────────────────────────────────
 
     public IReadOnlyList<GeoFeature> GetAll() =>

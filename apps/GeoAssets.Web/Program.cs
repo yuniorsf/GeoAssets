@@ -163,6 +163,7 @@ builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
     new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
     sp.GetRequiredService<ILogger<ObservableAssetProvider>>(),
     sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<FeatureRenderPipeline>();
 
 builder.Services.AddScoped<IStorageService, WebStorageService>();
 

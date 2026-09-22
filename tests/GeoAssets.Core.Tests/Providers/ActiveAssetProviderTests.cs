@@ -30,6 +30,14 @@ public class ActiveAssetProviderTests
         return (sut, inner);
     }
 
+    [Fact]
+    public void Inner_ExposesCurrentProvider()
+    {
+        var (sut, inner) = CreateActive();
+
+        ((IProviderDecorator)sut).Inner.Should().BeSameAs(inner);
+    }
+
     // ── Read pass-through ────────────────────────────────────────────────────
 
     [Fact]

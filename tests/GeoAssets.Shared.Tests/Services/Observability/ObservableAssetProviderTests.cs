@@ -2,8 +2,11 @@ using System.Diagnostics;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Diagnostics;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Providers;
+using GeoAssets.Core.Services;
 using GeoAssets.Shared.Services.Observability;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -535,5 +538,26 @@ public class ObservableAssetProviderTests
         sut.Add(Feature("b", AssetType.Point.Id.ToString()));
 
         count.Should().Be(1);
+    }
+
+    // ── Decorator-chain unwrapping (XD01-160) ───────────────────────────────
+
+    [Fact]
+    public void UnwrapToConcrete_RealThreeLayerProductionChain_ReachesConcreteProvider()
+    {
+        // Mirrors exactly how DI wires this today (apps/GeoAssets.Web/Program.cs,
+        // apps/GeoAssets.MAUI/MauiProgram.cs): Observable(Validating(Active(pool))).
+        var pool = new ProviderPool();
+        var active = new ActiveAssetProvider(pool);
+        var concrete = new TestAssetProvider();
+        var entry = pool.Add("A", concrete);
+        pool.SetActive(entry.Id);
+        var validating = new ValidatingAssetProvider(active);
+        IAssetProvider observable = new ObservableAssetProvider(
+            validating, NullLogger<ObservableAssetProvider>.Instance, TimeProvider.System);
+
+        var unwrapped = observable.UnwrapToConcrete();
+
+        unwrapped.Should().BeSameAs(concrete);
     }
 }

@@ -14,7 +14,7 @@ namespace GeoAssets.Provider.Shapefile;
 /// interface surface, not a purpose-sized subset. Replaces the shared, general-purpose
 /// <c>InMemoryAssetProvider</c> (removed in XD01-131); logic here is otherwise identical to it.
 /// </summary>
-internal sealed class ShapefileFeatureStore : IAssetProvider
+internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];

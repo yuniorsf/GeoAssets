@@ -22,8 +22,10 @@ namespace GeoAssets.Core.Providers;
 /// <see cref="AssetType"/> is unrestricted (same "unrestricted by default" convention as the
 /// ServiceOrder-side decorator when an order type isn't registered).
 /// </summary>
-public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvider, IAsyncDisposable
+public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvider, IAsyncDisposable, IProviderDecorator
 {
+    IAssetProvider IProviderDecorator.Inner => inner;
+
     /// <summary>Forwards disposal to <paramref name="inner"/> when it owns disposable resources
     /// (e.g. <c>PostgresAssetProvider</c>'s <c>DbContext</c>) — without this, wrapping a
     /// disposable provider would silently stop it from being disposed by the DI container.</summary>

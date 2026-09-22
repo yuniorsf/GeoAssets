@@ -32,6 +32,15 @@ public class ValidatingAssetProviderTests
         Properties = { AssetTypeId = assetTypeId },
     };
 
+    [Fact]
+    public void Inner_ExposesWrappedProvider()
+    {
+        var inner = new TestAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+
+        ((IProviderDecorator)sut).Inner.Should().BeSameAs(inner);
+    }
+
     // ── Read pass-through ──────────────────────────────────────────────────────
 
     [Fact]
