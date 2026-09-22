@@ -7,10 +7,12 @@ using Xunit;
 namespace GeoAssets.Shared.Tests.Components.Map;
 
 /// <summary>
-/// <see cref="MapContainer.ResolveDrawnAssetTypeId"/> is the pure decision at the heart of
-/// XD01-117: prefer a type-first palette selection, otherwise fall back to the pre-XD01-117
-/// geometry-based inference. Factored out as a static method so it's directly unit-testable
-/// without a Blazor render tree (this repo has no bUnit yet).
+/// Covers <see cref="MapContainer"/>'s pure decisions, factored out as static methods so they're
+/// directly unit-testable without a Blazor render tree (this repo has no bUnit yet):
+/// <see cref="MapContainer.ResolveDrawnAssetTypeId"/> (XD01-117 — prefer a type-first palette
+/// selection, otherwise fall back to the pre-XD01-117 geometry-based inference) and
+/// <see cref="MapContainer.ShouldRenderLastViewport"/> (XD01-162 — prefer a bounds-filtered
+/// re-render over the last known viewport, otherwise fall back to a full-dataset pipeline render).
 /// </summary>
 public class MapContainerTests
 {
@@ -54,5 +56,20 @@ public class MapContainerTests
         var result = MapContainer.ResolveDrawnAssetTypeId(null, pendingAssetTypeId: null);
 
         result.Should().Be(AssetType.Point.Id.ToString());
+    }
+
+    // ── ShouldRenderLastViewport (XD01-162) ──────────────────────────────────
+
+    [Fact]
+    public void ShouldRenderLastViewport_ViewportKnown_PrefersViewportRender()
+    {
+        // Literal acceptance criterion: OnCollectionChanged prefers _lastViewport when set.
+        MapContainer.ShouldRenderLastViewport((0, 0, 1, 1)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldRenderLastViewport_NoViewportYet_FallsBackToFullDatasetPipelineRender()
+    {
+        MapContainer.ShouldRenderLastViewport(null).Should().BeFalse();
     }
 }

@@ -65,6 +65,14 @@ public interface IMapInterop
     /// callers clear once via <see cref="ClearAllFeaturesAsync"/> before the first chunk.
     /// </summary>
     Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson);
+    /// <summary>
+    /// Renders a batch of features additively — unlike <see cref="RenderAllFeaturesAsync(string, IEnumerable{GeoFeature})"/>,
+    /// this does <b>not</b> clear existing features first. Unlike <see cref="RenderFeatureBatchRawJsonAsync"/>,
+    /// it still resolves each feature's Layer/LayerRule styling (<c>GeoFeature</c> objects, not raw JSON).
+    /// Intended for streaming a large dataset in chunks (e.g. <see cref="GeoAssets.Core.Services.FeatureRenderPipeline.StreamAllAsync"/>) —
+    /// callers clear once via <see cref="ClearAllFeaturesAsync"/> before the first chunk.
+    /// </summary>
+    Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features);
     Task RemoveFeatureAsync(string divId, string featureId);
     Task ClearAllFeaturesAsync(string divId);
 

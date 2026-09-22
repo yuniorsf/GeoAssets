@@ -67,7 +67,16 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         var featureList = features as IReadOnlyList<GeoFeature> ?? [.. features];
         var styleMap = BuildStyleMap(_repo, featureList);
         var featuresAsJsonString = featureList.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
-        await RenderAllFeaturesAsync(divId, featuresAsJsonString, styleMap);
+        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        await RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
+    }
+
+    public async Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features)
+    {
+        var featureList = features as IReadOnlyList<GeoFeature> ?? [.. features];
+        var styleMap = BuildStyleMap(_repo, featureList);
+        var featuresAsJsonString = featureList.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
+        await RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
     }
 
     /// <summary>
@@ -80,7 +89,8 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     public async Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)
     {
         var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
-        await RenderAllFeaturesAsync(divId, featuresAsJsonString);
+        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        await RenderFeatureBatchesAsync(divId, featuresAsJsonString);
     }
 
     public async Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)
@@ -100,11 +110,10 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         return _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap).AsTask();
     }
 
-    private async Task RenderAllFeaturesAsync(
+    private async Task RenderFeatureBatchesAsync(
         string divId, IReadOnlyList<string> featuresAsJsonString, IReadOnlyDictionary<string, LayerStyleOptions>? styleMap = null)
     {
         var colorMap = BuildColorMap();
-        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
 
         if (_options.SinglePass)
         {

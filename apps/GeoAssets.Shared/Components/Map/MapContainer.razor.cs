@@ -20,9 +20,23 @@ public partial class MapContainer
     [Parameter] public EventCallback<string> OnFeatureClicked { get; set; }
     [Parameter] public EventCallback<(string FeatureId, double X, double Y)> OnFeatureContextMenu { get; set; }
 
+    /// <summary>Feature count per <see cref="FeatureRenderPipeline.StreamAllAsync"/> chunk for a
+    /// full-dataset bulk render — coarser than <c>MapInteropService</c>'s own <c>BatchSize</c>
+    /// JS-batch chunking, which further subdivides each pipeline chunk.</summary>
+    private const int BulkRenderChunkSize = 1500;
+
     // Use DotNetObjectReference<object> to avoid generic covariance issue
     private DotNetObjectReference<object>? _dotNetRef;
     private bool _initialized;
+
+    /// <summary>The most recent viewport bounds reported by <see cref="OnViewportChangedFromJs"/>,
+    /// if any — lets <see cref="OnCollectionChanged"/> prefer a bounds-filtered re-render over an
+    /// unbounded full-dataset one once the map has panned at least once.</summary>
+    private (double MinLon, double MinLat, double MaxLon, double MaxLat)? _lastViewport;
+
+    /// <summary>Cancelled at the top of <see cref="RenderViewportAsync"/> so a pan always wins over
+    /// an in-flight full-dataset bulk render (<see cref="RenderAllViaPipelineAsync"/>).</summary>
+    private CancellationTokenSource? _bulkRenderCts;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -36,10 +50,7 @@ public partial class MapContainer
         await MapInterop.InitializeMapAsync(DivId, InitLat, InitLon, InitZoom);
         await MapInterop.RegisterEventHandlersAsync(DivId, _dotNetRef);
 
-        var features = Repository.GetAll();
-        Logger.LogInformation("MapContainer initialized — rendering {Count} initial features", features.Count);
-        if (features.Count > 0)
-            await MapInterop.RenderAllFeaturesAsync(DivId, features);
+        await RenderAllViaPipelineAsync();
 
         Repository.FeatureAdded      += OnFeatureAdded;
         Repository.FeatureUpdated    += OnFeatureUpdated;
@@ -59,19 +70,54 @@ public partial class MapContainer
         InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
 
     private void OnCollectionChanged(object? _, EventArgs __) =>
-        InvokeAsync(async () =>
-        {
-            var sw = Stopwatch.StartNew();
-            var features = Repository.GetAll();
-            var fetchMs = sw.Elapsed.TotalMilliseconds;
-            sw.Restart();
+        InvokeAsync(() => ShouldRenderLastViewport(_lastViewport)
+            ? RenderViewportAsync(_lastViewport!.Value)
+            : RenderAllViaPipelineAsync());
 
-            await MapInterop.RenderAllFeaturesAsync(DivId, features);
+    /// <summary>
+    /// Decides whether a collection-change re-render should target the last known viewport
+    /// (bounds-filtered, reuses the already-correct pan path) or fall back to an unbounded
+    /// full-dataset pipeline render. Pure decision, factored out for direct testability — same
+    /// reasoning as <see cref="ResolveDrawnAssetTypeId"/> (this repo has no bUnit yet).
+    /// </summary>
+    public static bool ShouldRenderLastViewport((double MinLon, double MinLat, double MaxLon, double MaxLat)? lastViewport) =>
+        lastViewport is not null;
+
+    /// <summary>
+    /// Full-dataset bulk render (initial load, or a collection change with no known viewport yet)
+    /// streamed through <see cref="FeatureRenderPipeline"/> in <see cref="BulkRenderChunkSize"/>-feature
+    /// chunks so a large import doesn't block the UI thread with one unbounded render call — see
+    /// XD01-159's audit and XD01-160. Cancelled by <see cref="RenderViewportAsync"/> if a pan arrives
+    /// mid-render.
+    /// </summary>
+    private async Task RenderAllViaPipelineAsync()
+    {
+        _bulkRenderCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _bulkRenderCts = cts;
+
+        var sw = Stopwatch.StartNew();
+        var count = 0;
+        try
+        {
+            await MapInterop.ClearAllFeaturesAsync(DivId);
+            await foreach (var chunk in Pipeline.StreamAllAsync(Repository, BulkRenderChunkSize, cts.Token))
+            {
+                await MapInterop.RenderFeatureBatchAsync(DivId, chunk);
+                count += chunk.Count;
+            }
             sw.Stop();
             Logger.LogInformation(
-                "Collection changed — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
-                features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
-        });
+                "Bulk render via pipeline — {Count} features in {ElapsedMs:F1} ms",
+                count, sw.Elapsed.TotalMilliseconds);
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogDebug(
+                "Bulk render via pipeline — cancelled after {Count} features (superseded by a pan or a newer bulk render)",
+                count);
+        }
+    }
 
     // ─── JS → .NET callbacks ─────────────────────────────────────────────
 
@@ -145,6 +191,21 @@ public partial class MapContainer
     [JSInvokable("OnViewportChangedFromJs")]
     public async Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
     {
+        _lastViewport = (minLon, minLat, maxLon, maxLat);
+        await RenderViewportAsync(_lastViewport.Value);
+    }
+
+    /// <summary>
+    /// Bounds-filtered render for the given viewport — used both by a live pan
+    /// (<see cref="OnViewportChangedFromJs"/>) and by <see cref="OnCollectionChanged"/> once a
+    /// viewport is known, so a bulk mutation re-renders only what's visible instead of the whole
+    /// dataset. Cancels any in-flight full-dataset bulk render first, so a pan always wins.
+    /// </summary>
+    private async Task RenderViewportAsync((double MinLon, double MinLat, double MaxLon, double MaxLat) bounds)
+    {
+        _bulkRenderCts?.Cancel();
+
+        var (minLon, minLat, maxLon, maxLat) = bounds;
         var sw = Stopwatch.StartNew();
 
         // Prefer the raw-JSON chunked path: the provider streams the HTTP response body(s) as-is,
@@ -189,6 +250,8 @@ public partial class MapContainer
 
     public void Dispose()
     {
+        _bulkRenderCts?.Cancel();
+
         Repository.FeatureAdded      -= OnFeatureAdded;
         Repository.FeatureUpdated    -= OnFeatureUpdated;
         Repository.FeatureDeleted    -= OnFeatureDeletedFromRepo;

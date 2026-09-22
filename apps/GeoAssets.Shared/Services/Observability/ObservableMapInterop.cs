@@ -78,6 +78,7 @@ public sealed class ObservableMapInterop(
     public Task SetViewAsync(string divId, double lat, double lon, int zoom)                => inner.SetViewAsync(divId, lat, lon, zoom);
     public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)   => inner.RenderAllFeaturesAsync(divId, features);
     public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson)         => inner.RenderFeatureBatchRawJsonAsync(divId, rawFeaturesJson);
+    public Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features)      => inner.RenderFeatureBatchAsync(divId, features);
     public Task RemoveFeatureAsync(string divId, string featureId)                    => inner.RemoveFeatureAsync(divId, featureId);
     public Task ClearAllFeaturesAsync(string divId)                                   => inner.ClearAllFeaturesAsync(divId);
     public Task EnableDrawModeAsync(string divId, GeometryType mode)                  => inner.EnableDrawModeAsync(divId, mode);
