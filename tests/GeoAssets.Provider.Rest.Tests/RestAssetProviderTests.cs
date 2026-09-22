@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
 using Xunit;
 
 namespace GeoAssets.Provider.Rest.Tests;
@@ -20,6 +21,18 @@ public class RestAssetProviderTests
 
     private static HttpResponseMessage JsonResponse(string body) =>
         new(HttpStatusCode.OK) { Content = new StringContent(body) };
+
+    [Fact]
+    public void RestAssetProvider_IsMarkedAsSyncProvider()
+    {
+        // Backed by a real timing number from XD01-159's live REST audit: "Repository.GetAll —
+        // 44 features in 0 ms" — reads are served from the in-memory LocalFeatureCache populated
+        // once at InitializeAsync time, no I/O on the sync read surface (XD01-161).
+        var handler = new FakeHttpMessageHandler(_ => JsonResponse("[]"));
+        var sut = CreateSut(handler);
+
+        sut.Should().BeAssignableTo<ISyncProvider>();
+    }
 
     // ── SplitIntoTiles (pure) ────────────────────────────────────────────────
 

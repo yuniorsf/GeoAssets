@@ -18,7 +18,7 @@ namespace GeoAssets.Provider.WFS;
 /// Write operations are not supported (WFS-T is out of scope).  Any call to a
 /// mutating method is silently ignored and a warning is logged.
 /// </summary>
-public sealed class WfsAssetProvider : IAssetProvider
+public sealed class WfsAssetProvider : IAssetProvider, ISyncProvider
 {
     private readonly WfsClient              _wfs;
     private readonly string                 _typeName;

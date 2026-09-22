@@ -18,7 +18,7 @@ namespace GeoAssets.Provider.Rest;
 /// Spatial and topology queries run against the local cache using NTS / TopoGraph,
 /// so they reflect the last snapshot loaded from the server.
 /// </summary>
-public sealed class RestAssetProvider : IAssetProvider
+public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
 {
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.GetOptions();
 
