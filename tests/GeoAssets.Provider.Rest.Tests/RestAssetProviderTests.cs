@@ -108,10 +108,19 @@ public class RestAssetProviderTests
         var sut = CreateSut(handler);
 
         var received = new List<string>();
+        // Deterministic handshake instead of a fixed delay — a fixed wall-clock pause between
+        // SetResult calls is a guess about how fast the reader's continuation chain propagates,
+        // which is exactly the kind of margin that flakes on a slower/more contended CI runner
+        // (confirmed: this test flaked in CI with this originally using Task.Delay(20)). Waiting
+        // on a signal the reader itself releases after each chunk is unconditionally correct.
+        var chunkReceived = new SemaphoreSlim(0);
         var consumeTask = Task.Run(async () =>
         {
             await foreach (var chunk in sut.GetInBoundsRawJsonChunksAsync(0, 0, 10, 10)) // 4 tiles
+            {
                 received.Add(chunk);
+                chunkReceived.Release();
+            }
         });
 
         // Wait for all 4 tile requests to be dispatched (each awaiting its own TCS).
@@ -122,15 +131,15 @@ public class RestAssetProviderTests
             await Task.Delay(10);
         }
 
-        // Complete them in reverse dispatch order, pausing so the reader observes each chunk
-        // before the next completes — proves chunks arrive in completion order, not the order
-        // SplitIntoTiles generated them in.
+        // Complete them in reverse dispatch order, waiting for the reader to actually observe
+        // each chunk before completing the next TCS — proves chunks arrive in completion order,
+        // not the order SplitIntoTiles generated them in.
         List<TaskCompletionSource<HttpResponseMessage>> ordered;
         lock (gate) ordered = [.. tcsByDispatchIndex];
         for (var i = ordered.Count - 1; i >= 0; i--)
         {
             ordered[i].SetResult(JsonResponse($$"""[{"dispatchIndex":{{i}}}]"""));
-            await Task.Delay(20);
+            (await chunkReceived.WaitAsync(TimeSpan.FromSeconds(5))).Should().BeTrue();
         }
 
         await consumeTask;
