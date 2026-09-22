@@ -58,6 +58,13 @@ public interface IMapInterop
     /// The string is forwarded directly to JavaScript which parses it natively.
     /// </summary>
     Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson);
+    /// <summary>
+    /// Renders a raw JSON array of features additively — unlike <see cref="RenderAllFeaturesRawJsonAsync"/>,
+    /// this does <b>not</b> clear existing features first. Intended for progressive rendering of
+    /// several chunks in sequence (e.g. <see cref="GeoAssets.Core.Interfaces.IAssetProvider.GetInBoundsRawJsonChunksAsync"/>) —
+    /// callers clear once via <see cref="ClearAllFeaturesAsync"/> before the first chunk.
+    /// </summary>
+    Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson);
     Task RemoveFeatureAsync(string divId, string featureId);
     Task ClearAllFeaturesAsync(string divId);
 

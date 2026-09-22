@@ -92,6 +92,14 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap);
     }
 
+    public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson)
+    {
+        var colorMap = BuildColorMap();
+        // Same JS call as RenderAllFeaturesRawJsonAsync, minus the clearAllFeatures — additive,
+        // safe to call once per chunk while progressively streaming a large result.
+        return _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap).AsTask();
+    }
+
     private async Task RenderAllFeaturesAsync(
         string divId, IReadOnlyList<string> featuresAsJsonString, IReadOnlyDictionary<string, LayerStyleOptions>? styleMap = null)
     {

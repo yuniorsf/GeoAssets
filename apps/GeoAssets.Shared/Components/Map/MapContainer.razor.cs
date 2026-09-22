@@ -147,31 +147,39 @@ public partial class MapContainer
     {
         var sw = Stopwatch.StartNew();
 
-        // Prefer the raw-JSON path: the provider returns the HTTP response body as-is,
-        // JS parses it natively — no WASM JSON parsing bottleneck.
-        var rawJson = await Repository.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+        // Prefer the raw-JSON chunked path: the provider streams the HTTP response body(s) as-is,
+        // JS parses each chunk natively and renders it immediately (no WASM JSON parsing
+        // bottleneck, no waiting for one giant payload before anything appears). Providers that
+        // don't support raw JSON (e.g. Postgres) yield zero chunks — see IAssetProvider's default
+        // GetInBoundsRawJsonChunksAsync — which is the signal to fall back below. A provider that
+        // does support it never yields zero for a real (possibly empty) result: even an empty bbox
+        // response is a non-null "[]" chunk.
+        await MapInterop.ClearAllFeaturesAsync(DivId);
+        var chunkCount = 0;
+        await foreach (var chunk in Repository.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat))
+        {
+            await MapInterop.RenderFeatureBatchRawJsonAsync(DivId, chunk);
+            chunkCount++;
+        }
+
+        if (chunkCount > 0)
+        {
+            sw.Stop();
+            Logger.LogInformation(
+                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — raw path, {ChunkCount} chunk(s) in {ElapsedMs:F1} ms",
+                minLon, minLat, maxLon, maxLat, chunkCount, sw.Elapsed.TotalMilliseconds);
+            return;
+        }
+
+        sw.Restart();
+        var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
         var fetchMs = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
-
-        if (rawJson is not null)
-        {
-            await MapInterop.RenderAllFeaturesRawJsonAsync(DivId, rawJson);
-            sw.Stop();
-            Logger.LogInformation(
-                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — raw path, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
-                minLon, minLat, maxLon, maxLat, fetchMs, sw.Elapsed.TotalMilliseconds);
-        }
-        else
-        {
-            var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
-            fetchMs += sw.Elapsed.TotalMilliseconds;
-            sw.Restart();
-            await MapInterop.RenderAllFeaturesAsync(DivId, features);
-            sw.Stop();
-            Logger.LogInformation(
-                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
-                minLon, minLat, maxLon, maxLat, features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
-        }
+        await MapInterop.RenderAllFeaturesAsync(DivId, features);
+        sw.Stop();
+        Logger.LogInformation(
+            "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
+            minLon, minLat, maxLon, maxLat, features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
     }
 
     public Task PanToFeatureAsync(string featureId) =>

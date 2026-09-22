@@ -33,6 +33,7 @@ public class ObservableMapInteropTests
         public Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features) => Record(nameof(RenderAllFeaturesAsync), divId, features);
         public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features) => Record(nameof(RenderAllFeaturesAsync), divId, features);
         public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) => Record(nameof(RenderAllFeaturesRawJsonAsync), divId, rawFeaturesJson);
+        public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson) => Record(nameof(RenderFeatureBatchRawJsonAsync), divId, rawFeaturesJson);
         public Task RemoveFeatureAsync(string divId, string featureId) => Record(nameof(RemoveFeatureAsync), divId, featureId);
         public Task ClearAllFeaturesAsync(string divId) => Record(nameof(ClearAllFeaturesAsync), divId);
         public Task EnableDrawModeAsync(string divId, GeometryType mode) => Record(nameof(EnableDrawModeAsync), divId, mode);
@@ -176,6 +177,17 @@ public class ObservableMapInteropTests
         await sut.RenderAllFeaturesAsync("map1", features);
 
         inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.RenderAllFeaturesAsync));
+    }
+
+    [Fact]
+    public async Task RenderFeatureBatchRawJsonAsync_DelegatesToInner()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+
+        await sut.RenderFeatureBatchRawJsonAsync("map1", "[]");
+
+        inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.RenderFeatureBatchRawJsonAsync));
     }
 
     [Fact]
