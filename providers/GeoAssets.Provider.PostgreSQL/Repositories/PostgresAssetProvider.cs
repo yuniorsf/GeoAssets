@@ -21,7 +21,7 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// than an explicit override — this provider's <see cref="GetAll"/> already returns the
 /// exact same <see cref="Cache"/> those would have queried directly (XD01-135).
 /// </summary>
-public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
+public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyncDisposable
 {
     private readonly GeoAssetsDbContext _db;
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
@@ -67,6 +67,27 @@ public sealed class PostgresAssetProvider : IAssetProvider, IAsyncDisposable
     }
 
     private void InvalidateCache() => _cache = null;
+
+    /// <summary>
+    /// Pre-warms <see cref="Cache"/> asynchronously via a short-lived context (mirrors
+    /// <see cref="GetInBoundsAsync"/>'s pattern — never touches the long-lived <see cref="_db"/>
+    /// instance the write methods use), so no synchronous caller falls through to
+    /// <see cref="LoadCacheFromDb"/>'s blocking query. Called by
+    /// <see cref="PostgresProviderFactory.CreateAsync"/> — <see cref="LoadCacheFromDb"/>/the lazy
+    /// <see cref="Cache"/> property remain a defensive fallback only, not the primary path, once
+    /// this has run (XD01-161).
+    /// </summary>
+    internal async Task WarmCacheAsync(CancellationToken ct = default)
+    {
+        var startTimestamp = _timeProvider.GetTimestamp();
+        await using var db = new GeoAssetsDbContext(_dbOptions);
+        var rows = await db.GeoEntities.AsNoTracking().ToListAsync(ct);
+        _cache = rows.Select(MapToFeature).ToDictionary(f => f.Id);
+        var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+        _logger.LogInformation(
+            "PostgresAssetProvider.WarmCacheAsync — {RowCount} rows in {ElapsedMs:F1} ms",
+            rows.Count, elapsedMs);
+    }
 
     // ── Read ───────────────────────────────────────────────────────────────────
 
