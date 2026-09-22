@@ -181,6 +181,19 @@ public class ObservableAssetProviderTests
     }
 
     [Fact]
+    public async Task GetInBoundsRawJsonChunksAsync_DelegatesToInner()
+    {
+        var inner = new TestAssetProvider { RawJsonResult = """[{"id":"a"}]""" };
+        var sut = Sut(inner);
+
+        var chunks = new List<string>();
+        await foreach (var chunk in sut.GetInBoundsRawJsonChunksAsync(0, 0, 2, 2))
+            chunks.Add(chunk);
+
+        chunks.Should().ContainSingle().Which.Should().Be("""[{"id":"a"}]""");
+    }
+
+    [Fact]
     public void GetNearby_DelegatesToInner()
     {
         var inner = new TestAssetProvider();

@@ -134,6 +134,19 @@ public class ActiveAssetProviderTests
     }
 
     [Fact]
+    public async Task GetInBoundsRawJsonChunksAsync_DelegatesToCurrent()
+    {
+        var (sut, inner) = CreateActive();
+        inner.RawJsonResult = """[{"id":"a"}]""";
+
+        var chunks = new List<string>();
+        await foreach (var chunk in sut.GetInBoundsRawJsonChunksAsync(0, 0, 2, 2))
+            chunks.Add(chunk);
+
+        chunks.Should().ContainSingle().Which.Should().Be("""[{"id":"a"}]""");
+    }
+
+    [Fact]
     public void GetNearby_DelegatesToCurrent()
     {
         var (sut, inner) = CreateActive();

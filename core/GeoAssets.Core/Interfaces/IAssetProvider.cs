@@ -77,6 +77,23 @@ public interface IAssetProvider
         => Task.FromResult<string?>(null);
 
     /// <summary>
+    /// Streams the raw JSON array string(s) for features within the bounding box, allowing a caller
+    /// to render progressively as each chunk arrives rather than waiting for one large result.
+    /// Default implementation yields the single result of <see cref="GetInBoundsRawJsonAsync"/> as
+    /// one chunk (or nothing when that returns <c>null</c>) — every existing provider works
+    /// unchanged. Providers that can fetch sub-regions in parallel (e.g. a REST-backed provider
+    /// tiling the bbox into concurrent HTTP calls) should override this to yield each sub-region's
+    /// raw JSON as it completes.
+    /// </summary>
+    async IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(
+        double minLon, double minLat, double maxLon, double maxLat,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var raw = await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+        if (raw is not null) yield return raw;
+    }
+
+    /// <summary>
     /// Returns features whose geometry is within <paramref name="distanceDegrees"/> of
     /// <paramref name="center"/>, ordered by ascending distance.
     /// </summary>

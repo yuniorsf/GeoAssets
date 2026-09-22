@@ -48,6 +48,8 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
     public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)    => inner.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
     public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => inner.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+    public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default)
+        => inner.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees) => inner.GetNearby(center, distanceDegrees);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                     => inner.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)                   => inner.GetDescendants(featureId);

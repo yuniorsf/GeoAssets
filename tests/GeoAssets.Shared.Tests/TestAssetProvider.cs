@@ -162,6 +162,13 @@ internal sealed class TestAssetProvider : IAssetProvider
         return [.. features.Select(f => JsonSerializer.SerializeToElement(f, opts))];
     }
 
+    /// <summary>Settable so tests can opt into the "provider supports raw JSON" path — defaults to
+    /// <c>null</c>, matching <see cref="IAssetProvider"/>'s own "unsupported" default.</summary>
+    public string? RawJsonResult { get; set; }
+
+    public Task<string?> GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
+        Task.FromResult(RawJsonResult);
+
     public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) =>
         [.. _features.Values
             .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
