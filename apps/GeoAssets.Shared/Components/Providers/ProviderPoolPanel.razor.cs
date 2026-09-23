@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
@@ -11,6 +12,12 @@ namespace GeoAssets.Shared.Components.Providers;
 public partial class ProviderPoolPanel
 {
     private const string ManageProvidersPermission = "projects:manage-providers";
+
+    /// <summary>Chunk size for <see cref="FeatureRenderPipeline.StreamAllAsync"/> when this panel
+    /// walks a whole pool entry's features (toggle/export/remove) — matches
+    /// <c>MapContainer.BulkRenderChunkSize</c> (XD01-162) for consistency across the epic's
+    /// pipeline consumers.</summary>
+    private const int PipelineChunkSize = 1500;
 
     private readonly Dictionary<Guid, string> _messages = [];
     private Guid?  _editingId;
@@ -84,8 +91,9 @@ public partial class ProviderPoolPanel
             if (entry.Provider is IWmsProvider)
                 await MapInterop.RemoveWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString());
             else
-                foreach (var f in entry.Provider.GetAll())
-                    await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
+                await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
+                    foreach (var f in chunk)
+                        await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
         }
         else
         {
@@ -95,8 +103,9 @@ public partial class ProviderPoolPanel
                     wms.WmsBaseUrl,
                     new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
             else
-                foreach (var f in entry.Provider.GetAll())
-                    await MapInterop.RenderFeatureAsync(MapContext.MapDivId, f);
+                await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
+                    foreach (var f in chunk)
+                        await MapInterop.RenderFeatureAsync(MapContext.MapDivId, f);
         }
     }
 
@@ -114,9 +123,13 @@ public partial class ProviderPoolPanel
         _messages[entry.Id] = string.Empty;
         try
         {
+            var features = new List<GeoFeature>();
+            await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
+                features.AddRange(chunk);
+
             var collection = new GeoFeatureCollection
             {
-                Features = [.. entry.Provider.GetAll()],
+                Features = features,
                 Metadata = new GeoFeatureCollectionMetadata
                 {
                     Name       = entry.Name,
@@ -218,8 +231,9 @@ public partial class ProviderPoolPanel
         if (entry.Provider is IWmsProvider)
             await MapInterop.RemoveWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString());
         else
-            foreach (var f in entry.Provider.GetAll())
-                await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
+            await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
+                foreach (var f in chunk)
+                    await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);
     }
