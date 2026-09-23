@@ -37,6 +37,12 @@ namespace  GeoAssets.Server;
 /// </summary>
 public static class GeoAssetsRestApiExtensions
 {
+    /// <summary>Upper bound on features returned by <c>GET /features/bounds</c> for a single
+    /// request — a large viewport over a dense dataset otherwise has no ceiling on response
+    /// size (observed: ~15.9MB for one bbox during XD01-159's audit). Same order of magnitude
+    /// as <c>WfsProviderFactory.DefaultMaxFeatures</c>'s existing per-request cap convention.</summary>
+    private const int MaxBoundsFeatureCount = 10_000;
+
     /// <param name="wmsRequireAuthentication">Forwarded to <see cref="WmsEndpointExtensions.MapWmsApi"/>
     /// for the <c>{prefix}/wms</c> alias mounted below — see that method's own doc comment (XD01-95).</param>
     public static IEndpointRouteBuilder MapGeoAssetsApi(
@@ -54,7 +60,12 @@ public static class GeoAssetsRestApiExtensions
 
         routes.MapGet($"{prefix}/features/bounds",
             async (double minLon, double minLat, double maxLon, double maxLat, IAssetProvider provider) =>
-                Results.Json(await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat), opts))
+            {
+                var features = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+                if (features.Count > MaxBoundsFeatureCount)
+                    features = [.. features.Take(MaxBoundsFeatureCount)];
+                return Results.Json(features, opts);
+            })
             .RequireAuthorization("features:read");
 
         routes.MapGet($"{prefix}/features/{{id}}", async (
