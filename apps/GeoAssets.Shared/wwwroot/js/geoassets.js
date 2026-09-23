@@ -590,9 +590,21 @@ window.GeoAssets = (function () {
         (features || []).forEach(f => renderFeature(divId, f));
     }
 
+    // Sub-chunk size for renderFeatureBatch's non-WebGL RAF chunking (XD01-163) — a single
+    // requestAnimationFrame tick renders at most this many features before yielding back to the
+    // browser, so a large batch (the raw-JSON viewport/pipeline paths can hand this one call
+    // thousands of features — see XD01-172/XD01-162) never blocks one frame long enough to stall
+    // input, the same way _scheduleRedraw already bounds WebGL's per-frame cost.
+    const _RAF_SUB_CHUNK_SIZE = 75;
+
     /**
      * Batch-render path: adds all features then does a single WebGL redraw,
      * avoiding redundant redraws after every individual feature.
+     *
+     * Non-WebGL (SVG/Canvas via Leaflet) returns a Promise that resolves only once every feature
+     * has rendered — callers (MapInteropService) already treat "call resolved" as "fully
+     * rendered" (e.g. MapContainer clears the map before dispatching the next chunk), so
+     * completion ordering must be preserved; only how the work is spread across frames changes.
      */
     function renderFeatureBatch(divId, featuresJson, colorMap, styleMap) {
         const state    = _maps[divId];
@@ -606,11 +618,28 @@ window.GeoAssets = (function () {
                 _addWebGLFeature(divId, state, f, style.color);
             });
             _scheduleRedraw(divId); // one RAF draw covers the entire batch
-        } else {
-            const _batchStart = performance.now();
-            features.forEach(f => renderFeature(divId, f, colorMap, styleMap && styleMap[f.id]));
-            console.log(`[GeoAssets] renderFeatureBatch (non-WebGL) — ${features.length} features in ${(performance.now() - _batchStart).toFixed(1)} ms`);
+            return;
         }
+
+        return new Promise(resolve => {
+            const _batchStart = performance.now();
+            let i = 0;
+            function renderNextSubChunk() {
+                if (!_maps[divId]) { resolve(); return; } // map destroyed mid-render
+                const end = Math.min(i + _RAF_SUB_CHUNK_SIZE, features.length);
+                for (; i < end; i++) {
+                    const f = features[i];
+                    renderFeature(divId, f, colorMap, styleMap && styleMap[f.id]);
+                }
+                if (i < features.length) {
+                    requestAnimationFrame(renderNextSubChunk);
+                } else {
+                    console.log(`[GeoAssets] renderFeatureBatch (non-WebGL) — ${features.length} features in ${(performance.now() - _batchStart).toFixed(1)} ms`);
+                    resolve();
+                }
+            }
+            renderNextSubChunk();
+        });
     }
 
     function removeFeature(divId, featureId) {
