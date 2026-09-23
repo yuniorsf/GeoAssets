@@ -38,6 +38,12 @@ public partial class MapContainer
     /// an in-flight full-dataset bulk render (<see cref="RenderAllViaPipelineAsync"/>).</summary>
     private CancellationTokenSource? _bulkRenderCts;
 
+    /// <summary>Cancelled and replaced at the top of every <see cref="RenderViewportAsync"/> call so
+    /// a newer pan always supersedes a still-in-flight older one (XD01-170 finding #2) — without
+    /// this, rapid pans could leave multiple bounds fetches in flight concurrently, each eventually
+    /// rendering its (possibly stale) result on top of whatever the latest pan already drew.</summary>
+    private CancellationTokenSource? _viewportRenderCts;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _initialized) return;
@@ -205,42 +211,61 @@ public partial class MapContainer
     {
         _bulkRenderCts?.Cancel();
 
+        _viewportRenderCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _viewportRenderCts = cts;
+        var ct = cts.Token;
+
         var (minLon, minLat, maxLon, maxLat) = bounds;
         var sw = Stopwatch.StartNew();
 
-        // Prefer the raw-JSON chunked path: the provider streams the HTTP response body(s) as-is,
-        // JS parses each chunk natively and renders it immediately (no WASM JSON parsing
-        // bottleneck, no waiting for one giant payload before anything appears). Providers that
-        // don't support raw JSON (e.g. Postgres) yield zero chunks — see IAssetProvider's default
-        // GetInBoundsRawJsonChunksAsync — which is the signal to fall back below. A provider that
-        // does support it never yields zero for a real (possibly empty) result: even an empty bbox
-        // response is a non-null "[]" chunk.
-        await MapInterop.ClearAllFeaturesAsync(DivId);
-        var chunkCount = 0;
-        await foreach (var chunk in Repository.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat))
+        try
         {
-            await MapInterop.RenderFeatureBatchRawJsonAsync(DivId, chunk);
-            chunkCount++;
-        }
+            // Prefer the raw-JSON chunked path: the provider streams the HTTP response body(s) as-is,
+            // JS parses each chunk natively and renders it immediately (no WASM JSON parsing
+            // bottleneck, no waiting for one giant payload before anything appears). Providers that
+            // don't support raw JSON (e.g. Postgres) yield zero chunks — see IAssetProvider's default
+            // GetInBoundsRawJsonChunksAsync — which is the signal to fall back below. A provider that
+            // does support it never yields zero for a real (possibly empty) result: even an empty bbox
+            // response is a non-null "[]" chunk.
+            await MapInterop.ClearAllFeaturesAsync(DivId);
+            var chunkCount = 0;
+            await foreach (var chunk in Repository.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct))
+            {
+                await MapInterop.RenderFeatureBatchRawJsonAsync(DivId, chunk);
+                chunkCount++;
+            }
 
-        if (chunkCount > 0)
-        {
+            if (chunkCount > 0)
+            {
+                sw.Stop();
+                Logger.LogInformation(
+                    "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — raw path, {ChunkCount} chunk(s) in {ElapsedMs:F1} ms",
+                    minLon, minLat, maxLon, maxLat, chunkCount, sw.Elapsed.TotalMilliseconds);
+                return;
+            }
+
+            sw.Restart();
+            // GetInBoundsJsonAsync has no CancellationToken overload (not every provider's fetch
+            // supports mid-flight abort — e.g. a plain HTTP GET without one plumbed through), so a
+            // superseded call here can't be aborted early, but it must not paint its (now stale)
+            // result over whatever a newer pan already rendered.
+            var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+            if (ct.IsCancellationRequested) return;
+            var fetchMs = sw.Elapsed.TotalMilliseconds;
+            sw.Restart();
+            await MapInterop.RenderAllFeaturesAsync(DivId, features);
             sw.Stop();
             Logger.LogInformation(
-                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — raw path, {ChunkCount} chunk(s) in {ElapsedMs:F1} ms",
-                minLon, minLat, maxLon, maxLat, chunkCount, sw.Elapsed.TotalMilliseconds);
-            return;
+                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
+                minLon, minLat, maxLon, maxLat, features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
         }
-
-        sw.Restart();
-        var features = await Repository.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
-        var fetchMs = sw.Elapsed.TotalMilliseconds;
-        sw.Restart();
-        await MapInterop.RenderAllFeaturesAsync(DivId, features);
-        sw.Stop();
-        Logger.LogInformation(
-            "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — {Count} features, fetch={FetchMs:F1} ms render={RenderMs:F1} ms",
-            minLon, minLat, maxLon, maxLat, features.Count, fetchMs, sw.Elapsed.TotalMilliseconds);
+        catch (OperationCanceledException)
+        {
+            Logger.LogDebug(
+                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — cancelled (superseded by a newer viewport change)",
+                minLon, minLat, maxLon, maxLat);
+        }
     }
 
     public Task PanToFeatureAsync(string featureId) =>
@@ -251,6 +276,7 @@ public partial class MapContainer
     public void Dispose()
     {
         _bulkRenderCts?.Cancel();
+        _viewportRenderCts?.Cancel();
 
         Repository.FeatureAdded      -= OnFeatureAdded;
         Repository.FeatureUpdated    -= OnFeatureUpdated;
