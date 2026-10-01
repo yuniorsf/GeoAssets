@@ -68,6 +68,7 @@ public class ProviderConnectionMapRendererTests
     {
         public List<(string DivId, string LayerId, string BaseUrl, WmsLayerOptions Options)> WmsLayerCalls { get; } = [];
         public List<(string DivId, GeoFeature Feature)> RenderedFeatures { get; } = [];
+        public List<(string DivId, double[] Bbox)> FitBoundsCalls { get; } = [];
         public bool ThrowOnRenderFeature { get; init; }
 
         public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options)
@@ -102,7 +103,11 @@ public class ProviderConnectionMapRendererTests
         public Task RemoveTileLayerAsync(string divId, string layerId) => throw new NotSupportedException();
         public Task RemoveWmsLayerAsync(string divId, string layerId) => throw new NotSupportedException();
         public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => throw new NotSupportedException();
-        public Task FitBoundsAsync(string divId, double[] bbox) => throw new NotSupportedException();
+        public Task FitBoundsAsync(string divId, double[] bbox)
+        {
+            FitBoundsCalls.Add((divId, bbox));
+            return Task.CompletedTask;
+        }
         public Task PanToFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
         public Task HighlightFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
         public Task ClearHighlightAsync(string divId, string featureId) => throw new NotSupportedException();
@@ -157,6 +162,33 @@ public class ProviderConnectionMapRendererTests
         mapInterop.WmsLayerCalls.Should().BeEmpty();
         mapInterop.RenderedFeatures.Select(r => r.Feature.Id).Should().BeEquivalentTo([f1.Id, f2.Id]);
         mapInterop.RenderedFeatures.Should().OnlyContain(r => r.DivId == "my-map");
+        // Neither feature carries a geometry, so there's nothing to fit a view to.
+        mapInterop.FitBoundsCalls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void EntryAdded_FeaturesWithGeometry_FitsMapToTheirUnionBoundingBox()
+    {
+        // A newly-connected provider's features render wherever they geographically are, which is
+        // very often nowhere near the map's current (e.g. default startup) view — they'd be drawn
+        // but invisible until the view is moved to them. This locks in that the renderer fits the
+        // map to the imported data instead of leaving that to chance.
+        var pool = new ProviderPool();
+        var mapInterop = new FakeMapInterop();
+        var mapContext = new FakeMapContext("my-map");
+        using var sut = new ProviderConnectionMapRenderer(
+            pool, mapInterop, mapContext, NullLogger<ProviderConnectionMapRenderer>.Instance);
+
+        var f1 = new GeoFeature { Id = Guid.NewGuid().ToString(), Geometry = new GeoPoint(-51.2, -30.0) };
+        var f2 = new GeoFeature { Id = Guid.NewGuid().ToString(), Geometry = new GeoPoint(-50.3, -29.5) };
+        var provider = new FakeAssetProvider([f1, f2]);
+
+        pool.Add("Shapefile", provider);
+
+        mapInterop.FitBoundsCalls.Should().ContainSingle();
+        var call = mapInterop.FitBoundsCalls[0];
+        call.DivId.Should().Be("my-map");
+        call.Bbox.Should().BeEquivalentTo([-51.2, -30.0, -50.3, -29.5]);
     }
 
     [Fact]

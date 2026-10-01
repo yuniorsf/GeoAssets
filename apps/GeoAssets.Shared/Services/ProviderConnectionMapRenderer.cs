@@ -54,14 +54,47 @@ public sealed class ProviderConnectionMapRenderer : IDisposable
             }
             else
             {
-                foreach (var f in entry.Provider.GetAll())
+                var features = entry.Provider.GetAll();
+                foreach (var f in features)
                     await _mapInterop.RenderFeatureAsync(_mapContext.MapDivId, f);
+
+                // Without this, newly-connected features render wherever they geographically are,
+                // which is very often nowhere near the map's current view (e.g. its default
+                // Caribbean-centered startup position) — they're drawn, but invisible until the
+                // user happens to pan/zoom to them. Fit the view to what was just connected instead.
+                var bbox = UnionBoundingBox(features);
+                if (bbox is not null)
+                    await _mapInterop.FitBoundsAsync(_mapContext.MapDivId, bbox);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to render newly-connected provider '{Name}' onto the map", entry.Name);
         }
+    }
+
+    /// <summary>
+    /// Unions every feature's bounding box (RFC 7946 §5 order: minLon, minLat, maxLon, maxLat)
+    /// into one covering the whole set, or <c>null</c> if none have a geometry.
+    /// </summary>
+    private static double[]? UnionBoundingBox(IReadOnlyList<GeoFeature> features)
+    {
+        double minLon = double.PositiveInfinity, minLat = double.PositiveInfinity;
+        double maxLon = double.NegativeInfinity, maxLat = double.NegativeInfinity;
+        var any = false;
+
+        foreach (var f in features)
+        {
+            if (f.Geometry is null) continue;
+            var box = f.Geometry.GetBoundingBox();
+            any    = true;
+            minLon = Math.Min(minLon, box[0]);
+            minLat = Math.Min(minLat, box[1]);
+            maxLon = Math.Max(maxLon, box[2]);
+            maxLat = Math.Max(maxLat, box[3]);
+        }
+
+        return any ? [minLon, minLat, maxLon, maxLat] : null;
     }
 
     public void Dispose() => _pool.EntryAdded -= OnEntryAdded;
