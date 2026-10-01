@@ -206,6 +206,9 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
             _           => query.SortDescending ? rows.OrderByDescending(r => r.Id)        : rows.OrderBy(r => r.Id)
         };
 
+        // OFFSET still walks past skipped rows even with a perfect index, so deep pages degrade
+        // linearly regardless of indexing — keyset pagination would be the real fix if that
+        // becomes a problem (XD01-171).
         var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync();
         return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
     }
