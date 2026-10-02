@@ -3,6 +3,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using NetTopologySuite.Index.Strtree;
 
 namespace GeoAssets.Provider.Shapefile;
 
@@ -20,6 +21,16 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
     private readonly List<Layer> _layers = [];
     private readonly List<LayerRule> _layerRules = [];
+
+    // STRtree is immutable once queried (Query() builds it), so a mutation invalidates it rather
+    // than updating it in place — rebuilt lazily on the next spatial query.
+    private STRtree<GeoFeature>? _spatialIndex;
+
+    // Serializing a feature with tens of thousands of vertices is the dominant per-call cost on a
+    // pan that re-hits it (far more than the spatial predicate) — cached per feature ID so the
+    // same unchanged geometry isn't re-serialized on every overlapping pan, only invalidated here
+    // alongside the spatial index.
+    private readonly Dictionary<string, JsonElement> _jsonCache = [];
 
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;
@@ -50,6 +61,8 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     public void Add(GeoFeature feature)
     {
         _features[feature.Id] = feature;
+        _spatialIndex = null;
+        _jsonCache.Remove(feature.Id);
         FeatureAdded?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -58,6 +71,8 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     {
         feature.Properties.UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
         _features[feature.Id] = feature;
+        _spatialIndex = null;
+        _jsonCache.Remove(feature.Id);
         FeatureUpdated?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -69,7 +84,9 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
             if (_features.ContainsKey(feature.Id))
                 feature.Properties.UpdatedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
             _features[feature.Id] = feature;
+            _jsonCache.Remove(feature.Id);
         }
+        _spatialIndex = null;
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -77,6 +94,8 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     {
         if (_features.Remove(id))
         {
+            _spatialIndex = null;
+            _jsonCache.Remove(id);
             FeatureDeleted?.Invoke(this, id);
             CollectionChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -85,6 +104,8 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     public void Clear()
     {
         _features.Clear();
+        _spatialIndex = null;
+        _jsonCache.Clear();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -92,6 +113,8 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     {
         _features.Clear();
         foreach (var f in features) _features[f.Id] = f;
+        _spatialIndex = null;
+        _jsonCache.Clear();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -138,11 +161,32 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
 
     // ── Spatial queries ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Builds (or reuses) an envelope-based <see cref="STRtree{T}"/> over every feature with a
+    /// geometry, so <see cref="GetWithin"/>/<see cref="GetIntersecting"/> only run the full
+    /// topological predicate against envelope candidates instead of every feature in the store —
+    /// a flat per-call cost regardless of how many of the store's features are actually nearby.
+    /// </summary>
+    private STRtree<GeoFeature> EnsureSpatialIndex()
+    {
+        if (_spatialIndex is not null) return _spatialIndex;
+
+        var tree = new STRtree<GeoFeature>();
+        foreach (var f in _features.Values)
+        {
+            if (f.Geometry is null) continue;
+            tree.Insert(f.Geometry.NtsGeometry.EnvelopeInternal, f);
+        }
+        return _spatialIndex = tree;
+    }
+
     public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds) =>
-        [.. _features.Values.Where(f => f.Geometry is not null && f.Geometry.Within(bounds))];
+        [.. EnsureSpatialIndex().Query(bounds.NtsGeometry.EnvelopeInternal)
+            .Where(f => f.Geometry is not null && f.Geometry.Within(bounds))];
 
     public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) =>
-        [.. _features.Values.Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
+        [.. EnsureSpatialIndex().Query(geometry.NtsGeometry.EnvelopeInternal)
+            .Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
 
     public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)
     {
@@ -156,7 +200,15 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     {
         var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
         var opts = GeoJsonSerializer.GetCompactOptions();
-        return [.. features.Select(f => JsonSerializer.SerializeToElement(f, opts))];
+
+        var result = new List<JsonElement>(features.Count);
+        foreach (var f in features)
+        {
+            if (!_jsonCache.TryGetValue(f.Id, out var element))
+                _jsonCache[f.Id] = element = JsonSerializer.SerializeToElement(f, opts);
+            result.Add(element);
+        }
+        return result;
     }
 
     public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) =>
