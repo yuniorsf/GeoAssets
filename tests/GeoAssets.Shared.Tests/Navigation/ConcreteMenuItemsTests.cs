@@ -31,6 +31,7 @@ public class ConcreteMenuItemsTests
         new AdminUsersMenuItem(),
         new AdminRolesMenuItem(),
         new AdminPermissionsMenuItem(),
+        new AdminOrganizationsMenuItem(),
     ];
 
     [Fact]
@@ -44,14 +45,14 @@ public class ConcreteMenuItemsTests
     }
 
     [Fact]
-    public void Build_IdentityGroup_HasUsersRolesPermissionsChildrenInOrder()
+    public void Build_IdentityGroup_HasUsersRolesPermissionsOrganizationsChildrenInOrder()
     {
         var tree = MenuTreeBuilder.Build(AllItems);
 
         var identity = tree.Single(n => n.Item.Id == "identity");
 
         identity.Children.Select(c => c.Item.Id).Should().Equal(
-            "admin-users", "admin-roles", "admin-permissions");
+            "admin-users", "admin-roles", "admin-permissions", "admin-organizations");
     }
 
     [Fact]

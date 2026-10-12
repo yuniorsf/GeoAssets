@@ -1,0 +1,50 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IOrganizationRepository Repository
+
+@if (_loading)
+{
+    <div class="empty-state"><p>@L["app.loading"]</p></div>
+}
+else
+{
+    <div>
+        <h5>@(IsNew ? L["admin.organizations.newOrganization"] : L["admin.organizations.editTitle"])</h5>
+
+        <EditForm Model="@_editModel" OnValidSubmit="HandleSave">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>@L["admin.organizations.name"]</label>
+                <InputText class="form-control" @bind-Value="_editModel.Name" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.organizations.slug"]</label>
+                <InputText class="form-control" @bind-Value="_editModel.Slug" placeholder="@L["admin.organizations.slugPlaceholder"]" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.organizations.description"]</label>
+                <InputTextArea class="form-control" @bind-Value="_editModel.Description" rows="2" />
+            </div>
+
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:6px">
+                    <InputCheckbox @bind-Value="_editModel.IsActive" />
+                    @L["admin.organizations.isActive"]
+                </label>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="attribute-errors">@_error</p>
+            }
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+            </div>
+        </EditForm>
+    </div>
+}
