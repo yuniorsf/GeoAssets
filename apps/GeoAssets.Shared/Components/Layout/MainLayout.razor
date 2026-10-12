@@ -12,6 +12,9 @@
 @inject ICurrentUserAccessor CurrentUserAccessor
 @inject IUserRepository UserRepository
 @inject IServiceProvider ServiceProvider
+@inject GeoAssets.Core.Interfaces.IProjectClient ProjectClient
+@inject GeoAssets.Core.Interfaces.IProjectSessionService Session
+@inject GeoAssets.Identity.Authorization.Services.IGeoAuthorizationService AuthService
 
 <div class="geoassets-app">
 
