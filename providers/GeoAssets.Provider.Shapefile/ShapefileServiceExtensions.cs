@@ -12,6 +12,7 @@ public static class ShapefileServiceExtensions
     public static IServiceCollection AddGeoAssetsShapefile(this IServiceCollection services)
     {
         services.AddSingleton<IProviderPlugin, ShapefileProviderPlugin>();
+        services.AddSingleton<IShapefileExportService, ShapefileExportService>();
         return services;
     }
 }

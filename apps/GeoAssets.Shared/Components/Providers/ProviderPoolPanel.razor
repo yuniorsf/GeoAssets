@@ -47,9 +47,17 @@
                     }
 
                     <span class="pool-entry-actions">
-                        <!-- Export -->
+                        <!-- Export GeoJSON -->
                         <button class="btn-icon" title="@L["import.export"]"
                                 @onclick="() => ExportEntryAsync(e)">📤</button>
+
+                        @if (ShapefileExporter is not null && e.Provider is not IWmsProvider)
+                        {
+                            <!-- Export Shapefile — WMS entries have no discrete features to -->
+                            <!-- export (raster tiles only, see IWmsProvider's doc comment). -->
+                            <button class="btn-icon" title="@L["import.exportShapefile"]"
+                                    @onclick="() => ExportEntryAsShapefileAsync(e)">📦</button>
+                        }
 
                         <!-- Import -->
                         <label class="btn-icon" style="cursor:pointer" title="@L["import.import"]">

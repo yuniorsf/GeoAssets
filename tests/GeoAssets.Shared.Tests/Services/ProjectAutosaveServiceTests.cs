@@ -30,6 +30,7 @@ public class ProjectAutosaveServiceTests
         public Task<string> ExportToStringAsync(GeoFeatureCollection collection, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<string?> PickImportFileAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveExportFileAsync(string geoJson, string suggestedName = "export.geojson", CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<string?> GetStringAsync(string key, CancellationToken ct = default) =>
             Task.FromResult(_values.GetValueOrDefault(key));

@@ -20,6 +20,7 @@
   "import.section": "Importar / Exportar",
   "import.activeCollection": "Colección: {0}",
   "import.export": "⬇ Exportar GeoJSON",
+  "import.exportShapefile": "⬇ Exportar Shapefile",
   "import.import": "⬆ Importar GeoJSON",
   "import.clearMap": "✕ Limpiar mapa",
   "import.clearConfirm": "¿Eliminar todos los activos?",

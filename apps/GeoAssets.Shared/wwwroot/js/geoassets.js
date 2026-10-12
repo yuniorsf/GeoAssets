@@ -856,6 +856,37 @@ window.GeoAssets = (function () {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    function _base64ToBytes(base64) {
+        const binary = atob(base64);
+        const bytes  = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    }
+
+    async function saveBinaryFilePicker(base64Content, suggestedName, mimeType) {
+        const extension = '.' + (suggestedName || 'export.bin').split('.').pop();
+        const handle = await window.showSaveFilePicker({
+            suggestedName: suggestedName || 'export.bin',
+            types: [{
+                description: 'Export file',
+                accept: { [mimeType || 'application/octet-stream']: [extension] }
+            }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(_base64ToBytes(base64Content));
+        await writable.close();
+    }
+
+    function downloadBinaryFile(base64Content, fileName, mimeType) {
+        const blob = new Blob([_base64ToBytes(base64Content)], { type: mimeType || 'application/octet-stream' });
+        const url  = URL.createObjectURL(blob);
+        const a    = Object.assign(document.createElement('a'), { href: url, download: fileName });
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
     // ─── Public API ──────────────────────────────────────────────────────────
 
     return {
@@ -886,6 +917,8 @@ window.GeoAssets = (function () {
         localStorageLoad,
         openGeoJsonFilePicker,
         saveGeoJsonFilePicker,
-        downloadAsFile
+        downloadAsFile,
+        saveBinaryFilePicker,
+        downloadBinaryFile
     };
 })();

@@ -30,6 +30,11 @@ public partial class ProviderPoolPanel
     // FilterByPermissionAsync, so this panel still renders there with gating simply switched off.
     private IProjectSessionService? Session => Services.GetService<IProjectSessionService>();
 
+    // IShapefileExportService is only registered where AddGeoAssetsShapefile() runs (Web today,
+    // not MAUI) — resolved optionally so the Shapefile export button simply doesn't render
+    // rather than wiring to a service that isn't there, same pattern as Session above.
+    private IShapefileExportService? ShapefileExporter => Services.GetService<IShapefileExportService>();
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override void OnInitialized() => Pool.Changed += OnPoolChanged;
@@ -149,6 +154,36 @@ public partial class ProviderPoolPanel
         {
             _messages[entry.Id] = L.GetString("import.errorExport", ex.Message);
             Logger.LogError(ex, "Export failed — collection: {Name}", entry.Name);
+        }
+    }
+
+    private async Task ExportEntryAsShapefileAsync(ProviderEntry entry)
+    {
+        // WMS entries have no discrete features to export (raster tiles only, see
+        // IWmsProvider's doc comment) — Pipeline.StreamAllAsync would just yield nothing and
+        // ExportToZip would throw "No exportable geometries found." The button is already
+        // hidden for these entries in markup; this guard covers any other call site.
+        if (ShapefileExporter is null || entry.Provider is IWmsProvider) return;
+
+        _messages[entry.Id] = string.Empty;
+        try
+        {
+            var features = new List<GeoFeature>();
+            await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
+                features.AddRange(chunk);
+
+            var zip      = ShapefileExporter.ExportToZip(features);
+            var safeName = entry.Name.ToLowerInvariant().Replace(" ", "-");
+            await Storage.SaveExportBinaryFileAsync(zip, $"{safeName}-export.zip", "application/zip");
+
+            _messages[entry.Id] = L["import.exportSuccess"];
+            Logger.LogInformation("Shapefile export — collection: {Name}, features: {Count}",
+                entry.Name, features.Count);
+        }
+        catch (Exception ex)
+        {
+            _messages[entry.Id] = L.GetString("import.errorExport", ex.Message);
+            Logger.LogError(ex, "Shapefile export failed — collection: {Name}", entry.Name);
         }
     }
 
