@@ -22,9 +22,17 @@ internal static class ShapefileParser
     /// Decodes a Base-64 ZIP archive and returns the features it contains.
     /// The archive must include at least a <c>.shp</c> and a <c>.dbf</c> file.
     /// </summary>
-    internal static IReadOnlyList<GeoFeature> ParseZip(string base64Content)
+    internal static IReadOnlyList<GeoFeature> ParseZip(string base64Content) =>
+        ParseZipBytes(Convert.FromBase64String(base64Content));
+
+    /// <summary>
+    /// Same as <see cref="ParseZip"/>, taking already-decoded bytes directly — used when
+    /// reconnecting a previously-picked archive straight from disk (see
+    /// <see cref="ShapefileProviderPlugin"/>'s path-based reconnect), where there's no base64
+    /// round-trip to begin with.
+    /// </summary>
+    internal static IReadOnlyList<GeoFeature> ParseZipBytes(byte[] zipBytes)
     {
-        var zipBytes = Convert.FromBase64String(base64Content);
         var tempDir = Path.Combine(Path.GetTempPath(), "shp_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         try

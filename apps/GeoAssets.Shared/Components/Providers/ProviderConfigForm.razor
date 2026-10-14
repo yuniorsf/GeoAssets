@@ -1,4 +1,6 @@
 @using GeoAssets.Core.Models
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@inject IServiceProvider Services
 
 @foreach (var field in Plugin.ConfigFields)
 {
@@ -41,9 +43,18 @@
         }
         else if (f.Type == ProviderFieldType.BinaryFile)
         {
-            <InputFile class="form-control pcf-file"
-                       accept="@(f.Accept ?? ".zip")"
-                       OnChange="e => HandleBinaryFileAsync(e, f.Key)" />
+            @if (NativePicker is not null)
+            {
+                <button type="button" class="btn btn-outline-secondary pcf-file" @onclick="() => PickNativeBinaryFileAsync(f.Key)">
+                    @L["pool.browseFile"]
+                </button>
+            }
+            else
+            {
+                <InputFile class="form-control pcf-file"
+                           accept="@(f.Accept ?? ".zip")"
+                           OnChange="e => HandleBinaryFileAsync(e, f.Key)" />
+            }
             @if (!string.IsNullOrEmpty(Config.Get(f.Key + "_name")))
             {
                 <span class="pcf-file-name">@Config.Get(f.Key + "_name")</span>

@@ -155,6 +155,7 @@
   "pool.addSubtitle": "Conecta una nueva fuente de datos a este proyecto.",
   "pool.bootSubtitle": "Conecta una fuente de datos o abre un proyecto para comenzar.",
   "pool.selectProviderHint": "Selecciona un tipo de proveedor de la lista",
+  "pool.browseFile": "Elegir archivo…",
 
   "map.layers": "Capas",
   "map.layers.deleteType": "Eliminar tipo",

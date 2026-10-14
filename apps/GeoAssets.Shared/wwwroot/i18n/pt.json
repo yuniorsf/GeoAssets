@@ -134,6 +134,7 @@
   "pool.addSubtitle": "Conecte uma nova fonte de dados a este projeto.",
   "pool.bootSubtitle": "Conecte uma fonte de dados ou abra um projeto para começar.",
   "pool.selectProviderHint": "Selecione um tipo de provedor da lista",
+  "pool.browseFile": "Escolher arquivo…",
 
   "map.layers": "Camadas",
   "map.layers.deleteType": "Excluir tipo",

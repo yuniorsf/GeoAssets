@@ -155,6 +155,7 @@
   "pool.addSubtitle": "Connect a new data source to this project.",
   "pool.bootSubtitle": "Connect a data source or open a project to get started.",
   "pool.selectProviderHint": "Select a provider type from the list",
+  "pool.browseFile": "Browse…",
 
   "map.layers": "Layers",
   "map.layers.deleteType": "Delete type",
