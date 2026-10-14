@@ -5,7 +5,8 @@ namespace GeoAssets.Provider.Shapefile;
 
 /// <summary>
 /// Provider plugin that loads geographic features from an ESRI Shapefile
-/// packaged as a ZIP archive (must include .shp and .dbf; .prj optional).
+/// packaged as a ZIP archive (must include .shp and .dbf; if .prj is present, its CRS is
+/// reprojected to WGS84, otherwise coordinates are assumed to already be WGS84).
 /// Features are imported once into an in-memory collection — edits made in
 /// the session are not written back to the original file.
 /// </summary>
