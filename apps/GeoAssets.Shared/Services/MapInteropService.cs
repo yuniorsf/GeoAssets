@@ -93,6 +93,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         await RenderFeatureBatchesAsync(divId, featuresAsJsonString);
     }
 
+    public async Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features)
+    {
+        var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
+        await RenderFeatureBatchesAsync(divId, featuresAsJsonString);
+    }
+
     public async Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)
     {
         var colorMap = BuildColorMap();

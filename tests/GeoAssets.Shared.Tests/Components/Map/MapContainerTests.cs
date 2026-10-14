@@ -72,4 +72,40 @@ public class MapContainerTests
     {
         MapContainer.ShouldRenderLastViewport(null).Should().BeFalse();
     }
+
+    // ── ShouldShowOnMap (every open, non-hidden provider renders, not just Active) ───────────
+
+    [Fact]
+    public void ShouldShowOnMap_OpenAndEnabled_ReturnsTrue()
+    {
+        var entry = new ProviderEntry { IsOpen = true, IsEnabled = true };
+
+        MapContainer.ShouldShowOnMap(entry).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldShowOnMap_OpenButDisabled_ReturnsFalse()
+    {
+        // The "hide" toggle (Show/Hide in ProviderPoolPanel) must win even while still open.
+        var entry = new ProviderEntry { IsOpen = true, IsEnabled = false };
+
+        MapContainer.ShouldShowOnMap(entry).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShouldShowOnMap_EnabledButNotOpen_ReturnsFalse()
+    {
+        var entry = new ProviderEntry { IsOpen = false, IsEnabled = true };
+
+        MapContainer.ShouldShowOnMap(entry).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShouldShowOnMap_IsIndependentOfActive_NonActiveOpenEntryStillShows()
+    {
+        // The whole point of this fix: a non-active open overlay must render too, not just Active.
+        var entry = new ProviderEntry { IsOpen = true, IsEnabled = true, IsActive = false };
+
+        MapContainer.ShouldShowOnMap(entry).Should().BeTrue();
+    }
 }

@@ -93,6 +93,7 @@ public class ProviderConnectionMapRendererTests
         public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) => throw new NotSupportedException();
         public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson) => throw new NotSupportedException();
         public Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features) => throw new NotSupportedException();
+        public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features) => throw new NotSupportedException();
         public Task RemoveFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
         public Task ClearAllFeaturesAsync(string divId) => throw new NotSupportedException();
         public Task EnableDrawModeAsync(string divId, GeometryType mode) => throw new NotSupportedException();
