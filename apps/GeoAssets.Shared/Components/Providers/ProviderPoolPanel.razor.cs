@@ -20,6 +20,14 @@ public partial class ProviderPoolPanel
     private const int PipelineChunkSize = 1500;
 
     private readonly Dictionary<Guid, string> _messages = [];
+
+    // Reconnect-failure banner (e.g. a Shapefile provider whose archive content isn't persisted
+    // — see Session.LastReconnectFailures's doc comment) — dismissal is purely local display
+    // state, not written back to the session, cleared on every CurrentChanged so a fresh
+    // Open/Discard's failures (even one sharing a provider name with a previously-dismissed one)
+    // are never hidden.
+    private readonly HashSet<string> _dismissedReconnectFailures = [];
+
     private Guid?  _editingId;
     private string _editingName = string.Empty;
     private bool   _showConnectDialog;
@@ -52,7 +60,14 @@ public partial class ProviderPoolPanel
         InvokeAsync(StateHasChanged);
 
     private void OnSessionCurrentChanged(object? _, EventArgs __) =>
-        InvokeAsync(async () => { await RefreshAddProviderGatingAsync(); StateHasChanged(); });
+        InvokeAsync(async () =>
+        {
+            _dismissedReconnectFailures.Clear();
+            await RefreshAddProviderGatingAsync();
+            StateHasChanged();
+        });
+
+    private void DismissReconnectFailure(string name) => _dismissedReconnectFailures.Add(name);
 
     public override void Dispose()
     {

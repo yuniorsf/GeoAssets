@@ -46,6 +46,7 @@ public class ProjectAutosaveServiceTests
     {
         public Project? Current { get; set; }
         public bool IsDirty { get; set; }
+        public IReadOnlyList<ProviderReconnectFailure> LastReconnectFailures { get; set; } = [];
         public event EventHandler? DirtyChanged;
         public event EventHandler<Project>? Saved;
         public event EventHandler? CurrentChanged;

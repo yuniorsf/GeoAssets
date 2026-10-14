@@ -96,6 +96,20 @@ public class BlazorProjectSessionServiceTests
             Task.FromResult<IAssetProvider>(new FakeAssetProvider());
     }
 
+    /// <summary>Simulates a registered plugin whose <see cref="CreateAsync"/> fails on reconnect —
+    /// e.g. the real Shapefile plugin throwing because its archive content isn't persisted
+    /// (<c>ProviderConfig.ToReconnectValues</c> strips <c>*_content</c> keys by design).</summary>
+    private sealed class FakeThrowingProviderPlugin(string id, string errorMessage) : IProviderPlugin
+    {
+        public string Id => id;
+        public string DisplayName => id;
+        public string Description => "";
+        public IReadOnlyList<ProviderConfigField> ConfigFields => [];
+
+        public Task<IAssetProvider> CreateAsync(ProviderConfig config, IServiceProvider services, CancellationToken ct = default) =>
+            throw new InvalidOperationException(errorMessage);
+    }
+
     private sealed class FakeAssetProvider : IAssetProvider
     {
         public IReadOnlyList<GeoFeature> GetAll() => [];
@@ -276,6 +290,77 @@ public class BlazorProjectSessionServiceTests
 
         pool.All.Should().HaveCount(2);
         pool.All.Select(e => e.Name).Should().BeEquivalentTo(["A", "B"]);
+    }
+
+    // ── OpenAsync: LastReconnectFailures ──────────────────────────────────────
+
+    [Fact]
+    public async Task OpenAsync_UnregisteredPlugin_RecordsReconnectFailure()
+    {
+        var general = GeneralProject();
+        general.Providers = [new ProjectProviderEntry { Name = "Ghost", PluginId = "unregistered-plugin", Position = 0 }];
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _);
+
+        await sut.OpenAsync(general.Id);
+
+        sut.LastReconnectFailures.Should().ContainSingle();
+        var failure = sut.LastReconnectFailures[0];
+        failure.Name.Should().Be("Ghost");
+        failure.PluginId.Should().Be("unregistered-plugin");
+        failure.Reason.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task OpenAsync_PluginThrowsOnCreate_RecordsReconnectFailureWithExceptionMessage()
+    {
+        // Mirrors the real Shapefile provider: archive_content is never persisted
+        // (ProviderConfig.ToReconnectValues strips *_content keys by design), so
+        // ShapefileProviderPlugin.CreateAsync always throws on reconnect.
+        var general = GeneralProject();
+        general.Providers = [new ProjectProviderEntry { Name = "Shapefile", PluginId = "shapefile", Position = 0 }];
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _,
+            new FakeThrowingProviderPlugin("shapefile", "Shapefile ZIP archive is required."));
+
+        await sut.OpenAsync(general.Id);
+
+        var failure = sut.LastReconnectFailures.Should().ContainSingle().Subject;
+        failure.Name.Should().Be("Shapefile");
+        failure.PluginId.Should().Be("shapefile");
+        failure.Reason.Should().Be("Shapefile ZIP archive is required.");
+    }
+
+    [Fact]
+    public async Task OpenAsync_EveryProviderReconnects_LastReconnectFailuresIsEmpty()
+    {
+        var general = GeneralProject();
+        general.Providers = [new ProjectProviderEntry { Name = "A", PluginId = "known-a", Position = 0 }];
+        var client = new FakeProjectClient(general);
+        var sut = BuildSut(client, new ProviderPool(), out _, new FakeProviderPlugin("known-a"));
+
+        await sut.OpenAsync(general.Id);
+
+        sut.LastReconnectFailures.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OpenAsync_CalledAgainAfterAFailure_ReplacesNotAccumulatesPreviousFailures()
+    {
+        // LastReconnectFailures reflects only the most recent reconnect pass — a prior Open's
+        // failure must not linger once a later one succeeds cleanly.
+        var failingGeneral = GeneralProject();
+        failingGeneral.Providers = [new ProjectProviderEntry { Name = "Ghost", PluginId = "unregistered", Position = 0 }];
+        var cleanGeneral = GeneralProject();
+        cleanGeneral.Providers = [new ProjectProviderEntry { Name = "A", PluginId = "known-a", Position = 0 }];
+        var client = new FakeProjectClient(failingGeneral, cleanGeneral);
+        var sut = BuildSut(client, new ProviderPool(), out _, new FakeProviderPlugin("known-a"));
+        await sut.OpenAsync(failingGeneral.Id);
+        sut.LastReconnectFailures.Should().ContainSingle();
+
+        await sut.OpenAsync(cleanGeneral.Id);
+
+        sut.LastReconnectFailures.Should().BeEmpty();
     }
 
     [Fact]

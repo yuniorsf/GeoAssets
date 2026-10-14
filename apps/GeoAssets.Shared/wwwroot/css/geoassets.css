@@ -685,6 +685,18 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     padding-left: 16px;
 }
 
+.pool-reconnect-warning {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin: 8px 8px 0;
+}
+
 /* ─── Capability-aware gating & scope-override display (XD01-148) ──────────── */
 
 .btn-icon-hinted { opacity: 0.5; }
@@ -1262,10 +1274,41 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     color: var(--text-secondary);
 }
 
+.pcd-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 24px 0;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.pcd-tab {
+    background: transparent;
+    border: none;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+
+.pcd-tab:hover { color: var(--text-primary); }
+
+.pcd-tab--active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
 .pcd-body {
     display: flex;
     flex: 1;
     overflow: hidden;
+}
+
+.pcd-body--project {
+    flex-direction: column;
+    padding: 16px 24px;
+    overflow-y: auto;
 }
 
 .pcd-plugin-list {

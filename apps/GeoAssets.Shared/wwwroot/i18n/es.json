@@ -148,6 +148,13 @@
   "pool.delete": "Eliminar colección",
   "pool.active": "★",
   "pool.skipBoot": "Omitir inicio",
+  "pool.reconnectFailed": "«{0}» no se pudo reconectar: {1} Agrégalo de nuevo abajo.",
+  "pool.providerTab": "Proveedor",
+  "pool.projectTab": "Proyecto",
+  "pool.addProvider": "Agregar proveedor",
+  "pool.addSubtitle": "Conecta una nueva fuente de datos a este proyecto.",
+  "pool.bootSubtitle": "Conecta una fuente de datos o abre un proyecto para comenzar.",
+  "pool.selectProviderHint": "Selecciona un tipo de proveedor de la lista",
 
   "map.layers": "Capas",
   "map.layers.deleteType": "Eliminar tipo",

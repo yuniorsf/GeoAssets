@@ -19,6 +19,18 @@
                 @onclick="OpenConnectDialog">＋</button>
     </div>
 
+    @if (Session is not null)
+    {
+        @foreach (var failure in Session.LastReconnectFailures.Where(f => !_dismissedReconnectFailures.Contains(f.Name)))
+        {
+            <p class="pool-entry-msg pool-reconnect-warning">
+                ⚠ @L.GetString("pool.reconnectFailed", failure.Name, failure.Reason)
+                <button class="btn-icon" title="@L["assets.cancel"]"
+                        @onclick="() => DismissReconnectFailure(failure.Name)">✕</button>
+            </p>
+        }
+    }
+
     <div class="pool-list">
         @foreach (var entry in Pool.All)
         {

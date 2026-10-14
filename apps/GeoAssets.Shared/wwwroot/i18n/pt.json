@@ -127,6 +127,13 @@
   "pool.delete": "Excluir coleção",
   "pool.active": "★",
   "pool.skipBoot": "Pular inicialização",
+  "pool.reconnectFailed": "\"{0}\" não pôde reconectar: {1} Adicione-o novamente abaixo.",
+  "pool.providerTab": "Provedor",
+  "pool.projectTab": "Projeto",
+  "pool.addProvider": "Adicionar provedor",
+  "pool.addSubtitle": "Conecte uma nova fonte de dados a este projeto.",
+  "pool.bootSubtitle": "Conecte uma fonte de dados ou abra um projeto para começar.",
+  "pool.selectProviderHint": "Selecione um tipo de provedor da lista",
 
   "map.layers": "Camadas",
   "map.layers.deleteType": "Excluir tipo",

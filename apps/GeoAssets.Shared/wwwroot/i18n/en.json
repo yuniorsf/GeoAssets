@@ -148,6 +148,13 @@
   "pool.delete": "Delete collection",
   "pool.active": "★",
   "pool.skipBoot": "Skip boot",
+  "pool.reconnectFailed": "\"{0}\" could not reconnect: {1} Add it again below.",
+  "pool.providerTab": "Provider",
+  "pool.projectTab": "Project",
+  "pool.addProvider": "Add provider",
+  "pool.addSubtitle": "Connect a new data source to this project.",
+  "pool.bootSubtitle": "Connect a data source or open a project to get started.",
+  "pool.selectProviderHint": "Select a provider type from the list",
 
   "map.layers": "Layers",
   "map.layers.deleteType": "Delete type",

@@ -26,4 +26,12 @@ public interface IBootLoader
     /// pool entry so the caller can render it onto the map.
     /// </summary>
     Task<ProviderEntry> BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default);
+
+    /// <summary>
+    /// Marks boot complete without creating a new provider — used when the boot dialog's
+    /// Project tab opens an existing Project instead (its own saved providers, if any, are
+    /// reconnected by <c>IProjectSessionService.OpenAsync</c> itself), or when the user
+    /// explicitly skips boot with no provider connected and no Project open.
+    /// </summary>
+    void CompleteWithoutProvider();
 }

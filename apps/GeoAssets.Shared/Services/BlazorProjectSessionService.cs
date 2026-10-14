@@ -47,6 +47,7 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
     public Project? Current { get; private set; }
     public Project? RawCurrent => _liveRaw;
     public bool IsDirty { get; private set; }
+    public IReadOnlyList<ProviderReconnectFailure> LastReconnectFailures { get; private set; } = [];
     public event EventHandler? DirtyChanged;
     public event EventHandler<Project>? Saved;
     public event EventHandler? CurrentChanged;
@@ -95,7 +96,15 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
 
     private async Task ReconnectProvidersAsync(List<ProjectProviderEntry>? providers, CancellationToken ct)
     {
-        if (providers is null) return;
+        // Replaced wholesale (not appended) so a failure from a previous Open/Discard never
+        // lingers once this pass has its own verdict for the same entries.
+        var failures = new List<ProviderReconnectFailure>();
+
+        if (providers is null)
+        {
+            LastReconnectFailures = failures;
+            return;
+        }
 
         foreach (var entry in providers.OrderBy(p => p.Position))
         {
@@ -104,9 +113,11 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
                 var plugin = _registry.Find(entry.PluginId);
                 if (plugin is null)
                 {
+                    const string reason = "Unknown provider plugin.";
                     _logger.LogWarning(
                         "Reconnect skipped — unknown plugin '{PluginId}' for provider '{Name}'",
                         entry.PluginId, entry.Name);
+                    failures.Add(new ProviderReconnectFailure(entry.Name, entry.PluginId, reason));
                     continue;
                 }
 
@@ -120,8 +131,11 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
                 _logger.LogWarning(ex,
                     "Reconnect failed for provider '{Name}' (plugin '{PluginId}') — skipped",
                     entry.Name, entry.PluginId);
+                failures.Add(new ProviderReconnectFailure(entry.Name, entry.PluginId, ex.Message));
             }
         }
+
+        LastReconnectFailures = failures;
     }
 
     private Task ApplyViewStateAsync(ProjectViewState? view, CancellationToken ct) =>
