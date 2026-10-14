@@ -176,10 +176,28 @@ CanAsync(actionCode, resource):
         g.GranteeOrganizationId == user.OrganizationId &&
         g.ResourceOrganizationId == resource.OrganizationId &&
         (g.ResourceType is null || g.ResourceType == resource.Kind) &&
+        (g.ScopeId is null || (resource is IScopeableResource s && s.ScopeId == g.ScopeId)) &&
         g.AllowedActions.Contains(actionCode) &&
         (g.RequiredRole is null || context.HasRole(g.RequiredRole)) &&
         (g.ExpiresAt is null || g.ExpiresAt > now))
 ```
+
+**`ScopeId` narrowing** (added XD01-174, not in the original design above): a grant can
+additionally carry a `ScopeId`, restricting it to one named subset of `ResourceType`
+instead of all of it — e.g. one município's worth of a Distribuidora's `GeoFeature`s,
+not everything the Distribuidora owns. Only resources implementing the new
+`IScopeableResource` marker interface (`GeoFeature`, `ServiceOrder` — both via a
+well-known key in their existing attribute dictionary, no schema change) can satisfy a
+scoped grant; a resource type that doesn't implement it can never match one. Null
+`ScopeId` (every grant predating this field) is ungated, exactly as before. **Known gap,
+deliberately out of scope for XD01-174**: `ServiceOrder` cross-org access in practice is
+enforced by a *separate* path — `CrossOrgGrantRule` in `ServiceOrderRules.cs`, consulting
+pre-resolved `WorkflowOrgGrant` records (see §4's second integration point below) — which
+does not carry or check `ScopeId` at all. A scoped grant is honored by
+`OrgResourceAuthorizationHandler` for any `IOrgOwnedResource` passed through it (including
+a `ServiceOrder`, since it implements `IScopeableResource` too), but **not** by
+`ServiceOrderRules`'s own cross-org check — closing that second path, if ever needed, is
+follow-up work, not part of this change.
 
 **Unowned-resource exception** (added during XD01-21 implementation, not in the
 original design above): every `GeoFeature`/`AssetType` created before XD01-20
@@ -198,6 +216,7 @@ public sealed class OrganizationGrant
     public Guid    GranteeOrganizationId  { get; set; }  // O1 — whose members receive access
     public Guid    ResourceOrganizationId { get; set; }  // O2 — whose resources are shared
     public string? ResourceType           { get; set; }  // null = all types, or "ServiceOrder" / "Feature"
+    public string? ScopeId                { get; set; }  // null = all of ResourceType; else IScopeableResource match (XD01-174)
     public List<string> AllowedActions    { get; set; }  // permission codes
     public string? RequiredRole           { get; set; }  // optional extra gate
     public DateTime? ExpiresAt            { get; set; }

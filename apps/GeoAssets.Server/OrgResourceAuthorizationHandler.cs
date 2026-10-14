@@ -21,6 +21,13 @@ namespace GeoAssets.Server;
 /// this keeps every feature/asset-type created before XD01-20 (all defaulted to
 /// <c>Guid.Empty</c>) accessible exactly as before, rather than mass-locking out existing
 /// data the moment this handler ships.
+///
+/// A grant may additionally carry a <c>ScopeId</c>, narrowing it to one named subset of
+/// <c>ResourceType</c> instead of all of it (e.g. one município's worth of a Distribuidora's
+/// resources). When set, it only matches a resource that implements
+/// <see cref="IScopeableResource"/> with an equal <c>ScopeId</c> — a resource type that doesn't
+/// implement it can never satisfy a scoped grant. Null <c>ScopeId</c> (every grant predating
+/// this field) is ungated, exactly as before (XD01-174).
 /// </summary>
 public sealed class OrgResourceAuthorizationHandler(
     IGeoAuthorizationService authorizationService,
@@ -61,6 +68,7 @@ public sealed class OrgResourceAuthorizationHandler(
 
         var hasGrant = grants.Any(g =>
             (g.ResourceType is null || g.ResourceType == resourceType) &&
+            (g.ScopeId is null || (resource is IScopeableResource scoped && scoped.ScopeId == g.ScopeId)) &&
             g.AllowedActions.Contains(requirement.PermissionCode) &&
             (g.RequiredRole is null || authContext.HasRole(g.RequiredRole)));
 
