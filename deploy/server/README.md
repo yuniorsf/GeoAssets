@@ -28,9 +28,12 @@ docker compose up --build
 
 ## First-run database setup
 
-`GeoAssetsDbContext` (assets/PostGIS data) migrates itself automatically the
-first time the app resolves `IAssetProvider`
-(`PostgresProviderFactory.Create`, `providers/GeoAssets.Provider.PostgreSQL/PostgresProviderFactory.cs:38`).
+`GeoAssetsDbContext` (assets/PostGIS data) migrates itself automatically at
+startup, before the app starts serving requests — `GeoAssets.Server`'s
+`IAssetProvider` singleton is pre-warmed eagerly via
+`PostgresProviderFactory.CreateAsync` (`AddWarmedPostgresAssetProviderAsync`,
+`providers/GeoAssets.Provider.PostgreSQL/PostgresServiceExtensions.cs`), not
+lazily on first resolve (XD01-173).
 
 `ServiceOrderDbContext` (workflow tables) and `ProjectDbContext` (XD01-139
 Project persistence) do **not** auto-migrate — apply each manually once,
