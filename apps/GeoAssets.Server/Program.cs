@@ -2,6 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.IpBilling.Persistence;
 using GeoAssets.Projects;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server;
@@ -77,6 +78,16 @@ builder.Services.AddProjectPersistence(o => o.UseNpgsql(
 // IProjectService (XD01-141) — copy-on-write fork-on-edit authorization for Project
 // mutations, layered on top of IProjectRepository above.
 builder.Services.AddScoped<IProjectService, ProjectService>();
+
+// ── IP-billing (GEOS_FAT_IP) reference-data persistence (XD01-176, Phase 0) — its own
+// IpBillingDbContext (control-plane reference data, not folded into GeoAssetsDbContext),
+// same Postgres database/connection as everything else.
+builder.Services.AddIpBillingPersistence(o => o.UseNpgsql(
+    connectionString,
+    // IpBillingDbContext lives in GeoAssets.IpBilling.EFCore (kept provider-agnostic, same
+    // reasoning as ServiceOrderDbContext/ProjectDbContext above), so migrations targeting
+    // Postgres are generated into this (Server) project instead.
+    npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
 
 // ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
 // apps/GeoAssets.Web/Program.cs, so server-side enforcement and the client UI agree on
