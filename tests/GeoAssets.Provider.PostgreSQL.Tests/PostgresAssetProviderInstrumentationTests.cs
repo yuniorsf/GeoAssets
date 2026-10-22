@@ -33,7 +33,7 @@ public sealed class PostgresAssetProviderInstrumentationTests(PostgresContainerF
     private async Task ClearAsync()
     {
         await using var db = new GeoAssetsDbContext(fixture.CreateOptions());
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE geo_entity");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE geo_entity CASCADE");
     }
 
     private async Task SeedAsync(string sql)

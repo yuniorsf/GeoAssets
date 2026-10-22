@@ -45,7 +45,7 @@ public sealed class PostgresProviderDIWarmupTests(PostgresContainerFixture fixtu
     private async Task ClearAsync()
     {
         await using var db = new GeoAssetsDbContext(fixture.CreateOptions());
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE geo_entity");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE geo_entity CASCADE");
     }
 
     [Fact]
