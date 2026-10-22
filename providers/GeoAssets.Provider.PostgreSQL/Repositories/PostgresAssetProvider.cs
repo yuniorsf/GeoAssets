@@ -178,16 +178,20 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
         {
             var pattern = $"%{query.SearchText}%";
 
-            // custom_attributes is jsonb — jsonb_each_text expands it into key/value rows so
-            // ILIKE can match real attribute keys/values, unlike ILIKE-ing the raw JSON text
-            // (which would match JSON syntax, not attribute content). Matches Search()'s
-            // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider implementers.
-            var matchingAttributeIds = await db.Database
-                .SqlQuery<string>($"""
-                    SELECT DISTINCT ge."Id"
-                    FROM geo_entity ge, jsonb_each_text(ge.custom_attributes) AS attr(key, value)
-                    WHERE attr.key ILIKE {pattern} OR attr.value ILIKE {pattern}
-                    """)
+            // geo_entity_attribute is a normalized, trigram-indexed copy of custom_attributes
+            // (XD01-171). A correlated EXISTS here (db.GeoEntityAttributes.Any(a => a.EntityId
+            // == r.Id && ...)) was tried first and rejected: OR-ing a correlated subplan into
+            // this predicate makes Postgres abandon bitmap-OR entirely and sequentially scan
+            // geo_entity even for plain Name/Description searches with no attributes involved.
+            // Precomputing the matching ids (same shape the old jsonb_each_text version used —
+            // just backed by a real index now instead of an unconditional full-table scan) keeps
+            // the Name/Description trigram indexes usable below. Matches Search()'s
+            // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider
+            // implementers (XD01-123).
+            var matchingAttributeIds = await db.GeoEntityAttributes
+                .Where(a => EF.Functions.ILike(a.Key, pattern) || EF.Functions.ILike(a.Value, pattern))
+                .Select(a => a.EntityId)
+                .Distinct()
                 .ToListAsync();
 
             rows = rows.Where(r =>
@@ -219,6 +223,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     {
         var row = MapToRow(feature);
         _db.GeoEntities.Add(row);
+        _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
         SaveChanges();
         InvalidateCache();
         FeatureAdded?.Invoke(this, feature);
@@ -229,6 +234,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     {
         feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = MapToRow(feature);
+        _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
+        _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
         _db.GeoEntities.Update(row);
         SaveChanges();
         InvalidateCache();
@@ -239,6 +246,8 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     public void AddRange(IEnumerable<GeoFeature> features)
     {
         var list = features.ToList();
+        var ids = list.Select(f => f.Id).ToList();
+        _db.GeoEntityAttributes.Where(a => ids.Contains(a.EntityId)).ExecuteDelete();
         foreach (var f in list)
         {
             var row = MapToRow(f);
@@ -247,6 +256,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
                 _db.GeoEntities.Add(row);
             else
                 _db.GeoEntities.Update(row);
+            _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
         }
         SaveChanges();
         InvalidateCache();
@@ -257,6 +267,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     {
         var row = _db.GeoEntities.Find(id);
         if (row is null) return;
+        // geo_entity_attribute rows for this id are cleaned up via DB-level FK cascade.
         _db.GeoEntities.Remove(row);
         SaveChanges();
         InvalidateCache();
@@ -276,7 +287,10 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     {
         _db.GeoEntities.RemoveRange(_db.GeoEntities);
         foreach (var f in features)
+        {
             _db.GeoEntities.Add(MapToRow(f));
+            _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
+        }
         SaveChanges();
         InvalidateCache();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
@@ -479,6 +493,10 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
             CustomAttributesJson = JsonSerializer.Serialize(f.Properties.CustomAttributes, _json),
             TopologyJson         = JsonSerializer.Serialize(f.Topology, _json)
         };
+
+    private static IEnumerable<GeoEntityAttributeRow> MapToAttributeRows(GeoFeature feature) =>
+        feature.Properties.CustomAttributes.Select(kv =>
+            new GeoEntityAttributeRow { EntityId = feature.Id, Key = kv.Key, Value = kv.Value });
 
     private void SaveChanges()
     {
