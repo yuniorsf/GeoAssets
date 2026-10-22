@@ -29,7 +29,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(27);
+        (await db.Permissions.CountAsync()).Should().Be(34);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
@@ -98,7 +98,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(27);
+        (await db.Permissions.CountAsync()).Should().Be(34);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
@@ -300,7 +300,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var permissions = await db.Permissions.ToListAsync();
-        permissions.Should().HaveCount(27);
+        permissions.Should().HaveCount(34);
         foreach (var permission in permissions)
         {
             permission.Description.Should().StartWith("permissions.",
@@ -308,5 +308,28 @@ public class GeoIdentitySeederTests
             permission.Description.Should().NotContainAny([" ", "á", "é", "í", "ó", "ú", "ñ"],
                 $"'{permission.Code}' description should be a key, not literal (possibly Spanish) text");
         }
+    }
+
+    // ── XD01-176: ip-billing:* permissions ───────────────────────────────────
+
+    private static readonly string[] IpBillingPermissionCodes =
+    [
+        "ip-billing:read", "ip-billing:upload", "ip-billing:calculate", "ip-billing:validate",
+        "ip-billing:ledger-manual", "ip-billing:ledger-recarga", "ip-billing:reference-manage"
+    ];
+
+    [Fact]
+    public async Task SeedAsync_IpBillingPermissions_AllSevenCodesExist()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = NewContext(connection);
+        db.Database.EnsureCreated();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var seededCodes = await db.Permissions.Select(p => p.Code).ToListAsync();
+
+        seededCodes.Should().Contain(IpBillingPermissionCodes);
     }
 }
