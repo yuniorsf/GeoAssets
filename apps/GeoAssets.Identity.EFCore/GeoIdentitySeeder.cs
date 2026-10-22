@@ -101,6 +101,17 @@ public static class GeoIdentitySeeder
             P("projects:manage-view",       "projects", "manage-view",       "permissions.projects.manageView"),
             P("projects:rename",            "projects", "rename",            "permissions.projects.rename"),
             P("projects:delete",            "projects", "delete",            "permissions.projects.delete"),
+
+            // XD01-176: IP-billing (GEOS_FAT_IP) reference data + the Levantamento/Fiscalização/
+            // Ofício workflows this epic builds on top of it. Role wiring is left to the phase
+            // that first needs these (Phase 0 adds no UI/REST surface yet).
+            P("ip-billing:read",             "ip-billing", "read",             "permissions.ipBilling.read"),
+            P("ip-billing:upload",           "ip-billing", "upload",           "permissions.ipBilling.upload"),
+            P("ip-billing:calculate",        "ip-billing", "calculate",        "permissions.ipBilling.calculate"),
+            P("ip-billing:validate",         "ip-billing", "validate",         "permissions.ipBilling.validate"),
+            P("ip-billing:ledger-manual",    "ip-billing", "ledger-manual",    "permissions.ipBilling.ledgerManual"),
+            P("ip-billing:ledger-recarga",   "ip-billing", "ledger-recarga",   "permissions.ipBilling.ledgerRecarga"),
+            P("ip-billing:reference-manage", "ip-billing", "reference-manage", "permissions.ipBilling.referenceManage"),
         };
 
         var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct);

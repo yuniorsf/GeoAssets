@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
@@ -18,13 +17,14 @@ namespace GeoAssets.Core.Tests.Services;
 public class FeatureRenderPipelineTests
 {
     /// <summary>Bare-bones <see cref="IAssetProvider"/> whose <see cref="GetAll"/> returns a
-    /// fixed count of features, optionally after a synchronous delay simulating blocking I/O.
-    /// Every other member throws — the pipeline never calls them.</summary>
-    private class FakeProvider(int featureCount, TimeSpan delay = default) : IAssetProvider
+    /// fixed count of features, optionally blocking first on a caller-supplied <paramref name="gate"/>
+    /// to simulate blocking I/O under deterministic, test-controlled timing rather than a real-time
+    /// sleep. Every other member throws — the pipeline never calls them.</summary>
+    private class FakeProvider(int featureCount, ManualResetEventSlim? gate = null) : IAssetProvider
     {
         public IReadOnlyList<GeoFeature> GetAll()
         {
-            if (delay > TimeSpan.Zero) Thread.Sleep(delay);
+            gate?.Wait();
             return [.. Enumerable.Range(0, featureCount).Select(i => new GeoFeature { Id = $"f{i}" })];
         }
 
@@ -58,7 +58,8 @@ public class FeatureRenderPipelineTests
         public event EventHandler? CollectionChanged { add { } remove { } }
     }
 
-    private sealed class FakeSyncProvider(int featureCount) : FakeProvider(featureCount), ISyncProvider;
+    private sealed class FakeSyncProvider(int featureCount, ManualResetEventSlim? gate = null)
+        : FakeProvider(featureCount, gate), ISyncProvider;
 
     // ── Chunk boundaries ─────────────────────────────────────────────────────
 
@@ -119,14 +120,32 @@ public class FeatureRenderPipelineTests
 
     // ── Responsiveness — same dispatch path regardless of ISyncProvider classification ──
 
+    /// <summary>
+    /// Proves <see cref="FeatureRenderPipeline.StreamAllAsync"/> doesn't block the thread pool —
+    /// a concurrently-awaited operation can make progress while the provider's own
+    /// <see cref="IAssetProvider.GetAll"/> is still blocked — via synchronization rather than a
+    /// real-time wall-clock budget. The previous version of this test timed a cheap
+    /// <c>Task.Delay(5)</c> against a hard-coded 100ms threshold; under full-solution parallel
+    /// test load that threshold itself is unreliable (observed 110-288ms) independent of whether
+    /// the pipeline actually blocks anything, so it produced false failures (XD01-192).
+    /// <para/>
+    /// Here, <paramref name="useSyncProvider"/>'s provider blocks on <c>gate</c> for an
+    /// unbounded amount of real time — we only release it once the concurrent operation has
+    /// already completed. If the dispatch ever regressed to blocking the awaiting context
+    /// instead of offloading to the thread pool, the concurrent await would hang until the gate
+    /// opened (it never does, until after the assertion), so the generous <c>WaitAsync</c> bound
+    /// below exists purely as a fail-fast safety net against a genuine hang — it is not the
+    /// pass/fail signal itself, unlike the real-time budget it replaces.
+    /// </summary>
     [Theory]
     [InlineData(true)]  // ISyncProvider-marked
-    [InlineData(false)] // not marked, artificially slow GetAll()
+    [InlineData(false)] // not marked
     public async Task StreamAllAsync_KeepsConcurrentOperationResponsive(bool useSyncProvider)
     {
+        using var gate = new ManualResetEventSlim(initialState: false);
         IAssetProvider provider = useSyncProvider
-            ? new FakeSyncProvider(500)
-            : new FakeProvider(500, delay: TimeSpan.FromMilliseconds(150));
+            ? new FakeSyncProvider(500, gate)
+            : new FakeProvider(500, gate);
         var pipeline = new FeatureRenderPipeline();
 
         var streamTask = Task.Run(async () =>
@@ -134,12 +153,17 @@ public class FeatureRenderPipelineTests
             await foreach (var _ in pipeline.StreamAllAsync(provider, chunkSize: 50)) { }
         });
 
-        var sw = Stopwatch.StartNew();
-        await Task.Delay(5); // cheap, concurrently-awaited operation
-        sw.Stop();
+        // Cheap, concurrently-awaited operation: must complete even though provider.GetAll()
+        // (running on its own thread via the pipeline's internal Task.Run) is still blocked on
+        // `gate`, which we deliberately haven't released yet.
+        await Task.Delay(5).WaitAsync(TimeSpan.FromSeconds(10));
 
+        // The gate guarantees streamTask cannot have finished yet (GetAll() can't return until
+        // Set() below) — proving the Task.Delay(5) above genuinely ran concurrently with, not
+        // serialized after, the still-blocked provider call.
+        streamTask.IsCompleted.Should().BeFalse();
+
+        gate.Set(); // only now let GetAll() (and so streamTask) proceed
         await streamTask;
-
-        sw.ElapsedMilliseconds.Should().BeLessThan(100); // not blocked by the other task's slow/blocking GetAll()
     }
 }

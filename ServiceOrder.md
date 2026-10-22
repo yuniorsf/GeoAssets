@@ -151,6 +151,8 @@ classDiagram
         Complete
         Cancel
         Annotate
+        Calculate
+        Validate
     }
     class ActorKind {
         <<enumeration>>
