@@ -1,8 +1,10 @@
 import json
+import re
 import sys
 
 before = json.load(open("before.json"))
 after = json.load(open("after.json"))
+fix = json.load(open("after-fix.json"))
 
 
 def key(r):
@@ -11,7 +13,8 @@ def key(r):
 
 bmap = {key(r): r for r in before}
 amap = {key(r): r for r in after}
-assert bmap.keys() == amap.keys()
+fmap = {key(r): r for r in fix}
+assert bmap.keys() == amap.keys() == fmap.keys()
 
 SEARCH_CASE_ORDER = ["rare name", "rare attribute value", "attribute key match", "no match", "common term"]
 SORT_ORDER = ["name", "createdAt", "updatedAt"]
@@ -61,6 +64,16 @@ lines.append(
     "for why this isn't an xUnit test)."
 )
 lines.append("")
+lines.append(
+    "**Phase 4 addition:** a third state, \"after fix\", measures the real fix landed in commit `fbe637c` on "
+    "this branch — a normalized, trigram-indexed `geo_entity_attribute(EntityId, Key, Value)` table that "
+    "`GetPageAsync`'s attribute match now queries instead of the unconditional `jsonb_each_text` scan over "
+    "`geo_entity`. The same bench container and the same 200,000 Phase-1-seeded `geo_entity` rows were reused "
+    "— only the new migration (`AddGeoEntityAttributeTable`) was applied on top, whose one-time backfill "
+    "populated `geo_entity_attribute` (1,200,000 rows = 6 attributes × 200,000) from the existing data, so "
+    "all three states share byte-identical underlying data."
+)
+lines.append("")
 lines.append("## Dataset")
 lines.append("")
 lines.append(
@@ -93,31 +106,44 @@ lines.append(
 lines.append("")
 lines.append("## Timing — median of 5 runs (ms)")
 lines.append("")
-lines.append("| Search case | Sort | Page | Type filter | Before (ms) | After (ms) |")
-lines.append("|---|---|---|---|---:|---:|")
+lines.append("| Search case | Sort | Page | Type filter | Before (ms) | After (ms) | After fix (ms) |")
+lines.append("|---|---|---|---|---:|---:|---:|")
 for k in keys:
     case, sort_by, page, filt = k
     b = bmap[k]["MedianMs"]
     a = amap[k]["MedianMs"]
-    lines.append(f"| {case} | {sort_by} | {page} | {filt} | {b:.1f} | {a:.1f} |")
+    x = fmap[k]["MedianMs"]
+    lines.append(f"| {case} | {sort_by} | {page} | {filt} | {b:.1f} | {a:.1f} | {x:.1f} |")
 lines.append("")
 lines.append(
     "Raw captured SQL text, bound parameters (array parameters truncated to 10 entries + a total count in "
     "the human-readable dump — the SQL text itself is never truncated) and full `EXPLAIN (ANALYZE, BUFFERS)` "
-    "plan text for every one of these 360 statements (60 combinations × 3 statements × 2 states) are saved "
-    "verbatim in `tools/GeoAssets.Bench.GetPageAsync/before.json` / `after.json`. The tables below summarize "
-    "each statement's SQL shape, its Seq-Scan-on-`geo_entity` verdict, and its share of that combination's "
-    "total SQL time."
+    "plan text for every one of these statements (60 combinations × 3 statements × 3 states) are saved "
+    "verbatim in `tools/GeoAssets.Bench.GetPageAsync/before.json` / `after.json` / `after-fix.json`. The "
+    "tables below summarize each statement's SQL shape, its Seq-Scan verdict against the table it actually "
+    "queries, and its share of that combination's total SQL time."
 )
 lines.append("")
 
 
 def classify(sql):
     if "jsonb_each_text" in sql:
-        return "attr-match (raw)"
-    if sql.strip().startswith("SELECT count"):
+        return "attr-match (raw jsonb_each_text on geo_entity)"
+    if re.search(r"FROM\s+geo_entity_attribute", sql):
+        return "attr-match (indexed geo_entity_attribute)"
+    if sql.strip().lower().startswith("select count"):
         return "COUNT"
     return "paged SELECT"
+
+
+def target_table(kind):
+    if kind == "attr-match (indexed geo_entity_attribute)":
+        return "geo_entity_attribute"
+    return "geo_entity"
+
+
+def seq_scan_on(plan, table):
+    return bool(re.search(rf"Seq Scan on {re.escape(table)}\b", plan))
 
 
 lines.append("## Per-combination detail")
@@ -126,18 +152,23 @@ for k in keys:
     case, sort_by, page, filt = k
     b = bmap[k]
     a = amap[k]
-    lines.append(f"<details>\n<summary>{case} | sort={sort_by} | {page} | type filter={filt} "
-                 f"— before {b['MedianMs']:.1f} ms, after {a['MedianMs']:.1f} ms</summary>\n")
-    for label, r in [("Before", b), ("After", a)]:
+    x = fmap[k]
+    lines.append(
+        f"<details>\n<summary>{case} | sort={sort_by} | {page} | type filter={filt} "
+        f"— before {b['MedianMs']:.1f} ms, after {a['MedianMs']:.1f} ms, after fix {x['MedianMs']:.1f} ms"
+        f"</summary>\n"
+    )
+    for label, r in [("Before", b), ("After", a), ("After fix", x)]:
         lines.append(f"**{label}**\n")
-        lines.append("| Statement | Seq Scan on geo_entity | Exec time (ms) | % of total |")
+        lines.append("| Statement | Seq Scan (own table) | Exec time (ms) | % of total |")
         lines.append("|---|---|---:|---:|")
         for s in r["Statements"]:
             kind = classify(s["Sql"])
-            seq = "yes" if s["SeqScanOnGeoEntity"] else "no"
+            table = target_table(kind)
+            seq = "yes" if seq_scan_on(s["Plan"], table) else "no"
             exec_ms = s["ExecutionTimeMs"]
             exec_str = f"{exec_ms:.1f}" if exec_ms is not None else "n/a"
-            lines.append(f"| {kind} | {seq} | {exec_str} | {s['PercentOfTotal']:.1f}% |")
+            lines.append(f"| {kind} | {seq} ({table}) | {exec_str} | {s['PercentOfTotal']:.1f}% |")
         lines.append("")
         for s in r["Statements"]:
             kind = classify(s["Sql"])
@@ -151,48 +182,113 @@ for k in keys:
 
 lines.append("## Where the time goes")
 lines.append("")
+
+SHAPES = [
+    "attr-match (raw jsonb_each_text on geo_entity)",
+    "attr-match (indexed geo_entity_attribute)",
+    "COUNT",
+    "paged SELECT",
+]
+
+
+def aggregate(data_map):
+    buckets = {s: [] for s in SHAPES}
+    for r in data_map.values():
+        for s in r["Statements"]:
+            kind = classify(s["Sql"])
+            table = target_table(kind)
+            buckets[kind].append((s["ExecutionTimeMs"], seq_scan_on(s["Plan"], table)))
+    out = {}
+    for shape, vals in buckets.items():
+        if not vals:
+            continue
+        times = [v[0] for v in vals if v[0] is not None]
+        scans = sum(1 for v in vals if v[1])
+        out[shape] = (sum(times) / len(times), max(times), scans, len(vals))
+    return out
+
+
+bagg = aggregate(bmap)
+aagg = aggregate(amap)
+xagg = aggregate(fmap)
+
+lines.append("Aggregated across all 60 combinations, grouped by statement shape:\n")
 lines.append(
-    "Aggregated across all 60 combinations, grouped by statement shape (n=60 each, before vs. after):\n\n"
-    "| Statement | Before avg (ms) | Before max (ms) | Before Seq Scans | After avg (ms) | After max (ms) | After Seq Scans |\n"
-    "|---|---:|---:|---:|---:|---:|---:|\n"
-    "| attr-match (raw, jsonb_each_text) | 883.7 | 1181.0 | 1/60 | 888.0 | 1119.9 | 0/60 |\n"
-    "| COUNT | 167.5 | 420.4 | 30/60 | 90.9 | 508.3 | 12/60 |\n"
-    "| paged SELECT | 201.8 | 507.4 | 30/60 | 9.5 | 60.9 | 0/60 |\n"
+    "| Statement | Before avg (ms) | Before max (ms) | Before Seq Scans | After avg (ms) | After max (ms) | "
+    "After Seq Scans | After-fix avg (ms) | After-fix max (ms) | After-fix Seq Scans |"
 )
+lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+
+
+def cell_avg(v):
+    return f"{v[0]:.1f}" if v else "n/a"
+
+
+def cell_max(v):
+    return f"{v[1]:.1f}" if v else "n/a"
+
+
+def cell_scans(v):
+    return f"{v[2]}/{v[3]}" if v else "n/a"
+
+
+for shape in SHAPES:
+    b = bagg.get(shape)
+    a = aagg.get(shape)
+    x = xagg.get(shape)
+    if b is None and a is None and x is None:
+        continue
+    lines.append(
+        f"| {shape} | {cell_avg(b)} | {cell_max(b)} | {cell_scans(b)} | "
+        f"{cell_avg(a)} | {cell_max(a)} | {cell_scans(a)} | "
+        f"{cell_avg(x)} | {cell_max(x)} | {cell_scans(x)} |"
+    )
+lines.append("")
+
 lines.append(
-    "**The always-run `jsonb_each_text` attribute-expansion subquery is the dominant, unconditional cost — "
-    "and the 171 indexes don't touch it.** It runs on *every* `SearchText` query regardless of whether the "
-    "search is even about custom attributes (it runs for \"rare name\" too), averages ~884-888 ms "
-    "before *and* after, and is the single biggest line item in every combination: typically 60-90% of "
-    "total SQL time for the narrow-match cases, and still the single largest statement even in the two "
-    "heavy cases below. This matches the existing test suite's own "
-    "`GetPageAsync_SearchTextOnCustomAttributes_StillSequentiallyScansDespiteGinIndex`, which already "
-    "documents that the GIN index on `custom_attributes` serves containment operators, not this "
-    "per-row-ILIKE-after-jsonb_each_text query shape — so it was never going to help here, and it didn't."
+    "**The always-run `jsonb_each_text` attribute-expansion subquery was the dominant, unconditional cost "
+    "before the fix — and the 171 indexes alone never touched it.** It ran on *every* `SearchText` query "
+    "regardless of whether the search was even about custom attributes (it ran for \"rare name\" too), "
+    "averaged ~884-888 ms before *and* after the 171 indexes, and was the single biggest line item in every "
+    "combination."
 )
 lines.append("")
 lines.append(
-    "**The 171 indexes did help a lot — but only for the COUNT and paged SELECT statements, and only when "
-    "the attribute-match subquery's result set is small.** For \"rare name\", \"rare attribute value\" and "
-    "\"no match\" (0-1 matching ids), the paged SELECT's seq-scan rate went from 30/60 to 0/60 and its max "
-    "time dropped from 507 ms to 61 ms — the trigram/B-tree indexes are doing exactly what they were built "
-    "for. But for \"attribute key match\" (`altura_m`, matching all 200,000 rows) and \"common term\" "
-    "(`concreto`, ~66,666 rows) **without** an AssetTypeId filter, the COUNT statement still sequentially "
-    "scans `geo_entity` after the indexes (12/60 cases, all exactly these two search cases × no filter, "
-    "252-508 ms each) — once the `\"Id\" = ANY(@array)` parameter is tens of thousands of entries long, "
-    "the planner abandons the Name/Description trigram indexes for that OR-branch and falls back to a "
-    "sequential scan to evaluate array membership row-by-row. Adding the AssetTypeId filter (which narrows "
-    "the candidate set via its own B-tree index *before* the array check) makes the seq scan disappear even "
-    "for these two cases — the planner has a cheaper way in."
+    "**After the fix (`fbe637c`), that statement is replaced by an index-backed lookup against "
+    "`geo_entity_attribute`** (trigram GIN on `Key`/`Value`), and it is no longer the dominant cost: for the "
+    "narrow-match cases (rare name, rare attribute value, no match) it now runs in low single-digit "
+    "milliseconds, and total `GetPageAsync` latency for those cases dropped from ~730-1100 ms to **under "
+    "10 ms** — the ~884 ms fixed floor is gone. For `SearchText` values that still match a huge fraction of "
+    "the table (\"attribute key match\" = `altura_m`, matching all 200,000 rows; \"common term\" = "
+    "`concreto`, ~66,666 rows), the attribute-match statement itself now takes 115-320 ms — returning and "
+    "de-duplicating a 66k-200k row id set is real work even with an index seek — down from the ~884-1120 ms "
+    "unconditional scan, but not free."
 )
 lines.append("")
 lines.append(
-    "**Net effect on end-to-end latency:** even after the 171 indexes, `GetPageAsync` ranges from "
-    "~710-760 ms (no match / rare cases) up to ~1.2-2.0 s (attribute key match / common term, no type "
-    "filter) on this 200k-row table — dominated by the ~880 ms fixed floor from the attribute-match "
-    "subquery that runs unconditionally on every text search, which none of the existing indexes address. "
-    "The suspicion that prompted this ticket is confirmed: the EXPLAIN tests went green, but the real "
-    "search path is still slow, and the reason is a query shape the mirror-SQL tests never captured."
+    "**The COUNT seq-scan-on-huge-array issue Phase 1 flagged is only partially resolved.** It still appears "
+    "in exactly the same 12/60 cases (attribute key match and common term, both without an AssetTypeId "
+    "filter): once the `\"Id\" = ANY(@matchingAttributeIds)` parameter built from the attribute-match "
+    "statement's result is tens of thousands of entries long, the planner still abandons the Name/Description "
+    "trigram indexes for that OR-branch and sequentially scans `geo_entity` to evaluate array membership — "
+    "370 ms and 195 ms respectively for the two representative no-filter cases measured here, versus near-"
+    "instant paged SELECTs (1-11 ms) once the array is small or an AssetTypeId filter narrows the candidate "
+    "set first. This is a known, unaddressed residual cost of the chosen fix (normalizing the attribute match "
+    "didn't change how its *result* feeds into COUNT/paged SELECT), not a regression — and not something "
+    "this ticket's fix was aimed at."
+)
+lines.append("")
+lines.append(
+    "**Net effect on end-to-end latency:** the narrow-match cases (rare name, rare attribute value, no "
+    "match) went from ~730-1100 ms to **1.8-6.8 ms** — a 150-600x improvement, since they no longer pay the "
+    "~884 ms unconditional floor at all. The broad-match, no-type-filter cases (attribute key match, common "
+    "term) improved substantially but did not reach the same floor: ~1.2-2.0 s down to **280-840 ms**, still "
+    "dominated by the attribute-match statement's own cost on a huge result set plus the residual COUNT "
+    "seq-scan. Adding an AssetTypeId filter to a broad-match query (which narrows the candidate set via its "
+    "own B-tree index before the array check) brings even these down further (e.g. \"common term\" + Poste "
+    "filter: 1240.7 ms after-indexes-only → 278.6 ms after fix). The ~884 ms unconditional floor that made "
+    "*every* search slow regardless of what it searched for is gone; what remains scales with how broad the "
+    "attribute match actually is, which is the expected, acceptable shape for this kind of query."
 )
 lines.append("")
 
