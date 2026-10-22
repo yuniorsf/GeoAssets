@@ -113,6 +113,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Projects.Rest.Tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Shapefile.Tests", "tests\GeoAssets.Provider.Shapefile.Tests\GeoAssets.Provider.Shapefile.Tests.csproj", "{D59E24B4-A69A-4980-9365-57C2890472C6}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Bench.GetPageAsync", "tools\GeoAssets.Bench.GetPageAsync\GeoAssets.Bench.GetPageAsync.csproj", "{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -663,6 +667,18 @@ Global
 		{D59E24B4-A69A-4980-9365-57C2890472C6}.Release|x64.Build.0 = Release|Any CPU
 		{D59E24B4-A69A-4980-9365-57C2890472C6}.Release|x86.ActiveCfg = Release|Any CPU
 		{D59E24B4-A69A-4980-9365-57C2890472C6}.Release|x86.Build.0 = Release|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Debug|x64.Build.0 = Debug|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Debug|x86.Build.0 = Debug|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x64.ActiveCfg = Release|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x64.Build.0 = Release|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x86.ActiveCfg = Release|Any CPU
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -715,5 +731,6 @@ Global
 		{BEEB6BA3-DDD0-4DE7-B2E1-225317795B25} = {17245595-230B-9055-A944-863F0DDDA8E8}
 		{4EA5C7C0-C5A6-4AE2-8E6C-F26451A9CC12} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{D59E24B4-A69A-4980-9365-57C2890472C6} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal
