@@ -36,4 +36,21 @@ public enum OrderActionType
 
     /// <summary>Add comments or attachments to the order.</summary>
     Annotate,
+
+    /// <summary>
+    /// Run a calculation engine over the order's uploaded data, producing billable figures.
+    /// Added for the IP-billing (GEOS_FAT_IP) workflows' Carregado→Calculado stage (XD01-176)
+    /// — a dedicated action rather than overloading <see cref="Execute"/>, whose doc comment
+    /// ("Execute field work recorded on the order") reads misleadingly for a non-dispatched
+    /// spreadsheet-upload workflow with no field work step.
+    /// </summary>
+    Calculate,
+
+    /// <summary>
+    /// Confirm a calculated order's figures as final. Added for the IP-billing workflows'
+    /// Calculado→Validado stage (XD01-176) — distinct from <see cref="Complete"/>, whose doc
+    /// comment ("Mark the order as completed") implies the generic terminal-success state
+    /// rather than this workflow's own explicit validation step.
+    /// </summary>
+    Validate,
 }

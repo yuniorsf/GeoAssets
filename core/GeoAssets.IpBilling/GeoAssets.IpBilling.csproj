@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.IpBilling</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.IpBilling.EFCore" />
+    <InternalsVisibleTo Include="GeoAssets.IpBilling.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+  </ItemGroup>
+
+</Project>
