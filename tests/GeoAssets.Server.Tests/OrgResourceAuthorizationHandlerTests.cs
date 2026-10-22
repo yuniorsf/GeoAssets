@@ -83,16 +83,26 @@ public class OrgResourceAuthorizationHandlerTests
 
     private static OrganizationGrant Grant(
         Guid granteeOrgId, Guid resourceOrgId, IEnumerable<string> allowedActions,
-        string? resourceType = null, string? requiredRole = null) => new()
+        string? resourceType = null, string? requiredRole = null, string? scopeId = null) => new()
     {
         GranteeOrganizationId  = granteeOrgId,
         ResourceOrganizationId = resourceOrgId,
         ResourceType           = resourceType,
+        ScopeId                = scopeId,
         AllowedActions         = [.. allowedActions],
         RequiredRole           = requiredRole,
         GrantedBy              = "admin@example.com",
         GrantedAt              = DateTime.UtcNow,
         IsActive               = true,
+    };
+
+    private static GeoFeature ScopedFeature(Guid organizationId, string? scopeId) => new()
+    {
+        Properties = new GeoFeatureProperties
+        {
+            OrganizationId = organizationId,
+            CustomAttributes = scopeId is null ? new() : new() { ["scopeId"] = scopeId },
+        }
     };
 
     // ── Anonymous caller ──────────────────────────────────────────────────────
@@ -290,6 +300,91 @@ public class OrgResourceAuthorizationHandlerTests
         var grant = Grant(otherGranteeOrgId, resourceOrgId, ["features:edit"]);
         var handler = Sut(["features:edit"], userOrganizationId: callerOrgId, grants: [grant]);
         var context = Context(new OrgResourceRequirement("features:edit"), resource);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeFalse();
+    }
+
+    // ── Scoped grants (XD01-174) ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleRequirementAsync_NullScopeIdGrant_MatchesResourceRegardlessOfItsScopeId()
+    {
+        // Regression guard: a grant predating ScopeId (null) must behave exactly as before —
+        // ungated within ResourceType — even against a resource that does carry a ScopeId.
+        var granteeOrgId = Guid.NewGuid();
+        var resourceOrgId = Guid.NewGuid();
+        var resource = ScopedFeature(resourceOrgId, scopeId: "municipio-1234567");
+        var grant = Grant(granteeOrgId, resourceOrgId, ["features:read"], scopeId: null);
+        var handler = Sut(["features:read"], userOrganizationId: granteeOrgId, grants: [grant]);
+        var context = Context(new OrgResourceRequirement("features:read"), resource);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_ScopedGrantMatchingResourceScopeId_Succeeds()
+    {
+        var granteeOrgId = Guid.NewGuid();
+        var resourceOrgId = Guid.NewGuid();
+        var resource = ScopedFeature(resourceOrgId, scopeId: "municipio-1234567");
+        var grant = Grant(granteeOrgId, resourceOrgId, ["features:read"], scopeId: "municipio-1234567");
+        var handler = Sut(["features:read"], userOrganizationId: granteeOrgId, grants: [grant]);
+        var context = Context(new OrgResourceRequirement("features:read"), resource);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_ScopedGrantDifferentResourceScopeId_DoesNotSucceed()
+    {
+        // Non-leakage: the very case this ticket exists for — a Prefeitura's grant scoped to
+        // its own município must not also admit a different município's resources, even though
+        // both share the same ResourceOrganizationId (the Distribuidora).
+        var granteeOrgId = Guid.NewGuid();
+        var resourceOrgId = Guid.NewGuid();
+        var resource = ScopedFeature(resourceOrgId, scopeId: "municipio-OTHER");
+        var grant = Grant(granteeOrgId, resourceOrgId, ["features:read"], scopeId: "municipio-1234567");
+        var handler = Sut(["features:read"], userOrganizationId: granteeOrgId, grants: [grant]);
+        var context = Context(new OrgResourceRequirement("features:read"), resource);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_ScopedGrantResourceWithNoScopeId_DoesNotSucceed()
+    {
+        // Non-leakage: an un-scoped resource (ScopeId null) must not slip through a scoped grant.
+        var granteeOrgId = Guid.NewGuid();
+        var resourceOrgId = Guid.NewGuid();
+        var resource = ScopedFeature(resourceOrgId, scopeId: null);
+        var grant = Grant(granteeOrgId, resourceOrgId, ["features:read"], scopeId: "municipio-1234567");
+        var handler = Sut(["features:read"], userOrganizationId: granteeOrgId, grants: [grant]);
+        var context = Context(new OrgResourceRequirement("features:read"), resource);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_ScopedGrantAgainstNonScopeableResourceType_DoesNotSucceed()
+    {
+        // Non-leakage: a resource type that doesn't implement IScopeableResource (AssetType)
+        // can never satisfy a scoped grant, regardless of ResourceOrganizationId matching.
+        var granteeOrgId = Guid.NewGuid();
+        var resourceOrgId = Guid.NewGuid();
+        var resource = new AssetType { OrganizationId = resourceOrgId };
+        var grant = Grant(granteeOrgId, resourceOrgId, ["features:read"], scopeId: "municipio-1234567");
+        var handler = Sut(["features:read"], userOrganizationId: granteeOrgId, grants: [grant]);
+        var context = Context(new OrgResourceRequirement("features:read"), resource);
 
         await handler.HandleAsync(context);
 

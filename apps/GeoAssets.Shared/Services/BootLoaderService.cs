@@ -88,6 +88,8 @@ public sealed class BootLoaderService : IBootLoader
         return entry;
     }
 
+    public void CompleteWithoutProvider() => Complete();
+
     private void Complete()
     {
         IsBootComplete = true;

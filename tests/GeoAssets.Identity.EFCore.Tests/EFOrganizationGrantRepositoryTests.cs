@@ -41,6 +41,7 @@ public class EFOrganizationGrantRepositoryTests
         var grant = Grant(Guid.NewGuid(), Guid.NewGuid());
         grant.ResourceType = "ServiceOrder";
         grant.RequiredRole = "Supervisor";
+        grant.ScopeId = "municipio-1234567";
 
         await repo.AddAsync(grant);
         await repo.SaveChangesAsync();
@@ -51,6 +52,7 @@ public class EFOrganizationGrantRepositoryTests
         loaded.ResourceOrganizationId.Should().Be(grant.ResourceOrganizationId);
         loaded.ResourceType.Should().Be("ServiceOrder");
         loaded.RequiredRole.Should().Be("Supervisor");
+        loaded.ScopeId.Should().Be("municipio-1234567");
         loaded.AllowedActions.Should().BeEquivalentTo(["serviceorders:view", "features:read"]);
         loaded.GrantedBy.Should().Be("admin@example.com");
         loaded.IsActive.Should().BeTrue();

@@ -14,6 +14,7 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
         b.HasKey(g => g.Id);
 
         b.Property(g => g.ResourceType).HasMaxLength(128);
+        b.Property(g => g.ScopeId).HasMaxLength(128);
         b.Property(g => g.RequiredRole).HasMaxLength(128);
         b.Property(g => g.GrantedBy).IsRequired().HasMaxLength(256);
         b.Property(g => g.GrantedAt).IsRequired();

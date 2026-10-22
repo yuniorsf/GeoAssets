@@ -73,6 +73,21 @@ public sealed class WebStorageService : IStorageService
         }
     }
 
+    public async Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default)
+    {
+        var base64 = Convert.ToBase64String(content);
+        try
+        {
+            // Try File System Access API (Chrome/Edge)
+            await _js.InvokeVoidAsync("GeoAssets.saveBinaryFilePicker", ct, base64, suggestedName, mimeType);
+        }
+        catch
+        {
+            // Fallback: trigger download link (Firefox/Safari)
+            await _js.InvokeVoidAsync("GeoAssets.downloadBinaryFile", ct, base64, suggestedName, mimeType);
+        }
+    }
+
     public async Task<string?> GetStringAsync(string key, CancellationToken ct = default)
     {
         var value = await _localStorage.GetItemAsStringAsync(key, ct);

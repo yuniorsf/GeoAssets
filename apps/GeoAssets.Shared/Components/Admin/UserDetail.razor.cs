@@ -1,6 +1,7 @@
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoAssets.Shared.Components.Admin;
@@ -11,8 +12,7 @@ public partial class UserDetail
     [Parameter] public EventCallback OnSaved { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    private string _organizationIdText = string.Empty;
-    private string? _error;
+    private List<Organization> _organizations = [];
     private Guid? _loadedUserId;
 
     private bool _roleSyncEnabled;
@@ -20,12 +20,13 @@ public partial class UserDetail
     private HashSet<string> _assignedRoleNames = [];
     private Guid? _togglingRoleId;
 
+    protected override async Task OnInitializedAsync() =>
+        _organizations = [.. await OrganizationRepository.GetAllAsync()];
+
     protected override async Task OnParametersSetAsync()
     {
         if (User is null || User.Id == _loadedUserId) return;
         _loadedUserId = User.Id;
-        _organizationIdText = User.OrganizationId?.ToString() ?? string.Empty;
-        _error = null;
 
         var statusProvider = ServiceProvider.GetService<IRoleSyncStatusProvider>();
         _roleSyncEnabled = statusProvider is not null && await statusProvider.IsEnabledAsync();
@@ -38,23 +39,16 @@ public partial class UserDetail
         }
     }
 
+    private void OnOrganizationChanged(ChangeEventArgs e)
+    {
+        if (User is null) return;
+        var value = e.Value as string;
+        User.OrganizationId = string.IsNullOrEmpty(value) ? null : Guid.Parse(value);
+    }
+
     private async Task HandleSave()
     {
         if (User is null) return;
-
-        Guid? organizationId = null;
-        if (!string.IsNullOrWhiteSpace(_organizationIdText))
-        {
-            if (!Guid.TryParse(_organizationIdText, out var parsed))
-            {
-                _error = L["admin.users.invalidOrganizationId"];
-                return;
-            }
-            organizationId = parsed;
-        }
-
-        User.OrganizationId = organizationId;
-        _error = null;
 
         await Repository.UpdateAsync(User);
         await Repository.SaveChangesAsync();

@@ -68,6 +68,15 @@ public sealed class FileStorageService : IStorageService
         await File.WriteAllTextAsync(filePath, geoJson, ct);
     }
 
+    public async Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default)
+    {
+        // On MAUI, save to the documents folder and notify the user — same destination as
+        // SaveExportFileAsync, just writing bytes instead of text.
+        var docsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var filePath = Path.Combine(docsPath, suggestedName);
+        await File.WriteAllBytesAsync(filePath, content, ct);
+    }
+
     public async Task<string?> GetStringAsync(string key, CancellationToken ct = default)
     {
         var path = Path.Combine(FileSystem.AppDataDirectory, $"{key}.txt");

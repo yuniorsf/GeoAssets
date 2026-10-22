@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
@@ -161,5 +162,58 @@ public class MainLayoutTests
         var result = await MainLayout.ResolveOrganizationNameAsync(SampleUser, orgRepo, userRepo);
 
         result.Should().Be("Empresa Eléctrica del Norte");
+    }
+
+    [Fact]
+    public void SelectDefaultProject_NoProjects_ReturnsNull()
+    {
+        var result = MainLayout.SelectDefaultProject([]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void SelectDefaultProject_OnlyUserProjects_ReturnsNull()
+    {
+        var projects = new[]
+        {
+            new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, CreatedAt = DateTime.UtcNow },
+        };
+
+        var result = MainLayout.SelectDefaultProject(projects);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void SelectDefaultProject_SingleGeneralProject_ReturnsIt()
+    {
+        var general = new Project { Id = Guid.NewGuid(), Kind = ProjectKind.General, CreatedAt = DateTime.UtcNow };
+        var projects = new[]
+        {
+            new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, CreatedAt = DateTime.UtcNow },
+            general,
+        };
+
+        var result = MainLayout.SelectDefaultProject(projects);
+
+        result.Should().Be(general);
+    }
+
+    [Fact]
+    public void SelectDefaultProject_MultipleGeneralProjects_ReturnsEarliestCreated()
+    {
+        var older = new Project
+        {
+            Id = Guid.NewGuid(), Kind = ProjectKind.General, CreatedAt = new DateTime(2024, 1, 1),
+        };
+        var newer = new Project
+        {
+            Id = Guid.NewGuid(), Kind = ProjectKind.General, CreatedAt = new DateTime(2025, 1, 1),
+        };
+
+        var result = MainLayout.SelectDefaultProject([newer, older]);
+
+        result.Should().Be(older);
     }
 }

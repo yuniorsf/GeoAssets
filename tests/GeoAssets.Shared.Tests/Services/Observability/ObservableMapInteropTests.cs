@@ -35,6 +35,7 @@ public class ObservableMapInteropTests
         public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) => Record(nameof(RenderAllFeaturesRawJsonAsync), divId, rawFeaturesJson);
         public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson) => Record(nameof(RenderFeatureBatchRawJsonAsync), divId, rawFeaturesJson);
         public Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features) => Record(nameof(RenderFeatureBatchAsync), divId, features);
+        public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features) => Record(nameof(RenderFeatureBatchAsync), divId, features);
         public Task RemoveFeatureAsync(string divId, string featureId) => Record(nameof(RemoveFeatureAsync), divId, featureId);
         public Task ClearAllFeaturesAsync(string divId) => Record(nameof(ClearAllFeaturesAsync), divId);
         public Task EnableDrawModeAsync(string divId, GeometryType mode) => Record(nameof(EnableDrawModeAsync), divId, mode);

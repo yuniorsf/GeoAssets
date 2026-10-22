@@ -174,6 +174,35 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.GeoEntityAttributeRow", b =>
+                {
+                    b.Property<string>("EntityId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("EntityId", "Key");
+
+                    b.HasIndex(new[] { "Key" }, "IX_geo_entity_attribute_Key_Trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Key" }, "IX_geo_entity_attribute_Key_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Key" }, "IX_geo_entity_attribute_Key_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "Value" }, "IX_geo_entity_attribute_Value_Trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Value" }, "IX_geo_entity_attribute_Value_Trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Value" }, "IX_geo_entity_attribute_Value_Trgm"), new[] { "gin_trgm_ops" });
+
+                    b.ToTable("geo_entity_attribute", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.GeoEntityRow", b =>
                 {
                     b.Property<string>("Id")
@@ -445,6 +474,17 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("DefaultLayer");
+                });
+
+            modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.GeoEntityAttributeRow", b =>
+                {
+                    b.HasOne("GeoAssets.Provider.PostgreSQL.Entities.GeoEntityRow", "Entity")
+                        .WithMany()
+                        .HasForeignKey("EntityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Entity");
                 });
 
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.GeoEntityRow", b =>

@@ -35,6 +35,15 @@ public interface IProjectSessionService
     /// <summary>True once anything has changed since the last open/save/discard checkpoint.</summary>
     bool IsDirty { get; }
 
+    /// <summary>
+    /// Providers from the most recent <see cref="OpenAsync"/>/<see cref="DiscardChangesAsync"/>
+    /// reconnect pass that failed to reconnect (see <see cref="OpenAsync"/>'s doc comment — a
+    /// failed entry is skipped, not fatal to the open). Replaced wholesale at the start of every
+    /// reconnect pass, so this only ever reflects the most recent one. Empty when everything
+    /// reconnected cleanly.
+    /// </summary>
+    IReadOnlyList<ProviderReconnectFailure> LastReconnectFailures { get; }
+
     /// <summary>Raised whenever <see cref="IsDirty"/> changes.</summary>
     event EventHandler? DirtyChanged;
 

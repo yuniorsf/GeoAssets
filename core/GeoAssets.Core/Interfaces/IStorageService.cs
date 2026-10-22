@@ -27,6 +27,10 @@ public interface IStorageService
     /// <summary>Present a file-save dialog and write GeoJSON.</summary>
     Task SaveExportFileAsync(string geoJson, string suggestedName = "export.geojson", CancellationToken ct = default);
 
+    /// <summary>Present a file-save dialog and write arbitrary binary content (e.g. a zipped
+    /// Shapefile export) — unlike <see cref="SaveExportFileAsync"/>, which assumes GeoJSON text.</summary>
+    Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default);
+
     /// <summary>Reads a raw string value from persistent storage. Returns null if not found.</summary>
     Task<string?> GetStringAsync(string key, CancellationToken ct = default);
 

@@ -1,0 +1,38 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Repositories
+@inject IOrganizationRepository Repository
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["admin.organizations.title"] (@_organizations.Count)</h6>
+        <button class="btn-icon" title="@L["admin.organizations.newOrganization"]" @onclick="() => OnCreateRequested.InvokeAsync()">＋</button>
+    </div>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (_organizations.Count == 0)
+    {
+        <div class="empty-state"><p>@L["admin.organizations.empty"]</p></div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var organization in _organizations)
+            {
+                <div class="asset-list-item @(SelectedOrganizationId == organization.Id ? "selected" : "")"
+                     @onclick="() => SelectOrganization(organization)">
+                    <span class="asset-name">@organization.Name</span>
+                    <span style="color:var(--text-secondary)">@organization.Slug</span>
+                    @if (!organization.IsActive)
+                    {
+                        <span class="badge-builtin">@L["admin.organizations.inactive"]</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>

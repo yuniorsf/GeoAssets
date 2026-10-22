@@ -1,5 +1,4 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Providers;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
@@ -39,9 +38,13 @@ var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
 // ── PostgreSQL provider ───────────────────────────────────────────────────────
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddGeoAssetsPostgres();
-builder.Services.AddSingleton<IAssetProvider>(sp =>
-    new ValidatingAssetProvider(
-        sp.GetRequiredService<IPostgresProviderFactory>().Create(connectionString)));
+
+// Pre-warms the IAssetProvider singleton before app.Run() — otherwise PostgresAssetProvider's
+// ISyncProvider marker (XD01-161) would be dishonest for this deployment: the first
+// GetAll()/GetById() call, on whatever request thread happens to hit it first, would still
+// block on LoadCacheFromDb (XD01-173). See AddWarmedPostgresAssetProviderAsync's own doc
+// comment for why this needs an interim service provider.
+await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString);
 
 // IDbContextFactory<GeoAssetsDbContext> — used by WmsPostGisRenderer so each
 // tile request opens its own short-lived, thread-safe DbContext without touching

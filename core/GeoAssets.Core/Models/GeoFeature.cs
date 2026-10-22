@@ -5,7 +5,7 @@ using GeoAssets.Core.Models.Geometry;
 namespace GeoAssets.Core.Models;
 
 /// <summary>Maps 1:1 to a GeoJSON Feature object (RFC 7946 §3.2)</summary>
-public sealed class GeoFeature : IOrgOwnedResource
+public sealed class GeoFeature : IOrgOwnedResource, IScopeableResource
 {
     [JsonPropertyName("type")]
     public string Type => "Feature";
@@ -30,6 +30,11 @@ public sealed class GeoFeature : IOrgOwnedResource
     /// <summary>See <see cref="IOrgOwnedResource"/>. Delegates to <see cref="Properties"/>,
     /// which is the JSON source of truth (<see cref="GeoFeatureProperties.OrganizationId"/>).</summary>
     Guid IOrgOwnedResource.OrganizationId => Properties.OrganizationId;
+
+    /// <summary>See <see cref="IScopeableResource"/>. A plain, well-known key in
+    /// <see cref="GeoFeatureProperties.CustomAttributes"/> — no dedicated column, so this costs
+    /// nothing for features that never need scoping (XD01-174).</summary>
+    string? IScopeableResource.ScopeId => Properties.CustomAttributes.GetValueOrDefault("scopeId");
 }
 
 public sealed class GeoFeatureProperties

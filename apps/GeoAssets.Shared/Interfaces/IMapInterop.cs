@@ -73,6 +73,15 @@ public interface IMapInterop
     /// callers clear once via <see cref="ClearAllFeaturesAsync"/> before the first chunk.
     /// </summary>
     Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features);
+    /// <summary>
+    /// Renders features from pre-serialized <see cref="JsonElement"/> objects additively — the
+    /// <see cref="JsonElement"/> counterpart to <see cref="RenderFeatureBatchAsync(string, IEnumerable{GeoFeature})"/>,
+    /// as <see cref="RenderFeatureBatchRawJsonAsync"/> is to <see cref="RenderAllFeaturesRawJsonAsync"/>:
+    /// same payload shape as <see cref="RenderAllFeaturesAsync(string, IReadOnlyList{JsonElement})"/>, but
+    /// does not clear existing features first, so callers rendering several providers' results onto
+    /// the same map don't erase each other.
+    /// </summary>
+    Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features);
     Task RemoveFeatureAsync(string divId, string featureId);
     Task ClearAllFeaturesAsync(string divId);
 

@@ -8,7 +8,7 @@ namespace GeoAssets.Workflow.Orders;
 /// Default mutable implementation of <see cref="IServiceOrder"/>.
 /// All mutation goes through the With* fluent methods to keep change tracking simple.
 /// </summary>
-public sealed class ServiceOrder : IServiceOrder
+public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 {
     // ── Identity ──────────────────────────────────────────────────────────────
 
@@ -39,6 +39,11 @@ public sealed class ServiceOrder : IServiceOrder
 
     public Dictionary<string, string> Attributes { get; init; } = [];
     IReadOnlyDictionary<string, string> IServiceOrder.Attributes => Attributes;
+
+    /// <summary>See <see cref="IScopeableResource"/>. A plain, well-known key in
+    /// <see cref="Attributes"/> — no dedicated column, so this costs nothing for orders that
+    /// never need scoping (XD01-174).</summary>
+    string? IScopeableResource.ScopeId => Attributes.GetValueOrDefault("scopeId");
 
     // ── Geographic asset set ──────────────────────────────────────────────────
 

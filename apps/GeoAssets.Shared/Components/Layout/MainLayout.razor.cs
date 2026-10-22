@@ -1,5 +1,8 @@
+using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Repositories;
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -89,7 +92,52 @@ public partial class MainLayout
         }
 
         _identityResolved = true;
+
+        // Fire-and-forget: Save/Load in TopBar and ProjectPanel only come alive once a Project
+        // is open, and nothing opened one automatically before this — the buttons looked
+        // clickable but silently did nothing until a user discovered the Projects panel and
+        // picked one manually. Not awaited so the map still renders immediately; TopBar and
+        // ProjectPanel both already re-render off Session.CurrentChanged once this lands.
+        _ = OpenDefaultProjectAsync();
     }
+
+    /// <summary>
+    /// Opens the organization's default <see cref="ProjectKind.General"/> Project if none is
+    /// already open. A no-op if a Project is already open (e.g. this layout instance survived
+    /// navigation) or if the org has none yet. Like the optional identity/org-name resolution
+    /// above, a failure here (token/network issue) must not take down the map page.
+    /// </summary>
+    private async Task OpenDefaultProjectAsync()
+    {
+        if (Session.Current is not null) return;
+
+        try
+        {
+            var context = await AuthService.GetAuthorizationContextAsync();
+            if (context.User.OrganizationId is not { } organizationId) return;
+
+            var projects = await ProjectClient.GetByOrganizationAsync(organizationId);
+            if (SelectDefaultProject(projects) is { } defaultProject)
+                await Session.OpenAsync(defaultProject.Id);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MainLayout] Failed to auto-open default Project: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Picks the org's default Project out of every Project <see cref="IProjectClient.GetByOrganizationAsync"/>
+    /// returned — the earliest-created <see cref="ProjectKind.General"/> one. Org-level General
+    /// Projects are reliably a single row in practice (<c>DefaultProjectSeeder</c> is idempotent
+    /// per org), but this stays defensive rather than assuming exactly one. Pure/static so it's
+    /// directly unit-testable without a Blazor render tree — same reasoning as
+    /// <see cref="ResolveOrganizationNameAsync"/> and <c>ProjectPanel.Categorize</c>.
+    /// </summary>
+    public static Project? SelectDefaultProject(IReadOnlyList<Project> projects) =>
+        projects.Where(p => p.Kind == ProjectKind.General)
+                .OrderBy(p => p.CreatedAt)
+                .FirstOrDefault();
 
     /// <summary>
     /// Resolves the display name of the current user's organization for the topbar.

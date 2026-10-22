@@ -23,6 +23,17 @@ public sealed class OrganizationGrant
     public string? ResourceType { get; set; }
 
     /// <summary>
+    /// Restricts the grant to resources belonging to one named subset within
+    /// <see cref="ResourceType"/> — e.g. one município's worth of a Distribuidora's
+    /// <c>GeoFeature</c>s, not everything it owns. Null (every grant created before this field
+    /// existed, and any grant that doesn't need this) means "ungated within
+    /// <see cref="ResourceType"/>" — the original, unaffected behavior. Only resources
+    /// implementing <c>IScopeableResource</c> can be matched against a non-null value here;
+    /// other resource types simply cannot be granted at this granularity (XD01-174).
+    /// </summary>
+    public string? ScopeId { get; set; }
+
+    /// <summary>
     /// Permission codes (matching <see cref="AppPermission.Code"/> format, e.g.
     /// "serviceorders:view") the grantee organization is allowed to perform on the
     /// resource organization's resources. Empty means the grant authorizes nothing.

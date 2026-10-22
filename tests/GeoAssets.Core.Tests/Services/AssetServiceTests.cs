@@ -35,6 +35,9 @@ public class AssetServiceTests
         public Task SaveExportFileAsync(string geoJson, string suggestedName = "export.geojson", CancellationToken ct = default)
             => Task.CompletedTask;
 
+        public Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default)
+            => Task.CompletedTask;
+
         public Task<string?> GetStringAsync(string key, CancellationToken ct = default)
             => Task.FromResult<string?>(null);
 

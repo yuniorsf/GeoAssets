@@ -39,6 +39,23 @@ public class OrgOwnershipTests
         restored!.Properties.OrganizationId.Should().Be(orgId);
     }
 
+    [Fact]
+    public void GeoFeature_AsIScopeableResource_DefaultsToNull()
+    {
+        ((IScopeableResource)new GeoFeature()).ScopeId.Should().BeNull();
+    }
+
+    [Fact]
+    public void GeoFeature_AsIScopeableResource_DelegatesToScopeIdCustomAttribute()
+    {
+        var feature = new GeoFeature
+        {
+            Properties = new GeoFeatureProperties { CustomAttributes = { ["scopeId"] = "municipio-1234567" } }
+        };
+
+        ((IScopeableResource)feature).ScopeId.Should().Be("municipio-1234567");
+    }
+
     // ── AssetType ──────────────────────────────────────────────────────────────
 
     [Fact]

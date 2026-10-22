@@ -20,6 +20,14 @@ public partial class ProviderPoolPanel
     private const int PipelineChunkSize = 1500;
 
     private readonly Dictionary<Guid, string> _messages = [];
+
+    // Reconnect-failure banner (e.g. a Shapefile provider whose archive content isn't persisted
+    // — see Session.LastReconnectFailures's doc comment) — dismissal is purely local display
+    // state, not written back to the session, cleared on every CurrentChanged so a fresh
+    // Open/Discard's failures (even one sharing a provider name with a previously-dismissed one)
+    // are never hidden.
+    private readonly HashSet<string> _dismissedReconnectFailures = [];
+
     private Guid?  _editingId;
     private string _editingName = string.Empty;
     private bool   _showConnectDialog;
@@ -29,6 +37,11 @@ public partial class ProviderPoolPanel
     // resolved optionally via IServiceProvider, same defensive pattern as NavMenu's
     // FilterByPermissionAsync, so this panel still renders there with gating simply switched off.
     private IProjectSessionService? Session => Services.GetService<IProjectSessionService>();
+
+    // IShapefileExportService is only registered where AddGeoAssetsShapefile() runs (Web today,
+    // not MAUI) — resolved optionally so the Shapefile export button simply doesn't render
+    // rather than wiring to a service that isn't there, same pattern as Session above.
+    private IShapefileExportService? ShapefileExporter => Services.GetService<IShapefileExportService>();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -47,7 +60,14 @@ public partial class ProviderPoolPanel
         InvokeAsync(StateHasChanged);
 
     private void OnSessionCurrentChanged(object? _, EventArgs __) =>
-        InvokeAsync(async () => { await RefreshAddProviderGatingAsync(); StateHasChanged(); });
+        InvokeAsync(async () =>
+        {
+            _dismissedReconnectFailures.Clear();
+            await RefreshAddProviderGatingAsync();
+            StateHasChanged();
+        });
+
+    private void DismissReconnectFailure(string name) => _dismissedReconnectFailures.Add(name);
 
     public override void Dispose()
     {
@@ -149,6 +169,36 @@ public partial class ProviderPoolPanel
         {
             _messages[entry.Id] = L.GetString("import.errorExport", ex.Message);
             Logger.LogError(ex, "Export failed — collection: {Name}", entry.Name);
+        }
+    }
+
+    private async Task ExportEntryAsShapefileAsync(ProviderEntry entry)
+    {
+        // WMS entries have no discrete features to export (raster tiles only, see
+        // IWmsProvider's doc comment) — Pipeline.StreamAllAsync would just yield nothing and
+        // ExportToZip would throw "No exportable geometries found." The button is already
+        // hidden for these entries in markup; this guard covers any other call site.
+        if (ShapefileExporter is null || entry.Provider is IWmsProvider) return;
+
+        _messages[entry.Id] = string.Empty;
+        try
+        {
+            var features = new List<GeoFeature>();
+            await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
+                features.AddRange(chunk);
+
+            var zip      = ShapefileExporter.ExportToZip(features);
+            var safeName = entry.Name.ToLowerInvariant().Replace(" ", "-");
+            await Storage.SaveExportBinaryFileAsync(zip, $"{safeName}-export.zip", "application/zip");
+
+            _messages[entry.Id] = L["import.exportSuccess"];
+            Logger.LogInformation("Shapefile export — collection: {Name}, features: {Count}",
+                entry.Name, features.Count);
+        }
+        catch (Exception ex)
+        {
+            _messages[entry.Id] = L.GetString("import.errorExport", ex.Message);
+            Logger.LogError(ex, "Shapefile export failed — collection: {Name}", entry.Name);
         }
     }
 

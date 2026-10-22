@@ -1,4 +1,5 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Models
 @using GeoAssets.Core.Services
 @using Microsoft.Extensions.Logging
 @inject IBootLoader BootLoader
@@ -26,39 +27,104 @@
                 </div>
             </div>
 
-            <div class="pcd-body">
+            @if (ShowProjectTab)
+            {
+                <div class="pcd-tabs">
+                    <button class="pcd-tab @(_activeTab == ConnectTab.Provider ? "pcd-tab--active" : "")"
+                            @onclick="() => SelectTab(ConnectTab.Provider)">@L["pool.providerTab"]</button>
+                    <button class="pcd-tab @(_activeTab == ConnectTab.Project ? "pcd-tab--active" : "")"
+                            @onclick="() => SelectTab(ConnectTab.Project)">@L["pool.projectTab"]</button>
+                </div>
+            }
 
-                <!-- Plugin list -->
-                <ul class="pcd-plugin-list">
-                    @foreach (var plugin in Registry.All)
+            @if (_activeTab == ConnectTab.Project && ShowProjectTab)
+            {
+                <div class="pcd-body pcd-body--project">
+                    @if (_loadingProjects)
                     {
-                        var p = plugin;
-                        <li class="pcd-plugin-item @(p == _selected ? "pcd-plugin-item--active" : "")"
-                            @onclick="() => SelectPlugin(p)">
-                            <span class="pcd-plugin-name">@p.DisplayName</span>
-                            <span class="pcd-plugin-desc">@p.Description</span>
-                        </li>
-                    }
-                </ul>
-
-                <!-- Dynamic config form for selected plugin -->
-                <div class="pcd-config">
-                    @if (_selected is not null)
-                    {
-                        <h4 class="pcd-config-title">@_selected.DisplayName</h4>
-                        <ProviderConfigForm Plugin="_selected" Config="_config" />
-
-                        @if (!string.IsNullOrEmpty(_error))
-                        {
-                            <p class="pcd-error">@_error</p>
-                        }
+                        <p class="pool-entry-msg">@L["projects.loading"]</p>
                     }
                     else
                     {
-                        <p class="pcd-hint">← @L["pool.selectProviderHint"]</p>
+                        <div class="pool-list">
+                            <div class="geo-nav-section-label">@L["projects.general"]</div>
+                            @if (_generalProjects.Count == 0)
+                            {
+                                <p class="pool-entry-msg">@L["projects.noGeneral"]</p>
+                            }
+                            @foreach (var p in _generalProjects)
+                            {
+                                var project = p;
+                                <div class="pool-entry">
+                                    <div class="layer-row">
+                                        <span class="pool-entry-name" @onclick="() => OpenProjectAsync(project)">
+                                            @project.Name
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="geo-nav-section-label">@L["projects.myForks"]</div>
+                            @if (_myForks.Count == 0)
+                            {
+                                <p class="pool-entry-msg">@L["projects.noForks"]</p>
+                            }
+                            @foreach (var p in _myForks)
+                            {
+                                var project = p;
+                                <div class="pool-entry">
+                                    <div class="layer-row">
+                                        <span class="pool-entry-name" @onclick="() => OpenProjectAsync(project)">
+                                            @project.Name
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_projectError))
+                        {
+                            <p class="pcd-error">@_projectError</p>
+                        }
                     }
                 </div>
-            </div>
+            }
+            else
+            {
+                <div class="pcd-body">
+
+                    <!-- Plugin list -->
+                    <ul class="pcd-plugin-list">
+                        @foreach (var plugin in Registry.All)
+                        {
+                            var p = plugin;
+                            <li class="pcd-plugin-item @(p == _selected ? "pcd-plugin-item--active" : "")"
+                                @onclick="() => SelectPlugin(p)">
+                                <span class="pcd-plugin-name">@p.DisplayName</span>
+                                <span class="pcd-plugin-desc">@p.Description</span>
+                            </li>
+                        }
+                    </ul>
+
+                    <!-- Dynamic config form for selected plugin -->
+                    <div class="pcd-config">
+                        @if (_selected is not null)
+                        {
+                            <h4 class="pcd-config-title">@_selected.DisplayName</h4>
+                            <ProviderConfigForm Plugin="_selected" Config="_config" />
+
+                            @if (!string.IsNullOrEmpty(_error))
+                            {
+                                <p class="pcd-error">@_error</p>
+                            }
+                        }
+                        else
+                        {
+                            <p class="pcd-hint">← @L["pool.selectProviderHint"]</p>
+                        }
+                    </div>
+                </div>
+            }
 
             <div class="pcd-footer">
                 @if (!IsBootMode)
@@ -67,10 +133,19 @@
                         @L["assets.cancel"]
                     </button>
                 }
-                <button class="btn btn-primary btn-sm" @onclick="ConnectAsync"
-                        disabled="@(_connecting || _selected is null)">
-                    @(_connecting ? L["pool.connecting"] : L["pool.connect"])
-                </button>
+                @if (IsBootMode)
+                {
+                    <button class="btn btn-secondary btn-sm" @onclick="SkipBoot" disabled="@_connecting">
+                        @L["pool.skipBoot"]
+                    </button>
+                }
+                @if (_activeTab == ConnectTab.Provider)
+                {
+                    <button class="btn btn-primary btn-sm" @onclick="ConnectAsync"
+                            disabled="@(_connecting || _selected is null)">
+                        @(_connecting ? L["pool.connecting"] : L["pool.connect"])
+                    </button>
+                }
             </div>
         </div>
     </div>

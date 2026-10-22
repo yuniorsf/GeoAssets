@@ -2,6 +2,7 @@
 @using GeoAssets.Identity.Authorization.Repositories
 @inject IUserRepository Repository
 @inject IRoleRepository RoleRepository
+@inject IOrganizationRepository OrganizationRepository
 @inject IServiceProvider ServiceProvider
 
 @if (User is not null)
@@ -31,14 +32,14 @@
 
             <div class="form-group">
                 <label>@L["admin.users.organizationId"]</label>
-                <input class="form-control" @bind="_organizationIdText"
-                       placeholder="@L["admin.users.organizationIdPlaceholder"]" />
+                <select class="form-control" @onchange="OnOrganizationChanged">
+                    <option value="" selected="@(User.OrganizationId is null)">@L["admin.users.organizationNone"]</option>
+                    @foreach (var organization in _organizations)
+                    {
+                        <option value="@organization.Id" selected="@(User.OrganizationId == organization.Id)">@organization.Name</option>
+                    }
+                </select>
             </div>
-
-            @if (!string.IsNullOrEmpty(_error))
-            {
-                <p class="attribute-errors">@_error</p>
-            }
 
             <div class="form-actions">
                 <button class="btn btn-primary" type="submit">@L["assets.save"]</button>

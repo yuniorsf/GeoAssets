@@ -15,6 +15,10 @@ namespace GeoAssets.Server;
 /// counterpart invoked directly via <c>IAuthorizationService.AuthorizeAsync(user, resource,
 /// requirement)</c> once an endpoint has loaded a specific <c>IOrgOwnedResource</c> — it depends
 /// on <c>IOrganizationGrantRepository</c>, also provided by <c>AddGeoIdentity()</c>.
+///
+/// Also registers <see cref="RequireOrganizationAuthorizationHandler"/>, a subject-only check
+/// that the caller's AppUser has an organization assigned — opt an endpoint or policy into it
+/// via <see cref="RequireOrganizationRequirement"/>; it is not applied by default.
 /// </summary>
 public static class GeoAssetsAuthorizationExtensions
 {
@@ -23,6 +27,7 @@ public static class GeoAssetsAuthorizationExtensions
         services.AddSingleton<IAuthorizationPolicyProvider, GeoAuthorizationPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, GeoAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, OrgResourceAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, RequireOrganizationAuthorizationHandler>();
 
         return services;
     }

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Selection;
@@ -208,5 +209,21 @@ public class ServiceOrderTests
         order.WithFeatures([], new FixedTimeProvider(fixedNow));
 
         order.UpdatedAt.Should().Be(fixedNow.UtcDateTime);
+    }
+
+    // ── IScopeableResource ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void AsIScopeableResource_DefaultsToNull()
+    {
+        ((IScopeableResource)new ServiceOrder()).ScopeId.Should().BeNull();
+    }
+
+    [Fact]
+    public void AsIScopeableResource_DelegatesToScopeIdAttribute()
+    {
+        var order = new ServiceOrder { Attributes = { ["scopeId"] = "municipio-1234567" } };
+
+        ((IScopeableResource)order).ScopeId.Should().Be("municipio-1234567");
     }
 }

@@ -134,6 +134,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<FeatureRenderPipeline>();
         builder.Services.AddGeoAssetsPostgres();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
+        builder.Services.AddScoped<INativeFilePicker, MauiNativeFilePicker>();
         builder.Services.Configure<MapInteropOptions>(
             builder.Configuration.GetSection("MapInterop"));
         builder.Services.AddScoped<MapInteropService>();
