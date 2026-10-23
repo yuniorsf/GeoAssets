@@ -97,6 +97,11 @@ Also theme-scoped: `--on-accent` (text/icon color for content on top of `--accen
 - The topbar's theme toggle (`TopBar.razor`) is a 3-button Bootstrap `btn-group` (Light/System/Dark).
 - Only wired into `GeoAssets.Web` (`Program.cs` + `App.razor`) — `GeoAssets.MAUI`'s `MauiProgram.cs`/`WebApp.razor` don't register `IThemeService` or `ICultureService` (MAUI's DI for these two remains a pre-existing gap; `ICurrentUserAccessor`/`IAuthNavigationService` were closed for MAUI by XD01-52's MSAL.NET wiring — see `EntraCiamMauiAuthenticationProvider`). The FOUC-prevention inline script is duplicated into MAUI's `index.html` anyway since it's plain JS with no DI dependency.
 
+## Branching & Release Policy
+
+- `develop` is the sole integration branch for all agent work — manual ticket implementation, `/implement-ticket`, `/ship-ticket`, and `/orchestrate-tickets` alike. Every new branch must be created from `origin/develop` explicitly (fetch it, branch from it) — never from whatever branch happens to already be checked out, since this repo's working directory is sometimes shared across concurrent sessions and the current branch is not a reliable signal of intent.
+- `main` must never be branched from, merged into, merged from, or rebased by any agent or orchestration workflow, under any circumstance — including when resolving a conflict, "catching main up," or any other seemingly-helpful cleanup. The only way `main` changes is the user explicitly instructing it in an interactive session, by name, in that session. No skill or command in this repo should reference `main` as a base or target branch; if one is found to, that's a bug in the skill, not a precedent to follow.
+
 ## Pull Requests & Commits
 
 - When an Agent (Claude Code Action or otherwise) opens a PR implementing a Jira ticket, the PR title must be prefixed with that ticket's key, e.g. `XD01-8: Add REST-backed IServiceOrderRepository client`

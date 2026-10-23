@@ -2,6 +2,8 @@ Run multiple Jira tickets in parallel, each in its own isolated git worktree, ea
 
 Default concurrency cap: 5 simultaneous workers. If resolving the argument (literal list or JQL) yields more than 5 tickets, stop and confirm with the user before spawning more than 5 workers at once — don't silently fan out wider.
 
+**Branch base, non-negotiable:** every worktree/branch this command creates must fork from `origin/develop` — never `main`, and never "whatever branch happens to be checked out right now" (this repo's working directory is sometimes shared across concurrent sessions, so the current branch is not a reliable signal). Before step 4, `git fetch origin develop` and confirm the orchestrator's own checkout is on `develop` at `origin/develop`'s tip — don't assume it already is. `main` is never touched by this command, for any reason, at any step — not as a merge target, not as a conflict-resolution base, nothing. See `CLAUDE.md` § Branching & Release Policy.
+
 ## Steps
 
 1. **Resolve the ticket set.** Literal keys used as-is. For `JQL: ...`, run `searchJiraIssuesUsingJql` and collect the resulting keys. Jira site: `xdicor.atlassian.net`, project `XD01` (verify with `getVisibleJiraProjects` if a call 404s).
@@ -18,7 +20,7 @@ Default concurrency cap: 5 simultaneous workers. If resolving the argument (lite
 
 5. **Collect results.** For each worker: worktree path, branch name, PR number/URL, final Jira status, pass/fail. Any ticket whose worker did not reach "pushed branch + open PR + In Review" is excluded from the merge-back phase below and reported to the user as needing attention — never force it forward.
 
-6. **Merge-back phase — strictly serialized in the step-2 order.** For each eligible ticket, in order:
+6. **Merge-back phase — strictly serialized in the step-2 order.** `develop` is the only merge target, always — never `main`. For each eligible ticket, in order:
    a. In that ticket's worktree: `git fetch origin develop`, then `git rebase origin/develop`.
    b. **If the rebase is clean:**
       - Re-run `dotnet build` on the full solution and `dotnet test` on the full solution **in that worktree, after the rebase** — do not trust the pre-rebase green run; a rebase can silently reintroduce a break (e.g. an enum/interface whose meaning shifted) with no textual conflict.

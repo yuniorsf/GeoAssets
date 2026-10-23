@@ -4,6 +4,8 @@ This is the only command in this repo allowed to run `git add`, `git commit`, `g
 
 ## Steps
 
+0. **Branch base, non-negotiable.** If invoked standalone (not as `/orchestrate-tickets`'s worker — that command already creates the worktree/branch from `origin/develop` before calling this): before any implementation, `git fetch origin develop` and create the ticket's branch from `origin/develop` explicitly — never from whatever is currently checked out, and never from `main`. See `CLAUDE.md` § Branching & Release Policy.
+
 1. **Steps 1-9: identical to `/implement-ticket`.** Follow `.claude/commands/implement-ticket.md` steps 1 ("Fetch the ticket") through 9 ("Move to In Review") exactly as written there — ticket-key resolution (including `FIRST_TO_DO`), readiness check, →In Progress transition, design, implementation, tests, the `dotnet build`/`dotnet test` gate, the design-doc update, and the →In Review transition. Do not restate or duplicate that text; just execute it. If this command was invoked by `/orchestrate-tickets`, the ticket is already →In Progress — step 3 there becomes a no-op check (status already In Progress is fine; any other unexpected status should stop and report rather than forcing a transition).
 
 2. **Final test gate — hard stop, no exceptions.** Run `dotnet build` on the full solution and `dotnet test` on the full solution (not just the touched project(s) — this is the real gate before anything gets committed). **Any test failure blocks this command, full stop — including one you believe is pre-existing, flaky, or unrelated to this change.** Do not commit, push, or open a PR. There is no judgment call here: "probably unrelated" is not a reason to proceed. Report the exact failing test(s), whether `git diff` shows the failing test's own file as touched by this branch, and why you suspect it's unrelated if you do — then stop and wait. Only a human confirming it's safe (by re-running it, or by explicitly telling you to proceed) unblocks this step; you never make that call yourself.
@@ -14,7 +16,7 @@ This is the only command in this repo allowed to run `git add`, `git commit`, `g
 
 5. **Push the branch** — `git push -u origin <branch>`. If the current branch name doesn't already follow this repo's convention (lowercase `xd01-<n>-<slug>`, e.g. `xd01-171-real-search-path`), rename it to match before pushing.
 
-6. **Open the PR** — `pull_request_create` with `title: "<TICKET-KEY>: <summary>"` (per `CLAUDE.md`; if the diff incidentally spans a secondary ticket, prefix with the primary/parent key instead), source branch = this branch, target branch `develop`, body summarizing the change and linking the Jira ticket.
+6. **Open the PR** — `pull_request_create` with `title: "<TICKET-KEY>: <summary>"` (per `CLAUDE.md`; if the diff incidentally spans a secondary ticket, prefix with the primary/parent key instead), source branch = this branch, target branch `develop` — always `develop`, never `main` — body summarizing the change and linking the Jira ticket.
 
 7. **Update the Jira resolution note** — same "## Resolution" append as implement-ticket step 13 (summary of the change, test counts/pass status, any deliberate scope cuts), plus the PR URL. Do **not** transition the ticket past In Review — only a human reviewer moves it to Done.
 
