@@ -45,8 +45,9 @@ publish/
 *.cpuprofile
 vscode-profile-*
 
-# Claude Code local config (per-developer)
+# Claude Code local config & runtime worktrees (per-developer)
 .claude/settings.local.json
+.claude/worktrees/
 
 # Local secrets (vendor credentials for deploy/otel Collector)
 deploy/otel/.env
