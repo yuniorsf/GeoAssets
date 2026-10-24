@@ -1,5 +1,48 @@
 # GeoAssets — Claude Instructions
 
+## Tri-Planar Multi-Agent Architecture & Operational Contract
+
+GeoAssets operates under a **Tri-Planar Dual-Loop Architecture** backed by a **Deterministic Oracle Substrate** and **Git Worktree Isolation**:
+
+- **Outer Loop — Google Antigravity (DAG Orchestrator)**: Decomposes epics/tickets into a dependency-aware DAG, provisions isolated Git Worktrees via `scripts/agent-sandbox.sh`, dispatches parallel work to inner-loop agents, runs the deterministic gatekeeper (`scripts/verify-agent-worktree.sh`), manages the self-healing retry loop (up to 3 cycles), and coordinates rebase/merge preparation.
+- **Inner Loop (Deep Reasoning) — Claude Code (Specialist)**: Owns complex domain modeling, cross-cutting architectural refactoring, spatial/topology algorithms (NetTopologySuite / PostGIS), state-machine rules (`GeoAssets.Workflow`), concurrency/observability propagation, and self-healing diagnostic resolution.
+- **Inner Loop (Mechanical / QA) — GitHub Copilot (Worker)**: Owns high-velocity mechanical implementation, DTO/mapper scaffolding, xUnit test suites, mock/builder generation, and formatting compliance.
+
+### Mandatory Execution Rules for Claude Code
+
+1. **Strict Git Worktree Isolation**:
+   - Execute all file reads, edits, builds, and tests **exclusively inside the assigned Git Worktree** (`../worktrees/<task-id>` provisioned by `scripts/agent-sandbox.sh` or `.claude/worktrees/<id>`).
+   - Never modify the root checkout directly during orchestrated runs, and **never** branch from, checkout, merge into, or rebase `main`. Every worktree branch must originate from `origin/develop`.
+2. **No Unverified Commits**:
+   - Never run `git commit` or report task completion until the deterministic gatekeeper script passes with exit code `0`:
+     ```bash
+     ./scripts/verify-agent-worktree.sh
+     ```
+   - In interactive `/implement-ticket` flows, leave changes unstaged and uncommitted after verification so the human reviewer can inspect the verified diff.
+3. **Zero Tolerance for Analyzer Suppression**:
+   - Never bypass `Directory.Build.props` or `BannedSymbols.txt` by inserting `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`. Fix the underlying architectural or code defect.
+
+### Deterministic Self-Healing Loop (Compiler & Oracle Diagnostics)
+
+When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercept the structured output and execute up to **3 self-healing iterations** before escalating to the orchestrator:
+
+| Exit Code | Gate Stage | Typical Diagnostics | Required Self-Healing Resolution |
+|---|---|---|---|
+| `10` | `dotnet format --verify-no-changes` | `WHITESPACE`, `IDE0055` | Run `dotnet format GeoAssets.sln` inside the worktree and re-verify that no unintended semantic changes were introduced. |
+| `20` | `dotnet build --no-incremental /warnaserror` | `AsyncFixer01`–`04`, `RS0030`, `MA*`, `CA*` | Parse the diagnostic code and resolve without breaking domain invariants (see table below). |
+| `30` | `dotnet test --no-build` (NetArchTest / Domain) | Onion layer violation or broken domain invariant | Refactor misplaced infrastructure dependencies back behind `core/` interfaces (`IAssetProvider`, `IServiceOrderRepository`, etc.) and re-run. |
+
+#### Common Analyzer Diagnostic Resolutions (`Exit Code 20`)
+- **`AsyncFixer01` (Unnecessary `async`/`await`)**: Remove the `async`/`await` state-machine wrapper and return the underlying `Task` directly, **unless** the `await` is inside a `using` block, `try/catch/finally` block, or active `Activity` span scope (in which case eliding `async` would dispose the resource or end the span before the task completes — restructure the scope instead).
+- **`AsyncFixer02` (Long-running or blocking operation inside `async` method)**: Replace synchronous blocking calls (`.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, `Thread.Sleep`, synchronous EF Core/IO methods) with their true asynchronous counterparts (`await ...ConfigureAwait(false)` or `await Task.Delay(..., timeProvider, cancellationToken)`).
+- **`AsyncFixer03` (`async void` fire-and-forget)**: Convert `async void` methods to `async Task` (except framework-mandated Blazor/MAUI UI event handlers, which must wrap their body in an explicit `try/catch` error boundary).
+- **`RS0030` (Banned Symbol from `BannedSymbols.txt`)**:
+  - `DateTime.Now` / `DateTime.UtcNow` / `DateTimeOffset.Now` → Inject `System.TimeProvider` via primary/constructor DI and call `timeProvider.GetUtcNow()`.
+  - `Task.Wait` / `Task.Result` / `Thread.Sleep` → Convert to non-blocking `await` with `CancellationToken`.
+- **`MA0004` / `MA0040` (Meziantou Concurrency & CancellationToken)**: Forward the caller's `CancellationToken` to all downstream async calls and apply `.ConfigureAwait(false)` in non-UI library layers (`core/`, `providers/`, `workflow/`).
+
+---
+
 ## Stack
 
 - .NET 10 / Blazor WebAssembly (Web) + MAUI (mobile/desktop)
@@ -12,12 +55,17 @@
 
 ## Folder Structure
 
-- `apps/` — Blazor Web, MAUI, Shared RCL, Identity EFCore, Commands Builtin
-- `core/` — Core, Commands, Workflow, Identity, Observability
-- `providers/` — InMemory, PostgreSQL, Active, Rest, Observable, Utils
-- `plugins/` — Plugin.Hydrology, Plugin.GeoJsonImport
-- `workflow/` — EFCore, Kafka, ServiceBus
-- `examples/`
+- `apps/` — Blazor Web, ASP.NET Core Server, MAUI, Shared RCL, Identity EFCore, Commands Builtin
+- `core/` — Core, Commands, Workflow, Identity, IpBilling, Infrastructure.Observability
+- `providers/` — PostgreSQL, Rest, Shapefile, WFS, WMS, Xlsx
+- `plugins/commands/` — Plugin.Hydrology, Plugin.GeoJsonImport
+- `workflow/` — EFCore, Rest, Messaging.Kafka, Messaging.ServiceBus, Agents
+- `ipbilling/` — IpBilling.EFCore
+- `projects/` — Projects.EFCore, Projects.Rest
+- `deploy/` — Docker Compose stacks (`web`, `server`, `otel`)
+- `docs/` — Performance baselines and technical reports
+- `tools/` — Benchmarks and developer tooling (`GeoAssets.Bench.GetPageAsync`)
+- `examples/` — Console examples (Spatial, Topology, Workflow, MultiAgent)
 
 ## Key File Paths
 
@@ -34,17 +82,20 @@
 | JS interop | `apps/GeoAssets.Shared/wwwroot/js/geoassets.js` |
 | CSS | `apps/GeoAssets.Shared/wwwroot/css/geoassets.css` |
 | Geometry models | `core/GeoAssets.Core/Models/Geometry/` |
-| Repository | `core/GeoAssets.Core/Services/InMemoryAssetRepository.cs` |
+| Provider contract | `core/GeoAssets.Core/Interfaces/IAssetProvider.cs` |
+| Active provider proxy | `core/GeoAssets.Core/Providers/ActiveAssetProvider.cs` |
+| Provider pool | `core/GeoAssets.Core/Services/ProviderPool.cs` |
 | Map interop interface | `apps/GeoAssets.Shared/Interfaces/IMapInterop.cs` |
 | Map interop impl | `apps/GeoAssets.Shared/Services/MapInteropService.cs` |
 | Web app | `apps/GeoAssets.Web/` |
+| Server app | `apps/GeoAssets.Server/` |
 | MAUI app | `apps/GeoAssets.MAUI/` |
 
 ## Architecture
 
-- **State**: singleton `IAssetRepository` (InMemoryAssetRepository) as source of truth; C# events (`FeatureAdded/Updated/Deleted/CollectionChanged`) as pub/sub
+- **State**: `IAssetProvider` (`ActiveAssetProvider` proxying the active entry in `IProviderPool`) as source of truth; C# events (`FeatureAdded/Updated/Deleted/CollectionChanged`) as pub/sub
 - **JS↔C# bridge**: `DotNetObjectReference<object>` stored in JS `_maps[divId].dotNetRef`; C# calls JS via `IJSRuntime.InvokeVoidAsync("GeoAssets.*")`
-- **JS→C# callbacks** (all `[JSInvokable]` on `MapContainer`): `OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`
+- **JS→C# callbacks** (all `[JSInvokable]` on `MapContainer`): `OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`, `OnViewportChangedFromJs`
 - **Auto-save**: `AssetService` debounces 500ms on `CollectionChanged` → `IStorageService.SaveAsync`
 
 ## Geometry (NTS Integration)
@@ -52,7 +103,7 @@
 - `GeoGeometry` base: abstract `NtsGeometry` property, `GetBoundingBox()` via NTS envelope, spatial predicates (`Contains`, `Intersects`, `Within`, etc.), measurements (`Area`, `Length`, `Distance`), derived geometries (`Buffer`, `ConvexHull`, `Union`, etc.), `Centroid`, `FromNts()` static factory
 - `GeoPoint`, `GeoLineString`, `GeoPolygon`: each builds NTS geometry lazily from coordinate arrays (SRID 4326, X=lon, Y=lat)
 - Serialization: coordinate arrays are the JSON source of truth — do not change this
-- Spatial queries on `IAssetRepository`: `GetWithin`, `GetIntersecting`, `GetNearby`
+- Spatial queries on `IAssetProvider`: `GetWithinAsync`, `GetIntersectingAsync`, `GetNearbyAsync`, `GetInBoundsAsync`
 
 ## Topology (directed graph)
 
@@ -63,9 +114,9 @@
 ## PostgreSQL Provider
 
 - Register with `builder.Services.AddGeoAssetsPostgres()` (server-side hosts only — not Blazor WASM)
-- `IExternalRepositoryFactory` (Core) — discoverable; `RepositoryPoolPanel` renders one entry per registered factory
+- `IExternalProviderFactory` (Core) — discoverable; `ProviderPoolPanel` renders entries managed in `IProviderPool`
 - NTS bridge: write `feature.Geometry?.NtsGeometry` → `GeoEntityRow.Geom`; read `GeoGeometry.FromNts(row.Geom)` → `GeoFeature.Geometry`
-- Key files: `Data/GeoAssetsDbContext.cs`, `Entities/GeoEntityRow.cs`, `Repositories/PostgresAssetRepository.cs`, `PostgresRepositoryFactory.cs`
+- Key files: `Data/GeoAssetsDbContext.cs`, `Entities/GeoEntityRow.cs`, `Repositories/PostgresAssetProvider.cs`, `PostgresProviderFactory.cs`
 
 ## Context Menu
 

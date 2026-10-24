@@ -1,0 +1,242 @@
+{
+  "$schema": "https://antigravity.google/schemas/workflow-dag-v1.json",
+  "workflowId": "geoassets-tri-planar-code-gen-dag",
+  "name": "GeoAssets Tri-Planar Multi-Agent Code Generation & Verification DAG",
+  "version": "1.0.0",
+  "description": "Declarative Outer-Loop orchestration blueprint for Google Antigravity coordinating Claude Code (Deep Reasoning/Refactoring) and GitHub Copilot (Mechanical/QA) across isolated Git Worktrees with a Deterministic Oracle Substrate.",
+  "metadata": {
+    "targetStack": ".NET 10 (C# 14, Blazor WASM, MAUI, ASP.NET Core, EF Core/PostGIS, NetTopologySuite)",
+    "architectureModel": "Tri-Planar Dual-Loop with Deterministic Oracle Substrate",
+    "repositoryRoot": ".",
+    "integrationBranch": "origin/develop",
+    "protectedBranches": ["main", "master"],
+    "maxConcurrentWorktrees": 5
+  },
+  "agents": {
+    "orchestrator": {
+      "id": "google-antigravity",
+      "plane": "ControlPlane-OuterLoop",
+      "role": "DAG Orchestrator, Worktree Lifecycle Manager, Deterministic Gatekeeper, and Merge Coordinator",
+      "contracts": ["CLAUDE.md", "AI-AUGMENTED-DEVELOPMENT.md"]
+    },
+    "reasoningSpecialist": {
+      "id": "claude-code",
+      "plane": "ExecutionPlane-InnerLoop-DeepReasoning",
+      "role": "Domain Modeling, Architectural Refactoring, Spatial/Topology Logic, and Self-Healing Diagnostic Repair",
+      "contractFile": "CLAUDE.md",
+      "skills": [
+        ".claude/skills/csharp-conventions/SKILL.md",
+        ".claude/skills/observability-conventions/SKILL.md",
+        ".claude/skills/jira-conventions/SKILL.md",
+        ".claude/skills/ui-ux-pro-max/SKILL.md"
+      ]
+    },
+    "mechanicalWorker": {
+      "id": "github-copilot",
+      "plane": "ExecutionPlane-InnerLoop-MechanicalQA",
+      "role": "Fast Mechanical Scaffolding, DTO/Mapper Generation, xUnit/NSubstitute Test Suites, and Formatting",
+      "contractFile": ".github/copilot-instructions.md"
+    }
+  },
+  "oracleSubstrate": {
+    "sandboxScript": "./scripts/agent-sandbox.sh",
+    "verifierScript": "./scripts/verify-agent-worktree.sh",
+    "buildProps": "./Directory.Build.props",
+    "bannedSymbols": "./BannedSymbols.txt",
+    "exitCodeMap": {
+      "0": "PASS_VERIFIED",
+      "2": "FATAL_ENVIRONMENT_OR_PROTECTED_BRANCH_VIOLATION",
+      "10": "FAIL_STAGE_1_DOTNET_FORMAT",
+      "20": "FAIL_STAGE_2_COMPILER_OR_ANALYZER_WARNASERROR",
+      "30": "FAIL_STAGE_3_ARCHITECTURE_OR_INVARIANT_TEST"
+    }
+  },
+  "parameters": {
+    "taskId": {
+      "type": "string",
+      "required": true,
+      "pattern": "^[a-zA-Z0-9._-]+$",
+      "description": "Jira ticket key or task slug (e.g., 'XD01-195-spatial-buffer-cache')"
+    },
+    "baseRef": {
+      "type": "string",
+      "default": "origin/develop",
+      "forbiddenValues": ["main", "origin/main", "master", "origin/master"]
+    },
+    "maxSelfHealRetries": {
+      "type": "integer",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 5
+    }
+  },
+  "phases": [
+    {
+      "phaseId": "phase-1-decompose-and-init-worktree",
+      "name": "Phase 1: Task Decomposition & Worktree Initialization",
+      "owner": "google-antigravity",
+      "dependsOn": [],
+      "steps": [
+        {
+          "stepId": "1.1-decompose-task",
+          "action": "analyze_and_decompose",
+          "description": "Parse ticket/request requirements, verify dependency graph (formal Jira Blocks links + prose 'Depends on' references), and split work into (A) Core Domain/Architecture slice for Claude Code and (B) Mechanical/Test/Mock slice for GitHub Copilot.",
+          "outputs": ["coreLogicSpec", "testAndBoilerplateSpec", "touchedProjects"]
+        },
+        {
+          "stepId": "1.2-provision-worktree",
+          "action": "shell_exec",
+          "command": "./scripts/agent-sandbox.sh create {{parameters.taskId}} {{parameters.baseRef}}",
+          "workingDirectory": ".",
+          "expectedExitCode": 0,
+          "outputs": {
+            "worktreePath": "../worktrees/{{parameters.taskId}}",
+            "branchName": "{{parameters.taskId | lowercase}}"
+          },
+          "onFailure": {
+            "action": "abort_workflow",
+            "reason": "Failed to provision isolated Git worktree or base branch policy violated."
+          }
+        }
+      ]
+    },
+    {
+      "phaseId": "phase-2-parallel-agent-dispatch",
+      "name": "Phase 2: Parallel Dispatch (Claude Code + GitHub Copilot)",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-1-decompose-and-init-worktree"],
+      "executionMode": "parallel",
+      "branches": [
+        {
+          "branchId": "2A-claude-code-core-domain",
+          "agent": "claude-code",
+          "workingDirectory": "../worktrees/{{parameters.taskId}}",
+          "inputs": ["coreLogicSpec", "CLAUDE.md", ".claude/skills/csharp-conventions/SKILL.md"],
+          "instructions": [
+            "Implement core domain logic, architectural abstractions, spatial/workflow rules, and complex refactoring inside the assigned worktree.",
+            "Inject System.TimeProvider instead of DateTime.Now/UtcNow (BannedSymbols.txt).",
+            "Maintain strict Onion Architecture boundaries: zero PostGIS/EFCore dependencies in core/ projects.",
+            "Ensure all async paths propagate CancellationToken and avoid sync-over-async."
+          ],
+          "outputs": ["modifiedProductionFiles"]
+        },
+        {
+          "branchId": "2B-copilot-tests-and-boilerplate",
+          "agent": "github-copilot",
+          "workingDirectory": "../worktrees/{{parameters.taskId}}",
+          "inputs": ["testAndBoilerplateSpec", ".github/copilot-instructions.md"],
+          "instructions": [
+            "Scaffold DTOs, mappers, DomainTestDataBuilders, NSubstitute/Moq test doubles, and xUnit [Fact]/[Theory] tests targeting 100% branch coverage.",
+            "Use .NET 10 / C# 14 idioms (readonly record struct, pattern matching, FakeTimeProvider).",
+            "Normalize whitespace and code style for dotnet format compliance."
+          ],
+          "outputs": ["modifiedTestAndBoilerplateFiles"]
+        }
+      ],
+      "joinBarrier": "all_branches_completed"
+    },
+    {
+      "phaseId": "phase-3-deterministic-oracle-verification",
+      "name": "Phase 3: Execution of the Deterministic Oracle",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-2-parallel-agent-dispatch"],
+      "steps": [
+        {
+          "stepId": "3.1-run-oracle-gatekeeper",
+          "action": "shell_exec",
+          "command": "./scripts/verify-agent-worktree.sh ../worktrees/{{parameters.taskId}}",
+          "workingDirectory": ".",
+          "captureStdout": true,
+          "captureStderr": true,
+          "transitions": {
+            "0": "phase-5-worktree-cleanup-and-merge-prep",
+            "10": "phase-4-feedback-self-healing-loop",
+            "20": "phase-4-feedback-self-healing-loop",
+            "30": "phase-4-feedback-self-healing-loop",
+            "2": "abort_workflow"
+          }
+        }
+      ]
+    },
+    {
+      "phaseId": "phase-4-feedback-self-healing-loop",
+      "name": "Phase 4: Feedback Self-Healing Loop (Bounded Retry)",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-3-deterministic-oracle-verification"],
+      "loopPolicy": {
+        "maxIterations": "{{parameters.maxSelfHealRetries}}",
+        "counterVariable": "healAttempt",
+        "onMaxIterationsExceeded": {
+          "action": "halt_and_escalate_to_human",
+          "preserveWorktree": true,
+          "message": "Deterministic Oracle still failing after {{parameters.maxSelfHealRetries}} self-healing attempts. Worktree preserved at ../worktrees/{{parameters.taskId}} for human inspection."
+        }
+      },
+      "routingRules": [
+        {
+          "whenExitCode": 10,
+          "failureCategory": "FormattingDrift",
+          "targetAgent": "github-copilot",
+          "remediationCommand": "dotnet format GeoAssets.sln",
+          "instructions": "Apply deterministic formatting fixes in ../worktrees/{{parameters.taskId}} without altering logic, then re-enter Phase 3."
+        },
+        {
+          "whenExitCode": 20,
+          "failureCategory": "CompilerOrAnalyzerViolation",
+          "targetAgent": "claude-code",
+          "instructions": "Parse targeted Roslyn/AsyncFixer/Meziantou/BannedApi diagnostics from Phase 3 output. Resolve each diagnostic in source without using #pragma warning disable or <NoWarn>, preserving domain invariants, then re-enter Phase 3."
+        },
+        {
+          "whenExitCode": 30,
+          "failureCategory": "ArchitectureOrInvariantFailure",
+          "targetAgent": "claude-code",
+          "instructions": "Analyze failed NetArchTest or domain unit test assertions from Phase 3 output. Repair layer coupling or domain logic defects, update tests via GitHub Copilot if test setup was stale, then re-enter Phase 3."
+        }
+      ],
+      "postIterationTransition": "phase-3-deterministic-oracle-verification"
+    },
+    {
+      "phaseId": "phase-5-worktree-cleanup-and-merge-prep",
+      "name": "Phase 5: Worktree Cleanup and Merge Preparation",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-3-deterministic-oracle-verification"],
+      "precondition": "phase-3-deterministic-oracle-verification.exitCode == 0",
+      "steps": [
+        {
+          "stepId": "5.1-rebase-onto-develop",
+          "action": "shell_exec",
+          "workingDirectory": "../worktrees/{{parameters.taskId}}",
+          "command": "git fetch origin develop && git rebase origin/develop",
+          "onConflict": {
+            "targetAgent": "claude-code",
+            "instructions": "Resolve mechanical rebase conflicts using worktree context; if semantic conflict detected, run 'git rebase --abort' and escalate to human."
+          }
+        },
+        {
+          "stepId": "5.2-post-rebase-oracle-recheck",
+          "action": "shell_exec",
+          "workingDirectory": ".",
+          "command": "./scripts/verify-agent-worktree.sh ../worktrees/{{parameters.taskId}}",
+          "expectedExitCode": 0
+        },
+        {
+          "stepId": "5.3-stage-and-commit-or-prepare-pr",
+          "action": "prepare_merge_artifact",
+          "workingDirectory": "../worktrees/{{parameters.taskId}}",
+          "commitConvention": "<type>(<scope>): <summary> ({{parameters.taskId}})",
+          "prTitleConvention": "{{parameters.taskId}}: <summary>",
+          "targetBranch": "develop",
+          "forbidTargetBranch": "main"
+        },
+        {
+          "stepId": "5.4-destroy-sandbox-after-merge",
+          "action": "shell_exec",
+          "workingDirectory": ".",
+          "command": "./scripts/agent-sandbox.sh destroy {{parameters.taskId}}",
+          "runCondition": "when_branch_merged_to_develop"
+        }
+      ]
+    }
+  ]
+}
+
