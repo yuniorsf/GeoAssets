@@ -70,6 +70,8 @@ public sealed class BootLoaderService : IBootLoader
 
     public async Task<ProviderEntry> BootWithAsync(IProviderPlugin plugin, ProviderConfig config, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(plugin);
+        ArgumentNullException.ThrowIfNull(config);
         var provider = await plugin.CreateAsync(config, _services, ct);
         var name     = config.Get("name", plugin.DisplayName);
         var entry    = _pool.Add(name, provider, plugin.Id, config.ToReconnectValues(plugin.ConfigFields));

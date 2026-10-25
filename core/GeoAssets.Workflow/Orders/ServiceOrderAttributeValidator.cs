@@ -23,6 +23,9 @@ public static class ServiceOrderAttributeValidator
     /// </summary>
     public static IReadOnlyList<string> Validate(OrderType orderType, IReadOnlyDictionary<string, string> attributes)
     {
+        ArgumentNullException.ThrowIfNull(orderType);
+        ArgumentNullException.ThrowIfNull(attributes);
+
         if (string.IsNullOrWhiteSpace(orderType.AttributesSchemaJson))
             return [];
 
@@ -41,6 +44,8 @@ public static class ServiceOrderAttributeValidator
     /// <summary>Throws <see cref="ServiceOrderAttributeValidationException"/> when invalid.</summary>
     public static void EnsureValid(OrderType orderType, IReadOnlyDictionary<string, string> attributes)
     {
+        ArgumentNullException.ThrowIfNull(orderType);
+
         var errors = Validate(orderType, attributes);
         if (errors.Count > 0)
             throw new ServiceOrderAttributeValidationException(orderType.Id, errors);

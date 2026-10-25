@@ -11,7 +11,7 @@ public sealed record FeatureSelectionSpec
 
     /// <summary>The parameters that were passed to the strategy at execution time.</summary>
     public IReadOnlyDictionary<string, object> Parameters { get; init; } =
-        new Dictionary<string, object>();
+        new Dictionary<string, object>(StringComparer.Ordinal);
 
     /// <summary>UTC timestamp when the selection was executed.</summary>
     public required DateTime ExecutedAt { get; init; }

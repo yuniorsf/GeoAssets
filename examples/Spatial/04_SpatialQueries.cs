@@ -15,7 +15,7 @@ using GeoAssets.Core.Services;
 
 namespace GeoAssets.Examples.Spatial;
 
-public static class SpatialQueries
+internal static class SpatialQueries
 {
     public static void Run()
     {

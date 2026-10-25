@@ -72,12 +72,12 @@ public partial class SchemaDrivenAttributeEditor
                     : schema.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String
                         ? typeEl.GetString() switch
                         {
-                            "integer" => SchemaFieldKind.Integer,
+                            "integer" => SchemaFieldKind.WholeNumber,
                             "number" => SchemaFieldKind.Number,
                             "boolean" => SchemaFieldKind.Boolean,
-                            _ => SchemaFieldKind.String
+                            _ => SchemaFieldKind.Text
                         }
-                        : SchemaFieldKind.String;
+                        : SchemaFieldKind.Text;
 
                 var minimum = schema.TryGetProperty("minimum", out var minEl) && minEl.ValueKind == JsonValueKind.Number
                     ? minEl.GetDouble() : (double?)null;
@@ -91,14 +91,3 @@ public partial class SchemaDrivenAttributeEditor
         }
     }
 }
-
-public enum SchemaFieldKind { String, Integer, Number, Boolean, Enum }
-
-public sealed record SchemaField(
-    string Key,
-    string Label,
-    SchemaFieldKind Kind,
-    bool Required,
-    double? Minimum,
-    double? Maximum,
-    IReadOnlyList<string>? EnumValues);

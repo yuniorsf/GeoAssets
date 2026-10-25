@@ -18,7 +18,7 @@ namespace GeoAssets.Workflow.Agents.Executors;
 /// <see cref="ServiceOrder.DispatchTo"/>/<see cref="ServiceOrder.RecordAction"/> calls. This is
 /// the hybrid (part-agent, part-human) case falling out of configuration, not code.
 /// </summary>
-public sealed class DispatchServiceOrderExecutor(
+public sealed partial class DispatchServiceOrderExecutor(
     IServiceOrderRepository                repository,
     ServiceOrderRules                      rules,
     IAgentIdentityProvider                 identity,
@@ -33,6 +33,7 @@ public sealed class DispatchServiceOrderExecutor(
         IWorkflowContext    context,
         CancellationToken   cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(message);
         using var span = tracer.StartAgentActivity("Dispatch", message.Order.Id, message.AgentId, message.AgentInvocationId);
 
         var principal = identity.Resolve(message.AgentId);
@@ -43,58 +44,71 @@ public sealed class DispatchServiceOrderExecutor(
 
         if (!decision.Allowed)
         {
-            logger.LogInformation(
-                "Agent {AgentId} denied Dispatch on order {OrderId}: {Reason}",
-                message.AgentId, order.Id, decision.Reason);
+            LogDenied(logger, message.AgentId, order.Id, decision.Reason);
             return order;
         }
 
         try
         {
-            // AppendDispatchAsync/AppendActionAsync — not UpdateAsync, which explicitly does not
-            // persist Dispatches/ActionLog (see IServiceOrderWriter.UpdateAsync). AppendActionAsync
-            // applies the Draft -> Pending transition atomically with the audit entry.
-            var dispatchedAt = timeProvider.GetUtcNow().UtcDateTime;
-            var dispatch = new OrderDispatch(
-                message.DispatchTargetId,
-                message.DispatchTargetType,
-                message.AgentId,
-                dispatchedAt)
-            {
-                ActorKind         = ActorKind.Agent,
-                AgentInvocationId = message.AgentInvocationId
-            };
-
-            await repository.AppendDispatchAsync(order.Id, dispatch, cancellationToken);
-            await repository.AppendActionAsync(
-                order.Id,
-                new OrderActionLog(
-                    OrderActionType.Dispatch,
-                    message.AgentId,
-                    dispatchedAt,
-                    ResultingStatus: ServiceOrderStatus.Pending)
-                {
-                    ActorKind         = ActorKind.Agent,
-                    AgentInvocationId = message.AgentInvocationId
-                },
-                cancellationToken);
-
-            // Whether AppendDispatchAsync/AppendActionAsync mutate `order` in place is an
-            // implementation detail some repositories (in-memory) happen to do and others
-            // (EF-backed) don't — re-read the authoritative persisted state instead of guessing.
-            var updated = (ServiceOrder)(await repository.GetByIdAsync(order.Id, cancellationToken))!;
-
-            logger.LogInformation(
-                "Agent {AgentId} dispatched order {OrderId}; transitioned to {NewStatus}",
-                message.AgentId, updated.Id, updated.Status);
-
-            return updated;
+            return await DispatchAndActivateAsync(message, order, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             GeoAssetsActivitySource.RecordException(span, ex);
-            logger.LogError(ex, "Agent {AgentId} failed to dispatch order {OrderId}", message.AgentId, order.Id);
+            LogDispatchFailed(logger, message.AgentId, order.Id, ex);
             throw;
         }
     }
+
+    /// <summary>
+    /// AppendDispatchAsync/AppendActionAsync — not UpdateAsync, which explicitly does not persist
+    /// Dispatches/ActionLog (see IServiceOrderWriter.UpdateAsync). AppendActionAsync applies the
+    /// Draft -> Pending transition atomically with the audit entry.
+    /// </summary>
+    private async Task<ServiceOrder> DispatchAndActivateAsync(
+        ServiceOrderCreated message, ServiceOrder order, CancellationToken cancellationToken)
+    {
+        var dispatchedAt = timeProvider.GetUtcNow().UtcDateTime;
+        var dispatch = new OrderDispatch(
+            message.DispatchTargetId,
+            message.DispatchTargetType,
+            message.AgentId,
+            dispatchedAt)
+        {
+            ActorKind         = ActorKind.Agent,
+            AgentInvocationId = message.AgentInvocationId
+        };
+
+        await repository.AppendDispatchAsync(order.Id, dispatch, cancellationToken).ConfigureAwait(false);
+        await repository.AppendActionAsync(
+            order.Id,
+            new OrderActionLog(
+                OrderActionType.Dispatch,
+                message.AgentId,
+                dispatchedAt,
+                ResultingStatus: ServiceOrderStatus.Pending)
+            {
+                ActorKind         = ActorKind.Agent,
+                AgentInvocationId = message.AgentInvocationId
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        // Whether AppendDispatchAsync/AppendActionAsync mutate `order` in place is an
+        // implementation detail some repositories (in-memory) happen to do and others
+        // (EF-backed) don't — re-read the authoritative persisted state instead of guessing.
+        var updated = (ServiceOrder)(await repository.GetByIdAsync(order.Id, cancellationToken).ConfigureAwait(false))!;
+
+        LogDispatched(logger, message.AgentId, updated.Id, updated.Status);
+
+        return updated;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Agent {AgentId} denied Dispatch on order {OrderId}: {Reason}")]
+    private static partial void LogDenied(ILogger logger, string agentId, string orderId, string reason);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Agent {AgentId} dispatched order {OrderId}; transitioned to {NewStatus}")]
+    private static partial void LogDispatched(ILogger logger, string agentId, string orderId, string newStatus);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Agent {AgentId} failed to dispatch order {OrderId}")]
+    private static partial void LogDispatchFailed(ILogger logger, string agentId, string orderId, Exception ex);
 }

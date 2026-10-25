@@ -15,10 +15,10 @@ public sealed class EFPolicyRepository(GeoIdentityDbContext db) : IPolicyReposit
                       .FirstOrDefaultAsync(p => p.Name == name, ct);
 
     public async Task<IReadOnlyList<AppPolicy>> GetAllAsync(CancellationToken ct = default)
-        => await db.Policies.Include(p => p.Requirements).ToListAsync(ct);
+        => await db.Policies.Include(p => p.Requirements).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task AddAsync(AppPolicy policy, CancellationToken ct = default)
-        => await db.Policies.AddAsync(policy, ct);
+        => await db.Policies.AddAsync(policy, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(AppPolicy policy, CancellationToken ct = default)
     {
@@ -28,7 +28,7 @@ public sealed class EFPolicyRepository(GeoIdentityDbContext db) : IPolicyReposit
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var p = await db.Policies.FindAsync([id], ct);
+        var p = await db.Policies.FindAsync([id], ct).ConfigureAwait(false);
         if (p is not null) db.Policies.Remove(p);
     }
 

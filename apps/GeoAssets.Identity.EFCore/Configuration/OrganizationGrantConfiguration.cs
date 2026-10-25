@@ -25,7 +25,7 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
         // ServiceOrderRecord.AttributesJson).
         var allowedActionsComparer = new ValueComparer<List<string>>(
             (left, right) => (left ?? new()).SequenceEqual(right ?? new()),
-            v => v.Aggregate(0, (hash, s) => HashCode.Combine(hash, s.GetHashCode())),
+            v => v.Aggregate(0, (hash, s) => HashCode.Combine(hash, s.GetHashCode(StringComparison.Ordinal))),
             v => v.ToList());
 
         b.Property(g => g.AllowedActions)

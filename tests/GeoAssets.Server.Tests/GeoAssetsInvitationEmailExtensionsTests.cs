@@ -18,7 +18,7 @@ public class GeoAssetsInvitationEmailExtensionsTests
 
     private static IConfiguration InvitationConfiguration(bool enabled) =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["Invitation:Enabled"]         = enabled.ToString(),
                 ["Invitation:PublicWebAppUrl"] = "https://app.geoassets.example",

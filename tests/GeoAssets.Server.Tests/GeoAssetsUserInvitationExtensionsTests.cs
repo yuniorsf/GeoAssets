@@ -20,7 +20,7 @@ public class GeoAssetsUserInvitationExtensionsTests
 
     private static IConfiguration InvitationConfiguration(bool enabled) =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["Invitation:Enabled"]   = enabled.ToString(),
                 ["RoleSync:TenantId"]     = "11111111-2222-3333-4444-555555555555",
@@ -31,7 +31,7 @@ public class GeoAssetsUserInvitationExtensionsTests
 
     private static IConfiguration BothFeaturesEnabledConfiguration() =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["RoleSync:Enabled"]                       = "true",
                 ["RoleSync:TenantId"]                       = "11111111-2222-3333-4444-555555555555",

@@ -20,7 +20,7 @@ public class ProviderConfigTests
             new ProviderConfigField("name", "Name"),
         ]);
 
-        result.Should().BeEquivalentTo(new Dictionary<string, string>
+        result.Should().BeEquivalentTo(new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["url"]  = "https://example.test",
             ["name"] = "My Layer",

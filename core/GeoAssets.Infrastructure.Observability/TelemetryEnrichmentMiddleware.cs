@@ -30,17 +30,19 @@ public sealed class TelemetryEnrichmentMiddleware(
 {
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         var activity = Activity.Current;
 
         using (logger.BeginScope(BuildScope(context, activity)))
         {
-            await next(context);
+            await next(context).ConfigureAwait(false);
         }
     }
 
     private static Dictionary<string, object?> BuildScope(HttpContext ctx, Activity? activity)
     {
-        var scope = new Dictionary<string, object?>
+        var scope = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["RequestPath"] = ctx.Request.Path.Value,
             ["RequestMethod"] = ctx.Request.Method,

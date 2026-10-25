@@ -29,6 +29,7 @@ public class IpBillingDbContext(DbContextOptions<IpBillingDbContext> options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IpBillingDbContext).Assembly);
     }

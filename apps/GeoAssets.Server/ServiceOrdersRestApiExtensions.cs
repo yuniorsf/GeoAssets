@@ -46,57 +46,81 @@ public static class ServiceOrdersRestApiExtensions
         this IEndpointRouteBuilder routes,
         string prefix = "/api/workflow")
     {
-        var opts = GeoJsonSerializer.GetOptions();
+        var opts = GeoJsonSerializer.Options;
 
-        // ── Service Orders — reads ──────────────────────────────────────────────
+        MapServiceOrderReads(routes, prefix, opts);
+        MapServiceOrderWrites(routes, prefix, opts);
+        MapOrderTypesApi(routes, prefix, opts);
 
+        return routes;
+    }
+
+    // ── Service Orders — reads ──────────────────────────────────────────────
+
+    private static void MapServiceOrderReads(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapGet($"{prefix}/service-orders", async (IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetAllAsync(), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetAllAsync().ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/roots", async (IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetRootsAsync(), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetRootsAsync().ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-status/{{status}}", async (string status, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByStatusAsync(status), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetByStatusAsync(status).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-assignee/{{userId}}", async (string userId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByAssigneeAsync(userId), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetByAssigneeAsync(userId).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-creator/{{userId}}", async (string userId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByCreatorAsync(userId), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetByCreatorAsync(userId).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-order-type/{{orderTypeId}}", async (string orderTypeId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByOrderTypeAsync(orderTypeId), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetByOrderTypeAsync(orderTypeId).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/by-date-range", async (DateTime from, DateTime to, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByDateRangeAsync(from, to), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetByDateRangeAsync(from, to).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/dispatched-to/{{targetId}}",
             async (string targetId, DispatchTargetType targetType, IServiceOrderRepository repo) =>
-                Results.Json(await repo.GetDispatchedToAsync(targetId, targetType), opts)).RequireAuthorization("serviceorders:read");
+                Results.Json(await repo.GetDispatchedToAsync(targetId, targetType).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/{{id}}", async (string id, IServiceOrderRepository repo) =>
         {
-            var order = await repo.GetByIdAsync(id);
+            var order = await repo.GetByIdAsync(id).ConfigureAwait(false);
             return order is null ? Results.NotFound() : Results.Json(order, opts);
         }).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/{{id}}/children", async (string id, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetChildrenAsync(id), opts)).RequireAuthorization("serviceorders:read");
+            Results.Json(await repo.GetChildrenAsync(id).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
 
         routes.MapGet($"{prefix}/service-orders/{{id}}/parent", async (string id, IServiceOrderRepository repo) =>
         {
-            var parent = await repo.GetParentAsync(id);
+            var parent = await repo.GetParentAsync(id).ConfigureAwait(false);
             return parent is null ? Results.NotFound() : Results.Json(parent, opts);
         }).RequireAuthorization("serviceorders:read");
+    }
 
-        // ── Service Orders — writes ─────────────────────────────────────────────
+    // ── Service Orders — writes ─────────────────────────────────────────────
 
+    private static void MapServiceOrderWrites(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        MapServiceOrderCreateAndUpdate(routes, prefix, opts);
+        MapServiceOrderActionsAndDelete(routes, prefix, opts);
+    }
+
+    private static void MapServiceOrderCreateAndUpdate(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        MapServiceOrderCreate(routes, prefix, opts);
+        MapServiceOrderUpdate(routes, prefix, opts);
+    }
+
+    private static void MapServiceOrderCreate(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapPost($"{prefix}/service-orders", async (
             HttpRequest req, IServiceOrderRepository repo, OrderTypeRegistry orderTypeRegistry,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
-            var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts);
+            var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts).ConfigureAwait(false);
             if (order is null) return Results.BadRequest("Invalid service order.");
 
             // Looks up OrderTypeRegistry (the seeded-defaults + DB-persisted-overlay singleton,
@@ -108,41 +132,44 @@ public static class ServiceOrdersRestApiExtensions
             var orderType = orderTypeRegistry.Find(order.OrderTypeId);
             if (orderType is null) return Results.BadRequest($"Unknown order type '{order.OrderTypeId}'.");
 
-            var principal = await principalFactory.CreateAsync();
+            var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             if (!rules.CanCreate(principal, orderType))
                 return Results.Json(new { reason = "Not authorized to create orders of this type." },
                     statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
-                await repo.AddAsync(order);
-                return Results.Created($"{prefix}/service-orders/{order.Id}", null);
+                await repo.AddAsync(order).ConfigureAwait(false);
+                return Results.Created(new Uri($"{prefix}/service-orders/{order.Id}", UriKind.Relative), null);
             }
             catch (ServiceOrderAttributeValidationException ex)
             {
                 return Results.BadRequest(new { orderTypeId = ex.OrderTypeId, errors = ex.Errors });
             }
         });
+    }
 
+    private static void MapServiceOrderUpdate(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapPut($"{prefix}/service-orders/{{id}}", async (
             string id, HttpRequest req, IServiceOrderRepository repo,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
-            var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts);
+            var order = await JsonSerializer.DeserializeAsync<ServiceOrder>(req.Body, opts).ConfigureAwait(false);
             if (order is null) return Results.BadRequest("Invalid service order.");
-            if (order.Id != id) return Results.BadRequest("Route id does not match body id.");
+            if (!string.Equals(order.Id, id, StringComparison.Ordinal)) return Results.BadRequest("Route id does not match body id.");
 
-            var existing = await repo.GetByIdAsync(id);
+            var existing = await repo.GetByIdAsync(id).ConfigureAwait(false);
             if (existing is null) return Results.NotFound();
 
-            var principal = await principalFactory.CreateAsync();
+            var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, OrderActionType.Annotate, existing);
             if (!verdict.Allowed)
                 return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
-                await repo.UpdateAsync(order);
+                await repo.UpdateAsync(order).ConfigureAwait(false);
                 return Results.NoContent();
             }
             catch (ServiceOrderAttributeValidationException ex)
@@ -162,25 +189,34 @@ public static class ServiceOrdersRestApiExtensions
                 return Results.NotFound();
             }
         });
+    }
 
+    private static void MapServiceOrderActionsAndDelete(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        MapServiceOrderDispatchAndActions(routes, prefix, opts);
+        MapServiceOrderDelete(routes, prefix);
+    }
+
+    private static void MapServiceOrderDispatchAndActions(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapPost($"{prefix}/service-orders/{{id}}/dispatch", async (
             string id, HttpRequest req, IServiceOrderRepository repo,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
-            var dispatch = await JsonSerializer.DeserializeAsync<OrderDispatch>(req.Body, opts);
+            var dispatch = await JsonSerializer.DeserializeAsync<OrderDispatch>(req.Body, opts).ConfigureAwait(false);
             if (dispatch is null) return Results.BadRequest("Invalid dispatch.");
 
-            var order = await repo.GetByIdAsync(id);
+            var order = await repo.GetByIdAsync(id).ConfigureAwait(false);
             if (order is null) return Results.NotFound();
 
-            var principal = await principalFactory.CreateAsync();
+            var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, OrderActionType.Dispatch, order);
             if (!verdict.Allowed)
                 return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
-                await repo.AppendDispatchAsync(id, dispatch);
+                await repo.AppendDispatchAsync(id, dispatch).ConfigureAwait(false);
                 return Results.NoContent();
             }
             catch (KeyNotFoundException)
@@ -193,20 +229,20 @@ public static class ServiceOrdersRestApiExtensions
             string id, HttpRequest req, IServiceOrderRepository repo,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
-            var entry = await JsonSerializer.DeserializeAsync<OrderActionLog>(req.Body, opts);
+            var entry = await JsonSerializer.DeserializeAsync<OrderActionLog>(req.Body, opts).ConfigureAwait(false);
             if (entry is null) return Results.BadRequest("Invalid action.");
 
-            var order = await repo.GetByIdAsync(id);
+            var order = await repo.GetByIdAsync(id).ConfigureAwait(false);
             if (order is null) return Results.NotFound();
 
-            var principal = await principalFactory.CreateAsync();
+            var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, entry.Action, order);
             if (!verdict.Allowed)
                 return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
             try
             {
-                await repo.AppendActionAsync(id, entry);
+                await repo.AppendActionAsync(id, entry).ConfigureAwait(false);
                 return Results.NoContent();
             }
             catch (InvalidServiceOrderTransitionException ex)
@@ -218,62 +254,66 @@ public static class ServiceOrdersRestApiExtensions
                 return Results.NotFound();
             }
         });
+    }
 
+    private static void MapServiceOrderDelete(IEndpointRouteBuilder routes, string prefix)
+    {
         routes.MapDelete($"{prefix}/service-orders/{{id}}", async (
             string id, IServiceOrderRepository repo,
             ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
         {
-            var order = await repo.GetByIdAsync(id);
+            var order = await repo.GetByIdAsync(id).ConfigureAwait(false);
             if (order is null) return Results.NotFound();
 
-            var principal = await principalFactory.CreateAsync();
+            var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, OrderActionType.Cancel, order);
             if (!verdict.Allowed)
                 return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
 
-            await repo.DeleteAsync(id);
+            await repo.DeleteAsync(id).ConfigureAwait(false);
             return Results.NoContent();
         });
+    }
 
-        // ── Order Types ──────────────────────────────────────────────────────────
+    // ── Order Types ──────────────────────────────────────────────────────────
 
+    private static void MapOrderTypesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapGet($"{prefix}/order-types", async (IOrderTypeRepository repo) =>
-            Results.Json(await repo.GetAllAsync(), opts));
+            Results.Json(await repo.GetAllAsync().ConfigureAwait(false), opts));
 
         routes.MapGet($"{prefix}/order-types/{{id}}", async (string id, IOrderTypeRepository repo) =>
         {
-            var orderType = await repo.GetByIdAsync(id);
+            var orderType = await repo.GetByIdAsync(id).ConfigureAwait(false);
             return orderType is null ? Results.NotFound() : Results.Json(orderType, opts);
         });
 
         routes.MapPost($"{prefix}/order-types", async (HttpRequest req, IOrderTypeRepository repo) =>
         {
-            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts);
+            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
             if (orderType is null) return Results.BadRequest("Invalid order type.");
-            await repo.AddAsync(orderType);
-            await repo.SaveChangesAsync();
-            return Results.Created($"{prefix}/order-types/{orderType.Id}", null);
+            await repo.AddAsync(orderType).ConfigureAwait(false);
+            await repo.SaveChangesAsync().ConfigureAwait(false);
+            return Results.Created(new Uri($"{prefix}/order-types/{orderType.Id}", UriKind.Relative), null);
         });
 
         routes.MapPut($"{prefix}/order-types/{{id}}", async (string id, HttpRequest req, IOrderTypeRepository repo) =>
         {
-            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts);
+            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
             if (orderType is null) return Results.BadRequest("Invalid order type.");
-            if (orderType.Id != id) return Results.BadRequest("Route id does not match body id.");
-            if (await repo.GetByIdAsync(id) is null) return Results.NotFound();
+            if (!string.Equals(orderType.Id, id, StringComparison.Ordinal)) return Results.BadRequest("Route id does not match body id.");
+            if (await repo.GetByIdAsync(id).ConfigureAwait(false) is null) return Results.NotFound();
 
-            await repo.UpdateAsync(orderType);
-            await repo.SaveChangesAsync();
+            await repo.UpdateAsync(orderType).ConfigureAwait(false);
+            await repo.SaveChangesAsync().ConfigureAwait(false);
             return Results.NoContent();
         });
 
         routes.MapDelete($"{prefix}/order-types/{{id}}", async (string id, IOrderTypeRepository repo) =>
         {
-            await repo.DeleteAsync(id);
-            await repo.SaveChangesAsync();
+            await repo.DeleteAsync(id).ConfigureAwait(false);
+            await repo.SaveChangesAsync().ConfigureAwait(false);
             return Results.NoContent();
         });
-
-        return routes;
     }
 }

@@ -30,10 +30,10 @@ public sealed class ServerWorkflowPrincipalFactory(
     /// </summary>
     public async Task<WorkflowPrincipal> CreateAsync(CancellationToken ct = default)
     {
-        var context = await authorizationService.GetAuthorizationContextAsync(ct);
+        var context = await authorizationService.GetAuthorizationContextAsync(ct).ConfigureAwait(false);
 
         var orgGrants = context.User.OrganizationId is { } organizationId
-            ? await grantRepository.GetActiveGrantsForGranteeAsync(organizationId, ct)
+            ? await grantRepository.GetActiveGrantsForGranteeAsync(organizationId, ct).ConfigureAwait(false)
             : [];
 
         return new WorkflowPrincipal(

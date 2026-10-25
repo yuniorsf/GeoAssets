@@ -18,7 +18,7 @@ namespace GeoAssets.Workflow.Tests.Selection.Strategies;
 /// </summary>
 public class FeatureSelectionRoundTripTests
 {
-    private static IReadOnlyDictionary<string, object> RoundTrip(IReadOnlyDictionary<string, object> parameters)
+    private static Dictionary<string, object> RoundTrip(IReadOnlyDictionary<string, object> parameters)
     {
         var json = JsonSerializer.Serialize(parameters);
         return JsonSerializer.Deserialize<Dictionary<string, object>>(json)!;
@@ -36,7 +36,7 @@ public class FeatureSelectionRoundTripTests
         repo.Add(new GeoFeature { Id = "inside", Geometry = new GeoPoint(0, 0) });
         repo.Add(new GeoFeature { Id = "outside", Geometry = new GeoPoint(50, 50) });
 
-        var parameters = new Dictionary<string, object>
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["minLon"] = -1.0, ["minLat"] = -1.0, ["maxLon"] = 1.0, ["maxLat"] = 1.0,
         };
@@ -61,7 +61,7 @@ public class FeatureSelectionRoundTripTests
         repo.Add(new GeoFeature { Id = "near", Geometry = new GeoPoint(0.1, 0.1) });
         repo.Add(new GeoFeature { Id = "far", Geometry = new GeoPoint(50, 50) });
 
-        var parameters = new Dictionary<string, object>
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["center"] = new GeoPoint(0, 0),
             ["radiusDegrees"] = 1.0,
@@ -87,7 +87,7 @@ public class FeatureSelectionRoundTripTests
         repo.Add(new GeoFeature { Id = "match", Properties = new GeoFeatureProperties { AssetTypeId = "hydrant" } });
         repo.Add(new GeoFeature { Id = "nomatch", Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
 
-        var parameters = new Dictionary<string, object> { ["assetTypeId"] = "hydrant" };
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal) { ["assetTypeId"] = "hydrant" };
 
         using var registry = NewRegistry();
 
@@ -113,7 +113,7 @@ public class FeatureSelectionRoundTripTests
         });
         repo.Add(new GeoFeature { Id = "child" });
 
-        var parameters = new Dictionary<string, object>
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["featureId"] = "seed",
             ["direction"] = TraversalDirection.Downstream,
@@ -140,7 +140,7 @@ public class FeatureSelectionRoundTripTests
         repo.Add(new GeoFeature { Id = "f1" });
         repo.Add(new GeoFeature { Id = "f2" });
 
-        var parameters = new Dictionary<string, object> { ["featureIds"] = new List<string> { "f1", "f2" } };
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal) { ["featureIds"] = new List<string> { "f1", "f2" } };
 
         using var registry = NewRegistry();
 

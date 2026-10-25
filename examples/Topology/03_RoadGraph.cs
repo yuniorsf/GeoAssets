@@ -18,13 +18,14 @@
 //   • TopologicalSort throws on cyclic graphs — use FindShortestPath instead
 //   • GetConnectedComponents identifies disconnected road clusters
 // ────────────────────────────────────────────────────────────────────────────
+using System.Globalization;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 
 namespace GeoAssets.Examples.Topology;
 
-public static class RoadGraph
+internal static class RoadGraph
 {
     public static void Run()
     {
@@ -103,10 +104,10 @@ public static class RoadGraph
     /// <summary>Adds a pair of directed edges to model an undirected (bidirectional) road.</summary>
     private static void Road(GeoFeature a, GeoFeature b, double distanceKm, int speedKmh = 50)
     {
-        var metadata = new Dictionary<string, string>
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["distanceKm"] = distanceKm.ToString("F1"),
-            ["speedKmh"]   = speedKmh.ToString()
+            ["distanceKm"] = distanceKm.ToString("F1", CultureInfo.InvariantCulture),
+            ["speedKmh"]   = speedKmh.ToString(CultureInfo.InvariantCulture)
         };
 
         a.Topology.Add(new TopoEdge { TargetId = b.Id, Kind = "road", Weight = distanceKm, Metadata = metadata });

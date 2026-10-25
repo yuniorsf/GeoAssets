@@ -46,8 +46,8 @@ public sealed class ValidatingServiceOrderRepository(
     public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default)
         => inner.GetByOrderTypeAsync(orderTypeId, ct);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default)
-        => inner.GetByDateRangeAsync(from, to, ct);
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default)
+        => inner.GetByDateRangeAsync(from, toExclusive, ct);
 
     public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
         string targetId, DispatchTargetType targetType, CancellationToken ct = default)
@@ -57,22 +57,24 @@ public sealed class ValidatingServiceOrderRepository(
 
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         ValidateAttributes(order);
         return inner.AddAsync(order, ct);
     }
 
     public async Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         ValidateAttributes(order);
 
-        var existing = await inner.GetByIdAsync(order.Id, ct)
+        var existing = await inner.GetByIdAsync(order.Id, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
         var orderType = orderTypeRegistry?.Find(order.OrderTypeId);
         if (!ServiceOrderTransitions.IsValid(orderType, existing.Status, order.Status))
             throw new InvalidServiceOrderTransitionException(existing.Status, order.Status);
 
-        await inner.UpdateAsync(order, ct);
+        await inner.UpdateAsync(order, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -93,9 +95,11 @@ public sealed class ValidatingServiceOrderRepository(
 
     public async Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(entry);
+
         if (entry.ResultingStatus is { } resultingStatus)
         {
-            var existing = await inner.GetByIdAsync(orderId, ct)
+            var existing = await inner.GetByIdAsync(orderId, ct).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
             var orderType = orderTypeRegistry?.Find(existing.OrderTypeId);
@@ -103,7 +107,7 @@ public sealed class ValidatingServiceOrderRepository(
                 throw new InvalidServiceOrderTransitionException(existing.Status, resultingStatus);
         }
 
-        await inner.AppendActionAsync(orderId, entry, ct);
+        await inner.AppendActionAsync(orderId, entry, ct).ConfigureAwait(false);
     }
 
     public Task DeleteAsync(string id, CancellationToken ct = default)

@@ -30,13 +30,14 @@ public partial class ServiceOrderCreateForm
             OrderTypeId = _model.OrderTypeId,
             Priority    = _model.Priority,
             CreatedBy   = Principal.UserId,
+            CreatedAt   = Clock.GetUtcNow().UtcDateTime,
         };
 
         await Repository.AddAsync(order);
         await OnSave.InvokeAsync(order);
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 
     private sealed class NewOrderModel
     {

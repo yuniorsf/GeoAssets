@@ -12,7 +12,7 @@ namespace GeoAssets.IpBilling.EFCore.Tests;
 /// Mirrors <c>GeoAssets.Workflow.EFCore.Tests.SqliteFixture</c>, minus that fixture's
 /// RowVersion-trigger workaround — none of this ticket's entities carry a concurrency token.
 /// </summary>
-public sealed class SqliteFixture : IDisposable
+internal sealed class SqliteFixture : IDisposable
 {
     private readonly SqliteConnection _connection;
 

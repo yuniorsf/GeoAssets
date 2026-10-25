@@ -13,19 +13,19 @@ public class CompleteProfileTests
         public CancellationToken ReceivedCancellationToken { get; private set; }
 
         public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default)
         {
@@ -39,7 +39,7 @@ public class CompleteProfileTests
         User = new AppUser
         {
             Id        = userId,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         },
         Roles       = [],
         Claims      = [],

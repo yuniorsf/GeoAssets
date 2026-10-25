@@ -49,14 +49,25 @@ public static class PostgresServiceExtensions
         this IServiceCollection services, string connectionString, CancellationToken ct = default)
     {
 #pragma warning disable ASP0000 // deliberate — see doc comment above
-        await using var interim = services.BuildServiceProvider();
+        var interim = services.BuildServiceProvider();
 #pragma warning restore ASP0000
-        var warmed = await interim
-            .GetRequiredService<PostgresProviderFactory>()
-            .CreateAsync(connectionString, ct);
+        try
+        {
+            var warmed = await interim
+                .GetRequiredService<PostgresProviderFactory>()
+                .CreateAsync(connectionString, ct)
+                .ConfigureAwait(false);
 
-        services.AddSingleton<IAssetProvider>(new ValidatingAssetProvider(warmed));
-        return services;
+            // Registered via a factory (not a pre-built instance) so the DI container takes
+            // ownership and disposes it — a singleton instance handed to AddSingleton(instance)
+            // is never disposed by the container.
+            services.AddSingleton<IAssetProvider>(_ => new ValidatingAssetProvider(warmed));
+            return services;
+        }
+        finally
+        {
+            await interim.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>

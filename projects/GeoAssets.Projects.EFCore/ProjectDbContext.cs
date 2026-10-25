@@ -23,6 +23,8 @@ public class ProjectDbContext(DbContextOptions<ProjectDbContext> options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ProjectDbContext).Assembly);
     }

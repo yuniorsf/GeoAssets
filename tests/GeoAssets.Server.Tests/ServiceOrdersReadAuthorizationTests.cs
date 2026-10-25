@@ -98,7 +98,7 @@ public class ServiceOrdersReadAuthorizationTests
         using var server = await BuildServerAsync("serviceorders:read");
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/workflow/service-orders");
+        var response = await client.GetAsync(new Uri("/api/workflow/service-orders", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -110,7 +110,7 @@ public class ServiceOrdersReadAuthorizationTests
         using var server = await BuildServerAsync(); // authenticated, no permissions granted
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/workflow/service-orders");
+        var response = await client.GetAsync(new Uri("/api/workflow/service-orders", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -121,7 +121,7 @@ public class ServiceOrdersReadAuthorizationTests
         using var server = await BuildServerAsync("serviceorders:read");
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/workflow/service-orders");
+        var response = await client.GetAsync(new Uri("/api/workflow/service-orders", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -132,7 +132,7 @@ public class ServiceOrdersReadAuthorizationTests
         using var server = await BuildServerAsync();
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/workflow/service-orders/some-id");
+        var response = await client.GetAsync(new Uri("/api/workflow/service-orders/some-id", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }

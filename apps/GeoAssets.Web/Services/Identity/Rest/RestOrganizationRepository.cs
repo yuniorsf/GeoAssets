@@ -19,7 +19,7 @@ public sealed class RestOrganizationRepository(HttpClient http) : IOrganizationR
 {
     public async Task<Organization?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"organizations/{id}", ct);
+        var response = await http.GetAsync(new Uri($"organizations/{id}", UriKind.Relative), ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
@@ -47,6 +47,7 @@ public sealed class RestOrganizationRepository(HttpClient http) : IOrganizationR
     /// </summary>
     public async Task AddAsync(Organization organization, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(organization);
         var response = await http.PostAsJsonAsync("organizations",
             new OrganizationWriteDto(organization.Name, organization.Slug, organization.Description, organization.IsActive), ct);
         response.EnsureSuccessStatusCode();
@@ -59,6 +60,7 @@ public sealed class RestOrganizationRepository(HttpClient http) : IOrganizationR
 
     public async Task UpdateAsync(Organization organization, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(organization);
         var response = await http.PutAsJsonAsync($"organizations/{organization.Id}",
             new OrganizationWriteDto(organization.Name, organization.Slug, organization.Description, organization.IsActive), ct);
         response.EnsureSuccessStatusCode();

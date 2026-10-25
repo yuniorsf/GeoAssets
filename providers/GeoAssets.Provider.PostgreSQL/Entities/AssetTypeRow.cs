@@ -9,8 +9,8 @@ public sealed class AssetTypeRow
     public string Name      { get; set; } = string.Empty;
     public string Color     { get; set; } = "#3388ff";
     public string IconUrl   { get; set; } = string.Empty;
-    public bool   IsBuiltIn { get; set; } = false;
-    public bool   IsProtected { get; set; } = false;
+    public bool   IsBuiltIn { get; set; }
+    public bool   IsProtected { get; set; }
     public GeometryType? AllowedGeometryType { get; set; }
     public Guid?  DefaultLayerId { get; set; }
     public string? AttributesSchemaJson { get; set; }

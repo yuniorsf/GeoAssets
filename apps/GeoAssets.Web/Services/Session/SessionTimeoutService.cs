@@ -33,6 +33,7 @@ public sealed class SessionTimeoutService : IAsyncDisposable
 
     public SessionTimeoutService(IOptions<SessionConfig> config, TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(config);
         _config = config.Value;
         _timeProvider = timeProvider;
         _lastActivity = _timeProvider.GetUtcNow();

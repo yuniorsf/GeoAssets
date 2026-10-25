@@ -140,7 +140,7 @@ public class EntraGraphUserInvitationProviderTests
     }
 
     [Fact]
-    public async Task RevokeInvitedAccountAsync_GraphReturns404_DoesNotThrow()
+    public Task RevokeInvitedAccountAsync_GraphReturns404_DoesNotThrow()
     {
         // XD01-94: the Graph account was already deleted out-of-band (e.g. manual cleanup) —
         // the goal ("this account can't sign in") is already satisfied, so this must not throw.
@@ -150,24 +150,24 @@ public class EntraGraphUserInvitationProviderTests
 
         var act = () => sut.RevokeInvitedAccountAsync("already-deleted-oid");
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 
     // ── Error handling ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task CreateInvitedAccountAsync_GraphReturnsError_ThrowsHttpRequestException()
+    public Task CreateInvitedAccountAsync_GraphReturnsError_ThrowsHttpRequestException()
     {
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
         var sut = BuildSut(handler);
 
         var act = () => sut.CreateInvitedAccountAsync("invitee@example.com", "Invitee Name");
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        return act.Should().ThrowAsync<HttpRequestException>();
     }
 
     [Fact]
-    public async Task RevokeInvitedAccountAsync_GraphReturnsForbidden_ThrowsHttpRequestException()
+    public Task RevokeInvitedAccountAsync_GraphReturnsForbidden_ThrowsHttpRequestException()
     {
         // Only 404 ("already gone") is tolerated — every other Graph error must still surface.
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
@@ -175,6 +175,6 @@ public class EntraGraphUserInvitationProviderTests
 
         var act = () => sut.RevokeInvitedAccountAsync("external-oid-1");
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        return act.Should().ThrowAsync<HttpRequestException>();
     }
 }

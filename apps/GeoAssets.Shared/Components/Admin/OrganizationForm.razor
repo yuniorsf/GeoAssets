@@ -1,6 +1,7 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Identity.Authorization.Repositories
 @inject IOrganizationRepository Repository
+@inject TimeProvider Clock
 
 @if (_loading)
 {

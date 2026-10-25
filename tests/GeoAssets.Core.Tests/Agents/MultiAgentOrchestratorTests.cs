@@ -19,13 +19,13 @@ public class MultiAgentOrchestratorTests
     }
 
     [Fact]
-    public async Task DispatchAsync_UnknownAgent_ThrowsInvalidOperationException()
+    public Task DispatchAsync_UnknownAgent_ThrowsInvalidOperationException()
     {
         var orchestrator = new TestOrchestrator(new FakeAgentWorker("analysis", "Analyzes work", "ok"));
 
-        var act = async () => await orchestrator.DispatchPublicAsync("review", new AgentWorkItem("inspect"));
+        var act = () => orchestrator.DispatchPublicAsync("review", new AgentWorkItem("inspect"));
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        return act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Unknown agent: review");
     }
 

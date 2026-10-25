@@ -46,6 +46,7 @@ public sealed class WmsProviderPlugin : IProviderPlugin
         IServiceProvider  services,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(config);
         var restBase = config.Get("url").Trim().TrimEnd('/');
         if (string.IsNullOrEmpty(restBase))
             throw new InvalidOperationException("GeoAssets REST API URL is required.");

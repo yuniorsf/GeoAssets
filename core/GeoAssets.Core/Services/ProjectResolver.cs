@@ -11,8 +11,12 @@ public static class ProjectResolver
 {
     /// <summary>Builds the resolved <see cref="Project"/> used everywhere downstream — the raw User Project
     /// row (with its nulls) is a separate concern from what callers actually render/operate against.</summary>
-    public static Project Resolve(Project userProject, Project parentProject) =>
-        new()
+    public static Project Resolve(Project userProject, Project parentProject)
+    {
+        ArgumentNullException.ThrowIfNull(userProject);
+        ArgumentNullException.ThrowIfNull(parentProject);
+
+        return new()
         {
             Id = userProject.Id,
             Name = userProject.Name,
@@ -29,4 +33,5 @@ public static class ProjectResolver
             LayerScope = userProject.LayerScope ?? parentProject.LayerScope,
             ViewState = userProject.ViewState ?? parentProject.ViewState
         };
+    }
 }

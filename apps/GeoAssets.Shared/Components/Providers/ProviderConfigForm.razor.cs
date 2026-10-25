@@ -30,7 +30,7 @@ public partial class ProviderConfigForm
         Config.Set(f.Key, e.Value?.ToString() ?? string.Empty);
 
     private bool IsChecked(ProviderConfigField f) =>
-        Config.Get(f.Key, f.DefaultValue ?? string.Empty) == "true";
+        string.Equals(Config.Get(f.Key, f.DefaultValue ?? string.Empty), "true", StringComparison.Ordinal);
 
     private void SetChecked(ProviderConfigField f, ChangeEventArgs e) =>
         Config.Set(f.Key, (bool)(e.Value ?? false) ? "true" : "false");

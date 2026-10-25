@@ -25,24 +25,25 @@ public sealed class RestProjectClient(HttpClient http) : IProjectClient
 
     public async Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"{id}", ct);
+        var response = await http.GetAsync(new Uri($"{id}", UriKind.RelativeOrAbsolute), ct).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
-        await EnsureSuccessAsync(response, id);
-        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct);
+        await EnsureSuccessAsync(response, id).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<Project>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"organization/{organizationId}", ct);
-        await EnsureSuccessAsync(response, organizationId);
-        return await response.Content.ReadFromJsonAsync<List<Project>>(_opts, ct) ?? [];
+        var response = await http.GetAsync(new Uri($"organization/{organizationId}", UriKind.RelativeOrAbsolute), ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, organizationId).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<List<Project>>(_opts, ct).ConfigureAwait(false) ?? [];
     }
 
     public async Task<Project> CreateAsync(Project project, CancellationToken ct = default)
     {
-        var response = await http.PostAsJsonAsync(string.Empty, project, _opts, ct);
-        await EnsureSuccessAsync(response, project.ParentProjectId ?? Guid.Empty);
-        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct)
+        ArgumentNullException.ThrowIfNull(project);
+        var response = await http.PostAsJsonAsync(string.Empty, project, _opts, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, project.ParentProjectId ?? Guid.Empty).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Server returned an empty response for a successful Project create.");
     }
 
@@ -62,9 +63,9 @@ public sealed class RestProjectClient(HttpClient http) : IProjectClient
 
     private async Task<Project> PutScopeAsync<T>(Guid id, string segment, T? body, CancellationToken ct)
     {
-        var response = await http.PutAsJsonAsync($"{id}/{segment}", body, _opts, ct);
-        await EnsureSuccessAsync(response, id);
-        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct)
+        var response = await http.PutAsJsonAsync($"{id}/{segment}", body, _opts, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, id).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<Project>(_opts, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Server returned an empty response for a successful Project update.");
     }
 
@@ -78,7 +79,7 @@ public sealed class RestProjectClient(HttpClient http) : IProjectClient
                 throw new KeyNotFoundException($"Project '{id}' not found.");
 
             case HttpStatusCode.Forbidden:
-                var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+                var body = await response.Content.ReadFromJsonAsync<JsonElement>().ConfigureAwait(false);
                 var reason = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("reason", out var reasonEl)
                     ? reasonEl.GetString() ?? "Not authorized."
                     : "Not authorized.";

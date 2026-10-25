@@ -18,7 +18,7 @@ internal sealed class WfsClient
     private static readonly XNamespace _wfsNs = "http://www.opengis.net/wfs/2.0";
     private static readonly XNamespace _owsNs = "http://www.opengis.net/ows/1.1";
 
-    private static readonly JsonSerializerOptions _jsonOpts = GeoJsonSerializer.GetOptions();
+    private static readonly JsonSerializerOptions _jsonOpts = GeoJsonSerializer.Options;
 
     private readonly HttpClient _http;
 
@@ -33,7 +33,7 @@ internal sealed class WfsClient
     public async Task<WfsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
     {
         var xml = await _http.GetStringAsync(
-            "?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities", ct);
+            new Uri("?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities", UriKind.RelativeOrAbsolute), ct).ConfigureAwait(false);
 
         var doc  = XDocument.Parse(xml);
         var root = doc.Root!;
@@ -111,19 +111,26 @@ internal sealed class WfsClient
 
     private async Task<GeoFeature[]> FetchFeaturesAsync(string url, CancellationToken ct)
     {
-        var response = await _http.GetAsync(url, ct);
+        var response = await _http.GetAsync(new Uri(url, UriKind.RelativeOrAbsolute), ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using  var doc   = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
 
-        // Standard WFS GeoJSON envelope: { "type": "FeatureCollection", "features": [...] }
-        if (!doc.RootElement.TryGetProperty("features", out var featuresEl))
-            return [];
+            // Standard WFS GeoJSON envelope: { "type": "FeatureCollection", "features": [...] }
+            if (!doc.RootElement.TryGetProperty("features", out var featuresEl))
+                return [];
 
-        return [.. featuresEl.EnumerateArray()
-            .Select(MapFeature)
-            .OfType<GeoFeature>()];
+            return [.. featuresEl.EnumerateArray()
+                .Select(MapFeature)
+                .OfType<GeoFeature>()];
+        }
+        finally
+        {
+            await stream.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -150,64 +157,74 @@ internal sealed class WfsClient
                 return JsonSerializer.Deserialize<GeoFeature>(el.GetRawText(), _jsonOpts);
             }
 
-            // ── Generic WFS mapping ─────────────────────────────────────────
-            // WFS feature ids are often "typeName.numericId" — strip the prefix.
-            var rawId = el.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-            if (rawId?.Contains('.') == true)
-                rawId = rawId[(rawId.LastIndexOf('.') + 1)..];
-            if (string.IsNullOrEmpty(rawId))
-                rawId = Guid.NewGuid().ToString();
-
-            var name        = string.Empty;
-            var description = string.Empty;
-            var custom      = new Dictionary<string, string>();
-
-            if (props.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var p in props.EnumerateObject())
-                {
-                    var val = p.Value.ValueKind == JsonValueKind.String
-                        ? p.Value.GetString() ?? string.Empty
-                        : p.Value.ToString();
-
-                    switch (p.Name.ToLowerInvariant())
-                    {
-                        case "name": case "nombre": case "title": case "label":
-                            if (string.IsNullOrEmpty(name)) name = val;
-                            break;
-                        case "description": case "descripcion": case "abstract": case "notes":
-                            if (string.IsNullOrEmpty(description)) description = val;
-                            break;
-                        default:
-                            custom[p.Name] = val;
-                            break;
-                    }
-                }
-            }
-
-            GeoGeometry? geometry = null;
-            if (el.TryGetProperty("geometry", out var geomEl) &&
-                geomEl.ValueKind != JsonValueKind.Null)
-            {
-                geometry = JsonSerializer.Deserialize<GeoGeometry>(geomEl.GetRawText(), _jsonOpts);
-            }
-
-            return new GeoFeature
-            {
-                Id       = rawId,
-                Geometry = geometry,
-                Properties = new GeoFeatureProperties
-                {
-                    Name             = name,
-                    Description      = description,
-                    AssetTypeId      = AssetType.Point.Id.ToString(),
-                    CustomAttributes = custom
-                }
-            };
+            return MapGenericFeature(el, props);
         }
         catch
         {
             return null; // skip malformed features silently
         }
+    }
+
+    /// <summary>
+    /// Heuristic mapping for an external WFS service's feature: common property names are
+    /// promoted to <see cref="GeoFeatureProperties.Name"/> and
+    /// <see cref="GeoFeatureProperties.Description"/>; everything else goes into
+    /// <see cref="GeoFeatureProperties.CustomAttributes"/>.
+    /// </summary>
+    private static GeoFeature MapGenericFeature(JsonElement el, JsonElement props)
+    {
+        // WFS feature ids are often "typeName.numericId" — strip the prefix.
+        var rawId = el.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+        if (rawId?.Contains('.', StringComparison.Ordinal) == true)
+            rawId = rawId[(rawId.LastIndexOf('.') + 1)..];
+        if (string.IsNullOrEmpty(rawId))
+            rawId = Guid.NewGuid().ToString();
+
+        var name        = string.Empty;
+        var description = string.Empty;
+        var custom      = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (props.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in props.EnumerateObject())
+            {
+                var val = p.Value.ValueKind == JsonValueKind.String
+                    ? p.Value.GetString() ?? string.Empty
+                    : p.Value.ToString();
+
+                switch (p.Name.ToUpperInvariant())
+                {
+                    case "NAME": case "NOMBRE": case "TITLE": case "LABEL":
+                        if (string.IsNullOrEmpty(name)) name = val;
+                        break;
+                    case "DESCRIPTION": case "DESCRIPCION": case "ABSTRACT": case "NOTES":
+                        if (string.IsNullOrEmpty(description)) description = val;
+                        break;
+                    default:
+                        custom[p.Name] = val;
+                        break;
+                }
+            }
+        }
+
+        GeoGeometry? geometry = null;
+        if (el.TryGetProperty("geometry", out var geomEl) &&
+            geomEl.ValueKind != JsonValueKind.Null)
+        {
+            geometry = JsonSerializer.Deserialize<GeoGeometry>(geomEl.GetRawText(), _jsonOpts);
+        }
+
+        return new GeoFeature
+        {
+            Id       = rawId,
+            Geometry = geometry,
+            Properties = new GeoFeatureProperties
+            {
+                Name             = name,
+                Description      = description,
+                AssetTypeId      = AssetType.Point.Id.ToString(),
+                CustomAttributes = custom
+            }
+        };
     }
 }

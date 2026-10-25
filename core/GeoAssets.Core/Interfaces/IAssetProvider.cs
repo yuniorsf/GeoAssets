@@ -24,19 +24,21 @@ public interface IAssetProvider
     /// </summary>
     Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         IEnumerable<GeoFeature> filtered = string.IsNullOrWhiteSpace(query.SearchText)
             ? GetAll()
             : Search(query.SearchText);
 
         if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
-            filtered = filtered.Where(f => f.Properties.AssetTypeId == query.AssetTypeId);
+            filtered = filtered.Where(f => string.Equals(f.Properties.AssetTypeId, query.AssetTypeId, StringComparison.Ordinal));
 
         filtered = query.SortBy switch
         {
-            "name"      => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name)      : filtered.OrderBy(f => f.Properties.Name),
+            "name"      => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name, StringComparer.Ordinal)      : filtered.OrderBy(f => f.Properties.Name, StringComparer.Ordinal),
             "createdAt" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.CreatedAt) : filtered.OrderBy(f => f.Properties.CreatedAt),
             "updatedAt" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.UpdatedAt) : filtered.OrderBy(f => f.Properties.UpdatedAt),
-            _           => query.SortDescending ? filtered.OrderByDescending(f => f.Id)                   : filtered.OrderBy(f => f.Id)
+            _           => query.SortDescending ? filtered.OrderByDescending(f => f.Id, StringComparer.Ordinal)                   : filtered.OrderBy(f => f.Id, StringComparer.Ordinal)
         };
 
         var matching = filtered.ToList();
@@ -89,7 +91,7 @@ public interface IAssetProvider
         double minLon, double minLat, double maxLon, double maxLat,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        var raw = await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+        var raw = await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
         if (raw is not null) yield return raw;
     }
 

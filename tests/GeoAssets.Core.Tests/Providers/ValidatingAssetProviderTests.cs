@@ -743,7 +743,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public async Task DisposeAsync_InnerIsAsyncDisposable_DisposesInner()
     {
-        var inner = new AsyncDisposableStubProvider();
+        await using var inner = new AsyncDisposableStubProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         await sut.DisposeAsync();
@@ -754,7 +754,7 @@ public class ValidatingAssetProviderTests
     [Fact]
     public async Task DisposeAsync_InnerIsSyncDisposable_DisposesInner()
     {
-        var inner = new SyncDisposableStubProvider();
+        using var inner = new SyncDisposableStubProvider();
         var sut = new ValidatingAssetProvider(inner);
 
         await sut.DisposeAsync();
@@ -763,13 +763,13 @@ public class ValidatingAssetProviderTests
     }
 
     [Fact]
-    public async Task DisposeAsync_InnerNotDisposable_DoesNotThrow()
+    public Task DisposeAsync_InnerNotDisposable_DoesNotThrow()
     {
         var inner = new StubAssetProvider();
         var sut = new ValidatingAssetProvider(inner);
 
-        var act = async () => await sut.DisposeAsync();
+        var act = () => sut.DisposeAsync().AsTask();
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 }

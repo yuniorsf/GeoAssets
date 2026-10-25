@@ -6,20 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Provider.PostgreSQL;
 
-/// <summary>
-/// Creates <see cref="IAssetProvider"/> instances backed by PostgreSQL + PostGIS.
-/// Each call to <see cref="Create"/> opens a new <see cref="GeoAssetsDbContext"/>
-/// pointing at the supplied connection string and applies any pending migrations automatically.
-/// </summary>
-public interface IPostgresProviderFactory
-{
-    /// <summary>
-    /// Builds a connected <see cref="PostgresAssetProvider"/> for the given connection string.
-    /// Throws on invalid connection strings or unreachable hosts.
-    /// </summary>
-    IAssetProvider Create(string connectionString);
-}
-
 public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimeProvider timeProvider)
     : IPostgresProviderFactory, IAsyncProviderFactory
 {
@@ -58,10 +44,10 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimePr
         var db     = new GeoAssetsDbContext(options);
         var logger = loggerFactory.CreateLogger<PostgresAssetProvider>();
 
-        await db.Database.MigrateAsync(ct);
+        await db.Database.MigrateAsync(ct).ConfigureAwait(false);
 
         var provider = new PostgresAssetProvider(db, options, logger, timeProvider);
-        await provider.WarmCacheAsync(ct);
+        await provider.WarmCacheAsync(ct).ConfigureAwait(false);
         return provider;
     }
 }

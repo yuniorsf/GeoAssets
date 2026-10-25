@@ -18,7 +18,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// error message — this implementation exists for the shared <see cref="IAuthNavigationService"/>
 /// contract (e.g. TopBar's sign-out button), where no such UI feedback is expected.
 /// </summary>
-public sealed class MauiAuthNavigationService(
+public sealed partial class MauiAuthNavigationService(
     MauiMsalAuthenticationStateProvider authStateProvider,
     NavigationManager navigationManager,
     ILogger<MauiAuthNavigationService> logger) : IAuthNavigationService
@@ -36,7 +36,7 @@ public sealed class MauiAuthNavigationService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Interactive MSAL sign-in failed");
+            LogSignInFailed(logger, ex);
         }
     }
 
@@ -49,7 +49,13 @@ public sealed class MauiAuthNavigationService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "MSAL sign-out failed");
+            LogSignOutFailed(logger, ex);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Interactive MSAL sign-in failed")]
+    private static partial void LogSignInFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "MSAL sign-out failed")]
+    private static partial void LogSignOutFailed(ILogger logger, Exception ex);
 }

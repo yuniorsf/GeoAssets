@@ -19,6 +19,9 @@ public sealed class AddFeatureHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var feature = (GeoFeature)parameters["feature"];
         context.Repository.Add(feature);
         return Task.FromResult(GeoCommandResult.Ok(feature));

@@ -1,3 +1,4 @@
+using System.Globalization;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Theming;
 using Microsoft.AspNetCore.Components;
@@ -32,11 +33,11 @@ public partial class TopBar
         AutosaveService.AutosaveFailed += OnAutosaveFailed;
     }
 
-    private void OnThemeChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
-    private void OnSessionChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
-    private void OnSessionSaved(object? sender, Project e) => InvokeAsync(StateHasChanged);
+    private void OnThemeChanged(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+    private void OnSessionChanged(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+    private void OnSessionSaved(object? sender, Project e) => _ = InvokeAsync(StateHasChanged);
 
-    private async Task SetTheme(ThemeMode mode) => await ThemeService.SetModeAsync(mode);
+    private Task SetTheme(ThemeMode mode) => ThemeService.SetModeAsync(mode);
 
     private void ToggleUserMenu() => _userMenuOpen = !_userMenuOpen;
     private void CloseUserMenu()  => _userMenuOpen = false;
@@ -100,32 +101,35 @@ public partial class TopBar
 
     private async Task OnAutosaveIntervalChanged(ChangeEventArgs e)
     {
-        if (e.Value is string s && int.TryParse(s, out var minutes) && minutes > 0)
+        if (e.Value is string s && int.TryParse(s, CultureInfo.InvariantCulture, out var minutes) && minutes > 0)
             await AutosaveService.SetIntervalMinutesAsync(minutes);
     }
 
     private void OnAutosaveSucceeded(object? sender, DateTimeOffset timestamp)
     {
         _autosaveStatusIsError = false;
-        _autosaveStatusMessage = L.GetString("autosave.succeededAt", timestamp.ToLocalTime().ToString("HH:mm"));
-        InvokeAsync(StateHasChanged);
+        _autosaveStatusMessage = L.GetString("autosave.succeededAt", timestamp.ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture));
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void OnAutosaveFailed(object? sender, Exception ex)
     {
         _autosaveStatusIsError = true;
         _autosaveStatusMessage = L.GetString("autosave.failed", ex.Message);
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(StateHasChanged);
     }
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        ThemeService.ThemeChanged -= OnThemeChanged;
-        Session.DirtyChanged -= OnSessionChanged;
-        Session.Saved -= OnSessionSaved;
-        Session.CurrentChanged -= OnSessionChanged;
-        AutosaveService.AutosaveSucceeded -= OnAutosaveSucceeded;
-        AutosaveService.AutosaveFailed -= OnAutosaveFailed;
-        base.Dispose();
+        if (disposing)
+        {
+            ThemeService.ThemeChanged -= OnThemeChanged;
+            Session.DirtyChanged -= OnSessionChanged;
+            Session.Saved -= OnSessionSaved;
+            Session.CurrentChanged -= OnSessionChanged;
+            AutosaveService.AutosaveSucceeded -= OnAutosaveSucceeded;
+            AutosaveService.AutosaveFailed -= OnAutosaveFailed;
+        }
+        base.Dispose(disposing);
     }
 }

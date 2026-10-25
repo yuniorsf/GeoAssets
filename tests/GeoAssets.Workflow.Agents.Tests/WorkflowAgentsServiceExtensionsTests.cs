@@ -12,7 +12,7 @@ public class WorkflowAgentsServiceExtensionsTests
     [Fact]
     public void AddWorkflowAgents_FromConfiguration_ResolvesProviderThatKnowsConfiguredAgent()
     {
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["WorkflowAgents:Agents:agent-hydro-01:RoleNames:0"] = "AutomationAgent",
         }).Build();

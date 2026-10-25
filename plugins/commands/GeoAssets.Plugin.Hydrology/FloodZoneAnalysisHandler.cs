@@ -22,6 +22,9 @@ public sealed class FloodZoneAnalysisHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var floodZone = (GeoPolygon)parameters["floodZone"];
         var atRisk    = context.Repository.GetIntersecting(floodZone);
         return Task.FromResult(GeoCommandResult.Ok(atRisk));

@@ -27,7 +27,7 @@ public sealed class AcsEmailInvitationSender : IInvitationEmailSender
         _invitationOptions = invitationOptions;
     }
 
-    public async Task SendInvitationAsync(string toEmail, string displayName, CancellationToken ct = default)
+    public Task SendInvitationAsync(string toEmail, string displayName, CancellationToken ct = default)
     {
         var signInUrl = _invitationOptions.PublicWebAppUrl;
 
@@ -49,6 +49,6 @@ public sealed class AcsEmailInvitationSender : IInvitationEmailSender
             toEmail,
             new EmailContent("You've been invited to GeoAssets") { PlainText = plainText, Html = html });
 
-        await _client.SendAsync(WaitUntil.Completed, message, ct);
+        return _client.SendAsync(WaitUntil.Completed, message, ct);
     }
 }

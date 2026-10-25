@@ -22,10 +22,13 @@ public class ValidatingServiceOrderRepositoryTests
         public int UpdateAsyncCallCount { get; private set; }
         public int AppendActionAsyncCallCount { get; private set; }
 
+        // Never fire — this test double tracks call counts only, no subscriber relies on these.
+#pragma warning disable CS0067
         public event EventHandler<IServiceOrder>? OrderAdded;
         public event EventHandler<IServiceOrder>? OrderUpdated;
         public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
         public event EventHandler<string>? OrderDeleted;
+#pragma warning restore CS0067
 
         public Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default)
         {
@@ -33,16 +36,16 @@ public class ValidatingServiceOrderRepositoryTests
             return Task.FromResult(_store.GetValueOrDefault(id));
         }
 
-        public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(string targetId, DispatchTargetType targetType, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(string targetId, DispatchTargetType targetType, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
         {
@@ -57,7 +60,7 @@ public class ValidatingServiceOrderRepositoryTests
             return Task.CompletedTask;
         }
 
-        public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
         {
@@ -65,7 +68,7 @@ public class ValidatingServiceOrderRepositoryTests
             return Task.CompletedTask;
         }
 
-        public Task DeleteAsync(string id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task DeleteAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     // ── Read / query pass-through ──────────────────────────────────────────────
@@ -200,7 +203,7 @@ public class ValidatingServiceOrderRepositoryTests
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
-        await sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
+        await sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         (await inner.GetByIdAsync("a"))!.Dispatches.Should().ContainSingle();
     }
@@ -339,7 +342,7 @@ public class ValidatingServiceOrderRepositoryTests
         await inner.AddAsync(Order("a"));
         var sut = new ValidatingServiceOrderRepository(inner);
 
-        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
+        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         inner.AppendActionAsyncCallCount.Should().Be(1);
         inner.GetByIdAsyncCallCount.Should().Be(0);
@@ -353,7 +356,7 @@ public class ValidatingServiceOrderRepositoryTests
         var sut = new ValidatingServiceOrderRepository(inner);
 
         await sut.AppendActionAsync("a",
-            new OrderActionLog(OrderActionType.Approve, "supervisor-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Pending));
+            new OrderActionLog(OrderActionType.Approve, "supervisor-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Pending));
 
         inner.AppendActionAsyncCallCount.Should().Be(1);
     }
@@ -366,7 +369,7 @@ public class ValidatingServiceOrderRepositoryTests
         var sut = new ValidatingServiceOrderRepository(inner);
 
         var act = () => sut.AppendActionAsync("a",
-            new OrderActionLog(OrderActionType.Complete, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Completed));
+            new OrderActionLog(OrderActionType.Complete, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Completed));
 
         await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
         inner.AppendActionAsyncCallCount.Should().Be(0);
@@ -379,7 +382,7 @@ public class ValidatingServiceOrderRepositoryTests
         var sut = new ValidatingServiceOrderRepository(inner);
 
         var act = () => sut.AppendActionAsync("missing",
-            new OrderActionLog(OrderActionType.Approve, "supervisor-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Pending));
+            new OrderActionLog(OrderActionType.Approve, "supervisor-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Pending));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
         inner.AppendActionAsyncCallCount.Should().Be(0);
@@ -439,7 +442,7 @@ public class ValidatingServiceOrderRepositoryTests
         var sut = new ValidatingServiceOrderRepository(inner, RegistryWithCustomGraph());
 
         await sut.AppendActionAsync("a",
-            new OrderActionLog(OrderActionType.Approve, "triager-1", DateTime.UtcNow, ResultingStatus: "Triaged"));
+            new OrderActionLog(OrderActionType.Approve, "triager-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: "Triaged"));
 
         inner.AppendActionAsyncCallCount.Should().Be(1);
     }
@@ -452,7 +455,7 @@ public class ValidatingServiceOrderRepositoryTests
         var sut = new ValidatingServiceOrderRepository(inner, RegistryWithCustomGraph());
 
         var act = () => sut.AppendActionAsync("a",
-            new OrderActionLog(OrderActionType.Complete, "triager-1", DateTime.UtcNow, ResultingStatus: "Closed"));
+            new OrderActionLog(OrderActionType.Complete, "triager-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: "Closed"));
 
         await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
         inner.AppendActionAsyncCallCount.Should().Be(0);

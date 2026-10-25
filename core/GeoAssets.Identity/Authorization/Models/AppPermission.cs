@@ -30,5 +30,5 @@ public sealed class AppPermission
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    public List<RolePermission> RolePermissions { get; set; } = [];
+    public List<RolePermission> RolePermissions { get; init; } = [];
 }

@@ -50,10 +50,13 @@ public class ProviderConnectionMapRendererTests
         public void AddLayerRule(LayerRule layerRule) => throw new NotSupportedException();
         public void DeleteLayerRule(Guid id) => throw new NotSupportedException();
 
+        // Never fire — this test double tracks no subscribers, no test relies on these.
+#pragma warning disable CS0067
         public event EventHandler<GeoFeature>? FeatureAdded;
         public event EventHandler<GeoFeature>? FeatureUpdated;
         public event EventHandler<string>? FeatureDeleted;
         public event EventHandler? CollectionChanged;
+#pragma warning restore CS0067
     }
 
     private sealed class FakeWmsAssetProvider(IReadOnlyList<GeoFeature> features)

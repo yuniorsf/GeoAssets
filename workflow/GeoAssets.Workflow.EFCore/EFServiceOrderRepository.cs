@@ -38,14 +38,14 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var record = await _db.ServiceOrders
             .Include(o => o.Dispatches)
             .Include(o => o.ActionLog)
-            .FirstOrDefaultAsync(o => o.Id == id, ct);
+            .FirstOrDefaultAsync(o => o.Id == id, ct).ConfigureAwait(false);
 
         if (record is null) return null;
 
         var childIds = await _db.ServiceOrders
             .Where(o => o.ParentOrderId == id)
             .Select(o => o.Id)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         return ServiceOrderMapper.ToDomain(record, childIds, _assets);
     }
@@ -64,9 +64,9 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var parentId = await _db.ServiceOrders
             .Where(o => o.Id == childId)
             .Select(o => o.ParentOrderId)
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-        return parentId is null ? null : await GetByIdAsync(parentId, ct);
+        return parentId is null ? null : await GetByIdAsync(parentId, ct).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default)
@@ -81,8 +81,8 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default)
         => LoadAllAsync(_db.ServiceOrders.Where(o => o.OrderTypeId == orderTypeId), ct);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default)
-        => LoadAllAsync(_db.ServiceOrders.Where(o => o.CreatedAt >= from && o.CreatedAt <= to), ct);
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default)
+        => LoadAllAsync(_db.ServiceOrders.Where(o => o.CreatedAt >= from && o.CreatedAt <= toExclusive), ct);
 
     public async Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
         string targetId, DispatchTargetType targetType, CancellationToken ct = default)
@@ -91,9 +91,9 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             .Where(d => d.TargetId == targetId && d.TargetType == (int)targetType)
             .Select(d => d.ServiceOrderId)
             .Distinct()
-            .ToHashSetAsync(ct);
+            .ToHashSetAsync(ct).ConfigureAwait(false);
 
-        return await LoadAllAsync(_db.ServiceOrders.Where(o => orderIds.Contains(o.Id)), ct);
+        return await LoadAllAsync(_db.ServiceOrders.Where(o => orderIds.Contains(o.Id)), ct).ConfigureAwait(false);
     }
 
     // ── Write ─────────────────────────────────────────────────────────────────
@@ -104,17 +104,18 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
 
         _db.ServiceOrders.Add(ServiceOrderMapper.ToRecord(so));
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         OrderAdded?.Invoke(this, order);
     }
 
     public async Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         if (order is not ServiceOrder so)
             throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
 
-        var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct)
+        var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
         var previous = existing.Status;
@@ -136,7 +137,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         try
         {
-            await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -145,13 +146,14 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         OrderUpdated?.Invoke(this, order);
 
-        if (previous != order.Status)
+        if (!string.Equals(previous, order.Status, StringComparison.Ordinal))
             OrderStatusChanged?.Invoke(this, (order, previous));
     }
 
     public async Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default)
     {
-        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct)
+        ArgumentNullException.ThrowIfNull(dispatch);
+        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
         _db.OrderDispatches.Add(new OrderDispatchRecord
@@ -165,15 +167,16 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         });
         record.UpdatedAt = dispatch.DispatchedAt;
 
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        var updated = await GetByIdAsync(orderId, ct);
+        var updated = await GetByIdAsync(orderId, ct).ConfigureAwait(false);
         OrderUpdated?.Invoke(this, updated!);
     }
 
     public async Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
-        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct)
+        ArgumentNullException.ThrowIfNull(entry);
+        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
         var previous = record.Status;
@@ -203,22 +206,22 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             record.UpdatedAt = entry.PerformedAt;
         }
 
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        var updated = await GetByIdAsync(orderId, ct);
+        var updated = await GetByIdAsync(orderId, ct).ConfigureAwait(false);
         OrderUpdated?.Invoke(this, updated!);
 
-        if (entry.ResultingStatus is not null && entry.ResultingStatus != previous)
+        if (entry.ResultingStatus is not null && !string.Equals(entry.ResultingStatus, previous, StringComparison.Ordinal))
             OrderStatusChanged?.Invoke(this, (updated!, previous));
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
-        var record = await _db.ServiceOrders.FindAsync([id], ct);
+        var record = await _db.ServiceOrders.FindAsync([id], ct).ConfigureAwait(false);
         if (record is null) return;
 
         _db.ServiceOrders.Remove(record);
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         OrderDeleted?.Invoke(this, id);
     }
@@ -237,17 +240,17 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             .Include(o => o.Dispatches)
             .Include(o => o.ActionLog)
             .OrderBy(o => o.CreatedAt)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         if (records.Count == 0) return [];
 
-        var ids       = records.Select(r => r.Id).ToHashSet();
+        var ids       = records.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         var childMap  = (await _db.ServiceOrders
             .Where(o => o.ParentOrderId != null && ids.Contains(o.ParentOrderId!))
             .Select(o => new { o.Id, ParentId = o.ParentOrderId! })
-            .ToListAsync(ct))
-            .GroupBy(x => x.ParentId)
-            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(x => x.Id).ToList());
+            .ToListAsync(ct).ConfigureAwait(false))
+            .GroupBy(x => x.ParentId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(x => x.Id).ToList(), StringComparer.Ordinal);
 
         return records
             .Select(r => (IServiceOrder)ServiceOrderMapper.ToDomain(

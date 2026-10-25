@@ -16,7 +16,7 @@ public class CreateServiceOrderExecutorTests
 {
     private const string AgentId = "agent-1";
 
-    private static IAgentIdentityProvider AgentIdentity(params string[] roles) =>
+    private static ConfiguredAgentIdentityProvider AgentIdentity(params string[] roles) =>
         new ConfiguredAgentIdentityProvider(Options.Create(new AgentIdentityOptions
         {
             Agents = { [AgentId] = new AgentIdentityDescriptor { RoleNames = [.. roles] } }
@@ -25,7 +25,7 @@ public class CreateServiceOrderExecutorTests
     private static CreateServiceOrderExecutor Executor(
         IServiceOrderWriter writer, ServiceOrderRules rules, OrderTypeRegistry registry,
         IAgentIdentityProvider identity, ILogger<CreateServiceOrderExecutor>? logger = null) =>
-        new(writer, rules, registry, identity, TestObservability.Tracer,
+        new(writer, rules, registry, identity, TimeProvider.System, TestObservability.Tracer,
             logger ?? NullLogger<CreateServiceOrderExecutor>.Instance);
 
     [Fact]
@@ -63,7 +63,7 @@ public class CreateServiceOrderExecutorTests
     }
 
     [Fact]
-    public async Task HandleAsync_UnregisteredAgent_ThrowsKeyNotFoundException()
+    public Task HandleAsync_UnregisteredAgent_ThrowsKeyNotFoundException()
     {
         var writer   = new SnapshottingServiceOrderRepository();
         var registry = new OrderTypeRegistry();
@@ -73,7 +73,7 @@ public class CreateServiceOrderExecutorTests
 
         var act = async () => await executor.HandleAsync(request, NoOpWorkflowContext.Instance);
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     [Fact]

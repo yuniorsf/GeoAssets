@@ -48,13 +48,14 @@ public sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthoriza
     public async Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default)
     {
         var policies = await GetPoliciesAsync(ct);
-        var policy = policies.FirstOrDefault(p => p.Name == policyName)
+        var policy = policies.FirstOrDefault(p => string.Equals(p.Name, policyName, StringComparison.Ordinal))
             ?? throw new KeyNotFoundException($"Policy '{policyName}' not found.");
         return await EvaluatePolicyAsync(policy, ct);
     }
 
     public async Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(policy);
         var ctx = await GetAuthorizationContextAsync(ct);
         return Evaluate(policy, ctx);
     }

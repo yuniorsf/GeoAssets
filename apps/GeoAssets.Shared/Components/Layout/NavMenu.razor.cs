@@ -47,6 +47,7 @@ public partial class NavMenu
     public static async Task<IReadOnlyList<MenuNode>> FilterByPermissionAsync(
         IReadOnlyList<MenuNode> nodes, IGeoAuthorizationService? authService)
     {
+        ArgumentNullException.ThrowIfNull(nodes);
         var result = new List<MenuNode>(nodes.Count);
 
         foreach (var node in nodes)
@@ -62,7 +63,7 @@ public partial class NavMenu
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine(
+                        await Console.Error.WriteLineAsync(
                             $"[NavMenu] Failed to evaluate permission '{permission}' for item '{node.Item.Id}': {ex.Message}");
                     }
                 }
@@ -83,11 +84,12 @@ public partial class NavMenu
             _expandedGroupIds.Add(groupId);
     }
 
-    private void OnPanelStateChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+    private void OnPanelStateChanged(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        PanelState.Changed -= OnPanelStateChanged;
-        base.Dispose();
+        if (disposing)
+            PanelState.Changed -= OnPanelStateChanged;
+        base.Dispose(disposing);
     }
 }

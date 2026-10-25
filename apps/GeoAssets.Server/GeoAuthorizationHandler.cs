@@ -1,5 +1,6 @@
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Server;
 
@@ -25,7 +26,7 @@ namespace GeoAssets.Server;
 /// unhandled 500. An unknown permission code needs no such handling — <c>HasPermissionAsync</c>
 /// just returns false for any code the caller doesn't hold, known or not.
 /// </summary>
-public sealed class GeoAuthorizationHandler(
+public sealed partial class GeoAuthorizationHandler(
     IGeoAuthorizationService authorizationService,
     ILogger<GeoAuthorizationHandler> logger) : AuthorizationHandler<GeoPolicyRequirement>
 {
@@ -37,26 +38,29 @@ public sealed class GeoAuthorizationHandler(
         // handler regardless of whether an earlier one already failed, so an anonymous caller
         // still reaches here. IGeoAuthorizationService assumes an authenticated context and
         // throws otherwise; deny cleanly instead of letting that propagate as an unhandled 500.
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(requirement);
         if (context.User.Identity?.IsAuthenticated != true) return;
 
-        var isPermissionCode = requirement.PolicyName.Contains(':');
+        var isPermissionCode = requirement.PolicyName.Contains(':', StringComparison.Ordinal);
 
         bool satisfied;
         try
         {
             satisfied = isPermissionCode
-                ? await authorizationService.HasPermissionAsync(requirement.PolicyName)
-                : await authorizationService.EvaluatePolicyAsync(requirement.PolicyName);
+                ? await authorizationService.HasPermissionAsync(requirement.PolicyName).ConfigureAwait(false)
+                : await authorizationService.EvaluatePolicyAsync(requirement.PolicyName).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
         {
-            logger.LogWarning(
-                "Authorization policy '{PolicyName}' has no matching AppPolicy row — denying by default.",
-                requirement.PolicyName);
+            LogUnknownPolicy(logger, requirement.PolicyName);
             return;
         }
 
         if (satisfied)
             context.Succeed(requirement);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Authorization policy '{PolicyName}' has no matching AppPolicy row — denying by default.")]
+    private static partial void LogUnknownPolicy(ILogger logger, string policyName);
 }

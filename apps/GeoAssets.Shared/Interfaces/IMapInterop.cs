@@ -5,34 +5,6 @@ using Microsoft.JSInterop;
 
 namespace GeoAssets.Shared.Interfaces;
 
-/// <summary>Options for a Leaflet <c>L.tileLayer</c> or WMS tile layer.</summary>
-/// <param name="Attribution">HTML attribution text shown in the map corner.</param>
-/// <param name="MaxZoom">Maximum native zoom level for this layer.</param>
-/// <param name="MinZoom">Minimum native zoom level for this layer.</param>
-/// <param name="Opacity">Layer opacity in [0, 1].</param>
-public record TileLayerOptions(
-    string Attribution = "",
-    int    MaxZoom     = 19,
-    int    MinZoom     = 0,
-    double Opacity     = 1.0);
-
-/// <summary>Options for a Leaflet <c>L.tileLayer.wms()</c> OGC WMS layer.</summary>
-/// <param name="Layers">Comma-separated OGC LAYERS parameter, e.g. <c>geoassets:feature</c>.</param>
-/// <param name="Format">Image MIME type returned by GetMap, e.g. <c>image/png</c>.</param>
-/// <param name="Transparent">Whether the WMS server should return transparent PNG tiles.</param>
-/// <param name="Attribution">HTML attribution text shown in the map corner.</param>
-/// <param name="Version">WMS protocol version (default 1.1.1).</param>
-/// <param name="MaxZoom">Maximum native zoom level.</param>
-/// <param name="Opacity">Layer opacity in [0, 1].</param>
-public record WmsLayerOptions(
-    string Layers      = "geoassets:feature",
-    string Format      = "image/png",
-    bool   Transparent = true,
-    string Attribution = "",
-    string Version     = "1.1.1",
-    int    MaxZoom     = 19,
-    double Opacity     = 1.0);
-
 /// <summary>
 /// Abstraction over IJSRuntime calls to the Leaflet map instance.
 /// Every method corresponds to a function in mapInterop.js / drawInterop.js.

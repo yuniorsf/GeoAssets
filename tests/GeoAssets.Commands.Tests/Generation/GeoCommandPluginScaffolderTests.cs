@@ -51,7 +51,7 @@ public class GeoCommandPluginScaffolderTests
         {
             var commandsProjectPath = Path.Combine(tempRoot, "core", "GeoAssets.Commands", "GeoAssets.Commands.csproj");
             Directory.CreateDirectory(Path.GetDirectoryName(commandsProjectPath)!);
-            File.WriteAllText(commandsProjectPath, "<Project />");
+            await File.WriteAllTextAsync(commandsProjectPath, "<Project />");
 
             var outputRoot = Path.Combine(tempRoot, "generated");
             var scaffolder = new GeoCommandPluginScaffolder(commandsProjectPath);
@@ -61,7 +61,7 @@ public class GeoCommandPluginScaffolderTests
             Directory.Exists(generated.ProjectDirectory).Should().BeTrue();
             File.Exists(Path.Combine(generated.ProjectDirectory, "GeoAssets.Plugin.AssetTypeSummary.csproj")).Should().BeTrue();
             File.Exists(Path.Combine(generated.ProjectDirectory, "AssetTypeSummaryHandler.cs")).Should().BeTrue();
-            File.ReadAllText(Path.Combine(generated.ProjectDirectory, "README.txt"))
+            (await File.ReadAllTextAsync(Path.Combine(generated.ProjectDirectory, "README.txt")))
                 .Should().Contain("layerId (string, optional)");
         }
         finally

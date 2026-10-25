@@ -108,6 +108,7 @@ public sealed class ServiceOrderRules
     /// </summary>
     public bool CanCreate(WorkflowPrincipal principal, OrderType orderType)
     {
+        ArgumentNullException.ThrowIfNull(principal);
         if (string.IsNullOrEmpty(principal.UserId)) return false;
 
         bool anyAllow = false;
@@ -140,6 +141,7 @@ public sealed class ServiceOrderRules
         OrderActionType   action,
         IServiceOrder     order)
     {
+        ArgumentNullException.ThrowIfNull(principal);
         if (string.IsNullOrEmpty(principal.UserId))
             return RuleEvaluationResult.Deny(action, "Anonymous users cannot act on orders.");
 
@@ -171,19 +173,22 @@ public sealed class ServiceOrderRules
         WorkflowPrincipal principal,
         IServiceOrder     order)
     {
+        ArgumentNullException.ThrowIfNull(principal);
+        ArgumentNullException.ThrowIfNull(order);
+
         var rel = OrderUserRelationship.None;
 
-        if (order.CreatedBy == principal.UserId)
+        if (string.Equals(order.CreatedBy, principal.UserId, StringComparison.Ordinal))
             rel |= OrderUserRelationship.Creator;
 
-        if (order.AssignedTo == principal.UserId)
+        if (string.Equals(order.AssignedTo, principal.UserId, StringComparison.Ordinal))
             rel |= OrderUserRelationship.Assignee;
 
         foreach (var dispatch in order.Dispatches)
         {
             switch (dispatch.TargetType)
             {
-                case DispatchTargetType.User when dispatch.TargetId == principal.UserId:
+                case DispatchTargetType.User when string.Equals(dispatch.TargetId, principal.UserId, StringComparison.Ordinal):
                     rel |= OrderUserRelationship.DirectRecipient;
                     break;
 
@@ -196,7 +201,7 @@ public sealed class ServiceOrderRules
                     break;
             }
 
-            if (dispatch.DispatchedBy == principal.UserId)
+            if (string.Equals(dispatch.DispatchedBy, principal.UserId, StringComparison.Ordinal))
                 rel |= OrderUserRelationship.Dispatcher;
         }
 
@@ -287,17 +292,17 @@ file sealed class DispatchRecipientRule(
 {
     public string Name => "DispatchRecipientRule";
 
-    private static readonly OrderUserRelationship _recipientFlags =
+    private const OrderUserRelationship _recipientFlags =
         OrderUserRelationship.DirectRecipient |
         OrderUserRelationship.GroupMember     |
         OrderUserRelationship.OrgMember;
 
     private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> _roleGrants =
-        roleGrants ?? new Dictionary<string, IReadOnlySet<OrderActionType>>();
+        roleGrants ?? new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal);
 
     public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
     {
-        if ((ctx.Relationship & _recipientFlags) == 0) return null;
+        if ((ctx.Relationship & _recipientFlags) == OrderUserRelationship.None) return null;
 
         switch (action)
         {
@@ -423,7 +428,7 @@ file sealed class OrderTypeActionPermissionRule(OrderTypeRegistry? registry) : I
         if (orderType is null) return null;
 
         var permissions = orderType.ActionPermissions
-            .Where(p => p.Action == action && (p.FromStateKey is null || p.FromStateKey == ctx.Order.Status))
+            .Where(p => p.Action == action && (p.FromStateKey is null || string.Equals(p.FromStateKey, ctx.Order.Status, StringComparison.Ordinal)))
             .ToList();
         if (permissions.Count == 0) return null;
 

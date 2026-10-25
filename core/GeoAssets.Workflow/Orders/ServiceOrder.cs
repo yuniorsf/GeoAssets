@@ -32,7 +32,13 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
     /// <summary>See <see cref="IOrgOwnedResource"/>. Set-once at creation, like <see cref="CreatedBy"/>.</summary>
     public Guid OrganizationId { get; init; } = Guid.Empty;
 
-    public DateTime  CreatedAt   { get; init; } = DateTime.UtcNow;
+    /// <summary>
+    /// Defaults to <see cref="DateTime.MinValue"/> — a "creation time unknown" sentinel, not the
+    /// current clock, matching <c>GeoFeatureProperties.CreatedAt</c>'s convention (a property
+    /// initializer has no access to an injected <see cref="TimeProvider"/>). Callers that create
+    /// a real order set this themselves from their own injected <see cref="TimeProvider"/>.
+    /// </summary>
+    public DateTime  CreatedAt   { get; init; } = DateTime.MinValue;
     public DateTime? UpdatedAt   { get; set;  }
     public DateTime? ScheduledAt { get; set;  }
     public DateTime? CompletedAt { get; set;  }
@@ -89,6 +95,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
     /// </summary>
     public ServiceOrder Transition(string newStatus, TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         if (!ServiceOrderTransitions.IsValid(Status, newStatus))
             throw new InvalidServiceOrderTransitionException(Status, newStatus);
 
@@ -113,6 +120,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
         ActorKind          actorKind         = ActorKind.Human,
         string?            agentInvocationId = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         var now      = timeProvider.GetUtcNow().UtcDateTime;
         var dispatch = new OrderDispatch(targetId, targetType, dispatchedBy, now, note)
         {
@@ -143,6 +151,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
         ActorKind       actorKind         = ActorKind.Human,
         string?         agentInvocationId = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         var now = timeProvider.GetUtcNow().UtcDateTime;
         ActionLog.Add(new OrderActionLog(action, performedBy, now, comment, resultingStatus)
         {
@@ -159,6 +168,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
     /// <summary>Replaces the feature set and records the spec used to build it.</summary>
     public ServiceOrder WithFeatures(IEnumerable<GeoFeature> features, TimeProvider timeProvider, FeatureSelectionSpec? spec = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         Features.Clear();
         Features.AddRange(features);
         SelectionSpec = spec;

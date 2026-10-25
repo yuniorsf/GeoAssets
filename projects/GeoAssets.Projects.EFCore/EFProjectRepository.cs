@@ -9,8 +9,13 @@ namespace GeoAssets.Projects.Persistence;
 public sealed class EFProjectRepository : IProjectRepository, IAsyncDisposable
 {
     private readonly ProjectDbContext _db;
+    private readonly TimeProvider _timeProvider;
 
-    public EFProjectRepository(ProjectDbContext db) => _db = db;
+    public EFProjectRepository(ProjectDbContext db, TimeProvider timeProvider)
+    {
+        _db = db;
+        _timeProvider = timeProvider;
+    }
 
     // ── Events ────────────────────────────────────────────────────────────────
 
@@ -21,7 +26,7 @@ public sealed class EFProjectRepository : IProjectRepository, IAsyncDisposable
 
     public async Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var row = await _db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
+        var row = await _db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct).ConfigureAwait(false);
         return row is null ? null : ProjectMapper.ToDomain(row);
     }
 
@@ -38,15 +43,17 @@ public sealed class EFProjectRepository : IProjectRepository, IAsyncDisposable
 
     public async Task AddAsync(Project project, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(project);
         _db.Projects.Add(ProjectMapper.ToRow(project));
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         ProjectSaved?.Invoke(this, project);
     }
 
     public async Task UpdateAsync(Project project, CancellationToken ct = default)
     {
-        var existing = await _db.Projects.FirstOrDefaultAsync(p => p.Id == project.Id, ct)
+        ArgumentNullException.ThrowIfNull(project);
+        var existing = await _db.Projects.FirstOrDefaultAsync(p => p.Id == project.Id, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Project '{project.Id}' not found.");
 
         var updated = ProjectMapper.ToRow(project);
@@ -59,19 +66,19 @@ public sealed class EFProjectRepository : IProjectRepository, IAsyncDisposable
         existing.LayerScopeJson     = updated.LayerScopeJson;
         existing.ViewStateJson      = updated.ViewStateJson;
 
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         ProjectSaved?.Invoke(this, project);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var row = await _db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct);
+        var row = await _db.Projects.FirstOrDefaultAsync(p => p.Id == id, ct).ConfigureAwait(false);
         if (row is null) return;
 
         row.IsDeleted = true;
-        row.DeletedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync(ct);
+        row.DeletedAt = _timeProvider.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         ProjectDeleted?.Invoke(this, id);
     }
@@ -85,7 +92,7 @@ public sealed class EFProjectRepository : IProjectRepository, IAsyncDisposable
     private static async Task<IReadOnlyList<Project>> LoadAllAsync(
         IQueryable<ProjectRow> query, CancellationToken ct)
     {
-        var rows = await query.OrderBy(p => p.CreatedAt).ToListAsync(ct);
+        var rows = await query.OrderBy(p => p.CreatedAt).ToListAsync(ct).ConfigureAwait(false);
         return rows.Select(ProjectMapper.ToDomain).ToList();
     }
 }

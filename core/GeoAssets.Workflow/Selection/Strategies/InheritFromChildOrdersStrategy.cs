@@ -22,16 +22,17 @@ public sealed class InheritFromChildOrdersStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         if (context.TargetOrder is null)
             throw new InvalidOperationException("TargetOrder must be set for 'inherit-children' strategy.");
 
         if (context.OrderRepository is null)
             throw new InvalidOperationException("OrderRepository must be set for 'inherit-children' strategy.");
 
-        var seen     = new HashSet<string>();
+        var seen     = new HashSet<string>(StringComparer.Ordinal);
         var features = new List<GeoFeature>();
 
-        foreach (var child in await context.OrderRepository.GetChildrenAsync(context.TargetOrder.Id, ct))
+        foreach (var child in await context.OrderRepository.GetChildrenAsync(context.TargetOrder.Id, ct).ConfigureAwait(false))
         {
             foreach (var f in child.Features)
             {

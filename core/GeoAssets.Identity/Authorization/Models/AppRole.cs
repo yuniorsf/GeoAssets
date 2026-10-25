@@ -20,6 +20,6 @@ public sealed class AppRole
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    public List<UserRole>       UserRoles       { get; set; } = [];
-    public List<RolePermission> RolePermissions { get; set; } = [];
+    public List<UserRole>       UserRoles       { get; init; } = [];
+    public List<RolePermission> RolePermissions { get; init; } = [];
 }

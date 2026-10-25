@@ -26,5 +26,5 @@ public sealed class AppPolicy
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    public List<PolicyRequirement> Requirements { get; set; } = [];
+    public List<PolicyRequirement> Requirements { get; init; } = [];
 }

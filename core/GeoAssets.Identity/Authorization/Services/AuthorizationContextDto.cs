@@ -19,15 +19,3 @@ public sealed record AuthorizationContextDto(
     IReadOnlyList<string>    Roles,
     IReadOnlyList<ClaimDto>  Claims,
     IReadOnlyList<string>    Permissions);
-
-public sealed record ClaimDto(string Type, string Value);
-
-/// <summary>Wire shape for <c>GET /api/identity/policies</c> — see <see cref="AuthorizationContextDto"/> for why.</summary>
-public sealed record PolicyDto(
-    Guid                                Id,
-    string                              Name,
-    string                              Description,
-    PolicyOperator                      Operator,
-    IReadOnlyList<PolicyRequirementDto> Requirements);
-
-public sealed record PolicyRequirementDto(RequirementType Type, string Value, string? ClaimValue);

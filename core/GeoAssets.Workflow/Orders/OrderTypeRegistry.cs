@@ -19,7 +19,10 @@ public sealed class OrderTypeRegistry
     private readonly Dictionary<string, OrderType> _types = new(StringComparer.OrdinalIgnoreCase);
 
     public void Register(OrderType orderType)
-        => _types[orderType.Id] = orderType;
+    {
+        ArgumentNullException.ThrowIfNull(orderType);
+        _types[orderType.Id] = orderType;
+    }
 
     public OrderType? Find(string id)
         => _types.GetValueOrDefault(id);
@@ -41,7 +44,8 @@ public sealed class OrderTypeRegistry
     /// </summary>
     public async Task LoadFromAsync(IOrderTypeRepository repository, CancellationToken ct = default)
     {
-        var types = await repository.GetAllAsync(ct);
+        ArgumentNullException.ThrowIfNull(repository);
+        var types = await repository.GetAllAsync(ct).ConfigureAwait(false);
         foreach (var t in types)
             _types[t.Id] = t;
     }

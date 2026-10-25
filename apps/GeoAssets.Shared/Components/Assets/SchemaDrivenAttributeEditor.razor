@@ -25,11 +25,11 @@
                 </select>
                 break;
 
-            case SchemaFieldKind.Integer:
+            case SchemaFieldKind.WholeNumber:
             case SchemaFieldKind.Number:
                 <input class="form-control" type="number"
                        min="@field.Minimum" max="@field.Maximum"
-                       step="@(field.Kind == SchemaFieldKind.Integer ? "1" : "any")"
+                       step="@(field.Kind == SchemaFieldKind.WholeNumber ? "1" : "any")"
                        value="@GetValue(field.Key)"
                        @onchange="e => SetValue(field.Key, e.Value?.ToString() ?? string.Empty)" />
                 break;

@@ -34,7 +34,7 @@ namespace GeoAssets.Workflow.Rest;
 /// </summary>
 public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderRepository
 {
-    private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.GetOptions();
+    private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
 
     public event EventHandler<IServiceOrder>? OrderAdded;
     public event EventHandler<IServiceOrder>? OrderUpdated;
@@ -45,10 +45,10 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
 
     public async Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"service-orders/{Uri.EscapeDataString(id)}", ct);
+        var response = await http.GetAsync(new Uri($"service-orders/{Uri.EscapeDataString(id)}", UriKind.Relative), ct).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<ServiceOrder>(_opts, ct);
+        return await response.Content.ReadFromJsonAsync<ServiceOrder>(_opts, ct).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default)
@@ -62,10 +62,10 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
 
     public async Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"service-orders/{Uri.EscapeDataString(childId)}/parent", ct);
+        var response = await http.GetAsync(new Uri($"service-orders/{Uri.EscapeDataString(childId)}/parent", UriKind.Relative), ct).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<ServiceOrder>(_opts, ct);
+        return await response.Content.ReadFromJsonAsync<ServiceOrder>(_opts, ct).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default)
@@ -80,9 +80,9 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
     public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default)
         => GetOrdersAsync($"service-orders/by-order-type/{Uri.EscapeDataString(orderTypeId)}", ct);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default)
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default)
         => GetOrdersAsync(
-            $"service-orders/by-date-range?from={Uri.EscapeDataString(from.ToString("O"))}&to={Uri.EscapeDataString(to.ToString("O"))}",
+            $"service-orders/by-date-range?from={Uri.EscapeDataString(from.ToString("O"))}&to={Uri.EscapeDataString(toExclusive.ToString("O"))}",
             ct);
 
     public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
@@ -92,15 +92,15 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
             ct);
 
     private async Task<IReadOnlyList<IServiceOrder>> GetOrdersAsync(string path, CancellationToken ct)
-        => await http.GetFromJsonAsync<ServiceOrder[]>(path, _opts, ct) ?? [];
+        => await http.GetFromJsonAsync<ServiceOrder[]>(path, _opts, ct).ConfigureAwait(false) ?? [];
 
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public async Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
         var so = AsServiceOrder(order);
-        var response = await http.PostAsJsonAsync("service-orders", so, _opts, ct);
-        await EnsureWriteSuccessAsync(response, so.Id);
+        var response = await http.PostAsJsonAsync("service-orders", so, _opts, ct).ConfigureAwait(false);
+        await EnsureWriteSuccessAsync(response, so.Id).ConfigureAwait(false);
 
         OrderAdded?.Invoke(this, order);
     }
@@ -108,46 +108,47 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
     public async Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
         var so = AsServiceOrder(order);
-        var response = await http.PutAsJsonAsync($"service-orders/{Uri.EscapeDataString(so.Id)}", so, _opts, ct);
-        await EnsureWriteSuccessAsync(response, so.Id);
+        var response = await http.PutAsJsonAsync($"service-orders/{Uri.EscapeDataString(so.Id)}", so, _opts, ct).ConfigureAwait(false);
+        await EnsureWriteSuccessAsync(response, so.Id).ConfigureAwait(false);
 
         OrderUpdated?.Invoke(this, order);
     }
 
     public async Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default)
     {
-        var response = await http.PostAsJsonAsync($"service-orders/{Uri.EscapeDataString(orderId)}/dispatch", dispatch, _opts, ct);
-        await EnsureWriteSuccessAsync(response, orderId);
+        var response = await http.PostAsJsonAsync($"service-orders/{Uri.EscapeDataString(orderId)}/dispatch", dispatch, _opts, ct).ConfigureAwait(false);
+        await EnsureWriteSuccessAsync(response, orderId).ConfigureAwait(false);
 
-        var updated = await GetByIdAsync(orderId, ct)
+        var updated = await GetByIdAsync(orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
         OrderUpdated?.Invoke(this, updated);
     }
 
     public async Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         string? previous = null;
         if (entry.ResultingStatus is not null)
         {
-            var existing = await GetByIdAsync(orderId, ct)
+            var existing = await GetByIdAsync(orderId, ct).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
             previous = existing.Status;
         }
 
-        var response = await http.PostAsJsonAsync($"service-orders/{Uri.EscapeDataString(orderId)}/actions", entry, _opts, ct);
-        await EnsureWriteSuccessAsync(response, orderId);
+        var response = await http.PostAsJsonAsync($"service-orders/{Uri.EscapeDataString(orderId)}/actions", entry, _opts, ct).ConfigureAwait(false);
+        await EnsureWriteSuccessAsync(response, orderId).ConfigureAwait(false);
 
-        var updated = await GetByIdAsync(orderId, ct)
+        var updated = await GetByIdAsync(orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
         OrderUpdated?.Invoke(this, updated);
 
-        if (previous is not null && previous != updated.Status)
+        if (previous is not null && !string.Equals(previous, updated.Status, StringComparison.Ordinal))
             OrderStatusChanged?.Invoke(this, (updated, previous));
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"service-orders/{Uri.EscapeDataString(id)}", ct);
+        var response = await http.DeleteAsync(new Uri($"service-orders/{Uri.EscapeDataString(id)}", UriKind.Relative), ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         OrderDeleted?.Invoke(this, id);
@@ -177,7 +178,7 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
                 throw new ServiceOrderConcurrencyException(orderId);
 
             case HttpStatusCode.BadRequest:
-                var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+                var body = await response.Content.ReadFromJsonAsync<JsonElement>().ConfigureAwait(false);
 
                 // Most 400s here are structured (Results.BadRequest(new { ... })) — the two
                 // property-based shapes below. But some server-side validation failures return

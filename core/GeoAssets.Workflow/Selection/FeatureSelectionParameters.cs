@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace GeoAssets.Workflow.Selection;
@@ -16,13 +17,13 @@ public static class FeatureSelectionParameters
     public static double ToDouble(object value) => value switch
     {
         JsonElement je => je.GetDouble(),
-        var v => Convert.ToDouble(v),
+        var v => Convert.ToDouble(v, CultureInfo.InvariantCulture),
     };
 
     public static bool ToBoolean(object value) => value switch
     {
         JsonElement je => je.GetBoolean(),
-        var v => Convert.ToBoolean(v),
+        var v => Convert.ToBoolean(v, CultureInfo.InvariantCulture),
     };
 
     public static string ToStringValue(object value) => value switch
@@ -59,21 +60,39 @@ public static class FeatureSelectionParameters
     // ── Dictionary convenience wrappers (key lookup + convert) ──────────────────
 
     public static double GetDouble(this IReadOnlyDictionary<string, object> parameters, string key)
-        => ToDouble(parameters[key]);
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        return ToDouble(parameters[key]);
+    }
 
     public static bool GetBoolean(this IReadOnlyDictionary<string, object> parameters, string key)
-        => ToBoolean(parameters[key]);
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        return ToBoolean(parameters[key]);
+    }
 
     public static string GetString(this IReadOnlyDictionary<string, object> parameters, string key)
-        => ToStringValue(parameters[key]);
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        return ToStringValue(parameters[key]);
+    }
 
     public static TEnum GetEnum<TEnum>(this IReadOnlyDictionary<string, object> parameters, string key)
         where TEnum : struct, Enum
-        => ToEnum<TEnum>(parameters[key]);
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        return ToEnum<TEnum>(parameters[key]);
+    }
 
     public static T GetValue<T>(this IReadOnlyDictionary<string, object> parameters, string key)
-        => To<T>(parameters[key]);
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        return To<T>(parameters[key]);
+    }
 
     public static IReadOnlyList<string> GetStringList(this IReadOnlyDictionary<string, object> parameters, string key)
-        => ToStringList(parameters[key]);
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        return ToStringList(parameters[key]);
+    }
 }

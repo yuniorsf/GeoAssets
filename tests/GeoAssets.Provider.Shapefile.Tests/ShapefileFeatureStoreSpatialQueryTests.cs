@@ -44,12 +44,14 @@ public class ShapefileFeatureStoreSpatialQueryTests
             ])
         ]);
 
+#pragma warning disable MA0002 // AttributesTable (NetTopologySuite.IO.ShapeFile) has no constructor overload accepting an IEqualityComparer<string>
         var features = new List<IFeature>
         {
             new Feature(polyA, new AttributesTable { { "NAME", "A" } }),
             new Feature(polyB, new AttributesTable { { "NAME", "B" } }),
             new Feature(multiC, new AttributesTable { { "NAME", "C" } }),
         };
+#pragma warning restore MA0002
 
         var tempDir = Path.Combine(Path.GetTempPath(), "shp_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -64,9 +66,9 @@ public class ShapefileFeatureStoreSpatialQueryTests
             writer.Write(features);
 
             var zipPath = Path.Combine(tempDir, "archive.zip");
-            using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+            await using (var zip = await ZipFile.OpenAsync(zipPath, ZipArchiveMode.Create))
                 foreach (var f in Directory.GetFiles(tempDir, "fixture.*"))
-                    zip.CreateEntryFromFile(f, Path.GetFileName(f));
+                    await zip.CreateEntryFromFileAsync(f, Path.GetFileName(f));
 
             var config = new ProviderConfig();
             config.Set("name", "fixture");
@@ -88,7 +90,7 @@ public class ShapefileFeatureStoreSpatialQueryTests
         var result = await provider.GetInBoundsAsync(-1, -1, 24, 24);
 
         result.Select(f => f.Properties.Name).Should().BeEquivalentTo(["A", "B", "C"]);
-        result.Single(f => f.Properties.Name == "C").Geometry!.NtsGeometry.GeometryType.Should().Be("MultiPolygon");
+        result.Single(f => string.Equals(f.Properties.Name, "C", StringComparison.Ordinal)).Geometry!.NtsGeometry.GeometryType.Should().Be("MultiPolygon");
     }
 
     [Fact]
@@ -146,7 +148,7 @@ public class ShapefileFeatureStoreSpatialQueryTests
         var before = await provider.GetInBoundsJsonAsync(-1, -1, 2, 2);
         before[0].GetProperty("properties").GetProperty("name").GetString().Should().Be("A");
 
-        var featureA = provider.GetAll().Single(f => f.Properties.Name == "A");
+        var featureA = provider.GetAll().Single(f => string.Equals(f.Properties.Name, "A", StringComparison.Ordinal));
         featureA.Properties.Name = "A-renamed";
         provider.Update(featureA);
 

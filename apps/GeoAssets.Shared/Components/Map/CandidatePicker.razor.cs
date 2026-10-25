@@ -64,5 +64,5 @@ public partial class CandidatePicker
         await OnLink.InvokeAsync(_state.Confirm());
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 }

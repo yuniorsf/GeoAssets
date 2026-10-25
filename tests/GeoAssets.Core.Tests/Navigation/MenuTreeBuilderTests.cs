@@ -104,7 +104,9 @@ public class MenuTreeBuilderTests
 
         var expandedIds = MenuTreeBuilder.ComputeExpandedGroupIds(tree, relativePath);
 
+#pragma warning disable MA0002 // IReadOnlySet<string>.Contains has no comparer overload — the set already uses StringComparer.Ordinal (see MenuTreeBuilder.ComputeExpandedGroupIds)
         expandedIds.Contains("identity").Should().Be(expected);
+#pragma warning restore MA0002
     }
 
     [Fact]
@@ -115,8 +117,10 @@ public class MenuTreeBuilderTests
             id: "summary", routeHref: "reports/summary", parentId: "reports", match: MenuLinkMatch.Exact);
         var tree = MenuTreeBuilder.Build([group, page]);
 
+#pragma warning disable MA0002 // IReadOnlySet<string>.Contains has no comparer overload — the set already uses StringComparer.Ordinal (see MenuTreeBuilder.ComputeExpandedGroupIds)
         MenuTreeBuilder.ComputeExpandedGroupIds(tree, "reports/summary/details")
             .Contains("reports").Should().BeFalse();
+#pragma warning restore MA0002
     }
 
     [Fact]

@@ -32,7 +32,7 @@ using GeoAssets.Workflow.Selection.Strategies;
 
 namespace GeoAssets.Examples.Workflow;
 
-public static class CustomSelectionStrategy
+internal static class CustomSelectionStrategy
 {
     public static async Task RunAsync()
     {
@@ -102,13 +102,13 @@ public static class CustomSelectionStrategy
             {
                 Repository      = repo,
                 OrderRepository = orderRepo,
-                Parameters      = new Dictionary<string, object>
+                Parameters      = new Dictionary<string, object>(StringComparer.Ordinal)
                 {
                     ["minLon"] = -66.95, ["minLat"] = 10.44,
                     ["maxLon"] = -66.84, ["maxLat"] = 10.56
                 }
             },
-            note: "Selección inicial completa del área de operación");
+            note: "Selección inicial completa del área de operación").ConfigureAwait(false);
 
         var rootOrder = new ServiceOrder
         {
@@ -117,7 +117,7 @@ public static class CustomSelectionStrategy
             Priority    = ServiceOrderPriority.Normal,
         }.WithFeatures(allFeatures, TimeProvider.System, rootSpec);
 
-        await orderRepo.AddAsync(rootOrder);
+        await orderRepo.AddAsync(rootOrder).ConfigureAwait(false);
         PrintOrder(rootOrder);
 
         // ── 5. Orden hija A — LayerFilterStrategy (estrategia personalizada) ─
@@ -132,9 +132,9 @@ public static class CustomSelectionStrategy
                 Repository      = repo,
                 OrderRepository = orderRepo,
                 TargetOrder     = rootOrder,
-                Parameters      = new Dictionary<string, object> { ["layerId"] = "electrica" }
+                Parameters      = new Dictionary<string, object>(StringComparer.Ordinal) { ["layerId"] = "electrica" }
             },
-            note: "Activos eléctricos derivados de la orden raíz");
+            note: "Activos eléctricos derivados de la orden raíz").ConfigureAwait(false);
 
         var childOrderA = new ServiceOrder
         {
@@ -144,7 +144,7 @@ public static class CustomSelectionStrategy
             ParentOrderId = rootOrder.Id,
         }.WithFeatures(electricFeatures, TimeProvider.System, layerSpec);
 
-        await orderRepo.AddAsync(childOrderA);
+        await orderRepo.AddAsync(childOrderA).ConfigureAwait(false);
         PrintOrder(childOrderA);
 
         // ── 6. Orden hija B — NetworkImpactStrategy (proceso de background) ──
@@ -168,13 +168,13 @@ public static class CustomSelectionStrategy
                 Repository      = repo,
                 OrderRepository = orderRepo,
                 TargetOrder     = rootOrder,
-                Parameters      = new Dictionary<string, object>
+                Parameters      = new Dictionary<string, object>(StringComparer.Ordinal)
                 {
                     ["featureId"] = transformador.Id,
                     ["direction"] = TraversalDirection.Both,
                 }
             },
-            note: "Análisis de impacto por falla en Transformador");
+            note: "Análisis de impacto por falla en Transformador").ConfigureAwait(false);
 
         var childOrderB = new ServiceOrder
         {
@@ -184,13 +184,13 @@ public static class CustomSelectionStrategy
             ParentOrderId = rootOrder.Id,
         }.WithFeatures(impactFeatures, TimeProvider.System, impactSpec);
 
-        await orderRepo.AddAsync(childOrderB);
+        await orderRepo.AddAsync(childOrderB).ConfigureAwait(false);
         PrintOrder(childOrderB);
 
         // ── 7. Inspeccionar jerarquía y FeatureSelectionSpec ─────────────────
 
         Print.Section("Jerarquía de órdenes");
-        await PrintHierarchy(rootOrder, orderRepo, indent: 0);
+        await PrintHierarchy(rootOrder, orderRepo, indent: 0).ConfigureAwait(false);
 
         Print.Section("Auditoría — FeatureSelectionSpec por orden");
         foreach (var order in new[] { rootOrder, childOrderA, childOrderB })
@@ -235,8 +235,8 @@ public static class CustomSelectionStrategy
         var prefix = new string(' ', indent * 4 + 6);
         var icon   = indent == 0 ? "◆" : "└─";
         Console.WriteLine($"{prefix}{icon} [{order.Status}] {order.Title}  ({order.Features.Count} features)");
-        foreach (var child in await repo.GetChildrenAsync(order.Id))
-            await PrintHierarchy(child, repo, indent + 1);
+        foreach (var child in await repo.GetChildrenAsync(order.Id).ConfigureAwait(false))
+            await PrintHierarchy(child, repo, indent + 1).ConfigureAwait(false);
     }
 }
 
@@ -265,10 +265,13 @@ file sealed class DemoAssetStore : IAssetProvider
     public IReadOnlyList<GeoFeature> GetDescendants(string featureId) =>
         TopoGraph.GetDescendants(featureId, _features.Values);
 
+    // Never fire — this demo store is a static in-memory snapshot with no write path.
+#pragma warning disable CS0067
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;
     public event EventHandler<string>? FeatureDeleted;
     public event EventHandler? CollectionChanged;
+#pragma warning restore CS0067
 
     public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) => throw new NotSupportedException();
     public IReadOnlyList<GeoFeature> Search(string query) => throw new NotSupportedException();
@@ -316,12 +319,15 @@ file sealed class DemoServiceOrderRepository : IServiceOrderRepository
     }
 
     public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.ParentOrderId == parentId)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.ParentOrderId, parentId, StringComparison.Ordinal))]);
 
+    // Never fire — this demo repository is a static in-memory snapshot with no write path.
+#pragma warning disable CS0067
     public event EventHandler<IServiceOrder>? OrderAdded;
     public event EventHandler<IServiceOrder>? OrderUpdated;
     public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
     public event EventHandler<string>? OrderDeleted;
+#pragma warning restore CS0067
 
     public Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
@@ -369,7 +375,7 @@ file sealed class LayerFilterStrategy : IFeatureSelectionStrategy
 
         var result = context.Repository
             .GetAll()
-            .Where(f => f.Properties.LayerId == layerId)
+            .Where(f => string.Equals(f.Properties.LayerId, layerId, StringComparison.Ordinal))
             .ToList();
 
         return Task.FromResult<IReadOnlyList<GeoFeature>>(result);
@@ -424,7 +430,7 @@ file sealed class NetworkImpactStrategy : BackgroundProcessSelectionStrategy
         if (direction is TraversalDirection.Upstream or TraversalDirection.Both)
         {
             progress.Report(new(10, "Analizando nodos upstream (fuentes)…"));
-            await Task.Delay(40, ct); // simula I/O o cómputo real
+            await Task.Delay(40, ct).ConfigureAwait(false); // simula I/O o cómputo real
 
             var ancestors = context.Repository.GetAncestors(featureId);
             result.AddRange(ancestors);
@@ -437,11 +443,11 @@ file sealed class NetworkImpactStrategy : BackgroundProcessSelectionStrategy
         if (direction is TraversalDirection.Downstream or TraversalDirection.Both)
         {
             progress.Report(new(50, "Analizando nodos downstream (consumidores)…", result.Count));
-            await Task.Delay(40, ct);
+            await Task.Delay(40, ct).ConfigureAwait(false);
 
             var descendants = context.Repository.GetDescendants(featureId);
             foreach (var f in descendants)
-                if (result.All(x => x.Id != f.Id))
+                if (result.All(x => !string.Equals(x.Id, f.Id, StringComparison.Ordinal)))
                     result.Add(f);
 
             progress.Report(new(80, "Downstream completado.", result.Count));
@@ -449,7 +455,7 @@ file sealed class NetworkImpactStrategy : BackgroundProcessSelectionStrategy
 
         // Fase 3 — nodo semilla
         var seed = context.Repository.GetById(featureId);
-        if (seed is not null && result.All(x => x.Id != featureId))
+        if (seed is not null && result.All(x => !string.Equals(x.Id, featureId, StringComparison.Ordinal)))
             result.Insert(0, seed);
 
         progress.Report(new(100, "Análisis de impacto completado.", result.Count));

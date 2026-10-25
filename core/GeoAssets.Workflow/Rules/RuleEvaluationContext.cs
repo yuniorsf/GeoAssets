@@ -12,5 +12,5 @@ public sealed record RuleEvaluationContext(
     OrderUserRelationship Relationship
 )
 {
-    public bool Is(OrderUserRelationship flag) => (Relationship & flag) != 0;
+    public bool Is(OrderUserRelationship flag) => (Relationship & flag) != OrderUserRelationship.None;
 }

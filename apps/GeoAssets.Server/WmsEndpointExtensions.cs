@@ -63,9 +63,9 @@ public static class WmsEndpointExtensions
             {
                 return Param("REQUEST").ToUpperInvariant() switch
                 {
-                    "GETCAPABILITIES" => await HandleGetCapabilitiesAsync(req, renderer, ct),
-                    "GETMAP"          => await HandleGetMapAsync(Param, renderer, ct),
-                    "GETFEATUREINFO"  => await HandleGetFeatureInfoAsync(Param, renderer, ct),
+                    "GETCAPABILITIES" => await HandleGetCapabilitiesAsync(req, renderer, ct).ConfigureAwait(false),
+                    "GETMAP"          => await HandleGetMapAsync(Param, renderer, ct).ConfigureAwait(false),
+                    "GETFEATUREINFO"  => await HandleGetFeatureInfoAsync(Param, renderer, ct).ConfigureAwait(false),
                     var op            => Results.BadRequest(
                         $"Unsupported WMS REQUEST: '{op}'. " +
                         "Supported: GetCapabilities, GetMap, GetFeatureInfo.")
@@ -93,12 +93,12 @@ public static class WmsEndpointExtensions
         HttpRequest req, WmsPostGisRenderer renderer, CancellationToken ct)
     {
         var baseUrl    = $"{req.Scheme}://{req.Host}{req.PathBase}{req.Path}";
-        var assetTypes = await renderer.GetAssetTypesAsync(ct);
+        var assetTypes = await renderer.GetAssetTypesAsync(ct).ConfigureAwait(false);
         return Results.Content(BuildCapabilitiesXml(baseUrl, assetTypes), "application/xml; charset=utf-8");
     }
 
     private static string BuildCapabilitiesXml(
-        string wmsUrl, List<WmsPostGisRenderer.AssetTypeInfo> assetTypes)
+        string wmsUrl, List<AssetTypeInfo> assetTypes)
     {
         var subLayers = assetTypes.Select(t =>
             new XElement("Layer",
@@ -168,9 +168,9 @@ public static class WmsEndpointExtensions
         if (!TryParseBbox(param("BBOX"), out var minLon, out var minLat, out var maxLon, out var maxLat))
             return Results.BadRequest("Invalid or missing BBOX. Expected: minLon,minLat,maxLon,maxLat");
 
-        if (!int.TryParse(param("WIDTH"),  out var width)  || width  <= 0 || width  > 4096)
+        if (!int.TryParse(param("WIDTH"), CultureInfo.InvariantCulture,  out var width)  || width  <= 0 || width  > 4096)
             return Results.BadRequest("Invalid or missing WIDTH.");
-        if (!int.TryParse(param("HEIGHT"), out var height) || height <= 0 || height > 4096)
+        if (!int.TryParse(param("HEIGHT"), CultureInfo.InvariantCulture, out var height) || height <= 0 || height > 4096)
             return Results.BadRequest("Invalid or missing HEIGHT.");
 
         var transparent = param("TRANSPARENT").Equals("TRUE", StringComparison.OrdinalIgnoreCase);
@@ -182,7 +182,7 @@ public static class WmsEndpointExtensions
             : null;
 
         // ── Direct PostGIS query — no cache, only geom + color columns ────────
-        var rows = await renderer.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, assetTypeId, ct);
+        var rows = await renderer.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, assetTypeId, ct).ConfigureAwait(false);
 
         var pngBytes = RenderToPng(rows, width, height, minLon, minLat, maxLon, maxLat, transparent);
         return Results.Bytes(pngBytes, "image/png");
@@ -196,18 +196,18 @@ public static class WmsEndpointExtensions
         if (!TryParseBbox(param("BBOX"), out var minLon, out var minLat, out var maxLon, out var maxLat))
             return Results.BadRequest("Invalid or missing BBOX.");
 
-        if (!int.TryParse(param("WIDTH"),  out var width)  || width  <= 0) return Results.BadRequest("Invalid WIDTH.");
-        if (!int.TryParse(param("HEIGHT"), out var height) || height <= 0) return Results.BadRequest("Invalid HEIGHT.");
-        if (!int.TryParse(param("I"),      out var pixelI))                return Results.BadRequest("Missing I (pixel column).");
-        if (!int.TryParse(param("J"),      out var pixelJ))                return Results.BadRequest("Missing J (pixel row).");
+        if (!int.TryParse(param("WIDTH"), CultureInfo.InvariantCulture,  out var width)  || width  <= 0) return Results.BadRequest("Invalid WIDTH.");
+        if (!int.TryParse(param("HEIGHT"), CultureInfo.InvariantCulture, out var height) || height <= 0) return Results.BadRequest("Invalid HEIGHT.");
+        if (!int.TryParse(param("I"), CultureInfo.InvariantCulture,      out var pixelI))                return Results.BadRequest("Missing I (pixel column).");
+        if (!int.TryParse(param("J"), CultureInfo.InvariantCulture,      out var pixelJ))                return Results.BadRequest("Missing J (pixel row).");
 
         var clickLon = minLon + (double)pixelI / width  * (maxLon - minLon);
         var clickLat = maxLat - (double)pixelJ / height * (maxLat - minLat);
         var tolLon   = (maxLon - minLon) * 0.01;
         var tolLat   = (maxLat - minLat) * 0.01;
 
-        var maxCount = int.TryParse(param("FEATURE_COUNT"), out var fc) ? fc : 1;
-        var rows     = await renderer.GetFeatureInfoAsync(clickLon, clickLat, tolLon, tolLat, maxCount, ct);
+        var maxCount = int.TryParse(param("FEATURE_COUNT"), CultureInfo.InvariantCulture, out var fc) ? fc : 1;
+        var rows     = await renderer.GetFeatureInfoAsync(clickLon, clickLat, tolLon, tolLat, maxCount, ct).ConfigureAwait(false);
 
         return Results.Json(new
         {
@@ -225,7 +225,7 @@ public static class WmsEndpointExtensions
     // ── SkiaSharp renderer ────────────────────────────────────────────────────
 
     private static byte[] RenderToPng(
-        List<WmsPostGisRenderer.RenderRow> rows,
+        List<RenderRow> rows,
         int    width,  int    height,
         double minLon, double minLat, double maxLon, double maxLat,
         bool   transparent)

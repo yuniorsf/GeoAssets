@@ -50,15 +50,15 @@ public abstract class GeoGeometry
 
     // ── Spatial predicates ────────────────────────────────────────────────────
 
-    public bool Contains(GeoGeometry other)        => NtsGeometry.Contains(other.NtsGeometry);
-    public bool Intersects(GeoGeometry other)      => NtsGeometry.Intersects(other.NtsGeometry);
-    public bool Crosses(GeoGeometry other)         => NtsGeometry.Crosses(other.NtsGeometry);
-    public bool Overlaps(GeoGeometry other)        => NtsGeometry.Overlaps(other.NtsGeometry);
-    public bool Touches(GeoGeometry other)         => NtsGeometry.Touches(other.NtsGeometry);
-    public bool Within(GeoGeometry other)          => NtsGeometry.Within(other.NtsGeometry);
-    public bool CoveredBy(GeoGeometry other)       => NtsGeometry.CoveredBy(other.NtsGeometry);
-    public bool Covers(GeoGeometry other)          => NtsGeometry.Covers(other.NtsGeometry);
-    public bool Disjoint(GeoGeometry other)        => NtsGeometry.Disjoint(other.NtsGeometry);
+    public bool Contains(GeoGeometry other)   { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Contains(other.NtsGeometry); }
+    public bool Intersects(GeoGeometry other) { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Intersects(other.NtsGeometry); }
+    public bool Crosses(GeoGeometry other)    { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Crosses(other.NtsGeometry); }
+    public bool Overlaps(GeoGeometry other)   { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Overlaps(other.NtsGeometry); }
+    public bool Touches(GeoGeometry other)    { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Touches(other.NtsGeometry); }
+    public bool Within(GeoGeometry other)     { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Within(other.NtsGeometry); }
+    public bool CoveredBy(GeoGeometry other)  { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.CoveredBy(other.NtsGeometry); }
+    public bool Covers(GeoGeometry other)     { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Covers(other.NtsGeometry); }
+    public bool Disjoint(GeoGeometry other)   { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Disjoint(other.NtsGeometry); }
 
     // ── Measurements ─────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ public abstract class GeoGeometry
     /// Cartesian distance in the geometry's coordinate units
     /// (degrees for SRID 4326, metres for projected CRS).
     /// </summary>
-    public double Distance(GeoGeometry other)      => NtsGeometry.Distance(other.NtsGeometry);
+    public double Distance(GeoGeometry other) { ArgumentNullException.ThrowIfNull(other); return NtsGeometry.Distance(other.NtsGeometry); }
 
     /// <summary>Planar area in the geometry's coordinate units squared.</summary>
     [JsonIgnore] public double Area   => NtsGeometry.Area;
@@ -94,10 +94,10 @@ public abstract class GeoGeometry
 
     public GeoGeometry Buffer(double distance)                 => FromNts(NtsGeometry.Buffer(distance));
     public GeoGeometry ConvexHull()                            => FromNts(NtsGeometry.ConvexHull());
-    public GeoGeometry Intersection(GeoGeometry other)        => FromNts(NtsGeometry.Intersection(other.NtsGeometry));
-    public GeoGeometry Union(GeoGeometry other)               => FromNts(NtsGeometry.Union(other.NtsGeometry));
-    public GeoGeometry Difference(GeoGeometry other)          => FromNts(NtsGeometry.Difference(other.NtsGeometry));
-    public GeoGeometry SymmetricDifference(GeoGeometry other) => FromNts(NtsGeometry.SymmetricDifference(other.NtsGeometry));
+    public GeoGeometry Intersection(GeoGeometry other)        { ArgumentNullException.ThrowIfNull(other); return FromNts(NtsGeometry.Intersection(other.NtsGeometry)); }
+    public GeoGeometry Union(GeoGeometry other)               { ArgumentNullException.ThrowIfNull(other); return FromNts(NtsGeometry.Union(other.NtsGeometry)); }
+    public GeoGeometry Difference(GeoGeometry other)          { ArgumentNullException.ThrowIfNull(other); return FromNts(NtsGeometry.Difference(other.NtsGeometry)); }
+    public GeoGeometry SymmetricDifference(GeoGeometry other) { ArgumentNullException.ThrowIfNull(other); return FromNts(NtsGeometry.SymmetricDifference(other.NtsGeometry)); }
 
     // ── NTS ↔ GeoGeometry ────────────────────────────────────────────────────
 

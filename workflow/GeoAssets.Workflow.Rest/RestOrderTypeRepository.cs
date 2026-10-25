@@ -17,34 +17,35 @@ namespace GeoAssets.Workflow.Rest;
 /// </summary>
 public sealed class RestOrderTypeRepository(HttpClient http) : IOrderTypeRepository
 {
-    private static readonly System.Text.Json.JsonSerializerOptions _opts = GeoJsonSerializer.GetOptions();
+    private static readonly System.Text.Json.JsonSerializerOptions _opts = GeoJsonSerializer.Options;
 
     public async Task<OrderType?> GetByIdAsync(string id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"order-types/{Uri.EscapeDataString(id)}", ct);
+        var response = await http.GetAsync(new Uri($"order-types/{Uri.EscapeDataString(id)}", UriKind.Relative), ct).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<OrderType>(_opts, ct);
+        return await response.Content.ReadFromJsonAsync<OrderType>(_opts, ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OrderType>> GetAllAsync(CancellationToken ct = default)
-        => await http.GetFromJsonAsync<OrderType[]>("order-types", _opts, ct) ?? [];
+        => await http.GetFromJsonAsync<OrderType[]>("order-types", _opts, ct).ConfigureAwait(false) ?? [];
 
     public async Task AddAsync(OrderType orderType, CancellationToken ct = default)
     {
-        var response = await http.PostAsJsonAsync("order-types", orderType, _opts, ct);
+        var response = await http.PostAsJsonAsync("order-types", orderType, _opts, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task UpdateAsync(OrderType orderType, CancellationToken ct = default)
     {
-        var response = await http.PutAsJsonAsync($"order-types/{Uri.EscapeDataString(orderType.Id)}", orderType, _opts, ct);
+        ArgumentNullException.ThrowIfNull(orderType);
+        var response = await http.PutAsJsonAsync($"order-types/{Uri.EscapeDataString(orderType.Id)}", orderType, _opts, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"order-types/{Uri.EscapeDataString(id)}", ct);
+        var response = await http.DeleteAsync(new Uri($"order-types/{Uri.EscapeDataString(id)}", UriKind.Relative), ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 

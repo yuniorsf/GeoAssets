@@ -25,6 +25,7 @@ public sealed class GeoJsonImportHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(parameters);
         if (!parameters.TryGetValue("filePath", out var fp) || fp is not string filePath)
             return GeoCommandResult.Fail("Required parameter 'filePath' is missing or not a string.");
 
@@ -37,7 +38,7 @@ public sealed class GeoJsonImportHandler : IGeoCommandHandler
         try
         {
             var importer = new GeoJsonToPostgresImporter();
-            var count = await importer.ImportAsync(filePath, connectionString, ct);
+            var count = await importer.ImportAsync(filePath, connectionString, ct).ConfigureAwait(false);
             return GeoCommandResult.Ok(new { imported = count, source = filePath });
         }
         catch (Exception ex)

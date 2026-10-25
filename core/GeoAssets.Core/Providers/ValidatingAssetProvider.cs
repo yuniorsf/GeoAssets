@@ -33,7 +33,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     {
         switch (inner)
         {
-            case IAsyncDisposable asyncDisposable: await asyncDisposable.DisposeAsync(); break;
+            case IAsyncDisposable asyncDisposable: await asyncDisposable.DisposeAsync().ConfigureAwait(false); break;
             case IDisposable disposable: disposable.Dispose(); break;
         }
     }
@@ -69,6 +69,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
 
     public void Add(GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         ValidateAttributes(feature);
         ValidateGeometry(feature);
         inner.Add(feature);
@@ -76,6 +77,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
 
     public void Update(GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         ValidateAttributes(feature);
         ValidateGeometry(feature);
         inner.Update(feature);
@@ -90,7 +92,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     private void ValidateAttributes(GeoFeature feature)
     {
         var assetType = inner.GetAssetTypes()
-            .FirstOrDefault(t => t.Id.ToString() == feature.Properties.AssetTypeId);
+            .FirstOrDefault(t => string.Equals(t.Id.ToString(), feature.Properties.AssetTypeId, StringComparison.Ordinal));
         if (assetType is not null)
             GeoFeatureAttributeValidator.EnsureValid(assetType, feature.Properties.CustomAttributes);
     }
@@ -103,7 +105,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     private void ValidateGeometry(GeoFeature feature)
     {
         var assetType = inner.GetAssetTypes()
-            .FirstOrDefault(t => t.Id.ToString() == feature.Properties.AssetTypeId);
+            .FirstOrDefault(t => string.Equals(t.Id.ToString(), feature.Properties.AssetTypeId, StringComparison.Ordinal));
         if (assetType?.AllowedGeometryType is not { } allowed || feature.Geometry is null)
             return;
 

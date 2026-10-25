@@ -50,10 +50,28 @@ public static class GeoAssetsRestApiExtensions
         string prefix = "/api/geoassets",
         bool   wmsRequireAuthentication = true)
     {
-        var opts = GeoJsonSerializer.GetOptions();
+        var opts = GeoJsonSerializer.Options;
 
-        // ── Features ─────────────────────────────────────────────────────────
+        MapFeaturesApi(routes, prefix, opts);
+        MapAssetTypesApi(routes, prefix, opts);
 
+        // WFS 2.0 and WMS 1.1.1 handlers mounted under the same CORS-configured prefix so
+        // Blazor WASM clients can reach them without separate CORS origin entries.
+        // External OGC clients can also use the standalone /wfs and /wms routes.
+        routes.MapWfsApi(route: $"{prefix}/wfs");
+        routes.MapWmsApi(route: $"{prefix}/wms", requireAuthentication: wmsRequireAuthentication);
+
+        return routes;
+    }
+
+    private static void MapFeaturesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        MapFeatureReads(routes, prefix, opts);
+        MapFeatureWrites(routes, prefix, opts);
+    }
+
+    private static void MapFeatureReads(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapGet($"{prefix}/features", (IAssetProvider provider) =>
             Results.Json(provider.GetAll(), opts))
             .RequireAuthorization("features:read");
@@ -61,7 +79,7 @@ public static class GeoAssetsRestApiExtensions
         routes.MapGet($"{prefix}/features/bounds",
             async (double minLon, double minLat, double maxLon, double maxLat, IAssetProvider provider) =>
             {
-                var features = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+                var features = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
                 if (features.Count > MaxBoundsFeatureCount)
                     features = [.. features.Take(MaxBoundsFeatureCount)];
                 return Results.Json(features, opts);
@@ -74,7 +92,7 @@ public static class GeoAssetsRestApiExtensions
             var f = provider.GetById(id);
             if (f is null) return Results.NotFound();
 
-            var result = await authz.AuthorizeAsync(http.User, f, new OrgResourceRequirement("features:read"));
+            var result = await authz.AuthorizeAsync(http.User, f, new OrgResourceRequirement("features:read")).ConfigureAwait(false);
             if (!result.Succeeded)
                 return Results.Json(new { reason = "Not authorized to read this feature." },
                     statusCode: StatusCodes.Status403Forbidden);
@@ -82,13 +100,22 @@ public static class GeoAssetsRestApiExtensions
             return Results.Json(f, opts);
         })
             .RequireAuthorization("features:read");
+    }
 
+    private static void MapFeatureWrites(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        MapSingleFeatureWrites(routes, prefix, opts);
+        MapBulkFeatureWrites(routes, prefix, opts);
+    }
+
+    private static void MapSingleFeatureWrites(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapPost($"{prefix}/features", async (HttpRequest req, IAssetProvider provider) =>
         {
-            var feature = await JsonSerializer.DeserializeAsync<GeoFeature>(req.Body, opts);
+            var feature = await JsonSerializer.DeserializeAsync<GeoFeature>(req.Body, opts).ConfigureAwait(false);
             if (feature is null) return Results.BadRequest("Invalid feature.");
             provider.Add(feature);
-            return Results.Created($"{prefix}/features/{feature.Id}", null);
+            return Results.Created(new Uri($"{prefix}/features/{feature.Id}", UriKind.Relative), null);
         })
             .RequireAuthorization("features:edit");
 
@@ -98,13 +125,13 @@ public static class GeoAssetsRestApiExtensions
             var existing = provider.GetById(id);
             if (existing is not null)
             {
-                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:edit"));
+                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:edit")).ConfigureAwait(false);
                 if (!result.Succeeded)
                     return Results.Json(new { reason = "Not authorized to edit this feature." },
                         statusCode: StatusCodes.Status403Forbidden);
             }
 
-            var feature = await JsonSerializer.DeserializeAsync<GeoFeature>(req.Body, opts);
+            var feature = await JsonSerializer.DeserializeAsync<GeoFeature>(req.Body, opts).ConfigureAwait(false);
             if (feature is null) return Results.BadRequest("Invalid feature.");
             feature.Id = id;
             provider.Update(feature);
@@ -118,7 +145,7 @@ public static class GeoAssetsRestApiExtensions
             var existing = provider.GetById(id);
             if (existing is not null)
             {
-                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:delete"));
+                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:delete")).ConfigureAwait(false);
                 if (!result.Succeeded)
                     return Results.Json(new { reason = "Not authorized to delete this feature." },
                         statusCode: StatusCodes.Status403Forbidden);
@@ -128,10 +155,13 @@ public static class GeoAssetsRestApiExtensions
             return Results.NoContent();
         })
             .RequireAuthorization("features:delete");
+    }
 
+    private static void MapBulkFeatureWrites(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapPost($"{prefix}/features/bulk", async (HttpRequest req, IAssetProvider provider) =>
         {
-            var features = await JsonSerializer.DeserializeAsync<GeoFeature[]>(req.Body, opts) ?? [];
+            var features = await JsonSerializer.DeserializeAsync<GeoFeature[]>(req.Body, opts).ConfigureAwait(false) ?? [];
             provider.AddRange(features);
             return Results.NoContent();
         })
@@ -139,7 +169,7 @@ public static class GeoAssetsRestApiExtensions
 
         routes.MapPost($"{prefix}/features/load", async (HttpRequest req, IAssetProvider provider) =>
         {
-            var features = await JsonSerializer.DeserializeAsync<GeoFeature[]>(req.Body, opts) ?? [];
+            var features = await JsonSerializer.DeserializeAsync<GeoFeature[]>(req.Body, opts).ConfigureAwait(false) ?? [];
             provider.LoadAll(features);
             return Results.NoContent();
         })
@@ -151,19 +181,20 @@ public static class GeoAssetsRestApiExtensions
             return Results.NoContent();
         })
             .RequireAuthorization("features:delete");
+    }
 
-        // ── Asset types ───────────────────────────────────────────────────────
-
+    private static void MapAssetTypesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapGet($"{prefix}/asset-types", (IAssetProvider provider) =>
             Results.Json(provider.GetAssetTypes(), opts))
             .RequireAuthorization("features:read");
 
         routes.MapPost($"{prefix}/asset-types", async (HttpRequest req, IAssetProvider provider) =>
         {
-            var assetType = await JsonSerializer.DeserializeAsync<AssetType>(req.Body, opts);
+            var assetType = await JsonSerializer.DeserializeAsync<AssetType>(req.Body, opts).ConfigureAwait(false);
             if (assetType is null) return Results.BadRequest("Invalid asset type.");
             provider.AddAssetType(assetType);
-            return Results.Created($"{prefix}/asset-types/{assetType.Id}", null);
+            return Results.Created(new Uri($"{prefix}/asset-types/{assetType.Id}", UriKind.Relative), null);
         })
             .RequireAuthorization("features:edit");
 
@@ -173,7 +204,7 @@ public static class GeoAssetsRestApiExtensions
             var existing = provider.GetAssetTypes().FirstOrDefault(t => t.Id == id);
             if (existing is not null)
             {
-                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:delete"));
+                var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:delete")).ConfigureAwait(false);
                 if (!result.Succeeded)
                     return Results.Json(new { reason = "Not authorized to delete this asset type." },
                         statusCode: StatusCodes.Status403Forbidden);
@@ -183,13 +214,5 @@ public static class GeoAssetsRestApiExtensions
             return Results.NoContent();
         })
             .RequireAuthorization("features:delete");
-
-        // WFS 2.0 and WMS 1.1.1 handlers mounted under the same CORS-configured prefix so
-        // Blazor WASM clients can reach them without separate CORS origin entries.
-        // External OGC clients can also use the standalone /wfs and /wms routes.
-        routes.MapWfsApi(route: $"{prefix}/wfs");
-        routes.MapWmsApi(route: $"{prefix}/wms", requireAuthentication: wmsRequireAuthentication);
-
-        return routes;
     }
 }

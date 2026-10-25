@@ -17,6 +17,8 @@ public static class MenuTreeBuilder
     /// </summary>
     public static IReadOnlyList<MenuNode> Build(IReadOnlyList<MenuItemBase> items)
     {
+        ArgumentNullException.ThrowIfNull(items);
+
         var idsInUse = items.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
         var childrenByParentId = items.ToLookup(item => item.ParentId, StringComparer.Ordinal);
 
@@ -34,7 +36,7 @@ public static class MenuTreeBuilder
         return BuildNodes(topLevelItems, childrenByParentId);
     }
 
-    private static IReadOnlyList<MenuNode> BuildNodes(
+    private static List<MenuNode> BuildNodes(
         IEnumerable<MenuItemBase> items, ILookup<string?, MenuItemBase> childrenByParentId) =>
         items
             .OrderBy(item => item.SortOrder)
@@ -49,6 +51,9 @@ public static class MenuTreeBuilder
     public static IReadOnlySet<string> ComputeExpandedGroupIds(
         IReadOnlyList<MenuNode> tree, string currentRelativePath)
     {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(currentRelativePath);
+
         var trimmedPath = currentRelativePath.TrimStart('/');
         var expandedGroupIds = new HashSet<string>(StringComparer.Ordinal);
 
@@ -89,7 +94,7 @@ public static class MenuTreeBuilder
 
     private static string StripQuery(string path)
     {
-        var queryIndex = path.IndexOf('?');
+        var queryIndex = path.IndexOf('?', StringComparison.Ordinal);
         return queryIndex < 0 ? path : path[..queryIndex];
     }
 }

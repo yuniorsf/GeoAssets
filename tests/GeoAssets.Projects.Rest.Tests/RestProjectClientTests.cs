@@ -113,7 +113,7 @@ public class RestProjectClientTests
     }
 
     [Fact]
-    public async Task CreateAsync_Forbidden_ThrowsUnauthorizedAccessException()
+    public Task CreateAsync_Forbidden_ThrowsUnauthorizedAccessException()
     {
         var handler = new FakeHttpMessageHandler(_ =>
             JsonResponse(HttpStatusCode.Forbidden, new { reason = "Not authorized to fork this project." }));
@@ -121,7 +121,7 @@ public class RestProjectClientTests
 
         var act = () => sut.CreateAsync(new Project { Name = "X", ParentProjectId = Guid.NewGuid() });
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        return act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     // ── UpdateProvidersAsync ──────────────────────────────────────────────────
@@ -158,7 +158,7 @@ public class RestProjectClientTests
     }
 
     [Fact]
-    public async Task UpdateProvidersAsync_NotFound_ThrowsKeyNotFoundException()
+    public Task UpdateProvidersAsync_NotFound_ThrowsKeyNotFoundException()
     {
         var id = Guid.NewGuid();
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.NotFound));
@@ -166,11 +166,11 @@ public class RestProjectClientTests
 
         var act = () => sut.UpdateProvidersAsync(id, []);
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     [Fact]
-    public async Task UpdateProvidersAsync_Forbidden_ThrowsUnauthorizedAccessException()
+    public Task UpdateProvidersAsync_Forbidden_ThrowsUnauthorizedAccessException()
     {
         var handler = new FakeHttpMessageHandler(_ =>
             JsonResponse(HttpStatusCode.Forbidden, new { reason = "Not authorized (projects:manage-providers) on this project." }));
@@ -178,7 +178,7 @@ public class RestProjectClientTests
 
         var act = () => sut.UpdateProvidersAsync(Guid.NewGuid(), []);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        return act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     // ── UpdateAssetTypeScopeAsync / UpdateLayerScopeAsync / UpdateViewStateAsync ─

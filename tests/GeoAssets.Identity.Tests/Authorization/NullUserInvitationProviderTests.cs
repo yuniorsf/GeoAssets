@@ -9,11 +9,11 @@ public class NullUserInvitationProviderTests
     private readonly NullUserInvitationProvider _sut = new();
 
     [Fact]
-    public async Task CreateInvitedAccountAsync_DoesNotThrow()
+    public Task CreateInvitedAccountAsync_DoesNotThrow()
     {
         var act = () => _sut.CreateInvitedAccountAsync("invitee@example.com", "Invitee");
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 
     [Fact]
@@ -25,10 +25,10 @@ public class NullUserInvitationProviderTests
     }
 
     [Fact]
-    public async Task RevokeInvitedAccountAsync_DoesNotThrow()
+    public Task RevokeInvitedAccountAsync_DoesNotThrow()
     {
         var act = () => _sut.RevokeInvitedAccountAsync("external-oid-1");
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 }

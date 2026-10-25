@@ -115,7 +115,7 @@ public class ShapefileExportServiceTests
     public void ExportToZip_FeatureWithCustomAttributes_RoundTripsNameAndAttributes()
     {
         var sut = new ShapefileExportService();
-        var feature = PointFeature("Hydrant 1", 10, 20, new Dictionary<string, string> { ["material"] = "cast-iron", ["year"] = "1998" });
+        var feature = PointFeature("Hydrant 1", 10, 20, new Dictionary<string, string>(StringComparer.Ordinal) { ["material"] = "cast-iron", ["year"] = "1998" });
 
         var zip = sut.ExportToZip([feature]);
         var dir = Unzip(zip);
@@ -146,8 +146,8 @@ public class ShapefileExportServiceTests
         var sut = new ShapefileExportService();
         var features = new List<GeoFeature>
         {
-            PointFeature("A", 0, 0, new Dictionary<string, string> { ["foo"] = "1" }),
-            PointFeature("B", 1, 1, new Dictionary<string, string> { ["bar"] = "2" }),
+            PointFeature("A", 0, 0, new Dictionary<string, string>(StringComparer.Ordinal) { ["foo"] = "1" }),
+            PointFeature("B", 1, 1, new Dictionary<string, string>(StringComparer.Ordinal) { ["bar"] = "2" }),
         };
 
         var act = () => sut.ExportToZip(features);
@@ -196,7 +196,7 @@ public class ShapefileExportServiceTests
         var factory = new GeometryFactory(new PrecisionModel(), 4326);
         using var reader = new ShapefileDataReader(basePath, factory);
         var header = reader.DbaseHeader;
-        var nameIndex = Enumerable.Range(0, header.NumFields).First(i => header.Fields[i].Name == "NAME");
+        var nameIndex = Enumerable.Range(0, header.NumFields).First(i => string.Equals(header.Fields[i].Name, "NAME", StringComparison.Ordinal));
 
         var names = new List<string>();
         while (reader.Read())

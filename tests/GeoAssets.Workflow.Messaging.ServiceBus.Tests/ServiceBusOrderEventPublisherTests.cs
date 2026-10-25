@@ -26,7 +26,7 @@ public class ServiceBusOrderEventPublisherTests
         using var activity = TestSource.StartActivity("test-publish", ActivityKind.Producer);
         activity.Should().NotBeNull("the static listener should force sampling");
 
-        var applicationProperties = new Dictionary<string, object>();
+        var applicationProperties = new Dictionary<string, object>(StringComparer.Ordinal);
 
         ServiceBusOrderEventPublisher.ApplyTraceContext(applicationProperties, activity);
 
@@ -37,7 +37,7 @@ public class ServiceBusOrderEventPublisherTests
     [Fact]
     public void ApplyTraceContext_AddsNoKeys_WhenActivityIsNull()
     {
-        var applicationProperties = new Dictionary<string, object>();
+        var applicationProperties = new Dictionary<string, object>(StringComparer.Ordinal);
 
         ServiceBusOrderEventPublisher.ApplyTraceContext(applicationProperties, activity: null);
 
@@ -49,7 +49,7 @@ public class ServiceBusOrderEventPublisherTests
     {
         using var activity = TestSource.StartActivity("test-publish", ActivityKind.Producer);
 
-        var applicationProperties = new Dictionary<string, object>
+        var applicationProperties = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["orderId"]     = "order-1",
             ["orderTypeId"] = "inspection",

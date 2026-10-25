@@ -37,11 +37,11 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
     // two concurrent calls from this process) can't silently drop each other's roles. A
     // concurrent *direct* Entra-portal edit during a sync is a separate, accepted risk (not
     // solvable without distributed locking Graph doesn't offer) — see XD01-59/62's design notes.
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _appLocks = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _appLocks = new(StringComparer.Ordinal);
 
     // Service principal ids don't change for the lifetime of this instance — fetch once per
     // app registration, not on every assignment call.
-    private readonly ConcurrentDictionary<string, string> _servicePrincipalIds = new();
+    private readonly ConcurrentDictionary<string, string> _servicePrincipalIds = new(StringComparer.Ordinal);
 
     public EntraGraphRoleAssignmentProvider(
         HttpClient graph, IGraphAccessTokenProvider tokenProvider, RoleSyncOptions options)
@@ -53,20 +53,21 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
 
     public async Task RegisterRoleAsync(AppRole role, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(role);
         foreach (var clientId in _options.TargetApplicationClientIds)
         {
             var appLock = GetLock(clientId);
-            await appLock.WaitAsync(ct);
+            await appLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                var roles = await GetAppRolesAsync(clientId, ct);
+                var roles = await GetAppRolesAsync(clientId, ct).ConfigureAwait(false);
                 var updated = new GraphAppRole(role.Id, role.Name, role.Description, role.Name, IsEnabled: true, ["User"]);
 
                 var index = roles.FindIndex(r => r.Id == role.Id);
                 if (index >= 0) roles[index] = updated;
                 else roles.Add(updated);
 
-                await PatchAppRolesAsync(clientId, roles, ct);
+                await PatchAppRolesAsync(clientId, roles, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -80,20 +81,20 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
         foreach (var clientId in _options.TargetApplicationClientIds)
         {
             var appLock = GetLock(clientId);
-            await appLock.WaitAsync(ct);
+            await appLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                var roles = await GetAppRolesAsync(clientId, ct);
+                var roles = await GetAppRolesAsync(clientId, ct).ConfigureAwait(false);
                 var index = roles.FindIndex(r => r.Id == roleId);
                 if (index < 0) continue; // never registered against this app — no-op
 
                 // Two-phase per Graph's own requirement: a role must be disabled in one PATCH
                 // before a follow-up PATCH can remove it from the appRoles array.
                 roles[index] = roles[index] with { IsEnabled = false };
-                await PatchAppRolesAsync(clientId, roles, ct);
+                await PatchAppRolesAsync(clientId, roles, ct).ConfigureAwait(false);
 
                 roles.RemoveAt(index);
-                await PatchAppRolesAsync(clientId, roles, ct);
+                await PatchAppRolesAsync(clientId, roles, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -106,14 +107,14 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
     {
         foreach (var clientId in _options.TargetApplicationClientIds)
         {
-            var appRole = await FindAppRoleByNameAsync(clientId, roleName, ct)
+            var appRole = await FindAppRoleByNameAsync(clientId, roleName, ct).ConfigureAwait(false)
                 ?? throw new InvalidOperationException(
                     $"Role '{roleName}' is not registered against application '{clientId}'. Call RegisterRoleAsync first.");
 
-            var servicePrincipalId = await GetServicePrincipalIdAsync(clientId, ct);
-            var assignments = await GetAssignmentsAsync(servicePrincipalId, ct);
+            var servicePrincipalId = await GetServicePrincipalIdAsync(clientId, ct).ConfigureAwait(false);
+            var assignments = await GetAssignmentsAsync(servicePrincipalId, ct).ConfigureAwait(false);
 
-            if (assignments.Any(a => a.PrincipalId == externalUserObjectId && a.AppRoleId == appRole.Id))
+            if (assignments.Any(a => string.Equals(a.PrincipalId, externalUserObjectId, StringComparison.Ordinal) && a.AppRoleId == appRole.Id))
                 continue; // already assigned — idempotent no-op
 
             await SendAsync(HttpMethod.Post, $"servicePrincipals/{servicePrincipalId}/appRoleAssignedTo", new
@@ -121,7 +122,7 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
                 principalId = externalUserObjectId,
                 resourceId  = servicePrincipalId,
                 appRoleId   = appRole.Id,
-            }, ct);
+            }, ct).ConfigureAwait(false);
         }
     }
 
@@ -129,29 +130,29 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
     {
         foreach (var clientId in _options.TargetApplicationClientIds)
         {
-            var appRole = await FindAppRoleByNameAsync(clientId, roleName, ct);
+            var appRole = await FindAppRoleByNameAsync(clientId, roleName, ct).ConfigureAwait(false);
             if (appRole is null) continue; // never registered against this app — nothing to revoke
 
-            var servicePrincipalId = await GetServicePrincipalIdAsync(clientId, ct);
-            var assignments = await GetAssignmentsAsync(servicePrincipalId, ct);
-            var assignment = assignments.FirstOrDefault(a => a.PrincipalId == externalUserObjectId && a.AppRoleId == appRole.Id);
+            var servicePrincipalId = await GetServicePrincipalIdAsync(clientId, ct).ConfigureAwait(false);
+            var assignments = await GetAssignmentsAsync(servicePrincipalId, ct).ConfigureAwait(false);
+            var assignment = assignments.FirstOrDefault(a => string.Equals(a.PrincipalId, externalUserObjectId, StringComparison.Ordinal) && a.AppRoleId == appRole.Id);
             if (assignment is null) continue; // not currently assigned — no-op
 
-            await SendAsync(HttpMethod.Delete, $"servicePrincipals/{servicePrincipalId}/appRoleAssignedTo/{assignment.Id}", body: null, ct);
+            await SendAsync(HttpMethod.Delete, $"servicePrincipals/{servicePrincipalId}/appRoleAssignedTo/{assignment.Id}", body: null, ct).ConfigureAwait(false);
         }
     }
 
     public async Task<IReadOnlyList<string>> GetAssignedRoleNamesAsync(string externalUserObjectId, CancellationToken ct = default)
     {
-        var names = new HashSet<string>();
+        var names = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var clientId in _options.TargetApplicationClientIds)
         {
-            var roles = await GetAppRolesAsync(clientId, ct);
-            var servicePrincipalId = await GetServicePrincipalIdAsync(clientId, ct);
-            var assignments = await GetAssignmentsAsync(servicePrincipalId, ct);
+            var roles = await GetAppRolesAsync(clientId, ct).ConfigureAwait(false);
+            var servicePrincipalId = await GetServicePrincipalIdAsync(clientId, ct).ConfigureAwait(false);
+            var assignments = await GetAssignmentsAsync(servicePrincipalId, ct).ConfigureAwait(false);
 
-            foreach (var assignment in assignments.Where(a => a.PrincipalId == externalUserObjectId))
+            foreach (var assignment in assignments.Where(a => string.Equals(a.PrincipalId, externalUserObjectId, StringComparison.Ordinal)))
             {
                 var role = roles.Find(r => r.Id == assignment.AppRoleId);
                 if (role is not null) names.Add(role.Value);
@@ -165,30 +166,28 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
 
     private async Task<GraphAppRole?> FindAppRoleByNameAsync(string clientId, string roleName, CancellationToken ct)
     {
-        var roles = await GetAppRolesAsync(clientId, ct);
-        return roles.Find(r => r.Value == roleName);
+        var roles = await GetAppRolesAsync(clientId, ct).ConfigureAwait(false);
+        return roles.Find(r => string.Equals(r.Value, roleName, StringComparison.Ordinal));
     }
 
     private async Task<List<GraphAppRole>> GetAppRolesAsync(string clientId, CancellationToken ct)
     {
-        var response = await SendAsync(HttpMethod.Get, $"applications(appId='{Uri.EscapeDataString(clientId)}')?$select=appRoles", body: null, ct);
-        var dto = await response.Content.ReadFromJsonAsync<GraphAppRolesResponse>(ct)
+        var response = await SendAsync(HttpMethod.Get, $"applications(appId='{Uri.EscapeDataString(clientId)}')?$select=appRoles", body: null, ct).ConfigureAwait(false);
+        var dto = await response.Content.ReadFromJsonAsync<GraphAppRolesResponse>(ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"GET applications(appId='{clientId}') returned an empty response.");
         return dto.AppRoles;
     }
 
-    private async Task PatchAppRolesAsync(string clientId, List<GraphAppRole> roles, CancellationToken ct)
-    {
-        await SendAsync(HttpMethod.Patch, $"applications(appId='{Uri.EscapeDataString(clientId)}')", new { appRoles = roles }, ct);
-    }
+    private Task<HttpResponseMessage> PatchAppRolesAsync(string clientId, List<GraphAppRole> roles, CancellationToken ct) =>
+        SendAsync(HttpMethod.Patch, $"applications(appId='{Uri.EscapeDataString(clientId)}')", new { appRoles = roles }, ct);
 
     private async Task<string> GetServicePrincipalIdAsync(string clientId, CancellationToken ct)
     {
         if (_servicePrincipalIds.TryGetValue(clientId, out var cached))
             return cached;
 
-        var response = await SendAsync(HttpMethod.Get, $"servicePrincipals(appId='{Uri.EscapeDataString(clientId)}')?$select=id", body: null, ct);
-        var dto = await response.Content.ReadFromJsonAsync<GraphIdResponse>(ct)
+        var response = await SendAsync(HttpMethod.Get, $"servicePrincipals(appId='{Uri.EscapeDataString(clientId)}')?$select=id", body: null, ct).ConfigureAwait(false);
+        var dto = await response.Content.ReadFromJsonAsync<GraphIdResponse>(ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"GET servicePrincipals(appId='{clientId}') returned an empty response.");
 
         _servicePrincipalIds[clientId] = dto.Id;
@@ -197,8 +196,8 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
 
     private async Task<List<GraphAppRoleAssignment>> GetAssignmentsAsync(string servicePrincipalId, CancellationToken ct)
     {
-        var response = await SendAsync(HttpMethod.Get, $"servicePrincipals/{servicePrincipalId}/appRoleAssignedTo", body: null, ct);
-        var dto = await response.Content.ReadFromJsonAsync<GraphAssignmentsResponse>(ct)
+        var response = await SendAsync(HttpMethod.Get, $"servicePrincipals/{servicePrincipalId}/appRoleAssignedTo", body: null, ct).ConfigureAwait(false);
+        var dto = await response.Content.ReadFromJsonAsync<GraphAssignmentsResponse>(ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("GET appRoleAssignedTo returned an empty response.");
         return dto.Value;
     }
@@ -207,15 +206,15 @@ public sealed class EntraGraphRoleAssignmentProvider : IRoleAssignmentProvider
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string relativeUrl, object? body, CancellationToken ct)
     {
-        var token = await _tokenProvider.GetAccessTokenAsync(ct);
-        var request = new HttpRequestMessage(method, relativeUrl)
+        var token = await _tokenProvider.GetAccessTokenAsync(ct).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(method, relativeUrl)
         {
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) },
         };
         if (body is not null)
             request.Content = JsonContent.Create(body);
 
-        var response = await _graph.SendAsync(request, ct);
+        var response = await _graph.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         return response;
     }

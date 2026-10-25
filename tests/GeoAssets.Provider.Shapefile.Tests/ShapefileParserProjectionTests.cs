@@ -30,7 +30,9 @@ public class ShapefileParserProjectionTests
     private static async Task<IAssetProvider> LoadFixtureProviderAsync(double x, double y, string? prjWkt)
     {
         var point = Factory.CreatePoint(new Coordinate(x, y));
+#pragma warning disable MA0002 // AttributesTable (NetTopologySuite.IO.ShapeFile) has no constructor overload accepting an IEqualityComparer<string>
         var features = new List<IFeature> { new Feature(point, new AttributesTable { { "NAME", "Pole" } }) };
+#pragma warning restore MA0002
 
         var tempDir = Path.Combine(Path.GetTempPath(), "shp_proj_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -48,9 +50,9 @@ public class ShapefileParserProjectionTests
                 await File.WriteAllTextAsync(basePath + ".prj", prjWkt);
 
             var zipPath = Path.Combine(tempDir, "archive.zip");
-            using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+            await using (var zip = await ZipFile.OpenAsync(zipPath, ZipArchiveMode.Create))
                 foreach (var f in Directory.GetFiles(tempDir, "fixture.*"))
-                    zip.CreateEntryFromFile(f, Path.GetFileName(f));
+                    await zip.CreateEntryFromFileAsync(f, Path.GetFileName(f));
 
             var config = new ProviderConfig();
             config.Set("name", "fixture");

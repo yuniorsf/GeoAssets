@@ -68,7 +68,7 @@ public class InvitationRedirectGateTests
     private sealed class StorePendingInvitationRepository(PendingInvitationStore store) : IPendingInvitationRepository
     {
         public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) =>
-            Task.FromResult(store.Invitations.FirstOrDefault(i => i.ExternalObjectId == externalObjectId));
+            Task.FromResult(store.Invitations.FirstOrDefault(i => string.Equals(i.ExternalObjectId, externalObjectId, StringComparison.Ordinal)));
 
         public Task<PendingInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default) => throw new NotSupportedException();
@@ -106,7 +106,7 @@ public class InvitationRedirectGateTests
         {
             ExternalObjectId = "user-3",
             Status           = InvitationStatus.Redeemed,
-            RedeemedAt       = DateTime.UtcNow,
+            RedeemedAt       = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         });
 
         await sut.RedirectIfPendingAsync();

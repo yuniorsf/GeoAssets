@@ -23,6 +23,7 @@ namespace GeoAssets.Commands;
 /// </summary>
 public sealed class GeoPluginContainer : IDisposable
 {
+    private readonly AggregateCatalog _catalog;
     private readonly CompositionContainer _container;
 
     [ImportMany]
@@ -30,21 +31,23 @@ public sealed class GeoPluginContainer : IDisposable
 
     public GeoPluginContainer(string pluginsDirectory, params Assembly[] builtInAssemblies)
     {
-        var catalog = new AggregateCatalog();
+        ArgumentNullException.ThrowIfNull(builtInAssemblies);
+
+        _catalog = new AggregateCatalog();
 
         foreach (var asm in builtInAssemblies)
-            catalog.Catalogs.Add(new AssemblyCatalog(asm));
+            _catalog.Catalogs.Add(new AssemblyCatalog(asm));
 
         if (Directory.Exists(pluginsDirectory))
-            catalog.Catalogs.Add(new DirectoryCatalog(pluginsDirectory, "GeoAssets.Plugin.*.dll"));
+            _catalog.Catalogs.Add(new DirectoryCatalog(pluginsDirectory, "GeoAssets.Plugin.*.dll"));
 
-        _container = new CompositionContainer(catalog);
+        _container = new CompositionContainer(_catalog);
         _container.ComposeParts(this);
     }
 
     /// <summary>Returns metadata for all registered commands (built-in + plugins).</summary>
     public IEnumerable<IGeoCommandMetadata> GetAvailableCommands()
-        => Handlers.Select(h => h.Metadata).OrderBy(m => m.Category).ThenBy(m => m.Name);
+        => Handlers.Select(h => h.Metadata).OrderBy(m => m.Category, StringComparer.Ordinal).ThenBy(m => m.Name, StringComparer.Ordinal);
 
     /// <summary>Executes a command by name.</summary>
     public async Task<GeoCommandResult> ExecuteAsync(
@@ -64,8 +67,8 @@ public sealed class GeoPluginContainer : IDisposable
         {
             return await export.Value.ExecuteAsync(
                 context,
-                parameters ?? new Dictionary<string, object>(),
-                ct);
+                parameters ?? new Dictionary<string, object>(StringComparer.Ordinal),
+                ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -73,5 +76,9 @@ public sealed class GeoPluginContainer : IDisposable
         }
     }
 
-    public void Dispose() => _container.Dispose();
+    public void Dispose()
+    {
+        _container.Dispose();
+        _catalog.Dispose();
+    }
 }

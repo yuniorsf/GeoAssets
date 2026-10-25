@@ -50,7 +50,7 @@ public class ProjectServiceTests
                     Id          = callerId,
                     Email       = "caller@example.com",
                     DisplayName = "Caller",
-                    CreatedAt   = DateTime.UtcNow,
+                    CreatedAt   = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
                 },
                 Roles       = [],
                 Claims      = [],
@@ -68,7 +68,10 @@ public class ProjectServiceTests
         public IReadOnlyList<Project> Added => _projects;
 
         public event EventHandler<Project>? ProjectSaved;
+        // Never fires — this test double has no deletion path, no test relies on it.
+#pragma warning disable CS0067
         public event EventHandler<Guid>? ProjectDeleted;
+#pragma warning restore CS0067
 
         public Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
@@ -104,7 +107,7 @@ public class ProjectServiceTests
             new FakeGeoAuthorizationService(callerId),
             store,
             store,
-            new FixedTimeProvider(now ?? DateTimeOffset.UtcNow));
+            new FixedTimeProvider(now ?? new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero)));
         return (sut, store);
     }
 
@@ -124,7 +127,7 @@ public class ProjectServiceTests
     [Fact]
     public async Task ResolveMutationTargetAsync_CallerHoldsPermission_ReturnsSameProject()
     {
-        var (sut, _) = BuildSut(Guid.NewGuid(), permits: code => code == "projects:manage-providers");
+        var (sut, _) = BuildSut(Guid.NewGuid(), permits: code => string.Equals(code, "projects:manage-providers", StringComparison.Ordinal));
         var project = GeneralProject(Guid.NewGuid());
 
         var target = await sut.ResolveMutationTargetAsync(Caller(), project, "projects:manage-providers");
@@ -140,7 +143,7 @@ public class ProjectServiceTests
         // Fails without the fix: a naive "permission denied -> null" implementation would
         // return null here instead of a fork.
         var callerId = Guid.NewGuid();
-        var (sut, store) = BuildSut(callerId, permits: code => code == "projects:read");
+        var (sut, store) = BuildSut(callerId, permits: code => string.Equals(code, "projects:read", StringComparison.Ordinal));
         var project = GeneralProject(Guid.NewGuid());
 
         var target = await sut.ResolveMutationTargetAsync(Caller(), project, "projects:manage-providers");
@@ -157,7 +160,7 @@ public class ProjectServiceTests
     {
         var callerId = Guid.NewGuid();
         var orgId = Guid.NewGuid();
-        var (sut, _) = BuildSut(callerId, permits: code => code == "projects:read");
+        var (sut, _) = BuildSut(callerId, permits: code => string.Equals(code, "projects:read", StringComparison.Ordinal));
         var project = GeneralProject(orgId);
         project.Name = "Field Ops";
         project.Description = "Shared field assets";
@@ -173,7 +176,7 @@ public class ProjectServiceTests
     public async Task ResolveMutationTargetAsync_ExistingForkForCaller_ReusesItInsteadOfCreatingAnother()
     {
         var callerId = Guid.NewGuid();
-        var (sut, store) = BuildSut(callerId, permits: code => code == "projects:read");
+        var (sut, store) = BuildSut(callerId, permits: code => string.Equals(code, "projects:read", StringComparison.Ordinal));
         var project = GeneralProject(Guid.NewGuid());
 
         var first = await sut.ResolveMutationTargetAsync(Caller(), project, "projects:manage-providers");
@@ -204,7 +207,7 @@ public class ProjectServiceTests
     {
         // projects:rename/projects:delete have no "fork instead" fallback — a caller who can
         // read but not rename/delete a General Project gets a hard 403, not a redirected fork.
-        var (sut, store) = BuildSut(Guid.NewGuid(), permits: code => code == "projects:read");
+        var (sut, store) = BuildSut(Guid.NewGuid(), permits: code => string.Equals(code, "projects:read", StringComparison.Ordinal));
         var project = GeneralProject(Guid.NewGuid());
 
         var target = await sut.ResolveMutationTargetAsync(Caller(), project, permissionCode);
@@ -256,7 +259,7 @@ public class ProjectServiceTests
     [Fact]
     public async Task ResolveMutationTargetAsync_NonOwnerOfUserProjectWithPermission_ReturnsSameProject()
     {
-        var (sut, _) = BuildSut(Guid.NewGuid(), permits: code => code == "projects:manage-providers");
+        var (sut, _) = BuildSut(Guid.NewGuid(), permits: code => string.Equals(code, "projects:manage-providers", StringComparison.Ordinal));
         var othersFork = new Project
         {
             Id              = Guid.NewGuid(),
@@ -276,7 +279,7 @@ public class ProjectServiceTests
     public async Task ResolveMutationTargetAsync_Fork_SetsCreatedAtAndUpdatedAtFromTimeProvider()
     {
         var now = new DateTimeOffset(2026, 9, 14, 12, 0, 0, TimeSpan.Zero);
-        var (sut, _) = BuildSut(Guid.NewGuid(), permits: code => code == "projects:read", now: now);
+        var (sut, _) = BuildSut(Guid.NewGuid(), permits: code => string.Equals(code, "projects:read", StringComparison.Ordinal), now: now);
         var project = GeneralProject(Guid.NewGuid());
 
         var target = await sut.ResolveMutationTargetAsync(Caller(), project, "projects:manage-view");

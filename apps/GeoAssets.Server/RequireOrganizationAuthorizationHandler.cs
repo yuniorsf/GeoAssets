@@ -25,13 +25,14 @@ public sealed class RequireOrganizationAuthorizationHandler(
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context, RequireOrganizationRequirement requirement)
     {
+        ArgumentNullException.ThrowIfNull(context);
         // Same reasoning as GeoAuthorizationHandler/OrgResourceAuthorizationHandler: this
         // handler can run before a paired RequireAuthenticatedUser() requirement has
         // succeeded, and IGeoAuthorizationService throws for an anonymous caller rather
         // than returning false.
         if (context.User.Identity?.IsAuthenticated != true) return;
 
-        var authContext = await authorizationService.GetAuthorizationContextAsync();
+        var authContext = await authorizationService.GetAuthorizationContextAsync().ConfigureAwait(false);
 
         if (authContext.User.OrganizationId is not null)
             context.Succeed(requirement);

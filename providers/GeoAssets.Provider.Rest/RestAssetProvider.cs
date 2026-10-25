@@ -18,9 +18,9 @@ namespace GeoAssets.Provider.Rest;
 /// Spatial and topology queries run against the local cache using NTS / TopoGraph,
 /// so they reflect the last snapshot loaded from the server.
 /// </summary>
-public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
+public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposable
 {
-    private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.GetOptions();
+    private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
 
     /// <summary>Bboxes at or below this area (in decimal-degrees²) are fetched as a single
     /// request — tiling a small/already-fast viewport would only add HTTP overhead.</summary>
@@ -66,8 +66,8 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
     /// <summary>Loads the full dataset from the remote API into the local cache.</summary>
     internal async Task InitializeAsync(CancellationToken ct = default)
     {
-        var features = await _http.GetFromJsonAsync<GeoFeature[]>("features",    _opts, ct) ?? [];
-        var types    = await _http.GetFromJsonAsync<AssetType[]> ("asset-types", _opts, ct) ?? [];
+        var features = await _http.GetFromJsonAsync<GeoFeature[]>("features",    _opts, ct).ConfigureAwait(false) ?? [];
+        var types    = await _http.GetFromJsonAsync<AssetType[]> ("asset-types", _opts, ct).ConfigureAwait(false) ?? [];
 
         _cache.LoadAll(features);
         foreach (var t in types.Where(t => !t.IsBuiltIn))
@@ -91,7 +91,7 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
         double minLon, double minLat, double maxLon, double maxLat)
     {
         var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
-        return await _http.GetFromJsonAsync<GeoFeature[]>(url, _opts) ?? [];
+        return await _http.GetFromJsonAsync<GeoFeature[]>(url, _opts).ConfigureAwait(false) ?? [];
     }
 
     /// <summary>
@@ -102,9 +102,9 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
         double minLon, double minLat, double maxLon, double maxLat)
     {
         var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
-        var response = await _http.GetAsync(url);
+        var response = await _http.GetAsync(new Uri(url, UriKind.RelativeOrAbsolute)).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsStringAsync();
+        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -147,9 +147,9 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
         var tiles = SplitIntoTiles(minLon, minLat, maxLon, maxLat, gridDivisions);
         var tasks = tiles.Select(t => FetchTileThrottledAsync(t.MinLon, t.MinLat, t.MaxLon, t.MaxLat, ct)).ToList();
 
-        await foreach (var completed in Task.WhenEach(tasks).WithCancellation(ct))
+        await foreach (var completed in Task.WhenEach(tasks).WithCancellation(ct).ConfigureAwait(false))
         {
-            var raw = await completed;
+            var raw = await completed.ConfigureAwait(false);
             if (raw is not null) yield return raw;
         }
     }
@@ -157,10 +157,10 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
     private async Task<string?> FetchTileThrottledAsync(
         double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct)
     {
-        await _boundsFetchThrottle.WaitAsync(ct);
+        await _boundsFetchThrottle.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
+            return await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
         }
         finally
         {
@@ -177,10 +177,10 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
         double minLon, double minLat, double maxLon, double maxLat)
     {
         var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
-        var response = await _http.GetAsync(url);
+        var response = await _http.GetAsync(new Uri(url, UriKind.RelativeOrAbsolute)).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        var stream = await response.Content.ReadAsStreamAsync();
-        using var doc = await JsonDocument.ParseAsync(stream);
+        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var doc = await JsonDocument.ParseAsync(stream).ConfigureAwait(false);
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("Expected JSON array from server");
         // Clone each element so they own their own memory and survive the document disposal.
@@ -190,7 +190,7 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
         // which is less efficient for large datasets.
         // return await _http.GetFromJsonAsync<JsonElement[]>(url) ?? [];
     }
-    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg) => _cache.GetNearby(center, distanceDeg);
+    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees) => _cache.GetNearby(center, distanceDegrees);
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                 => _cache.GetAssetTypes();
     public IReadOnlyList<Layer>                     GetLayers()                                     => _cache.GetLayers();
     public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                 => _cache.GetLayerRules(assetTypeId);
@@ -199,12 +199,14 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
 
     public void Add(GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         _cache.Add(feature);
         _ = _http.PostAsJsonAsync("features", feature, _opts);
     }
 
     public void Update(GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         _cache.Update(feature);
         _ = _http.PutAsJsonAsync($"features/{feature.Id}", feature, _opts);
     }
@@ -219,17 +221,18 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
     public void Delete(string id)
     {
         _cache.Delete(id);
-        _ = _http.DeleteAsync($"features/{id}");
+        _ = _http.DeleteAsync(new Uri($"features/{id}", UriKind.RelativeOrAbsolute));
     }
 
     public void Clear()
     {
         _cache.Clear();
-        _ = _http.DeleteAsync("features");
+        _ = _http.DeleteAsync(new Uri("features", UriKind.RelativeOrAbsolute));
     }
 
     public void LoadAll(IEnumerable<GeoFeature> features)
     {
+        ArgumentNullException.ThrowIfNull(features);
         _cache.LoadAll(features);
         _ = _http.PostAsJsonAsync("features/load", _cache.GetAll(), _opts);
     }
@@ -243,7 +246,7 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
     public void DeleteAssetType(Guid id)
     {
         _cache.DeleteAssetType(id);
-        _ = _http.DeleteAsync($"asset-types/{id}");
+        _ = _http.DeleteAsync(new Uri($"asset-types/{id}", UriKind.RelativeOrAbsolute));
     }
 
     /// <summary>
@@ -254,4 +257,6 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider
     public void DeleteLayer(Guid id)              => _cache.DeleteLayer(id);
     public void AddLayerRule(LayerRule layerRule) => _cache.AddLayerRule(layerRule);
     public void DeleteLayerRule(Guid id)          => _cache.DeleteLayerRule(id);
+
+    public void Dispose() => _boundsFetchThrottle.Dispose();
 }

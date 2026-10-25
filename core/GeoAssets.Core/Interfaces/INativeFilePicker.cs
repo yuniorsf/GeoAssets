@@ -13,6 +13,3 @@ public interface INativeFilePicker
     /// <summary>Opens the native picker filtered to ZIP archives. Returns <c>null</c> if the user cancelled.</summary>
     Task<NativeFilePickResult?> PickZipArchiveAsync(CancellationToken ct = default);
 }
-
-/// <summary>Result of a successful <see cref="INativeFilePicker.PickZipArchiveAsync"/> call.</summary>
-public sealed record NativeFilePickResult(byte[] Content, string FileName, string FullPath);

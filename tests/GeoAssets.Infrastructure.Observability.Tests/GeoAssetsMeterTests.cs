@@ -16,7 +16,7 @@ public class GeoAssetsMeterTests
         {
             _listener.InstrumentPublished = (instrument, listener) =>
             {
-                if (instrument.Meter.Name == GeoAssetsMeter.MeterName)
+                if (string.Equals(instrument.Meter.Name, GeoAssetsMeter.MeterName, StringComparison.Ordinal))
                     listener.EnableMeasurementEvents(instrument);
             };
             _listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
@@ -37,8 +37,8 @@ public class GeoAssetsMeterTests
 
         meter.RecordOrderTransition("inspection", "Draft", "Pending");
 
-        capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.orders.transitions");
-        var measurement = capture.Measurements.Single(m => m.Instrument == "geoassets.orders.transitions");
+        capture.Measurements.Should().ContainSingle(m => string.Equals(m.Instrument, "geoassets.orders.transitions", StringComparison.Ordinal));
+        var measurement = capture.Measurements.Single(m => string.Equals(m.Instrument, "geoassets.orders.transitions", StringComparison.Ordinal));
         measurement.Value.Should().Be(1);
         measurement.Tags.Should().Contain(new KeyValuePair<string, object?>("order.type", "inspection"));
         measurement.Tags.Should().Contain(new KeyValuePair<string, object?>("order.prev_status", "Draft"));

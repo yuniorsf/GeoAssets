@@ -28,7 +28,7 @@ foreach (var (title, run) in examples)
     Console.WriteLine($"╚{bar}╝");
     Console.ResetColor();
 
-    await run();
+    await run().ConfigureAwait(false);
 
     Console.ForegroundColor = ConsoleColor.DarkGray;
     Console.WriteLine("\n  Press any key for the next example…");

@@ -24,15 +24,16 @@ public sealed class RestProviderPlugin(RestProviderFactory factory) : IProviderP
             Required: true)
     ];
 
-    public async Task<IAssetProvider> CreateAsync(
+    public Task<IAssetProvider> CreateAsync(
         ProviderConfig config,
         IServiceProvider services,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(config);
         var url = config.Get("url").Trim();
         if (string.IsNullOrEmpty(url))
             throw new InvalidOperationException("API base URL is required.");
 
-        return await factory.CreateAsync(url, ct);
+        return factory.CreateAsync(url, ct);
     }
 }

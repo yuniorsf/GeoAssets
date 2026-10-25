@@ -19,14 +19,16 @@ public sealed class ProjectService(
     public async Task<Project?> ResolveMutationTargetAsync(
         ClaimsPrincipal caller, Project project, string permissionCode, CancellationToken ct = default)
     {
-        var context = await authorizationService.GetAuthorizationContextAsync(ct);
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(permissionCode);
+        var context = await authorizationService.GetAuthorizationContextAsync(ct).ConfigureAwait(false);
 
         // Ownership bypass (XD01-141 point 4): checked locally, not a change to
         // OrgResourceAuthorizationHandler, which stays untouched.
         if (project.Kind == ProjectKind.User && project.CreatedByUserId == context.User.Id)
             return project;
 
-        var permitted = await authz.AuthorizeAsync(caller, project, new OrgResourceRequirement(permissionCode));
+        var permitted = await authz.AuthorizeAsync(caller, project, new OrgResourceRequirement(permissionCode)).ConfigureAwait(false);
         if (permitted.Succeeded)
             return project;
 
@@ -37,16 +39,16 @@ public sealed class ProjectService(
             !permissionCode.StartsWith(ManageCodePrefix, StringComparison.Ordinal))
             return null;
 
-        var canRead = await authz.AuthorizeAsync(caller, project, new OrgResourceRequirement("projects:read"));
+        var canRead = await authz.AuthorizeAsync(caller, project, new OrgResourceRequirement("projects:read")).ConfigureAwait(false);
         if (!canRead.Succeeded)
             return null;
 
-        return await FindOrCreateForkAsync(project, context.User.Id, ct);
+        return await FindOrCreateForkAsync(project, context.User.Id, ct).ConfigureAwait(false);
     }
 
     private async Task<Project> FindOrCreateForkAsync(Project parent, Guid callerId, CancellationToken ct)
     {
-        var forks = await projectReader.GetForksOfAsync(parent.Id, ct);
+        var forks = await projectReader.GetForksOfAsync(parent.Id, ct).ConfigureAwait(false);
         var existing = forks.FirstOrDefault(f => f.CreatedByUserId == callerId);
         if (existing is not null)
             return existing;
@@ -63,7 +65,7 @@ public sealed class ProjectService(
             CreatedAt       = now,
             UpdatedAt       = now,
         };
-        await projectWriter.AddAsync(fork, ct);
+        await projectWriter.AddAsync(fork, ct).ConfigureAwait(false);
         return fork;
     }
 }

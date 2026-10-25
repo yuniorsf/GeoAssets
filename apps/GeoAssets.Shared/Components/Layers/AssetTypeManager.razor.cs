@@ -27,10 +27,10 @@ public partial class AssetTypeManager
     private void ShowTypesTab() => _activeTab = "types";
     private void ShowStylesTab() => _activeTab = "styles";
 
-    private async Task ToggleLayer(AssetType type, bool visible)
+    private Task ToggleLayer(AssetType type, bool visible)
     {
         _visibility[type.Id] = visible;
-        await MapInterop.SetLayerVisibilityAsync(MapContext.MapDivId, type.Id.ToString(), visible);
+        return MapInterop.SetLayerVisibilityAsync(MapContext.MapDivId, type.Id.ToString(), visible);
     }
 
     private void ToggleExpand(Guid typeId) =>

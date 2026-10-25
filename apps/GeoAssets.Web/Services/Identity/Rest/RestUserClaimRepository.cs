@@ -33,7 +33,7 @@ public sealed class RestUserClaimRepository(HttpClient http) : IUserClaimReposit
 
     public async Task<UserClaim?> GetAsync(Guid userId, string claimType, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"userclaims/{Uri.EscapeDataString(claimType)}", ct);
+        var response = await http.GetAsync(new Uri($"userclaims/{Uri.EscapeDataString(claimType)}", UriKind.Relative), ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
@@ -44,6 +44,7 @@ public sealed class RestUserClaimRepository(HttpClient http) : IUserClaimReposit
 
     public async Task AddAsync(UserClaim claim, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(claim);
         var response = await http.PostAsJsonAsync("userclaims", new UserClaimWriteDto(claim.Type, claim.Value), ct);
         response.EnsureSuccessStatusCode();
 
@@ -54,19 +55,20 @@ public sealed class RestUserClaimRepository(HttpClient http) : IUserClaimReposit
 
     public async Task UpdateAsync(UserClaim claim, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(claim);
         var response = await http.PutAsJsonAsync($"userclaims/{claim.Id}", new UserClaimUpdateDto(claim.Value), ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RemoveAsync(Guid claimId, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"userclaims/{claimId}", ct);
+        var response = await http.DeleteAsync(new Uri($"userclaims/{claimId}", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RemoveAllAsync(Guid userId, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync("userclaims", ct);
+        var response = await http.DeleteAsync(new Uri("userclaims", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
     }
 

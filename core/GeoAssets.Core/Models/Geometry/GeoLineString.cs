@@ -55,6 +55,7 @@ public sealed class GeoLineString : GeoGeometry
         get => [.. _line.Coordinates.Select(static c => new double[] { c.X, c.Y })];
         set
         {
+            ArgumentNullException.ThrowIfNull(value);
             var factory = GeoFactory.For(_line.SRID);
             _line = value.Length < 2
                 ? factory.CreateLineString(Array.Empty<NtsCoordinate>())

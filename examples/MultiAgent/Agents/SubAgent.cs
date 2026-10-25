@@ -4,7 +4,7 @@ using GeoAssets.Core.Agents;
 
 namespace GeoAssets.Examples.MultiAgent.Agents;
 
-internal abstract class SubAgent : IAgentWorker
+internal abstract class SubAgent : IAgentWorker, IDisposable
 {
     protected readonly AnthropicClient Client = new();
 
@@ -25,12 +25,24 @@ internal abstract class SubAgent : IAgentWorker
             MaxTokens = 1024,
             System = SystemPrompt,
             Messages = [new() { Role = Role.User, Content = content }],
-        });
+        }, ct).ConfigureAwait(false);
 
         foreach (var block in response.Content)
             if (block.TryPickText(out TextBlock? text))
                 return text!.Text;
 
         return string.Empty;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+            Client.Dispose();
     }
 }

@@ -53,7 +53,7 @@ public class RestOrganizationRepositoryTests
     [Fact]
     public async Task GetAllAsync_MapsOrganizations()
     {
-        var dto = new OrganizationDto(Guid.NewGuid(), "Empresa Test", "test", null, true, DateTime.UtcNow);
+        var dto = new OrganizationDto(Guid.NewGuid(), "Empresa Test", "test", null, true, new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(new List<OrganizationDto> { dto }));
         var sut = Sut(handler);
 
@@ -92,7 +92,7 @@ public class RestOrganizationRepositoryTests
             return response;
         });
         var sut = Sut(handler);
-        var org = new Organization { Id = Guid.NewGuid(), Name = "Empresa Test", Slug = "test", IsActive = true, CreatedAt = DateTime.UtcNow };
+        var org = new Organization { Id = Guid.NewGuid(), Name = "Empresa Test", Slug = "test", IsActive = true, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
         var callerSuppliedId = org.Id;
 
         await sut.AddAsync(org);
@@ -109,7 +109,7 @@ public class RestOrganizationRepositoryTests
     [Fact]
     public async Task UpdateAsync_SendsWriteDtoToCorrectUrl()
     {
-        var org = new Organization { Id = Guid.NewGuid(), Name = "Renamed", Slug = "renamed", Description = "d", IsActive = false, CreatedAt = DateTime.UtcNow };
+        var org = new Organization { Id = Guid.NewGuid(), Name = "Renamed", Slug = "renamed", Description = "d", IsActive = false, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
         var sut = Sut(handler);
 
@@ -134,12 +134,12 @@ public class RestOrganizationRepositoryTests
     }
 
     [Fact]
-    public async Task GetBySlugAsync_ThrowsNotSupportedException()
+    public Task GetBySlugAsync_ThrowsNotSupportedException()
     {
         var sut = Sut(new FakeHttpMessageHandler(_ => throw new InvalidOperationException("Should not be called.")));
 
         var act = () => sut.GetBySlugAsync("test");
 
-        await act.Should().ThrowAsync<NotSupportedException>();
+        return act.Should().ThrowAsync<NotSupportedException>();
     }
 }

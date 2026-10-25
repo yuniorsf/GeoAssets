@@ -24,6 +24,9 @@ public sealed class GeoJsonImportViaRestHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         if (!parameters.TryGetValue("content", out var raw) || raw is not string content)
             return Task.FromResult(GeoCommandResult.Fail("Required parameter 'content' is missing or not a string."));
 

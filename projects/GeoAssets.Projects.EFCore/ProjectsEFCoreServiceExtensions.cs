@@ -24,7 +24,7 @@ public static class ProjectsEFCoreServiceExtensions
         services.AddDbContext<ProjectDbContext>(configureDb);
 
         services.AddScoped<IProjectRepository>(sp =>
-            new EFProjectRepository(sp.GetRequiredService<ProjectDbContext>()));
+            new EFProjectRepository(sp.GetRequiredService<ProjectDbContext>(), sp.GetRequiredService<TimeProvider>()));
 
         // Read-only or write-only consumers can depend on just the piece they need instead of
         // the full IProjectRepository.

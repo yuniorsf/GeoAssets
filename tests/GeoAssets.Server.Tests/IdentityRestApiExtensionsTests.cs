@@ -90,7 +90,7 @@ public class IdentityRestApiExtensionsTests
         Id               = Guid.NewGuid(),
         Email            = email,
         DisplayName      = "Test User",
-        CreatedAt        = DateTime.UtcNow,
+        CreatedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         ExternalObjectId = externalObjectId,
     };
 
@@ -129,7 +129,7 @@ public class IdentityRestApiExtensionsTests
         // AuthorizationContextDto) would make System.Text.Json throw on this cycle.
         var user = NewUser();
         var role = new AppRole { Id = Guid.NewGuid(), Name = "Administrator" };
-        var userRole = new UserRole { UserId = user.Id, RoleId = role.Id, AssignedAt = DateTime.UtcNow, User = user, Role = role };
+        var userRole = new UserRole { UserId = user.Id, RoleId = role.Id, AssignedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), User = user, Role = role };
         user.UserRoles.Add(userRole);
         role.UserRoles.Add(userRole);
 
@@ -138,7 +138,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildServerAsync(new FakeAuthorizationService(ctx), new FakePolicyRepository([]));
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/identity/me");
+        var response = await client.GetAsync(new Uri("/api/identity/me", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -213,7 +213,7 @@ public class IdentityRestApiExtensionsTests
         }
 
         public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) =>
-            Task.FromResult(users.Values.FirstOrDefault(u => u.ExternalObjectId == oid));
+            Task.FromResult(users.Values.FirstOrDefault(u => string.Equals(u.ExternalObjectId, oid, StringComparison.Ordinal)));
         public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
@@ -375,7 +375,7 @@ public class IdentityRestApiExtensionsTests
         Name      = name,
         Slug      = slug,
         IsActive  = true,
-        CreatedAt = DateTime.UtcNow,
+        CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
     };
 
     private static AppGroup NewGroup(string name = "Cuadrilla Norte") => new()
@@ -383,7 +383,7 @@ public class IdentityRestApiExtensionsTests
         Id        = Guid.NewGuid(),
         Name      = name,
         IsActive  = true,
-        CreatedAt = DateTime.UtcNow,
+        CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
     };
 
     /// <summary>Records what was called and returns a caller-configurable role list — drives
@@ -472,8 +472,11 @@ public class IdentityRestApiExtensionsTests
         public Task AddAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        // Never fire — this test double is never actually invoked, no test relies on them.
+#pragma warning disable CS0067
         public event EventHandler<Project>? ProjectSaved;
         public event EventHandler<Guid>? ProjectDeleted;
+#pragma warning restore CS0067
     }
 
     /// <summary>Drives the XD01-144 default-Project-seed assertion on org creation.</summary>
@@ -497,8 +500,11 @@ public class IdentityRestApiExtensionsTests
 
         public Task UpdateAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        // Never fire — AddAsync records to Added directly, no test relies on these.
+#pragma warning disable CS0067
         public event EventHandler<Project>? ProjectSaved;
         public event EventHandler<Guid>? ProjectDeleted;
+#pragma warning restore CS0067
     }
 
     /// <summary>Drives the XD01-69 invitations endpoint tests below.</summary>
@@ -531,7 +537,7 @@ public class IdentityRestApiExtensionsTests
 
         public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) =>
             Task.FromResult(invitations.Values.FirstOrDefault(i =>
-                i.Status == InvitationStatus.Pending && i.ExternalObjectId == externalObjectId));
+                i.Status == InvitationStatus.Pending && string.Equals(i.ExternalObjectId, externalObjectId, StringComparison.Ordinal)));
     }
 
     /// <summary>Drives the XD01-87 userclaims endpoint tests below. Claims are keyed by owning
@@ -548,7 +554,7 @@ public class IdentityRestApiExtensionsTests
         public Task<IReadOnlyList<UserClaim>> GetByUserIdAsync(Guid userId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<UserClaim>>(claimsByUser.GetValueOrDefault(userId) ?? []);
         public Task<UserClaim?> GetAsync(Guid userId, string claimType, CancellationToken ct = default) =>
-            Task.FromResult((claimsByUser.GetValueOrDefault(userId) ?? []).FirstOrDefault(c => c.Type == claimType));
+            Task.FromResult((claimsByUser.GetValueOrDefault(userId) ?? []).FirstOrDefault(c => string.Equals(c.Type, claimType, StringComparison.Ordinal)));
         public Task AddAsync(UserClaim claim, CancellationToken ct = default)
         {
             Added = claim;
@@ -701,7 +707,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("users:read"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/users");
+        var response = await client.GetAsync(new Uri("/api/identity/users", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var dtos = await response.Content.ReadFromJsonAsync<List<UserSummaryDto>>();
@@ -717,7 +723,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/users");
+        var response = await client.GetAsync(new Uri("/api/identity/users", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -751,7 +757,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("users:read"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/users/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/users/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -765,7 +771,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/users/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/users/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -799,7 +805,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("users:read"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/users/by-external-id/no-such-oid");
+        var response = await client.GetAsync(new Uri("/api/identity/users/by-external-id/no-such-oid", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -813,7 +819,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/users/by-external-id/oid-abc-123");
+        var response = await client.GetAsync(new Uri("/api/identity/users/by-external-id/oid-abc-123", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -898,7 +904,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/roles");
+        var response = await client.GetAsync(new Uri("/api/identity/roles", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -931,7 +937,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:read"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/roles/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/roles/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -945,7 +951,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/roles/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/roles/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1041,7 +1047,7 @@ public class IdentityRestApiExtensionsTests
             roleRepo, new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:delete"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/roles/{role.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/roles/{role.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         roleRepo.Deleted.Should().BeNull();
@@ -1058,7 +1064,7 @@ public class IdentityRestApiExtensionsTests
             roleRepo, new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:delete"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/roles/{role.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/roles/{role.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         roleRepo.Deleted.Should().Be(role.Id);
@@ -1074,7 +1080,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:delete"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/roles/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/roles/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -1089,7 +1095,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/roles/{role.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/roles/{role.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1105,7 +1111,7 @@ public class IdentityRestApiExtensionsTests
             roleRepo, new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:edit"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/roles/{roleId}/permissions/{permId}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/roles/{roleId}/permissions/{permId}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         roleRepo.Granted.Should().Be((roleId, permId));
@@ -1121,7 +1127,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/roles/{Guid.NewGuid()}/permissions/{Guid.NewGuid()}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/roles/{Guid.NewGuid()}/permissions/{Guid.NewGuid()}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1137,7 +1143,7 @@ public class IdentityRestApiExtensionsTests
             roleRepo, new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:edit"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/roles/{roleId}/permissions/{permId}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/roles/{roleId}/permissions/{permId}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         roleRepo.Revoked.Should().Be((roleId, permId));
@@ -1153,7 +1159,7 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/roles/{Guid.NewGuid()}/permissions/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/roles/{Guid.NewGuid()}/permissions/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1184,16 +1190,16 @@ public class IdentityRestApiExtensionsTests
             new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/permissions");
+        var response = await client.GetAsync(new Uri("/api/identity/permissions", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     // ── Organizations (XD01-128) ────────────────────────────────────────────
 
-    private static async Task<TestServer> BuildOrgServerAsync(
+    private static Task<TestServer> BuildOrgServerAsync(
         IOrganizationRepository orgRepo, IGeoAuthorizationService authService, IProjectRepository? projectRepo = null) =>
-        await BuildAdminServerAsync(
+        BuildAdminServerAsync(
             new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
             new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
             new FakeAdminPermissionRepository([]), authService, orgRepo: orgRepo, projectRepo: projectRepo);
@@ -1219,7 +1225,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/organizations");
+        var response = await client.GetAsync(new Uri("/api/identity/organizations", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1247,7 +1253,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService("organizations:read"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/organizations/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/organizations/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -1259,7 +1265,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/organizations/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/organizations/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1287,7 +1293,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildOrgServerAsync(orgRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/organizations/{Guid.NewGuid()}/users");
+        var response = await client.GetAsync(new Uri($"/api/identity/organizations/{Guid.NewGuid()}/users", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1394,9 +1400,9 @@ public class IdentityRestApiExtensionsTests
 
     // ── Groups (XD01-128) ────────────────────────────────────────────────────
 
-    private static async Task<TestServer> BuildGroupServerAsync(
+    private static Task<TestServer> BuildGroupServerAsync(
         IGroupRepository groupRepo, IGeoAuthorizationService authService) =>
-        await BuildAdminServerAsync(
+        BuildAdminServerAsync(
             new FakeAdminUserRepository(new Dictionary<Guid, AppUser>(), new Dictionary<Guid, List<AppRole>>()),
             new FakeAdminRoleRepository(new Dictionary<Guid, AppRole>(), new Dictionary<Guid, List<AppPermission>>()),
             new FakeAdminPermissionRepository([]), authService, groupRepo: groupRepo);
@@ -1422,7 +1428,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/groups");
+        var response = await client.GetAsync(new Uri("/api/identity/groups", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1434,7 +1440,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:read"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/groups/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/identity/groups/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -1462,7 +1468,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/identity/groups/{Guid.NewGuid()}/members");
+        var response = await client.GetAsync(new Uri($"/api/identity/groups/{Guid.NewGuid()}/members", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1559,7 +1565,7 @@ public class IdentityRestApiExtensionsTests
             groupRepo, new FakePermissionAuthorizationService("groups:edit") { CurrentUser = caller });
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/groups/{group.Id}/members/{user.Id}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/groups/{group.Id}/members/{user.Id}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         groupRepo.MemberAdded.Should().Be((group.Id, user.Id, caller.Id.ToString()));
@@ -1573,7 +1579,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/groups/{Guid.NewGuid()}/members/{Guid.NewGuid()}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/groups/{Guid.NewGuid()}/members/{Guid.NewGuid()}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         groupRepo.MemberAdded.Should().BeNull();
@@ -1588,7 +1594,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService("groups:edit"));
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/groups/{groupId}/members/{userId}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/groups/{groupId}/members/{userId}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         groupRepo.MemberRemoved.Should().Be((groupId, userId));
@@ -1602,7 +1608,7 @@ public class IdentityRestApiExtensionsTests
         using var server = await BuildGroupServerAsync(groupRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/groups/{Guid.NewGuid()}/members/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/groups/{Guid.NewGuid()}/members/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         groupRepo.MemberRemoved.Should().BeNull();
@@ -1655,7 +1661,7 @@ public class IdentityRestApiExtensionsTests
             roleRepo, new FakeAdminPermissionRepository([]), new FakePermissionAuthorizationService("roles:edit"), roleSync);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/rolesync/roles/{role.Id}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/rolesync/roles/{role.Id}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         roleSync.RegisteredRole.Should().Be(role);
@@ -1670,7 +1676,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("roles:edit"), roleSync);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/rolesync/roles/{Guid.NewGuid()}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/rolesync/roles/{Guid.NewGuid()}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         roleSync.RegisteredRole.Should().BeNull();
@@ -1684,7 +1690,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync($"/api/identity/rolesync/roles/{Guid.NewGuid()}", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/rolesync/roles/{Guid.NewGuid()}", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1698,7 +1704,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"), roleSync);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", content: null);
+        var response = await client.PostAsync(new Uri("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         roleSync.Assigned.Should().Be(("ext-oid-1", "Supervisor"));
@@ -1712,7 +1718,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.PostAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", content: null);
+        var response = await client.PostAsync(new Uri("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1726,7 +1732,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("users:edit"), roleSync);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor");
+        var response = await client.DeleteAsync(new Uri("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         roleSync.Revoked.Should().Be(("ext-oid-1", "Supervisor"));
@@ -1740,7 +1746,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor");
+        var response = await client.DeleteAsync(new Uri("/api/identity/rolesync/users/ext-oid-1/roles/Supervisor", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1767,7 +1773,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/rolesync/users/ext-oid-1/roles");
+        var response = await client.GetAsync(new Uri("/api/identity/rolesync/users/ext-oid-1/roles", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1782,7 +1788,7 @@ public class IdentityRestApiExtensionsTests
         Email            = email,
         ExternalObjectId = externalObjectId,
         InvitedByUserId  = Guid.NewGuid(),
-        InvitedAt        = DateTime.UtcNow,
+        InvitedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         Status           = status,
     };
 
@@ -1859,7 +1865,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/identity/invitations");
+        var response = await client.GetAsync(new Uri("/api/identity/invitations", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -1881,7 +1887,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/identity/invitations/me");
+        var response = await client.GetAsync(new Uri("/api/identity/invitations/me", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var dto = await response.Content.ReadFromJsonAsync<PendingInvitationDto>();
@@ -1902,7 +1908,7 @@ public class IdentityRestApiExtensionsTests
             invitationRepo: new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>()));
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/identity/invitations/me");
+        var response = await client.GetAsync(new Uri("/api/identity/invitations/me", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadAsStringAsync();
@@ -1926,7 +1932,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/identity/invitations/me");
+        var response = await client.GetAsync(new Uri("/api/identity/invitations/me", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadAsStringAsync();
@@ -2013,7 +2019,7 @@ public class IdentityRestApiExtensionsTests
             invitationRepo: invitationRepo, invitationProvider: invitationProvider);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/invitations/{invitation.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/invitations/{invitation.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         invitationProvider.RevokedExternalObjectId.Should().Be("invitee-oid-1");
@@ -2033,7 +2039,7 @@ public class IdentityRestApiExtensionsTests
             invitationProvider: invitationProvider);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/invitations/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/invitations/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         invitationProvider.RevokedExternalObjectId.Should().BeNull();
@@ -2047,7 +2053,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/identity/invitations/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/invitations/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -2066,7 +2072,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
         using var client = server.CreateClient();
 
-        var response = await client.PostAsync($"/api/identity/invitations/{invitation.Id}/redeem", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/invitations/{invitation.Id}/redeem", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         invitationRepo.Updated.Should().NotBeNull();
@@ -2087,7 +2093,7 @@ public class IdentityRestApiExtensionsTests
             invitationRepo: new FakePendingInvitationRepository(new Dictionary<Guid, PendingInvitation>()));
         using var client = server.CreateClient();
 
-        var response = await client.PostAsync($"/api/identity/invitations/{Guid.NewGuid()}/redeem", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/invitations/{Guid.NewGuid()}/redeem", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -2108,7 +2114,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, authService, invitationRepo: invitationRepo);
         using var client = server.CreateClient();
 
-        var response = await client.PostAsync($"/api/identity/invitations/{othersInvitation.Id}/redeem", content: null);
+        var response = await client.PostAsync(new Uri($"/api/identity/invitations/{othersInvitation.Id}/redeem", UriKind.Relative), content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         invitationRepo.Updated.Should().BeNull();
@@ -2177,7 +2183,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/identity/userclaims/department");
+        var response = await client.GetAsync(new Uri("/api/identity/userclaims/department", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -2266,7 +2272,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync($"/api/identity/userclaims/{claim.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/userclaims/{claim.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         claimRepo.Removed.Should().Be(claim.Id);
@@ -2283,7 +2289,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync($"/api/identity/userclaims/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/userclaims/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -2300,7 +2306,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync($"/api/identity/userclaims/{othersClaim.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/identity/userclaims/{othersClaim.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         claimRepo.Removed.Should().BeNull();
@@ -2316,7 +2322,7 @@ public class IdentityRestApiExtensionsTests
             userRepo, roleRepo, permRepo, AuthServiceFor(caller), claimRepo: claimRepo);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync("/api/identity/userclaims");
+        var response = await client.DeleteAsync(new Uri("/api/identity/userclaims", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         claimRepo.RemovedAllForUserId.Should().Be(caller.Id);

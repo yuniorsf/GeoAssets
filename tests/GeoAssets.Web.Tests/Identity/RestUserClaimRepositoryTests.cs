@@ -143,7 +143,7 @@ public class RestUserClaimRepositoryTests
     }
 
     [Fact]
-    public async Task GetByTypeAsync_NoServerEndpointExists_ThrowsNotSupportedException()
+    public Task GetByTypeAsync_NoServerEndpointExists_ThrowsNotSupportedException()
     {
         // Cross-user query — "every user with claim type X" — has no self-service mapping and
         // no server endpoint; this is the one method XD01-87 deliberately left unimplemented.
@@ -152,6 +152,6 @@ public class RestUserClaimRepositoryTests
 
         var act = () => sut.GetByTypeAsync("zone");
 
-        await act.Should().ThrowAsync<NotSupportedException>();
+        return act.Should().ThrowAsync<NotSupportedException>();
     }
 }

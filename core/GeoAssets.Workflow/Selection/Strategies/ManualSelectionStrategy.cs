@@ -23,6 +23,7 @@ public sealed class ManualSelectionStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var ids = context.Parameters.GetStringList("featureIds");
 
         var result = ids

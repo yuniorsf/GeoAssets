@@ -22,7 +22,7 @@ namespace GeoAssets.Workflow.Messaging.Kafka;
 ///   <item><term>Header "traceparent"</term><description>W3C trace context of the publishing span, so a future consumer can continue the same trace instead of starting a disconnected one.</description></item>
 /// </list>
 /// </summary>
-public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
+public sealed partial class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
 {
     private readonly IProducer<string?, string> _producer;
     private readonly KafkaPublisherOptions _options;
@@ -41,6 +41,7 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
         GeoAssetsActivitySource tracer,
         ILogger<KafkaOrderEventPublisher> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _tracer  = tracer;
         _logger  = logger;
@@ -59,6 +60,7 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
 
     public async Task PublishAsync(OrderStateChangedEvent evt, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(evt);
         using var activity = _tracer.StartNotificationActivity(evt.OrderId, "kafka", ActivityKind.Producer);
 
         var payload = JsonSerializer.Serialize(evt, _jsonOptions);
@@ -77,22 +79,22 @@ public sealed class KafkaOrderEventPublisher : IOrderEventPublisher, IDisposable
                 .ProduceAsync(_options.TopicName, message, ct)
                 .ConfigureAwait(false);
 
-            _logger.LogInformation(
-                "Published OrderStateChangedEvent for order {OrderId} ({Previous} → {New}) " +
-                "to Kafka topic '{Topic}' partition {Partition} offset {Offset}.",
-                evt.OrderId, evt.PreviousStatus, evt.NewStatus,
+            LogPublished(_logger, evt.OrderId, evt.PreviousStatus, evt.NewStatus,
                 _options.TopicName, result.Partition.Value, result.Offset.Value);
         }
         catch (ProduceException<string?, string> ex)
         {
             GeoAssetsActivitySource.RecordException(activity, ex);
-            _logger.LogError(ex,
-                "Failed to publish OrderStateChangedEvent for order {OrderId} to Kafka. " +
-                "Error: {KafkaError}",
-                evt.OrderId, ex.Error.Reason);
+            LogPublishFailed(_logger, evt.OrderId, ex.Error.Reason, ex);
             throw;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Published OrderStateChangedEvent for order {OrderId} ({Previous} → {New}) to Kafka topic '{Topic}' partition {Partition} offset {Offset}.")]
+    private static partial void LogPublished(ILogger logger, string orderId, string previous, string @new, string topic, int partition, long offset);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to publish OrderStateChangedEvent for order {OrderId} to Kafka. Error: {KafkaError}")]
+    private static partial void LogPublishFailed(ILogger logger, string orderId, string kafkaError, Exception ex);
 
     /// <summary>
     /// Builds the Kafka message headers, including the W3C <c>traceparent</c>

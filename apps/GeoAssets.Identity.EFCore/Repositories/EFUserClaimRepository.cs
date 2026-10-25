@@ -7,16 +7,16 @@ namespace GeoAssets.Identity.Authorization.EFCore.Repositories;
 public sealed class EFUserClaimRepository(GeoIdentityDbContext db) : IUserClaimRepository
 {
     public async Task<IReadOnlyList<UserClaim>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
-        => await db.UserClaims.Where(c => c.UserId == userId).ToListAsync(ct);
+        => await db.UserClaims.Where(c => c.UserId == userId).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<IReadOnlyList<UserClaim>> GetByTypeAsync(string claimType, CancellationToken ct = default)
-        => await db.UserClaims.Where(c => c.Type == claimType).ToListAsync(ct);
+        => await db.UserClaims.Where(c => c.Type == claimType).ToListAsync(ct).ConfigureAwait(false);
 
     public Task<UserClaim?> GetAsync(Guid userId, string claimType, CancellationToken ct = default)
         => db.UserClaims.FirstOrDefaultAsync(c => c.UserId == userId && c.Type == claimType, ct);
 
     public async Task AddAsync(UserClaim claim, CancellationToken ct = default)
-        => await db.UserClaims.AddAsync(claim, ct);
+        => await db.UserClaims.AddAsync(claim, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(UserClaim claim, CancellationToken ct = default)
     {
@@ -26,13 +26,13 @@ public sealed class EFUserClaimRepository(GeoIdentityDbContext db) : IUserClaimR
 
     public async Task RemoveAsync(Guid claimId, CancellationToken ct = default)
     {
-        var c = await db.UserClaims.FindAsync([claimId], ct);
+        var c = await db.UserClaims.FindAsync([claimId], ct).ConfigureAwait(false);
         if (c is not null) db.UserClaims.Remove(c);
     }
 
     public async Task RemoveAllAsync(Guid userId, CancellationToken ct = default)
     {
-        var claims = await db.UserClaims.Where(c => c.UserId == userId).ToListAsync(ct);
+        var claims = await db.UserClaims.Where(c => c.UserId == userId).ToListAsync(ct).ConfigureAwait(false);
         db.UserClaims.RemoveRange(claims);
     }
 

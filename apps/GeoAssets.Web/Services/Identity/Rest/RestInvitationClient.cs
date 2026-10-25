@@ -22,13 +22,13 @@ public sealed class RestInvitationClient(HttpClient http) : IInvitationClient
 
     public async Task RevokeInvitationAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"invitations/{id}", ct);
+        var response = await http.DeleteAsync(new Uri($"invitations/{id}", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RedeemInvitationAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.PostAsync($"invitations/{id}/redeem", content: null, ct);
+        var response = await http.PostAsync(new Uri($"invitations/{id}/redeem", UriKind.Relative), content: null, ct);
         response.EnsureSuccessStatusCode();
     }
 

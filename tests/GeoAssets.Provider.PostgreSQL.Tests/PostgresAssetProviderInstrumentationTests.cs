@@ -79,7 +79,7 @@ public sealed class PostgresAssetProviderInstrumentationTests(PostgresContainerF
         sut.GetAll();
         sut.GetAll();
 
-        logger.Entries.Count(e => e.Message.Contains("LoadCacheFromDb")).Should().Be(1);
+        logger.Entries.Count(e => e.Message.Contains("LoadCacheFromDb", StringComparison.Ordinal)).Should().Be(1);
     }
 
     [Fact]

@@ -16,14 +16,14 @@ public class DispatchServiceOrderExecutorTests
 {
     private const string AgentId = "agent-1";
 
-    private static IAgentIdentityProvider AgentIdentity() =>
-        new ConfiguredAgentIdentityProvider(Options.Create(new AgentIdentityOptions
+    private static ConfiguredAgentIdentityProvider AgentIdentity() =>
+        new(Options.Create(new AgentIdentityOptions
         {
             Agents = { [AgentId] = new AgentIdentityDescriptor { RoleNames = ["AutomationAgent"] } }
         }));
 
     private static ServiceOrderRules GrantingRules() => new(
-        roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>
+        roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["AutomationAgent"] = new HashSet<OrderActionType> { OrderActionType.Dispatch }
         });

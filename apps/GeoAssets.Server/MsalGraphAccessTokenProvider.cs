@@ -29,7 +29,7 @@ internal sealed class MsalGraphAccessTokenProvider : IGraphAccessTokenProvider
 
     public async Task<string> GetAccessTokenAsync(CancellationToken ct = default)
     {
-        var result = await _app.AcquireTokenForClient(GraphDefaultScope).ExecuteAsync(ct);
+        var result = await _app.AcquireTokenForClient(GraphDefaultScope).ExecuteAsync(ct).ConfigureAwait(false);
         return result.AccessToken;
     }
 }

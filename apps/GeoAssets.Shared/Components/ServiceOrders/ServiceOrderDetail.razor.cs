@@ -15,11 +15,11 @@ public partial class ServiceOrderDetail
     private string _noteText = string.Empty;
 
     private bool CanDispatch    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Dispatch, Order).Allowed;
-    private bool CanAssignToMe  => Order is not null && Order.AssignedTo != Principal.UserId
+    private bool CanAssignToMe  => Order is not null && !string.Equals(Order.AssignedTo, Principal.UserId, StringComparison.Ordinal)
                                     && Rules.Evaluate(Principal, OrderActionType.Assign, Order).Allowed;
-    private bool CanStart       => Order is not null && Order.Status == ServiceOrderStatus.Pending
+    private bool CanStart       => Order is not null && string.Equals(Order.Status, ServiceOrderStatus.Pending, StringComparison.Ordinal)
                                     && Rules.Evaluate(Principal, OrderActionType.Execute, Order).Allowed;
-    private bool CanComplete    => Order is not null && Order.Status == ServiceOrderStatus.InProgress
+    private bool CanComplete    => Order is not null && string.Equals(Order.Status, ServiceOrderStatus.InProgress, StringComparison.Ordinal)
                                     && Rules.Evaluate(Principal, OrderActionType.Complete, Order).Allowed;
     private bool CanCancel      => Order is not null
                                     && Order.Status is ServiceOrderStatus.Draft or ServiceOrderStatus.Pending
@@ -34,14 +34,14 @@ public partial class ServiceOrderDetail
         if (Order is null) return;
 
         await Repository.AppendDispatchAsync(Order.Id,
-            new OrderDispatch(result.TargetId, result.TargetType, Principal.UserId, DateTime.UtcNow, result.Note));
+            new OrderDispatch(result.TargetId, result.TargetType, Principal.UserId, Clock.GetUtcNow().UtcDateTime, result.Note));
 
         await Repository.AppendActionAsync(Order.Id, new OrderActionLog(
             Action: OrderActionType.Dispatch,
             PerformedBy: Principal.UserId,
-            PerformedAt: DateTime.UtcNow,
+            PerformedAt: Clock.GetUtcNow().UtcDateTime,
             Comment: result.Note,
-            ResultingStatus: Order.Status == ServiceOrderStatus.Draft ? ServiceOrderStatus.Pending : null));
+            ResultingStatus: string.Equals(Order.Status, ServiceOrderStatus.Draft, StringComparison.Ordinal) ? ServiceOrderStatus.Pending : null));
 
         _dispatchDialogVisible = false;
         await OnChanged.InvokeAsync();
@@ -79,7 +79,7 @@ public partial class ServiceOrderDetail
         await Repository.AppendActionAsync(Order.Id, new OrderActionLog(
             Action: OrderActionType.Annotate,
             PerformedBy: Principal.UserId,
-            PerformedAt: DateTime.UtcNow,
+            PerformedAt: Clock.GetUtcNow().UtcDateTime,
             Comment: _noteText));
 
         _noteText = string.Empty;
@@ -93,7 +93,7 @@ public partial class ServiceOrderDetail
         await Repository.AppendActionAsync(Order.Id, new OrderActionLog(
             Action: action,
             PerformedBy: Principal.UserId,
-            PerformedAt: DateTime.UtcNow,
+            PerformedAt: Clock.GetUtcNow().UtcDateTime,
             ResultingStatus: resultingStatus));
 
         await OnChanged.InvokeAsync();
@@ -116,16 +116,16 @@ public partial class ServiceOrderDetail
             Status        = order.Status,
             Priority      = order.Priority,
             AssignedTo    = assignedTo ?? order.AssignedTo,
-            UpdatedAt     = DateTime.UtcNow,
+            UpdatedAt     = Clock.GetUtcNow().UtcDateTime,
             ScheduledAt   = order.ScheduledAt,
             CompletedAt   = order.CompletedAt,
             ParentOrderId = order.ParentOrderId,
             SelectionSpec = order.SelectionSpec,
             FeatureIds    = [.. order.Features.Select(f => f.Id)],
-            Attributes    = new Dictionary<string, string>(order.Attributes),
+            Attributes    = new Dictionary<string, string>(order.Attributes, StringComparer.Ordinal),
             Features      = [.. order.Features],
         };
     }
 
-    private async Task Close() => await OnClose.InvokeAsync();
+    private Task Close() => OnClose.InvokeAsync();
 }

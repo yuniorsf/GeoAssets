@@ -99,7 +99,7 @@ public class GeoAuthorizationPolicyBridgeEndToEndTests
         using var client = server.CreateClient();
         client.DefaultRequestHeaders.Add("X-Test-Authenticated", "1");
 
-        var response = await client.GetAsync("/protected");
+        var response = await client.GetAsync(new Uri("/protected", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -111,7 +111,7 @@ public class GeoAuthorizationPolicyBridgeEndToEndTests
         using var client = server.CreateClient();
         client.DefaultRequestHeaders.Add("X-Test-Authenticated", "1");
 
-        var response = await client.GetAsync("/protected");
+        var response = await client.GetAsync(new Uri("/protected", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -122,7 +122,7 @@ public class GeoAuthorizationPolicyBridgeEndToEndTests
         using var server = await BuildServerAsync(grant: true);
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/protected");
+        var response = await client.GetAsync(new Uri("/protected", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

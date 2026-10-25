@@ -37,12 +37,15 @@ public sealed class OrgResourceAuthorizationHandler(
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context, OrgResourceRequirement requirement, IOrgOwnedResource resource)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(requirement);
+        ArgumentNullException.ThrowIfNull(resource);
         // Same reasoning as GeoAuthorizationHandler: this handler can run even when the
         // route-level RequireAuthorization requirement hasn't succeeded yet, and
         // IGeoAuthorizationService throws for an anonymous caller rather than returning false.
         if (context.User.Identity?.IsAuthenticated != true) return;
 
-        if (!await authorizationService.HasPermissionAsync(requirement.PermissionCode))
+        if (!await authorizationService.HasPermissionAsync(requirement.PermissionCode).ConfigureAwait(false))
             return;
 
         if (resource.OrganizationId == Guid.Empty)
@@ -51,7 +54,7 @@ public sealed class OrgResourceAuthorizationHandler(
             return;
         }
 
-        var authContext = await authorizationService.GetAuthorizationContextAsync();
+        var authContext = await authorizationService.GetAuthorizationContextAsync().ConfigureAwait(false);
         var userOrganizationId = authContext.User.OrganizationId;
 
         if (userOrganizationId == resource.OrganizationId)
@@ -64,12 +67,12 @@ public sealed class OrgResourceAuthorizationHandler(
             return;
 
         var resourceType = resource.GetType().Name;
-        var grants = await grantRepository.GetActiveGrantsAsync(userOrganizationId.Value, resource.OrganizationId);
+        var grants = await grantRepository.GetActiveGrantsAsync(userOrganizationId.Value, resource.OrganizationId).ConfigureAwait(false);
 
         var hasGrant = grants.Any(g =>
-            (g.ResourceType is null || g.ResourceType == resourceType) &&
-            (g.ScopeId is null || (resource is IScopeableResource scoped && scoped.ScopeId == g.ScopeId)) &&
-            g.AllowedActions.Contains(requirement.PermissionCode) &&
+            (g.ResourceType is null || string.Equals(g.ResourceType, resourceType, StringComparison.Ordinal)) &&
+            (g.ScopeId is null || (resource is IScopeableResource scoped && string.Equals(scoped.ScopeId, g.ScopeId, StringComparison.Ordinal))) &&
+            g.AllowedActions.Contains(requirement.PermissionCode, StringComparer.Ordinal) &&
             (g.RequiredRole is null || authContext.HasRole(g.RequiredRole)));
 
         if (hasGrant)

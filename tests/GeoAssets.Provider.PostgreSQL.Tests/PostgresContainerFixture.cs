@@ -36,9 +36,3 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
 
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 }
-
-[CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresContainerFixture>
-{
-    public const string Name = "Postgres";
-}

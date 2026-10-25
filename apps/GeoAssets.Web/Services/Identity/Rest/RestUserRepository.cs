@@ -31,7 +31,7 @@ public sealed class RestUserRepository(HttpClient http) : IUserRepository
 {
     public async Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"users/{id}", ct);
+        var response = await http.GetAsync(new Uri($"users/{id}", UriKind.Relative), ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
@@ -42,7 +42,7 @@ public sealed class RestUserRepository(HttpClient http) : IUserRepository
 
     public async Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"users/by-external-id/{Uri.EscapeDataString(oid)}", ct);
+        var response = await http.GetAsync(new Uri($"users/by-external-id/{Uri.EscapeDataString(oid)}", UriKind.Relative), ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
@@ -59,6 +59,7 @@ public sealed class RestUserRepository(HttpClient http) : IUserRepository
 
     public async Task UpdateAsync(AppUser user, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(user);
         var response = await http.PutAsJsonAsync(
             $"users/{user.Id}", new UserUpdateDto(user.DisplayName, user.IsActive, user.OrganizationId), ct);
         response.EnsureSuccessStatusCode();

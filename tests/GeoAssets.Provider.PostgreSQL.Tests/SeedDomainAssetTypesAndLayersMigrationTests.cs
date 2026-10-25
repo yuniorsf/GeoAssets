@@ -26,7 +26,7 @@ public sealed class SeedDomainAssetTypesAndLayersMigrationTests
 
         return builder.Operations
             .OfType<InsertDataOperation>()
-            .Single(op => op.Table == "asset_type");
+            .Single(op => string.Equals(op.Table, "asset_type", StringComparison.Ordinal));
     }
 
     [Fact]

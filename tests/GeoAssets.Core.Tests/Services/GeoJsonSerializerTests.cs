@@ -105,19 +105,19 @@ public class GeoJsonSerializerTests
     [Fact]
     public void GetOptions_WriteIndented_IsTrue()
     {
-        GeoJsonSerializer.GetOptions().WriteIndented.Should().BeTrue();
+        GeoJsonSerializer.Options.WriteIndented.Should().BeTrue();
     }
 
     [Fact]
     public void GetCompactOptions_WriteIndented_IsFalse()
     {
-        GeoJsonSerializer.GetCompactOptions().WriteIndented.Should().BeFalse();
+        GeoJsonSerializer.CompactOptions.WriteIndented.Should().BeFalse();
     }
 
     [Fact]
     public void GetCompactOptions_SerializedOutput_ContainsNoNewlines()
     {
-        var json = JsonSerializer.Serialize(new GeoFeature { Id = "x" }, GeoJsonSerializer.GetCompactOptions());
+        var json = JsonSerializer.Serialize(new GeoFeature { Id = "x" }, GeoJsonSerializer.CompactOptions);
         json.Should().NotContain("\n");
     }
 

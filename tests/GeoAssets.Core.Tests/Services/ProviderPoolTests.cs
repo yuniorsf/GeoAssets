@@ -81,7 +81,7 @@ public class ProviderPoolTests
     {
         // XD01-157: ProviderEntry must retain the reconnect config it was created from so it can
         // round-trip into ProjectProviderEntry later — fails without the fix (fields don't exist).
-        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var values = new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "https://example.test" };
         var entry = new ProviderPool().Add("A", Provider(), "rest", values);
 
         entry.PluginId.Should().Be("rest");
@@ -91,7 +91,7 @@ public class ProviderPoolTests
     [Fact]
     public void Add_WithValues_StoresAnIndependentCopy()
     {
-        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var values = new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "https://example.test" };
         var entry = new ProviderPool().Add("A", Provider(), "rest", values);
 
         values["url"] = "mutated";
@@ -160,7 +160,7 @@ public class ProviderPoolTests
     {
         // XD01-157: reconnect config must survive a restore, same as a fresh Add.
         var sut = new ProviderPool();
-        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var values = new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "https://example.test" };
 
         var entry = sut.RestoreEntry("A", Provider(), 0, true, true, false, "rest", values);
 
@@ -665,7 +665,7 @@ public class ProviderPoolTests
         // XD01-157: this is the round-trip counterpart to RestoreEntry — fails without it (no
         // way to turn live pool state back into the persisted ProjectProviderEntry shape).
         var sut = new ProviderPool();
-        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var values = new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "https://example.test" };
         var entry = sut.RestoreEntry("A", Provider(), 0, isOpen: true, isEnabled: false, isActive: true, "rest", values);
 
         var persisted = sut.ToPersistedEntries().Should().ContainSingle().Subject;
@@ -698,7 +698,7 @@ public class ProviderPoolTests
         // Mutating the live entry's Values afterward must not reach back into an already-taken
         // snapshot — SaveAsync holds onto the snapshot across an await.
         var sut = new ProviderPool();
-        var values = new Dictionary<string, string> { ["url"] = "https://example.test" };
+        var values = new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "https://example.test" };
         var entry = sut.Add("A", Provider(), "rest", values);
 
         var persisted = sut.ToPersistedEntries().Single();

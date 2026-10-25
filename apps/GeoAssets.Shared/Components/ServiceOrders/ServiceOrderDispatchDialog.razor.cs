@@ -22,5 +22,5 @@ public partial class ServiceOrderDispatchDialog
         _note     = string.Empty;
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 }

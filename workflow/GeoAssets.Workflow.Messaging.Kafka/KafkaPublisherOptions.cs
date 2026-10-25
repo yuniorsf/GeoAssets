@@ -31,7 +31,7 @@ public sealed class KafkaPublisherOptions
     /// Applied after the built-in defaults, allowing fine-grained tuning
     /// (e.g. <c>acks</c>, <c>compression.type</c>, <c>linger.ms</c>).
     /// </summary>
-    public Dictionary<string, string> AdditionalConfig { get; set; } = new();
+    public Dictionary<string, string> AdditionalConfig { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// When true, the <see cref="Orders.ServiceOrder.Id"/> is used as the Kafka

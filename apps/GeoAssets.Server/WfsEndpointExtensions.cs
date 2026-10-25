@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -39,7 +40,7 @@ public static class WfsEndpointExtensions
     private static readonly XNamespace _ows = "http://www.opengis.net/ows/1.1";
     private static readonly XNamespace _xlink = "http://www.w3.org/1999/xlink";
 
-    private static readonly JsonSerializerOptions _geoOpts = GeoJsonSerializer.GetOptions();
+    private static readonly JsonSerializerOptions _geoOpts = GeoJsonSerializer.Options;
     private static readonly JsonSerializerOptions _schemaOpts = new()
     {
         WriteIndented = true,
@@ -66,7 +67,7 @@ public static class WfsEndpointExtensions
             return operation.ToUpperInvariant() switch
             {
                 "GETCAPABILITIES"     => HandleGetCapabilities(req, provider),
-                "GETFEATURE"          => await HandleGetFeatureAsync(Param, provider, timeProvider),
+                "GETFEATURE"          => await HandleGetFeatureAsync(Param, provider, timeProvider).ConfigureAwait(false),
                 "DESCRIBEFEATURETYPE" => HandleDescribeFeatureType(),
                 _ => Results.BadRequest(
                     $"Unsupported or missing REQUEST parameter: '{operation}'. " +
@@ -179,8 +180,8 @@ public static class WfsEndpointExtensions
         var typeName = param("TYPENAMES") is { Length: > 0 } tn ? tn
                      : param("TYPENAME");
 
-        var count      = int.TryParse(param("COUNT"),      out var c)  ? c  : int.MaxValue;
-        var startIndex = int.TryParse(param("STARTINDEX"), out var si) ? si : 0;
+        var count      = int.TryParse(param("COUNT"),      CultureInfo.InvariantCulture, out var c)  ? c  : int.MaxValue;
+        var startIndex = int.TryParse(param("STARTINDEX"), CultureInfo.InvariantCulture, out var si) ? si : 0;
         var bboxRaw    = param("BBOX");
 
         IReadOnlyList<GeoFeature> matched;
@@ -202,7 +203,7 @@ public static class WfsEndpointExtensions
                 return Results.BadRequest("Invalid BBOX. Expected: minLon,minLat,maxLon,maxLat[,srsName]");
             }
 
-            matched = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+            matched = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
         }
         else if (!string.IsNullOrEmpty(typeName) &&
                  typeName.StartsWith("geoassets:feature:", StringComparison.OrdinalIgnoreCase))

@@ -13,7 +13,7 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
             .Include(t => t.ActionPermissions)
             .Include(t => t.States)
             .Include(t => t.Transitions)
-            .FirstOrDefaultAsync(t => t.Id == id, ct);
+            .FirstOrDefaultAsync(t => t.Id == id, ct).ConfigureAwait(false);
 
         return record is null ? null : OrderTypeMapper.ToDomain(record);
     }
@@ -26,22 +26,26 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
             .Include(t => t.States)
             .Include(t => t.Transitions)
             .OrderBy(t => t.DisplayName)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         return records.Select(OrderTypeMapper.ToDomain).ToList();
     }
 
     public async Task AddAsync(OrderType orderType, CancellationToken ct = default)
-        => await db.OrderTypes.AddAsync(OrderTypeMapper.ToRecord(orderType), ct);
+    {
+        ArgumentNullException.ThrowIfNull(orderType);
+        await db.OrderTypes.AddAsync(OrderTypeMapper.ToRecord(orderType), ct).ConfigureAwait(false);
+    }
 
     public async Task UpdateAsync(OrderType orderType, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(orderType);
         var existing = await db.OrderTypes
             .Include(t => t.CreationPolicies)
             .Include(t => t.ActionPermissions)
             .Include(t => t.States)
             .Include(t => t.Transitions)
-            .FirstOrDefaultAsync(t => t.Id == orderType.Id, ct);
+            .FirstOrDefaultAsync(t => t.Id == orderType.Id, ct).ConfigureAwait(false);
 
         if (existing is null) return;
 
@@ -94,7 +98,7 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
-        var record = await db.OrderTypes.FindAsync([id], ct);
+        var record = await db.OrderTypes.FindAsync([id], ct).ConfigureAwait(false);
         if (record is not null) db.OrderTypes.Remove(record);
     }
 

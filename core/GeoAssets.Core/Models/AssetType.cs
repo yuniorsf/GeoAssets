@@ -10,7 +10,7 @@ public sealed class AssetType : IOrgOwnedResource
     public string Name { get; set; } = string.Empty;
     public string Color { get; set; } = "#3388ff";
     public string IconUrl { get; set; } = string.Empty;
-    public bool IsBuiltIn { get; set; } = false;
+    public bool IsBuiltIn { get; set; }
 
     /// <summary>
     /// Undeletable, independent of <see cref="IsBuiltIn"/> — a seeded type can still be deleted
@@ -18,7 +18,7 @@ public sealed class AssetType : IOrgOwnedResource
     /// marked protected once other data depends on it. Only the 3 generic defaults
     /// (<see cref="Point"/>/<see cref="Line"/>/<see cref="Area"/>) are protected today.
     /// </summary>
-    public bool IsProtected { get; set; } = false;
+    public bool IsProtected { get; set; }
 
     /// <summary>Restricts features of this type to one geometry shape. <c>null</c> means any geometry is allowed.</summary>
     public GeometryType? AllowedGeometryType { get; set; }

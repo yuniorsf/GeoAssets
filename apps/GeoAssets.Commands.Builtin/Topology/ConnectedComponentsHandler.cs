@@ -18,6 +18,9 @@ public sealed class ConnectedComponentsHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var components = context.Repository.GetConnectedComponents();
         return Task.FromResult(GeoCommandResult.Ok(components));
     }

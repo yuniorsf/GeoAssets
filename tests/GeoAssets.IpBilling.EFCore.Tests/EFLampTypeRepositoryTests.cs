@@ -13,7 +13,7 @@ public class EFLampTypeRepositoryTests
     // these tests seed directly through the DbContext, exactly standing in for "what the
     // migration already put there" rather than going through ILampTypeRepository (which is
     // read-only by design, see its own doc comment).
-    private static async Task SeedAsync(IpBillingDbContext db)
+    private static Task<int> SeedAsync(IpBillingDbContext db)
     {
         db.Set<LampTypeRecord>().Add(new LampTypeRecord
         {
@@ -38,7 +38,7 @@ public class EFLampTypeRepositoryTests
             ],
         });
 
-        await db.SaveChangesAsync();
+        return db.SaveChangesAsync();
     }
 
     [Fact]

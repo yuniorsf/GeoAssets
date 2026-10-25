@@ -21,7 +21,7 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// than an explicit override — this provider's <see cref="GetAll"/> already returns the
 /// exact same <see cref="Cache"/> those would have queried directly (XD01-135).
 /// </summary>
-public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyncDisposable
+public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyncDisposable
 {
     private readonly GeoAssetsDbContext _db;
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
@@ -58,11 +58,9 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     {
         var startTimestamp = _timeProvider.GetTimestamp();
         var rows = _db.GeoEntities.AsNoTracking().ToList();
-        var cache = rows.Select(MapToFeature).ToDictionary(f => f.Id);
+        var cache = rows.Select(MapToFeature).ToDictionary(f => f.Id, StringComparer.Ordinal);
         var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
-        _logger.LogInformation(
-            "PostgresAssetProvider.LoadCacheFromDb — {RowCount} rows in {ElapsedMs:F1} ms",
-            rows.Count, elapsedMs);
+        LogCacheLoaded(_logger, rows.Count, elapsedMs);
         return cache;
     }
 
@@ -80,13 +78,18 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     internal async Task WarmCacheAsync(CancellationToken ct = default)
     {
         var startTimestamp = _timeProvider.GetTimestamp();
-        await using var db = new GeoAssetsDbContext(_dbOptions);
-        var rows = await db.GeoEntities.AsNoTracking().ToListAsync(ct);
-        _cache = rows.Select(MapToFeature).ToDictionary(f => f.Id);
-        var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
-        _logger.LogInformation(
-            "PostgresAssetProvider.WarmCacheAsync — {RowCount} rows in {ElapsedMs:F1} ms",
-            rows.Count, elapsedMs);
+        var db = new GeoAssetsDbContext(_dbOptions);
+        try
+        {
+            var rows = await db.GeoEntities.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+            _cache = rows.Select(MapToFeature).ToDictionary(f => f.Id, StringComparer.Ordinal);
+            var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            LogCacheWarmed(_logger, rows.Count, elapsedMs);
+        }
+        finally
+        {
+            await db.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     // ── Read ───────────────────────────────────────────────────────────────────
@@ -97,18 +100,17 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     public IReadOnlyList<GeoFeature> GetAll() => [.. Cache.Values];
 
     public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) =>
-        [.. Cache.Values.Where(f => f.Properties.AssetTypeId == assetTypeId)];
+        [.. Cache.Values.Where(f => string.Equals(f.Properties.AssetTypeId, assetTypeId, StringComparison.Ordinal))];
 
     public IReadOnlyList<GeoFeature> Search(string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return GetAll();
-        var lower = query.ToLowerInvariant();
         return [.. Cache.Values.Where(f =>
-            f.Properties.Name.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
-            f.Properties.Description.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
+            f.Properties.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            f.Properties.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             f.Properties.CustomAttributes.Any(kv =>
-                kv.Key.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
-                kv.Value.Contains(lower, StringComparison.OrdinalIgnoreCase)))];
+                kv.Key.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                kv.Value.Contains(query, StringComparison.OrdinalIgnoreCase)))];
     }
 
     // ── Spatial ────────────────────────────────────────────────────────────────
@@ -132,20 +134,28 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
 
         // Use a dedicated short-lived context so concurrent viewport requests
         // never share the same DbContext instance (which would cause a concurrency exception).
-        await using var db = new GeoAssetsDbContext(_dbOptions);
-        var rows = await db.GeoEntities
-            .AsNoTracking()
-            .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
-            .ToListAsync();
+        var db = new GeoAssetsDbContext(_dbOptions);
+        try
+        {
+            var rows = await db.GeoEntities
+                .AsNoTracking()
+                .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
+                .ToListAsync()
+                .ConfigureAwait(false);
 
-        return rows.Select(MapToFeature).ToList();
+            return rows.Select(MapToFeature).ToList();
+        }
+        finally
+        {
+            await db.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
         double minLon, double minLat, double maxLon, double maxLat)
     {
-        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
-        var opts = GeoJsonSerializer.GetCompactOptions();
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+        var opts = GeoJsonSerializer.CompactOptions;
         return [.. features.Select(f => JsonSerializer.SerializeToElement(f, opts))];
     }
 
@@ -168,59 +178,70 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
     /// </summary>
     public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
     {
-        await using var db = new GeoAssetsDbContext(_dbOptions);
-        IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
+        ArgumentNullException.ThrowIfNull(query);
 
-        if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
-            rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
-
-        if (!string.IsNullOrWhiteSpace(query.SearchText))
+        var db = new GeoAssetsDbContext(_dbOptions);
+        try
         {
-            var pattern = $"%{query.SearchText}%";
+            IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
 
-            // geo_entity_attribute is a normalized, trigram-indexed copy of custom_attributes
-            // (XD01-171). A correlated EXISTS here (db.GeoEntityAttributes.Any(a => a.EntityId
-            // == r.Id && ...)) was tried first and rejected: OR-ing a correlated subplan into
-            // this predicate makes Postgres abandon bitmap-OR entirely and sequentially scan
-            // geo_entity even for plain Name/Description searches with no attributes involved.
-            // Precomputing the matching ids (same shape the old jsonb_each_text version used —
-            // just backed by a real index now instead of an unconditional full-table scan) keeps
-            // the Name/Description trigram indexes usable below. Matches Search()'s
-            // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider
-            // implementers (XD01-123).
-            var matchingAttributeIds = await db.GeoEntityAttributes
-                .Where(a => EF.Functions.ILike(a.Key, pattern) || EF.Functions.ILike(a.Value, pattern))
-                .Select(a => a.EntityId)
-                .Distinct()
-                .ToListAsync();
+            if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
+                rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
 
-            rows = rows.Where(r =>
-                EF.Functions.ILike(r.Name, pattern) ||
-                EF.Functions.ILike(r.Description, pattern) ||
-                matchingAttributeIds.Contains(r.Id));
+            if (!string.IsNullOrWhiteSpace(query.SearchText))
+            {
+                var pattern = $"%{query.SearchText}%";
+
+                // geo_entity_attribute is a normalized, trigram-indexed copy of custom_attributes
+                // (XD01-171). A correlated EXISTS here (db.GeoEntityAttributes.Any(a => a.EntityId
+                // == r.Id && ...)) was tried first and rejected: OR-ing a correlated subplan into
+                // this predicate makes Postgres abandon bitmap-OR entirely and sequentially scan
+                // geo_entity even for plain Name/Description searches with no attributes involved.
+                // Precomputing the matching ids (same shape the old jsonb_each_text version used —
+                // just backed by a real index now instead of an unconditional full-table scan) keeps
+                // the Name/Description trigram indexes usable below. Matches Search()'s
+                // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider
+                // implementers (XD01-123).
+                var matchingAttributeIds = await db.GeoEntityAttributes
+                    .Where(a => EF.Functions.ILike(a.Key, pattern) || EF.Functions.ILike(a.Value, pattern))
+                    .Select(a => a.EntityId)
+                    .Distinct()
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                rows = rows.Where(r =>
+                    EF.Functions.ILike(r.Name, pattern) ||
+                    EF.Functions.ILike(r.Description, pattern) ||
+                    matchingAttributeIds.Contains(r.Id));
+            }
+
+            var totalCount = await rows.CountAsync().ConfigureAwait(false);
+
+            rows = query.SortBy switch
+            {
+                "name"      => query.SortDescending ? rows.OrderByDescending(r => r.Name)      : rows.OrderBy(r => r.Name),
+                "createdAt" => query.SortDescending ? rows.OrderByDescending(r => r.CreatedAt) : rows.OrderBy(r => r.CreatedAt),
+                "updatedAt" => query.SortDescending ? rows.OrderByDescending(r => r.UpdatedAt) : rows.OrderBy(r => r.UpdatedAt),
+                _           => query.SortDescending ? rows.OrderByDescending(r => r.Id)        : rows.OrderBy(r => r.Id)
+            };
+
+            // OFFSET still walks past skipped rows even with a perfect index, so deep pages degrade
+            // linearly regardless of indexing — keyset pagination would be the real fix if that
+            // becomes a problem (XD01-171).
+            var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync().ConfigureAwait(false);
+            return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
         }
-
-        var totalCount = await rows.CountAsync();
-
-        rows = query.SortBy switch
+        finally
         {
-            "name"      => query.SortDescending ? rows.OrderByDescending(r => r.Name)      : rows.OrderBy(r => r.Name),
-            "createdAt" => query.SortDescending ? rows.OrderByDescending(r => r.CreatedAt) : rows.OrderBy(r => r.CreatedAt),
-            "updatedAt" => query.SortDescending ? rows.OrderByDescending(r => r.UpdatedAt) : rows.OrderBy(r => r.UpdatedAt),
-            _           => query.SortDescending ? rows.OrderByDescending(r => r.Id)        : rows.OrderBy(r => r.Id)
-        };
-
-        // OFFSET still walks past skipped rows even with a perfect index, so deep pages degrade
-        // linearly regardless of indexing — keyset pagination would be the real fix if that
-        // becomes a problem (XD01-171).
-        var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync();
-        return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
+            await db.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     // ── Write ──────────────────────────────────────────────────────────────────
 
     public void Add(GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         var row = MapToRow(feature);
         _db.GeoEntities.Add(row);
         _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
@@ -232,6 +253,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
 
     public void Update(GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = MapToRow(feature);
         _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
@@ -285,6 +307,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
 
     public void LoadAll(IEnumerable<GeoFeature> features)
     {
+        ArgumentNullException.ThrowIfNull(features);
         _db.GeoEntities.RemoveRange(_db.GeoEntities);
         foreach (var f in features)
         {
@@ -319,6 +342,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
 
     public void AddAssetType(AssetType assetType)
     {
+        ArgumentNullException.ThrowIfNull(assetType);
         if (_db.AssetTypes.Find(assetType.Id) is not null) return;
         _db.AssetTypes.Add(new AssetTypeRow
         {
@@ -369,6 +393,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
 
     public void AddLayer(Layer layer)
     {
+        ArgumentNullException.ThrowIfNull(layer);
         if (_db.Layers.Find(layer.Id) is not null) return;
         _db.Layers.Add(new LayerRow
         {
@@ -421,6 +446,7 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
 
     public void AddLayerRule(LayerRule layerRule)
     {
+        ArgumentNullException.ThrowIfNull(layerRule);
         if (_db.LayerRules.Find(layerRule.Id) is not null) return;
         _db.LayerRules.Add(new LayerRuleRow
         {
@@ -505,16 +531,26 @@ public sealed class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyn
         {
             var rowCount = _db.SaveChanges();
             var elapsedMs = _timeProvider.GetElapsedTime(startTimestamp).TotalMilliseconds;
-            _logger.LogInformation(
-                "PostgresAssetProvider.SaveChanges — {RowCount} rows in {ElapsedMs:F1} ms",
-                rowCount, elapsedMs);
+            LogChangesSaved(_logger, rowCount, elapsedMs);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PostgresAssetProvider: SaveChanges failed");
+            LogSaveChangesFailed(_logger, ex);
             throw;
         }
     }
 
-    public async ValueTask DisposeAsync() => await _db.DisposeAsync();
+    [LoggerMessage(Level = LogLevel.Information, Message = "PostgresAssetProvider.LoadCacheFromDb — {RowCount} rows in {ElapsedMs:F1} ms")]
+    private static partial void LogCacheLoaded(ILogger logger, int rowCount, double elapsedMs);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "PostgresAssetProvider.WarmCacheAsync — {RowCount} rows in {ElapsedMs:F1} ms")]
+    private static partial void LogCacheWarmed(ILogger logger, int rowCount, double elapsedMs);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "PostgresAssetProvider.SaveChanges — {RowCount} rows in {ElapsedMs:F1} ms")]
+    private static partial void LogChangesSaved(ILogger logger, int rowCount, double elapsedMs);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "PostgresAssetProvider: SaveChanges failed")]
+    private static partial void LogSaveChangesFailed(ILogger logger, Exception ex);
+
+    public ValueTask DisposeAsync() => _db.DisposeAsync();
 }

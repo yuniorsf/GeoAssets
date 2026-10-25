@@ -37,7 +37,7 @@ public class CandidatePickerStateTests
     {
         var state = new CandidatePickerState(ThreeCandidates());
 
-        state.Mode.Should().Be(CandidatePickerMode.Single);
+        state.Mode.Should().Be(CandidatePickerMode.Exclusive);
         state.CurrentIndex.Should().Be(0);
         state.Current.Id.Should().Be("wire-a");
     }
@@ -142,7 +142,7 @@ public class CandidatePickerStateTests
         state.CycleNext();
         state.ToggleCurrentSelected(); // wire-a and wire-b both selected
 
-        state.SwitchMode(CandidatePickerMode.Single); // current is still wire-b
+        state.SwitchMode(CandidatePickerMode.Exclusive); // current is still wire-b
 
         state.Confirm().Should().ContainSingle().Which.Id.Should().Be("wire-b");
     }

@@ -23,11 +23,11 @@ public sealed class FileStorageService : IStorageService
         return GeoJsonSerializer.Deserialize(json) ?? new GeoFeatureCollection();
     }
 
-    public async Task SaveAsync(GeoFeatureCollection collection, string key = "default", CancellationToken ct = default)
+    public Task SaveAsync(GeoFeatureCollection collection, string key = "default", CancellationToken ct = default)
     {
         var path = GetFilePath(key);
         var json = GeoJsonSerializer.Serialize(collection);
-        await File.WriteAllTextAsync(path, json, ct);
+        return File.WriteAllTextAsync(path, json, ct);
     }
 
     public Task<GeoFeatureCollection> ImportFromStringAsync(string geoJson, CancellationToken ct = default)
@@ -60,21 +60,21 @@ public sealed class FileStorageService : IStorageService
         return await reader.ReadToEndAsync(ct);
     }
 
-    public async Task SaveExportFileAsync(string geoJson, string suggestedName = "export.geojson", CancellationToken ct = default)
+    public Task SaveExportFileAsync(string geoJson, string suggestedName = "export.geojson", CancellationToken ct = default)
     {
         // On MAUI, save to the documents folder and notify the user
         var docsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var filePath = Path.Combine(docsPath, suggestedName);
-        await File.WriteAllTextAsync(filePath, geoJson, ct);
+        return File.WriteAllTextAsync(filePath, geoJson, ct);
     }
 
-    public async Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default)
+    public Task SaveExportBinaryFileAsync(byte[] content, string suggestedName, string mimeType, CancellationToken ct = default)
     {
         // On MAUI, save to the documents folder and notify the user — same destination as
         // SaveExportFileAsync, just writing bytes instead of text.
         var docsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var filePath = Path.Combine(docsPath, suggestedName);
-        await File.WriteAllBytesAsync(filePath, content, ct);
+        return File.WriteAllBytesAsync(filePath, content, ct);
     }
 
     public async Task<string?> GetStringAsync(string key, CancellationToken ct = default)

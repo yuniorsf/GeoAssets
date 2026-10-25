@@ -25,7 +25,7 @@ public sealed class GeoFeature : IOrgOwnedResource, IScopeableResource
     /// Serialized as part of the GeoJSON feature for portability.
     /// </summary>
     [JsonPropertyName("topology")]
-    public List<TopoEdge> Topology { get; set; } = [];
+    public List<TopoEdge> Topology { get; init; } = [];
 
     /// <summary>See <see cref="IOrgOwnedResource"/>. Delegates to <see cref="Properties"/>,
     /// which is the JSON source of truth (<see cref="GeoFeatureProperties.OrganizationId"/>).</summary>
@@ -35,57 +35,4 @@ public sealed class GeoFeature : IOrgOwnedResource, IScopeableResource
     /// <see cref="GeoFeatureProperties.CustomAttributes"/> — no dedicated column, so this costs
     /// nothing for features that never need scoping (XD01-174).</summary>
     string? IScopeableResource.ScopeId => Properties.CustomAttributes.GetValueOrDefault("scopeId");
-}
-
-public sealed class GeoFeatureProperties
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
-
-    [JsonPropertyName("assetTypeId")]
-    public string AssetTypeId { get; set; } = AssetType.Point.Id.ToString();
-
-    [JsonPropertyName("description")]
-    public string Description { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Per-feature style override — the highest-priority entry in the <see cref="Layer"/>
-    /// resolution chain (ahead of any matching <see cref="LayerRule"/> and the asset type's
-    /// <see cref="AssetType.DefaultLayerId"/>). Empty means no override; resolution logic
-    /// lands in XD01-111.
-    /// </summary>
-    [JsonPropertyName("layerId")]
-    public string LayerId { get; set; } = string.Empty;
-
-    /// <summary>See <see cref="IOrgOwnedResource"/>. Defaults to <see cref="Guid.Empty"/> —
-    /// "no organization assigned" — rather than being nullable, matching this class's own
-    /// <see cref="CreatedAt"/>/<see cref="UpdatedAt"/> sentinel-default convention.</summary>
-    [JsonPropertyName("organizationId")]
-    public Guid OrganizationId { get; set; } = Guid.Empty;
-
-    /// <summary>
-    /// EPSG code of the coordinate reference system for this feature's geometry.
-    /// Defaults to 4326 (WGS-84) for GeoJSON compatibility.
-    /// Set explicitly when working with projected CRS (e.g. 25830 for UTM zone 30N,
-    /// 3857 for Web Mercator, 32632 for UTM zone 32N, etc.).
-    /// </summary>
-    [JsonPropertyName("srid")]
-    public int Srid { get; set; } = 4326;
-
-    /// <summary>
-    /// Defaults to <see cref="DateTime.MinValue"/> — a "creation time unknown" sentinel, not the
-    /// current clock. This type is built primarily via JSON deserialization (import/localStorage/
-    /// WFS), which can't be intercepted to inject a <see cref="TimeProvider"/>; explicit-construction
-    /// callers that know the real creation time (e.g. <c>AssetForm.razor</c>) set this themselves.
-    /// </summary>
-    [JsonPropertyName("createdAt")]
-    public DateTime CreatedAt { get; set; }
-
-    /// <summary>Defaults to <see cref="DateTime.MinValue"/> — see <see cref="CreatedAt"/>.</summary>
-    [JsonPropertyName("updatedAt")]
-    public DateTime UpdatedAt { get; set; }
-
-    /// <summary>Flexible user-defined attributes stored as a JSON object</summary>
-    [JsonPropertyName("customAttributes")]
-    public Dictionary<string, string> CustomAttributes { get; set; } = new();
 }

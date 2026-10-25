@@ -4,39 +4,41 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Identity.Authorization.EFCore.Repositories;
 
-public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db) : IOrganizationGrantRepository
+public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db, TimeProvider timeProvider) : IOrganizationGrantRepository
 {
     public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => db.OrganizationGrants.FirstOrDefaultAsync(g => g.Id == id, ct);
 
     public async Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default)
-        => await db.OrganizationGrants.ToListAsync(ct);
+        => await db.OrganizationGrants.ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(
         Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         return await db.OrganizationGrants
             .Where(g => g.GranteeOrganizationId == granteeOrganizationId
                      && g.ResourceOrganizationId == resourceOrganizationId
                      && g.IsActive
                      && (g.ExpiresAt == null || g.ExpiresAt > now))
-            .ToListAsync(ct);
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(
         Guid granteeOrganizationId, CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         return await db.OrganizationGrants
             .Where(g => g.GranteeOrganizationId == granteeOrganizationId
                      && g.IsActive
                      && (g.ExpiresAt == null || g.ExpiresAt > now))
-            .ToListAsync(ct);
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
     }
 
     public async Task AddAsync(OrganizationGrant grant, CancellationToken ct = default)
-        => await db.OrganizationGrants.AddAsync(grant, ct);
+        => await db.OrganizationGrants.AddAsync(grant, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default)
     {

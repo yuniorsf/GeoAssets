@@ -24,7 +24,9 @@ public class ShapefileProviderPluginReconnectTests
     private static string CreateFixtureZip(string tempDir)
     {
         var point = Factory.CreatePoint(new Coordinate(-39.8, -10.99));
+#pragma warning disable MA0002 // AttributesTable (NetTopologySuite.IO.ShapeFile) has no constructor overload accepting an IEqualityComparer<string>
         var features = new List<IFeature> { new Feature(point, new AttributesTable { { "NAME", "Pole" } }) };
+#pragma warning restore MA0002
 
         var basePath = Path.Combine(tempDir, "fixture");
         var header = new DbaseFileHeader();
@@ -68,27 +70,27 @@ public class ShapefileProviderPluginReconnectTests
     }
 
     [Fact]
-    public async Task CreateAsync_ArchivePathMissingFromDisk_ThrowsWithPathInMessage()
+    public Task CreateAsync_ArchivePathMissingFromDisk_ThrowsWithPathInMessage()
     {
         var config = new ProviderConfig();
         config.Set("name", "fixture");
         config.Set("archive_path", "/no/such/directory/archive.zip");
 
-        var act = async () => await new ShapefileProviderPlugin().CreateAsync(config, null!);
+        var act = () => new ShapefileProviderPlugin().CreateAsync(config, null!);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        return act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*archive.zip*");
     }
 
     [Fact]
-    public async Task CreateAsync_NeitherContentNorPath_ThrowsArchiveRequired()
+    public Task CreateAsync_NeitherContentNorPath_ThrowsArchiveRequired()
     {
         var config = new ProviderConfig();
         config.Set("name", "fixture");
 
-        var act = async () => await new ShapefileProviderPlugin().CreateAsync(config, null!);
+        var act = () => new ShapefileProviderPlugin().CreateAsync(config, null!);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        return act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Shapefile ZIP archive is required*");
     }
 

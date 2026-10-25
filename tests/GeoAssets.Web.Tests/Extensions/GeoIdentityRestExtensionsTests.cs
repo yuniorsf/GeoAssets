@@ -14,7 +14,7 @@ namespace GeoAssets.Web.Tests.Extensions;
 /// </summary>
 public class GeoIdentityRestExtensionsTests
 {
-    private static IServiceProvider BuildProvider(IConfiguration configuration)
+    private static ServiceProvider BuildProvider(IConfiguration configuration)
     {
         var services = new ServiceCollection();
         services.AddSingleton(configuration);
@@ -39,7 +39,7 @@ public class GeoIdentityRestExtensionsTests
     public void AddGeoIdentityRest_ConfiguredGeoAssetsServerBaseUrl_ResolvesSuccessfully()
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["GeoAssetsServer:BaseUrl"] = "http://test"
             })

@@ -123,8 +123,8 @@ public class ProjectPanelTests
 
         var result = ProjectPanel.DescribeScopeOverrides(rawFork);
 
-        result.Single(s => s.ScopeKey == "view").Overridden.Should().BeTrue();
-        result.Where(s => s.ScopeKey != "view").Should().OnlyContain(s => !s.Overridden);
+        result.Single(s => string.Equals(s.ScopeKey, "view", StringComparison.Ordinal)).Overridden.Should().BeTrue();
+        result.Where(s => !string.Equals(s.ScopeKey, "view", StringComparison.Ordinal)).Should().OnlyContain(s => !s.Overridden);
     }
 
     [Fact]

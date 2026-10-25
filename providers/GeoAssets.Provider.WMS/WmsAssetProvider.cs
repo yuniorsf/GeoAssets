@@ -43,12 +43,12 @@ public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider
     public IReadOnlyList<GeoFeature>                Search(string query)                            => [];
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                  => [];
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)          => [];
-    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg) => [];
-    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double a, double b, double c, double d)
+    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees) => [];
+    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)
         => Task.FromResult<IReadOnlyList<GeoFeature>>([]);
-    public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double a, double b, double c, double d)
+    public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)
         => Task.FromResult<IReadOnlyList<JsonElement>>([]);
-    public Task<string?>                            GetInBoundsRawJsonAsync(double a, double b, double c, double d)
+    public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat)
         => Task.FromResult<string?>(null);
 
     // Topology queries use IAssetProvider's default implementation (TopoGraph over

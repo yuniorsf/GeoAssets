@@ -22,7 +22,7 @@ public partial class CustomAttributeEditor
 
     private void RenameKey(string oldKey, string newKey)
     {
-        if (string.IsNullOrWhiteSpace(newKey) || newKey == oldKey) return;
+        if (string.IsNullOrWhiteSpace(newKey) || string.Equals(newKey, oldKey, StringComparison.Ordinal)) return;
         var value = Attributes.TryGetValue(oldKey, out var v) ? v : string.Empty;
         Attributes.Remove(oldKey);
         Attributes[newKey] = value;

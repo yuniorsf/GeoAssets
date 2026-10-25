@@ -12,7 +12,7 @@ public partial class RoleList
     private List<AppRole> _roles = [];
     private bool _loading = true;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    protected override Task OnInitializedAsync() => RefreshAsync();
 
     public async Task RefreshAsync()
     {
@@ -23,5 +23,5 @@ public partial class RoleList
         StateHasChanged();
     }
 
-    private async Task SelectRole(AppRole role) => await OnRoleSelected.InvokeAsync(role);
+    private Task SelectRole(AppRole role) => OnRoleSelected.InvokeAsync(role);
 }

@@ -2,7 +2,7 @@ namespace GeoAssets.Core.Agents;
 
 public abstract class MultiAgentOrchestrator : IMultiAgentOrchestrator
 {
-    private readonly IReadOnlyDictionary<string, IAgentWorker> _agents;
+    private readonly Dictionary<string, IAgentWorker> _agents;
 
     protected MultiAgentOrchestrator(IEnumerable<IAgentWorker> agents)
     {

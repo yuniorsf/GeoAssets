@@ -41,7 +41,7 @@ public class OrgResourceEndpointAuthorizationTests
                 User = new AppUser
                 {
                     Id = Guid.NewGuid(), Email = "test@example.com", DisplayName = "Test",
-                    CreatedAt = DateTime.UtcNow, OrganizationId = userOrganizationId,
+                    CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), OrganizationId = userOrganizationId,
                 },
                 Roles       = [],
                 Claims      = [],
@@ -130,7 +130,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.Add(feature);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/geoassets/features/{feature.Id}");
+        var response = await client.GetAsync(new Uri($"/api/geoassets/features/{feature.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -144,7 +144,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.Add(feature);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/geoassets/features/{feature.Id}");
+        var response = await client.GetAsync(new Uri($"/api/geoassets/features/{feature.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -158,7 +158,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.Add(feature);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/geoassets/features/{feature.Id}");
+        var response = await client.GetAsync(new Uri($"/api/geoassets/features/{feature.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -174,7 +174,7 @@ public class OrgResourceEndpointAuthorizationTests
             ResourceOrganizationId = resourceOrgId,
             AllowedActions         = ["features:read"],
             GrantedBy              = "admin@example.com",
-            GrantedAt              = DateTime.UtcNow,
+            GrantedAt              = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
             IsActive               = true,
         };
         var (server, provider) = await BuildServerAsync(userOrganizationId: granteeOrgId, grants: [grant]);
@@ -182,7 +182,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.Add(feature);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/geoassets/features/{feature.Id}");
+        var response = await client.GetAsync(new Uri($"/api/geoassets/features/{feature.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -212,7 +212,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.Add(feature);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/geoassets/features/{feature.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/geoassets/features/{feature.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -225,7 +225,7 @@ public class OrgResourceEndpointAuthorizationTests
         var (server, _) = await BuildServerAsync(userOrganizationId: Guid.NewGuid());
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync("/api/geoassets/features/does-not-exist");
+        var response = await client.DeleteAsync(new Uri("/api/geoassets/features/does-not-exist", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
@@ -240,7 +240,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.AddAssetType(assetType);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/geoassets/asset-types/{assetType.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/geoassets/asset-types/{assetType.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -254,7 +254,7 @@ public class OrgResourceEndpointAuthorizationTests
         provider.AddAssetType(assetType);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/geoassets/asset-types/{assetType.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/geoassets/asset-types/{assetType.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }

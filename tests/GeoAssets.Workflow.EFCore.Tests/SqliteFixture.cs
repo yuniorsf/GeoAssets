@@ -17,7 +17,7 @@ namespace GeoAssets.Workflow.EFCore.Tests;
 /// let a stale write through instead of throwing, defeating the point of testing
 /// <c>EFServiceOrderRepository</c>'s <c>RowVersion</c>-based conflict detection.
 /// </summary>
-public sealed class SqliteFixture : IDisposable
+internal sealed class SqliteFixture : IDisposable
 {
     private readonly SqliteConnection _connection;
 

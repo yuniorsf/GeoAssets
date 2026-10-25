@@ -12,7 +12,7 @@ namespace GeoAssets.Projects.EFCore.Tests;
 /// <c>HasQueryFilter</c> soft-delete filter — is actually exercised, matching
 /// <c>GeoAssets.Workflow.EFCore.Tests</c>'s choice of provider for the same reason.
 /// </summary>
-public sealed class SqliteFixture : IDisposable
+internal sealed class SqliteFixture : IDisposable
 {
     private readonly SqliteConnection _connection;
 

@@ -227,7 +227,7 @@ public sealed class BlazorProjectSessionService : IProjectSessionService, IDispo
         result.Id != previousTargetId ? (true, result.Id) : (alreadyRedirected, previousTargetId);
 
     private static bool ScopeChanged<T>(T? live, T? baseline) =>
-        JsonSerializer.Serialize(live, DiffOptions) != JsonSerializer.Serialize(baseline, DiffOptions);
+        !string.Equals(JsonSerializer.Serialize(live, DiffOptions), JsonSerializer.Serialize(baseline, DiffOptions), StringComparison.Ordinal);
 
     // ── DiscardChangesAsync ───────────────────────────────────────────────────
 

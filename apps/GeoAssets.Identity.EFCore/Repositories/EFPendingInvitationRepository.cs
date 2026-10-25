@@ -13,10 +13,10 @@ public sealed class EFPendingInvitationRepository(GeoIdentityDbContext db) : IPe
         => db.PendingInvitations.FirstOrDefaultAsync(i => i.ExternalObjectId == externalObjectId, ct);
 
     public async Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default)
-        => await db.PendingInvitations.Where(i => i.Status == InvitationStatus.Pending).ToListAsync(ct);
+        => await db.PendingInvitations.Where(i => i.Status == InvitationStatus.Pending).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task AddAsync(PendingInvitation invitation, CancellationToken ct = default)
-        => await db.PendingInvitations.AddAsync(invitation, ct);
+        => await db.PendingInvitations.AddAsync(invitation, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(PendingInvitation invitation, CancellationToken ct = default)
     {

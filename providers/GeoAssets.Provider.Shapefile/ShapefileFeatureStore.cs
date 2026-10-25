@@ -43,19 +43,17 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
     public IReadOnlyList<GeoFeature> GetAll() => [.. _features.Values];
 
     public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) =>
-        [.. _features.Values.Where(f => f.Properties.AssetTypeId == assetTypeId)];
+        [.. _features.Values.Where(f => string.Equals(f.Properties.AssetTypeId, assetTypeId, StringComparison.Ordinal))];
 
     public IReadOnlyList<GeoFeature> Search(string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return GetAll();
-
-        var lower = query.ToLowerInvariant();
         return [.. _features.Values.Where(f =>
-            f.Properties.Name.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
-            f.Properties.Description.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
+            f.Properties.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            f.Properties.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             f.Properties.CustomAttributes.Any(kv =>
-                kv.Key.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
-                kv.Value.Contains(lower, StringComparison.OrdinalIgnoreCase)))];
+                kv.Key.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                kv.Value.Contains(query, StringComparison.OrdinalIgnoreCase)))];
     }
 
     public void Add(GeoFeature feature)
@@ -198,8 +196,8 @@ internal sealed class ShapefileFeatureStore : IAssetProvider, ISyncProvider
 
     public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)
     {
-        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
-        var opts = GeoJsonSerializer.GetCompactOptions();
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+        var opts = GeoJsonSerializer.CompactOptions;
 
         var result = new List<JsonElement>(features.Count);
         foreach (var f in features)

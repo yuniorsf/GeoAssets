@@ -11,7 +11,7 @@ namespace GeoAssets.Web.Extensions;
 /// <c>AddMsalAuthentication</c> directly — swapping CIAM vendors is then a DI argument, not a
 /// call to a vendor SDK at the composition root.
 /// </summary>
-public static class GeoAssetsWasmAuthenticationExtensions
+internal static class GeoAssetsWasmAuthenticationExtensions
 {
     public static IServiceCollection AddGeoAssetsWasmAuthentication(
         this IServiceCollection services,

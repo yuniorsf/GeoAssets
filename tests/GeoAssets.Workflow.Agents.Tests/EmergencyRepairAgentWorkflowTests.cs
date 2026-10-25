@@ -28,7 +28,7 @@ public class EmergencyRepairAgentWorkflowTests
         return registry;
     }
 
-    private static IAgentIdentityProvider AgentIdentity()
+    private static ConfiguredAgentIdentityProvider AgentIdentity()
     {
         var options = new AgentIdentityOptions
         {
@@ -62,7 +62,7 @@ public class EmergencyRepairAgentWorkflowTests
     public async Task FullyAgentGranted_DrivesOrderFromDraftToPending()
     {
         var rules = new ServiceOrderRules(
-            roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>
+            roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
             {
                 ["AutomationAgent"] = new HashSet<OrderActionType> { OrderActionType.Dispatch }
             });
@@ -101,7 +101,7 @@ public class EmergencyRepairAgentWorkflowTests
         var humanPrincipal = new WorkflowPrincipal("supervisor-1", null, ["Supervisor"], [], []);
         rules.Evaluate(humanPrincipal, OrderActionType.Dispatch, order).Allowed.Should().BeTrue();
 
-        var dispatchedAt = DateTime.UtcNow;
+        var dispatchedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc);
         await repository.AppendDispatchAsync(order.Id, new OrderDispatch(
             "crew-1", DispatchTargetType.Group, "supervisor-1", dispatchedAt, "Picking up after agent"));
         await repository.AppendActionAsync(order.Id, new OrderActionLog(

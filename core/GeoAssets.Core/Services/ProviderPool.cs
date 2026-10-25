@@ -26,7 +26,7 @@ public sealed class ProviderPool : IProviderPool
             IsEnabled = true,
             Provider  = provider,
             PluginId  = pluginId,
-            Values    = values is null ? [] : new Dictionary<string, string>(values),
+            Values    = values is null ? [] : new Dictionary<string, string>(values, StringComparer.Ordinal),
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -51,7 +51,7 @@ public sealed class ProviderPool : IProviderPool
             IsActive  = isActive,
             Provider  = provider,
             PluginId  = pluginId,
-            Values    = values is null ? [] : new Dictionary<string, string>(values),
+            Values    = values is null ? [] : new Dictionary<string, string>(values, StringComparer.Ordinal),
         };
         _entries.Add(entry);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -70,7 +70,7 @@ public sealed class ProviderPool : IProviderPool
                 Position  = i,
                 Name      = e.Name,
                 PluginId  = e.PluginId,
-                Values    = new Dictionary<string, string>(e.Values),
+                Values    = new Dictionary<string, string>(e.Values, StringComparer.Ordinal),
                 IsOpen    = e.IsOpen,
                 IsEnabled = e.IsEnabled,
                 IsActive  = e.IsActive,

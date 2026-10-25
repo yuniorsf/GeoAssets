@@ -1,4 +1,5 @@
 using System.Net;
+using System.Threading;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using Xunit;
@@ -93,7 +94,7 @@ public class RestAssetProviderTests
 
         handler.Requests.Should().HaveCount(4);
         chunks.Should().HaveCount(4);
-        handler.Requests.Select(r => r.RequestUri!.Query).Distinct().Should().HaveCount(4);
+        handler.Requests.Select(r => r.RequestUri!.Query).Distinct(StringComparer.Ordinal).Should().HaveCount(4);
     }
 
     // ── Completion-order streaming ───────────────────────────────────────────
@@ -101,7 +102,7 @@ public class RestAssetProviderTests
     [Fact]
     public async Task GetInBoundsRawJsonChunksAsync_YieldsChunksInCompletionOrder_NotDispatchOrder()
     {
-        var gate = new object();
+        var gate = new Lock();
         var tcsByDispatchIndex = new List<TaskCompletionSource<HttpResponseMessage>>();
 
         async Task<HttpResponseMessage> Respond(HttpRequestMessage _)
@@ -167,7 +168,7 @@ public class RestAssetProviderTests
     [Fact]
     public async Task GetInBoundsRawJsonChunksAsync_OverlappingLargeCalls_NeverExceedsFourConcurrentRequests()
     {
-        var gate = new object();
+        var gate = new Lock();
         var concurrent = 0;
         var maxConcurrent = 0;
 

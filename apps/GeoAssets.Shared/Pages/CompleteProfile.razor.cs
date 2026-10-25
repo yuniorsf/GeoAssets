@@ -58,6 +58,7 @@ public partial class CompleteProfile
         IGeoAuthorizationService authService,
         CancellationToken        ct = default)
     {
+        ArgumentNullException.ThrowIfNull(authService);
         var ctx = await authService.GetAuthorizationContextAsync(ct);
         return ctx.User.Id;
     }

@@ -27,7 +27,7 @@ using GeoAssets.Core.Services;
 
 namespace GeoAssets.Examples.Topology;
 
-public static class HydraulicNetwork
+internal static class HydraulicNetwork
 {
     public static void Run()
     {
@@ -113,7 +113,7 @@ public static class HydraulicNetwork
             TargetId = to.Id,
             Kind     = "water-flow",
             Weight   = frictionLossMwc,
-            Metadata = new() { ["diameter"] = diameter, ["material"] = material }
+            Metadata = new(StringComparer.Ordinal) { ["diameter"] = diameter, ["material"] = material }
         });
     }
 }

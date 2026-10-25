@@ -18,5 +18,8 @@ public sealed class NoOpJsonStringLocalizer : IJsonStringLocalizer
 
     public string GetString(string key, params object[] args) => key;
 
+    // Never fires — this no-op localizer's output never changes, so no subscriber is ever notified.
+#pragma warning disable CS0067
     public event EventHandler? LocalizationChanged;
+#pragma warning restore CS0067
 }

@@ -7,8 +7,22 @@ namespace GeoAssets.Workflow.Orders;
 /// Only <c>EFServiceOrderRepository</c> currently detects this; other implementations have
 /// no equivalent check.
 /// </summary>
-public sealed class ServiceOrderConcurrencyException(string orderId)
-    : InvalidOperationException($"ServiceOrder '{orderId}' was modified by another writer. Reload and retry.")
+public sealed class ServiceOrderConcurrencyException : InvalidOperationException
 {
-    public string OrderId { get; } = orderId;
+    public string? OrderId { get; }
+
+    public ServiceOrderConcurrencyException(string orderId)
+        : base($"ServiceOrder '{orderId}' was modified by another writer. Reload and retry.")
+    {
+        OrderId = orderId;
+    }
+
+    public ServiceOrderConcurrencyException()
+    {
+    }
+
+    public ServiceOrderConcurrencyException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

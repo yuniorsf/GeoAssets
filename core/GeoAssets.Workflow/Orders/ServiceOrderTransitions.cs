@@ -19,7 +19,7 @@ namespace GeoAssets.Workflow.Orders;
 /// </summary>
 public static class ServiceOrderTransitions
 {
-    private static readonly Dictionary<string, string[]> _allowed = new()
+    private static readonly Dictionary<string, string[]> _allowed = new(StringComparer.Ordinal)
     {
         [ServiceOrderStatus.Draft]      = [ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled],
         [ServiceOrderStatus.Pending]    = [ServiceOrderStatus.InProgress, ServiceOrderStatus.Cancelled],
@@ -37,7 +37,7 @@ public static class ServiceOrderTransitions
     /// of either is legal.
     /// </summary>
     public static bool IsValid(string from, string to)
-        => from == to || (_allowed.TryGetValue(from, out var next) && next.Contains(to));
+        => string.Equals(from, to, StringComparison.Ordinal) || (_allowed.TryGetValue(from, out var next) && next.Contains(to));
 
     /// <summary>
     /// Same as <see cref="IsValid(string, string)"/>, but validates against
@@ -48,10 +48,10 @@ public static class ServiceOrderTransitions
     /// </summary>
     public static bool IsValid(OrderType? orderType, string from, string to)
     {
-        if (from == to) return true;
+        if (string.Equals(from, to, StringComparison.Ordinal)) return true;
 
         if (orderType is { States.Count: > 0 })
-            return orderType.Transitions.Any(t => t.FromStateKey == from && t.ToStateKey == to);
+            return orderType.Transitions.Any(t => string.Equals(t.FromStateKey, from, StringComparison.Ordinal) && string.Equals(t.ToStateKey, to, StringComparison.Ordinal));
 
         return IsValid(from, to);
     }
@@ -67,7 +67,7 @@ public static class ServiceOrderTransitions
     public static bool HasTransitionFor(OrderType? orderType, string from, OrderActionType action)
     {
         if (orderType is { States.Count: > 0 })
-            return orderType.Transitions.Any(t => t.FromStateKey == from && t.TriggerAction == action);
+            return orderType.Transitions.Any(t => string.Equals(t.FromStateKey, from, StringComparison.Ordinal) && t.TriggerAction == action);
 
         return action == OrderActionType.Cancel
             && from is ServiceOrderStatus.Draft or ServiceOrderStatus.Pending;
@@ -85,22 +85,8 @@ public static class ServiceOrderTransitions
     public static bool IsSuccessState(OrderType? orderType, string status)
     {
         if (orderType is { States.Count: > 0 })
-            return orderType.States.Any(s => s.Key == status && s.IsSuccess);
+            return orderType.States.Any(s => string.Equals(s.Key, status, StringComparison.Ordinal) && s.IsSuccess);
 
-        return status == ServiceOrderStatus.Completed;
+        return string.Equals(status, ServiceOrderStatus.Completed, StringComparison.Ordinal);
     }
-}
-
-/// <summary>
-/// Thrown when a caller attempts a status transition that
-/// <see cref="ServiceOrderTransitions.IsValid(string, string)"/> (or the
-/// <see cref="OrderType"/>-aware overload) rejects as structurally illegal (e.g.
-/// reopening a <see cref="ServiceOrderStatus.Completed"/> order, or skipping straight
-/// from <see cref="ServiceOrderStatus.Draft"/> to <see cref="ServiceOrderStatus.Completed"/>).
-/// </summary>
-public sealed class InvalidServiceOrderTransitionException(string from, string to)
-    : InvalidOperationException($"Cannot transition a service order from '{from}' to '{to}'.")
-{
-    public string From { get; } = from;
-    public string To   { get; } = to;
 }

@@ -12,7 +12,7 @@ public partial class OrganizationList
     private List<Organization> _organizations = [];
     private bool _loading = true;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    protected override Task OnInitializedAsync() => RefreshAsync();
 
     public async Task RefreshAsync()
     {
@@ -23,5 +23,5 @@ public partial class OrganizationList
         StateHasChanged();
     }
 
-    private async Task SelectOrganization(Organization organization) => await OnOrganizationSelected.InvokeAsync(organization);
+    private Task SelectOrganization(Organization organization) => OnOrganizationSelected.InvokeAsync(organization);
 }

@@ -36,6 +36,7 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public MapInteropService(IJSRuntime js, IAssetProvider repo, IOptions<MapInteropOptions> options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _js = js;
         _repo = repo;
         _options = options.Value;
@@ -43,7 +44,7 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom) =>
         _js.InvokeVoidAsync($"{Ns}.initializeMap", divId, lat, lon, zoom,
-            _options.RenderMode.ToString().ToLowerInvariant()).AsTask();
+            _options.RenderMode.ToString().ToUpperInvariant()).AsTask();
 
     public Task DestroyMapAsync(string divId) =>
         _js.InvokeVoidAsync($"{Ns}.destroyMap", divId).AsTask();
@@ -56,6 +57,7 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public Task RenderFeatureAsync(string divId, GeoFeature feature)
     {
+        ArgumentNullException.ThrowIfNull(feature);
         var json = JsonSerializer.Serialize(feature, _interopOptions);
         var colorMap = BuildColorMap();
         var style = BuildStyleMap(_repo, [feature]).GetValueOrDefault(feature.Id);
@@ -71,12 +73,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         await RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
     }
 
-    public async Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features)
+    public Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features)
     {
         var featureList = features as IReadOnlyList<GeoFeature> ?? [.. features];
         var styleMap = BuildStyleMap(_repo, featureList);
         var featuresAsJsonString = featureList.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
-        await RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
+        return RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
     }
 
     /// <summary>
@@ -93,10 +95,10 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         await RenderFeatureBatchesAsync(divId, featuresAsJsonString);
     }
 
-    public async Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features)
+    public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features)
     {
         var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
-        await RenderFeatureBatchesAsync(divId, featuresAsJsonString);
+        return RenderFeatureBatchesAsync(divId, featuresAsJsonString);
     }
 
     public async Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)
@@ -117,7 +119,7 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     }
 
     private async Task RenderFeatureBatchesAsync(
-        string divId, IReadOnlyList<string> featuresAsJsonString, IReadOnlyDictionary<string, LayerStyleOptions>? styleMap = null)
+        string divId, List<string> featuresAsJsonString, IReadOnlyDictionary<string, LayerStyleOptions>? styleMap = null)
     {
         var colorMap = BuildColorMap();
 
@@ -207,7 +209,7 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     /// Called once per render operation; Guid.ToString() is paid per type, not per feature.
     /// </summary>
     private Dictionary<string, string> BuildColorMap() =>
-        _repo.GetAssetTypes().ToDictionary(t => t.Id.ToString(), t => t.Color);
+        _repo.GetAssetTypes().ToDictionary(t => t.Id.ToString(), t => t.Color, StringComparer.Ordinal);
 
     /// <summary>
     /// Resolves each feature's effective <see cref="Layer"/> via <see cref="LayerResolver"/> and
@@ -221,10 +223,12 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
     /// </summary>
     public static Dictionary<string, LayerStyleOptions> BuildStyleMap(IAssetProvider repo, IEnumerable<GeoFeature> features)
     {
-        var assetTypesById = repo.GetAssetTypes().ToDictionary(t => t.Id.ToString());
+        ArgumentNullException.ThrowIfNull(repo);
+        ArgumentNullException.ThrowIfNull(features);
+        var assetTypesById = repo.GetAssetTypes().ToDictionary(t => t.Id.ToString(), StringComparer.Ordinal);
         var layers = repo.GetLayers();
         var ruleCache = new Dictionary<Guid, IReadOnlyList<LayerRule>>();
-        var map = new Dictionary<string, LayerStyleOptions>();
+        var map = new Dictionary<string, LayerStyleOptions>(StringComparer.Ordinal);
 
         foreach (var feature in features)
         {
@@ -251,16 +255,3 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
         DashArray: string.IsNullOrEmpty(layer.DashArray) ? null : layer.DashArray,
         IconUrl: string.IsNullOrEmpty(layer.IconUrl) ? null : layer.IconUrl);
 }
-
-/// <summary>
-/// A resolved <see cref="Layer"/>'s style fields, shaped for the <c>geoassets.js</c> render path
-/// (camelCase JSON via the default JS interop serializer, same as <see cref="TileLayerOptions"/>).
-/// </summary>
-public sealed record LayerStyleOptions(
-    string Color,
-    double Weight,
-    double Radius,
-    string FillColor,
-    double FillOpacity,
-    string? DashArray,
-    string? IconUrl);

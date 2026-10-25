@@ -19,7 +19,8 @@ public sealed class RestRoleAssignmentProvider(HttpClient http) : IRoleAssignmen
 {
     public async Task RegisterRoleAsync(AppRole role, CancellationToken ct = default)
     {
-        var response = await http.PostAsync($"rolesync/roles/{role.Id}", content: null, ct);
+        ArgumentNullException.ThrowIfNull(role);
+        var response = await http.PostAsync(new Uri($"rolesync/roles/{role.Id}", UriKind.Relative), content: null, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -44,6 +45,6 @@ public sealed class RestRoleAssignmentProvider(HttpClient http) : IRoleAssignmen
         return names ?? [];
     }
 
-    private static string RoleAssignmentUrl(string externalUserObjectId, string roleName) =>
-        $"rolesync/users/{Uri.EscapeDataString(externalUserObjectId)}/roles/{Uri.EscapeDataString(roleName)}";
+    private static Uri RoleAssignmentUrl(string externalUserObjectId, string roleName) =>
+        new($"rolesync/users/{Uri.EscapeDataString(externalUserObjectId)}/roles/{Uri.EscapeDataString(roleName)}", UriKind.Relative);
 }

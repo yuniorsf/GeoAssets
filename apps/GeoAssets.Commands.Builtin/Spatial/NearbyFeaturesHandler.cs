@@ -1,3 +1,4 @@
+using System.Globalization;
 using GeoAssets.Commands.Contracts;
 using GeoAssets.Core.Models.Geometry;
 
@@ -20,8 +21,11 @@ public sealed class NearbyFeaturesHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var center    = (GeoPoint)parameters["center"];
-        var radiusDeg = Convert.ToDouble(parameters["radiusDegrees"]);
+        var radiusDeg = Convert.ToDouble(parameters["radiusDegrees"], CultureInfo.InvariantCulture);
 
         var results = context.Repository.GetNearby(center, radiusDeg);
         return Task.FromResult(GeoCommandResult.Ok(results));
