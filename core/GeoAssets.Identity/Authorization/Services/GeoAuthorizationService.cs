@@ -30,6 +30,9 @@ public class GeoAuthorizationService(
     IRoleRepository        roleRepository,
     TimeProvider           timeProvider) : IGeoAuthorizationService
 {
+    private (string ExternalObjectId, IReadOnlyList<string> Roles, AuthorizationContext Context)? _cachedContext;
+    private readonly Dictionary<string, AppPolicy> _policyCache = new(StringComparer.Ordinal);
+
     public async Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default)
     {
         var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
@@ -50,8 +53,13 @@ public class GeoAuthorizationService(
 
     public async Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default)
     {
-        var policy = await policyRepository.GetByNameAsync(policyName, ct).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Policy '{policyName}' not found.");
+        if (!_policyCache.TryGetValue(policyName, out var policy))
+        {
+            policy = await policyRepository.GetByNameAsync(policyName, ct).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException($"Policy '{policyName}' not found.");
+            _policyCache[policyName] = policy;
+        }
+
         return await EvaluatePolicyAsync(policy, ct).ConfigureAwait(false);
     }
 
@@ -66,6 +74,13 @@ public class GeoAuthorizationService(
     {
         var current = await currentUserAccessor.GetCurrentUserAsync(ct).ConfigureAwait(false)
             ?? throw new UnauthorizedAccessException("No authenticated user in the current context.");
+
+        if (_cachedContext is { } cached
+            && string.Equals(cached.ExternalObjectId, current.ExternalObjectId, StringComparison.Ordinal)
+            && cached.Roles.SequenceEqual(current.ExternalRoles, StringComparer.Ordinal))
+        {
+            return cached.Context;
+        }
 
         var user = await userRepository.GetByExternalObjectIdAsync(current.ExternalObjectId, ct).ConfigureAwait(false);
 
@@ -90,13 +105,6 @@ public class GeoAuthorizationService(
             await userRepository.AddAsync(user, ct).ConfigureAwait(false);
             await userRepository.SaveChangesAsync(ct).ConfigureAwait(false);
         }
-        else
-        {
-            // Update last-login stamp
-            user.LastLoginAt = timeProvider.GetUtcNow().UtcDateTime;
-            await userRepository.UpdateAsync(user, ct).ConfigureAwait(false);
-            await userRepository.SaveChangesAsync(ct).ConfigureAwait(false);
-        }
 
         var claims = await claimRepository.GetByUserIdAsync(user.Id, ct).ConfigureAwait(false);
 
@@ -108,21 +116,18 @@ public class GeoAuthorizationService(
         // already-provisioned ones), so a brand-new caller's very first request already reflects
         // their real permissions instead of reporting an empty set until a second round-trip.
         var roles = current.ExternalRoles;
-        var permissions = new List<AppPermission>();
-        foreach (var roleName in roles)
-        {
-            var role = await roleRepository.GetByNameAsync(roleName, ct).ConfigureAwait(false);
-            if (role is not null)
-                permissions.AddRange(await roleRepository.GetPermissionsAsync(role.Id, ct).ConfigureAwait(false));
-        }
+        var permissions = await roleRepository.GetPermissionsByRoleNamesAsync(roles, ct).ConfigureAwait(false);
 
-        return new AuthorizationContext
+        var context = new AuthorizationContext
         {
             User        = user,
             Roles       = roles,
             Claims      = claims.ToList(),
             Permissions = permissions.Select(p => p.Code).Distinct(StringComparer.Ordinal).ToList()
         };
+
+        _cachedContext = (current.ExternalObjectId, roles, context);
+        return context;
     }
 
     // ── Policy evaluation engine ──────────────────────────────────────────────

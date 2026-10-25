@@ -31,10 +31,16 @@ public class GeoAuthorizationServiceTests
         private AppUser? _user = initialUser;
 
         public AppUser? Added { get; private set; }
+        public AppUser? Updated { get; private set; }
         public bool SaveChangesCalled { get; private set; }
+        public int GetByExternalObjectIdCallCount { get; private set; }
 
         public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) => Task.FromResult(_user);
+        public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default)
+        {
+            GetByExternalObjectIdCallCount++;
+            return Task.FromResult(_user);
+        }
         public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
@@ -53,6 +59,7 @@ public class GeoAuthorizationServiceTests
         }
         public Task UpdateAsync(AppUser user, CancellationToken ct = default)
         {
+            Updated = user;
             _user = user;
             return Task.CompletedTask;
         }
@@ -67,7 +74,13 @@ public class GeoAuthorizationServiceTests
 
     private sealed class FakeUserClaimRepository(IReadOnlyList<UserClaim> claims) : IUserClaimRepository
     {
-        public Task<IReadOnlyList<UserClaim>> GetByUserIdAsync(Guid userId, CancellationToken ct = default) => Task.FromResult(claims);
+        public int GetByUserIdCallCount { get; private set; }
+
+        public Task<IReadOnlyList<UserClaim>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
+        {
+            GetByUserIdCallCount++;
+            return Task.FromResult(claims);
+        }
         public Task<IReadOnlyList<UserClaim>> GetByTypeAsync(string claimType, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<UserClaim?> GetAsync(Guid userId, string claimType, CancellationToken ct = default) => throw new NotSupportedException();
         public Task AddAsync(UserClaim claim, CancellationToken ct = default) => throw new NotSupportedException();
@@ -79,8 +92,17 @@ public class GeoAuthorizationServiceTests
 
     private sealed class FakePolicyRepository : IPolicyRepository
     {
+        private readonly Dictionary<string, AppPolicy> _policiesByName = new(StringComparer.Ordinal);
+        public int GetByNameCallCount { get; private set; }
+
+        public void AddPolicy(AppPolicy policy) => _policiesByName[policy.Name] = policy;
+
         public Task<AppPolicy?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<AppPolicy?> GetByNameAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AppPolicy?> GetByNameAsync(string name, CancellationToken ct = default)
+        {
+            GetByNameCallCount++;
+            return Task.FromResult(_policiesByName.GetValueOrDefault(name));
+        }
         public Task<IReadOnlyList<AppPolicy>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task AddAsync(AppPolicy policy, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(AppPolicy policy, CancellationToken ct = default) => throw new NotSupportedException();
@@ -92,6 +114,7 @@ public class GeoAuthorizationServiceTests
     {
         private readonly Dictionary<string, AppRole> _rolesByName = [];
         private readonly Dictionary<Guid, List<AppPermission>> _permissionsByRoleId = [];
+        public int GetByNameCallCount { get; private set; }
 
         public void AddRole(string name, params string[] permissionCodes)
         {
@@ -101,7 +124,10 @@ public class GeoAuthorizationServiceTests
         }
 
         public Task<AppRole?> GetByNameAsync(string name, CancellationToken ct = default)
-            => Task.FromResult(_rolesByName.GetValueOrDefault(name));
+        {
+            GetByNameCallCount++;
+            return Task.FromResult(_rolesByName.GetValueOrDefault(name));
+        }
 
         public Task<IReadOnlyList<AppPermission>> GetPermissionsAsync(Guid roleId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<AppPermission>>(_permissionsByRoleId.GetValueOrDefault(roleId) ?? []);
@@ -294,5 +320,110 @@ public class GeoAuthorizationServiceTests
         var ctx = await sut.GetAuthorizationContextAsync();
 
         ctx.HasClaim("zone", "north").Should().BeTrue();
+    }
+
+    // ── Phase 0.1: Write-on-Read Elimination & Per-Scope Caching ──────────────
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_AlreadyProvisionedUser_DoesNotUpdateOrSaveChanges()
+    {
+        var user = ProvisionedUser("user-1");
+        var (sut, userRepo) = SutWithUserRepo(new CurrentUser("user-1", "a@example.com", "Ada", []), user);
+
+        await sut.GetAuthorizationContextAsync();
+
+        userRepo.Added.Should().BeNull();
+        userRepo.Updated.Should().BeNull();
+        userRepo.SaveChangesCalled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_CalledMultipleTimesInSameScope_QueriesRepositoriesOnlyOnce()
+    {
+        var user = ProvisionedUser("user-1");
+        var userRepo = new FakeUserRepository(user);
+        var claimRepo = new FakeUserClaimRepository([new UserClaim { Type = "zone", Value = "north" }]);
+        var roleRepo = new FakeRoleRepository();
+        roleRepo.AddRole("Supervisor", "serviceorders:assign");
+
+        var sut = new GeoAuthorizationService(
+            new FakeCurrentUserAccessor(new CurrentUser("user-1", "a@example.com", "Ada", ["Supervisor"])),
+            userRepo,
+            claimRepo,
+            new FakePolicyRepository(),
+            roleRepo,
+            TimeProvider.System);
+
+        var ctx1 = await sut.GetAuthorizationContextAsync();
+        var ctx2 = await sut.GetAuthorizationContextAsync();
+        var hasPerm = await sut.HasPermissionAsync("serviceorders:assign");
+        var inRole = await sut.IsInRoleAsync("Supervisor");
+
+        ctx2.Should().BeSameAs(ctx1);
+        hasPerm.Should().BeTrue();
+        inRole.Should().BeTrue();
+        userRepo.GetByExternalObjectIdCallCount.Should().Be(1);
+        claimRepo.GetByUserIdCallCount.Should().Be(1);
+        roleRepo.GetByNameCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_UnprovisionedUserAcrossTwoScopes_ProvisionsOnceAndReusesPersistedId()
+    {
+        var current = new CurrentUser("user-1", "a@example.com", "Ada", []);
+        var userRepo = new FakeUserRepository(initialUser: null);
+
+        var scope1 = new GeoAuthorizationService(
+            new FakeCurrentUserAccessor(current),
+            userRepo,
+            new FakeUserClaimRepository([]),
+            new FakePolicyRepository(),
+            new FakeRoleRepository(),
+            TimeProvider.System);
+        var scope2 = new GeoAuthorizationService(
+            new FakeCurrentUserAccessor(current),
+            userRepo,
+            new FakeUserClaimRepository([]),
+            new FakePolicyRepository(),
+            new FakeRoleRepository(),
+            TimeProvider.System);
+
+        var ctx1 = await scope1.GetAuthorizationContextAsync();
+        var ctx2 = await scope2.GetAuthorizationContextAsync();
+
+        ctx1.User.Id.Should().NotBe(Guid.Empty);
+        ctx2.User.Id.Should().Be(ctx1.User.Id);
+        userRepo.GetByExternalObjectIdCallCount.Should().Be(2);
+        userRepo.Updated.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EvaluatePolicyAsync_CalledMultipleTimesForSamePolicyInSameScope_QueriesPolicyRepositoryOnlyOnce()
+    {
+        var user = ProvisionedUser("user-1");
+        var policyRepo = new FakePolicyRepository();
+        policyRepo.AddPolicy(new AppPolicy
+        {
+            Name         = "CanEditFeatures",
+            Operator     = PolicyOperator.All,
+            Requirements = [new PolicyRequirement { Type = RequirementType.Permission, Value = "features:edit" }]
+        });
+        var roleRepo = new FakeRoleRepository();
+        roleRepo.AddRole("Supervisor", "features:edit");
+
+        var sut = new GeoAuthorizationService(
+            new FakeCurrentUserAccessor(new CurrentUser("user-1", "a@example.com", "Ada", ["Supervisor"])),
+            new FakeUserRepository(user),
+            new FakeUserClaimRepository([]),
+            policyRepo,
+            roleRepo,
+            TimeProvider.System);
+
+        var first = await sut.EvaluatePolicyAsync("CanEditFeatures");
+        var second = await sut.EvaluatePolicyAsync("CanEditFeatures");
+
+        first.Should().BeTrue();
+        second.Should().BeTrue();
+        policyRepo.GetByNameCallCount.Should().Be(1);
     }
 }

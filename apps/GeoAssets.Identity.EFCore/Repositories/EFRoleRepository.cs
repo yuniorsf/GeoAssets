@@ -52,6 +52,22 @@ public sealed class EFRoleRepository(GeoIdentityDbContext db) : IRoleRepository
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
+    public async Task<IReadOnlyList<AppPermission>> GetPermissionsByRoleNamesAsync(
+        IReadOnlyList<string> roleNames, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(roleNames);
+        if (roleNames.Count == 0)
+            return [];
+
+        return await db.RolePermissions
+            .AsNoTracking()
+            .Where(rp => roleNames.Contains(rp.Role.Name))
+            .Select(rp => rp.Permission)
+            .Distinct()
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default)
         => db.SaveChangesAsync(ct);
 }
