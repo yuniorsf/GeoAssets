@@ -20,8 +20,8 @@ jobs:
       - name: Restore packages
         run: dotnet restore GeoAssets.sln
 
-      - name: Oracle Stage 1 — Verify formatting (dotnet format)
-        run: dotnet format GeoAssets.sln --verify-no-changes --no-restore
+      - name: Oracle Stage 1 — Verify code style (dotnet format style)
+        run: dotnet format style GeoAssets.sln --verify-no-changes --no-restore
 
       - name: Oracle Stage 2 — Strict build & static analyzers (/warnaserror)
         run: dotnet build GeoAssets.sln --no-restore --no-incremental --configuration Release /warnaserror

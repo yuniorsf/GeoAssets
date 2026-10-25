@@ -38,7 +38,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("Usage: migrate <target>|seed|bench --label <before|after> --out <path>");
+            await Console.Error.WriteLineAsync("Usage: migrate <target>|seed|bench --label <before|after> --out <path>");
             return 1;
         }
 
@@ -51,12 +51,12 @@ internal static class Program
                 await RunSeedAsync();
                 return 0;
             case "bench":
-                var label = GetArg(args, "--label") ?? throw new ArgumentException("--label required");
-                var outPath = GetArg(args, "--out") ?? throw new ArgumentException("--out required");
+                var label = GetArg(args, "--label") ?? throw new ArgumentException("--label required", nameof(args));
+                var outPath = GetArg(args, "--out") ?? throw new ArgumentException("--out required", nameof(args));
                 await RunBenchAsync(label, outPath);
                 return 0;
             default:
-                Console.Error.WriteLine($"Unknown mode '{args[0]}'");
+                await Console.Error.WriteLineAsync($"Unknown mode '{args[0]}'");
                 return 1;
         }
     }
@@ -141,6 +141,8 @@ internal static class Program
         ("Poste", "00000000-0000-0000-0000-000000000004"),
     ];
 
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
+
     private static async Task RunBenchAsync(string label, string outPath)
     {
         var results = new List<CombinationResult>();
@@ -162,8 +164,10 @@ internal static class Program
             Console.WriteLine($"[{label}] {caseName} | sort={sortBy} | {pageLabel} | type={filterLabel}");
 
             var interceptor = new CapturingInterceptor();
+            var warmupOptions = CreateOptions(interceptor);
+            await using (var warmupDb = new GeoAssetsDbContext(warmupOptions))
             await using (var warmupProvider = new PostgresAssetProvider(
-                new GeoAssetsDbContext(CreateOptions(interceptor)), CreateOptions(interceptor),
+                warmupDb, warmupOptions,
                 NullLogger<PostgresAssetProvider>.Instance, TimeProvider.System))
             {
                 await warmupProvider.GetPageAsync(query);
@@ -174,8 +178,9 @@ internal static class Program
             for (var i = 0; i < 5; i++)
             {
                 var options = CreateOptions();
+                await using var db = new GeoAssetsDbContext(options);
                 await using var provider = new PostgresAssetProvider(
-                    new GeoAssetsDbContext(options), options, NullLogger<PostgresAssetProvider>.Instance, TimeProvider.System);
+                    db, options, NullLogger<PostgresAssetProvider>.Instance, TimeProvider.System);
                 var sw = Stopwatch.StartNew();
                 await provider.GetPageAsync(query);
                 sw.Stop();
@@ -206,7 +211,7 @@ internal static class Program
             });
         }
 
-        var json = JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(results, IndentedJsonOptions);
         await File.WriteAllTextAsync(outPath, json);
         Console.WriteLine($"Wrote {results.Count} combinations to {outPath}");
     }
@@ -235,8 +240,8 @@ internal static class Program
         }
         var plan = string.Join('\n', lines);
 
-        var match = Regex.Match(plan, @"Execution Time:\s*([\d.]+)\s*ms");
-        double? execMs = match.Success ? double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : null;
+        var match = Regex.Match(plan, @"Execution Time:\s*(?<ms>[\d.]+)\s*ms", RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
+        double? execMs = match.Success ? double.Parse(match.Groups["ms"].Value, CultureInfo.InvariantCulture) : null;
 
         return new StatementResult
         {

@@ -80,16 +80,16 @@ parse_test_failures() {
 printf "\033[1;34m[ORACLE:START]\033[0m Worktree: %s | Branch: %s | Solution: %s\n" "${TARGET_DIR}" "${CURRENT_BRANCH}" "${SOLUTION_FILE}"
 
 # ------------------------------------------------------------------------------
-# Stage 1: Deterministic Formatting Check
+# Stage 1: Deterministic Formatting & Code Style Check
 # ------------------------------------------------------------------------------
-print_header "Stage 1/3: Running 'dotnet format --verify-no-changes'"
-if ! dotnet format "${SOLUTION_FILE}" --verify-no-changes --verbosity diagnostic >"${FORMAT_LOG}" 2>&1; then
-    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 1 failed (Exit Code 10): Formatting violations detected.\n" >&2
+print_header "Stage 1/3: Running 'dotnet format style --verify-no-changes'"
+if ! dotnet format style "${SOLUTION_FILE}" --verify-no-changes --no-restore --verbosity diagnostic >"${FORMAT_LOG}" 2>&1; then
+    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 1 failed (Exit Code 10): Code style / formatting violations detected.\n" >&2
     grep -E "(error WHITESPACE|error IDE|Formatted code file)" "${FORMAT_LOG}" | head -n 40 || tail -n 40 "${FORMAT_LOG}"
-    printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Run 'dotnet format %s' in the worktree and re-verify.\n" "${SOLUTION_FILE}" >&2
+    printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Run 'dotnet format style %s' in the worktree and re-verify.\n" "${SOLUTION_FILE}" >&2
     exit 10
 fi
-printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 1 passed: Zero formatting drift.\n"
+printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 1 passed: Zero code style drift.\n"
 
 # ------------------------------------------------------------------------------
 # Stage 2: Strict Non-Incremental Build & Static Analyzers (/warnaserror)

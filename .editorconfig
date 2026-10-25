@@ -362,3 +362,16 @@ dotnet_diagnostic.MA0051.severity = none
 # parse back via an exact "light"/"dark"/"system" match — switching to ToUpperInvariant would
 # silently break every stored-theme read on next load.
 dotnet_diagnostic.CA1308.severity = none
+
+[tools/**.cs]
+# Standalone developer benchmark CLI harnesses (e.g. GeoAssets.Bench.GetPageAsync) share the same
+# console-only characteristics as examples/**.cs and tests/**.cs: no SynchronizationContext
+# (MA0004/CA2007), no localization resource table for CLI output (CA1303), single-file DTO/helper
+# layout (MA0048/MA0051), and EXPLAIN (ANALYZE, BUFFERS) wrapping of EF-generated parameterized
+# SQL (CA2100, same rationale as PostgresAssetProviderGetPageAsyncTests.cs above).
+dotnet_diagnostic.CA1303.severity = none
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.MA0048.severity = none
+dotnet_diagnostic.MA0051.severity = none
+dotnet_diagnostic.CA2100.severity = none
