@@ -42,7 +42,7 @@ public sealed class GeoJsonToPostgresImporter
         string connectionString,
         CancellationToken ct = default)
     {
-        var json = await File.ReadAllTextAsync(geoJsonPath, ct);
+        var json = await File.ReadAllTextAsync(geoJsonPath, ct).ConfigureAwait(false);
 
         var collection = GeoJsonSerializer.Deserialize(json)
             ?? throw new InvalidOperationException($"Failed to parse GeoJSON file: {geoJsonPath}");
@@ -55,7 +55,7 @@ public sealed class GeoJsonToPostgresImporter
 
         // Connect to PostgreSQL and transfer
         var factory = new PostgresProviderFactory(_loggerFactory, _timeProvider);
-        var postgres = factory.Create(connectionString);
+        var postgres = await factory.CreateAsync(connectionString, ct).ConfigureAwait(false);
         try
         {
             foreach (var assetType in staging.GetAssetTypes())
@@ -68,7 +68,7 @@ public sealed class GeoJsonToPostgresImporter
         finally
         {
             if (postgres is IAsyncDisposable asyncDisposable)
-                await asyncDisposable.DisposeAsync();
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
         }
     }
 

@@ -21,9 +21,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_EmptyDatabase_CreatesCanonicalRolesPermissionsPolicies()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var time = new FakeTimeProvider();
 
         await GeoIdentitySeeder.SeedAsync(db, time);
@@ -42,9 +42,9 @@ public class GeoIdentitySeederTests
         // the permission (before it's actually persisted) would silently find nothing
         // and leave every role with zero RolePermissions on a fresh database.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -63,9 +63,9 @@ public class GeoIdentitySeederTests
         // early-return on "role already exists" would skip the grant loop entirely and this
         // grant would never backfill, exactly as happened in production.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var usersReadGrant = await db.RolePermissions
@@ -89,9 +89,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_CalledTwice_IsIdempotent()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var time = new FakeTimeProvider();
 
         await GeoIdentitySeeder.SeedAsync(db, time);
@@ -109,9 +109,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_ReadOnlyRole_HasOnlyReadPermissions()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -138,9 +138,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_IdentityAdminPermissions_AllTenCodesExist()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -156,9 +156,9 @@ public class GeoIdentitySeederTests
         // permissions to Administrator. If a future edit accidentally copies them onto
         // another built-in role, this test catches it.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -193,9 +193,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_ProjectsPermissions_AllSevenCodesExist()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -211,9 +211,9 @@ public class GeoIdentitySeederTests
         // Supervisor gets the manage-*/rename projects codes but not delete, mirroring how
         // Supervisor already lacks features:delete.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -240,9 +240,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_SupervisorRole_HasProjectsManageAndRenameButNotDelete()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -262,9 +262,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_TechnicianAndReadOnlyRoles_HaveOnlyProjectsRead()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -293,9 +293,9 @@ public class GeoIdentitySeederTests
         // user's culture. It must now be a stable "permissions.{resource}.{action}" key
         // resolved via IJsonStringLocalizer in the UI (see PermissionList.razor).
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -322,9 +322,9 @@ public class GeoIdentitySeederTests
     public async Task SeedAsync_IpBillingPermissions_AllSevenCodesExist()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 

@@ -16,7 +16,7 @@ public class RestOrderTypeRepositoryTests
     {
         var response = new HttpResponseMessage(status);
         if (body is not null)
-            response.Content = JsonContent.Create(body, options: GeoJsonSerializer.GetOptions());
+            response.Content = JsonContent.Create(body, options: GeoJsonSerializer.Options);
         return response;
     }
 
@@ -71,14 +71,14 @@ public class RestOrderTypeRepositoryTests
     }
 
     [Fact]
-    public async Task AddAsync_Failure_ThrowsHttpRequestException()
+    public Task AddAsync_Failure_ThrowsHttpRequestException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.BadRequest));
         var sut = Sut(handler);
 
         var act = () => sut.AddAsync(Type());
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        return act.Should().ThrowAsync<HttpRequestException>();
     }
 
     [Fact]

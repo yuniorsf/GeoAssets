@@ -17,7 +17,10 @@ public class DefaultProjectSeederTests
         public IReadOnlyList<Project> All => _projects;
 
         public event EventHandler<Project>? ProjectSaved;
+        // Never fires — this test double has no deletion path, no test relies on it.
+#pragma warning disable CS0067
         public event EventHandler<Guid>? ProjectDeleted;
+#pragma warning restore CS0067
 
         public Task<Project?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_projects.FirstOrDefault(p => p.Id == id));
@@ -92,7 +95,7 @@ public class DefaultProjectSeederTests
 
     private static Organization Org(Guid? id = null) => new()
     {
-        Id = id ?? Guid.NewGuid(), Name = "Acme", Slug = "acme", CreatedAt = DateTime.UtcNow, IsActive = true,
+        Id = id ?? Guid.NewGuid(), Name = "Acme", Slug = "acme", CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), IsActive = true,
     };
 
     // ── EnsureDefaultProjectAsync ─────────────────────────────────────────────
@@ -125,7 +128,7 @@ public class DefaultProjectSeederTests
         // for the same org (e.g. a retried request), without accumulating duplicate defaults.
         var repo = new InMemoryProjectRepository();
         var orgId = Guid.NewGuid();
-        var timeProvider = new FixedTimeProvider(DateTimeOffset.UtcNow);
+        var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero));
 
         await DefaultProjectSeeder.EnsureDefaultProjectAsync(repo, orgId, timeProvider);
         await DefaultProjectSeeder.EnsureDefaultProjectAsync(repo, orgId, timeProvider);
@@ -141,7 +144,7 @@ public class DefaultProjectSeederTests
         var orgId = Guid.NewGuid();
         await repo.AddAsync(new Project { Kind = ProjectKind.User, OrganizationId = orgId, ParentProjectId = Guid.NewGuid() });
 
-        await DefaultProjectSeeder.EnsureDefaultProjectAsync(repo, orgId, new FixedTimeProvider(DateTimeOffset.UtcNow));
+        await DefaultProjectSeeder.EnsureDefaultProjectAsync(repo, orgId, new FixedTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero)));
 
         repo.All.Should().HaveCount(2);
         repo.All.Should().ContainSingle(p => p.Kind == ProjectKind.General);
@@ -155,7 +158,7 @@ public class DefaultProjectSeederTests
         // seeder never triggers.
         var repo = new InMemoryProjectRepository();
 
-        await DefaultProjectSeeder.EnsureDefaultProjectAsync(repo, Guid.NewGuid(), new FixedTimeProvider(DateTimeOffset.UtcNow));
+        await DefaultProjectSeeder.EnsureDefaultProjectAsync(repo, Guid.NewGuid(), new FixedTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero)));
 
         repo.All.Should().NotContain(p => p.Kind == ProjectKind.User);
     }
@@ -171,7 +174,7 @@ public class DefaultProjectSeederTests
         var services = new ServiceCollection()
             .AddSingleton<IProjectRepository>(projectRepo)
             .AddSingleton<IOrganizationRepository>(new InMemoryOrganizationRepository(orgA, orgB))
-            .AddSingleton<TimeProvider>(new FixedTimeProvider(DateTimeOffset.UtcNow))
+            .AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero)))
             .BuildServiceProvider();
 
         await services.SeedDefaultProjectsAsync();
@@ -189,7 +192,7 @@ public class DefaultProjectSeederTests
         var services = new ServiceCollection()
             .AddSingleton<IProjectRepository>(projectRepo)
             .AddSingleton<IOrganizationRepository>(new InMemoryOrganizationRepository(org))
-            .AddSingleton<TimeProvider>(new FixedTimeProvider(DateTimeOffset.UtcNow))
+            .AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero)))
             .BuildServiceProvider();
 
         await services.SeedDefaultProjectsAsync();
@@ -211,7 +214,7 @@ public class DefaultProjectSeederTests
         var services = new ServiceCollection()
             .AddScoped<IProjectRepository>(_ => new AsyncDisposableOnlyProjectRepository(inner))
             .AddSingleton<IOrganizationRepository>(new InMemoryOrganizationRepository(org))
-            .AddSingleton<TimeProvider>(new FixedTimeProvider(DateTimeOffset.UtcNow))
+            .AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero)))
             .BuildServiceProvider();
 
         var act = () => services.SeedDefaultProjectsAsync();

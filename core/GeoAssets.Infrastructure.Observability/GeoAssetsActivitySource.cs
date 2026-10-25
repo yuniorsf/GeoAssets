@@ -24,7 +24,7 @@ namespace GeoAssets.Infrastructure.Observability;
 /// }
 /// </code>
 /// </summary>
-public sealed class GeoAssetsActivitySource
+public sealed class GeoAssetsActivitySource : IDisposable
 {
     /// <summary>Name registered with OpenTelemetry so spans appear under a consistent source.</summary>
     public const string SourceName = "GeoAssets";
@@ -71,8 +71,11 @@ public sealed class GeoAssetsActivitySource
     /// <summary>Records an exception on the current <see cref="Activity"/> and sets its status to Error.</summary>
     public static void RecordException(Activity? activity, Exception ex)
     {
+        ArgumentNullException.ThrowIfNull(ex);
         if (activity is null) return;
         activity.AddException(ex);
         activity.SetStatus(ActivityStatusCode.Error, ex.Message);
     }
+
+    public void Dispose() => _source.Dispose();
 }

@@ -9,28 +9,32 @@ public sealed class EFMunicipioRepository(IpBillingDbContext db) : IMunicipioRep
 {
     public async Task<Municipio?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var record = await db.Municipios.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var record = await db.Municipios.FirstOrDefaultAsync(m => m.Id == id, ct).ConfigureAwait(false);
         return record is null ? null : IpBillingMapper.ToDomain(record);
     }
 
     public async Task<Municipio?> GetByIbgeCodeAsync(string ibgeCode, CancellationToken ct = default)
     {
-        var record = await db.Municipios.FirstOrDefaultAsync(m => m.IbgeCode == ibgeCode, ct);
+        var record = await db.Municipios.FirstOrDefaultAsync(m => m.IbgeCode == ibgeCode, ct).ConfigureAwait(false);
         return record is null ? null : IpBillingMapper.ToDomain(record);
     }
 
     public async Task<IReadOnlyList<Municipio>> GetAllAsync(CancellationToken ct = default)
     {
-        var records = await db.Municipios.OrderBy(m => m.Name).ToListAsync(ct);
+        var records = await db.Municipios.OrderBy(m => m.Name).ToListAsync(ct).ConfigureAwait(false);
         return records.Select(IpBillingMapper.ToDomain).ToList();
     }
 
     public async Task AddAsync(Municipio municipio, CancellationToken ct = default)
-        => await db.Municipios.AddAsync(IpBillingMapper.ToRecord(municipio), ct);
+    {
+        ArgumentNullException.ThrowIfNull(municipio);
+        await db.Municipios.AddAsync(IpBillingMapper.ToRecord(municipio), ct).ConfigureAwait(false);
+    }
 
     public async Task UpdateAsync(Municipio municipio, CancellationToken ct = default)
     {
-        var existing = await db.Municipios.FirstOrDefaultAsync(m => m.Id == municipio.Id, ct);
+        ArgumentNullException.ThrowIfNull(municipio);
+        var existing = await db.Municipios.FirstOrDefaultAsync(m => m.Id == municipio.Id, ct).ConfigureAwait(false);
         if (existing is null) return;
 
         existing.IbgeCode                    = municipio.IbgeCode;
@@ -46,7 +50,7 @@ public sealed class EFMunicipioRepository(IpBillingDbContext db) : IMunicipioRep
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var record = await db.Municipios.FindAsync([id], ct);
+        var record = await db.Municipios.FindAsync([id], ct).ConfigureAwait(false);
         if (record is not null) db.Municipios.Remove(record);
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -5,7 +6,7 @@ namespace GeoAssets.Commands.Generation;
 
 public sealed class GeoCommandPluginScaffolder(string commandsProjectPath)
 {
-    private static readonly Regex NameSegmentPattern = new("[A-Za-z0-9]+", RegexOptions.Compiled);
+    private static readonly Regex NameSegmentPattern = new("[A-Za-z0-9]+", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     public string CommandsProjectPath { get; } =
         string.IsNullOrWhiteSpace(commandsProjectPath)
@@ -58,7 +59,7 @@ public sealed class GeoCommandPluginScaffolder(string commandsProjectPath)
             if (!string.IsNullOrEmpty(parent))
                 Directory.CreateDirectory(parent);
 
-            await File.WriteAllTextAsync(targetPath, file.Content, ct);
+            await File.WriteAllTextAsync(targetPath, file.Content, ct).ConfigureAwait(false);
         }
 
         return generated;
@@ -97,12 +98,12 @@ public sealed class GeoCommandPluginScaffolder(string commandsProjectPath)
             builder.AppendLine(@using);
 
         builder.AppendLine();
-        builder.AppendLine($"namespace {namespaceName};");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"namespace {namespaceName};");
         builder.AppendLine();
-        builder.AppendLine($"[ExportGeoCommand(\"{EscapeString(spec.CommandName)}\",");
-        builder.AppendLine($"    Category    = \"{EscapeString(spec.Category)}\",");
-        builder.AppendLine($"    Description = \"{EscapeString(spec.Description)}\")]");
-        builder.AppendLine($"public sealed class {className} : IGeoCommandHandler");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"[ExportGeoCommand(\"{EscapeString(spec.CommandName)}\",");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"    Category    = \"{EscapeString(spec.Category)}\",");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"    Description = \"{EscapeString(spec.Description)}\")]");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"public sealed class {className} : IGeoCommandHandler");
         builder.AppendLine("{");
         builder.AppendLine("    public async Task<GeoCommandResult> ExecuteAsync(");
         builder.AppendLine("        GeoCommandContext context,");
@@ -119,11 +120,11 @@ public sealed class GeoCommandPluginScaffolder(string commandsProjectPath)
     private static string BuildReadme(GeoCommandPluginSpec spec, string assemblyName, string className)
     {
         var builder = new StringBuilder();
-        builder.AppendLine($"Assembly: {assemblyName}");
-        builder.AppendLine($"Handler: {className}");
-        builder.AppendLine($"Command: {spec.CommandName}");
-        builder.AppendLine($"Category: {spec.Category}");
-        builder.AppendLine($"Description: {spec.Description}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Assembly: {assemblyName}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Handler: {className}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Command: {spec.CommandName}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Category: {spec.Category}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Description: {spec.Description}");
         builder.AppendLine();
         builder.AppendLine("Parameters:");
 
@@ -136,7 +137,7 @@ public sealed class GeoCommandPluginScaffolder(string commandsProjectPath)
             foreach (var parameter in spec.Parameters)
             {
                 var requiredLabel = parameter.Required ? "required" : "optional";
-                builder.AppendLine($"- {parameter.Name} ({parameter.Type}, {requiredLabel}): {parameter.Description}");
+                builder.AppendLine(CultureInfo.InvariantCulture, $"- {parameter.Name} ({parameter.Type}, {requiredLabel}): {parameter.Description}");
             }
         }
 

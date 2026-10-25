@@ -16,7 +16,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// ahead of that, same as <c>ProviderConnectionMapRenderer</c> was in XD01-83 before XD01-84 wired
 /// it in: the seam is ready for whenever MAUI gains a REST call site against GeoAssets.Server.
 /// </summary>
-public sealed class MsalAuthorizationHandler(
+public sealed partial class MsalAuthorizationHandler(
     IPublicClientApplication app,
     IConfiguration configuration,
     ILogger<MsalAuthorizationHandler> logger) : DelegatingHandler
@@ -24,6 +24,7 @@ public sealed class MsalAuthorizationHandler(
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var scope = configuration["GeoAssetsServer:ApiScope"];
         if (!string.IsNullOrWhiteSpace(scope))
         {
@@ -37,12 +38,14 @@ public sealed class MsalAuthorizationHandler(
                 }
                 catch (MsalUiRequiredException ex)
                 {
-                    logger.LogWarning(ex,
-                        "Silent token acquisition failed for '{Scope}' — sending request unauthenticated", scope);
+                    LogSilentAcquisitionFailed(logger, scope, ex);
                 }
             }
         }
 
         return await base.SendAsync(request, cancellationToken);
     }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Silent token acquisition failed for '{Scope}' — sending request unauthenticated")]
+    private static partial void LogSilentAcquisitionFailed(ILogger logger, string scope, Exception ex);
 }

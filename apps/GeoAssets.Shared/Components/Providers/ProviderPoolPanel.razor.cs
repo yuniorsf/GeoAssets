@@ -57,10 +57,10 @@ public partial class ProviderPoolPanel
     }
 
     private void OnPoolChanged(object? _, EventArgs __) =>
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(StateHasChanged);
 
     private void OnSessionCurrentChanged(object? _, EventArgs __) =>
-        InvokeAsync(async () =>
+        _ = InvokeAsync(async () =>
         {
             _dismissedReconnectFailures.Clear();
             await RefreshAddProviderGatingAsync();
@@ -69,12 +69,15 @@ public partial class ProviderPoolPanel
 
     private void DismissReconnectFailure(string name) => _dismissedReconnectFailures.Add(name);
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        Pool.Changed -= OnPoolChanged;
-        if (Session is not null)
-            Session.CurrentChanged -= OnSessionCurrentChanged;
-        base.Dispose();
+        if (disposing)
+        {
+            Pool.Changed -= OnPoolChanged;
+            if (Session is not null)
+                Session.CurrentChanged -= OnSessionCurrentChanged;
+        }
+        base.Dispose(disposing);
     }
 
     // ── Connect dialog ────────────────────────────────────────────────────────
@@ -158,7 +161,7 @@ public partial class ProviderPoolPanel
                 }
             };
             var json     = await Storage.ExportToStringAsync(collection);
-            var safeName = entry.Name.ToLowerInvariant().Replace(" ", "-");
+            var safeName = entry.Name.ToUpperInvariant().Replace(" ", "-", StringComparison.Ordinal);
             await Storage.SaveExportFileAsync(json, $"{safeName}-export.geojson");
 
             _messages[entry.Id] = L["import.exportSuccess"];
@@ -188,7 +191,7 @@ public partial class ProviderPoolPanel
                 features.AddRange(chunk);
 
             var zip      = ShapefileExporter.ExportToZip(features);
-            var safeName = entry.Name.ToLowerInvariant().Replace(" ", "-");
+            var safeName = entry.Name.ToUpperInvariant().Replace(" ", "-", StringComparison.Ordinal);
             await Storage.SaveExportBinaryFileAsync(zip, $"{safeName}-export.zip", "application/zip");
 
             _messages[entry.Id] = L["import.exportSuccess"];
@@ -269,8 +272,8 @@ public partial class ProviderPoolPanel
 
     private void HandleRenameKey(KeyboardEventArgs ev, ProviderEntry entry)
     {
-        if (ev.Key == "Enter")  CommitRename(entry);
-        if (ev.Key == "Escape") _editingId = null;
+        if (string.Equals(ev.Key, "Enter", StringComparison.Ordinal))  CommitRename(entry);
+        if (string.Equals(ev.Key, "Escape", StringComparison.Ordinal)) _editingId = null;
     }
 
     // ── Remove ────────────────────────────────────────────────────────────────

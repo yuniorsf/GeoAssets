@@ -21,9 +21,9 @@ namespace GeoAssets.Workflow.Agents.Tests.TestDoubles;
 /// <c>RowVersion</c> (XD01-26) — no real backing store here for optimistic concurrency to
 /// mean anything against.
 /// </summary>
-public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
+internal sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
 {
-    private readonly Dictionary<string, ServiceOrder> _store = [];
+    private readonly Dictionary<string, ServiceOrder> _store = new(StringComparer.Ordinal);
 
     private static ServiceOrder Clone(ServiceOrder order) => new()
     {
@@ -40,7 +40,7 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
         ScheduledAt   = order.ScheduledAt,
         CompletedAt   = order.CompletedAt,
         ParentOrderId = order.ParentOrderId,
-        Attributes    = new Dictionary<string, string>(order.Attributes),
+        Attributes    = new Dictionary<string, string>(order.Attributes, StringComparer.Ordinal),
         Features      = [.. order.Features],
         SelectionSpec = order.SelectionSpec,
         Dispatches    = [.. order.Dispatches],
@@ -49,12 +49,14 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
 
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         _store[order.Id] = Clone((ServiceOrder)order);
         return Task.CompletedTask;
     }
 
     public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         if (!_store.TryGetValue(order.Id, out var existing))
             throw new KeyNotFoundException(order.Id);
 
@@ -75,6 +77,7 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
 
     public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         var order = _store[orderId];
         order.ActionLog.Add(entry);
         if (entry.ResultingStatus is not null)
@@ -98,7 +101,7 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
         Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.ParentOrderId is null).Select(Clone)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.ParentOrderId == parentId).Select(Clone)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.ParentOrderId, parentId, StringComparison.Ordinal)).Select(Clone)]);
 
     public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default) =>
         Task.FromResult(_store.TryGetValue(childId, out var child) && child.ParentOrderId is not null
@@ -106,27 +109,30 @@ public sealed class SnapshottingServiceOrderRepository : IServiceOrderRepository
             : null);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.Status == status).Select(Clone)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.Status, status, StringComparison.Ordinal)).Select(Clone)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.AssignedTo == userId).Select(Clone)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.AssignedTo, userId, StringComparison.Ordinal)).Select(Clone)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedBy == userId).Select(Clone)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.CreatedBy, userId, StringComparison.Ordinal)).Select(Clone)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.OrderTypeId == orderTypeId).Select(Clone)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.OrderTypeId, orderTypeId, StringComparison.Ordinal)).Select(Clone)]);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= to).Select(Clone)]);
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= toExclusive).Select(Clone)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
         string targetId, DispatchTargetType targetType, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<IServiceOrder>>(
-            [.. _store.Values.Where(o => o.Dispatches.Any(d => d.TargetId == targetId && d.TargetType == targetType)).Select(Clone)]);
+            [.. _store.Values.Where(o => o.Dispatches.Any(d => string.Equals(d.TargetId, targetId, StringComparison.Ordinal) && d.TargetType == targetType)).Select(Clone)]);
 
+    // Never fire — this test double tracks snapshots only, no test relies on these.
+#pragma warning disable CS0067
     public event EventHandler<IServiceOrder>? OrderAdded;
     public event EventHandler<IServiceOrder>? OrderUpdated;
     public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
     public event EventHandler<string>? OrderDeleted;
+#pragma warning restore CS0067
 }

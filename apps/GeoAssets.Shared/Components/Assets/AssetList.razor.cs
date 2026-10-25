@@ -19,8 +19,8 @@ public partial class AssetList
         RefreshList();
     }
 
-    private void OnChanged(object? _, GeoFeature __) { RefreshList(); InvokeAsync(StateHasChanged); }
-    private void OnDeleted(object? _, string __)     { RefreshList(); InvokeAsync(StateHasChanged); }
+    private void OnChanged(object? _, GeoFeature __) { RefreshList(); _ = InvokeAsync(StateHasChanged); }
+    private void OnDeleted(object? _, string __)     { RefreshList(); _ = InvokeAsync(StateHasChanged); }
 
     private void RefreshList()
     {
@@ -30,7 +30,7 @@ public partial class AssetList
 
         _filtered = string.IsNullOrEmpty(_typeFilter)
             ? [.. all]
-            : [.. all.Where(f => f.Properties.AssetTypeId == _typeFilter)];
+            : [.. all.Where(f => string.Equals(f.Properties.AssetTypeId, _typeFilter, StringComparison.Ordinal))];
     }
 
     private void OnSearch(string query)    { _searchQuery = query;  RefreshList(); }
@@ -44,7 +44,7 @@ public partial class AssetList
     private void ConfirmDelete()
     {
         if (_pendingDelete is null) return;
-        var wasSelected = Selection.Selected?.Id == _pendingDelete.Id;
+        var wasSelected = string.Equals(Selection.Selected?.Id, _pendingDelete.Id, StringComparison.Ordinal);
         Repository.Delete(_pendingDelete.Id);
         if (wasSelected) Selection.Clear();
         _pendingDelete = null;
@@ -53,7 +53,7 @@ public partial class AssetList
 
     private string GetColor(string assetTypeId)
     {
-        var t = Repository.GetAssetTypes().FirstOrDefault(x => x.Id.ToString() == assetTypeId);
+        var t = Repository.GetAssetTypes().FirstOrDefault(x => string.Equals(x.Id.ToString(), assetTypeId, StringComparison.Ordinal));
         return t?.Color ?? "#3388ff";
     }
 
@@ -65,11 +65,14 @@ public partial class AssetList
         _                                  => "?"
     };
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        Repository.FeatureAdded   -= OnChanged;
-        Repository.FeatureUpdated -= OnChanged;
-        Repository.FeatureDeleted -= OnDeleted;
-        base.Dispose();
+        if (disposing)
+        {
+            Repository.FeatureAdded   -= OnChanged;
+            Repository.FeatureUpdated -= OnChanged;
+            Repository.FeatureDeleted -= OnDeleted;
+        }
+        base.Dispose(disposing);
     }
 }

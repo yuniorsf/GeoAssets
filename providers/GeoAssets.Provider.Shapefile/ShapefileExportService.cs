@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
@@ -24,7 +25,8 @@ public sealed class ShapefileExportService : IShapefileExportService
 
     public byte[] ExportToZip(IReadOnlyList<GeoFeature> features)
     {
-        var buckets = new Dictionary<string, List<GeoFeature>>
+        ArgumentNullException.ThrowIfNull(features);
+        var buckets = new Dictionary<string, List<GeoFeature>>(StringComparer.Ordinal)
         {
             ["points"]   = [],
             ["lines"]    = [],
@@ -67,7 +69,7 @@ public sealed class ShapefileExportService : IShapefileExportService
             {
                 foreach (var file in Directory.GetFiles(tempDir))
                 {
-                    if (file == zipPath) continue;
+                    if (string.Equals(file, zipPath, StringComparison.Ordinal)) continue;
                     zip.CreateEntryFromFile(file, Path.GetFileName(file));
                 }
             }
@@ -83,7 +85,7 @@ public sealed class ShapefileExportService : IShapefileExportService
     private static void WriteBucket(
         string tempDir, string baseName, List<GeoFeature> features, GeometryFactory factory)
     {
-        var columnMap = BuildColumnNameMap(features.SelectMany(f => f.Properties.CustomAttributes.Keys).Distinct());
+        var columnMap = BuildColumnNameMap(features.SelectMany(f => f.Properties.CustomAttributes.Keys).Distinct(StringComparer.Ordinal));
 
         var header = new DbaseFileHeader();
         header.AddColumn("NAME", 'C', 254, 0);
@@ -98,7 +100,9 @@ public sealed class ShapefileExportService : IShapefileExportService
             // custom attribute) — ShapefileDataWriter looks values up by column name per
             // feature, so a sparse AttributesTable would fail on records missing a key another
             // feature in the same bucket happens to have.
+#pragma warning disable MA0002 // AttributesTable (NetTopologySuite.IO.ShapeFile) has no constructor overload accepting an IEqualityComparer<string>
             var attrs = new AttributesTable { { "NAME", feature.Properties.Name } };
+#pragma warning restore MA0002
             foreach (var (originalKey, dbfName) in columnMap)
             {
                 feature.Properties.CustomAttributes.TryGetValue(originalKey, out var value);
@@ -122,8 +126,9 @@ public sealed class ShapefileExportService : IShapefileExportService
     /// </summary>
     public static Dictionary<string, string> BuildColumnNameMap(IEnumerable<string> customAttributeKeys)
     {
+        ArgumentNullException.ThrowIfNull(customAttributeKeys);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "NAME" };
-        var map = new Dictionary<string, string>();
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var key in customAttributeKeys)
         {
@@ -132,7 +137,7 @@ public sealed class ShapefileExportService : IShapefileExportService
             var suffix = 1;
             while (!used.Add(candidate))
             {
-                var suffixText = suffix.ToString();
+                var suffixText = suffix.ToString(CultureInfo.InvariantCulture);
                 candidate = baseName[..Math.Min(baseName.Length, 10 - suffixText.Length)] + suffixText;
                 suffix++;
             }

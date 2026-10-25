@@ -27,7 +27,7 @@ public class RestRoleAssignmentProviderTests
     }
 
     [Fact]
-    public async Task UnregisterRoleAsync_ThrowsNotSupportedException()
+    public Task UnregisterRoleAsync_ThrowsNotSupportedException()
     {
         // No server endpoint exists for this — XD01-63's admin UI only exposes a "Register"
         // action, matching the other Rest* repos' NotSupportedException idiom for operations
@@ -36,7 +36,7 @@ public class RestRoleAssignmentProviderTests
 
         var act = () => sut.UnregisterRoleAsync(Guid.NewGuid());
 
-        await act.Should().ThrowAsync<NotSupportedException>();
+        return act.Should().ThrowAsync<NotSupportedException>();
     }
 
     [Fact]

@@ -15,7 +15,7 @@ namespace GeoAssets.Web.Services.Identity;
 /// <see cref="GetCurrentUser"/> returns the last cached value (safe for sync callers).
 /// <see cref="GetCurrentUserAsync"/> always refreshes from the live auth state.
 /// </summary>
-public sealed class BlazorWasmCurrentUserAccessor(
+internal sealed class BlazorWasmCurrentUserAccessor(
     AuthenticationStateProvider authStateProvider, ClaimMapping? claimMapping = null) : ICurrentUserAccessor
 {
     private readonly ClaimMapping _claimMapping = claimMapping ?? ClaimMapping.EntraDefault;

@@ -25,6 +25,7 @@ namespace GeoAssets.Workflow.Selection;
 /// </summary>
 public sealed class FeatureSelectionRegistry : IDisposable
 {
+    private readonly AggregateCatalog     _catalog;
     private readonly CompositionContainer _container;
     private readonly TimeProvider         _timeProvider;
 
@@ -34,16 +35,18 @@ public sealed class FeatureSelectionRegistry : IDisposable
 
     public FeatureSelectionRegistry(TimeProvider timeProvider, string pluginsDirectory, params Assembly[] builtInAssemblies)
     {
+        ArgumentNullException.ThrowIfNull(builtInAssemblies);
+
         _timeProvider = timeProvider;
-        var catalog = new AggregateCatalog();
+        _catalog = new AggregateCatalog();
 
         foreach (var asm in builtInAssemblies)
-            catalog.Catalogs.Add(new AssemblyCatalog(asm));
+            _catalog.Catalogs.Add(new AssemblyCatalog(asm));
 
         if (Directory.Exists(pluginsDirectory))
-            catalog.Catalogs.Add(new DirectoryCatalog(pluginsDirectory, "GeoAssets.Plugin.*.dll"));
+            _catalog.Catalogs.Add(new DirectoryCatalog(pluginsDirectory, "GeoAssets.Plugin.*.dll"));
 
-        _container = new CompositionContainer(catalog);
+        _container = new CompositionContainer(_catalog);
         _container.ComposeParts(this);
     }
 
@@ -51,8 +54,8 @@ public sealed class FeatureSelectionRegistry : IDisposable
     public IEnumerable<IFeatureSelectionStrategyMetadata> GetAvailableStrategies()
         => Strategies
             .Select(s => s.Metadata)
-            .OrderBy(m => m.Category)
-            .ThenBy(m => m.DisplayName);
+            .OrderBy(m => m.Category, StringComparer.Ordinal)
+            .ThenBy(m => m.DisplayName, StringComparer.Ordinal);
 
     /// <summary>
     /// Executes the named strategy and returns the resolved feature set.
@@ -64,6 +67,8 @@ public sealed class FeatureSelectionRegistry : IDisposable
         string? note = null,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         var export = Strategies.FirstOrDefault(
             s => s.Metadata.StrategyId.Equals(strategyId, StringComparison.OrdinalIgnoreCase));
 
@@ -74,7 +79,7 @@ public sealed class FeatureSelectionRegistry : IDisposable
 
         ValidateParametersAreSerializable(strategyId, context.Parameters);
 
-        var features = await export.Value.SelectAsync(context, ct);
+        var features = await export.Value.SelectAsync(context, ct).ConfigureAwait(false);
 
         var spec = new FeatureSelectionSpec
         {
@@ -111,5 +116,9 @@ public sealed class FeatureSelectionRegistry : IDisposable
         }
     }
 
-    public void Dispose() => _container.Dispose();
+    public void Dispose()
+    {
+        _container.Dispose();
+        _catalog.Dispose();
+    }
 }

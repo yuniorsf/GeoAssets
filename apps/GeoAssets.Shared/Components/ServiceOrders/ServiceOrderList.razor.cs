@@ -20,27 +20,25 @@ public partial class ServiceOrderList
     private string _searchQuery = string.Empty;
     private string _statusFilter = string.Empty;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         Repository.OrderAdded        += OnChanged;
         Repository.OrderUpdated      += OnChanged;
         Repository.OrderStatusChanged += OnStatusChanged;
         Repository.OrderDeleted      += OnDeleted;
-        await RefreshListAsync();
+        return RefreshListAsync();
     }
 
     private void OnChanged(object? _, IServiceOrder __) => _ = ReloadAndRenderAsync();
     private void OnStatusChanged(object? _, (IServiceOrder Order, string Previous) __) => _ = ReloadAndRenderAsync();
     private void OnDeleted(object? _, string __) => _ = ReloadAndRenderAsync();
 
-    private async Task ReloadAndRenderAsync()
-    {
-        await InvokeAsync(async () =>
+    private Task ReloadAndRenderAsync() =>
+        InvokeAsync(async () =>
         {
             await RefreshListAsync();
             StateHasChanged();
         });
-    }
 
     private async Task RefreshListAsync()
     {
@@ -56,7 +54,7 @@ public partial class ServiceOrderList
             query = query.Where(o => o.Title.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrEmpty(_statusFilter))
-            query = query.Where(o => o.Status == _statusFilter);
+            query = query.Where(o => string.Equals(o.Status, _statusFilter, StringComparison.Ordinal));
 
         _filtered = [.. query.OrderByDescending(o => o.CreatedAt)];
     }
@@ -74,16 +72,19 @@ public partial class ServiceOrderList
         ApplyFilters();
     }
 
-    private async Task SelectOrder(IServiceOrder order) => await OnOrderSelected.InvokeAsync(order);
+    private Task SelectOrder(IServiceOrder order) => OnOrderSelected.InvokeAsync(order);
 
-    private async Task RequestCreate() => await OnCreateRequested.InvokeAsync();
+    private Task RequestCreate() => OnCreateRequested.InvokeAsync();
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        Repository.OrderAdded        -= OnChanged;
-        Repository.OrderUpdated      -= OnChanged;
-        Repository.OrderStatusChanged -= OnStatusChanged;
-        Repository.OrderDeleted      -= OnDeleted;
-        base.Dispose();
+        if (disposing)
+        {
+            Repository.OrderAdded        -= OnChanged;
+            Repository.OrderUpdated      -= OnChanged;
+            Repository.OrderStatusChanged -= OnStatusChanged;
+            Repository.OrderDeleted      -= OnDeleted;
+        }
+        base.Dispose(disposing);
     }
 }

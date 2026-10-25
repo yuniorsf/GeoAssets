@@ -32,18 +32,21 @@ public static class GeoIdentitySeeder
     public static async Task SeedAsync(
         GeoIdentityDbContext db, TimeProvider timeProvider, CancellationToken ct = default)
     {
-        await SeedOrganizationsAsync(db, timeProvider, ct);
-        await SeedPermissionsAsync(db, ct);
-        await SeedRolesAsync(db, ct);
-        await SeedPoliciesAsync(db, ct);
-        await db.SaveChangesAsync(ct);
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
+        await SeedOrganizationsAsync(db, timeProvider, ct).ConfigureAwait(false);
+        await SeedPermissionsAsync(db, ct).ConfigureAwait(false);
+        await SeedRolesAsync(db, ct).ConfigureAwait(false);
+        await SeedPoliciesAsync(db, ct).ConfigureAwait(false);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     // ── Organizations ─────────────────────────────────────────────────────────
 
     private static async Task SeedOrganizationsAsync(GeoIdentityDbContext db, TimeProvider timeProvider, CancellationToken ct)
     {
-        if (!await db.Organizations.AnyAsync(o => o.Id == DefaultOrgId, ct))
+        if (!await db.Organizations.AnyAsync(o => o.Id == DefaultOrgId, ct).ConfigureAwait(false))
             db.Organizations.Add(new Organization
             {
                 Id          = DefaultOrgId,
@@ -114,9 +117,9 @@ public static class GeoIdentitySeeder
             P("ip-billing:reference-manage", "ip-billing", "reference-manage", "permissions.ipBilling.referenceManage"),
         };
 
-        var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct);
+        var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct).ConfigureAwait(false);
         foreach (var perm in perms)
-            if (!existingCodes.Contains(perm.Code))
+            if (!existingCodes.Contains(perm.Code, StringComparer.Ordinal))
                 db.Permissions.Add(perm);
     }
 
@@ -132,23 +135,27 @@ public static class GeoIdentitySeeder
             "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read",
             "organizations:read", "organizations:edit", "groups:read", "groups:edit",
             "projects:read", "projects:manage-providers", "projects:manage-asset-types",
-            "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete");
+            "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete")
+            .ConfigureAwait(false);
 
         await AddRoleAsync(db, SupervisorRoleId, "Supervisor",      "Gestión de órdenes y supervisión", isBuiltIn: true, ct,
             "serviceorders:create", "serviceorders:read", "serviceorders:assign",
             "serviceorders:complete", "serviceorders:cancel",
             "features:read", "features:edit", "reports:export",
             "projects:read", "projects:manage-providers", "projects:manage-asset-types",
-            "projects:manage-layers", "projects:manage-view", "projects:rename");
+            "projects:manage-layers", "projects:manage-view", "projects:rename")
+            .ConfigureAwait(false);
 
         await AddRoleAsync(db, TechnicianRoleId, "FieldTechnician", "Ejecución de órdenes en campo",    isBuiltIn: true, ct,
             "serviceorders:read", "serviceorders:complete",
             "features:read", "features:edit",
-            "projects:read");
+            "projects:read")
+            .ConfigureAwait(false);
 
         await AddRoleAsync(db, ReadOnlyRoleId,   "ReadOnly",        "Solo lectura, sin modificaciones", isBuiltIn: true, ct,
             "serviceorders:read", "features:read",
-            "projects:read");
+            "projects:read")
+            .ConfigureAwait(false);
     }
 
     // ── Policies ──────────────────────────────────────────────────────────────
@@ -158,28 +165,33 @@ public static class GeoIdentitySeeder
         await AddPolicyAsync(db, "CanCreateServiceOrders",
             "Puede crear nuevas órdenes de servicio",
             PolicyOperator.All, ct,
-            (RequirementType.Permission, "serviceorders:create", null));
+            (RequirementType.Permission, "serviceorders:create", null))
+            .ConfigureAwait(false);
 
         await AddPolicyAsync(db, "CanAssignOrders",
             "Puede asignar órdenes a técnicos",
             PolicyOperator.All, ct,
-            (RequirementType.Permission, "serviceorders:assign", null));
+            (RequirementType.Permission, "serviceorders:assign", null))
+            .ConfigureAwait(false);
 
         await AddPolicyAsync(db, "CanManageUsers",
             "Puede gestionar usuarios y roles — solo Administradores",
             PolicyOperator.All, ct,
-            (RequirementType.Role, "Administrator", null));
+            (RequirementType.Role, "Administrator", null))
+            .ConfigureAwait(false);
 
         await AddPolicyAsync(db, "CanEditFeatures",
             "Puede editar activos GIS",
             PolicyOperator.All, ct,
-            (RequirementType.Permission, "features:edit", null));
+            (RequirementType.Permission, "features:edit", null))
+            .ConfigureAwait(false);
 
         await AddPolicyAsync(db, "CanExportReports",
             "Puede exportar reportes",
             PolicyOperator.Any, ct,
             (RequirementType.Role, "Administrator", null),
-            (RequirementType.Role, "Supervisor",    null));
+            (RequirementType.Role, "Supervisor",    null))
+            .ConfigureAwait(false);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -191,7 +203,7 @@ public static class GeoIdentitySeeder
         GeoIdentityDbContext db, Guid id, string name, string description, bool isBuiltIn,
         CancellationToken ct, params string[] permissionCodes)
     {
-        if (!await db.Roles.AnyAsync(r => r.Id == id, ct))
+        if (!await db.Roles.AnyAsync(r => r.Id == id, ct).ConfigureAwait(false))
             db.Roles.Add(new AppRole { Id = id, Name = name, Description = description, IsBuiltIn = isBuiltIn });
 
         // Backfill any grants missing from an already-existing role too (XD01-90), not just
@@ -201,15 +213,16 @@ public static class GeoIdentitySeeder
         var grantedPermissionIds = (await db.RolePermissions
             .Where(rp => rp.RoleId == id)
             .Select(rp => rp.PermissionId)
-            .ToListAsync(ct))
+            .ToListAsync(ct)
+            .ConfigureAwait(false))
             .ToHashSet();
 
         // Permissions were seeded (and possibly still pending SaveChanges) earlier in the
         // same unit of work — read from the change tracker, not the database, to see them.
         foreach (var code in permissionCodes)
         {
-            var perm = db.ChangeTracker.Entries<AppPermission>().Select(e => e.Entity).FirstOrDefault(p => p.Code == code)
-                    ?? await db.Permissions.FirstOrDefaultAsync(p => p.Code == code, ct);
+            var perm = db.ChangeTracker.Entries<AppPermission>().Select(e => e.Entity).FirstOrDefault(p => string.Equals(p.Code, code, StringComparison.Ordinal))
+                    ?? await db.Permissions.FirstOrDefaultAsync(p => p.Code == code, ct).ConfigureAwait(false);
             if (perm is not null && !grantedPermissionIds.Contains(perm.Id))
                 db.RolePermissions.Add(new RolePermission { RoleId = id, PermissionId = perm.Id });
         }
@@ -219,7 +232,7 @@ public static class GeoIdentitySeeder
         GeoIdentityDbContext db, string name, string description, PolicyOperator op, CancellationToken ct,
         params (RequirementType Type, string Value, string? ClaimValue)[] requirements)
     {
-        if (await db.Policies.AnyAsync(p => p.Name == name, ct)) return;
+        if (await db.Policies.AnyAsync(p => p.Name == name, ct).ConfigureAwait(false)) return;
 
         db.Policies.Add(new AppPolicy
         {

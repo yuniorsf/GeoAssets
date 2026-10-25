@@ -8,7 +8,7 @@ namespace GeoAssets.Workflow.Agents.Tests.TestDoubles;
 /// <paramref name="context"/> — throws <see cref="NotSupportedException"/> on every member so a
 /// test fails loudly (not silently no-ops) if that assumption ever stops holding.
 /// </summary>
-public sealed class NoOpWorkflowContext : IWorkflowContext
+internal sealed class NoOpWorkflowContext : IWorkflowContext
 {
     public static readonly NoOpWorkflowContext Instance = new();
 
@@ -18,7 +18,7 @@ public sealed class NoOpWorkflowContext : IWorkflowContext
     public ValueTask AddEventAsync(WorkflowEvent workflowEvent, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 
-    public ValueTask SendMessageAsync(object message, string? targetId = null, CancellationToken cancellationToken = default)
+    public ValueTask SendMessageAsync(object message, string? targetId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 
     public ValueTask YieldOutputAsync(object output, CancellationToken cancellationToken = default)

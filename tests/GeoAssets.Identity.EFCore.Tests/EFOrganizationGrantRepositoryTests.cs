@@ -25,7 +25,7 @@ public class EFOrganizationGrantRepositoryTests
         ResourceOrganizationId = resourceOrgId,
         AllowedActions         = ["serviceorders:view", "features:read"],
         GrantedBy              = "admin@example.com",
-        GrantedAt              = DateTime.UtcNow,
+        GrantedAt              = TimeProvider.System.GetUtcNow().UtcDateTime,
         IsActive               = isActive,
         ExpiresAt              = expiresAt,
     };
@@ -34,10 +34,10 @@ public class EFOrganizationGrantRepositoryTests
     public async Task AddAsync_ThenGetById_RoundTripsAllScalarFieldsIncludingAllowedActions()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         var grant = Grant(Guid.NewGuid(), Guid.NewGuid());
         grant.ResourceType = "ServiceOrder";
         grant.RequiredRole = "Supervisor";
@@ -62,10 +62,10 @@ public class EFOrganizationGrantRepositoryTests
     public async Task GetActiveGrantsAsync_MatchingActiveUnexpiredGrant_IsReturned()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         var grantee = Guid.NewGuid();
         var resource = Guid.NewGuid();
         await repo.AddAsync(Grant(grantee, resource));
@@ -82,10 +82,10 @@ public class EFOrganizationGrantRepositoryTests
         // Non-leakage: a grant explicitly deactivated must not authorize cross-org access,
         // even though its GranteeOrganizationId/ResourceOrganizationId still match.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         var grantee = Guid.NewGuid();
         var resource = Guid.NewGuid();
         await repo.AddAsync(Grant(grantee, resource, isActive: false));
@@ -101,13 +101,13 @@ public class EFOrganizationGrantRepositoryTests
     {
         // Non-leakage: a grant past its ExpiresAt must not authorize cross-org access.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         var grantee = Guid.NewGuid();
         var resource = Guid.NewGuid();
-        await repo.AddAsync(Grant(grantee, resource, expiresAt: DateTime.UtcNow.AddDays(-1)));
+        await repo.AddAsync(Grant(grantee, resource, expiresAt: TimeProvider.System.GetUtcNow().UtcDateTime.AddDays(-1)));
         await repo.SaveChangesAsync();
 
         var active = await repo.GetActiveGrantsAsync(grantee, resource);
@@ -120,10 +120,10 @@ public class EFOrganizationGrantRepositoryTests
     {
         // Non-leakage: a grant scoped to one grantee/resource pair must not leak to another.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         await repo.AddAsync(Grant(Guid.NewGuid(), Guid.NewGuid()));
         await repo.SaveChangesAsync();
 
@@ -138,10 +138,10 @@ public class EFOrganizationGrantRepositoryTests
     public async Task GetActiveGrantsForGranteeAsync_ReturnsGrantsAcrossMultipleResourceOrganizations()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         var grantee = Guid.NewGuid();
         await repo.AddAsync(Grant(grantee, Guid.NewGuid()));
         await repo.AddAsync(Grant(grantee, Guid.NewGuid()));
@@ -157,10 +157,10 @@ public class EFOrganizationGrantRepositoryTests
     {
         // Non-leakage: a grant issued to a different grantee organization must not leak.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         await repo.AddAsync(Grant(Guid.NewGuid(), Guid.NewGuid()));
         await repo.SaveChangesAsync();
 
@@ -173,10 +173,10 @@ public class EFOrganizationGrantRepositoryTests
     public async Task GetActiveGrantsForGranteeAsync_InactiveGrant_IsExcluded()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
-        var repo = new EFOrganizationGrantRepository(db);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
         var grantee = Guid.NewGuid();
         await repo.AddAsync(Grant(grantee, Guid.NewGuid(), isActive: false));
         await repo.SaveChangesAsync();

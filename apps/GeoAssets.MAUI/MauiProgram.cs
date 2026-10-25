@@ -49,23 +49,34 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        // GeoAssets services
-        //
-        // Observability (XD01-43): wrapped with the same Observable* decorators as
-        // apps/GeoAssets.Web/Program.cs, giving MAUI the same import/render/repository-timing
-        // telemetry Blazor Web already has. Deliberately NOT wired to AddGeoAssetsObservability
-        // (GeoAssets.Infrastructure.Observability) or an OTLP exporter here:
-        //   - That extension is ASP.NET Core-oriented (FrameworkReference on
-        //     Microsoft.AspNetCore.App, ASP.NET Core request instrumentation, a /healthz
-        //     endpoint) — none of it applies to a MAUI client, which hosts no HTTP server.
-        //   - A mobile/desktop app is a distributed binary an end user's device — unlike
-        //     GeoAssets.Server, a vendor OTLP endpoint/API-key credential embedded in it can be
-        //     extracted by decompiling the package. The safe pattern for client telemetry is
-        //     proxying through a trusted backend, not exporting directly from the client; that's
-        //     a separate, larger design (out of scope here).
-        // The decorators below are safe with no exporter at all — ImportDiagnostics'
-        // ActivitySource/Meter are zero-cost no-ops with nothing listening, exactly like
-        // Blazor Web before OTel is wired up client-side.
+        AddCrossCuttingServices(builder);
+        AddAuthentication(builder);
+        AddIdentityAuthorization(builder);
+        AddServiceOrderWorkflow(builder);
+        AddAssetsAndMap(builder);
+
+        return builder.Build();
+    }
+
+    /// <summary>
+    /// Observability (XD01-43): wrapped with the same Observable* decorators as
+    /// apps/GeoAssets.Web/Program.cs, giving MAUI the same import/render/repository-timing
+    /// telemetry Blazor Web already has. Deliberately NOT wired to AddGeoAssetsObservability
+    /// (GeoAssets.Infrastructure.Observability) or an OTLP exporter here:
+    ///   - That extension is ASP.NET Core-oriented (FrameworkReference on
+    ///     Microsoft.AspNetCore.App, ASP.NET Core request instrumentation, a /healthz
+    ///     endpoint) — none of it applies to a MAUI client, which hosts no HTTP server.
+    ///   - A mobile/desktop app is a distributed binary an end user's device — unlike
+    ///     GeoAssets.Server, a vendor OTLP endpoint/API-key credential embedded in it can be
+    ///     extracted by decompiling the package. The safe pattern for client telemetry is
+    ///     proxying through a trusted backend, not exporting directly from the client; that's
+    ///     a separate, larger design (out of scope here).
+    /// The decorators below are safe with no exporter at all — ImportDiagnostics'
+    /// ActivitySource/Meter are zero-cost no-ops with nothing listening, exactly like
+    /// Blazor Web before OTel is wired up client-side.
+    /// </summary>
+    private static void AddCrossCuttingServices(MauiAppBuilder builder)
+    {
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IProviderPool, ProviderPool>();
 
@@ -78,9 +89,14 @@ public static class MauiProgram
         // tolerates the absence of IGeoAuthorizationService (not registered here), so this alone
         // is enough for MAUI to render the same 6 items minus anything permission-gated.
         builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
+    }
 
-        // ── Authentication (XD01-52: MSAL.NET public-client flow, provider-agnostic seam per
-        // XD01-48 — see EntraCiamMauiAuthenticationProvider) ────────────────────────────────
+    /// <summary>
+    /// XD01-52: MSAL.NET public-client flow, provider-agnostic seam per XD01-48 — see
+    /// EntraCiamMauiAuthenticationProvider.
+    /// </summary>
+    private static void AddAuthentication(MauiAppBuilder builder)
+    {
         builder.Services.AddAuthorizationCore();
         builder.Services.AddGeoAssetsMauiAuthentication(builder.Configuration);
         builder.Services.AddScoped<MauiMsalAuthenticationStateProvider>();
@@ -95,12 +111,18 @@ public static class MauiProgram
         builder.Services.AddTransient<MsalAuthorizationHandler>();
         builder.Services.AddHttpClient("GeoAssetsServer")
             .AddHttpMessageHandler<MsalAuthorizationHandler>();
+    }
 
-        // Identity authorization — REST-backed against GeoAssets.Server, same shape as
-        // apps/GeoAssets.Web/Extensions/GeoIdentityRestExtensions.AddGeoIdentityRest, but only
-        // the one piece WorkflowPrincipalFactory (below) actually needs — see
-        // RestGeoAuthorizationService's doc comment for why this is a small duplicated copy
-        // instead of a shared registration (XD01-24).
+    /// <summary>
+    /// Identity authorization — REST-backed against GeoAssets.Server, same shape as
+    /// apps/GeoAssets.Web/Extensions/GeoIdentityRestExtensions.AddGeoIdentityRest, but only
+    /// the one piece WorkflowPrincipalFactory actually needs — see
+    /// RestGeoAuthorizationService's doc comment for why this is a small duplicated copy
+    /// instead of a shared registration (XD01-24). Also registers the localization stand-in
+    /// (NoOpJsonStringLocalizer) alongside it.
+    /// </summary>
+    private static void AddIdentityAuthorization(MauiAppBuilder builder)
+    {
         var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
             ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
         builder.Services.AddScoped<IGeoAuthorizationService>(sp =>
@@ -114,9 +136,14 @@ public static class MauiProgram
         // no real translation loader yet, so LocalizedComponentBase-derived components (Service
         // Orders among them) get raw i18n keys instead of throwing on a missing registration.
         builder.Services.AddSingleton<IJsonStringLocalizer, NoOpJsonStringLocalizer>();
+    }
 
-        // Service Order workflow — REST-backed via GeoAssets.Server, same pattern as
-        // apps/GeoAssets.Web/Program.cs (XD01-24, XD01-8 originally for Web).
+    /// <summary>
+    /// Service Order workflow — REST-backed via GeoAssets.Server, same pattern as
+    /// apps/GeoAssets.Web/Program.cs (XD01-24, XD01-8 originally for Web).
+    /// </summary>
+    private static void AddServiceOrderWorkflow(MauiAppBuilder builder)
+    {
         builder.Services.AddOrderTypeRegistry();
 
         var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
@@ -125,7 +152,10 @@ public static class MauiProgram
 
         builder.Services.AddServiceOrderRules();
         builder.Services.AddScoped<WorkflowPrincipalFactory>();
+    }
 
+    private static void AddAssetsAndMap(MauiAppBuilder builder)
+    {
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
             new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),
@@ -147,7 +177,5 @@ public static class MauiProgram
             sp.GetRequiredService<AssetService>(),
             sp.GetRequiredService<ILogger<ObservableAssetService>>(),
             sp.GetRequiredService<TimeProvider>()));
-
-        return builder.Build();
     }
 }

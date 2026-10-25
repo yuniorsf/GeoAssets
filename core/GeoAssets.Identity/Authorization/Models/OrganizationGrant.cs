@@ -38,7 +38,7 @@ public sealed class OrganizationGrant
     /// "serviceorders:view") the grantee organization is allowed to perform on the
     /// resource organization's resources. Empty means the grant authorizes nothing.
     /// </summary>
-    public List<string> AllowedActions { get; set; } = [];
+    public List<string> AllowedActions { get; init; } = [];
 
     /// <summary>
     /// Restricts the grant to grantee-organization users holding this role.

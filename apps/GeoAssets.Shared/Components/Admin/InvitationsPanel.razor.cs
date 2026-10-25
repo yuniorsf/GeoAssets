@@ -39,10 +39,10 @@ public partial class InvitationsPanel
         StateHasChanged();
     }
 
-    private async Task OnInvited()
+    private Task OnInvited()
     {
         _showInviteDialog = false;
-        await RefreshAsync();
+        return RefreshAsync();
     }
 
     private void RequestRevoke(PendingInvitation invitation)

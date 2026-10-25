@@ -36,7 +36,7 @@ public static class EmergencyRepairAgentWorkflow
         ILoggerFactory          loggerFactory)
     {
         var create   = new CreateServiceOrderExecutor(
-            repository, rules, orderTypeRegistry, identity, tracer, loggerFactory.CreateLogger<CreateServiceOrderExecutor>());
+            repository, rules, orderTypeRegistry, identity, timeProvider, tracer, loggerFactory.CreateLogger<CreateServiceOrderExecutor>());
         var dispatch = new DispatchServiceOrderExecutor(
             repository, rules, identity, timeProvider, tracer, loggerFactory.CreateLogger<DispatchServiceOrderExecutor>());
 

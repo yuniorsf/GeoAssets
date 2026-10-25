@@ -28,7 +28,7 @@ public class KafkaOrderEventPublisherTests
         PreviousStatus: "Open",
         NewStatus     : "Closed",
         PerformedBy   : "user-1",
-        OccurredAt    : DateTimeOffset.UtcNow,
+        OccurredAt    : new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero),
         CorrelationId : correlationId);
 
     [Fact]
@@ -58,9 +58,9 @@ public class KafkaOrderEventPublisherTests
 
         var headers = KafkaOrderEventPublisher.BuildHeaders(CreateEvent(correlationId: "corr-42"), activity);
 
-        Encoding.UTF8.GetString(headers.Single(h => h.Key == "orderTypeId").GetValueBytes()).Should().Be("inspection");
-        Encoding.UTF8.GetString(headers.Single(h => h.Key == "newStatus").GetValueBytes()).Should().Be("Closed");
-        Encoding.UTF8.GetString(headers.Single(h => h.Key == "correlationId").GetValueBytes()).Should().Be("corr-42");
+        Encoding.UTF8.GetString(headers.Single(h => string.Equals(h.Key, "orderTypeId", StringComparison.Ordinal)).GetValueBytes()).Should().Be("inspection");
+        Encoding.UTF8.GetString(headers.Single(h => string.Equals(h.Key, "newStatus", StringComparison.Ordinal)).GetValueBytes()).Should().Be("Closed");
+        Encoding.UTF8.GetString(headers.Single(h => string.Equals(h.Key, "correlationId", StringComparison.Ordinal)).GetValueBytes()).Should().Be("corr-42");
         headers.Should().Contain(h => h.Key == "traceparent");
     }
 

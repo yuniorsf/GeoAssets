@@ -27,6 +27,7 @@ public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
 
     public ActiveAssetProvider(IProviderPool pool)
     {
+        ArgumentNullException.ThrowIfNull(pool);
         _pool    = pool;
         _current = NullAssetProvider.Instance;
         pool.Changed += OnPoolChanged;
@@ -62,7 +63,7 @@ public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
     private void OnFeatureAdded(object? s, GeoFeature f)    => FeatureAdded?.Invoke(s, f);
     private void OnFeatureUpdated(object? s, GeoFeature f)  => FeatureUpdated?.Invoke(s, f);
     private void OnFeatureDeleted(object? s, string id)     => FeatureDeleted?.Invoke(s, id);
-    private void OnCollectionChanged(object? s, EventArgs e) => CollectionChanged?.Invoke(s, e);
+    private void OnCollectionChanged(object? s, EventArgs e) => CollectionChanged?.Invoke(this, e);
 
     // ── All members delegate to _current ────────────────────────────────────
 
@@ -78,7 +79,7 @@ public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
     public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => _current.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default)
         => _current.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
-    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg)   => _current.GetNearby(center, distanceDeg);
+    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees) => _current.GetNearby(center, distanceDegrees);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                   => _current.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)                 => _current.GetDescendants(featureId);
     public IReadOnlyList<GeoFeature>                GetAncestors(string featureId)                   => _current.GetAncestors(featureId);

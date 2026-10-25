@@ -1,27 +1,68 @@
-name: .NET Build & Test
+name: .NET Build, Test & Coverage (Deterministic Oracle)
 
 on:
   push:
+    branches: [develop, main]
   pull_request:
+    branches: [develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-test:
+    name: Build, Oracle & Unit Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.x'
-      
+
       - name: Install MAUI Android workload
         run: dotnet workload install maui-android
-      
+
       - name: Restore packages
-        run: dotnet restore
-      
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
-      
-      - name: Test (skip iOS/Android tests if any)
-        run: dotnet test --no-build --configuration Release --filter "Category!=RequiresiOS"
+        run: dotnet restore GeoAssets.sln
+
+      - name: Oracle Stage 1 — Verify code style (dotnet format style)
+        run: dotnet format style GeoAssets.sln --verify-no-changes --no-restore
+
+      - name: Oracle Stage 2 — Strict build & static analyzers (/warnaserror)
+        run: dotnet build GeoAssets.sln --no-restore --no-incremental --configuration Release /warnaserror
+
+      - name: Oracle Stage 3 — Architecture invariants
+        run: dotnet test GeoAssets.sln --no-build --configuration Release --filter "FullyQualifiedName~Architecture|Category=Architecture"
+
+      - name: Run Full Test Suite & Collect Coverage (skip iOS-only tests)
+        run: >
+          dotnet test GeoAssets.sln
+          --no-build --configuration Release
+          --filter "Category!=RequiresiOS"
+          --logger "trx"
+          --results-directory ./TestResults
+          --collect:"XPlat Code Coverage"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: xUnit — GeoAssets Test Suite
+          path: TestResults/**/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: TestResults/**/coverage.cobertura.xml
+          retention-days: 14

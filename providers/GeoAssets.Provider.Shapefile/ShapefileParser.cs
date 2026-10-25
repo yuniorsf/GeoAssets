@@ -63,7 +63,7 @@ internal static class ShapefileParser
         }
     }
 
-    private static IReadOnlyList<GeoFeature> ReadFeatures(string basePath)
+    private static List<GeoFeature> ReadFeatures(string basePath)
     {
         var factory = new GeometryFactory(new PrecisionModel(), 4326);
         using var reader = new ShapefileDataReader(basePath, factory);

@@ -43,6 +43,7 @@ public sealed class ShapefileProviderPlugin : IProviderPlugin
         IServiceProvider  services,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(config);
         var zipBytes = ResolveArchiveBytes(config);
 
         var features = ShapefileParser.ParseZipBytes(zipBytes);

@@ -78,6 +78,6 @@ public static class WorkflowEFCoreServiceExtensions
         using var scope      = services.CreateScope();
         var registry         = scope.ServiceProvider.GetRequiredService<OrderTypeRegistry>();
         var orderTypeRepo    = scope.ServiceProvider.GetRequiredService<IOrderTypeRepository>();
-        await registry.LoadFromAsync(orderTypeRepo, ct);
+        await registry.LoadFromAsync(orderTypeRepo, ct).ConfigureAwait(false);
     }
 }

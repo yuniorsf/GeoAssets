@@ -10,5 +10,5 @@ public sealed class FeatureSelectionContext : IFeatureSelectionContext
     public IServiceOrder?               TargetOrder      { get; init; }
     public IServiceOrderRepository?     OrderRepository  { get; init; }
     public IReadOnlyDictionary<string, object> Parameters { get; init; } =
-        new Dictionary<string, object>();
+        new Dictionary<string, object>(StringComparer.Ordinal);
 }

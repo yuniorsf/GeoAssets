@@ -11,7 +11,7 @@ public partial class UserList
     private List<AppUser> _users = [];
     private bool _loading = true;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    protected override Task OnInitializedAsync() => RefreshAsync();
 
     public async Task RefreshAsync()
     {
@@ -22,5 +22,5 @@ public partial class UserList
         StateHasChanged();
     }
 
-    private async Task SelectUser(AppUser user) => await OnUserSelected.InvokeAsync(user);
+    private Task SelectUser(AppUser user) => OnUserSelected.InvokeAsync(user);
 }

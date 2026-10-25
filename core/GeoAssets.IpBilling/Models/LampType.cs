@@ -19,5 +19,5 @@ public sealed class LampType
     /// The wattages this lamp type is billed at, each with its own ballast-loss figure.
     /// Populated when loaded through <c>ILampTypeRepository</c>; empty by default.
     /// </summary>
-    public List<LampWattageOption> WattageOptions { get; set; } = [];
+    public List<LampWattageOption> WattageOptions { get; init; } = [];
 }

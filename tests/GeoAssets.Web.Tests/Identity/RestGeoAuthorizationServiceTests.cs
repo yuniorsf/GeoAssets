@@ -113,7 +113,7 @@ public class RestGeoAuthorizationServiceTests
     }
 
     [Fact]
-    public async Task EvaluatePolicyAsync_UnknownPolicyName_ThrowsKeyNotFoundException()
+    public Task EvaluatePolicyAsync_UnknownPolicyName_ThrowsKeyNotFoundException()
     {
         var handler = new FakeHttpMessageHandler(req => req.RequestUri!.AbsolutePath switch
         {
@@ -124,6 +124,6 @@ public class RestGeoAuthorizationServiceTests
 
         var act = () => sut.EvaluatePolicyAsync("DoesNotExist");
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 }

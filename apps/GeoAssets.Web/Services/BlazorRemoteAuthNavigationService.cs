@@ -14,7 +14,7 @@ namespace GeoAssets.Web.Services;
 /// Uses the proper SignOutSessionStateManager flow so RemoteAuthenticatorView accepts the
 /// logout request without the "not initiated from within the page" error.
 /// </summary>
-public sealed class BlazorRemoteAuthNavigationService(NavigationManager nav) : IAuthNavigationService
+internal sealed class BlazorRemoteAuthNavigationService(NavigationManager nav) : IAuthNavigationService
 {
     public void NavigateToLogin(string returnUrl = "/")
         => nav.NavigateToLogin($"authentication/login?returnUrl={Uri.EscapeDataString(returnUrl)}");

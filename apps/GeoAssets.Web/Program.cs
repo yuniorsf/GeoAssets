@@ -45,7 +45,7 @@ if (builder.HostEnvironment.IsDevelopment())
         // which throws "net_http_synchronous_reads_not_supported" the moment the file is
         // actually present. Materialize the content as a string first (fully async), then
         // hand AddJsonStream a plain in-memory stream, which supports synchronous reads.
-        var localSettingsJson = await localSettingsHttp.GetStringAsync("appsettings.Local.json");
+        var localSettingsJson = await localSettingsHttp.GetStringAsync(new Uri("appsettings.Local.json", UriKind.Relative));
         builder.Configuration.AddJsonStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(localSettingsJson)));
     }
     catch (HttpRequestException)

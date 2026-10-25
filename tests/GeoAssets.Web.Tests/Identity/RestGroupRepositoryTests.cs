@@ -53,7 +53,7 @@ public class RestGroupRepositoryTests
     [Fact]
     public async Task GetAllAsync_MapsGroups()
     {
-        var dto = new GroupDto(Guid.NewGuid(), "Cuadrilla Sur", null, null, true, DateTime.UtcNow);
+        var dto = new GroupDto(Guid.NewGuid(), "Cuadrilla Sur", null, null, true, new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(new List<GroupDto> { dto }));
         var sut = Sut(handler);
 
@@ -91,7 +91,7 @@ public class RestGroupRepositoryTests
             return response;
         });
         var sut = Sut(handler);
-        var group = new AppGroup { Id = Guid.NewGuid(), Name = "Cuadrilla Norte", IsActive = true, CreatedAt = DateTime.UtcNow };
+        var group = new AppGroup { Id = Guid.NewGuid(), Name = "Cuadrilla Norte", IsActive = true, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
         var callerSuppliedId = group.Id;
 
         await sut.AddAsync(group);
@@ -109,7 +109,7 @@ public class RestGroupRepositoryTests
     public async Task UpdateAsync_SendsWriteDtoToCorrectUrl()
     {
         var orgId = Guid.NewGuid();
-        var group = new AppGroup { Id = Guid.NewGuid(), Name = "Renamed", Description = "d", OrganizationId = orgId, IsActive = false, CreatedAt = DateTime.UtcNow };
+        var group = new AppGroup { Id = Guid.NewGuid(), Name = "Renamed", Description = "d", OrganizationId = orgId, IsActive = false, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
         var sut = Sut(handler);
 
@@ -173,12 +173,12 @@ public class RestGroupRepositoryTests
 
     [Theory]
     [MemberData(nameof(UnsupportedMethods))]
-    public async Task Method_WithNoServerEndpoint_ThrowsNotSupportedException(Func<IGroupRepository, Task> call)
+    public Task Method_WithNoServerEndpoint_ThrowsNotSupportedException(Func<IGroupRepository, Task> call)
     {
         var sut = Sut(new FakeHttpMessageHandler(_ => throw new InvalidOperationException("Should not be called.")));
 
         var act = () => call(sut);
 
-        await act.Should().ThrowAsync<NotSupportedException>();
+        return act.Should().ThrowAsync<NotSupportedException>();
     }
 }

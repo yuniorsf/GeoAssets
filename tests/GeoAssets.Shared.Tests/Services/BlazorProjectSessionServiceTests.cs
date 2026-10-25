@@ -144,10 +144,13 @@ public class BlazorProjectSessionServiceTests
         public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => throw new NotSupportedException();
         public void AddLayerRule(LayerRule layerRule) => throw new NotSupportedException();
         public void DeleteLayerRule(Guid id) => throw new NotSupportedException();
+        // Never fire — this test double tracks no subscribers, no test relies on these.
+#pragma warning disable CS0067
         public event EventHandler<GeoFeature>? FeatureAdded;
         public event EventHandler<GeoFeature>? FeatureUpdated;
         public event EventHandler<string>? FeatureDeleted;
         public event EventHandler? CollectionChanged;
+#pragma warning restore CS0067
     }
 
     private sealed class ThrowingServiceProvider : IServiceProvider
@@ -423,13 +426,13 @@ public class BlazorProjectSessionServiceTests
     }
 
     [Fact]
-    public async Task OpenAsync_UnknownProjectId_ThrowsKeyNotFoundException()
+    public Task OpenAsync_UnknownProjectId_ThrowsKeyNotFoundException()
     {
         var sut = BuildSut(new FakeProjectClient(), new ProviderPool(), out _);
 
         var act = () => sut.OpenAsync(Guid.NewGuid());
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     // ── Dirty tracking ────────────────────────────────────────────────────────
@@ -456,6 +459,8 @@ public class BlazorProjectSessionServiceTests
     public async Task ScopeSetter_AfterOpen_MarksDirtyAndUpdatesCurrent(
         Action<IProjectSessionService> setScope, Func<Project, object?> readScope, object expected)
     {
+        ArgumentNullException.ThrowIfNull(setScope);
+        ArgumentNullException.ThrowIfNull(readScope);
         var general = GeneralProject();
         var client = new FakeProjectClient(general);
         var sut = BuildSut(client, new ProviderPool(), out _);
@@ -543,7 +548,7 @@ public class BlazorProjectSessionServiceTests
         var sut = BuildSut(client, pool, out _, new FakeProviderPlugin("known-a"));
         await sut.OpenAsync(general.Id);
 
-        pool.Add("New", new FakeAssetProvider(), "known-a", new Dictionary<string, string> { ["url"] = "http://x" });
+        pool.Add("New", new FakeAssetProvider(), "known-a", new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "http://x" });
         await sut.SaveAsync();
 
         client.Calls.Should().ContainSingle().Which.Scope.Should().Be("providers");
@@ -565,7 +570,7 @@ public class BlazorProjectSessionServiceTests
             new ProjectProviderEntry
             {
                 Name = "A", PluginId = "known-a", Position = 0,
-                Values = new Dictionary<string, string> { ["url"] = "http://x" },
+                Values = new Dictionary<string, string>(StringComparer.Ordinal) { ["url"] = "http://x" },
                 IsOpen = true, IsEnabled = true, IsActive = true,
             },
         ];
@@ -1005,7 +1010,7 @@ public class BlazorProjectSessionServiceTests
         var general = GeneralProject();
         var client = new FakeProjectClient(general);
         var sut = BuildSutWithAuth(client, new ProviderPool(),
-            new FakeGeoAuthorizationService(code => code == "projects:manage-providers"));
+            new FakeGeoAuthorizationService(code => string.Equals(code, "projects:manage-providers", StringComparison.Ordinal)));
         await sut.OpenAsync(general.Id);
 
         (await sut.CanAsync("projects:manage-providers")).Should().BeTrue();

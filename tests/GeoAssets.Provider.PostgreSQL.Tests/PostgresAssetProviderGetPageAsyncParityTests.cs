@@ -83,7 +83,7 @@ public sealed class PostgresAssetProviderGetPageAsyncParityTests(PostgresContain
         {
             var typeId = (i % 3) switch { 0 => PoleTypeId, 1 => TransformerTypeId, _ => SwitchTypeId };
             var material = (i % 5) switch { 0 => "concreto", 1 => "madera", _ => "metal" };
-            var customAttributes = new Dictionary<string, string>
+            var customAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["material"] = material,
                 ["serie"] = $"SN-{i:D4}",

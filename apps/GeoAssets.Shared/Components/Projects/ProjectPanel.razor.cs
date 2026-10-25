@@ -25,12 +25,13 @@ public partial class ProjectPanel
     // an externally-raised event doesn't trigger Blazor's post-handler render on its own, so the
     // reload is followed by an explicit StateHasChanged.
     private void OnSessionCurrentChanged(object? sender, EventArgs e) =>
-        InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+        _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        Session.CurrentChanged -= OnSessionCurrentChanged;
-        base.Dispose();
+        if (disposing)
+            Session.CurrentChanged -= OnSessionCurrentChanged;
+        base.Dispose(disposing);
     }
 
     // ── Loading ───────────────────────────────────────────────────────────────
@@ -81,13 +82,17 @@ public partial class ProjectPanel
     /// (null). Pure/static so it's directly unit-testable without a Blazor render tree — same
     /// reasoning as <see cref="Categorize"/>.
     /// </summary>
-    public static IReadOnlyList<(string ScopeKey, bool Overridden)> DescribeScopeOverrides(Project rawCurrent) =>
-    [
-        ("providers", rawCurrent.Providers is not null),
-        ("assetTypes", rawCurrent.AssetTypeScope is not null),
-        ("layers", rawCurrent.LayerScope is not null),
-        ("view", rawCurrent.ViewState is not null),
-    ];
+    public static IReadOnlyList<(string ScopeKey, bool Overridden)> DescribeScopeOverrides(Project rawCurrent)
+    {
+        ArgumentNullException.ThrowIfNull(rawCurrent);
+        return
+        [
+            ("providers", rawCurrent.Providers is not null),
+            ("assetTypes", rawCurrent.AssetTypeScope is not null),
+            ("layers", rawCurrent.LayerScope is not null),
+            ("view", rawCurrent.ViewState is not null),
+        ];
+    }
 
     // ── Open ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +157,7 @@ public partial class ProjectPanel
 
     private void HandleSaveAsKey(KeyboardEventArgs ev)
     {
-        if (ev.Key == "Enter") _ = ConfirmSaveAsAsync();
-        if (ev.Key == "Escape") CancelSaveAs();
+        if (string.Equals(ev.Key, "Enter", StringComparison.Ordinal)) _ = ConfirmSaveAsAsync();
+        if (string.Equals(ev.Key, "Escape", StringComparison.Ordinal)) CancelSaveAs();
     }
 }

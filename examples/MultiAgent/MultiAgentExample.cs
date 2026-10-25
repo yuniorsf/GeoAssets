@@ -24,7 +24,7 @@ using GeoAssets.Examples.MultiAgent.Agents;
 
 namespace GeoAssets.Examples.MultiAgent;
 
-public static class MultiAgentExample
+internal static class MultiAgentExample
 {
     private const string UserTask =
         """
@@ -53,14 +53,12 @@ public static class MultiAgentExample
         Console.WriteLine("  Task submitted to orchestrator…\n");
         Console.ResetColor();
 
-        var orchestrator = new AnthropicMultiAgentOrchestrator(
-        [
-            new AnalysisAgent(),
-            new CodeAgent(),
-            new ReviewAgent(),
-        ]);
+        using var analysisAgent = new AnalysisAgent();
+        using var codeAgent = new CodeAgent();
+        using var reviewAgent = new ReviewAgent();
+        using var orchestrator = new AnthropicMultiAgentOrchestrator([analysisAgent, codeAgent, reviewAgent]);
 
-        var result = await orchestrator.RunAsync(UserTask);
+        var result = await orchestrator.RunAsync(UserTask).ConfigureAwait(false);
 
         Print.Section("Orchestrator final answer");
         Console.WriteLine(Indent(result, 6));

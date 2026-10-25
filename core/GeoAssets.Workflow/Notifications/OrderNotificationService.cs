@@ -83,7 +83,7 @@ namespace GeoAssets.Workflow.Notifications;
 public sealed class OrderNotificationService(IOrderEventPublisher publisher, TimeProvider timeProvider)
     : IOrderNotificationService
 {
-    public async Task NotifyStateChangedAsync(
+    public Task NotifyStateChangedAsync(
         string                               orderId,
         string                               orderTypeId,
         string                               previous,
@@ -96,7 +96,7 @@ public sealed class OrderNotificationService(IOrderEventPublisher publisher, Tim
     {
         var recipients = string.Join(",", recipientIds);
 
-        var enriched = new Dictionary<string, string>(metadata ?? new Dictionary<string, string>())
+        var enriched = new Dictionary<string, string>(metadata ?? new Dictionary<string, string>(StringComparer.Ordinal), StringComparer.Ordinal)
         {
             ["recipients"] = recipients,
         };
@@ -111,6 +111,6 @@ public sealed class OrderNotificationService(IOrderEventPublisher publisher, Tim
             correlationId,
             enriched);
 
-        await publisher.PublishAsync(evt, ct).ConfigureAwait(false);
+        return publisher.PublishAsync(evt, ct);
     }
 }

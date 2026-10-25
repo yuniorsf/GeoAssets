@@ -10,7 +10,7 @@ namespace GeoAssets.Web.Services;
 /// IStorageService implementation for Blazor WebAssembly.
 /// Uses Blazored.LocalStorage for persistence; JS interop for file dialogs.
 /// </summary>
-public sealed class WebStorageService : IStorageService
+internal sealed class WebStorageService : IStorageService
 {
     private readonly ILocalStorageService _localStorage;
     private readonly IJSRuntime _js;

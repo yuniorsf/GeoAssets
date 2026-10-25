@@ -21,6 +21,8 @@ public static class LayerResolver
         IReadOnlyList<Layer> layers,
         IReadOnlyList<LayerRule> layerRules)
     {
+        ArgumentNullException.ThrowIfNull(feature);
+
         // 1. Per-feature override
         if (Guid.TryParse(feature.Properties.LayerId, out var overrideId))
         {
@@ -52,15 +54,15 @@ public static class LayerResolver
         return null;
     }
 
-    private static bool Matches(LayerRuleCondition condition, IReadOnlyDictionary<string, string> attributes)
+    private static bool Matches(LayerRuleCondition condition, Dictionary<string, string> attributes)
     {
         if (!attributes.TryGetValue(condition.Attribute, out var actual))
             return false;
 
         return condition.Operator switch
         {
-            LayerRuleOperator.Equals => actual == condition.Value,
-            LayerRuleOperator.NotEquals => actual != condition.Value,
+            LayerRuleOperator.Equals => string.Equals(actual, condition.Value, StringComparison.Ordinal),
+            LayerRuleOperator.NotEquals => !string.Equals(actual, condition.Value, StringComparison.Ordinal),
             LayerRuleOperator.GreaterThanOrEqual => TryCompareNumeric(actual, condition.Value, out var ge) && ge >= 0,
             LayerRuleOperator.LessThanOrEqual => TryCompareNumeric(actual, condition.Value, out var le) && le <= 0,
             _ => false

@@ -13,7 +13,7 @@ public class GeoAssetsActivitySourceTests
         // real Activity to assert against.
         ActivitySource.AddActivityListener(new ActivityListener
         {
-            ShouldListenTo = source => source.Name == GeoAssetsActivitySource.SourceName,
+            ShouldListenTo = source => string.Equals(source.Name, GeoAssetsActivitySource.SourceName, StringComparison.Ordinal),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
         });
     }

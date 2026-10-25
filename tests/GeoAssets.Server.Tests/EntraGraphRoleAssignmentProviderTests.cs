@@ -27,10 +27,10 @@ public class EntraGraphRoleAssignmentProviderTests
     /// </summary>
     private sealed class FakeGraphServer
     {
-        private readonly object _gate = new();
-        private readonly Dictionary<string, JsonArray> _appRoles = new();
-        private readonly Dictionary<string, string> _servicePrincipalIds = new();
-        private readonly Dictionary<string, JsonArray> _assignments = new();
+        private readonly Lock _gate = new();
+        private readonly Dictionary<string, JsonArray> _appRoles = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _servicePrincipalIds = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, JsonArray> _assignments = new(StringComparer.Ordinal);
 
         public FakeGraphServer WithServicePrincipal(string clientId, string servicePrincipalId)
         {
@@ -67,13 +67,13 @@ public class EntraGraphRoleAssignmentProviderTests
             return this;
         }
 
-        public IReadOnlyList<JsonNode> AppRolesFor(string clientId)
+        public List<JsonNode> AppRolesFor(string clientId)
         {
             lock (_gate)
                 return _appRoles.TryGetValue(clientId, out var arr) ? arr.Select(n => n!).ToList() : [];
         }
 
-        public IReadOnlyList<JsonNode> AssignmentsFor(string servicePrincipalId)
+        public List<JsonNode> AssignmentsFor(string servicePrincipalId)
         {
             lock (_gate)
                 return _assignments.TryGetValue(servicePrincipalId, out var arr) ? arr.Select(n => n!).ToList() : [];
@@ -87,10 +87,10 @@ public class EntraGraphRoleAssignmentProviderTests
             {
                 var url = request.RequestUri!.ToString();
 
-                var appMatch = Regex.Match(url, @"applications\(appId='([^']+)'\)");
+                var appMatch = Regex.Match(url, @"applications\(appId='(?<clientId>[^']+)'\)", RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
                 if (appMatch.Success)
                 {
-                    var clientId = appMatch.Groups[1].Value;
+                    var clientId = appMatch.Groups["clientId"].Value;
                     if (request.Method == HttpMethod.Get)
                     {
                         var roles = _appRoles.TryGetValue(clientId, out var arr) ? arr : new JsonArray();
@@ -104,15 +104,15 @@ public class EntraGraphRoleAssignmentProviderTests
                     }
                 }
 
-                var spMatch = Regex.Match(url, @"servicePrincipals\(appId='([^']+)'\)");
+                var spMatch = Regex.Match(url, @"servicePrincipals\(appId='(?<clientId>[^']+)'\)", RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
                 if (spMatch.Success && request.Method == HttpMethod.Get)
-                    return JsonResponse(new JsonObject { ["id"] = _servicePrincipalIds[spMatch.Groups[1].Value] });
+                    return JsonResponse(new JsonObject { ["id"] = _servicePrincipalIds[spMatch.Groups["clientId"].Value] });
 
-                var assignMatch = Regex.Match(url, @"servicePrincipals/([^/]+)/appRoleAssignedTo(?:/(.+))?$");
+                var assignMatch = Regex.Match(url, @"servicePrincipals/(?<spId>[^/]+)/appRoleAssignedTo(?:/(?<assignmentId>.+))?$", RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
                 if (assignMatch.Success)
                 {
-                    var spId = assignMatch.Groups[1].Value;
-                    var assignmentId = assignMatch.Groups[2].Success ? assignMatch.Groups[2].Value : null;
+                    var spId = assignMatch.Groups["spId"].Value;
+                    var assignmentId = assignMatch.Groups["assignmentId"].Success ? assignMatch.Groups["assignmentId"].Value : null;
                     _assignments.TryAdd(spId, new JsonArray());
 
                     if (request.Method == HttpMethod.Get && assignmentId is null)
@@ -133,7 +133,7 @@ public class EntraGraphRoleAssignmentProviderTests
 
                     if (request.Method == HttpMethod.Delete && assignmentId is not null)
                     {
-                        var toRemove = _assignments[spId].FirstOrDefault(a => a!["id"]!.GetValue<string>() == assignmentId);
+                        var toRemove = _assignments[spId].FirstOrDefault(a => string.Equals(a!["id"]!.GetValue<string>(), assignmentId, StringComparison.Ordinal));
                         if (toRemove is not null) _assignments[spId].Remove(toRemove);
                         return new HttpResponseMessage(HttpStatusCode.NoContent);
                     }
@@ -275,14 +275,14 @@ public class EntraGraphRoleAssignmentProviderTests
     }
 
     [Fact]
-    public async Task AssignRoleAsync_RoleNeverRegistered_ThrowsInvalidOperationException()
+    public Task AssignRoleAsync_RoleNeverRegistered_ThrowsInvalidOperationException()
     {
         var server = new FakeGraphServer().WithServicePrincipal(WebClientId, WebServicePrincipalId);
         var sut = BuildSut(server, [WebClientId]);
 
         var act = () => sut.AssignRoleAsync("user-1", "GhostRole");
 
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        return act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     // ── RevokeRoleAsync ────────────────────────────────────────────────────
@@ -303,7 +303,7 @@ public class EntraGraphRoleAssignmentProviderTests
     }
 
     [Fact]
-    public async Task RevokeRoleAsync_NotCurrentlyAssigned_DoesNotThrow()
+    public Task RevokeRoleAsync_NotCurrentlyAssigned_DoesNotThrow()
     {
         var roleId = Guid.NewGuid();
         var server = new FakeGraphServer()
@@ -313,18 +313,18 @@ public class EntraGraphRoleAssignmentProviderTests
 
         var act = () => sut.RevokeRoleAsync("user-1", "Supervisor");
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 
     [Fact]
-    public async Task RevokeRoleAsync_RoleNeverRegistered_DoesNotThrow()
+    public Task RevokeRoleAsync_RoleNeverRegistered_DoesNotThrow()
     {
         var server = new FakeGraphServer().WithServicePrincipal(WebClientId, WebServicePrincipalId);
         var sut = BuildSut(server, [WebClientId]);
 
         var act = () => sut.RevokeRoleAsync("user-1", "GhostRole");
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 
     // ── GetAssignedRoleNamesAsync ──────────────────────────────────────────

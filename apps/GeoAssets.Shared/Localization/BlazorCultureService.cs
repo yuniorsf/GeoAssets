@@ -28,6 +28,7 @@ public sealed class BlazorCultureService : ICultureService
 
     public BlazorCultureService(IJSRuntime js, IOptions<LocalizationOptions> options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _js      = js;
         _options = options.Value;
 
@@ -54,10 +55,10 @@ public sealed class BlazorCultureService : ICultureService
         await ApplyAsync(resolved, persist: stored is null);
     }
 
-    public async Task SetCultureAsync(string cultureName)
+    public Task SetCultureAsync(string cultureName)
     {
         var culture = Resolve(cultureName);
-        await ApplyAsync(culture, persist: true);
+        return ApplyAsync(culture, persist: true);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

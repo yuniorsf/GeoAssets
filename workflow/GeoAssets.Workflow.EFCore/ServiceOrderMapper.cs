@@ -102,15 +102,7 @@ internal static class ServiceOrderMapper
                          ? null
                          : JsonSerializer.Deserialize<FeatureSelectionSpec>(record.SelectionSpecJson, _json);
 
-        var features = new List<GeoFeature>();
-        if (assets is not null && featureIds.Length > 0)
-        {
-            foreach (var fid in featureIds)
-            {
-                var f = assets.GetById(fid);
-                if (f is not null) features.Add(f);
-            }
-        }
+        var features = ResolveFeatures(assets, featureIds);
 
         var order = new ServiceOrder
         {
@@ -140,7 +132,30 @@ internal static class ServiceOrderMapper
 
         order.ChildOrderIds.AddRange(childIds);
 
-        order.Dispatches.AddRange(record.Dispatches
+        order.Dispatches.AddRange(MapDispatches(record.Dispatches));
+        order.ActionLog.AddRange(MapActionLog(record.ActionLog));
+
+        return order;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static List<GeoFeature> ResolveFeatures(IAssetProvider? assets, string[] featureIds)
+    {
+        var features = new List<GeoFeature>();
+        if (assets is null || featureIds.Length == 0) return features;
+
+        foreach (var fid in featureIds)
+        {
+            var f = assets.GetById(fid);
+            if (f is not null) features.Add(f);
+        }
+
+        return features;
+    }
+
+    private static IEnumerable<OrderDispatch> MapDispatches(IEnumerable<OrderDispatchRecord> records) =>
+        records
             .OrderBy(d => d.DispatchedAt)
             .Select(d => new OrderDispatch(
                 d.TargetId,
@@ -151,9 +166,10 @@ internal static class ServiceOrderMapper
             {
                 ActorKind         = (ActorKind)d.ActorKind,
                 AgentInvocationId = d.AgentInvocationId,
-            }));
+            });
 
-        order.ActionLog.AddRange(record.ActionLog
+    private static IEnumerable<OrderActionLog> MapActionLog(IEnumerable<OrderActionLogRecord> records) =>
+        records
             .OrderBy(a => a.PerformedAt)
             .Select(a => new OrderActionLog(
                 (OrderActionType)a.Action,
@@ -164,12 +180,7 @@ internal static class ServiceOrderMapper
             {
                 ActorKind         = (ActorKind)a.ActorKind,
                 AgentInvocationId = a.AgentInvocationId,
-            }));
-
-        return order;
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
+            });
 
     private static T DeserializeOrDefault<T>(string? json, T fallback) where T : class
     {

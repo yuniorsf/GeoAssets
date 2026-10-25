@@ -55,6 +55,7 @@ public partial class DrawToolbar
     /// </summary>
     public static Layer? ResolveStyle(AssetType type, IReadOnlyList<Layer> layers, IReadOnlyList<LayerRule> layerRules)
     {
+        ArgumentNullException.ThrowIfNull(type);
         var placeholder = new GeoFeature { Properties = { AssetTypeId = type.Id.ToString() } };
         return LayerResolver.Resolve(placeholder, type, layers, layerRules);
     }

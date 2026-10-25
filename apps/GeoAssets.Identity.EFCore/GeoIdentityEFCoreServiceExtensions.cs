@@ -73,6 +73,6 @@ public static class GeoIdentityEFCoreServiceExtensions
         using var scope        = services.CreateScope();
         var db                 = scope.ServiceProvider.GetRequiredService<GeoIdentityDbContext>();
         var timeProvider       = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-        await GeoIdentitySeeder.SeedAsync(db, timeProvider, ct);
+        await GeoIdentitySeeder.SeedAsync(db, timeProvider, ct).ConfigureAwait(false);
     }
 }

@@ -14,14 +14,14 @@ public static class TopoGraph
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private static Dictionary<string, GeoFeature> Index(IEnumerable<GeoFeature> features) =>
-        features.ToDictionary(f => f.Id);
+        features.ToDictionary(f => f.Id, StringComparer.Ordinal);
 
     /// <summary>Forward adjacency: id → list of reachable ids.</summary>
     private static Dictionary<string, List<string>> Forward(
         IReadOnlyCollection<GeoFeature> features,
         Dictionary<string, GeoFeature>  index)
     {
-        var adj = features.ToDictionary(f => f.Id, _ => new List<string>());
+        var adj = features.ToDictionary(f => f.Id, _ => new List<string>(), StringComparer.Ordinal);
         foreach (var f in features)
             foreach (var e in f.Topology)
                 if (index.ContainsKey(e.TargetId))
@@ -34,7 +34,7 @@ public static class TopoGraph
         IReadOnlyCollection<GeoFeature> features,
         Dictionary<string, GeoFeature>  index)
     {
-        var rev = features.ToDictionary(f => f.Id, _ => new List<string>());
+        var rev = features.ToDictionary(f => f.Id, _ => new List<string>(), StringComparer.Ordinal);
         foreach (var f in features)
             foreach (var e in f.Topology)
                 if (index.ContainsKey(e.TargetId))
@@ -66,7 +66,7 @@ public static class TopoGraph
         if (!idx.ContainsKey(featureId)) return [];
 
         var fwd     = Forward(all, idx);
-        var visited = new HashSet<string>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
         var queue   = new Queue<string>([featureId]);
 
         while (queue.TryDequeue(out var id))
@@ -89,7 +89,7 @@ public static class TopoGraph
         if (!idx.ContainsKey(featureId)) return [];
 
         var rev     = Reverse(all, idx);
-        var visited = new HashSet<string>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
         var queue   = new Queue<string>([featureId]);
 
         while (queue.TryDequeue(out var id))
@@ -113,7 +113,7 @@ public static class TopoGraph
         var idx = Index(all);
         var fwd = Forward(all, idx);
 
-        var inDegree = all.ToDictionary(f => f.Id, _ => 0);
+        var inDegree = all.ToDictionary(f => f.Id, _ => 0, StringComparer.Ordinal);
         foreach (var f in all)
             foreach (var nb in fwd[f.Id])
                 inDegree[nb]++;
@@ -147,16 +147,16 @@ public static class TopoGraph
     {
         var all = features.ToList();
         var idx = Index(all);
-        if (!idx.ContainsKey(fromId) || !idx.ContainsKey(toId)) return [];
-        if (fromId == toId) return [idx[fromId]];
+        if (!idx.TryGetValue(fromId, out var fromFeature) || !idx.ContainsKey(toId)) return [];
+        if (string.Equals(fromId, toId, StringComparison.Ordinal)) return [fromFeature];
 
         var fwd  = Forward(all, idx);
-        var prev = new Dictionary<string, string?> { [fromId] = null };
+        var prev = new Dictionary<string, string?>(StringComparer.Ordinal) { [fromId] = null };
         var queue = new Queue<string>([fromId]);
 
         while (queue.TryDequeue(out var id))
         {
-            if (id == toId) break;
+            if (string.Equals(id, toId, StringComparison.Ordinal)) break;
             foreach (var nb in fwd[id])
                 if (!prev.ContainsKey(nb))
                 {
@@ -179,11 +179,11 @@ public static class TopoGraph
     {
         var all = features.ToList();
         var idx = Index(all);
-        if (!idx.ContainsKey(fromId) || !idx.ContainsKey(toId)) return [];
-        if (fromId == toId) return [idx[fromId]];
+        if (!idx.TryGetValue(fromId, out var fromFeature) || !idx.ContainsKey(toId)) return [];
+        if (string.Equals(fromId, toId, StringComparison.Ordinal)) return [fromFeature];
 
-        var dist = all.ToDictionary(f => f.Id, _ => double.PositiveInfinity);
-        var prev = new Dictionary<string, string?> { [fromId] = null };
+        var dist = all.ToDictionary(f => f.Id, _ => double.PositiveInfinity, StringComparer.Ordinal);
+        var prev = new Dictionary<string, string?>(StringComparer.Ordinal) { [fromId] = null };
         dist[fromId] = 0;
 
         var pq = new PriorityQueue<string, double>();
@@ -192,7 +192,7 @@ public static class TopoGraph
         while (pq.TryDequeue(out var id, out var priority))
         {
             if (priority > dist[id]) continue; // stale entry
-            if (id == toId) break;
+            if (string.Equals(id, toId, StringComparison.Ordinal)) break;
 
             foreach (var edge in idx[id].Topology)
             {
@@ -224,7 +224,7 @@ public static class TopoGraph
         var idx = Index(all);
 
         // Build undirected adjacency
-        var undirected = all.ToDictionary(f => f.Id, _ => new HashSet<string>());
+        var undirected = all.ToDictionary(f => f.Id, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
         foreach (var f in all)
             foreach (var e in f.Topology)
             {
@@ -233,7 +233,7 @@ public static class TopoGraph
                 undirected[e.TargetId].Add(f.Id);
             }
 
-        var visited    = new HashSet<string>();
+        var visited    = new HashSet<string>(StringComparer.Ordinal);
         var components = new List<IReadOnlyList<GeoFeature>>();
 
         foreach (var f in all)
@@ -268,7 +268,7 @@ public static class TopoGraph
         var all   = features.ToList();
         var idx   = Index(all);
         var fwd   = Forward(all, idx);
-        var color = all.ToDictionary(f => f.Id, _ => 0); // 0=white 1=grey 2=black
+        var color = all.ToDictionary(f => f.Id, _ => 0, StringComparer.Ordinal); // 0=white 1=grey 2=black
 
         bool Dfs(string id)
         {
@@ -287,7 +287,7 @@ public static class TopoGraph
 
     // ── Private utils ─────────────────────────────────────────────────────────
 
-    private static IReadOnlyList<GeoFeature> ReconstructPath(
+    private static List<GeoFeature> ReconstructPath(
         string target,
         Dictionary<string, string?> prev,
         Dictionary<string, GeoFeature> idx)

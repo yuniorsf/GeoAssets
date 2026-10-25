@@ -71,6 +71,7 @@ public sealed class GeoPolygon : GeoGeometry
         get => ToCoordArray(_polygon);
         set
         {
+            ArgumentNullException.ThrowIfNull(value);
             var srid = _polygon.SRID;
             if (value.Length == 0)
             {

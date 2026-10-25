@@ -39,7 +39,7 @@ public class OrgResourceAuthorizationHandlerTests
                     Id             = Guid.NewGuid(),
                     Email          = "test@example.com",
                     DisplayName    = "Test",
-                    CreatedAt      = DateTime.UtcNow,
+                    CreatedAt      = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
                     OrganizationId = userOrganizationId,
                 },
                 Roles       = roles,
@@ -92,7 +92,7 @@ public class OrgResourceAuthorizationHandlerTests
         AllowedActions         = [.. allowedActions],
         RequiredRole           = requiredRole,
         GrantedBy              = "admin@example.com",
-        GrantedAt              = DateTime.UtcNow,
+        GrantedAt              = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         IsActive               = true,
     };
 
@@ -101,7 +101,9 @@ public class OrgResourceAuthorizationHandlerTests
         Properties = new GeoFeatureProperties
         {
             OrganizationId = organizationId,
-            CustomAttributes = scopeId is null ? new() : new() { ["scopeId"] = scopeId },
+            CustomAttributes = scopeId is null
+                ? new(StringComparer.Ordinal)
+                : new(StringComparer.Ordinal) { ["scopeId"] = scopeId },
         }
     };
 

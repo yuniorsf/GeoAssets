@@ -51,7 +51,7 @@ public sealed class RestPendingInvitationRepository(HttpClient http) : IPendingI
 
     public async Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default)
     {
-        var response = await http.GetAsync("invitations/me", ct);
+        var response = await http.GetAsync(new Uri("invitations/me", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
 
         // No pending invitation is a 200 with an empty body (Results.Json writes nothing for a

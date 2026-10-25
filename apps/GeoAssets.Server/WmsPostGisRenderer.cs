@@ -34,17 +34,6 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
     /// <summary>Per-query timeout for PostGIS operations (tile rendering must be fast).</summary>
     public static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(30);
 
-    // ── Render row ────────────────────────────────────────────────────────────
-
-    /// <summary>Minimal data required to draw one feature on a tile.</summary>
-    public sealed class RenderRow
-    {
-        public required Geometry Geom        { get; init; }
-        public required string   Color       { get; init; }
-        public required string   Name        { get; init; }
-        public required string   AssetTypeId { get; init; }
-    }
-
     // ── Queries ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -69,25 +58,31 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
         var bbox = MakeBbox(minLon, minLat, maxLon, maxLat);
 
         using var cts = new CancellationTokenSource(QueryTimeout, timeProvider);
-        await using var db = await factory.CreateDbContextAsync(cts.Token);
+        var db = await factory.CreateDbContextAsync(cts.Token).ConfigureAwait(false);
+        try
+        {
+            var query = db.GeoEntities
+                .AsNoTracking()
+                .Include(e => e.AssetType)
+                .Where(e => e.Geom != null && e.Geom.Intersects(bbox));
 
-        var query = db.GeoEntities
-            .AsNoTracking()
-            .Include(e => e.AssetType)
-            .Where(e => e.Geom != null && e.Geom.Intersects(bbox));
+            if (!string.IsNullOrEmpty(assetTypeId))
+                query = query.Where(e => e.AssetTypeId == assetTypeId);
 
-        if (!string.IsNullOrEmpty(assetTypeId))
-            query = query.Where(e => e.AssetTypeId == assetTypeId);
-
-        return await query
-            .Select(e => new RenderRow
-            {
-                Geom        = e.Geom!,
-                Color       = e.AssetType != null ? e.AssetType.Color : "#3388ff",
-                Name        = e.Name,
-                AssetTypeId = e.AssetTypeId
-            })
-            .ToListAsync(cts.Token);
+            return await query
+                .Select(e => new RenderRow
+                {
+                    Geom        = e.Geom!,
+                    Color       = e.AssetType != null ? e.AssetType.Color : "#3388ff",
+                    Name        = e.Name,
+                    AssetTypeId = e.AssetTypeId
+                })
+                .ToListAsync(cts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            await db.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -107,20 +102,26 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
             clickLon + toleranceLon, clickLat + toleranceLat);
 
         using var cts = new CancellationTokenSource(QueryTimeout, timeProvider);
-        await using var db = await factory.CreateDbContextAsync(cts.Token);
-
-        return await db.GeoEntities
-            .AsNoTracking()
-            .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
-            .Take(maxCount)
-            .Select(e => new FeatureInfoRow
-            {
-                Id          = e.Id,
-                Name        = e.Name,
-                AssetTypeId = e.AssetTypeId,
-                Description = e.Description
-            })
-            .ToListAsync(cts.Token);
+        var db = await factory.CreateDbContextAsync(cts.Token).ConfigureAwait(false);
+        try
+        {
+            return await db.GeoEntities
+                .AsNoTracking()
+                .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
+                .Take(maxCount)
+                .Select(e => new FeatureInfoRow
+                {
+                    Id          = e.Id,
+                    Name        = e.Name,
+                    AssetTypeId = e.AssetTypeId,
+                    Description = e.Description
+                })
+                .ToListAsync(cts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            await db.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>Returns all asset types stored in the DB for GetCapabilities.</summary>
@@ -129,29 +130,18 @@ public sealed class WmsPostGisRenderer(IDbContextFactory<GeoAssetsDbContext> fac
         if (httpCt.IsCancellationRequested) return [];
 
         using var cts = new CancellationTokenSource(QueryTimeout, timeProvider);
-        await using var db = await factory.CreateDbContextAsync(cts.Token);
-
-        return await db.AssetTypes
-            .AsNoTracking()
-            .Select(t => new AssetTypeInfo { Id = t.Id, Name = t.Name, Color = t.Color })
-            .ToListAsync(cts.Token);
-    }
-
-    // ── DTOs ──────────────────────────────────────────────────────────────────
-
-    public sealed class FeatureInfoRow
-    {
-        public required string Id          { get; init; }
-        public required string Name        { get; init; }
-        public required string AssetTypeId { get; init; }
-        public required string Description { get; init; }
-    }
-
-    public sealed class AssetTypeInfo
-    {
-        public required Guid   Id    { get; init; }
-        public required string Name  { get; init; }
-        public required string Color { get; init; }
+        var db = await factory.CreateDbContextAsync(cts.Token).ConfigureAwait(false);
+        try
+        {
+            return await db.AssetTypes
+                .AsNoTracking()
+                .Select(t => new AssetTypeInfo { Id = t.Id, Name = t.Name, Color = t.Color })
+                .ToListAsync(cts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            await db.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

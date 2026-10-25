@@ -24,6 +24,7 @@ public static class GeoAssetsRoleAssignmentExtensions
         IConfiguration          configuration,
         IRoleAssignmentProvider? provider = null)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         if (provider is not null)
         {
             services.AddSingleton(provider);

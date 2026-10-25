@@ -34,7 +34,7 @@ public sealed class AppUser
     // ── Navigation ────────────────────────────────────────────────────────────
 
     public Organization?   Organization { get; set; }
-    public List<UserRole>  UserRoles    { get; set; } = [];
-    public List<UserClaim> UserClaims   { get; set; } = [];
-    public List<UserGroup> UserGroups   { get; set; } = [];
+    public List<UserRole>  UserRoles    { get; init; } = [];
+    public List<UserClaim> UserClaims   { get; init; } = [];
+    public List<UserGroup> UserGroups   { get; init; } = [];
 }

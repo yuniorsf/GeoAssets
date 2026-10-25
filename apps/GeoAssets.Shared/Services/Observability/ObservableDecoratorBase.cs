@@ -11,8 +11,8 @@ namespace GeoAssets.Shared.Services.Observability;
 /// </summary>
 public abstract class ObservableDecoratorBase<T>
 {
-    protected readonly ILogger<T> Logger;
-    protected readonly TimeProvider TimeProvider;
+    protected ILogger<T> Logger { get; }
+    protected TimeProvider TimeProvider { get; }
 
     protected ObservableDecoratorBase(ILogger<T> logger, TimeProvider timeProvider)
     {
@@ -31,6 +31,7 @@ public abstract class ObservableDecoratorBase<T>
         Action<Activity?>? before = null,
         Action<Activity?, long>? after = null)
     {
+        ArgumentNullException.ThrowIfNull(operation);
         var startTimestamp = TimeProvider.GetTimestamp();
         using var span = ImportDiagnostics.ActivitySource.StartActivity(spanName, ActivityKind.Internal);
         before?.Invoke(span);
@@ -57,6 +58,7 @@ public abstract class ObservableDecoratorBase<T>
         Action<Activity?>? before = null,
         Action<Activity?, TResult, long>? after = null)
     {
+        ArgumentNullException.ThrowIfNull(operation);
         var startTimestamp = TimeProvider.GetTimestamp();
         using var span = ImportDiagnostics.ActivitySource.StartActivity(spanName, ActivityKind.Internal);
         before?.Invoke(span);
@@ -83,6 +85,7 @@ public abstract class ObservableDecoratorBase<T>
         Action<Activity?>? before = null,
         Action<Activity?, TResult, long>? after = null)
     {
+        ArgumentNullException.ThrowIfNull(operation);
         var startTimestamp = TimeProvider.GetTimestamp();
         using var span = ImportDiagnostics.ActivitySource.StartActivity(spanName, ActivityKind.Internal);
         before?.Invoke(span);

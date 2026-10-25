@@ -1,0 +1,37 @@
+name: Claude Auto PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_federation_rule_id: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+            Additionally, verify compliance with GeoAssets' Tri-Planar Deterministic Oracle and CLAUDE.md contracts:
+            1. Target branch must be `develop` (flag if targeting `main` unless explicitly marked as a human release PR).
+            2. PR title must be prefixed with `<TICKET-KEY>:` and commit subjects must end with `(<TICKET-KEY>)`.
+            3. Flag any added `#pragma warning disable`, `[SuppressMessage]`, `<NoWarn>`, or unjustified `.editorconfig` `severity = none` entries.
+            4. Flag any banned API usage (`DateTime.Now`/`UtcNow` instead of injected `TimeProvider`, sync-over-async `.Result`/`.Wait()`, or EF Core/PostGIS leakage into `core/` projects).

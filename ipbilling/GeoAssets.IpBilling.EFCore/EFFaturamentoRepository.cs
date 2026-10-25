@@ -11,7 +11,7 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
         Guid municipioId, string competencia, CancellationToken ct = default)
     {
         var record = await db.Faturamentos.FirstOrDefaultAsync(
-            f => f.MunicipioId == municipioId && f.Competencia == competencia, ct);
+            f => f.MunicipioId == municipioId && f.Competencia == competencia, ct).ConfigureAwait(false);
 
         return record is null ? null : IpBillingMapper.ToDomain(record);
     }
@@ -22,13 +22,16 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
         var records = await db.Faturamentos
             .Where(f => f.MunicipioId == municipioId)
             .OrderBy(f => f.Competencia)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         return records.Select(IpBillingMapper.ToDomain).ToList();
     }
 
     public async Task AddAsync(Faturamento faturamento, CancellationToken ct = default)
-        => await db.Faturamentos.AddAsync(IpBillingMapper.ToRecord(faturamento), ct);
+    {
+        ArgumentNullException.ThrowIfNull(faturamento);
+        await db.Faturamentos.AddAsync(IpBillingMapper.ToRecord(faturamento), ct).ConfigureAwait(false);
+    }
 
     public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

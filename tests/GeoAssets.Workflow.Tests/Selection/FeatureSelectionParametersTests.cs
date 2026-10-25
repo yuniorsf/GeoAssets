@@ -125,7 +125,7 @@ public class FeatureSelectionParametersTests
     public void DictionaryWrappers_DelegateToValueConverters()
     {
         var point = new GeoPoint(5, 6);
-        IReadOnlyDictionary<string, object> parameters = new Dictionary<string, object>
+        IReadOnlyDictionary<string, object> parameters = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["d"]    = 1.5,
             ["b"]    = true,

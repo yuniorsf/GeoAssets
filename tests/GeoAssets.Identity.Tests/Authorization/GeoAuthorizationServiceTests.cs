@@ -149,7 +149,7 @@ public class GeoAuthorizationServiceTests
         ExternalObjectId = externalObjectId,
         Email            = "a@example.com",
         DisplayName      = "Test",
-        CreatedAt        = DateTime.UtcNow,
+        CreatedAt        = TimeProvider.System.GetUtcNow().UtcDateTime,
     };
 
     // ── JIT provisioning (XD01-88) ──────────────────────────────────────────

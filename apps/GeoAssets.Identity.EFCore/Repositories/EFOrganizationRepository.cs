@@ -14,13 +14,13 @@ public sealed class EFOrganizationRepository(GeoIdentityDbContext db) : IOrganiz
         => db.Organizations.FirstOrDefaultAsync(o => o.Slug == slug, ct);
 
     public async Task<IReadOnlyList<Organization>> GetAllAsync(CancellationToken ct = default)
-        => await db.Organizations.ToListAsync(ct);
+        => await db.Organizations.ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<IReadOnlyList<AppUser>> GetUsersAsync(Guid organizationId, CancellationToken ct = default)
-        => await db.Users.Where(u => u.OrganizationId == organizationId).ToListAsync(ct);
+        => await db.Users.Where(u => u.OrganizationId == organizationId).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task AddAsync(Organization organization, CancellationToken ct = default)
-        => await db.Organizations.AddAsync(organization, ct);
+        => await db.Organizations.AddAsync(organization, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(Organization organization, CancellationToken ct = default)
     {

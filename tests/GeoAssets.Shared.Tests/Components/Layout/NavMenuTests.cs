@@ -24,19 +24,19 @@ public class NavMenuTests
         }
 
         public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
     }
 
     private sealed class TestGroupItem(
@@ -72,7 +72,7 @@ public class NavMenuTests
     public async Task FilterByPermissionAsync_PermissionGranted_KeepsItem()
     {
         var tree = MenuTreeBuilder.Build([new TestPageItem("admin", requiredPermission: "users:read")]);
-        var authService = new StubAuthorizationService(hasPermission: code => code == "users:read");
+        var authService = new StubAuthorizationService(hasPermission: code => string.Equals(code, "users:read", StringComparison.Ordinal));
 
         var filtered = await NavMenu.FilterByPermissionAsync(tree, authService);
 

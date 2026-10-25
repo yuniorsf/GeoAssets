@@ -16,7 +16,7 @@ public class RestServiceOrderRepositoryTests
     {
         var response = new HttpResponseMessage(status);
         if (body is not null)
-            response.Content = JsonContent.Create(body, options: GeoJsonSerializer.GetOptions());
+            response.Content = JsonContent.Create(body, options: GeoJsonSerializer.Options);
         return response;
     }
 
@@ -177,14 +177,14 @@ public class RestServiceOrderRepositoryTests
     }
 
     [Fact]
-    public void AddAsync_NonServiceOrderImplementation_ThrowsArgumentException()
+    public Task AddAsync_NonServiceOrderImplementation_ThrowsArgumentException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.Created));
         var sut = Sut(handler);
 
         var act = () => sut.AddAsync(new FakeServiceOrder());
 
-        act.Should().ThrowAsync<ArgumentException>();
+        return act.Should().ThrowAsync<ArgumentException>();
     }
 
     // ── UpdateAsync ───────────────────────────────────────────────────────────
@@ -209,14 +209,14 @@ public class RestServiceOrderRepositoryTests
     }
 
     [Fact]
-    public async Task UpdateAsync_NotFound_ThrowsKeyNotFoundException()
+    public Task UpdateAsync_NotFound_ThrowsKeyNotFoundException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.NotFound));
         var sut = Sut(handler);
 
         var act = () => sut.UpdateAsync(Order("missing"));
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public class RestServiceOrderRepositoryTests
     }
 
     [Fact]
-    public async Task UpdateAsync_AttributeValidationFailure_ThrowsServiceOrderAttributeValidationException()
+    public Task UpdateAsync_AttributeValidationFailure_ThrowsServiceOrderAttributeValidationException()
     {
         var handler = new FakeHttpMessageHandler(_ =>
             JsonResponse(HttpStatusCode.BadRequest, new { orderTypeId = "inspection", errors = new[] { "bad" } }));
@@ -254,18 +254,18 @@ public class RestServiceOrderRepositoryTests
 
         var act = () => sut.UpdateAsync(Order("a"));
 
-        await act.Should().ThrowAsync<ServiceOrderAttributeValidationException>();
+        return act.Should().ThrowAsync<ServiceOrderAttributeValidationException>();
     }
 
     [Fact]
-    public async Task UpdateAsync_UnrecognizedBadRequestShape_ThrowsHttpRequestException()
+    public Task UpdateAsync_UnrecognizedBadRequestShape_ThrowsHttpRequestException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.BadRequest, new { message = "nope" }));
         var sut = Sut(handler);
 
         var act = () => sut.UpdateAsync(Order("a"));
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        return act.Should().ThrowAsync<HttpRequestException>();
     }
 
     // ── AppendDispatchAsync ───────────────────────────────────────────────────
@@ -281,7 +281,7 @@ public class RestServiceOrderRepositoryTests
         IServiceOrder? raised = null;
         sut.OrderUpdated += (_, o) => raised = o;
 
-        await sut.AppendDispatchAsync("a", new OrderDispatch("target-1", DispatchTargetType.User, "dispatcher-1", DateTime.UtcNow));
+        await sut.AppendDispatchAsync("a", new OrderDispatch("target-1", DispatchTargetType.User, "dispatcher-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         raised!.Id.Should().Be("a");
         handler.Requests.Should().HaveCount(2);
@@ -290,14 +290,14 @@ public class RestServiceOrderRepositoryTests
     }
 
     [Fact]
-    public async Task AppendDispatchAsync_NotFound_ThrowsKeyNotFoundException()
+    public Task AppendDispatchAsync_NotFound_ThrowsKeyNotFoundException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.NotFound));
         var sut = Sut(handler);
 
-        var act = () => sut.AppendDispatchAsync("missing", new OrderDispatch("t", DispatchTargetType.User, "d", DateTime.UtcNow));
+        var act = () => sut.AppendDispatchAsync("missing", new OrderDispatch("t", DispatchTargetType.User, "d", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     // ── AppendActionAsync ─────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ public class RestServiceOrderRepositoryTests
         var statusChanged = false;
         sut.OrderStatusChanged += (_, _) => statusChanged = true;
 
-        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Approve, "user-1", DateTime.UtcNow));
+        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Approve, "user-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         statusChanged.Should().BeFalse();
         // Only POST + the post-write GET — no pre-fetch GET since there's no status to compare.
@@ -335,7 +335,7 @@ public class RestServiceOrderRepositoryTests
         (IServiceOrder Order, string Previous)? raised = null;
         sut.OrderStatusChanged += (_, e) => raised = e;
 
-        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Execute, "user-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.InProgress));
+        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Execute, "user-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.InProgress));
 
         raised.Should().NotBeNull();
         raised!.Value.Previous.Should().Be(ServiceOrderStatus.Pending);
@@ -354,7 +354,7 @@ public class RestServiceOrderRepositoryTests
         var statusChanged = false;
         sut.OrderStatusChanged += (_, _) => statusChanged = true;
 
-        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Approve, "user-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Draft));
+        await sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Approve, "user-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Draft));
 
         statusChanged.Should().BeFalse();
     }
@@ -368,7 +368,7 @@ public class RestServiceOrderRepositoryTests
                 : JsonResponse(HttpStatusCode.BadRequest, new { from = ServiceOrderStatus.Completed, to = ServiceOrderStatus.Draft }));
         var sut = Sut(handler);
 
-        var act = () => sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Dispatch, "user-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Draft));
+        var act = () => sut.AppendActionAsync("a", new OrderActionLog(OrderActionType.Dispatch, "user-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Draft));
 
         var thrown = (await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>()).Which;
         thrown.From.Should().Be(ServiceOrderStatus.Completed);
@@ -376,14 +376,14 @@ public class RestServiceOrderRepositoryTests
     }
 
     [Fact]
-    public async Task AppendActionAsync_NotFound_ThrowsKeyNotFoundException()
+    public Task AppendActionAsync_NotFound_ThrowsKeyNotFoundException()
     {
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(HttpStatusCode.NotFound));
         var sut = Sut(handler);
 
-        var act = () => sut.AppendActionAsync("missing", new OrderActionLog(OrderActionType.Approve, "user-1", DateTime.UtcNow));
+        var act = () => sut.AppendActionAsync("missing", new OrderActionLog(OrderActionType.Approve, "user-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
-        await act.Should().ThrowAsync<KeyNotFoundException>();
+        return act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     // ── DeleteAsync ───────────────────────────────────────────────────────────
@@ -418,11 +418,11 @@ public class RestServiceOrderRepositoryTests
         public string CreatedBy => "";
         public string? AssignedTo => null;
         public Guid OrganizationId => Guid.Empty;
-        public DateTime CreatedAt => DateTime.UtcNow;
+        public DateTime CreatedAt => new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc);
         public DateTime? UpdatedAt => null;
         public DateTime? ScheduledAt => null;
         public DateTime? CompletedAt => null;
-        public IReadOnlyDictionary<string, string> Attributes => new Dictionary<string, string>();
+        public IReadOnlyDictionary<string, string> Attributes => new Dictionary<string, string>(StringComparer.Ordinal);
         public IReadOnlyList<Core.Models.GeoFeature> Features => [];
         public GeoAssets.Workflow.Selection.FeatureSelectionSpec? SelectionSpec => null;
         public string? ParentOrderId => null;

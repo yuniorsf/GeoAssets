@@ -69,16 +69,16 @@ public partial class MapContainer
     // ─── Repository event handlers ────────────────────────────────────────
 
     private void OnFeatureAdded(object? _, GeoFeature f)   =>
-        InvokeAsync(() => MapInterop.RenderFeatureAsync(DivId, f));
+        _ = InvokeAsync(() => MapInterop.RenderFeatureAsync(DivId, f));
 
     private void OnFeatureUpdated(object? _, GeoFeature f) =>
-        InvokeAsync(() => MapInterop.RenderFeatureAsync(DivId, f));
+        _ = InvokeAsync(() => MapInterop.RenderFeatureAsync(DivId, f));
 
     private void OnFeatureDeletedFromRepo(object? _, string id) =>
-        InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
+        _ = InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
 
     private void OnCollectionChanged(object? _, EventArgs __) =>
-        InvokeAsync(() => ShouldRenderLastViewport(_lastViewport)
+        _ = InvokeAsync(() => ShouldRenderLastViewport(_lastViewport)
             ? RenderViewportAsync(_lastViewport!.Value)
             : RenderAllViaPipelineAsync());
 
@@ -98,7 +98,11 @@ public partial class MapContainer
     /// <c>ProviderPoolPanel</c>) excludes it. Factored out for direct unit testing, same reasoning
     /// as <see cref="ShouldRenderLastViewport"/>.
     /// </summary>
-    public static bool ShouldShowOnMap(ProviderEntry entry) => entry.IsOpen && entry.IsEnabled;
+    public static bool ShouldShowOnMap(ProviderEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return entry.IsOpen && entry.IsEnabled;
+    }
 
     /// <summary>
     /// Resolves the <see cref="IAssetProvider"/> to actually read from for a given pool entry —
@@ -120,7 +124,7 @@ public partial class MapContainer
     /// </summary>
     private async Task RenderAllViaPipelineAsync()
     {
-        _bulkRenderCts?.Cancel();
+        if (_bulkRenderCts is { } existing) await existing.CancelAsync();
         var cts = new CancellationTokenSource();
         _bulkRenderCts = cts;
         var ct = cts.Token;
@@ -236,18 +240,18 @@ public partial class MapContainer
     }
 
     [JSInvokable("OnFeatureClickedFromJs")]
-    public async Task OnFeatureClickedFromJs(string featureId) =>
-        await OnFeatureClicked.InvokeAsync(featureId);
+    public Task OnFeatureClickedFromJs(string featureId) =>
+        OnFeatureClicked.InvokeAsync(featureId);
 
     [JSInvokable("OnFeatureContextMenuFromJs")]
-    public async Task OnFeatureContextMenuFromJs(string featureId, double x, double y) =>
-        await OnFeatureContextMenu.InvokeAsync((featureId, x, y));
+    public Task OnFeatureContextMenuFromJs(string featureId, double x, double y) =>
+        OnFeatureContextMenu.InvokeAsync((featureId, x, y));
 
     [JSInvokable("OnViewportChangedFromJs")]
-    public async Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
+    public Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
     {
         _lastViewport = (minLon, minLat, maxLon, maxLat);
-        await RenderViewportAsync(_lastViewport.Value);
+        return RenderViewportAsync(_lastViewport.Value);
     }
 
     /// <summary>
@@ -262,9 +266,9 @@ public partial class MapContainer
     /// </summary>
     private async Task RenderViewportAsync((double MinLon, double MinLat, double MaxLon, double MaxLat) bounds)
     {
-        _bulkRenderCts?.Cancel();
+        if (_bulkRenderCts is { } existingBulk) await existingBulk.CancelAsync();
 
-        _viewportRenderCts?.Cancel();
+        if (_viewportRenderCts is { } existingViewport) await existingViewport.CancelAsync();
         var cts = new CancellationTokenSource();
         _viewportRenderCts = cts;
         var ct = cts.Token;
@@ -335,8 +339,18 @@ public partial class MapContainer
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing) return;
+
         _bulkRenderCts?.Cancel();
+        _bulkRenderCts?.Dispose();
         _viewportRenderCts?.Cancel();
+        _viewportRenderCts?.Dispose();
 
         Repository.FeatureAdded      -= OnFeatureAdded;
         Repository.FeatureUpdated    -= OnFeatureUpdated;
@@ -346,7 +360,8 @@ public partial class MapContainer
 
     public async ValueTask DisposeAsync()
     {
-        Dispose();
+        Dispose(true);
+        GC.SuppressFinalize(this);
         if (_initialized)
         {
             Logger.LogDebug("MapContainer disposing — divId={DivId}", DivId);

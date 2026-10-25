@@ -9,10 +9,10 @@ public class NullInvitationEmailSenderTests
     private readonly NullInvitationEmailSender _sut = new();
 
     [Fact]
-    public async Task SendInvitationAsync_DoesNotThrow()
+    public Task SendInvitationAsync_DoesNotThrow()
     {
         var act = () => _sut.SendInvitationAsync("invitee@example.com", "Invitee");
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 }

@@ -151,12 +151,12 @@ public class RestUserRepositoryTests
 
     [Theory]
     [MemberData(nameof(UnsupportedMethods))]
-    public async Task Method_WithNoServerEndpoint_ThrowsNotSupportedException(Func<IUserRepository, Task> call)
+    public Task Method_WithNoServerEndpoint_ThrowsNotSupportedException(Func<IUserRepository, Task> call)
     {
         var sut = Sut(new FakeHttpMessageHandler(_ => throw new InvalidOperationException("Should not be called.")));
 
         var act = () => call(sut);
 
-        await act.Should().ThrowAsync<NotSupportedException>();
+        return act.Should().ThrowAsync<NotSupportedException>();
     }
 }

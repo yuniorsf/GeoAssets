@@ -34,5 +34,7 @@ public partial class SessionActivityTracker
             try { await JS.InvokeVoidAsync("sessionActivity.dispose"); } catch { }
             _ref.Dispose();
         }
+
+        GC.SuppressFinalize(this);
     }
 }

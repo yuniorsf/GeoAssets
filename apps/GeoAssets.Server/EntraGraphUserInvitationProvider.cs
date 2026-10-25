@@ -50,8 +50,8 @@ public sealed class EntraGraphUserInvitationProvider : IUserInvitationProvider
             },
         };
 
-        var response = await SendAsync(HttpMethod.Post, "users", body, ct);
-        var dto = await response.Content.ReadFromJsonAsync<GraphIdResponse>(ct)
+        var response = await SendAsync(HttpMethod.Post, "users", body, ct).ConfigureAwait(false);
+        var dto = await response.Content.ReadFromJsonAsync<GraphIdResponse>(ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("POST users returned an empty response.");
         return dto.Id;
     }
@@ -59,8 +59,8 @@ public sealed class EntraGraphUserInvitationProvider : IUserInvitationProvider
     // A 404 here means the account is already gone (e.g. deleted out-of-band, XD01-94) — the
     // goal of this call ("this account should not be able to sign in") is already satisfied,
     // so it's tolerated rather than treated as a failure, unlike every other non-success status.
-    public async Task RevokeInvitedAccountAsync(string externalObjectId, CancellationToken ct = default)
-        => await SendAsync(
+    public Task RevokeInvitedAccountAsync(string externalObjectId, CancellationToken ct = default)
+        => SendAsync(
             HttpMethod.Patch, $"users/{externalObjectId}", new { accountEnabled = false }, ct,
             toleratesNotFound: true);
 
@@ -70,14 +70,14 @@ public sealed class EntraGraphUserInvitationProvider : IUserInvitationProvider
         HttpMethod method, string relativeUrl, object body, CancellationToken ct,
         bool toleratesNotFound = false)
     {
-        var token = await _tokenProvider.GetAccessTokenAsync(ct);
-        var request = new HttpRequestMessage(method, relativeUrl)
+        var token = await _tokenProvider.GetAccessTokenAsync(ct).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(method, relativeUrl)
         {
             Content = JsonContent.Create(body),
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) },
         };
 
-        var response = await _graph.SendAsync(request, ct);
+        var response = await _graph.SendAsync(request, ct).ConfigureAwait(false);
         if (toleratesNotFound && response.StatusCode == HttpStatusCode.NotFound)
             return response;
 

@@ -18,7 +18,7 @@ public sealed class RestGroupRepository(HttpClient http) : IGroupRepository
 {
     public async Task<AppGroup?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"groups/{id}", ct);
+        var response = await http.GetAsync(new Uri($"groups/{id}", UriKind.Relative), ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
@@ -46,6 +46,7 @@ public sealed class RestGroupRepository(HttpClient http) : IGroupRepository
     /// </summary>
     public async Task AddAsync(AppGroup group, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(group);
         var response = await http.PostAsJsonAsync("groups",
             new GroupWriteDto(group.Name, group.Description, group.OrganizationId, group.IsActive), ct);
         response.EnsureSuccessStatusCode();
@@ -58,6 +59,7 @@ public sealed class RestGroupRepository(HttpClient http) : IGroupRepository
 
     public async Task UpdateAsync(AppGroup group, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(group);
         var response = await http.PutAsJsonAsync($"groups/{group.Id}",
             new GroupWriteDto(group.Name, group.Description, group.OrganizationId, group.IsActive), ct);
         response.EnsureSuccessStatusCode();
@@ -71,13 +73,13 @@ public sealed class RestGroupRepository(HttpClient http) : IGroupRepository
     /// </summary>
     public async Task AddMemberAsync(Guid groupId, Guid userId, string? addedBy = null, CancellationToken ct = default)
     {
-        var response = await http.PostAsync($"groups/{groupId}/members/{userId}", content: null, ct);
+        var response = await http.PostAsync(new Uri($"groups/{groupId}/members/{userId}", UriKind.Relative), content: null, ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RemoveMemberAsync(Guid groupId, Guid userId, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"groups/{groupId}/members/{userId}", ct);
+        var response = await http.DeleteAsync(new Uri($"groups/{groupId}/members/{userId}", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
     }
 

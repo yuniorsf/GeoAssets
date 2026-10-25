@@ -1,0 +1,41 @@
+# ==============================================================================
+# GeoAssets — Banned API Symbols (Microsoft.CodeAnalysis.BannedApiAnalyzers)
+# ==============================================================================
+# Enforces deterministic clock abstraction (TimeProvider) and prohibits
+# sync-over-async, blocking waits, and unsafe legacy threading primitives.
+# Format: <DocumentationCommentId>;<Justification message>
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Clock & Time Abstraction (Require System.TimeProvider)
+# ------------------------------------------------------------------------------
+P:System.DateTime.Now;Use injected System.TimeProvider.GetUtcNow() or GetLocalNow() instead of DateTime.Now for deterministic testability (see csharp-conventions: timeprovider-and-clock-abstraction.md).
+P:System.DateTime.UtcNow;Use injected System.TimeProvider.GetUtcNow() instead of DateTime.UtcNow for deterministic testability.
+P:System.DateTime.Today;Use injected System.TimeProvider.GetLocalNow().Date instead of DateTime.Today.
+P:System.DateTimeOffset.Now;Use injected System.TimeProvider.GetLocalNow() instead of DateTimeOffset.Now.
+P:System.DateTimeOffset.UtcNow;Use injected System.TimeProvider.GetUtcNow() instead of DateTimeOffset.UtcNow.
+
+# ------------------------------------------------------------------------------
+# 2. Sync-Over-Async & Blocking Task Primitives
+# ------------------------------------------------------------------------------
+M:System.Threading.Tasks.Task.Wait;Never block synchronously on a Task (sync-over-async deadlock/thread-pool starvation risk); use 'await' all the way down.
+M:System.Threading.Tasks.Task.Wait(System.Int32);Never block synchronously on a Task; use 'await' with a CancellationToken or Task.WaitAsync.
+M:System.Threading.Tasks.Task.Wait(System.TimeSpan);Never block synchronously on a Task; use 'await' with a CancellationToken or Task.WaitAsync.
+M:System.Threading.Tasks.Task.Wait(System.Threading.CancellationToken);Never block synchronously on a Task; use 'await' with Task.WaitAsync(CancellationToken).
+M:System.Threading.Tasks.Task.Wait(System.Int32,System.Threading.CancellationToken);Never block synchronously on a Task; use 'await' with Task.WaitAsync.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[]);Use 'await Task.WhenAll(...)' instead of blocking Task.WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Int32);Use 'await Task.WhenAll(...)' with CancellationToken instead of blocking Task.WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.TimeSpan);Use 'await Task.WhenAll(...)' with CancellationToken instead of blocking Task.WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Threading.CancellationToken);Use 'await Task.WhenAll(...)' instead of blocking Task.WaitAll.
+M:System.Threading.Tasks.Task.WaitAny(System.Threading.Tasks.Task[]);Use 'await Task.WhenAny(...)' instead of blocking Task.WaitAny.
+P:System.Threading.Tasks.Task`1.Result;Never access Task<T>.Result synchronously; 'await' the task instead.
+
+# ------------------------------------------------------------------------------
+# 3. Unchecked & Legacy Threading Primitives
+# ------------------------------------------------------------------------------
+M:System.Threading.Thread.Sleep(System.Int32);Never block threads with Thread.Sleep; use 'await Task.Delay(..., timeProvider, cancellationToken)'.
+M:System.Threading.Thread.Sleep(System.TimeSpan);Never block threads with Thread.Sleep; use 'await Task.Delay(..., timeProvider, cancellationToken)'.
+M:System.Threading.ThreadPool.QueueUserWorkItem(System.Threading.WaitCallback);Avoid unchecked fire-and-forget ThreadPool work items; use structured async tasks, Channels, or IHostedService.
+M:System.Threading.ThreadPool.QueueUserWorkItem(System.Threading.WaitCallback,System.Object);Avoid unchecked fire-and-forget ThreadPool work items; use structured async tasks, Channels, or IHostedService.
+M:System.Threading.ThreadPool.UnsafeQueueUserWorkItem(System.Threading.WaitCallback,System.Object);UnsafeQueueUserWorkItem suppresses ExecutionContext/Activity propagation and is banned.
+

@@ -20,7 +20,7 @@ using GeoAssets.Core.Services;
 
 namespace GeoAssets.Examples.Topology;
 
-public static class ElectricCircuit
+internal static class ElectricCircuit
 {
     public static void Run()
     {
@@ -103,7 +103,7 @@ public static class ElectricCircuit
             TargetId = to.Id,
             Kind     = kind,
             Weight   = resistance,
-            Metadata = new() { ["voltage"] = voltage, ["current"] = current }
+            Metadata = new(StringComparer.Ordinal) { ["voltage"] = voltage, ["current"] = current }
         });
     }
 }

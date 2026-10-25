@@ -4,7 +4,7 @@ using GeoAssets.Examples.MultiAgent.Agents;
 
 namespace GeoAssets.Examples.MultiAgent;
 
-public static class CommandPluginGenerationExample
+internal static class CommandPluginGenerationExample
 {
     private const string UserTask =
         """
@@ -40,18 +40,16 @@ public static class CommandPluginGenerationExample
         var outputRoot = Path.Combine(repoRoot, "generated-plugins");
         var commandsProjectPath = Path.Combine(repoRoot, "core", "GeoAssets.Commands", "GeoAssets.Commands.csproj");
 
-        var orchestrator = new AnthropicCommandPluginOrchestrator(
-        [
-            new AnalysisAgent(),
-            new CommandPluginAgent(),
-            new ReviewAgent(),
-        ]);
+        using var analysisAgent = new AnalysisAgent();
+        using var commandPluginAgent = new CommandPluginAgent();
+        using var reviewAgent = new ReviewAgent();
+        using var orchestrator = new AnthropicCommandPluginOrchestrator([analysisAgent, commandPluginAgent, reviewAgent]);
 
-        var rawSpec = await orchestrator.RunAsync(UserTask);
+        var rawSpec = await orchestrator.RunAsync(UserTask).ConfigureAwait(false);
         var spec = DeserializeSpec(rawSpec);
 
         var scaffolder = new GeoCommandPluginScaffolder(commandsProjectPath);
-        var generated = await scaffolder.WriteToDirectoryAsync(spec, outputRoot);
+        var generated = await scaffolder.WriteToDirectoryAsync(spec, outputRoot).ConfigureAwait(false);
 
         Print.Section("Agent-generated command plugin");
         Console.WriteLine($"      Project : {generated.ProjectDirectory}");
@@ -75,7 +73,7 @@ public static class CommandPluginGenerationExample
         var trimmed = rawSpec.Trim();
         if (trimmed.StartsWith("```", StringComparison.Ordinal))
         {
-            var firstBrace = trimmed.IndexOf('{');
+            var firstBrace = trimmed.IndexOf('{', StringComparison.Ordinal);
             var lastBrace = trimmed.LastIndexOf('}');
             if (firstBrace >= 0 && lastBrace > firstBrace)
                 return trimmed[firstBrace..(lastBrace + 1)];

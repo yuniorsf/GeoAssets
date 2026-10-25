@@ -26,7 +26,7 @@ public class RequireOrganizationAuthorizationHandlerTests
         User = new AppUser
         {
             ExternalObjectId = "oid",
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
             OrganizationId = organizationId,
         },
         Roles = [],

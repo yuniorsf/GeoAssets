@@ -29,7 +29,7 @@ public class ObservableAssetProviderTests
         Activity? captured = null;
         using var listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name == ImportDiagnostics.ActivitySourceName,
+            ShouldListenTo = source => string.Equals(source.Name, ImportDiagnostics.ActivitySourceName, StringComparison.Ordinal),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
             ActivityStopped = activity => captured = activity
         };

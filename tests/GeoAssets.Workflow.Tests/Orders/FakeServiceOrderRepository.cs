@@ -40,7 +40,7 @@ public sealed class FakeServiceOrderRepository : IServiceOrderRepository
         Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.IsRoot)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.ParentOrderId == parentId)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.ParentOrderId, parentId, StringComparison.Ordinal))]);
 
     public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default)
     {
@@ -49,27 +49,28 @@ public sealed class FakeServiceOrderRepository : IServiceOrderRepository
     }
 
     public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.Status == status)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.Status, status, StringComparison.Ordinal))]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.AssignedTo == userId)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.AssignedTo, userId, StringComparison.Ordinal))]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedBy == userId)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.CreatedBy, userId, StringComparison.Ordinal))]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.OrderTypeId == orderTypeId)]);
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.OrderTypeId, orderTypeId, StringComparison.Ordinal))]);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= to)]);
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= toExclusive)]);
 
     public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
         string targetId, DispatchTargetType targetType, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<IServiceOrder>>(
-            [.. _store.Values.Where(o => o.Dispatches.Any(d => d.TargetId == targetId && d.TargetType == targetType))]);
+            [.. _store.Values.Where(o => o.Dispatches.Any(d => string.Equals(d.TargetId, targetId, StringComparison.Ordinal) && d.TargetType == targetType))]);
 
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         _store[order.Id] = order;
         OrderAdded?.Invoke(this, order);
         return Task.CompletedTask;
@@ -77,6 +78,7 @@ public sealed class FakeServiceOrderRepository : IServiceOrderRepository
 
     public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         if (!_store.TryGetValue(order.Id, out var existing))
             throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
@@ -84,7 +86,7 @@ public sealed class FakeServiceOrderRepository : IServiceOrderRepository
         _store[order.Id] = order;
 
         OrderUpdated?.Invoke(this, order);
-        if (previous != order.Status)
+        if (!string.Equals(previous, order.Status, StringComparison.Ordinal))
             OrderStatusChanged?.Invoke(this, (order, previous));
 
         return Task.CompletedTask;
@@ -100,6 +102,7 @@ public sealed class FakeServiceOrderRepository : IServiceOrderRepository
 
     public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         var order = (ServiceOrder)_store[orderId];
         var previous = order.Status;
         order.ActionLog.Add(entry);
@@ -107,7 +110,7 @@ public sealed class FakeServiceOrderRepository : IServiceOrderRepository
             order.Status = entry.ResultingStatus;
 
         OrderUpdated?.Invoke(this, order);
-        if (entry.ResultingStatus is not null && entry.ResultingStatus != previous)
+        if (entry.ResultingStatus is not null && !string.Equals(entry.ResultingStatus, previous, StringComparison.Ordinal))
             OrderStatusChanged?.Invoke(this, (order, previous));
 
         return Task.CompletedTask;

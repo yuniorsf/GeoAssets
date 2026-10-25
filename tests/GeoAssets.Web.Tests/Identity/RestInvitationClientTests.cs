@@ -14,7 +14,7 @@ public class RestInvitationClientTests
         new(new HttpClient(handler) { BaseAddress = new Uri("http://test/") });
 
     private static PendingInvitationDto NewDto(InvitationStatus status = InvitationStatus.Pending) =>
-        new(Guid.NewGuid(), "invitee@example.com", "invitee-oid", Guid.NewGuid(), DateTime.UtcNow, null, status);
+        new(Guid.NewGuid(), "invitee@example.com", "invitee-oid", Guid.NewGuid(), new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), null, status);
 
     [Fact]
     public async Task CreateInvitationAsync_PostsCorrectDtoAndMapsResponse()

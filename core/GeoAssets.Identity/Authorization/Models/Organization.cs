@@ -24,5 +24,5 @@ public sealed class Organization
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    public List<AppUser> Users { get; set; } = [];
+    public List<AppUser> Users { get; init; } = [];
 }

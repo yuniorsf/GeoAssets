@@ -19,6 +19,9 @@ public sealed class ShortestPathHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var fromId = (string)parameters["fromId"];
         var toId   = (string)parameters["toId"];
 

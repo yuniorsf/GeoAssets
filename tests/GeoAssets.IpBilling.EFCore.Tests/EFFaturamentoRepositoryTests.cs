@@ -34,7 +34,7 @@ public class EFFaturamentoRepositoryTests
             MunicipioId = municipio.Id,
             Competencia = "2026-03",
             KwhFaturado = 12345.6789m,
-            CreatedAt   = DateTimeOffset.UtcNow,
+            CreatedAt   = new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero),
         };
 
         await repo.AddAsync(faturamento);
@@ -63,8 +63,8 @@ public class EFFaturamentoRepositoryTests
         var municipio = await SeedMunicipioAsync(fixture.Context);
         var repo = new EFFaturamentoRepository(fixture.Context);
 
-        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-02", KwhFaturado = 100m, CreatedAt = DateTimeOffset.UtcNow });
-        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-01", KwhFaturado = 90m, CreatedAt = DateTimeOffset.UtcNow });
+        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-02", KwhFaturado = 100m, CreatedAt = new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero) });
+        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-01", KwhFaturado = 90m, CreatedAt = new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero) });
         await repo.SaveChangesAsync();
 
         var all = await repo.GetByMunicipioAsync(municipio.Id);
@@ -78,10 +78,10 @@ public class EFFaturamentoRepositoryTests
         using var fixture = new SqliteFixture();
         var municipio = await SeedMunicipioAsync(fixture.Context);
         var repo = new EFFaturamentoRepository(fixture.Context);
-        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-03", KwhFaturado = 100m, CreatedAt = DateTimeOffset.UtcNow });
+        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-03", KwhFaturado = 100m, CreatedAt = new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero) });
         await repo.SaveChangesAsync();
 
-        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-03", KwhFaturado = 200m, CreatedAt = DateTimeOffset.UtcNow });
+        await repo.AddAsync(new Faturamento { MunicipioId = municipio.Id, Competencia = "2026-03", KwhFaturado = 200m, CreatedAt = new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero) });
         var act = async () => await repo.SaveChangesAsync();
 
         await act.Should().ThrowAsync<DbUpdateException>();
@@ -105,7 +105,7 @@ public class EFFaturamentoRepositoryTests
         var faturamentoRepo = new EFFaturamentoRepository(fixture.Context);
         await faturamentoRepo.AddAsync(new Faturamento
         {
-            MunicipioId = municipio.Id, Competencia = "2026-03", KwhFaturado = 100m, CreatedAt = DateTimeOffset.UtcNow,
+            MunicipioId = municipio.Id, Competencia = "2026-03", KwhFaturado = 100m, CreatedAt = new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero),
         });
         await faturamentoRepo.SaveChangesAsync();
 

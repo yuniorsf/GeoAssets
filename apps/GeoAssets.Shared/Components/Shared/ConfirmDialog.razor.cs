@@ -21,8 +21,8 @@ public partial class ConfirmDialog
     [Parameter] public string SecondaryButtonClass { get; set; } = "btn-outline";
     [Parameter] public EventCallback OnSecondary { get; set; }
 
-    private async Task Confirm() => await OnConfirm.InvokeAsync();
-    private async Task Secondary() => await OnSecondary.InvokeAsync();
-    private async Task Cancel() => await OnCancel.InvokeAsync();
-    private async Task OnBackdropClick() => await OnCancel.InvokeAsync();
+    private Task Confirm() => OnConfirm.InvokeAsync();
+    private Task Secondary() => OnSecondary.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
+    private Task OnBackdropClick() => OnCancel.InvokeAsync();
 }

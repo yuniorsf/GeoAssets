@@ -22,7 +22,7 @@ public class RestPendingInvitationRepositoryTests
     private static PendingInvitationDto NewDto(
         string email = "invitee@example.com", string externalObjectId = "invitee-oid",
         InvitationStatus status = InvitationStatus.Pending) =>
-        new(Guid.NewGuid(), email, externalObjectId, Guid.NewGuid(), DateTime.UtcNow, null, status);
+        new(Guid.NewGuid(), email, externalObjectId, Guid.NewGuid(), new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), null, status);
 
     [Fact]
     public async Task GetAllPendingAsync_MapsFieldsAndCallsCorrectUrl()
@@ -136,12 +136,12 @@ public class RestPendingInvitationRepositoryTests
 
     [Theory]
     [MemberData(nameof(UnsupportedMethods))]
-    public async Task Method_WithNoServerEndpoint_ThrowsNotSupportedException(Func<IPendingInvitationRepository, Task> call)
+    public Task Method_WithNoServerEndpoint_ThrowsNotSupportedException(Func<IPendingInvitationRepository, Task> call)
     {
         var sut = Sut(new FakeHttpMessageHandler(_ => throw new InvalidOperationException("Should not be called.")));
 
         var act = () => call(sut);
 
-        await act.Should().ThrowAsync<NotSupportedException>();
+        return act.Should().ThrowAsync<NotSupportedException>();
     }
 }

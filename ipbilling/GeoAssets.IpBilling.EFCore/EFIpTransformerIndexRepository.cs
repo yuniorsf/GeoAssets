@@ -11,7 +11,7 @@ public sealed class EFIpTransformerIndexRepository(IpBillingDbContext db) : IIpT
         string municipioIbgeCode, string codigoInstalacao, CancellationToken ct = default)
     {
         var record = await db.IpTransformerIndexes.FirstOrDefaultAsync(
-            i => i.MunicipioIbgeCode == municipioIbgeCode && i.CodigoInstalacao == codigoInstalacao, ct);
+            i => i.MunicipioIbgeCode == municipioIbgeCode && i.CodigoInstalacao == codigoInstalacao, ct).ConfigureAwait(false);
 
         return record is null ? null : IpBillingMapper.ToDomain(record);
     }
@@ -22,17 +22,21 @@ public sealed class EFIpTransformerIndexRepository(IpBillingDbContext db) : IIpT
         var records = await db.IpTransformerIndexes
             .Where(i => i.MunicipioIbgeCode == municipioIbgeCode)
             .OrderBy(i => i.CodigoInstalacao)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         return records.Select(IpBillingMapper.ToDomain).ToList();
     }
 
     public async Task AddAsync(IpTransformerIndex index, CancellationToken ct = default)
-        => await db.IpTransformerIndexes.AddAsync(IpBillingMapper.ToRecord(index), ct);
+    {
+        ArgumentNullException.ThrowIfNull(index);
+        await db.IpTransformerIndexes.AddAsync(IpBillingMapper.ToRecord(index), ct).ConfigureAwait(false);
+    }
 
     public async Task UpdateAsync(IpTransformerIndex index, CancellationToken ct = default)
     {
-        var existing = await db.IpTransformerIndexes.FirstOrDefaultAsync(i => i.Id == index.Id, ct);
+        ArgumentNullException.ThrowIfNull(index);
+        var existing = await db.IpTransformerIndexes.FirstOrDefaultAsync(i => i.Id == index.Id, ct).ConfigureAwait(false);
         if (existing is null) return;
 
         existing.MunicipioIbgeCode    = index.MunicipioIbgeCode;
@@ -42,7 +46,7 @@ public sealed class EFIpTransformerIndexRepository(IpBillingDbContext db) : IIpT
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var record = await db.IpTransformerIndexes.FindAsync([id], ct);
+        var record = await db.IpTransformerIndexes.FindAsync([id], ct).ConfigureAwait(false);
         if (record is not null) db.IpTransformerIndexes.Remove(record);
     }
 

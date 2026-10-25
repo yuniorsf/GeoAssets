@@ -26,7 +26,7 @@ public class EFPendingInvitationRepositoryTests
         Email            = email,
         ExternalObjectId = string.IsNullOrEmpty(externalObjectId) ? Guid.NewGuid().ToString() : externalObjectId,
         InvitedByUserId  = Guid.NewGuid(),
-        InvitedAt        = DateTime.UtcNow,
+        InvitedAt        = TimeProvider.System.GetUtcNow().UtcDateTime,
         Status           = status,
     };
 
@@ -34,9 +34,9 @@ public class EFPendingInvitationRepositoryTests
     public async Task AddAsync_ThenGetById_RoundTripsAllScalarFields()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
         var invitation = Invitation();
 
@@ -56,9 +56,9 @@ public class EFPendingInvitationRepositoryTests
     public async Task GetByIdAsync_UnknownId_ReturnsNull()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
 
         var loaded = await repo.GetByIdAsync(Guid.NewGuid());
@@ -70,9 +70,9 @@ public class EFPendingInvitationRepositoryTests
     public async Task GetByExternalObjectIdAsync_MatchingInvitation_IsReturned()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
         var invitation = Invitation(externalObjectId: "external-oid-1");
         await repo.AddAsync(invitation);
@@ -88,9 +88,9 @@ public class EFPendingInvitationRepositoryTests
     public async Task GetByExternalObjectIdAsync_NoMatch_ReturnsNull()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
 
         var loaded = await repo.GetByExternalObjectIdAsync("does-not-exist");
@@ -104,9 +104,9 @@ public class EFPendingInvitationRepositoryTests
         // Non-leakage: redeemed/revoked invitations must not surface through the
         // "pending" listing used to drive the invitations admin UI.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
         await repo.AddAsync(Invitation(status: InvitationStatus.Pending));
         await repo.AddAsync(Invitation(status: InvitationStatus.Redeemed));
@@ -123,16 +123,16 @@ public class EFPendingInvitationRepositoryTests
     public async Task UpdateAsync_ChangesStatusAndRedeemedAt()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
         var invitation = Invitation();
         await repo.AddAsync(invitation);
         await repo.SaveChangesAsync();
 
         invitation.Status = InvitationStatus.Redeemed;
-        invitation.RedeemedAt = DateTime.UtcNow;
+        invitation.RedeemedAt = TimeProvider.System.GetUtcNow().UtcDateTime;
         await repo.UpdateAsync(invitation);
         await repo.SaveChangesAsync();
         var loaded = await repo.GetByIdAsync(invitation.Id);
@@ -148,9 +148,9 @@ public class EFPendingInvitationRepositoryTests
         // guarantee — two invitations pointing at the same Graph user would make first-login
         // matching ambiguous.
         using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
+        await connection.OpenAsync();
         using var db = NewContext(connection);
-        db.Database.EnsureCreated();
+        await db.Database.EnsureCreatedAsync();
         var repo = new EFPendingInvitationRepository(db);
         await repo.AddAsync(Invitation(email: "first@example.com", externalObjectId: "duplicate-oid"));
         await repo.SaveChangesAsync();

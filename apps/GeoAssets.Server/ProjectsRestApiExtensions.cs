@@ -33,24 +33,34 @@ public static class ProjectsRestApiExtensions
         this IEndpointRouteBuilder routes,
         string prefix = "/api/projects")
     {
-        // ── Reads ────────────────────────────────────────────────────────────────
+        MapProjectReads(routes, prefix);
+        MapProjectCreate(routes, prefix);
+        MapProjectScopeMutations(routes, prefix);
+        MapProjectRenameAndDelete(routes, prefix);
 
+        return routes;
+    }
+
+    // ── Reads ────────────────────────────────────────────────────────────────
+
+    private static void MapProjectReads(IEndpointRouteBuilder routes, string prefix)
+    {
         routes.MapGet(prefix, async (IProjectReader reader) =>
-            Results.Json(await reader.GetAllAsync(), _opts))
+            Results.Json(await reader.GetAllAsync().ConfigureAwait(false), _opts))
             .RequireAuthorization("projects:read");
 
         routes.MapGet($"{prefix}/organization/{{organizationId}}", async (
             Guid organizationId, IProjectReader reader) =>
-                Results.Json(await reader.GetByOrganizationAsync(organizationId), _opts))
+                Results.Json(await reader.GetByOrganizationAsync(organizationId).ConfigureAwait(false), _opts))
             .RequireAuthorization("projects:read");
 
         routes.MapGet($"{prefix}/{{id}}", async (
             Guid id, IProjectReader reader, IAuthorizationService authz, HttpContext http) =>
         {
-            var project = await reader.GetByIdAsync(id);
+            var project = await reader.GetByIdAsync(id).ConfigureAwait(false);
             if (project is null) return Results.NotFound();
 
-            var result = await authz.AuthorizeAsync(http.User, project, new OrgResourceRequirement("projects:read"));
+            var result = await authz.AuthorizeAsync(http.User, project, new OrgResourceRequirement("projects:read")).ConfigureAwait(false);
             if (!result.Succeeded)
                 return Results.Json(new { reason = "Not authorized to read this project." },
                     statusCode: StatusCodes.Status403Forbidden);
@@ -58,28 +68,31 @@ public static class ProjectsRestApiExtensions
             return Results.Json(project, _opts);
         })
             .RequireAuthorization("projects:read");
+    }
 
-        // ── Create ("Save As", XD01-145) ─────────────────────────────────────────
+    // ── Create ("Save As", XD01-145) ─────────────────────────────────────────
 
+    private static void MapProjectCreate(IEndpointRouteBuilder routes, string prefix)
+    {
         routes.MapPost(prefix, async (
             HttpRequest req, IProjectReader reader, IProjectWriter writer, TimeProvider timeProvider,
             IAuthorizationService authz, IGeoAuthorizationService authService, HttpContext http) =>
         {
-            var body = await JsonSerializer.DeserializeAsync<Project>(req.Body, _opts);
+            var body = await JsonSerializer.DeserializeAsync<Project>(req.Body, _opts).ConfigureAwait(false);
             if (body?.ParentProjectId is not { } parentId)
                 return Results.BadRequest("ParentProjectId is required.");
 
-            var parent = await reader.GetByIdAsync(parentId);
+            var parent = await reader.GetByIdAsync(parentId).ConfigureAwait(false);
             if (parent is null) return Results.NotFound();
             if (parent.Kind != ProjectKind.General)
                 return Results.BadRequest("Can only fork a General Project — no fork chains.");
 
-            var result = await authz.AuthorizeAsync(http.User, parent, new OrgResourceRequirement("projects:read"));
+            var result = await authz.AuthorizeAsync(http.User, parent, new OrgResourceRequirement("projects:read")).ConfigureAwait(false);
             if (!result.Succeeded)
                 return Results.Json(new { reason = "Not authorized to fork this project." },
                     statusCode: StatusCodes.Status403Forbidden);
 
-            var caller = await authService.GetAuthorizationContextAsync();
+            var caller = await authService.GetAuthorizationContextAsync().ConfigureAwait(false);
             var now = timeProvider.GetUtcNow().UtcDateTime;
             var project = new Project
             {
@@ -97,7 +110,7 @@ public static class ProjectsRestApiExtensions
                 ViewState       = body.ViewState,
             };
 
-            await writer.AddAsync(project);
+            await writer.AddAsync(project).ConfigureAwait(false);
             // Returns the created Project as the response body (not Results.Created's
             // location-header-only convention used elsewhere in this codebase) — consistent
             // with every other endpoint in this file, all of which return the resulting
@@ -105,16 +118,19 @@ public static class ProjectsRestApiExtensions
             return Results.Json(project, _opts, statusCode: StatusCodes.Status201Created);
         })
             .RequireAuthorization("projects:read");
+    }
 
-        // ── Scope mutations (copy-on-write eligible) ────────────────────────────
+    // ── Scope mutations (copy-on-write eligible) ────────────────────────────
 
+    private static void MapProjectScopeMutations(IEndpointRouteBuilder routes, string prefix)
+    {
         routes.MapPut($"{prefix}/{{id}}/providers", async (
             Guid id, HttpRequest req, IProjectReader reader, IProjectWriter writer,
             IProjectService projectService, TimeProvider timeProvider, HttpContext http) =>
         {
-            var providers = await JsonSerializer.DeserializeAsync<List<ProjectProviderEntry>>(req.Body, _opts);
+            var providers = await JsonSerializer.DeserializeAsync<List<ProjectProviderEntry>>(req.Body, _opts).ConfigureAwait(false);
             return await MutateScopeAsync(id, "projects:manage-providers", reader, writer, projectService,
-                timeProvider, http, target => target.Providers = providers);
+                timeProvider, http, target => target.Providers = providers).ConfigureAwait(false);
         })
             .RequireAuthorization("projects:read");
 
@@ -122,9 +138,9 @@ public static class ProjectsRestApiExtensions
             Guid id, HttpRequest req, IProjectReader reader, IProjectWriter writer,
             IProjectService projectService, TimeProvider timeProvider, HttpContext http) =>
         {
-            var scope = await JsonSerializer.DeserializeAsync<ProjectAssetTypeScope>(req.Body, _opts);
+            var scope = await JsonSerializer.DeserializeAsync<ProjectAssetTypeScope>(req.Body, _opts).ConfigureAwait(false);
             return await MutateScopeAsync(id, "projects:manage-asset-types", reader, writer, projectService,
-                timeProvider, http, target => target.AssetTypeScope = scope);
+                timeProvider, http, target => target.AssetTypeScope = scope).ConfigureAwait(false);
         })
             .RequireAuthorization("projects:read");
 
@@ -132,9 +148,9 @@ public static class ProjectsRestApiExtensions
             Guid id, HttpRequest req, IProjectReader reader, IProjectWriter writer,
             IProjectService projectService, TimeProvider timeProvider, HttpContext http) =>
         {
-            var scope = await JsonSerializer.DeserializeAsync<ProjectLayerScope>(req.Body, _opts);
+            var scope = await JsonSerializer.DeserializeAsync<ProjectLayerScope>(req.Body, _opts).ConfigureAwait(false);
             return await MutateScopeAsync(id, "projects:manage-layers", reader, writer, projectService,
-                timeProvider, http, target => target.LayerScope = scope);
+                timeProvider, http, target => target.LayerScope = scope).ConfigureAwait(false);
         })
             .RequireAuthorization("projects:read");
 
@@ -142,26 +158,29 @@ public static class ProjectsRestApiExtensions
             Guid id, HttpRequest req, IProjectReader reader, IProjectWriter writer,
             IProjectService projectService, TimeProvider timeProvider, HttpContext http) =>
         {
-            var view = await JsonSerializer.DeserializeAsync<ProjectViewState>(req.Body, _opts);
+            var view = await JsonSerializer.DeserializeAsync<ProjectViewState>(req.Body, _opts).ConfigureAwait(false);
             return await MutateScopeAsync(id, "projects:manage-view", reader, writer, projectService,
-                timeProvider, http, target => target.ViewState = view);
+                timeProvider, http, target => target.ViewState = view).ConfigureAwait(false);
         })
             .RequireAuthorization("projects:read");
+    }
 
-        // ── Rename / Delete (no copy-on-write) ──────────────────────────────────
+    // ── Rename / Delete (no copy-on-write) ──────────────────────────────────
 
+    private static void MapProjectRenameAndDelete(IEndpointRouteBuilder routes, string prefix)
+    {
         routes.MapPut($"{prefix}/{{id}}/name", async (
             Guid id, HttpRequest req, IProjectReader reader, IProjectWriter writer,
             IProjectService projectService, TimeProvider timeProvider, HttpContext http) =>
         {
-            var dto = await JsonSerializer.DeserializeAsync<ProjectRenameDto>(req.Body, _opts);
+            var dto = await JsonSerializer.DeserializeAsync<ProjectRenameDto>(req.Body, _opts).ConfigureAwait(false);
             if (dto is null) return Results.BadRequest("Invalid request.");
             return await MutateScopeAsync(id, "projects:rename", reader, writer, projectService,
                 timeProvider, http, target =>
                 {
                     target.Name        = dto.Name;
                     target.Description = dto.Description;
-                });
+                }).ConfigureAwait(false);
         })
             .RequireAuthorization("projects:rename");
 
@@ -169,20 +188,18 @@ public static class ProjectsRestApiExtensions
             Guid id, IProjectReader reader, IProjectWriter writer,
             IProjectService projectService, HttpContext http) =>
         {
-            var project = await reader.GetByIdAsync(id);
+            var project = await reader.GetByIdAsync(id).ConfigureAwait(false);
             if (project is null) return Results.NotFound();
 
-            var target = await projectService.ResolveMutationTargetAsync(http.User, project, "projects:delete");
+            var target = await projectService.ResolveMutationTargetAsync(http.User, project, "projects:delete").ConfigureAwait(false);
             if (target is null)
                 return Results.Json(new { reason = "Not authorized to delete this project." },
                     statusCode: StatusCodes.Status403Forbidden);
 
-            await writer.DeleteAsync(target.Id);
+            await writer.DeleteAsync(target.Id).ConfigureAwait(false);
             return Results.NoContent();
         })
             .RequireAuthorization("projects:delete");
-
-        return routes;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -192,17 +209,17 @@ public static class ProjectsRestApiExtensions
         IProjectService projectService, TimeProvider timeProvider, HttpContext http,
         Action<Project> applyMutation)
     {
-        var project = await reader.GetByIdAsync(id);
+        var project = await reader.GetByIdAsync(id).ConfigureAwait(false);
         if (project is null) return Results.NotFound();
 
-        var target = await projectService.ResolveMutationTargetAsync(http.User, project, permissionCode);
+        var target = await projectService.ResolveMutationTargetAsync(http.User, project, permissionCode).ConfigureAwait(false);
         if (target is null)
             return Results.Json(new { reason = $"Not authorized ({permissionCode}) on this project." },
                 statusCode: StatusCodes.Status403Forbidden);
 
         applyMutation(target);
         target.UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
-        await writer.UpdateAsync(target);
+        await writer.UpdateAsync(target).ConfigureAwait(false);
 
         return Results.Json(target, _opts);
     }

@@ -13,9 +13,9 @@ public class AppDelegate : MauiUIApplicationDelegate
     // Platforms/iOS/Info.plist) back into MSAL.NET's pending AcquireTokenInteractive call
     // (XD01-52) — without this override, the browser completes sign-in but the app never
     // learns about it.
-    public override bool OpenUrl(UIApplication app, NSUrl url, NSDictionary options)
+    public override bool OpenUrl(UIApplication application, NSUrl url, NSDictionary options)
     {
         AuthenticationContinuationHelper.SetAuthenticationContinuationEventArgs(url);
-        return base.OpenUrl(app, url, options);
+        return base.OpenUrl(application, url, options);
     }
 }

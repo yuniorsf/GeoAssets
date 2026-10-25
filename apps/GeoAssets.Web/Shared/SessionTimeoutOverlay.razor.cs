@@ -9,8 +9,17 @@ public partial class SessionTimeoutOverlay
         => SessionTimeout.RecordActivity();
 
     private void Refresh()
-        => InvokeAsync(StateHasChanged);
+        => _ = InvokeAsync(StateHasChanged);
 
     public void Dispose()
-        => SessionTimeout.OnStateChanged -= Refresh;
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+            SessionTimeout.OnStateChanged -= Refresh;
+    }
 }

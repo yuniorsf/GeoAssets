@@ -33,7 +33,7 @@ public class FeatureSelectionRegistryTests
         {
             OrderRepository = orderRepo,
             TargetOrder     = new ServiceOrder { ParentOrderId = parent.Id },
-            Parameters      = new Dictionary<string, object>(),
+            Parameters      = new Dictionary<string, object>(StringComparer.Ordinal),
         };
 
         var (features, spec) = await registry.SelectAsync("inherit-parent", context);
@@ -56,9 +56,9 @@ public class FeatureSelectionRegistryTests
         {
             OrderRepository = orderRepo,
             TargetOrder     = new ServiceOrder { ParentOrderId = parent.Id },
-            Parameters      = new Dictionary<string, object>
+            Parameters      = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                ["filter"] = (Func<GeoFeature, bool>)(f => f.Id == "f1"),
+                ["filter"] = (Func<GeoFeature, bool>)(f => string.Equals(f.Id, "f1", StringComparison.Ordinal)),
             },
         };
 

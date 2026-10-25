@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Components.Shared;
 
@@ -20,7 +21,14 @@ public partial class SearchBar
         _debounce.Elapsed += async (_, _) =>
         {
             _debounce?.Dispose();
-            await InvokeAsync(() => OnSearch.InvokeAsync(Query));
+            try
+            {
+                await InvokeAsync(() => OnSearch.InvokeAsync(Query));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "SearchBar debounced OnSearch callback failed");
+            }
         };
         _debounce.AutoReset = false;
         _debounce.Start();
@@ -33,9 +41,10 @@ public partial class SearchBar
         await OnSearch.InvokeAsync(Query);
     }
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        _debounce?.Dispose();
-        base.Dispose();
+        if (disposing)
+            _debounce?.Dispose();
+        base.Dispose(disposing);
     }
 }

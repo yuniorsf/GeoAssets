@@ -53,7 +53,7 @@ public partial class ProviderConnectDialog
     {
         // Re-render when auto-boot completes so the overlay disappears immediately
         if (IsBootMode)
-            BootLoader.BootCompleted += (_, _) => InvokeAsync(StateHasChanged);
+            BootLoader.BootCompleted += (_, _) => _ = InvokeAsync(StateHasChanged);
 
         if (Registry.All.Count > 0)
             SelectPlugin(Registry.All[0]);
@@ -196,7 +196,7 @@ public partial class ProviderConnectDialog
     private void Cancel()
     {
         _error = string.Empty;
-        OnClose.InvokeAsync();
+        _ = OnClose.InvokeAsync();
     }
 
     // Close on backdrop click only in runtime mode (boot requires an explicit choice)

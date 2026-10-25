@@ -21,6 +21,9 @@ public static class GeoFeatureAttributeValidator
     /// </summary>
     public static IReadOnlyList<string> Validate(AssetType assetType, IReadOnlyDictionary<string, string> attributes)
     {
+        ArgumentNullException.ThrowIfNull(assetType);
+        ArgumentNullException.ThrowIfNull(attributes);
+
         if (string.IsNullOrWhiteSpace(assetType.AttributesSchemaJson))
             return [];
 
@@ -39,6 +42,8 @@ public static class GeoFeatureAttributeValidator
     /// <summary>Throws <see cref="GeoFeatureAttributeValidationException"/> when invalid.</summary>
     public static void EnsureValid(AssetType assetType, IReadOnlyDictionary<string, string> attributes)
     {
+        ArgumentNullException.ThrowIfNull(assetType);
+
         var errors = Validate(assetType, attributes);
         if (errors.Count > 0)
             throw new GeoFeatureAttributeValidationException(assetType.Id, errors);

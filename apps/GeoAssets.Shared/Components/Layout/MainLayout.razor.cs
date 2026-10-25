@@ -47,33 +47,55 @@ public partial class MainLayout
                         ?? user.Identity?.Name
                         ?? L["app.defaultUser"];
 
-        // Ensure the local user record exists before checking authorization. UserProvisioningService
-        // isn't registered by AddGeoIdentityRest (Rest handles provisioning server-side instead,
-        // XD01-88) — resolved optionally so this still works if it's ever registered again.
+        await EnsureProvisionedOrRedirectAsync();
+        await ResolveTopbarIdentityAsync();
+
+        _identityResolved = true;
+
+        // Fire-and-forget: Save/Load in TopBar and ProjectPanel only come alive once a Project
+        // is open, and nothing opened one automatically before this — the buttons looked
+        // clickable but silently did nothing until a user discovered the Projects panel and
+        // picked one manually. Not awaited so the map still renders immediately; TopBar and
+        // ProjectPanel both already re-render off Session.CurrentChanged once this lands.
+        _ = OpenDefaultProjectAsync();
+    }
+
+    /// <summary>
+    /// Ensures the local user record exists before checking authorization. UserProvisioningService
+    /// isn't registered by AddGeoIdentityRest (Rest handles provisioning server-side instead,
+    /// XD01-88) — resolved optionally so this still works if it's ever registered again. When it
+    /// isn't registered, the pending-invitation redirect check has no such restriction
+    /// (InvitationRedirectGate, XD01-89) — called directly so an invited caller still gets
+    /// redirected to /complete-profile. A failure here (e.g. no admin consent yet for the identity
+    /// API scope) must not take down the map page itself — the redirect is a convenience, not a
+    /// hard requirement to render this layout.
+    /// </summary>
+    private async Task EnsureProvisionedOrRedirectAsync()
+    {
         var provisioning = ServiceProvider.GetService<UserProvisioningService>();
         if (provisioning is not null)
         {
             await provisioning.EnsureProvisionedAsync();
-        }
-        else
-        {
-            // UserProvisioningService isn't registered, but the pending-invitation redirect
-            // check has no such restriction (InvitationRedirectGate, XD01-89) — call it
-            // directly so an invited caller still gets redirected to /complete-profile.
-            try
-            {
-                var redirectGate = ServiceProvider.GetRequiredService<InvitationRedirectGate>();
-                await redirectGate.RedirectIfPendingAsync();
-            }
-            catch (Exception ex)
-            {
-                // The redirect is a convenience, not a hard requirement to render this layout —
-                // a token/network failure here (e.g. no admin consent yet for the identity API
-                // scope) must not take down the map page itself.
-                Console.Error.WriteLine($"[MainLayout] Failed to check pending invitation: {ex.Message}");
-            }
+            return;
         }
 
+        try
+        {
+            var redirectGate = ServiceProvider.GetRequiredService<InvitationRedirectGate>();
+            await redirectGate.RedirectIfPendingAsync();
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"[MainLayout] Failed to check pending invitation: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Resolves the roles/organization name shown in the topbar. Optional — a failure here (e.g.
+    /// the identity backend being unreachable) must not take down the map page itself.
+    /// </summary>
+    private async Task ResolveTopbarIdentityAsync()
+    {
         try
         {
             var currentUser = await CurrentUserAccessor.GetCurrentUserAsync();
@@ -86,19 +108,8 @@ public partial class MainLayout
         }
         catch (Exception ex)
         {
-            // Organization/role display in the topbar is optional — a failure here (e.g. the
-            // identity backend being unreachable) must not take down the map page itself.
-            Console.Error.WriteLine($"[MainLayout] Failed to resolve topbar identity info: {ex.Message}");
+            await Console.Error.WriteLineAsync($"[MainLayout] Failed to resolve topbar identity info: {ex.Message}");
         }
-
-        _identityResolved = true;
-
-        // Fire-and-forget: Save/Load in TopBar and ProjectPanel only come alive once a Project
-        // is open, and nothing opened one automatically before this — the buttons looked
-        // clickable but silently did nothing until a user discovered the Projects panel and
-        // picked one manually. Not awaited so the map still renders immediately; TopBar and
-        // ProjectPanel both already re-render off Session.CurrentChanged once this lands.
-        _ = OpenDefaultProjectAsync();
     }
 
     /// <summary>
@@ -122,7 +133,7 @@ public partial class MainLayout
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[MainLayout] Failed to auto-open default Project: {ex.Message}");
+            await Console.Error.WriteLineAsync($"[MainLayout] Failed to auto-open default Project: {ex.Message}");
         }
     }
 
@@ -150,6 +161,7 @@ public partial class MainLayout
         IUserRepository          userRepository,
         CancellationToken        ct = default)
     {
+        ArgumentNullException.ThrowIfNull(userRepository);
         if (organizationRepo is null || currentUser is null) return null;
 
         var appUser = await userRepository.GetByExternalObjectIdAsync(currentUser.ExternalObjectId, ct);

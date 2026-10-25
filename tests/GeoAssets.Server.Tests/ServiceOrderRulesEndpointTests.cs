@@ -37,7 +37,7 @@ public class ServiceOrderRulesEndpointTests
         public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default)
             => Task.FromResult(new AuthorizationContext
             {
-                User        = new AppUser { Id = userId, Email = "test@example.com", DisplayName = "Test", CreatedAt = DateTime.UtcNow },
+                User        = new AppUser { Id = userId, Email = "test@example.com", DisplayName = "Test", CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) },
                 Roles       = roles,
                 Claims      = [],
                 Permissions = []
@@ -112,7 +112,7 @@ public class ServiceOrderRulesEndpointTests
         using var client = server.CreateClient();
         var body = JsonContent.Create(NewOrder(Guid.NewGuid().ToString()));
 
-        var response = await client.PostAsync("/api/workflow/service-orders", body);
+        var response = await client.PostAsync(new Uri("/api/workflow/service-orders", UriKind.Relative), body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -124,7 +124,7 @@ public class ServiceOrderRulesEndpointTests
         using var client = server.CreateClient();
         var body = JsonContent.Create(NewOrder(Guid.NewGuid().ToString()));
 
-        var response = await client.PostAsync("/api/workflow/service-orders", body);
+        var response = await client.PostAsync(new Uri("/api/workflow/service-orders", UriKind.Relative), body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
@@ -150,7 +150,7 @@ public class ServiceOrderRulesEndpointTests
         };
         var body = JsonContent.Create(order);
 
-        var response = await client.PostAsync("/api/workflow/service-orders", body);
+        var response = await client.PostAsync(new Uri("/api/workflow/service-orders", UriKind.Relative), body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
@@ -169,7 +169,7 @@ public class ServiceOrderRulesEndpointTests
         };
         var body = JsonContent.Create(order);
 
-        var response = await client.PostAsync("/api/workflow/service-orders", body);
+        var response = await client.PostAsync(new Uri("/api/workflow/service-orders", UriKind.Relative), body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -216,7 +216,7 @@ public class ServiceOrderRulesEndpointTests
         var order = NewOrder(creatorId.ToString());
         await repo.AddAsync(order);
         using var client = server.CreateClient();
-        var dispatch = new OrderDispatch("target-user", DispatchTargetType.User, creatorId.ToString(), DateTime.UtcNow);
+        var dispatch = new OrderDispatch("target-user", DispatchTargetType.User, creatorId.ToString(), new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
 
         var response = await client.PostAsJsonAsync($"/api/workflow/service-orders/{order.Id}/dispatch", dispatch);
 
@@ -231,7 +231,7 @@ public class ServiceOrderRulesEndpointTests
         var order = NewOrder(creatorId.ToString());
         await repo.AddAsync(order);
         using var client = server.CreateClient();
-        var dispatch = new OrderDispatch("target-user", DispatchTargetType.User, "supervisor-id", DateTime.UtcNow);
+        var dispatch = new OrderDispatch("target-user", DispatchTargetType.User, "supervisor-id", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
 
         var response = await client.PostAsJsonAsync($"/api/workflow/service-orders/{order.Id}/dispatch", dispatch);
 
@@ -251,7 +251,7 @@ public class ServiceOrderRulesEndpointTests
         var order = NewOrder(creatorId.ToString(), assigneeId.ToString());
         await repo.AddAsync(order);
         using var client = server.CreateClient();
-        var entry = new OrderActionLog(OrderActionType.Complete, creatorId.ToString(), DateTime.UtcNow);
+        var entry = new OrderActionLog(OrderActionType.Complete, creatorId.ToString(), new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
 
         var response = await client.PostAsJsonAsync($"/api/workflow/service-orders/{order.Id}/actions", entry);
 
@@ -267,7 +267,7 @@ public class ServiceOrderRulesEndpointTests
         var order = NewOrder(creatorId.ToString(), assigneeId.ToString());
         await repo.AddAsync(order);
         using var client = server.CreateClient();
-        var entry = new OrderActionLog(OrderActionType.Complete, assigneeId.ToString(), DateTime.UtcNow);
+        var entry = new OrderActionLog(OrderActionType.Complete, assigneeId.ToString(), new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc));
 
         var response = await client.PostAsJsonAsync($"/api/workflow/service-orders/{order.Id}/actions", entry);
 
@@ -285,7 +285,7 @@ public class ServiceOrderRulesEndpointTests
         await repo.AddAsync(order);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync($"/api/workflow/service-orders/{order.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/workflow/service-orders/{order.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -299,7 +299,7 @@ public class ServiceOrderRulesEndpointTests
         await repo.AddAsync(order);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync($"/api/workflow/service-orders/{order.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/workflow/service-orders/{order.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
@@ -313,7 +313,7 @@ public class ServiceOrderRulesEndpointTests
         await repo.AddAsync(order);
         using var client = server.CreateClient();
 
-        var response = await client.DeleteAsync($"/api/workflow/service-orders/{order.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/workflow/service-orders/{order.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }

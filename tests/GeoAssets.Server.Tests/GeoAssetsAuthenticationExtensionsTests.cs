@@ -36,7 +36,7 @@ public class GeoAssetsAuthenticationExtensionsTests
 
     private static IConfiguration BuildCiamConfiguration() =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["AzureAdCiam:Instance"] = "https://contoso.ciamlogin.com/",
                 ["AzureAdCiam:TenantId"] = "11111111-2222-3333-4444-555555555555",
@@ -153,7 +153,7 @@ public class GeoAssetsAuthenticationExtensionsTests
         using var server = await BuildServerAsync();
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/protected");
+        var response = await client.GetAsync(new Uri("/protected", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -164,7 +164,7 @@ public class GeoAssetsAuthenticationExtensionsTests
         using var server = await BuildServerAsync();
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/public");
+        var response = await client.GetAsync(new Uri("/public", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }

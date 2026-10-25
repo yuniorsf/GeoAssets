@@ -1,3 +1,4 @@
+using System.Globalization;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 
@@ -41,18 +42,19 @@ public sealed class WfsProviderPlugin(WfsProviderFactory factory) : IProviderPlu
             DefaultValue: "10000")
     ];
 
-    public async Task<IAssetProvider> CreateAsync(
+    public Task<IAssetProvider> CreateAsync(
         ProviderConfig    config,
         IServiceProvider  services,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(config);
         var url = config.Get("url").Trim();
         if (string.IsNullOrEmpty(url))
             throw new InvalidOperationException("WFS endpoint URL is required.");
 
         var typeName    = config.Get("typeName", "geoassets:feature").Trim();
-        var maxFeatures = int.TryParse(config.Get("maxFeatures", "10000"), out var n) ? n : 10_000;
+        var maxFeatures = int.TryParse(config.Get("maxFeatures", "10000"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 10_000;
 
-        return await factory.CreateAsync(url, typeName, maxFeatures, ct);
+        return factory.CreateAsync(url, typeName, maxFeatures, ct);
     }
 }

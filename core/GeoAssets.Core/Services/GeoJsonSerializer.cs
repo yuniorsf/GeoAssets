@@ -7,7 +7,7 @@ namespace GeoAssets.Core.Services;
 
 public static class GeoJsonSerializer
 {
-    private static readonly JsonSerializerOptions Options = new()
+    private static readonly JsonSerializerOptions _options = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -24,77 +24,22 @@ public static class GeoJsonSerializer
     };
 
     public static string Serialize(GeoFeatureCollection collection) =>
-        JsonSerializer.Serialize(collection, Options);
+        JsonSerializer.Serialize(collection, _options);
 
     public static GeoFeatureCollection? Deserialize(string json) =>
-        JsonSerializer.Deserialize<GeoFeatureCollection>(json, Options);
+        JsonSerializer.Deserialize<GeoFeatureCollection>(json, _options);
 
     public static string SerializeFeature(GeoFeature feature) =>
-        JsonSerializer.Serialize(feature, Options);
+        JsonSerializer.Serialize(feature, _options);
 
     public static GeoFeature? DeserializeFeature(string json) =>
-        JsonSerializer.Deserialize<GeoFeature>(json, Options);
+        JsonSerializer.Deserialize<GeoFeature>(json, _options);
 
     public static GeoGeometry? DeserializeGeometry(string json) =>
-        JsonSerializer.Deserialize<GeoGeometry>(json, Options);
+        JsonSerializer.Deserialize<GeoGeometry>(json, _options);
 
-    public static JsonSerializerOptions GetOptions() => Options;
+    public static JsonSerializerOptions Options => _options;
 
-    /// <summary>Compact (non-indented) options for the JS interop path — same converter set as <see cref="GetOptions"/> but without <c>WriteIndented</c>.</summary>
-    public static JsonSerializerOptions GetCompactOptions() => _compactOptions;
-}
-
-/// <summary>
-/// Custom polymorphic converter for GeoGeometry that reads the "type" field
-/// to determine the concrete geometry class to instantiate.
-/// </summary>
-public sealed class GeoGeometryConverter : JsonConverter<GeoGeometry>
-{
-    public override GeoGeometry? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        using var doc = JsonDocument.ParseValue(ref reader);
-        var root = doc.RootElement;
-
-        if (!root.TryGetProperty("type", out var typeProp))
-            return null;
-
-        var type = typeProp.GetString();
-        var json = root.GetRawText();
-
-        var innerOptions = new JsonSerializerOptions(options);
-        innerOptions.Converters.Clear(); // avoid recursion
-
-        return type switch
-        {
-            "Point"      => JsonSerializer.Deserialize<GeoPoint>(json, innerOptions),
-            "LineString" => JsonSerializer.Deserialize<GeoLineString>(json, innerOptions),
-            "Polygon"    => JsonSerializer.Deserialize<GeoPolygon>(json, innerOptions),
-            // MultiPolygon, MultiLineString, MultiPoint, GeometryCollection, etc.
-            // — preserve verbatim so Leaflet can render them correctly.
-            _ when type is not null => new GeoRawGeometry(type, json),
-            _            => null
-        };
-    }
-
-    public override void Write(Utf8JsonWriter writer, GeoGeometry value, JsonSerializerOptions options)
-    {
-        var innerOptions = new JsonSerializerOptions(options);
-        innerOptions.Converters.Clear();
-
-        switch (value)
-        {
-            case GeoPoint p:
-                JsonSerializer.Serialize(writer, p, innerOptions);
-                break;
-            case GeoLineString l:
-                JsonSerializer.Serialize(writer, l, innerOptions);
-                break;
-            case GeoPolygon poly:
-                JsonSerializer.Serialize(writer, poly, innerOptions);
-                break;
-            case GeoRawGeometry raw:
-                writer.WriteRawValue(raw.RawJson);
-                break;
-        }
-    }
+    /// <summary>Compact (non-indented) options for the JS interop path — same converter set as <see cref="Options"/> but without <c>WriteIndented</c>.</summary>
+    public static JsonSerializerOptions CompactOptions => _compactOptions;
 }

@@ -20,21 +20,23 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
         => db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
 
     public async Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default)
-        => await db.Users.ToListAsync(ct);
+        => await db.Users.ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default)
         => await db.Users
             .Where(u => u.UserRoles.Any(ur => ur.Role.Name == roleName))
-            .ToListAsync(ct);
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
 
     public async Task<IReadOnlyList<AppUser>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default)
-        => await db.Users.Where(u => u.OrganizationId == organizationId).ToListAsync(ct);
+        => await db.Users.Where(u => u.OrganizationId == organizationId).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<IReadOnlyList<AppRole>> GetRolesAsync(Guid userId, CancellationToken ct = default)
         => await db.UserRoles
             .Where(ur => ur.UserId == userId)
             .Select(ur => ur.Role)
-            .ToListAsync(ct);
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
 
     public async Task<IReadOnlyList<AppPermission>> GetEffectivePermissionsAsync(
         Guid userId, CancellationToken ct = default)
@@ -43,10 +45,11 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
             .SelectMany(ur => ur.Role.RolePermissions)
             .Select(rp => rp.Permission)
             .Distinct()
-            .ToListAsync(ct);
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
 
     public async Task AddAsync(AppUser user, CancellationToken ct = default)
-        => await db.Users.AddAsync(user, ct);
+        => await db.Users.AddAsync(user, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(AppUser user, CancellationToken ct = default)
     {
@@ -56,14 +59,14 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
 
     public async Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default)
     {
-        var exists = await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct);
+        var exists = await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct).ConfigureAwait(false);
         if (!exists)
-            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime }, ct);
+            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime }, ct).ConfigureAwait(false);
     }
 
     public async Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)
     {
-        var ur = await db.UserRoles.FindAsync([userId, roleId], ct);
+        var ur = await db.UserRoles.FindAsync([userId, roleId], ct).ConfigureAwait(false);
         if (ur is not null) db.UserRoles.Remove(ur);
     }
 

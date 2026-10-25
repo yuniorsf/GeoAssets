@@ -28,7 +28,7 @@ public class EFServiceOrderRepositoryTests
         AssignedTo    = assignedTo,
         OrderTypeId   = orderTypeId,
         ParentOrderId = parentOrderId,
-        CreatedAt     = createdAt ?? DateTime.UtcNow,
+        CreatedAt     = createdAt ?? new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
     };
 
     private sealed class FakeServiceOrder : IServiceOrder
@@ -43,11 +43,11 @@ public class EFServiceOrderRepositoryTests
         public string CreatedBy { get; init; } = string.Empty;
         public string? AssignedTo { get; init; }
         public Guid OrganizationId { get; init; } = Guid.Empty;
-        public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; init; } = new(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc);
         public DateTime? UpdatedAt { get; init; }
         public DateTime? ScheduledAt { get; init; }
         public DateTime? CompletedAt { get; init; }
-        public IReadOnlyDictionary<string, string> Attributes { get; init; } = new Dictionary<string, string>();
+        public IReadOnlyDictionary<string, string> Attributes { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
         public IReadOnlyList<GeoFeature> Features { get; init; } = [];
         public FeatureSelectionSpec? SelectionSpec { get; init; }
         public string? ParentOrderId { get; init; }
@@ -371,7 +371,7 @@ public class EFServiceOrderRepositoryTests
         var repo = new EFServiceOrderRepository(fixture.Context);
         await repo.AddAsync(Order("a"));
         await repo.AddAsync(Order("b"));
-        await repo.AppendDispatchAsync("a", new OrderDispatch("crew-1", DispatchTargetType.Group, "sup-1", DateTime.UtcNow));
+        await repo.AppendDispatchAsync("a", new OrderDispatch("crew-1", DispatchTargetType.Group, "sup-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         var dispatchedToCrew1 = await repo.GetDispatchedToAsync("crew-1", DispatchTargetType.Group);
 
@@ -569,7 +569,7 @@ public class EFServiceOrderRepositoryTests
         IServiceOrder? raised = null;
         repo.OrderUpdated += (_, o) => raised = o;
 
-        await repo.AppendDispatchAsync("a", new OrderDispatch("tech-1", DispatchTargetType.User, "sup-1", DateTime.UtcNow, "please go"));
+        await repo.AppendDispatchAsync("a", new OrderDispatch("tech-1", DispatchTargetType.User, "sup-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), "please go"));
 
         raised.Should().NotBeNull();
         var loaded = await repo.GetByIdAsync("a");
@@ -582,7 +582,7 @@ public class EFServiceOrderRepositoryTests
         using var fixture = new SqliteFixture();
         var repo = new EFServiceOrderRepository(fixture.Context);
 
-        var act = () => repo.AppendDispatchAsync("missing", new OrderDispatch("tech-1", DispatchTargetType.User, "sup-1", DateTime.UtcNow));
+        var act = () => repo.AppendDispatchAsync("missing", new OrderDispatch("tech-1", DispatchTargetType.User, "sup-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
@@ -596,7 +596,7 @@ public class EFServiceOrderRepositoryTests
         var repo = new EFServiceOrderRepository(fixture.Context);
         await repo.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
 
-        await repo.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow, "note"));
+        await repo.AppendActionAsync("a", new OrderActionLog(OrderActionType.Annotate, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), "note"));
 
         var loaded = await repo.GetByIdAsync("a");
         loaded!.Status.Should().Be(ServiceOrderStatus.Draft);
@@ -613,7 +613,7 @@ public class EFServiceOrderRepositoryTests
         repo.OrderStatusChanged += (_, e) => raised = e;
 
         await repo.AppendActionAsync("a", new OrderActionLog(
-            OrderActionType.Dispatch, "sup-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Pending));
+            OrderActionType.Dispatch, "sup-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Pending));
 
         raised.Should().NotBeNull();
         raised!.Value.Previous.Should().Be(ServiceOrderStatus.Draft);
@@ -628,7 +628,7 @@ public class EFServiceOrderRepositoryTests
         await repo.AddAsync(Order("a", status: ServiceOrderStatus.InProgress));
 
         await repo.AppendActionAsync("a", new OrderActionLog(
-            OrderActionType.Complete, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Completed));
+            OrderActionType.Complete, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Completed));
 
         (await repo.GetByIdAsync("a"))!.CompletedAt.Should().NotBeNull();
     }
@@ -641,7 +641,7 @@ public class EFServiceOrderRepositoryTests
         await repo.AddAsync(Order("a", status: ServiceOrderStatus.Draft));
 
         var act = () => repo.AppendActionAsync("a", new OrderActionLog(
-            OrderActionType.Complete, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Completed));
+            OrderActionType.Complete, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Completed));
 
         await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
         (await repo.GetByIdAsync("a"))!.ActionLog.Should().BeEmpty();
@@ -653,7 +653,7 @@ public class EFServiceOrderRepositoryTests
         using var fixture = new SqliteFixture();
         var repo = new EFServiceOrderRepository(fixture.Context);
 
-        var act = () => repo.AppendActionAsync("missing", new OrderActionLog(OrderActionType.Annotate, "tech-1", DateTime.UtcNow));
+        var act = () => repo.AppendActionAsync("missing", new OrderActionLog(OrderActionType.Annotate, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }

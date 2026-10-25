@@ -28,7 +28,7 @@ public class GeoFeatureAttributeValidatorTests
         AttributesSchemaJson = schema,
     };
 
-    private static Dictionary<string, string> ValidAttributes() => new()
+    private static Dictionary<string, string> ValidAttributes() => new(StringComparer.Ordinal)
     {
         ["diameter_mm"] = "100",
         ["material"] = "cast-iron",
@@ -42,7 +42,7 @@ public class GeoFeatureAttributeValidatorTests
     {
         var assetType = new AssetType { Name = "Point" };
 
-        var errors = GeoFeatureAttributeValidator.Validate(assetType, new Dictionary<string, string> { ["anything"] = "goes" });
+        var errors = GeoFeatureAttributeValidator.Validate(assetType, new Dictionary<string, string>(StringComparer.Ordinal) { ["anything"] = "goes" });
 
         errors.Should().BeEmpty();
     }
@@ -52,7 +52,7 @@ public class GeoFeatureAttributeValidatorTests
     {
         var assetType = SchemaAssetType(schema: "   ");
 
-        var errors = GeoFeatureAttributeValidator.Validate(assetType, new Dictionary<string, string> { ["anything"] = "goes" });
+        var errors = GeoFeatureAttributeValidator.Validate(assetType, new Dictionary<string, string>(StringComparer.Ordinal) { ["anything"] = "goes" });
 
         errors.Should().BeEmpty();
     }

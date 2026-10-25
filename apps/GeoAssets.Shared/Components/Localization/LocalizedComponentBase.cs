@@ -26,8 +26,17 @@ public abstract class LocalizedComponentBase : ComponentBase, IDisposable
     }
 
     private void OnLocalizationChanged(object? sender, EventArgs e) =>
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(StateHasChanged);
 
-    public virtual void Dispose() =>
-        L.LocalizationChanged -= OnLocalizationChanged;
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+            L.LocalizationChanged -= OnLocalizationChanged;
+    }
 }

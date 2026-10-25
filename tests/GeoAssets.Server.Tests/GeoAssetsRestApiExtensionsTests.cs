@@ -105,8 +105,7 @@ public class GeoAssetsRestApiExtensionsTests
         using var server = await BuildServerAsync(provider);
         using var client = server.CreateClient();
 
-        var json = await client.GetStringAsync(
-            "/api/geoassets/features/bounds?minLon=0&minLat=0&maxLon=1&maxLat=1");
+        var json = await client.GetStringAsync(new Uri("/api/geoassets/features/bounds?minLon=0&minLat=0&maxLon=1&maxLat=1", UriKind.Relative));
         using var doc = JsonDocument.Parse(json);
 
         doc.RootElement.GetArrayLength().Should().Be(5);
@@ -126,8 +125,7 @@ public class GeoAssetsRestApiExtensionsTests
         using var server = await BuildServerAsync(provider);
         using var client = server.CreateClient();
 
-        var json = await client.GetStringAsync(
-            "/api/geoassets/features/bounds?minLon=0&minLat=0&maxLon=10&maxLat=10");
+        var json = await client.GetStringAsync(new Uri("/api/geoassets/features/bounds?minLon=0&minLat=0&maxLon=10&maxLat=10", UriKind.Relative));
         using var doc = JsonDocument.Parse(json);
 
         doc.RootElement.GetArrayLength().Should().Be(10_000);

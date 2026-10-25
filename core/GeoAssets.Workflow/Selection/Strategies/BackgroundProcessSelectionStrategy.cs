@@ -30,22 +30,16 @@ public abstract class BackgroundProcessSelectionStrategy : IFeatureSelectionStra
         IProgress<BackgroundSelectionProgress> progress,
         CancellationToken ct);
 
-    public async Task<IReadOnlyList<GeoFeature>> SelectAsync(
+    public Task<IReadOnlyList<GeoFeature>> SelectAsync(
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
         var progress = new Progress<BackgroundSelectionProgress>(report =>
             OnProgress?.Invoke(this, report));
 
-        return await RunAsync(context, progress, ct);
+        return RunAsync(context, progress, ct);
     }
 
     /// <summary>Raised when the background process reports incremental progress.</summary>
     public event EventHandler<BackgroundSelectionProgress>? OnProgress;
 }
-
-/// <summary>Progress snapshot reported by a background selection process.</summary>
-public sealed record BackgroundSelectionProgress(
-    int    PercentComplete,
-    string Message,
-    int    FeaturesFoundSoFar = 0);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using GeoAssets.Core.Models;
 using Microsoft.AspNetCore.Components;
 
@@ -19,10 +20,10 @@ public partial class AssetsTable
     private IReadOnlyList<AssetType> _assetTypes = [];
     private PagedResult<GeoFeature>? _result;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         _assetTypes = Repository.GetAssetTypes();
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
     private async Task LoadPageAsync()
@@ -49,7 +50,7 @@ public partial class AssetsTable
     /// <summary>Clicking the currently-sorted column reverses direction; clicking a different one sorts ascending.</summary>
     public static (string? SortBy, bool SortDescending) NextSort(
         string? currentSortBy, bool currentDescending, string clickedColumn) =>
-        currentSortBy == clickedColumn
+        string.Equals(currentSortBy, clickedColumn, StringComparison.Ordinal)
             ? (clickedColumn, !currentDescending)
             : (clickedColumn, false);
 
@@ -59,53 +60,53 @@ public partial class AssetsTable
     private bool CanGoPrevious => _pageIndex > 0;
     private bool CanGoNext => _pageIndex < ComputeTotalPages(_result?.TotalCount ?? 0, _pageSize) - 1;
 
-    private async Task OnSearch(string query)
+    private Task OnSearch(string query)
     {
         _searchText = query;
         _pageIndex = 0;
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
-    private async Task OnTypeFilterChanged(ChangeEventArgs e)
+    private Task OnTypeFilterChanged(ChangeEventArgs e)
     {
         _assetTypeFilter = e.Value?.ToString() ?? string.Empty;
         _pageIndex = 0;
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
-    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    private Task OnPageSizeChanged(ChangeEventArgs e)
     {
-        _pageSize = int.TryParse(e.Value?.ToString(), out var size) ? size : DefaultPageSize;
+        _pageSize = int.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var size) ? size : DefaultPageSize;
         _pageIndex = 0;
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
-    private async Task OnSort(string column)
+    private Task OnSort(string column)
     {
         (_sortBy, _sortDescending) = NextSort(_sortBy, _sortDescending, column);
         _pageIndex = 0;
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
-    private async Task GoToPreviousPage()
+    private Task GoToPreviousPage()
     {
-        if (!CanGoPrevious) return;
+        if (!CanGoPrevious) return Task.CompletedTask;
         _pageIndex--;
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
-    private async Task GoToNextPage()
+    private Task GoToNextPage()
     {
-        if (!CanGoNext) return;
+        if (!CanGoNext) return Task.CompletedTask;
         _pageIndex++;
-        await LoadPageAsync();
+        return LoadPageAsync();
     }
 
     private string AssetTypeName(string assetTypeId) =>
-        _assetTypes.FirstOrDefault(t => t.Id.ToString() == assetTypeId)?.Name ?? assetTypeId;
+        _assetTypes.FirstOrDefault(t => string.Equals(t.Id.ToString(), assetTypeId, StringComparison.Ordinal))?.Name ?? assetTypeId;
 
     private string SortIndicator(string column) =>
-        _sortBy != column ? string.Empty : (_sortDescending ? " ▼" : " ▲");
+        !string.Equals(_sortBy, column, StringComparison.Ordinal) ? string.Empty : (_sortDescending ? " ▼" : " ▲");
 
     private string PagerSummary()
     {

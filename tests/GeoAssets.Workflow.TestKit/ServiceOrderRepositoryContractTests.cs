@@ -31,7 +31,7 @@ public abstract class ServiceOrderRepositoryContractTests
         CreatedBy     = createdBy,
         OrderTypeId   = orderTypeId,
         ParentOrderId = parentOrderId,
-        CreatedAt     = createdAt ?? DateTime.UtcNow,
+        CreatedAt     = createdAt ?? new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
     };
 
     [Fact]
@@ -60,7 +60,7 @@ public abstract class ServiceOrderRepositoryContractTests
         var entry = new OrderActionLog(
             OrderActionType.Complete,
             PerformedBy: "u1",
-            PerformedAt: DateTime.UtcNow,
+            PerformedAt: new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
             ResultingStatus: ServiceOrderStatus.Completed);
 
         var act = async () => await repository.AppendActionAsync("o1", entry);
@@ -96,7 +96,7 @@ public abstract class ServiceOrderRepositoryContractTests
         var entry = new OrderActionLog(
             OrderActionType.Approve,
             PerformedBy: "u1",
-            PerformedAt: DateTime.UtcNow,
+            PerformedAt: new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
             ResultingStatus: ServiceOrderStatus.Pending);
 
         await repository.AppendActionAsync("o1", entry);
@@ -138,9 +138,9 @@ public abstract class ServiceOrderRepositoryContractTests
 
         var all = await repository.GetAllAsync();
 
-        all.Single(o => o.Id == "parent").ChildOrderIds.Should().BeEquivalentTo(["child1", "child2"]);
-        all.Single(o => o.Id == "child1").ChildOrderIds.Should().BeEmpty();
-        all.Single(o => o.Id == "child2").ChildOrderIds.Should().BeEmpty();
+        all.Single(o => string.Equals(o.Id, "parent", StringComparison.Ordinal)).ChildOrderIds.Should().BeEquivalentTo(["child1", "child2"]);
+        all.Single(o => string.Equals(o.Id, "child1", StringComparison.Ordinal)).ChildOrderIds.Should().BeEmpty();
+        all.Single(o => string.Equals(o.Id, "child2", StringComparison.Ordinal)).ChildOrderIds.Should().BeEmpty();
     }
 
     [Fact]

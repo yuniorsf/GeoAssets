@@ -26,6 +26,7 @@ public sealed class BoundingBoxSelectionStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var p = context.Parameters;
 
         var minLon = p.GetDouble("minLon");

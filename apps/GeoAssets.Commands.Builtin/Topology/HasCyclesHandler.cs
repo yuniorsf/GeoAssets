@@ -18,6 +18,9 @@ public sealed class HasCyclesHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var result = context.Repository.HasCycles();
         return Task.FromResult(GeoCommandResult.Ok(result));
     }

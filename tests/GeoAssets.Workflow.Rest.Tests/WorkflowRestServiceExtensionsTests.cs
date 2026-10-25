@@ -25,7 +25,7 @@ public class WorkflowRestServiceExtensionsTests
         var handler = new FakeHttpMessageHandler(_ =>
             new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(Array.Empty<ServiceOrder>(), options: GeoJsonSerializer.GetOptions())
+                Content = JsonContent.Create(Array.Empty<ServiceOrder>(), options: GeoJsonSerializer.Options)
             });
 
         var services = new ServiceCollection();
@@ -47,7 +47,7 @@ public class WorkflowRestServiceExtensionsTests
         var handler = new FakeHttpMessageHandler(_ =>
             new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(Array.Empty<OrderType>(), options: GeoJsonSerializer.GetOptions())
+                Content = JsonContent.Create(Array.Empty<OrderType>(), options: GeoJsonSerializer.Options)
             });
 
         var services = new ServiceCollection();

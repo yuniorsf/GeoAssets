@@ -29,5 +29,5 @@ public sealed class TopoEdge
 
     /// <summary>Arbitrary domain-specific attributes (voltage, pressure, speed limit…).</summary>
     [JsonPropertyName("metadata")]
-    public Dictionary<string, string> Metadata { get; set; } = new();
+    public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.Ordinal);
 }

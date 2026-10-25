@@ -5,7 +5,7 @@ using GeoAssets.Core.Agents;
 
 namespace GeoAssets.Examples.MultiAgent;
 
-internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agents) : MultiAgentOrchestrator(agents)
+internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agents) : MultiAgentOrchestrator(agents), IDisposable
 {
     private const string OrchestratorModel = "claude-opus-4-7";
 
@@ -31,7 +31,7 @@ internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agen
                 System = SystemPrompt,
                 Tools = [.. tools],
                 Messages = [.. messages],
-            });
+            }, ct).ConfigureAwait(false);
 
             var assistantContent = new List<ContentBlockParam>();
             var toolResults = new List<ContentBlockParam>();
@@ -54,7 +54,7 @@ internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agen
                     Input = toolUse.Input,
                 });
 
-                var result = await DispatchToolAsync(toolUse, ct);
+                var result = await DispatchToolAsync(toolUse, ct).ConfigureAwait(false);
 
                 toolResults.Add(new ToolResultBlockParam
                 {
@@ -86,7 +86,7 @@ internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agen
 
         try
         {
-            return await DispatchAsync(toolUse.Name, new AgentWorkItem(task, context), ct);
+            return await DispatchAsync(toolUse.Name, new AgentWorkItem(task, context), ct).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex)
         {
@@ -100,7 +100,7 @@ internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agen
         {
             Name = capability.Name,
             Description = capability.Description,
-            InputSchema = InputSchema.FromRawUnchecked(new Dictionary<string, JsonElement>
+            InputSchema = InputSchema.FromRawUnchecked(new Dictionary<string, JsonElement>(StringComparer.Ordinal)
             {
                 ["type"] = JsonDocument.Parse("\"object\"").RootElement.Clone(),
                 ["properties"] = JsonDocument.Parse("""
@@ -114,5 +114,17 @@ internal abstract class AnthropicToolOrchestrator(IEnumerable<IAgentWorker> agen
         };
 
         return [.. AgentCapabilities.Select(AgentTool)];
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+            _client.Dispose();
     }
 }

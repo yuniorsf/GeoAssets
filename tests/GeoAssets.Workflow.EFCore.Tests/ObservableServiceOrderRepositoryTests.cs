@@ -17,7 +17,7 @@ public class ObservableServiceOrderRepositoryTests
         // (nothing is sampling) — same setup GeoAssetsActivitySourceTests uses.
         ActivitySource.AddActivityListener(new ActivityListener
         {
-            ShouldListenTo = source => source.Name == GeoAssetsActivitySource.SourceName,
+            ShouldListenTo = source => string.Equals(source.Name, GeoAssetsActivitySource.SourceName, StringComparison.Ordinal),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
         });
     }
@@ -48,7 +48,7 @@ public class ObservableServiceOrderRepositoryTests
         {
             _listener = new ActivityListener
             {
-                ShouldListenTo = source => source.Name == GeoAssetsActivitySource.SourceName,
+                ShouldListenTo = source => string.Equals(source.Name, GeoAssetsActivitySource.SourceName, StringComparison.Ordinal),
                 Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
                 ActivityStopped = Activities.Add,
             };
@@ -68,7 +68,8 @@ public class ObservableServiceOrderRepositoryTests
         {
             _listener.InstrumentPublished = (instrument, listener) =>
             {
-                if (instrument.Meter.Name == meterName && instrument.Name == instrumentName)
+                if (string.Equals(instrument.Meter.Name, meterName, StringComparison.Ordinal) &&
+                    string.Equals(instrument.Name, instrumentName, StringComparison.Ordinal))
                     listener.EnableMeasurementEvents(instrument);
             };
             _listener.SetMeasurementEventCallback<long>((_, measurement, tags, _) =>
@@ -110,7 +111,7 @@ public class ObservableServiceOrderRepositoryTests
             Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.IsRoot)]);
 
         public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.ParentOrderId == parentId)]);
+            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.ParentOrderId, parentId, StringComparison.Ordinal))]);
 
         public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default)
         {
@@ -119,16 +120,16 @@ public class ObservableServiceOrderRepositoryTests
         }
 
         public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.Status == status)]);
+            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.Status, status, StringComparison.Ordinal))]);
 
         public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.AssignedTo == userId)]);
+            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.AssignedTo, userId, StringComparison.Ordinal))]);
 
         public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedBy == userId)]);
+            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.CreatedBy, userId, StringComparison.Ordinal))]);
 
         public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.OrderTypeId == orderTypeId)]);
+            Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => string.Equals(o.OrderTypeId, orderTypeId, StringComparison.Ordinal))]);
 
         public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<IServiceOrder>>([.. _store.Values.Where(o => o.CreatedAt >= from && o.CreatedAt <= to)]);
@@ -136,7 +137,7 @@ public class ObservableServiceOrderRepositoryTests
         public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
             string targetId, DispatchTargetType targetType, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<IServiceOrder>>(
-                [.. _store.Values.Where(o => o.Dispatches.Any(d => d.TargetId == targetId && d.TargetType == targetType))]);
+                [.. _store.Values.Where(o => o.Dispatches.Any(d => string.Equals(d.TargetId, targetId, StringComparison.Ordinal) && d.TargetType == targetType))]);
 
         public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
         {
@@ -157,7 +158,7 @@ public class ObservableServiceOrderRepositoryTests
             _store[order.Id] = order;
 
             OrderUpdated?.Invoke(this, order);
-            if (previous != order.Status)
+            if (!string.Equals(previous, order.Status, StringComparison.Ordinal))
                 OrderStatusChanged?.Invoke(this, (order, previous));
 
             return Task.CompletedTask;
@@ -184,7 +185,7 @@ public class ObservableServiceOrderRepositoryTests
                 order.Status = entry.ResultingStatus;
 
             OrderUpdated?.Invoke(this, order);
-            if (entry.ResultingStatus is not null && entry.ResultingStatus != previous)
+            if (entry.ResultingStatus is not null && !string.Equals(entry.ResultingStatus, previous, StringComparison.Ordinal))
                 OrderStatusChanged?.Invoke(this, (order, previous));
 
             return Task.CompletedTask;
@@ -345,7 +346,7 @@ public class ObservableServiceOrderRepositoryTests
         var (tracer, metrics, logger) = Dependencies();
         var sut = new ObservableServiceOrderRepository(inner, tracer, metrics, logger);
 
-        await sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", DateTime.UtcNow));
+        await sut.AppendDispatchAsync("a", new OrderDispatch("user-1", DispatchTargetType.User, "supervisor-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
         (await inner.GetByIdAsync("a"))!.Dispatches.Should().ContainSingle();
     }
@@ -520,7 +521,7 @@ public class ObservableServiceOrderRepositoryTests
         using var measurements = new MeasurementCapture(GeoAssetsMeter.MeterName, "geoassets.orders.transitions");
 
         await sut.AppendActionAsync("a",
-            new OrderActionLog(OrderActionType.Approve, "supervisor-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Pending));
+            new OrderActionLog(OrderActionType.Approve, "supervisor-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Pending));
 
         activities.Activities.Should().ContainSingle();
         measurements.Measurements.Should().ContainSingle();
@@ -542,7 +543,7 @@ public class ObservableServiceOrderRepositoryTests
         using var measurements = new MeasurementCapture(GeoAssetsMeter.MeterName, "geoassets.orders.transitions");
 
         var act = () => sut.AppendActionAsync("a",
-            new OrderActionLog(OrderActionType.Complete, "tech-1", DateTime.UtcNow, ResultingStatus: ServiceOrderStatus.Completed));
+            new OrderActionLog(OrderActionType.Complete, "tech-1", new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), ResultingStatus: ServiceOrderStatus.Completed));
 
         await act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
         activities.Activities.Should().BeEmpty();

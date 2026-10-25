@@ -42,7 +42,7 @@ public class ProjectsEndpointAuthorizationTests
                 User = new AppUser
                 {
                     Id = callerId, Email = "caller@example.com", DisplayName = "Caller",
-                    CreatedAt = DateTime.UtcNow, OrganizationId = null,
+                    CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc), OrganizationId = null,
                 },
                 Roles       = [],
                 Claims      = [],
@@ -238,7 +238,7 @@ public class ProjectsEndpointAuthorizationTests
         using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read"], project);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/projects/{project.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/projects/{project.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -250,7 +250,7 @@ public class ProjectsEndpointAuthorizationTests
         using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read", "projects:delete"], project);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync($"/api/projects/{project.Id}");
+        var response = await client.DeleteAsync(new Uri($"/api/projects/{project.Id}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
@@ -264,7 +264,7 @@ public class ProjectsEndpointAuthorizationTests
         using var server = await BuildServerAsync(Guid.NewGuid(), permissions: ["projects:read"], project);
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync($"/api/projects/{Guid.NewGuid()}");
+        var response = await client.GetAsync(new Uri($"/api/projects/{Guid.NewGuid()}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

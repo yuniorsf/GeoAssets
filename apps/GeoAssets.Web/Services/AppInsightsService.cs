@@ -9,7 +9,7 @@ namespace GeoAssets.Web.Services;
 ///
 /// Severity levels (trackTrace): 0=Verbose, 1=Information, 2=Warning, 3=Error, 4=Critical
 /// </summary>
-public sealed class AppInsightsService(IJSRuntime js) : IAnalyticsService
+internal sealed class AppInsightsService(IJSRuntime js) : IAnalyticsService
 {
     private const string Ns = "appInsightsInterop";
 
@@ -18,32 +18,32 @@ public sealed class AppInsightsService(IJSRuntime js) : IAnalyticsService
     /// Visible in Azure Monitor → Logs → <c>customEvents</c> table.
     /// </summary>
     public void TrackEvent(string name, object? properties = null) =>
-        _ = js.InvokeVoidAsync($"{Ns}.trackEvent", name, properties);
+        _ = js.InvokeVoidAsync($"{Ns}.trackEvent", name, properties).AsTask();
 
     /// <summary>
     /// Records a diagnostic trace message.
     /// Visible in Azure Monitor → Logs → <c>traces</c> table.
     /// </summary>
     public void TrackTrace(string message, int severityLevel = 1, object? properties = null) =>
-        _ = js.InvokeVoidAsync($"{Ns}.trackTrace", message, severityLevel, properties);
+        _ = js.InvokeVoidAsync($"{Ns}.trackTrace", message, severityLevel, properties).AsTask();
 
     /// <summary>
     /// Records an exception.
     /// Visible in Azure Monitor → Logs → <c>exceptions</c> table.
     /// </summary>
     public void TrackException(string message, object? properties = null) =>
-        _ = js.InvokeVoidAsync($"{Ns}.trackException", message, properties);
+        _ = js.InvokeVoidAsync($"{Ns}.trackException", message, properties).AsTask();
 
     /// <summary>
     /// Records a single numeric measurement.
     /// Visible in Azure Monitor → Logs → <c>customMetrics</c> table.
     /// </summary>
     public void TrackMetric(string name, double value, object? properties = null) =>
-        _ = js.InvokeVoidAsync($"{Ns}.trackMetric", name, value, properties);
+        _ = js.InvokeVoidAsync($"{Ns}.trackMetric", name, value, properties).AsTask();
 
     /// <summary>
     /// Associates subsequent telemetry with an authenticated user identity.
     /// </summary>
     public void SetUser(string userId) =>
-        _ = js.InvokeVoidAsync($"{Ns}.setUser", userId);
+        _ = js.InvokeVoidAsync($"{Ns}.setUser", userId).AsTask();
 }

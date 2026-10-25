@@ -44,7 +44,7 @@ builder.Services.AddGeoAssetsPostgres();
 // GetAll()/GetById() call, on whatever request thread happens to hit it first, would still
 // block on LoadCacheFromDb (XD01-173). See AddWarmedPostgresAssetProviderAsync's own doc
 // comment for why this needs an interim service provider.
-await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString);
+await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
 
 // IDbContextFactory<GeoAssetsDbContext> — used by WmsPostGisRenderer so each
 // tile request opens its own short-lived, thread-safe DbContext without touching
@@ -144,14 +144,14 @@ builder.Services.AddCors(opts =>
 var app = builder.Build();
 
 // Overlay any DB-persisted OrderTypes on top of the seeded defaults.
-await app.Services.LoadRegistryFromDbAsync();
+await app.Services.LoadRegistryFromDbAsync().ConfigureAwait(false);
 
 // Seed canonical identity roles/permissions/policies (idempotent, XD01-14).
-await app.Services.SeedGeoIdentityAsync();
+await app.Services.SeedGeoIdentityAsync().ConfigureAwait(false);
 
 // Seed a default Project per organization (idempotent, XD01-144) — must run after identity
 // seeding above, since it needs the organizations that seeder creates.
-await app.Services.SeedDefaultProjectsAsync();
+await app.Services.SeedDefaultProjectsAsync().ConfigureAwait(false);
 
 app.UseCors();
 
@@ -188,4 +188,4 @@ app.MapIdentityApi();
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
 app.MapWmsApi(requireAuthentication: wmsRequireAuthentication);  // GET /wms — OGC WMS 1.1.1
 
-app.Run();
+await app.RunAsync().ConfigureAwait(false);

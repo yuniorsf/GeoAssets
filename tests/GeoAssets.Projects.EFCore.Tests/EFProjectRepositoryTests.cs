@@ -24,7 +24,7 @@ public class EFProjectRepositoryTests
             {
                 Name     = "Field GPS",
                 PluginId = "geoassets.plugin.gps",
-                Values   = new Dictionary<string, string> { ["endpoint"] = "https://example.com" },
+                Values   = new Dictionary<string, string>(StringComparer.Ordinal) { ["endpoint"] = "https://example.com" },
                 IsOpen   = true,
                 IsActive = true
             }
@@ -43,7 +43,7 @@ public class EFProjectRepositoryTests
     public async Task AddAsync_ThenGetById_RoundTripsScalarAndScopeFields()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var project = GeneralProject();
 
         await repo.AddAsync(project);
@@ -80,7 +80,7 @@ public class EFProjectRepositoryTests
     public async Task AddAsync_UserProjectWithAllScopesNull_RoundTripsPreservingNulls()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var parent = GeneralProject();
         await repo.AddAsync(parent);
         var project = new Project { Kind = ProjectKind.User, ParentProjectId = parent.Id };
@@ -101,7 +101,7 @@ public class EFProjectRepositoryTests
     public async Task AddAsync_UserProjectWithOnlyViewStateOverridden_RoundTripsMixedNullAndSetScopes()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var parent = GeneralProject();
         await repo.AddAsync(parent);
         var project = new Project
@@ -126,7 +126,7 @@ public class EFProjectRepositoryTests
     public async Task GetByIdAsync_UnknownId_ReturnsNull()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
 
         var loaded = await repo.GetByIdAsync(Guid.NewGuid());
 
@@ -139,7 +139,7 @@ public class EFProjectRepositoryTests
     public async Task GetByOrganizationAsync_ReturnsOnlyMatchingOrganization()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var orgId = Guid.NewGuid();
         var matching = GeneralProject();
         matching.OrganizationId = orgId;
@@ -157,7 +157,7 @@ public class EFProjectRepositoryTests
     public async Task GetForksOfAsync_ReturnsOnlyUserProjectsForkedFromParent()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var parent = GeneralProject();
         var otherParent = GeneralProject();
         var fork = new Project { Kind = ProjectKind.User, ParentProjectId = parent.Id };
@@ -179,7 +179,7 @@ public class EFProjectRepositoryTests
     public async Task UpdateAsync_ChangesMutableFields_LeavesIdentityAndOwnershipUntouched()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var project = GeneralProject();
         await repo.AddAsync(project);
 
@@ -204,7 +204,7 @@ public class EFProjectRepositoryTests
     public async Task UpdateAsync_UnknownId_Throws()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
 
         var act = () => repo.UpdateAsync(GeneralProject());
 
@@ -217,7 +217,7 @@ public class EFProjectRepositoryTests
     public async Task DeleteAsync_SoftDeletes_RowExcludedFromNormalQueriesButStillInDatabase()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var project = GeneralProject();
         await repo.AddAsync(project);
 
@@ -239,7 +239,7 @@ public class EFProjectRepositoryTests
     public async Task DeleteAsync_UnknownId_IsNoOp()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
 
         var act = () => repo.DeleteAsync(Guid.NewGuid());
 
@@ -252,7 +252,7 @@ public class EFProjectRepositoryTests
     public async Task AddAsync_RaisesProjectSaved()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         Project? saved = null;
         repo.ProjectSaved += (_, p) => saved = p;
 
@@ -267,7 +267,7 @@ public class EFProjectRepositoryTests
     public async Task UpdateAsync_RaisesProjectSaved()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var project = GeneralProject();
         await repo.AddAsync(project);
 
@@ -282,7 +282,7 @@ public class EFProjectRepositoryTests
     public async Task DeleteAsync_RaisesProjectDeleted()
     {
         using var fixture = new SqliteFixture();
-        var repo = new EFProjectRepository(fixture.NewContext());
+        var repo = new EFProjectRepository(fixture.NewContext(), TimeProvider.System);
         var project = GeneralProject();
         await repo.AddAsync(project);
 

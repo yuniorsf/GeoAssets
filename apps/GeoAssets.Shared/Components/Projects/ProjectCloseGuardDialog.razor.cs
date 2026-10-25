@@ -35,10 +35,10 @@ public partial class ProjectCloseGuardDialog
         _pending = null;
     }
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (ReferenceEquals(Session.CloseRequested?.Target, this))
+        if (disposing && ReferenceEquals(Session.CloseRequested?.Target, this))
             Session.CloseRequested = null;
-        base.Dispose();
+        base.Dispose(disposing);
     }
 }

@@ -11,5 +11,5 @@ public sealed class LayerRuleRow
     // ── Navigation ──────────────────────────────────────────────────────────────
     public AssetTypeRow? AssetType { get; set; }
     public LayerRow? Layer { get; set; }
-    public List<LayerRuleConditionRow> Conditions { get; set; } = [];
+    public List<LayerRuleConditionRow> Conditions { get; init; } = [];
 }

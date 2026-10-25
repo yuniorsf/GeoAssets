@@ -22,6 +22,7 @@ public sealed class RestProviderFactory : IAsyncProviderFactory
     /// <summary>Creates a provider without loading initial data. Prefer <see cref="CreateAsync"/>.</summary>
     public IAssetProvider Create(string connectionString)
     {
+        ArgumentNullException.ThrowIfNull(connectionString);
         var client = BuildClient(connectionString);
         return new RestAssetProvider(client);
     }
@@ -29,9 +30,10 @@ public sealed class RestProviderFactory : IAsyncProviderFactory
     /// <summary>Creates a provider and fetches the full dataset from the API.</summary>
     public async Task<IAssetProvider> CreateAsync(string connectionString, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(connectionString);
         var client   = BuildClient(connectionString);
         var provider = new RestAssetProvider(client);
-        await provider.InitializeAsync(ct);
+        await provider.InitializeAsync(ct).ConfigureAwait(false);
         return provider;
     }
 

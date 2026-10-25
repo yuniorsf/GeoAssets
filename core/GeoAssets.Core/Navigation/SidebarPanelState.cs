@@ -15,7 +15,7 @@ public sealed class SidebarPanelState
         get => _openPanelId;
         set
         {
-            if (_openPanelId == value) return;
+            if (string.Equals(_openPanelId, value, StringComparison.Ordinal)) return;
             _openPanelId = value;
             Changed?.Invoke(this, EventArgs.Empty);
         }
@@ -27,5 +27,5 @@ public sealed class SidebarPanelState
     public void Open(string panelId) => OpenPanelId = panelId;
 
     /// <summary>Same toggle-or-collapse behavior <c>NavMenu</c>'s own panel-header click had.</summary>
-    public void Toggle(string panelId) => OpenPanelId = OpenPanelId == panelId ? null : panelId;
+    public void Toggle(string panelId) => OpenPanelId = string.Equals(OpenPanelId, panelId, StringComparison.Ordinal) ? null : panelId;
 }

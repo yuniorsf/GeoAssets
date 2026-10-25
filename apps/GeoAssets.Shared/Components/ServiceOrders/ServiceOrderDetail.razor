@@ -4,6 +4,7 @@
 @inject IServiceOrderRepository Repository
 @inject ServiceOrderRules Rules
 @inject OrderTypeRegistry OrderTypes
+@inject TimeProvider Clock
 
 @if (Order is not null)
 {

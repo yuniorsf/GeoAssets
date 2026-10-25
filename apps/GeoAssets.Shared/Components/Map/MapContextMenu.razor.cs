@@ -17,5 +17,5 @@ public partial class MapContextMenu
     private async Task HandleEdit()   { await OnEdit.InvokeAsync();   await OnClose.InvokeAsync(); }
     private async Task HandleSave()   { await OnSave.InvokeAsync();   await OnClose.InvokeAsync(); }
     private async Task HandleDelete() { await OnDelete.InvokeAsync(); await OnClose.InvokeAsync(); }
-    private async Task HandleClose()  { await OnClose.InvokeAsync(); }
+    private Task HandleClose()  => OnClose.InvokeAsync();
 }

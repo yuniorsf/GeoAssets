@@ -23,7 +23,7 @@ public class GeoAssetsRoleAssignmentExtensionsTests
 
     private static IConfiguration RoleSyncConfiguration(bool enabled) =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["RoleSync:Enabled"]                       = enabled.ToString(),
                 ["RoleSync:TenantId"]                       = "11111111-2222-3333-4444-555555555555",

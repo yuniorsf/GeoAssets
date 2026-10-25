@@ -28,7 +28,7 @@ public class ServiceOrderAttributeValidatorTests
         AttributesSchemaJson = schema,
     };
 
-    private static Dictionary<string, string> ValidAttributes() => new()
+    private static Dictionary<string, string> ValidAttributes() => new(StringComparer.Ordinal)
     {
         ["severity"] = "3",
         ["hazard_class"] = "gas",
@@ -42,7 +42,7 @@ public class ServiceOrderAttributeValidatorTests
     {
         var orderType = new OrderType { Id = "inspection", DisplayName = "Inspection" };
 
-        var errors = ServiceOrderAttributeValidator.Validate(orderType, new Dictionary<string, string> { ["anything"] = "goes" });
+        var errors = ServiceOrderAttributeValidator.Validate(orderType, new Dictionary<string, string>(StringComparer.Ordinal) { ["anything"] = "goes" });
 
         errors.Should().BeEmpty();
     }
@@ -52,7 +52,7 @@ public class ServiceOrderAttributeValidatorTests
     {
         var orderType = SchemaOrderType(schema: "   ");
 
-        var errors = ServiceOrderAttributeValidator.Validate(orderType, new Dictionary<string, string> { ["anything"] = "goes" });
+        var errors = ServiceOrderAttributeValidator.Validate(orderType, new Dictionary<string, string>(StringComparer.Ordinal) { ["anything"] = "goes" });
 
         errors.Should().BeEmpty();
     }

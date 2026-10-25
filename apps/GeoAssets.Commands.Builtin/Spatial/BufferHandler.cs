@@ -1,3 +1,4 @@
+using System.Globalization;
 using GeoAssets.Commands.Contracts;
 using GeoAssets.Core.Models.Geometry;
 
@@ -20,8 +21,11 @@ public sealed class BufferHandler : IGeoCommandHandler
         IReadOnlyDictionary<string, object> parameters,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parameters);
+
         var geometry = (GeoGeometry)parameters["geometry"];
-        var distance = Convert.ToDouble(parameters["distanceDegrees"]);
+        var distance = Convert.ToDouble(parameters["distanceDegrees"], CultureInfo.InvariantCulture);
 
         var buffered = geometry.Buffer(distance);
         var results  = context.Repository.GetIntersecting(buffered);

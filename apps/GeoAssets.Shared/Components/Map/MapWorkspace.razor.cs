@@ -44,10 +44,7 @@ public partial class MapWorkspace
         Selection.Changed += OnSelectionChanged;
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        await AssetSvc.InitializeAsync();
-    }
+    protected override Task OnInitializedAsync() => AssetSvc.InitializeAsync();
 
     // Wakes Leaflet up after the container goes from CSS-hidden back to visible — Leaflet
     // doesn't notice a display:none -> display:block container resize on its own. Must run
@@ -69,7 +66,7 @@ public partial class MapWorkspace
     // drawn feature (IsNew true) is already visible where it was just drawn, so panning to it
     // would be pointless motion; a list/map-click selection (IsNew false) pans to bring an
     // already-existing feature into view.
-    private void OnSelectionChanged() => InvokeAsync(async () =>
+    private void OnSelectionChanged() => _ = InvokeAsync(async () =>
     {
         // Selecting a different feature (map click, AssetList row, etc.) while the candidate
         // picker is open is an implicit abandon — same silent no-op as declining/dismissing.
@@ -103,7 +100,7 @@ public partial class MapWorkspace
     {
         // While the picker is open, clicking its target asset cycles candidates instead of
         // reopening the properties panel for it.
-        if (_pickerVisible && featureId == _pickerTargetFeatureId)
+        if (_pickerVisible && string.Equals(featureId, _pickerTargetFeatureId, StringComparison.Ordinal))
         {
             _candidatePicker?.CycleNext();
             return;
@@ -195,7 +192,7 @@ public partial class MapWorkspace
         if (!string.IsNullOrEmpty(_pendingDeleteId))
         {
             Repository.Delete(_pendingDeleteId);
-            if (Selection.Selected?.Id == _pendingDeleteId)
+            if (string.Equals(Selection.Selected?.Id, _pendingDeleteId, StringComparison.Ordinal))
                 ClosePanel();
         }
         _pendingDeleteId   = string.Empty;
@@ -213,5 +210,6 @@ public partial class MapWorkspace
     {
         Selection.Changed -= OnSelectionChanged;
         await AssetSvc.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
 }

@@ -393,7 +393,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_OrgRecipientWithGrantedRole_CanPerformConfiguredAction()
     {
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
@@ -407,7 +407,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_OrgRecipientWithoutGrantedRole_CannotPerformConfiguredAction()
     {
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
@@ -424,7 +424,7 @@ public class ServiceOrderRulesTests
         // Proves the grant is scoped to orders actually dispatched to the principal —
         // holding the role alone (without the relationship) must not be enough, otherwise
         // this degrades into the same over-broad global grant RoleBasedActionRule already offers.
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
@@ -438,7 +438,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_RecipientGrantOnOneOrder_DoesNotLeakToOrderNotDispatchedToPrincipal()
     {
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
         };
@@ -638,7 +638,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_NarrowedSupervisorGrants_NoLongerAllowsRemovedAction()
     {
-        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["Supervisor"] = new HashSet<OrderActionType>
             {
@@ -655,7 +655,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_NarrowedSupervisorGrants_StillAllowsRetainedAction()
     {
-        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["Supervisor"] = new HashSet<OrderActionType> { OrderActionType.Approve },
         };
@@ -668,7 +668,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_CustomRoleTier_GrantsItsConfiguredActions()
     {
-        var customGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>
+        var customGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
         {
             ["RegionalManager"] = new HashSet<OrderActionType> { OrderActionType.Approve },
         };
@@ -683,7 +683,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_CustomUnrestrictedRoles_GrantsAnyAction()
     {
-        var rules = new ServiceOrderRules(unrestrictedRoles: new HashSet<string> { "SuperAdmin" });
+        var rules = new ServiceOrderRules(unrestrictedRoles: new HashSet<string>(StringComparer.Ordinal) { "SuperAdmin" });
 
         rules.Evaluate(Principal(roles: ["SuperAdmin"]), OrderActionType.Complete, Order())
             .Allowed.Should().BeTrue();
@@ -692,7 +692,7 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_DefaultAdministrator_NoLongerUnrestrictedWhenOverridden()
     {
-        var rules = new ServiceOrderRules(unrestrictedRoles: new HashSet<string> { "SuperAdmin" });
+        var rules = new ServiceOrderRules(unrestrictedRoles: new HashSet<string>(StringComparer.Ordinal) { "SuperAdmin" });
 
         rules.Evaluate(Principal(roles: ["Administrator"]), OrderActionType.Complete, Order())
             .Allowed.Should().BeFalse();

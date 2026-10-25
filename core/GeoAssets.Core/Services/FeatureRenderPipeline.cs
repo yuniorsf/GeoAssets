@@ -39,7 +39,7 @@ public sealed class FeatureRenderPipeline
         return StreamAllAsyncCore(provider, chunkSize, ct);
     }
 
-    private async IAsyncEnumerable<IReadOnlyList<GeoFeature>> StreamAllAsyncCore(
+    private static async IAsyncEnumerable<IReadOnlyList<GeoFeature>> StreamAllAsyncCore(
         IAssetProvider provider, int chunkSize, [EnumeratorCancellation] CancellationToken ct)
     {
         var isSyncProvider = provider.UnwrapToConcrete() is ISyncProvider;
@@ -60,7 +60,7 @@ public sealed class FeatureRenderPipeline
                 foreach (var chunk in provider.GetAll().Chunk(chunkSize))
                 {
                     ct.ThrowIfCancellationRequested();
-                    await channel.Writer.WriteAsync(chunk, ct);
+                    await channel.Writer.WriteAsync(chunk, ct).ConfigureAwait(false);
                 }
                 channel.Writer.Complete();
             }
@@ -70,7 +70,7 @@ public sealed class FeatureRenderPipeline
             }
         }, ct);
 
-        await foreach (var chunk in channel.Reader.ReadAllAsync(ct))
+        await foreach (var chunk in channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             yield return chunk;
     }
 }

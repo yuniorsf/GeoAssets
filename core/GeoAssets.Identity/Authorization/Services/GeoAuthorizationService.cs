@@ -32,41 +32,42 @@ public class GeoAuthorizationService(
 {
     public async Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default)
     {
-        var ctx = await GetAuthorizationContextAsync(ct);
+        var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
         return ctx.HasRole(roleName);
     }
 
     public async Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default)
     {
-        var ctx = await GetAuthorizationContextAsync(ct);
+        var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
         return ctx.HasClaim(claimType, claimValue);
     }
 
     public async Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default)
     {
-        var ctx = await GetAuthorizationContextAsync(ct);
+        var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
         return ctx.HasPermission(permissionCode);
     }
 
     public async Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default)
     {
-        var policy = await policyRepository.GetByNameAsync(policyName, ct)
+        var policy = await policyRepository.GetByNameAsync(policyName, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Policy '{policyName}' not found.");
-        return await EvaluatePolicyAsync(policy, ct);
+        return await EvaluatePolicyAsync(policy, ct).ConfigureAwait(false);
     }
 
     public async Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default)
     {
-        var ctx = await GetAuthorizationContextAsync(ct);
+        ArgumentNullException.ThrowIfNull(policy);
+        var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
         return Evaluate(policy, ctx);
     }
 
     public virtual async Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default)
     {
-        var current = await currentUserAccessor.GetCurrentUserAsync(ct)
+        var current = await currentUserAccessor.GetCurrentUserAsync(ct).ConfigureAwait(false)
             ?? throw new UnauthorizedAccessException("No authenticated user in the current context.");
 
-        var user = await userRepository.GetByExternalObjectIdAsync(current.ExternalObjectId, ct);
+        var user = await userRepository.GetByExternalObjectIdAsync(current.ExternalObjectId, ct).ConfigureAwait(false);
 
         if (user is null)
         {
@@ -86,18 +87,18 @@ public class GeoAuthorizationService(
                 LastLoginAt      = now,
             };
 
-            await userRepository.AddAsync(user, ct);
-            await userRepository.SaveChangesAsync(ct);
+            await userRepository.AddAsync(user, ct).ConfigureAwait(false);
+            await userRepository.SaveChangesAsync(ct).ConfigureAwait(false);
         }
         else
         {
             // Update last-login stamp
             user.LastLoginAt = timeProvider.GetUtcNow().UtcDateTime;
-            await userRepository.UpdateAsync(user, ct);
-            await userRepository.SaveChangesAsync(ct);
+            await userRepository.UpdateAsync(user, ct).ConfigureAwait(false);
+            await userRepository.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
-        var claims = await claimRepository.GetByUserIdAsync(user.Id, ct);
+        var claims = await claimRepository.GetByUserIdAsync(user.Id, ct).ConfigureAwait(false);
 
         // XD01-19: roles are sourced from the external provider's roles claim, not the local
         // UserRole assignment table. The permission each role name grants still resolves
@@ -110,9 +111,9 @@ public class GeoAuthorizationService(
         var permissions = new List<AppPermission>();
         foreach (var roleName in roles)
         {
-            var role = await roleRepository.GetByNameAsync(roleName, ct);
+            var role = await roleRepository.GetByNameAsync(roleName, ct).ConfigureAwait(false);
             if (role is not null)
-                permissions.AddRange(await roleRepository.GetPermissionsAsync(role.Id, ct));
+                permissions.AddRange(await roleRepository.GetPermissionsAsync(role.Id, ct).ConfigureAwait(false));
         }
 
         return new AuthorizationContext
@@ -120,7 +121,7 @@ public class GeoAuthorizationService(
             User        = user,
             Roles       = roles,
             Claims      = claims.ToList(),
-            Permissions = permissions.Select(p => p.Code).Distinct().ToList()
+            Permissions = permissions.Select(p => p.Code).Distinct(StringComparer.Ordinal).ToList()
         };
     }
 

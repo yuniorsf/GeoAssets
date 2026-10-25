@@ -38,7 +38,7 @@ public class SchemaDrivenAttributeEditorTests
             { "properties": { "material": { "type": "string" } } }
             """);
 
-        fields.Should().ContainSingle().Which.Kind.Should().Be(SchemaFieldKind.String);
+        fields.Should().ContainSingle().Which.Kind.Should().Be(SchemaFieldKind.Text);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class SchemaDrivenAttributeEditorTests
             { "properties": { "material": {} } }
             """);
 
-        fields.Should().ContainSingle().Which.Kind.Should().Be(SchemaFieldKind.String);
+        fields.Should().ContainSingle().Which.Kind.Should().Be(SchemaFieldKind.Text);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class SchemaDrivenAttributeEditorTests
             """);
 
         var field = fields.Should().ContainSingle().Which;
-        field.Kind.Should().Be(SchemaFieldKind.Integer);
+        field.Kind.Should().Be(SchemaFieldKind.WholeNumber);
         field.Minimum.Should().Be(10);
         field.Maximum.Should().Be(500);
     }
@@ -192,6 +192,6 @@ public class SchemaDrivenAttributeEditorTests
             """);
 
         fields.Select(f => f.Key).Should().Equal("material", "diameter_mm", "energized");
-        fields.Select(f => f.Kind).Should().Equal(SchemaFieldKind.String, SchemaFieldKind.Integer, SchemaFieldKind.Boolean);
+        fields.Select(f => f.Kind).Should().Equal(SchemaFieldKind.Text, SchemaFieldKind.WholeNumber, SchemaFieldKind.Boolean);
     }
 }

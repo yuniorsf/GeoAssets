@@ -49,7 +49,7 @@ public class ConcreteMenuItemsTests
     {
         var tree = MenuTreeBuilder.Build(AllItems);
 
-        var identity = tree.Single(n => n.Item.Id == "identity");
+        var identity = tree.Single(n => string.Equals(n.Item.Id, "identity", StringComparison.Ordinal));
 
         identity.Children.Select(c => c.Item.Id).Should().Equal(
             "admin-users", "admin-roles", "admin-permissions", "admin-organizations");
@@ -74,9 +74,9 @@ public class ConcreteMenuItemsTests
     [Fact]
     public void PanelItems_ComponentTypesAreRealBlazorComponents()
     {
-        new LayersMenuItem().ComponentType.Should().Be(typeof(AssetTypeManager));
-        new AssetListMenuItem().ComponentType.Should().Be(typeof(AssetList));
-        new CollectionsMenuItem().ComponentType.Should().Be(typeof(ProviderPoolPanel));
+        new LayersMenuItem().ComponentType.Should().Be<AssetTypeManager>();
+        new AssetListMenuItem().ComponentType.Should().Be<AssetList>();
+        new CollectionsMenuItem().ComponentType.Should().Be<ProviderPoolPanel>();
     }
 
     [Fact]

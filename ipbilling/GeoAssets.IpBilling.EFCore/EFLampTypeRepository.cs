@@ -11,7 +11,7 @@ public sealed class EFLampTypeRepository(IpBillingDbContext db) : ILampTypeRepos
     {
         var record = await db.LampTypes
             .Include(t => t.WattageOptions)
-            .FirstOrDefaultAsync(t => t.Code == code, ct);
+            .FirstOrDefaultAsync(t => t.Code == code, ct).ConfigureAwait(false);
 
         return record is null ? null : IpBillingMapper.ToDomain(record);
     }
@@ -21,7 +21,7 @@ public sealed class EFLampTypeRepository(IpBillingDbContext db) : ILampTypeRepos
         var records = await db.LampTypes
             .Include(t => t.WattageOptions)
             .OrderBy(t => t.Code)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         return records.Select(IpBillingMapper.ToDomain).ToList();
     }

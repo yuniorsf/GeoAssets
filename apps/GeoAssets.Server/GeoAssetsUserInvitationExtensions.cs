@@ -24,6 +24,7 @@ public static class GeoAssetsUserInvitationExtensions
         IConfiguration           configuration,
         IUserInvitationProvider? provider = null)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         if (provider is not null)
         {
             services.AddSingleton(provider);

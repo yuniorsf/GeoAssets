@@ -13,13 +13,13 @@ public sealed class EFPermissionRepository(GeoIdentityDbContext db) : IPermissio
         => db.Permissions.FirstOrDefaultAsync(p => p.Code == code, ct);
 
     public async Task<IReadOnlyList<AppPermission>> GetAllAsync(CancellationToken ct = default)
-        => await db.Permissions.OrderBy(p => p.Resource).ThenBy(p => p.Action).ToListAsync(ct);
+        => await db.Permissions.OrderBy(p => p.Resource).ThenBy(p => p.Action).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<IReadOnlyList<AppPermission>> GetByResourceAsync(string resource, CancellationToken ct = default)
-        => await db.Permissions.Where(p => p.Resource == resource).ToListAsync(ct);
+        => await db.Permissions.Where(p => p.Resource == resource).ToListAsync(ct).ConfigureAwait(false);
 
     public async Task AddAsync(AppPermission permission, CancellationToken ct = default)
-        => await db.Permissions.AddAsync(permission, ct);
+        => await db.Permissions.AddAsync(permission, ct).ConfigureAwait(false);
 
     public Task UpdateAsync(AppPermission permission, CancellationToken ct = default)
     {
@@ -29,7 +29,7 @@ public sealed class EFPermissionRepository(GeoIdentityDbContext db) : IPermissio
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var p = await db.Permissions.FindAsync([id], ct);
+        var p = await db.Permissions.FindAsync([id], ct).ConfigureAwait(false);
         if (p is not null) db.Permissions.Remove(p);
     }
 

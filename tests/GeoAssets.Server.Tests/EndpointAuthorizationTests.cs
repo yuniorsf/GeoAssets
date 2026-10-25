@@ -131,7 +131,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:read");
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/api/geoassets/features");
+        var response = await client.GetAsync(new Uri("/api/geoassets/features", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -142,7 +142,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync(); // authenticated, no permissions granted
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/geoassets/features");
+        var response = await client.GetAsync(new Uri("/api/geoassets/features", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -153,7 +153,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:read");
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/api/geoassets/features");
+        var response = await client.GetAsync(new Uri("/api/geoassets/features", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -168,7 +168,7 @@ public class EndpointAuthorizationTests
         using var client = AuthenticatedClient(server);
         var body = new StringContent("""{"properties":{"name":"Test"}}""", Encoding.UTF8, "application/json");
 
-        var response = await client.PostAsync("/api/geoassets/features", body);
+        var response = await client.PostAsync(new Uri("/api/geoassets/features", UriKind.Relative), body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -180,7 +180,7 @@ public class EndpointAuthorizationTests
         using var client = AuthenticatedClient(server);
         var body = new StringContent("""{"properties":{"name":"Test"}}""", Encoding.UTF8, "application/json");
 
-        var response = await client.PostAsync("/api/geoassets/features", body);
+        var response = await client.PostAsync(new Uri("/api/geoassets/features", UriKind.Relative), body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
@@ -194,7 +194,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:edit");
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync("/api/geoassets/features/some-id");
+        var response = await client.DeleteAsync(new Uri("/api/geoassets/features/some-id", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -205,7 +205,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:delete");
         using var client = AuthenticatedClient(server);
 
-        var response = await client.DeleteAsync("/api/geoassets/features/some-id");
+        var response = await client.DeleteAsync(new Uri("/api/geoassets/features/some-id", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
@@ -218,7 +218,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:read");
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities");
+        var response = await client.GetAsync(new Uri("/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -229,7 +229,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:read");
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities");
+        var response = await client.GetAsync(new Uri("/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -243,7 +243,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync("features:read");
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities");
+        var response = await client.GetAsync(new Uri("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -254,7 +254,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync(); // authenticated, no permissions granted
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities");
+        var response = await client.GetAsync(new Uri("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -272,7 +272,7 @@ public class EndpointAuthorizationTests
         using var server = await BuildServerAsync(wmsRequireAuthentication: false);
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=Nonsense");
+        var response = await client.GetAsync(new Uri("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=Nonsense", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

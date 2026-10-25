@@ -12,11 +12,12 @@ namespace GeoAssets.Workflow.Agents.Executors;
 /// Authorization goes through the exact same <see cref="ServiceOrderRules.CanCreate"/>
 /// check a human-driven caller would hit — this executor adds no privilege of its own.
 /// </summary>
-public sealed class CreateServiceOrderExecutor(
+public sealed partial class CreateServiceOrderExecutor(
     IServiceOrderWriter                    writer,
     ServiceOrderRules                      rules,
     OrderTypeRegistry                      orderTypeRegistry,
     IAgentIdentityProvider                 identity,
+    TimeProvider                            timeProvider,
     GeoAssetsActivitySource                tracer,
     ILogger<CreateServiceOrderExecutor>    logger,
     string                                  id = nameof(CreateServiceOrderExecutor))
@@ -27,6 +28,7 @@ public sealed class CreateServiceOrderExecutor(
         IWorkflowContext          context,
         CancellationToken         cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(message);
         // Generated up front (matches ServiceOrder.Id's own default) so the span can carry
         // order.id from the start, covering the authorization check too.
         var orderId = Guid.NewGuid().ToString();
@@ -42,9 +44,7 @@ public sealed class CreateServiceOrderExecutor(
 
             if (!allowed)
             {
-                logger.LogWarning(
-                    "Agent {AgentId} denied Create on order type {OrderTypeId}",
-                    message.AgentId, message.OrderTypeId);
+                LogDenied(logger, message.AgentId, message.OrderTypeId);
                 throw new InvalidOperationException(
                     $"Agent '{message.AgentId}' is not authorized to create '{message.OrderTypeId}' orders.");
             }
@@ -55,14 +55,13 @@ public sealed class CreateServiceOrderExecutor(
                 Title       = message.Title,
                 OrderTypeId = message.OrderTypeId,
                 CreatedBy   = message.AgentId,
+                CreatedAt   = timeProvider.GetUtcNow().UtcDateTime,
                 Status      = orderType.InitialStateKey ?? ServiceOrderStatus.Draft,
             };
 
-            await writer.AddAsync(order, cancellationToken);
+            await writer.AddAsync(order, cancellationToken).ConfigureAwait(false);
 
-            logger.LogInformation(
-                "Agent {AgentId} created order {OrderId} of type {OrderTypeId} in status {Status}",
-                message.AgentId, order.Id, order.OrderTypeId, order.Status);
+            LogCreated(logger, message.AgentId, order.Id, order.OrderTypeId, order.Status);
 
             return new ServiceOrderCreated(
                 order,
@@ -77,10 +76,17 @@ public sealed class CreateServiceOrderExecutor(
             // The denial above already logged a warning with its own reason — avoid a
             // second, misleadingly "unexpected error" log line for the same event.
             if (ex is not InvalidOperationException)
-                logger.LogError(ex,
-                    "Agent {AgentId} failed to create order of type {OrderTypeId}",
-                    message.AgentId, message.OrderTypeId);
+                LogCreateFailed(logger, message.AgentId, message.OrderTypeId, ex);
             throw;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Agent {AgentId} denied Create on order type {OrderTypeId}")]
+    private static partial void LogDenied(ILogger logger, string agentId, string orderTypeId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Agent {AgentId} created order {OrderId} of type {OrderTypeId} in status {Status}")]
+    private static partial void LogCreated(ILogger logger, string agentId, string orderId, string orderTypeId, string status);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Agent {AgentId} failed to create order of type {OrderTypeId}")]
+    private static partial void LogCreateFailed(ILogger logger, string agentId, string orderTypeId, Exception ex);
 }

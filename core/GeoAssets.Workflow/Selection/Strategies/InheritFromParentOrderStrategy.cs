@@ -29,6 +29,7 @@ public sealed class InheritFromParentOrderStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         if (context.TargetOrder is null)
             throw new InvalidOperationException("TargetOrder must be set for 'inherit-parent' strategy.");
 
@@ -38,7 +39,7 @@ public sealed class InheritFromParentOrderStrategy : IFeatureSelectionStrategy
         if (context.TargetOrder.ParentOrderId is null)
             return [];
 
-        var parent = await context.OrderRepository.GetByIdAsync(context.TargetOrder.ParentOrderId, ct);
+        var parent = await context.OrderRepository.GetByIdAsync(context.TargetOrder.ParentOrderId, ct).ConfigureAwait(false);
         if (parent is null)
             return [];
 

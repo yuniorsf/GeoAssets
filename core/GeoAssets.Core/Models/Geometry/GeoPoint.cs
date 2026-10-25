@@ -52,7 +52,11 @@ public sealed class GeoPoint : GeoGeometry
     public double[] Coordinates
     {
         get => [_point.X, _point.Y];
-        set => _point = GeoFactory.For(_point.SRID).CreatePoint(new NtsCoordinate(value[0], value[1]));
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _point = GeoFactory.For(_point.SRID).CreatePoint(new NtsCoordinate(value[0], value[1]));
+        }
     }
 
     [JsonIgnore] public double Longitude => _point.X;

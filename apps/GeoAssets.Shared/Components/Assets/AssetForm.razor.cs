@@ -41,7 +41,7 @@ public partial class AssetForm
     private IReadOnlyList<GeoFeature> _multiCandidates = [];
 
     private AssetType? SelectedAssetType =>
-        Feature is null ? null : Repository.GetAssetTypes().FirstOrDefault(t => t.Id.ToString() == Feature.Properties.AssetTypeId);
+        Feature is null ? null : Repository.GetAssetTypes().FirstOrDefault(t => string.Equals(t.Id.ToString(), Feature.Properties.AssetTypeId, StringComparison.Ordinal));
 
     private string SelectedAssetTypeSchema => SelectedAssetType?.AttributesSchemaJson ?? string.Empty;
 
@@ -146,5 +146,5 @@ public partial class AssetForm
     /// <summary>Allows a parent component to programmatically submit the form (e.g. from a context menu).</summary>
     public Task SaveAsync() => HandleSave();
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 }

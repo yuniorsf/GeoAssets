@@ -58,5 +58,5 @@ public partial class InviteUserDialog
         }
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 }

@@ -110,7 +110,7 @@ public class FeatureRenderPipelineTests
             await foreach (var chunk in pipeline.StreamAllAsync(provider, chunkSize: 10, cts.Token))
             {
                 received.Add(chunk);
-                if (received.Count == 2) cts.Cancel();
+                if (received.Count == 2) await cts.CancelAsync();
             }
         };
 

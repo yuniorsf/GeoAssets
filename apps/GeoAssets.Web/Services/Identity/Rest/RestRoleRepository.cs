@@ -20,7 +20,7 @@ public sealed class RestRoleRepository(HttpClient http) : IRoleRepository
 {
     public async Task<AppRole?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.GetAsync($"roles/{id}", ct);
+        var response = await http.GetAsync(new Uri($"roles/{id}", UriKind.Relative), ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
 
@@ -45,6 +45,7 @@ public sealed class RestRoleRepository(HttpClient http) : IRoleRepository
     /// </summary>
     public async Task AddAsync(AppRole role, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(role);
         var response = await http.PostAsJsonAsync("roles", new RoleWriteDto(role.Name, role.Description), ct);
         response.EnsureSuccessStatusCode();
 
@@ -59,25 +60,26 @@ public sealed class RestRoleRepository(HttpClient http) : IRoleRepository
 
     public async Task UpdateAsync(AppRole role, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(role);
         var response = await http.PutAsJsonAsync($"roles/{role.Id}", new RoleWriteDto(role.Name, role.Description), ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"roles/{id}", ct);
+        var response = await http.DeleteAsync(new Uri($"roles/{id}", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task GrantPermissionAsync(Guid roleId, Guid permissionId, CancellationToken ct = default)
     {
-        var response = await http.PostAsync($"roles/{roleId}/permissions/{permissionId}", content: null, ct);
+        var response = await http.PostAsync(new Uri($"roles/{roleId}/permissions/{permissionId}", UriKind.Relative), content: null, ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RevokePermissionAsync(Guid roleId, Guid permissionId, CancellationToken ct = default)
     {
-        var response = await http.DeleteAsync($"roles/{roleId}/permissions/{permissionId}", ct);
+        var response = await http.DeleteAsync(new Uri($"roles/{roleId}/permissions/{permissionId}", UriKind.Relative), ct);
         response.EnsureSuccessStatusCode();
     }
 

@@ -71,7 +71,7 @@ public partial class OrganizationForm
                     Slug        = _editModel.Slug,
                     Description = _editModel.Description,
                     IsActive    = _editModel.IsActive,
-                    CreatedAt   = DateTime.UtcNow,
+                    CreatedAt   = Clock.GetUtcNow().UtcDateTime,
                 };
                 await Repository.AddAsync(organization);
                 await Repository.SaveChangesAsync();
@@ -96,5 +96,5 @@ public partial class OrganizationForm
         }
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 }

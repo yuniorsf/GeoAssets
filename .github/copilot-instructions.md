@@ -1,5 +1,34 @@
 # GeoAssets Copilot Instructions
 
+## Tri-Planar Agent Role & .NET 10 Clean Code Contract
+
+Within GeoAssets' **Tri-Planar Dual-Loop Architecture**, **GitHub Copilot** operates as the **High-Velocity Mechanical & QA Worker** (complementing Google Antigravity as Outer-Loop DAG Orchestrator and Claude Code as Deep Reasoning / Refactoring Specialist).
+
+### 1. Copilot Responsibilities (Inner-Loop Mechanical & QA)
+- **Mechanical Implementation & Boilerplate**: Rapidly scaffold DTOs, EF Core entity configurations, REST client request/response contracts, DI registration extensions, and Razor code-behind (`.razor.cs`) bindings following established interfaces.
+- **Automated Test & Mock Scaffolding**: Generate exhaustive xUnit `[Fact]` and `[Theory]` unit tests, `NSubstitute`/`Moq` test doubles, and shared fluent builders (`DomainTestDataBuilders`) targeting 100% branch coverage across happy paths, guard clauses, boundary conditions, and cancellation paths.
+- **Formatting & Gate Compliance**: Ensure all generated code passes `./scripts/verify-agent-worktree.sh` (`dotnet format --verify-no-changes`, `dotnet build --no-incremental /warnaserror`, and architecture tests).
+
+### 2. Strictly Banned Patterns (Enforced by `BannedSymbols.txt` & Analyzers)
+- **No Sync-Over-Async or Thread Blocking**: Never emit `.Result`, `.Wait()`, `.WaitAll()`, `.WaitAny()`, `.GetAwaiter().GetResult()`, or `Thread.Sleep(...)`. Always `await` tasks asynchronously and accept/forward a `CancellationToken`.
+- **No Direct System Clock Calls**: Never use `DateTime.Now`, `DateTime.UtcNow`, `DateTime.Today`, `DateTimeOffset.Now`, or `DateTimeOffset.UtcNow` (`RS0030`). Always inject `System.TimeProvider` (or `FakeTimeProvider` in tests) and call `timeProvider.GetUtcNow()`.
+- **No Infrastructure or PostGIS Leakage into Domain Layers**: Projects under `core/` (`GeoAssets.Core`, `GeoAssets.Workflow`, `GeoAssets.Identity`, `GeoAssets.IpBilling`, `GeoAssets.Commands`) must **never** reference `Npgsql`, `Microsoft.EntityFrameworkCore`, `GeoAssets.Provider.PostgreSQL`, or raw SQL/PostGIS functions. Keep all PostGIS and EF Core logic strictly inside `providers/`, `ipbilling/`, `projects/`, `workflow/GeoAssets.Workflow.EFCore`, and `apps/GeoAssets.Server`.
+- **No Unchecked Fire-and-Forget Threading**: Never use `ThreadPool.QueueUserWorkItem`, `UnsafeQueueUserWorkItem`, or `Task.Run` without cancellation and error handling (`AsyncFixer03`).
+- **No Analyzer Suppressions**: Never add `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>` to silence `AsyncFixer`, `Meziantou.Analyzer`, `RS0030`, or Roslyn warnings.
+
+### 3. Clean Code Conventions for .NET 10 / C# 14
+- **Value Semantics (`readonly record struct` & `record`)**:
+  - Use `readonly record struct` for small, immutable value types, coordinate pairs, bounding boxes, and strongly-typed IDs to eliminate heap allocations.
+  - Use `sealed record` for immutable DTOs, commands, domain events, and API payloads; use `class` for stateful services and entities with identity/lifecycle.
+- **Modern Pattern Matching**:
+  - Prefer exhaustive `switch` expressions, property patterns (`{ Status: ServiceOrderStatus.Dispatched, AssigneeId: not null }`), and list patterns over nested `if`/`else` chains or manual type casts.
+- **Source-Generated JSON (`System.Text.Json`)**:
+  - Prefer source-generated `JsonSerializerContext` (`[JsonSerializable(typeof(...))]`) for high-throughput serialization paths (e.g., GeoJSON viewport payloads and REST DTOs) instead of reflection-based serialization.
+- **Nullable Reference Types & Guard Clauses**:
+  - `<Nullable>enable</Nullable>` is enforced solution-wide. Use `ArgumentNullException.ThrowIfNull(arg)` and `ArgumentException.ThrowIfNullOrWhiteSpace(arg)` for parameter validation instead of null-forgiving `!` operators.
+
+---
+
 ## Build, test, and run
 
 Use .NET 10. `global.json` pins SDK `10.0.100`, and the test projects target `net10.0`.
@@ -46,10 +75,11 @@ GeoAssets is a multi-target .NET 10 platform. The main layers are:
 
 - `core/GeoAssets.Core`: domain model, geometry abstractions, provider contracts, topology services, and multi-agent orchestration abstractions.
 - `core/GeoAssets.Commands`: MEF-based GIS command contracts, built-in command discovery, and the deterministic command-plugin scaffolder.
+- `core/GeoAssets.Workflow`, `core/GeoAssets.Identity`, `core/GeoAssets.IpBilling`, and `core/GeoAssets.Infrastructure.Observability`: domain contracts and rules for service-order workflows, authentication/authorization, IP billing, and OpenTelemetry instrumentation.
 - `apps/GeoAssets.Shared`: shared Razor Class Library for both WebAssembly and MAUI; components, localization, CSS, and JavaScript interop live here.
 - `apps/GeoAssets.Web`: the Blazor WebAssembly host; it wires authentication, storage, provider plugins, observability decorators, and boot-time provider selection.
-- `apps/GeoAssets.Server`: the server host for GeoAssets REST endpoints plus WFS/WMS endpoints backed by PostgreSQL/PostGIS.
-- `providers/`, `plugins/commands/`, and `workflow/`: extension layers that add provider implementations, MEF command plugins, and workflow persistence/messaging without moving those concerns into the core domain.
+- `apps/GeoAssets.Server`: the server host for GeoAssets REST endpoints, identity/project/service-order APIs, and WFS/WMS endpoints backed by PostgreSQL/PostGIS.
+- `providers/`, `plugins/commands/`, `workflow/`, `ipbilling/`, and `projects/`: extension layers that add provider implementations, MEF command plugins, workflow persistence/messaging/agents, IP-billing persistence, and project persistence/REST clients without moving those concerns into the core domain.
 
 The main UI entry point is `apps/GeoAssets.Shared/Pages/Index.razor`. It composes the provider pool, layer manager, asset list, asset form, draw toolbar, and `MapContainer`. `MapContextMenu` and `ConfirmDialog` are intentionally rendered outside `.map-area` so their `position: fixed` overlays behave correctly.
 
@@ -74,7 +104,7 @@ The PostgreSQL provider is server-oriented. `AddGeoAssetsPostgres()` registers t
 - Provider discovery is registration-driven. Wire new providers through `IProviderPlugin`, `IExternalProviderFactory`, and the existing registry/factory flow instead of hard-coding UI branches.
 - Only `apps/GeoAssets.Shared/wwwroot/js/geoassets.js` is loaded by the web and MAUI hosts. `mapInterop.js` and `drawInterop.js` are legacy drafts and should not be used as integration points.
 - `apps/GeoAssets.Shared` is the shared UI contract for WebAssembly and MAUI. Prefer changes there over duplicating behavior in host projects.
-- Razor component communication follows the existing pattern: data flows down via `[Parameter]`, actions flow up via `EventCallback<T>`.
-- The app uses bespoke CSS, not Bootstrap. Keep styling aligned with the existing Catppuccin-based tokens in `apps/GeoAssets.Shared/wwwroot/css/geoassets.css`.
+- Razor component communication follows the existing pattern: data flows down via `[Parameter]`, actions flow up via `EventCallback<T>`. Every Razor component/page in `GeoAssets.Shared`, `GeoAssets.Web`, and `GeoAssets.MAUI` ships as a markup-only `.razor` file plus a `.razor.cs` code-behind partial class (except `apps/GeoAssets.MAUI/Pages/MauiLogin.razor`; see `CLAUDE.md` § Conventions).
+- Bootstrap 5.3 (vendored under `apps/GeoAssets.Shared/wwwroot/lib/bootstrap/`) is the base for component styling in `GeoAssets.Shared`, with `--bs-*` custom properties mapped to the Catppuccin Mocha/Latte design tokens in `apps/GeoAssets.Shared/wwwroot/css/geoassets.css`. Layer bespoke CSS in `geoassets.css` on top for anything Bootstrap does not cover.
 - MEF command plugins follow the `GeoAssets.Plugin.*` assembly naming pattern and expose handlers with `[ExportGeoCommand]`; built-in and generated commands both rely on that discovery convention.
 - Automated tests are split by layer: `tests/GeoAssets.Core.Tests` covers the core domain, topology, agents, and the in-memory/provider logic, while `tests/GeoAssets.Commands.Tests` covers command discovery and command-plugin scaffolding.

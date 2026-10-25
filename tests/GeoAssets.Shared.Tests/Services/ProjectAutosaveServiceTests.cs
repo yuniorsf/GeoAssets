@@ -47,9 +47,12 @@ public class ProjectAutosaveServiceTests
         public Project? Current { get; set; }
         public bool IsDirty { get; set; }
         public IReadOnlyList<ProviderReconnectFailure> LastReconnectFailures { get; set; } = [];
+        // Never fire — this test double tracks no subscribers, no test relies on these.
+#pragma warning disable CS0067
         public event EventHandler? DirtyChanged;
         public event EventHandler<Project>? Saved;
         public event EventHandler? CurrentChanged;
+#pragma warning restore CS0067
         public Func<Task<ProjectCloseChoice>>? CloseRequested { get; set; }
 
         public int SaveCallCount { get; private set; }

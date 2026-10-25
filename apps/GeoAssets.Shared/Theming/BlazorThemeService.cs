@@ -43,7 +43,7 @@ public sealed class BlazorThemeService : IThemeService
         await ApplyAsync(mode, persist: false);
     }
 
-    public async Task SetModeAsync(ThemeMode mode) => await ApplyAsync(mode, persist: true);
+    public Task SetModeAsync(ThemeMode mode) => ApplyAsync(mode, persist: true);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

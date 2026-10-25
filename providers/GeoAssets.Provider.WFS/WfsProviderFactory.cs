@@ -1,3 +1,4 @@
+using System.Globalization;
 using GeoAssets.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -38,6 +39,7 @@ public sealed class WfsProviderFactory : IAsyncProviderFactory
     /// <summary>Creates a provider without loading initial data. Prefer <see cref="CreateAsync"/>.</summary>
     public IAssetProvider Create(string connectionString)
     {
+        ArgumentNullException.ThrowIfNull(connectionString);
         var (baseUrl, typeName, maxFeatures) = ParseConnectionString(connectionString);
         var wfs      = new WfsClient(BuildHttpClient(baseUrl));
         return new WfsAssetProvider(wfs, typeName, maxFeatures, _providerLogger);
@@ -48,10 +50,11 @@ public sealed class WfsProviderFactory : IAsyncProviderFactory
         string            connectionString,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(connectionString);
         var (baseUrl, typeName, maxFeatures) = ParseConnectionString(connectionString);
         var wfs      = new WfsClient(BuildHttpClient(baseUrl));
         var provider = new WfsAssetProvider(wfs, typeName, maxFeatures, _providerLogger);
-        await provider.InitializeAsync(ct);
+        await provider.InitializeAsync(ct).ConfigureAwait(false);
         return provider;
     }
 
@@ -67,7 +70,7 @@ public sealed class WfsProviderFactory : IAsyncProviderFactory
     {
         var wfs      = new WfsClient(BuildHttpClient(baseUrl));
         var provider = new WfsAssetProvider(wfs, typeName, maxFeatures, _providerLogger);
-        await provider.InitializeAsync(ct);
+        await provider.InitializeAsync(ct).ConfigureAwait(false);
         return provider;
     }
 
@@ -81,7 +84,7 @@ public sealed class WfsProviderFactory : IAsyncProviderFactory
         var typeName    = parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1])
             ? parts[1].Trim()
             : DefaultTypeName;
-        var maxFeatures = parts.Length > 2 && int.TryParse(parts[2], out var n)
+        var maxFeatures = parts.Length > 2 && int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
             ? n
             : DefaultMaxFeatures;
         return (baseUrl, typeName, maxFeatures);

@@ -39,6 +39,8 @@ public sealed class HttpJsonStringLocalizer : IJsonStringLocalizer
         ICultureService cultureService,
         ILogger<HttpJsonStringLocalizer> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(cultureService);
         _http    = http;
         _options = options.Value;
         _logger  = logger;
@@ -50,8 +52,9 @@ public sealed class HttpJsonStringLocalizer : IJsonStringLocalizer
 
     public string GetString(string key, params object[] args)
     {
+        ArgumentNullException.ThrowIfNull(args);
         if (_current.TryGetValue(key, out var value))
-            return args.Length > 0 ? string.Format(value, args) : value;
+            return args.Length > 0 ? string.Format(CultureInfo.CurrentCulture, value, args) : value;
 
         _logger.LogDebug("Missing translation key: {Key} [{Culture}]",
             key, CultureInfo.CurrentUICulture.Name);
@@ -64,6 +67,7 @@ public sealed class HttpJsonStringLocalizer : IJsonStringLocalizer
     /// </summary>
     public async Task LoadAsync(CultureInfo culture, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(culture);
         var name = culture.TwoLetterISOLanguageName;
 
         if (_cache.TryGetValue(name, out var cached))

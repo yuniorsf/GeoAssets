@@ -10,8 +10,8 @@
 
         <div class="candidate-picker-mode btn-group" role="group">
             <button type="button"
-                    class="btn btn-sm @(_state.Mode == CandidatePickerMode.Single ? "btn-primary" : "btn-outline-secondary")"
-                    @onclick="() => SwitchMode(CandidatePickerMode.Single)">@L["picker.single"]</button>
+                    class="btn btn-sm @(_state.Mode == CandidatePickerMode.Exclusive ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => SwitchMode(CandidatePickerMode.Exclusive)">@L["picker.single"]</button>
             <button type="button"
                     class="btn btn-sm @(_state.Mode == CandidatePickerMode.Multiple ? "btn-primary" : "btn-outline-secondary")"
                     @onclick="() => SwitchMode(CandidatePickerMode.Multiple)">@L["picker.multiple"]</button>
@@ -28,7 +28,7 @@
         }
 
         <div class="candidate-picker-actions">
-            @if (_state.Mode == CandidatePickerMode.Single)
+            @if (_state.Mode == CandidatePickerMode.Exclusive)
             {
                 <button type="button" class="btn btn-primary" @onclick="Confirm">@L["picker.select"]</button>
             }

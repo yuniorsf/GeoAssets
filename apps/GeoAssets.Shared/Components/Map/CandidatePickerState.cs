@@ -2,8 +2,6 @@ using GeoAssets.Core.Models;
 
 namespace GeoAssets.Shared.Components.Map;
 
-public enum CandidatePickerMode { Single, Multiple }
-
 /// <summary>
 /// Pure interaction-state machine behind the multi-candidate "Connect to…" picker (XD01-152),
 /// implementing the design settled in XD01-151: clicking the newly-placed asset cycles the
@@ -19,10 +17,11 @@ public sealed class CandidatePickerState
 
     public IReadOnlyList<GeoFeature> Candidates { get; }
     public int CurrentIndex { get; private set; }
-    public CandidatePickerMode Mode { get; private set; } = CandidatePickerMode.Single;
+    public CandidatePickerMode Mode { get; private set; } = CandidatePickerMode.Exclusive;
 
     public CandidatePickerState(IReadOnlyList<GeoFeature> candidates)
     {
+        ArgumentNullException.ThrowIfNull(candidates);
         if (candidates.Count == 0)
             throw new ArgumentException("At least one candidate is required.", nameof(candidates));
         Candidates = candidates;
@@ -32,7 +31,11 @@ public sealed class CandidatePickerState
 
     public int SelectedCount => _selectedIds.Count;
 
-    public bool IsSelected(GeoFeature candidate) => _selectedIds.Contains(candidate.Id);
+    public bool IsSelected(GeoFeature candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return _selectedIds.Contains(candidate.Id);
+    }
 
     /// <summary>Advances to the next candidate, wrapping circularly from the last back to the first.</summary>
     public void CycleNext() => CurrentIndex = (CurrentIndex + 1) % Candidates.Count;
@@ -59,7 +62,7 @@ public sealed class CandidatePickerState
     /// The candidate(s) to link on confirm — the current one in Single mode, the selection set
     /// (in candidate order) in Multiple mode.
     /// </summary>
-    public IReadOnlyList<GeoFeature> Confirm() => Mode == CandidatePickerMode.Single
+    public IReadOnlyList<GeoFeature> Confirm() => Mode == CandidatePickerMode.Exclusive
         ? [Current]
         : [.. Candidates.Where(c => _selectedIds.Contains(c.Id))];
 }

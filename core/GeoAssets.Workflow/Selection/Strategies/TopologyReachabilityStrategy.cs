@@ -28,6 +28,7 @@ public sealed class TopologyReachabilityStrategy : IFeatureSelectionStrategy
         IFeatureSelectionContext context,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var featureId   = context.Parameters.GetString("featureId");
         var direction   = context.Parameters.TryGetValue("direction", out var d)
                             ? FeatureSelectionParameters.ToEnum<TraversalDirection>(d)
@@ -44,30 +45,17 @@ public sealed class TopologyReachabilityStrategy : IFeatureSelectionStrategy
         if (direction is TraversalDirection.Upstream or TraversalDirection.Both)
         {
             foreach (var ancestor in context.Repository.GetAncestors(featureId))
-                if (result.All(f => f.Id != ancestor.Id))
+                if (result.All(f => !string.Equals(f.Id, ancestor.Id, StringComparison.Ordinal)))
                     result.Add(ancestor);
         }
 
         if (includeSeed)
         {
             var seed = context.Repository.GetById(featureId);
-            if (seed is not null && result.All(f => f.Id != featureId))
+            if (seed is not null && result.All(f => !string.Equals(f.Id, featureId, StringComparison.Ordinal)))
                 result.Insert(0, seed);
         }
 
         return Task.FromResult<IReadOnlyList<GeoFeature>>(result);
     }
-}
-
-/// <summary>Direction of topology traversal.</summary>
-public enum TraversalDirection
-{
-    /// <summary>Follow edges forward (children, descendants).</summary>
-    Downstream,
-
-    /// <summary>Follow edges backward (parents, ancestors).</summary>
-    Upstream,
-
-    /// <summary>Traverse in both directions.</summary>
-    Both
 }

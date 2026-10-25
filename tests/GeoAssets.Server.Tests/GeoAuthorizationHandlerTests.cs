@@ -96,7 +96,7 @@ public class GeoAuthorizationHandlerTests
     {
         // Non-leakage: a handler that granted based on the wrong policy name would pass a
         // caller with permission for "CanExportReports" through a "CanManageUsers" gate.
-        var handler = Sut(name => name == "CanExportReports");
+        var handler = Sut(name => string.Equals(name, "CanExportReports", StringComparison.Ordinal));
         var requirement = new GeoPolicyRequirement("CanManageUsers");
         var context = Context(requirement);
 

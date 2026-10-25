@@ -18,7 +18,7 @@ namespace GeoAssets.Provider.WFS;
 /// Write operations are not supported (WFS-T is out of scope).  Any call to a
 /// mutating method is silently ignored and a warning is logged.
 /// </summary>
-public sealed class WfsAssetProvider : IAssetProvider, ISyncProvider
+public sealed partial class WfsAssetProvider : IAssetProvider, ISyncProvider
 {
     private readonly WfsClient              _wfs;
     private readonly string                 _typeName;
@@ -69,17 +69,22 @@ public sealed class WfsAssetProvider : IAssetProvider, ISyncProvider
     /// </summary>
     internal async Task InitializeAsync(CancellationToken ct = default)
     {
-        var caps = await _wfs.GetCapabilitiesAsync(ct);
-        _logger.LogInformation(
-            "WFS connected: {Title} v{Version} — {Count} feature type(s) available",
-            caps.Title, caps.Version, caps.FeatureTypes.Count);
+        var caps = await _wfs.GetCapabilitiesAsync(ct).ConfigureAwait(false);
+        LogConnected(_logger, caps.Title, caps.Version, caps.FeatureTypes.Count);
 
-        var features = await _wfs.GetFeatureAsync(_typeName, _maxFeatures, ct);
+        var features = await _wfs.GetFeatureAsync(_typeName, _maxFeatures, ct).ConfigureAwait(false);
         _cache.LoadAll(features);
-        _logger.LogInformation(
-            "WFS initial load complete: {Count} features from type '{TypeName}'",
-            features.Length, _typeName);
+        LogInitialLoadComplete(_logger, features.Length, _typeName);
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "WFS connected: {Title} v{Version} — {Count} feature type(s) available")]
+    private static partial void LogConnected(ILogger logger, string title, string version, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "WFS initial load complete: {Count} features from type '{TypeName}'")]
+    private static partial void LogInitialLoadComplete(ILogger logger, int count, string typeName);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "WFS provider is read-only. Write operations are ignored. Use a writable provider (InMemory or REST) for edits.")]
+    private static partial void LogReadOnlyWrite(ILogger logger);
 
     // ── Reads — served from cache ─────────────────────────────────────────────
 
@@ -89,7 +94,7 @@ public sealed class WfsAssetProvider : IAssetProvider, ISyncProvider
     public IReadOnlyList<GeoFeature>                Search(string query)                           => _cache.Search(query);
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                 => _cache.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)         => _cache.GetIntersecting(geometry);
-    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDeg)=> _cache.GetNearby(center, distanceDeg);
+    public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees)=> _cache.GetNearby(center, distanceDegrees);
     public IReadOnlyList<AssetType>                 GetAssetTypes()                                => _cache.GetAssetTypes();
     public IReadOnlyList<Layer>                     GetLayers()                                    => _cache.GetLayers();
     public IReadOnlyList<LayerRule>                 GetLayerRules(Guid assetTypeId)                => _cache.GetLayerRules(assetTypeId);
@@ -105,23 +110,23 @@ public sealed class WfsAssetProvider : IAssetProvider, ISyncProvider
         double minLon, double minLat, double maxLon, double maxLat)
     {
         return await _wfs.GetFeatureInBoundsAsync(
-            _typeName, minLon, minLat, maxLon, maxLat, _maxFeatures);
+            _typeName, minLon, minLat, maxLon, maxLat, _maxFeatures).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
         double minLon, double minLat, double maxLon, double maxLat)
     {
-        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
         // Re-serialize to JsonElement[] so the map renderer can forward raw JSON to JS.
         return [.. features.Select(f =>
-            JsonSerializer.SerializeToElement(f, GeoAssets.Core.Services.GeoJsonSerializer.GetOptions()))];
+            JsonSerializer.SerializeToElement(f, GeoAssets.Core.Services.GeoJsonSerializer.Options))];
     }
 
     public async Task<string?> GetInBoundsRawJsonAsync(
         double minLon, double minLat, double maxLon, double maxLat)
     {
-        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
-        return JsonSerializer.Serialize(features, GeoAssets.Core.Services.GeoJsonSerializer.GetOptions());
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+        return JsonSerializer.Serialize(features, GeoAssets.Core.Services.GeoJsonSerializer.Options);
     }
 
     // ── Writes — not supported (read-only WFS provider) ─────────────────────
@@ -139,8 +144,5 @@ public sealed class WfsAssetProvider : IAssetProvider, ISyncProvider
     public void AddLayerRule(LayerRule layerRule) => LogReadOnly();
     public void DeleteLayerRule(Guid id)          => LogReadOnly();
 
-    private void LogReadOnly() =>
-        _logger.LogWarning(
-            "WFS provider is read-only. Write operations are ignored. " +
-            "Use a writable provider (InMemory or REST) for edits.");
+    private void LogReadOnly() => LogReadOnlyWrite(_logger);
 }

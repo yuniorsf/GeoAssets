@@ -1,0 +1,377 @@
+root = true
+
+[*.cs]
+# CA1002/MA0016 ("don't expose List<T>/concrete collections as public API") are tuned off
+# project-wide: these models are JSON-serialized DTOs where List<T> keeps deserialization and
+# existing .Add()/.Clear() call sites working; CA2227 (no public setter) is still enforced via
+# `init` accessors on these same properties.
+dotnet_diagnostic.CA1002.severity = none
+dotnet_diagnostic.MA0016.severity = none
+# Legacy FxCop/CAS-era rule objecting to type names ending in "Permission"/"Policy" etc. — not
+# relevant to modern .NET, and would force renaming core domain types (AppPermission,
+# RolePermission, ...) used throughout the codebase, tests, and EF configuration.
+dotnet_diagnostic.CA1711.severity = none
+# Both object to EventHandler<T> where T isn't an EventArgs subclass (e.g. EventHandler<GeoFeature>,
+# EventHandler<string>). Idiomatic, widely-used .NET pattern here across 9 public events; the
+# literal fix means a dedicated EventArgs wrapper class per event and updating every subscriber
+# across Core/Shared/Server/MAUI/tests for no real benefit.
+dotnet_diagnostic.CA1003.severity = none
+dotnet_diagnostic.MA0046.severity = none
+# Wants string-typed URL properties/parameters (AssetType.IconUrl, Layer.IconUrl,
+# IWmsProvider.WmsBaseUrl, AddProjectsRest's baseUrl, ...) changed to System.Uri. These are
+# loosely-validated JSON/config values that are sometimes empty or relative; System.Uri's strict
+# parsing (throws on "") would turn today's valid empty/relative values into runtime errors for
+# no functional benefit.
+dotnet_diagnostic.CA1056.severity = none
+dotnet_diagnostic.CA1054.severity = none
+# Wants array-returning properties changed to collections. GeoGeometry's Coordinates properties are
+# deliberately plain arrays — "coordinate arrays are the JSON source of truth" per project convention
+# (see CLAUDE.md) and mirror RFC 7946 GeoJSON shape directly; NativeFilePickResult.Content is a raw
+# byte buffer, same idiom.
+dotnet_diagnostic.CA1819.severity = none
+# Avoid empty interfaces: ISyncProvider is a deliberate marker interface (type-based dispatch, see
+# its own doc comment), not an oversight.
+dotnet_diagnostic.CA1040.severity = none
+# Wants every catch narrowed to a specific exception type. The two sites that trigger this
+# (GeoRawGeometry.NtsGeometry, FeatureRenderPipeline.StreamAllAsyncCore) deliberately catch broadly:
+# one falls back to an empty geometry on any malformed-GeoJSON parse failure, the other forwards any
+# background-task failure to its channel consumer — both need to handle every exception type, not a
+# specific list.
+dotnet_diagnostic.CA1031.severity = none
+# CA1812 ("internal class apparently never instantiated") false-positives on every EF Core
+# IEntityTypeConfiguration<T> class — these are instantiated reflectively by
+# modelBuilder.ApplyConfigurationsFromAssembly(...), never by direct code reference — plus a
+# handful of test-double classes discovered the same way via assembly scanning (MenuRegistry).
+dotnet_diagnostic.CA1812.severity = none
+
+[core/GeoAssets.Commands/GeoPluginContainer.cs]
+# AssemblyCatalog/DirectoryCatalog are added to _catalog.Catalogs (an AggregateCatalog, now
+# disposed by this class's own Dispose()), which cascades disposal to every catalog it holds —
+# CA2000 can't trace ownership transfer through a collection .Add() call.
+dotnet_diagnostic.CA2000.severity = none
+
+[core/GeoAssets.Workflow/Selection/FeatureSelectionRegistry.cs]
+# Same AggregateCatalog ownership-transfer pattern as GeoPluginContainer.cs.
+dotnet_diagnostic.CA2000.severity = none
+
+[core/GeoAssets.Infrastructure.Observability/ObservabilityApplicationExtensions.cs]
+# ToLowerInvariant() here produces the literal JSON value of the /healthz response
+# ({"status":"healthy"}), a convention many monitoring/health-check consumers expect in
+# lowercase — switching to ToUpperInvariant (CA1308's literal suggestion) would change that
+# external wire contract, not just satisfy the analyzer.
+dotnet_diagnostic.CA1308.severity = none
+
+[core/GeoAssets.Workflow/Rules/ServiceOrderRules.cs]
+# ToLowerInvariant() here builds a permission code ("serviceorders:{action}") that must match the
+# lowercase convention used by every permission seeded in GeoIdentitySeeder.cs (e.g.
+# "serviceorders:create"); switching to ToUpperInvariant would silently break every permission
+# lookup in CrossOrgGrantRule.
+dotnet_diagnostic.CA1308.severity = none
+
+[providers/GeoAssets.Provider.PostgreSQL/PostgresServiceExtensions.cs]
+# `interim` is disposed via `finally { await interim.DisposeAsync().ConfigureAwait(false); }` in
+# AddWarmedPostgresAssetProviderAsync — CA2000's static analysis has a known gap tracking
+# disposal across an await inside a try/finally in an async method.
+dotnet_diagnostic.CA2000.severity = none
+
+[core/GeoAssets.Core/Services/FeatureRenderPipeline.cs]
+# StreamAllAsync doesn't touch instance state, but it's called as `pipeline.StreamAllAsync(...)`
+# through an injected DI instance across multiple assemblies (GeoAssets.Shared, tests); C# doesn't
+# allow calling a static member through an instance reference (CS0176), so marking it static would
+# require updating every call site for no functional benefit.
+dotnet_diagnostic.CA1822.severity = none
+
+[**/Migrations/*.cs]
+# EF Core migration files are machine-generated by `dotnet ef migrations add` with a fixed
+# {timestamp}_{Name}.cs naming convention — the timestamp prefix means the file name can never
+# match the migration class name, and re-running the EF tooling would regenerate the same shape.
+dotnet_diagnostic.MA0048.severity = none
+# Migration classes are discovered by EF's tooling via reflection against the DbContext's
+# assembly at `dotnet ef database update` / runtime-migration time, which requires them to stay
+# public — `dotnet ef migrations add` always generates them this way regardless.
+dotnet_diagnostic.CA1515.severity = none
+# Up(MigrationBuilder)/Down(MigrationBuilder) overrides are always generated this way and always
+# called by EF with a non-null migrationBuilder; adding a null check here would be re-added by
+# every future `dotnet ef migrations add` regardless.
+dotnet_diagnostic.CA1062.severity = none
+# Inline array-literal arguments (e.g. columns: new[] {...}) are how `dotnet ef migrations add`
+# always generates MigrationBuilder calls; a migration only ever runs once per environment, so
+# "called repeatedly" perf advice doesn't apply, and the array would be regenerated this way anyway.
+dotnet_diagnostic.CA1861.severity = none
+# InsertData's multidimensional object[,] seed-row array is exactly how `dotnet ef migrations add`
+# generates seed data; it would regenerate the same shape on the next migration regardless.
+dotnet_diagnostic.CA1814.severity = none
+# Up(MigrationBuilder)/Down(MigrationBuilder) are one long flat sequence of MigrationBuilder calls
+# as `dotnet ef migrations add` always generates them — there's no meaningful sub-step to extract
+# into a helper, and the next migration would regenerate the same shape regardless.
+dotnet_diagnostic.MA0051.severity = none
+
+[apps/GeoAssets.Shared/**.cs]
+# MA0004/CA2007 ("use ConfigureAwait(false)") are scoped by this repo's own convention (see
+# CLAUDE.md) to "non-UI library layers (core/, providers/, workflow/)". GeoAssets.Shared is the
+# Blazor component library — ConfigureAwait(false) here is actively wrong, not just unnecessary:
+# Blazor Server's rendering depends on resuming on the captured SynchronizationContext, and
+# bypassing it risks "the current thread is not associated with the Dispatcher" exceptions on UI
+# updates after an await.
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+# CA1848/CA1873 (use LoggerMessage source-gen delegates) fire ~130 times here, entirely on
+# UI-event-driven and request-driven logging (button handlers, component lifecycle, service
+# initialization) — not hot loops. Converting every call site to a generated partial method is
+# substantial boilerplate for a perf gain that doesn't matter at this call frequency.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+# CA1716 ("rename namespace, 'Shared' conflicts with a reserved VB.NET keyword") fires on every
+# single file here since the assembly/project itself is named GeoAssets.Shared throughout this
+# repo's structure and documentation — not something to rename. Same legacy VB-interop rationale
+# as the project-wide CA1711 exemption above.
+dotnet_diagnostic.CA1716.severity = none
+
+[apps/GeoAssets.Web/**.cs]
+# Same rationale as apps/GeoAssets.Shared/**.cs — GeoAssets.Web is the Blazor WebAssembly host,
+# with the same SynchronizationContext-marshaling requirement for UI updates after an await.
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+
+[apps/GeoAssets.Server/**.cs]
+# Unlike a typical "application API isn't referenced from outside the assembly" case, almost
+# every type CA1515 flags here genuinely is referenced from tests/GeoAssets.Server.Tests (a
+# separate assembly, no InternalsVisibleTo) — making them internal would break that project's
+# compilation. Applied project-wide rather than file-by-file since the test project's coverage
+# touches nearly all of them (handlers, requirements, options, REST extension classes, DTOs).
+dotnet_diagnostic.CA1515.severity = none
+
+[apps/GeoAssets.Web/Services/Identity/Rest/**.cs]
+# Unlike a typical "application API isn't referenced from outside the assembly" case, every type
+# in this folder genuinely is referenced from tests/GeoAssets.Web.Tests (a separate assembly, no
+# InternalsVisibleTo) — making them internal would break that project's compilation.
+dotnet_diagnostic.CA1515.severity = none
+
+[apps/GeoAssets.Web/Services/Session/**.cs]
+# Same rationale as Services/Identity/Rest/**.cs — SessionConfig/SessionTimeoutService are
+# referenced from tests/GeoAssets.Web.Tests/Session/SessionTimeoutServiceTests.cs.
+dotnet_diagnostic.CA1515.severity = none
+
+[apps/GeoAssets.Web/Program.cs]
+# MA0026 flags the two pre-existing TODO comments above the provider-pool registration as
+# something to "address" — both document real, intentionally-deferred follow-up work (a loading
+# state for the map, provider selection by configuration), not defects introduced by this
+# analyzer pass. Removing or actioning them is out of scope here.
+dotnet_diagnostic.MA0026.severity = none
+# CA1848/CA1873 (use LoggerMessage source-gen delegates) fire on two log calls that each run
+# exactly once per app boot (startup banner, a one-time fallback warning before the render tree
+# starts) — not a hot path, so a generated partial method is pure boilerplate here.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+
+[apps/GeoAssets.Web/Extensions/GeoIdentityRestExtensions.cs]
+# Same rationale — referenced from tests/GeoAssets.Web.Tests/Extensions/GeoIdentityRestExtensionsTests.cs.
+dotnet_diagnostic.CA1515.severity = none
+
+[apps/GeoAssets.Web/{App.razor.cs,Pages/Authentication.razor.cs,Pages/Login.razor.cs,Shared/RedirectToLogin.razor.cs,Shared/SessionActivityTracker.razor.cs,Shared/SessionTimeoutOverlay.razor.cs}]
+# CA1515 wants these made internal, but the Razor SDK's compiler-generated partial class (from the
+# matching .razor file's markup) always emits `public partial class X` with no accessibility
+# override available — declaring the code-behind partial `internal` produces CS0262
+# ("conflicting accessibility modifiers"), a hard compile error, not just an analyzer suggestion.
+dotnet_diagnostic.CA1515.severity = none
+
+[apps/GeoAssets.MAUI/App.xaml.cs]
+# Same legacy FxCop/CAS-era rationale as the project-wide CA1711 exemption above — App is .NET
+# MAUI's own standard application entry-point class name (App.xaml/App.xaml.cs pairing, wired via
+# MauiProgram's .UseMauiApp<App>()), the exact scaffold name every MAUI app uses. Renaming it
+# would deviate from the framework's own convention, not fix a real defect.
+dotnet_diagnostic.CA1724.severity = none
+
+[apps/GeoAssets.Web/Pages/Authentication.razor.cs]
+# Same legacy FxCop/CAS-era rationale as the project-wide CA1711 exemption and
+# apps/GeoAssets.Shared/Pages/Admin/Permissions.razor.cs — Authentication is a routed Blazor page,
+# referenced only by route string, never by type name.
+dotnet_diagnostic.CA1724.severity = none
+
+[apps/GeoAssets.Web/Shared/**.cs]
+# Same rationale as apps/GeoAssets.Shared's own CA1716 exemption above — the GeoAssets.Web.Shared
+# namespace (this host app's own Layout/shared-component folder, distinct from the GeoAssets.Shared
+# RCL) hits the same "Shared is a reserved VB.NET keyword" legacy rule.
+dotnet_diagnostic.CA1716.severity = none
+
+[tests/GeoAssets.Shared.Tests/**.cs]
+# Same rationale as apps/GeoAssets.Shared's own CA1716 exemption above — this test project's own
+# name/namespace (GeoAssets.Shared.Tests) hits the same "Shared is a reserved VB.NET keyword"
+# legacy rule on every file.
+dotnet_diagnostic.CA1716.severity = none
+
+[apps/GeoAssets.MAUI/**.cs]
+# Same rationale as apps/GeoAssets.Shared/**.cs — MAUI's UI thread has the same
+# SynchronizationContext-marshaling requirement.
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+
+[tests/**.cs]
+# CA1707 ("identifiers should not contain underscores") fights the standard xUnit
+# Should_X_When_Y / Method_Scenario_Expected naming convention used throughout every test project
+# here. Renaming hundreds of test methods to remove underscores would make them less readable,
+# not more correct.
+dotnet_diagnostic.CA1707.severity = none
+# MA0004/CA2007 ("use ConfigureAwait(false)") exist to avoid resuming on a captured
+# SynchronizationContext — xUnit test runners don't have one, so every await in a test project
+# would carry this boilerplate for no behavioral effect.
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+# CA2000 ("dispose before scope exit") fires throughout ValidatingAssetProviderTests.cs, where
+# ValidatingAssetProvider (IAsyncDisposable only, no sync Dispose) wraps an in-memory test double
+# with no real resources, across ~50 plain `void` (non-async) delegation tests. Forcing every one
+# of them to become async just to dispose a stub is pure churn with no practical benefit.
+dotnet_diagnostic.CA2000.severity = none
+# CA1861 ("prefer static readonly over a constant array argument for a method called repeatedly")
+# fires on inline array literals passed to assertions inside individual [Fact]/[Theory] methods —
+# each runs once per test session, not in a hot loop, so hoisting to a static field has no
+# measurable benefit and only adds indirection between the array and the assertion that reads it.
+dotnet_diagnostic.CA1861.severity = none
+# MA0051 ("method too long") fires on round-trip/integration-style [Fact] methods that are a flat
+# arrange/act/assert sequence over many fields (e.g. a full-object JSON round-trip asserting every
+# property) — there's no cyclomatic complexity to reduce, and splitting the assertions into helper
+# methods would only make the test harder to read top-to-bottom for no complexity benefit.
+dotnet_diagnostic.MA0051.severity = none
+
+[tests/GeoAssets.Server.Tests/{EndpointAuthorizationTests.cs,GeoAuthorizationPolicyBridgeEndToEndTests.cs,FakeWorkflowInMemoryRepositories.cs}]
+# MA0048 flags small internal test-double/no-op classes (NeverCalledDbContextFactory,
+# NeverCalledOrganizationGrantRepository, NoOpAuthenticationHandler, FakeServiceOrderRepository,
+# FakeOrderTypeRepository) that intentionally live alongside the test class or helper file whose
+# scenario they exist to support, rather than matching the file's own name — each is a one-off
+# fixture used by exactly one test file, so splitting it out would scatter closely-related pieces
+# across more files for no readability gain.
+dotnet_diagnostic.MA0048.severity = none
+
+[core/GeoAssets.Core/Models/Project.cs]
+# Providers is deliberately reassigned wholesale on an already-constructed Project (the
+# inherit-vs-override contract documented on the property itself) by
+# GeoAssets.Shared/BlazorProjectSessionService.cs and GeoAssets.Server/ProjectsRestApiExtensions.cs —
+# both different assemblies from GeoAssets.Core, so `init`/a non-public setter would break that
+# real behavior, not just tests.
+dotnet_diagnostic.CA2227.severity = none
+
+[core/GeoAssets.Core/Localization/LocalizationOptions.cs]
+# SupportedCultures is bound via the Options pattern (IConfiguration.Bind and/or a configure
+# delegate run against an already-constructed instance, e.g. GeoAssets.Web/Program.cs), which
+# requires a public setter; `init` would break every Configure<LocalizationOptions> call site.
+dotnet_diagnostic.CA2227.severity = none
+
+[workflow/GeoAssets.Workflow.Agents/Identity/{AgentIdentityDescriptor.cs,AgentIdentityOptions.cs}]
+# Same Options-pattern rationale as LocalizationOptions.cs above — both are configuration-bound
+# via IConfiguration.Bind (WorkflowAgentsServiceExtensions.AddWorkflowAgents), which requires a
+# public setter.
+dotnet_diagnostic.CA2227.severity = none
+
+[workflow/GeoAssets.Workflow.Messaging.Kafka/KafkaPublisherOptions.cs]
+# Same Options-pattern rationale as LocalizationOptions.cs above — bound via IConfiguration.Bind
+# against appsettings.json ("WorkflowKafka" section), which requires a public setter.
+dotnet_diagnostic.CA2227.severity = none
+
+[apps/GeoAssets.Shared/Components/Assets/CustomAttributeEditor.razor.cs]
+# Attributes is a Blazor [Parameter] — Blazor's parameter-binding infrastructure assigns it on
+# every re-render (not just construction), unlike the project-wide "setter to init" convention
+# applied to CA2227/CA1002/MA0016 elsewhere (see the project-wide CA1002/MA0016 note above), which
+# covers JSON-serialized DTOs assigned once. Switching to `init` here is unverified against
+# Blazor's actual re-render parameter-binding path without a live browser check.
+dotnet_diagnostic.CA2227.severity = none
+
+[apps/GeoAssets.Shared/Components/Assets/SchemaDrivenAttributeEditor.razor.cs]
+# Same rationale as CustomAttributeEditor.razor.cs — Attributes is a Blazor [Parameter].
+dotnet_diagnostic.CA2227.severity = none
+
+[tests/GeoAssets.Provider.PostgreSQL.Tests/PostgresContainerFixture.cs]
+# PostgresContainerFixture must stay public — every test class's public constructor takes it as
+# a fixture-injected parameter (xUnit's ICollectionFixture<T> pattern); an internal fixture type
+# would make those public constructors CS0051 ("inconsistent accessibility").
+dotnet_diagnostic.CA1515.severity = none
+
+[tests/GeoAssets.Provider.PostgreSQL.Tests/PostgresCollection.cs]
+# PostgresCollection must stay public — xUnit's own analyzer (xUnit1027) requires collection
+# definition classes to be public.
+dotnet_diagnostic.CA1515.severity = none
+
+[tests/GeoAssets.Workflow.Agents.Tests/TestDoubles/AgentObservabilityCollection.cs]
+# Same rationale as PostgresCollection.cs — xUnit's own analyzer (xUnit1027) requires collection
+# definition classes to be public.
+dotnet_diagnostic.CA1515.severity = none
+
+[tests/GeoAssets.Provider.PostgreSQL.Tests/PostgresAssetProviderGetPageAsyncTests.cs]
+# CA2100 flags ExplainCapturedAsync's "EXPLAIN (ANALYZE, BUFFERS) " + cmd.CommandText as untrusted
+# SQL concatenation, but cmd.CommandText is the application's own already-parameterized SQL,
+# captured verbatim from a real PostgresAssetProvider.GetPageAsync call via CapturingInterceptor
+# — never user input — with its bound parameters cloned onto the new command, not inlined.
+dotnet_diagnostic.CA2100.severity = none
+
+[apps/GeoAssets.Server/{WfsEndpointExtensions.cs,WmsEndpointExtensions.cs}]
+# ToLowerInvariant() here is one of three deliberately-distinct lookups (exact key, ToUpperInvariant(),
+# ToLowerInvariant()) tried against the raw WFS/WMS query string to tolerate a client sending
+# REQUEST/BBOX etc. in any case — switching it to ToUpperInvariant (CA1308's literal suggestion)
+# would make it duplicate the adjacent uppercase check instead of covering the lowercase case.
+dotnet_diagnostic.CA1308.severity = none
+
+[tests/GeoAssets.Workflow.Tests/Orders/FakeServiceOrderRepository.cs]
+# Unlike a typical "application API isn't referenced from outside the assembly" case, this test
+# double genuinely is referenced from other test assemblies (GeoAssets.Server.Tests,
+# GeoAssets.Workflow.EFCore.Tests) — making it internal would break those call sites.
+dotnet_diagnostic.CA1515.severity = none
+
+[apps/GeoAssets.Shared/Pages/Admin/Permissions.razor.cs]
+# Same legacy FxCop/CAS-era rationale as the project-wide CA1711 exemption above — Permissions is
+# a routed Blazor page (@page "/admin/permissions"), referenced only by route string, never by
+# type name, so the claimed conflict with System.Security.Permissions never actually arises.
+dotnet_diagnostic.CA1724.severity = none
+
+[apps/GeoAssets.Shared/Pages/ServiceOrders.razor.cs]
+# Same rationale as Permissions.razor.cs — ServiceOrders is a routed Blazor page
+# (@page "/service-orders"), referenced only by route string; the flagged collision with the
+# GeoAssets.Shared.Components.ServiceOrders namespace never causes real ambiguity since nothing
+# references this page type by name.
+dotnet_diagnostic.CA1724.severity = none
+
+[apps/GeoAssets.Shared/Components/Shared/SearchBar.razor.cs]
+# The System.Timers.Timer.Elapsed event is ElapsedEventHandler (void-returning) — async void is
+# the only signature that fits. Wrapped in a try/catch error boundary per CLAUDE.md's exception
+# for framework-mandated UI event handlers.
+dotnet_diagnostic.AsyncFixer03.severity = none
+
+[apps/GeoAssets.Shared/Services/UserProvisioningService.cs]
+# AuthenticationStateProvider.AuthenticationStateChanged is Action<Task<AuthenticationState>>
+# (void-returning) — async void is the only signature that fits. Already wrapped in a try/catch
+# error boundary per CLAUDE.md's exception for framework-mandated UI event handlers.
+dotnet_diagnostic.AsyncFixer03.severity = none
+
+[examples/**.cs]
+# CA1303 ("retrieve from a resource table") fires on every Console.WriteLine literal across these
+# teaching/demo console scripts (examples/) — there is no localization requirement for example
+# output; adding a resource table here is pure busywork with no functional benefit.
+dotnet_diagnostic.CA1303.severity = none
+# These example files deliberately prefix their filename with a step number (01_, 02_, 03_, ...)
+# to show the walkthrough order in a directory listing and in Program.cs's own menu — the number
+# prefix means the filename can never match the type name exactly.
+dotnet_diagnostic.MA0048.severity = none
+# MA0051 ("method too long") fires on these examples' main Run()/RunAsync() methods, which are
+# deliberately one long linear narrative — each step prints/explains a concept in reading order
+# for a learner following along top-to-bottom. Splitting into helper methods for a line-count
+# limit would fragment that narrative into disconnected pieces for no functional benefit; this
+# isn't production logic with cyclomatic-complexity concerns.
+dotnet_diagnostic.MA0051.severity = none
+
+[apps/GeoAssets.Shared/Theming/BlazorThemeService.cs]
+# ToLowerInvariant() here produces the exact localStorage["geoassets.theme"] value that
+# ParseMode (below, same file) and the FOUC-prevention inline <script> in both index.html files
+# parse back via an exact "light"/"dark"/"system" match — switching to ToUpperInvariant would
+# silently break every stored-theme read on next load.
+dotnet_diagnostic.CA1308.severity = none
+
+[tools/**.cs]
+# Standalone developer benchmark CLI harnesses (e.g. GeoAssets.Bench.GetPageAsync) share the same
+# console-only characteristics as examples/**.cs and tests/**.cs: no SynchronizationContext
+# (MA0004/CA2007), no localization resource table for CLI output (CA1303), single-file DTO/helper
+# layout (MA0048/MA0051), and EXPLAIN (ANALYZE, BUFFERS) wrapping of EF-generated parameterized
+# SQL (CA2100, same rationale as PostgresAssetProviderGetPageAsyncTests.cs above).
+dotnet_diagnostic.CA1303.severity = none
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.MA0048.severity = none
+dotnet_diagnostic.MA0051.severity = none
+dotnet_diagnostic.CA2100.severity = none

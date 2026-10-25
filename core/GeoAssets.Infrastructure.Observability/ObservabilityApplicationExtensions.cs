@@ -31,7 +31,7 @@ public static class ObservabilityApplicationExtensions
             {
                 ctx.Response.ContentType = "application/json";
                 var status = report.Status.ToString().ToLowerInvariant();
-                await ctx.Response.WriteAsync($"{{\"status\":\"{status}\"}}");
+                await ctx.Response.WriteAsync($"{{\"status\":\"{status}\"}}").ConfigureAwait(false);
             }
         });
 

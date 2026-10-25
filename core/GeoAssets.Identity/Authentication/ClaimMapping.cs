@@ -51,7 +51,7 @@ public sealed class ClaimMapping
             .SelectMany(principal.FindAll)
             .Concat(principal.FindAll(ClaimTypes.Role))
             .Select(c => c.Value)
-            .Distinct()
+            .Distinct(StringComparer.Ordinal)
             .ToList();
 
         return new CurrentUser(objectId, email, displayName, roles);

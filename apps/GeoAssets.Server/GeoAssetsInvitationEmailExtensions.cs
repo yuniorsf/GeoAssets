@@ -21,6 +21,7 @@ public static class GeoAssetsInvitationEmailExtensions
         IConfiguration          configuration,
         IInvitationEmailSender? sender = null)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         if (sender is not null)
         {
             services.AddSingleton(sender);

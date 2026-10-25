@@ -22,5 +22,5 @@ public sealed class AppGroup
     // ── Navigation ────────────────────────────────────────────────────────────
 
     public Organization?    Organization { get; set; }
-    public List<UserGroup>  UserGroups   { get; set; } = [];
+    public List<UserGroup>  UserGroups   { get; init; } = [];
 }

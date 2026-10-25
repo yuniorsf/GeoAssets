@@ -31,7 +31,7 @@ namespace GeoAssets.Workflow.Persistence;
 /// constraint documented on <c>ImportDiagnostics</c>, which exists specifically to be usable from
 /// both sides of that boundary.
 /// </summary>
-public sealed class ObservableServiceOrderRepository : IServiceOrderRepository
+public sealed partial class ObservableServiceOrderRepository : IServiceOrderRepository
 {
     private readonly IServiceOrderRepository _inner;
     private readonly GeoAssetsActivitySource _tracer;
@@ -91,8 +91,8 @@ public sealed class ObservableServiceOrderRepository : IServiceOrderRepository
     public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default)
         => _inner.GetByOrderTypeAsync(orderTypeId, ct);
 
-    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default)
-        => _inner.GetByDateRangeAsync(from, to, ct);
+    public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default)
+        => _inner.GetByDateRangeAsync(from, toExclusive, ct);
 
     public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
         string targetId, DispatchTargetType targetType, CancellationToken ct = default)
@@ -105,9 +105,10 @@ public sealed class ObservableServiceOrderRepository : IServiceOrderRepository
 
     public async Task UpdateAsync(IServiceOrder order, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(order);
         try
         {
-            await _inner.UpdateAsync(order, ct);
+            await _inner.UpdateAsync(order, ct).ConfigureAwait(false);
         }
         catch (InvalidServiceOrderTransitionException ex)
         {
@@ -123,7 +124,7 @@ public sealed class ObservableServiceOrderRepository : IServiceOrderRepository
     {
         try
         {
-            await _inner.AppendActionAsync(orderId, entry, ct);
+            await _inner.AppendActionAsync(orderId, entry, ct).ConfigureAwait(false);
         }
         catch (InvalidServiceOrderTransitionException ex)
         {
@@ -136,9 +137,10 @@ public sealed class ObservableServiceOrderRepository : IServiceOrderRepository
         => _inner.DeleteAsync(id, ct);
 
     private void LogRejectedTransition(string orderId, InvalidServiceOrderTransitionException ex) =>
-        _logger.LogWarning(ex,
-            "Rejected invalid ServiceOrder transition for order {OrderId}: {From} -> {To}",
-            orderId, ex.From, ex.To);
+        LogRejectedTransitionCore(_logger, orderId, ex.From, ex.To, ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rejected invalid ServiceOrder transition for order {OrderId}: {From} -> {To}")]
+    private static partial void LogRejectedTransitionCore(ILogger logger, string orderId, string? from, string? to, Exception ex);
 
     // ── Events (forwarded) ───────────────────────────────────────────────────
 

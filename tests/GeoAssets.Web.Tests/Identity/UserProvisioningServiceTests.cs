@@ -72,7 +72,7 @@ public class UserProvisioningServiceTests
     private sealed class FakeUserRepository(FakeIdentityStore store) : IUserRepository
     {
         public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) =>
-            Task.FromResult(store.Users.FirstOrDefault(u => u.ExternalObjectId == oid));
+            Task.FromResult(store.Users.FirstOrDefault(u => string.Equals(u.ExternalObjectId, oid, StringComparison.Ordinal)));
 
         public Task AddAsync(AppUser user, CancellationToken ct = default)
         {
@@ -102,7 +102,7 @@ public class UserProvisioningServiceTests
     private sealed class FakePendingInvitationRepository(FakeIdentityStore store) : IPendingInvitationRepository
     {
         public Task<PendingInvitation?> GetByExternalObjectIdAsync(string externalObjectId, CancellationToken ct = default) =>
-            Task.FromResult(store.PendingInvitations.FirstOrDefault(i => i.ExternalObjectId == externalObjectId));
+            Task.FromResult(store.PendingInvitations.FirstOrDefault(i => string.Equals(i.ExternalObjectId, externalObjectId, StringComparison.Ordinal)));
 
         public Task<PendingInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<PendingInvitation>> GetAllPendingAsync(CancellationToken ct = default) => throw new NotSupportedException();
@@ -214,7 +214,7 @@ public class UserProvisioningServiceTests
         {
             ExternalObjectId = "user-3",
             Status           = InvitationStatus.Redeemed,
-            RedeemedAt       = DateTime.UtcNow,
+            RedeemedAt       = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         });
 
         await sut.EnsureProvisionedAsync();

@@ -176,5 +176,5 @@ public partial class RoleForm
         }
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 }

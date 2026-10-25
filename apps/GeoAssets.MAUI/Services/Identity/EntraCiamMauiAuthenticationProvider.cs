@@ -32,7 +32,7 @@ internal sealed class EntraCiamMauiAuthenticationProvider : IGeoAuthenticationPr
 
             var builder = PublicClientApplicationBuilder
                 .Create(clientId)
-                .WithAuthority(authority)
+                .WithAuthority(new Uri(authority, UriKind.Absolute))
                 // Computes the platform-correct redirect URI at runtime (Android:
                 // "msal{ClientId}://auth", iOS/MacCatalyst: "msauth.{BundleId}://auth") instead
                 // of hardcoding one scheme here — see the AzureAdCiamMaui comment in

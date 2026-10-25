@@ -53,12 +53,12 @@ public class GeoAuthorizationPolicyProviderTests
     }
 
     [Fact]
-    public async Task GetDefaultPolicyAsync_DoesNotThrow()
+    public Task GetDefaultPolicyAsync_DoesNotThrow()
     {
         var sut = Sut();
 
         var act = () => sut.GetDefaultPolicyAsync();
 
-        await act.Should().NotThrowAsync();
+        return act.Should().NotThrowAsync();
     }
 }

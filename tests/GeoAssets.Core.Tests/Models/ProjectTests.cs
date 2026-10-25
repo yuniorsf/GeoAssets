@@ -107,7 +107,7 @@ public class ProjectTests
                     Position = 0,
                     Name = "Field GPS",
                     PluginId = "geoassets.plugin.gps",
-                    Values = new Dictionary<string, string> { ["endpoint"] = "https://example.com" },
+                    Values = new Dictionary<string, string>(StringComparer.Ordinal) { ["endpoint"] = "https://example.com" },
                     IsOpen = true,
                     IsEnabled = true,
                     IsActive = true

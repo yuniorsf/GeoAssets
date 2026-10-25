@@ -20,7 +20,7 @@ public partial class Roles
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            Console.Error.WriteLine($"[AdminRoles] Failed to resolve authorization: {ex.Message}");
+            await Console.Error.WriteLineAsync($"[AdminRoles] Failed to resolve authorization: {ex.Message}");
             _authorized = false;
         }
     }

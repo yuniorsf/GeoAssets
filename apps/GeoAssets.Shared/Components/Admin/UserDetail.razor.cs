@@ -56,7 +56,7 @@ public partial class UserDetail
         await OnSaved.InvokeAsync();
     }
 
-    private async Task Cancel() => await OnCancel.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
 
     private async Task ToggleRoleAsync(AppRole role, bool isChecked)
     {

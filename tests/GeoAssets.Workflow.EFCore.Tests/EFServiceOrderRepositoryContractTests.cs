@@ -10,7 +10,7 @@ namespace GeoAssets.Workflow.EFCore.Tests;
 /// decorator) — proves the implementation honors the contract on its own, matching its own
 /// doc comment's claim of being safe to use unwrapped. See XD01-27.
 /// </summary>
-public sealed class EFServiceOrderRepositoryContractTests : ServiceOrderRepositoryContractTests, IDisposable
+internal sealed class EFServiceOrderRepositoryContractTests : ServiceOrderRepositoryContractTests, IDisposable
 {
     private readonly SqliteFixture _fixture = new();
 

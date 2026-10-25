@@ -90,8 +90,8 @@ public class AssetServiceTests
 
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000)
     {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (!condition() && DateTime.UtcNow < deadline)
+        var deadline = TimeProvider.System.GetUtcNow().UtcDateTime.AddMilliseconds(timeoutMs);
+        while (!condition() && TimeProvider.System.GetUtcNow().UtcDateTime < deadline)
             await Task.Delay(5);
     }
 

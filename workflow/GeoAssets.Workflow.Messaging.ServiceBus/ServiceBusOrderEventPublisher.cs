@@ -24,8 +24,9 @@ namespace GeoAssets.Workflow.Messaging.ServiceBus;
 ///   <item><term>ApplicationProperties["traceparent"]</term><description>W3C trace context of the publishing span, so a future consumer can continue the same trace instead of starting a disconnected one.</description></item>
 /// </list>
 /// </summary>
-public sealed class ServiceBusOrderEventPublisher : IOrderEventPublisher, IAsyncDisposable
+public sealed partial class ServiceBusOrderEventPublisher : IOrderEventPublisher, IAsyncDisposable
 {
+    private readonly ServiceBusClient _client;
     private readonly ServiceBusSender _sender;
     private readonly ServiceBusPublisherOptions _options;
     private readonly GeoAssetsActivitySource _tracer;
@@ -43,16 +44,18 @@ public sealed class ServiceBusOrderEventPublisher : IOrderEventPublisher, IAsync
         GeoAssetsActivitySource tracer,
         ILogger<ServiceBusOrderEventPublisher> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _tracer  = tracer;
         _logger  = logger;
 
-        var client = new ServiceBusClient(_options.ConnectionString);
-        _sender    = client.CreateSender(_options.TopicName);
+        _client = new ServiceBusClient(_options.ConnectionString);
+        _sender = _client.CreateSender(_options.TopicName);
     }
 
     public async Task PublishAsync(OrderStateChangedEvent evt, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(evt);
         using var activity = _tracer.StartNotificationActivity(evt.OrderId, "servicebus", ActivityKind.Producer);
 
         var json    = JsonSerializer.Serialize(evt, _jsonOptions);
@@ -75,19 +78,21 @@ public sealed class ServiceBusOrderEventPublisher : IOrderEventPublisher, IAsync
         {
             await _sender.SendMessageAsync(message, ct).ConfigureAwait(false);
 
-            _logger.LogInformation(
-                "Published OrderStateChangedEvent for order {OrderId} ({Previous} → {New}) to Service Bus topic '{Topic}'.",
-                evt.OrderId, evt.PreviousStatus, evt.NewStatus, _options.TopicName);
+            LogPublished(_logger, evt.OrderId, evt.PreviousStatus, evt.NewStatus, _options.TopicName);
         }
         catch (Exception ex)
         {
             GeoAssetsActivitySource.RecordException(activity, ex);
-            _logger.LogError(ex,
-                "Failed to publish OrderStateChangedEvent for order {OrderId} to Service Bus.",
-                evt.OrderId);
+            LogPublishFailed(_logger, evt.OrderId, ex);
             throw;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Published OrderStateChangedEvent for order {OrderId} ({Previous} → {New}) to Service Bus topic '{Topic}'.")]
+    private static partial void LogPublished(ILogger logger, string orderId, string previous, string @new, string topic);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to publish OrderStateChangedEvent for order {OrderId} to Service Bus.")]
+    private static partial void LogPublishFailed(ILogger logger, string orderId, Exception ex);
 
     /// <summary>
     /// Injects the W3C <c>traceparent</c> (and <c>tracestate</c>, if set) derived
@@ -103,5 +108,6 @@ public sealed class ServiceBusOrderEventPublisher : IOrderEventPublisher, IAsync
     public async ValueTask DisposeAsync()
     {
         await _sender.DisposeAsync().ConfigureAwait(false);
+        await _client.DisposeAsync().ConfigureAwait(false);
     }
 }

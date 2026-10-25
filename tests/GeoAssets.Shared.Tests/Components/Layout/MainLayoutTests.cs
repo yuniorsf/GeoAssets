@@ -19,39 +19,39 @@ public class MainLayoutTests
     private sealed class StubUserRepository(AppUser? userToReturn) : IUserRepository
     {
         public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<AppUser?> GetByExternalObjectIdAsync(string oid, CancellationToken ct = default) =>
             Task.FromResult(userToReturn);
 
         public Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<AppUser>> GetByOrganizationAsync(Guid organizationId, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<AppRole>> GetRolesAsync(Guid userId, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<AppPermission>> GetEffectivePermissionsAsync(Guid userId, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
-        public Task AddAsync(AppUser user, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task UpdateAsync(AppUser user, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task AddAsync(AppUser user, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(AppUser user, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
-        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private sealed class StubOrganizationRepository(Organization? organizationToReturn) : IOrganizationRepository
@@ -60,17 +60,17 @@ public class MainLayoutTests
             Task.FromResult(organizationToReturn);
 
         public Task<Organization?> GetBySlugAsync(string slug, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<Organization>> GetAllAsync(CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<AppUser>> GetUsersAsync(Guid organizationId, CancellationToken ct = default) =>
-            throw new NotImplementedException();
+            throw new NotSupportedException();
 
-        public Task AddAsync(Organization organization, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task UpdateAsync(Organization organization, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task AddAsync(Organization organization, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(Organization organization, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class MainLayoutTests
         {
             ExternalObjectId = SampleUser.ExternalObjectId,
             OrganizationId   = null,
-            CreatedAt        = DateTime.UtcNow,
+            CreatedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         };
         var userRepo = new StubUserRepository(appUser);
         var orgRepo  = new StubOrganizationRepository(organizationToReturn: null);
@@ -130,7 +130,7 @@ public class MainLayoutTests
         {
             ExternalObjectId = SampleUser.ExternalObjectId,
             OrganizationId   = orgId,
-            CreatedAt        = DateTime.UtcNow,
+            CreatedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         };
         var userRepo = new StubUserRepository(appUser);
         var orgRepo  = new StubOrganizationRepository(organizationToReturn: null);
@@ -148,13 +148,13 @@ public class MainLayoutTests
         {
             ExternalObjectId = SampleUser.ExternalObjectId,
             OrganizationId   = orgId,
-            CreatedAt        = DateTime.UtcNow,
+            CreatedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         };
         var organization = new Organization
         {
             Id        = orgId,
             Name      = "Empresa Eléctrica del Norte",
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         };
         var userRepo = new StubUserRepository(appUser);
         var orgRepo  = new StubOrganizationRepository(organization);
@@ -177,7 +177,7 @@ public class MainLayoutTests
     {
         var projects = new[]
         {
-            new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, CreatedAt = DateTime.UtcNow },
+            new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) },
         };
 
         var result = MainLayout.SelectDefaultProject(projects);
@@ -188,10 +188,10 @@ public class MainLayoutTests
     [Fact]
     public void SelectDefaultProject_SingleGeneralProject_ReturnsIt()
     {
-        var general = new Project { Id = Guid.NewGuid(), Kind = ProjectKind.General, CreatedAt = DateTime.UtcNow };
+        var general = new Project { Id = Guid.NewGuid(), Kind = ProjectKind.General, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
         var projects = new[]
         {
-            new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, CreatedAt = DateTime.UtcNow },
+            new Project { Id = Guid.NewGuid(), Kind = ProjectKind.User, CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) },
             general,
         };
 

@@ -12,7 +12,7 @@ public class ObservabilityServiceExtensionsTests
     private static TracerProvider BuildTracerProvider(IDictionary<string, string?>? config = null)
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(config ?? new Dictionary<string, string?>())
+            .AddInMemoryCollection(config ?? new Dictionary<string, string?>(StringComparer.Ordinal))
             .Build();
 
         var services = new ServiceCollection();

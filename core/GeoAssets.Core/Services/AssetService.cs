@@ -32,7 +32,7 @@ public sealed class AssetService : IAssetService
 
     public async Task InitializeAsync()
     {
-        var collection = await _storage.LoadAsync();
+        var collection = await _storage.LoadAsync().ConfigureAwait(false);
         _repository.LoadAll(collection.Features);
         _collectionName = collection.Metadata.Name;
 
@@ -41,15 +41,15 @@ public sealed class AssetService : IAssetService
             _repository.AddAssetType(type);
     }
 
-    public async Task<string> ExportAsync()
+    public Task<string> ExportAsync()
     {
         var collection = BuildCollection();
-        return await _storage.ExportToStringAsync(collection);
+        return _storage.ExportToStringAsync(collection);
     }
 
     public async Task ImportAsync(string geoJson)
     {
-        var imported = await _storage.ImportFromStringAsync(geoJson);
+        var imported = await _storage.ImportFromStringAsync(geoJson).ConfigureAwait(false);
 
         // Merge asset types
         foreach (var t in imported.Metadata.AssetTypes.Where(t => !t.IsBuiltIn))
@@ -63,10 +63,10 @@ public sealed class AssetService : IAssetService
     /// Removes all features from the repository and immediately persists
     /// the empty state so the map stays blank on next load.
     /// </summary>
-    public async Task ClearAllAsync(CancellationToken ct = default)
+    public Task ClearAllAsync(CancellationToken ct = default)
     {
         _repository.Clear();
-        await _storage.SaveAsync(BuildCollection(), "default", ct);
+        return _storage.SaveAsync(BuildCollection(), "default", ct);
     }
 
     private void OnCollectionChanged(object? sender, EventArgs e)
@@ -80,9 +80,9 @@ public sealed class AssetService : IAssetService
         {
             try
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500), _timeProvider, token);
+                await Task.Delay(TimeSpan.FromMilliseconds(500), _timeProvider, token).ConfigureAwait(false);
                 var collection = BuildCollection();
-                await _storage.SaveAsync(collection, "default", token);
+                await _storage.SaveAsync(collection, "default", token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { /* debounced */ }
         }, token);
@@ -106,7 +106,7 @@ public sealed class AssetService : IAssetService
         _disposed = true;
 
         _repository.CollectionChanged -= OnCollectionChanged;
-        await _saveCts.CancelAsync();
+        await _saveCts.CancelAsync().ConfigureAwait(false);
         _saveCts.Dispose();
     }
 }

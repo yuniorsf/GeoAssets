@@ -40,7 +40,7 @@ public class ObservabilityApplicationExtensionsTests
     /// <c>GeoAssets.Server/Program.cs</c>); this test guards the contract going forward.
     /// </summary>
     [Fact]
-    public async Task Healthz_AddHealthChecksNeverCalled_ThrowsAtStartup()
+    public Task Healthz_AddHealthChecksNeverCalled_ThrowsAtStartup()
     {
         var act = () => new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -50,7 +50,7 @@ public class ObservabilityApplicationExtensionsTests
             })
             .StartAsync();
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        return act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*AddHealthChecks*");
     }
 
@@ -60,7 +60,7 @@ public class ObservabilityApplicationExtensionsTests
         using var server = await BuildServerAsync();
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/healthz");
+        var response = await client.GetAsync(new Uri("/healthz", UriKind.Relative));
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -84,7 +84,7 @@ public class ObservabilityApplicationExtensionsTests
         using var server = host.GetTestServer();
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/healthz");
+        var response = await client.GetAsync(new Uri("/healthz", UriKind.Relative));
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
@@ -109,7 +109,7 @@ public class ObservabilityApplicationExtensionsTests
         using var server = host.GetTestServer();
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync("/features");
+        var response = await client.GetAsync(new Uri("/features", UriKind.Relative));
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
