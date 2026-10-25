@@ -35,7 +35,7 @@ if [[ ! -f "${SOLUTION_FILE}" ]]; then
 fi
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
-if [[ "${CURRENT_BRANCH}" == "main" || "${CURRENT_BRANCH}" == "master" ]]; then
+if [[ "${GITHUB_ACTIONS:-false}" != "true" ]] && [[ "${CURRENT_BRANCH}" == "main" || "${CURRENT_BRANCH}" == "master" ]]; then
     printf "\033[1;31m[ORACLE:FATAL]\033[0m Refusing to run agent verification on protected branch '%s'. Switch to an isolated worktree branch.\n" "${CURRENT_BRANCH}" >&2
     exit 2
 fi

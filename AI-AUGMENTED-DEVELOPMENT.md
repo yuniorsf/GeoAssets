@@ -8,7 +8,7 @@ GeoAssets uses multiple AI layers at different scopes: GitHub Actions automation
 
 Two workflows run on every repository event without any manual trigger.
 
-### Automated PR Review — `claude-code-review.yml`
+### Automated PR Review — `claude-auto-pr-review.yml`
 
 Every pull request (opened, synchronized, re-opened, or moved out of draft) triggers an automated code review by Claude Code.
 
@@ -21,7 +21,7 @@ Auth     : Anthropic OIDC Federation (ANTHROPIC_FEDERATION_RULE_ID + ANTHROPIC_O
 
 Claude reads the full diff, runs the `code-review` plugin, and posts structured feedback as a PR review. No human action required.
 
-### On-Demand Agent — `claude.yml`
+### On-Demand Agent — `claude-on-demand-agent.yml`
 
 Mention `@claude` anywhere in a PR comment, review body, issue comment, or issue title to invoke Claude Code as an interactive agent.
 
@@ -129,8 +129,8 @@ System prompts are cached with `cache_control: {"type": "ephemeral"}`, reducing 
 
 | Layer | Location | Trigger | Model |
 |-------|----------|---------|-------|
-| Automated PR review | `.github/workflows/claude-code-review.yml` | Every PR event | Claude Code (cloud, OIDC) |
-| On-demand agent | `.github/workflows/claude.yml` | `@claude` mention | Claude Code (cloud, OIDC) |
+| Automated PR review | `.github/workflows/claude-auto-pr-review.yml` | Every PR event | Claude Code (cloud, OIDC) |
+| On-demand agent | `.github/workflows/claude-on-demand-agent.yml` | `@claude` mention | Claude Code (cloud, OIDC) |
 | Copilot context | `.github/copilot-instructions.md` | Editor IDE | Copilot |
 | LLM contract | `CLAUDE.md` | All agent layers | — |
 | Sub-agents (11) | `.claude/agents/` | Automatic / `@name` / `/orchestrate-tickets` | Claude Code (local) |

@@ -7,7 +7,7 @@ on:
 
 jobs:
   unit-tests:
-    name: Unit Tests
+    name: Unit Tests & Coverage
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,19 +21,23 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
       - name: Restore
-        run: dotnet restore tests/GeoAssets.Core.Tests/GeoAssets.Core.Tests.csproj
+        run: dotnet restore GeoAssets.sln
 
-      - name: Build
+      - name: Build (Strict Analyzer Gate)
         run: >
-          dotnet build tests/GeoAssets.Core.Tests/GeoAssets.Core.Tests.csproj
-          --no-restore --configuration Release
+          dotnet build GeoAssets.sln
+          --no-restore --configuration Release /warnaserror
 
-      - name: Test
+      - name: Test All Suites
         run: >
-          dotnet test tests/GeoAssets.Core.Tests/GeoAssets.Core.Tests.csproj
+          dotnet test GeoAssets.sln
           --no-build --configuration Release
-          --logger "trx;LogFileName=test-results.trx"
+          --filter "Category!=RequiresiOS"
+          --logger "trx"
           --results-directory ./TestResults
           --collect:"XPlat Code Coverage"
 
@@ -41,8 +45,8 @@ jobs:
         uses: dorny/test-reporter@v1
         if: always()
         with:
-          name: xUnit — GeoAssets.Core
-          path: TestResults/test-results.trx
+          name: xUnit — GeoAssets Test Suite
+          path: TestResults/**/*.trx
           reporter: dotnet-trx
           fail-on-error: true
 
