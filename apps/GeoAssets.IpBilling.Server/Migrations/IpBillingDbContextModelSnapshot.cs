@@ -51,6 +51,49 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.ToTable("Faturamentos", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FaturamentoPostingRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Competencia")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<decimal>("DeltaOrBaselineKwh")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MunicipioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("PostedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("ResultingKwh")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MunicipioId");
+
+                    b.HasIndex("ServiceOrderId", "Competencia")
+                        .IsUnique();
+
+                    b.ToTable("FaturamentoPostings", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.IpTransformerIndexRecord", b =>
                 {
                     b.Property<Guid>("Id")

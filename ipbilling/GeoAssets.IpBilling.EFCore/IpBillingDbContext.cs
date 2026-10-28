@@ -26,6 +26,7 @@ public class IpBillingDbContext(DbContextOptions<IpBillingDbContext> options)
     internal DbSet<UnidadeOrganizacionalRecord> UnidadesOrganizacionais => Set<UnidadeOrganizacionalRecord>();
     internal DbSet<IpTransformerIndexRecord>    IpTransformerIndexes   => Set<IpTransformerIndexRecord>();
     internal DbSet<FaturamentoRecord>           Faturamentos           => Set<FaturamentoRecord>();
+    internal DbSet<FaturamentoPostingRecord>    FaturamentoPostings    => Set<FaturamentoPostingRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -18,5 +18,24 @@ public interface IFaturamentoRepository
 
     Task AddAsync(Faturamento faturamento, CancellationToken ct = default);
 
+    /// <summary>
+    /// Posts the validated order's kWh to the <see cref="Faturamento"/> ledger for
+    /// <paramref name="municipioId"/> and <paramref name="competencia"/> using either
+    /// <see cref="FaturamentoPostingMode.Set"/> (Levantamento baseline) or
+    /// <see cref="FaturamentoPostingMode.Accumulate"/> (Fiscalização/Ofício delta).
+    /// Idempotent per <c>(serviceOrderId, competencia)</c>.
+    /// </summary>
+    Task<Faturamento> PostOrderCalculationAsync(
+        string serviceOrderId,
+        Guid municipioId,
+        string competencia,
+        decimal kwhDeltaOrBaseline,
+        FaturamentoPostingMode mode,
+        DateTimeOffset postedAt,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<FaturamentoPosting>> GetPostingsByOrderAsync(
+        string serviceOrderId, CancellationToken ct = default);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }
