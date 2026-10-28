@@ -1,0 +1,232 @@
+[
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Agência Nacional de Energia Elétrica (ANEEL)",
+    "source_type": "Resolução Normativa / Marco Legal",
+    "title_or_id": "Resolução Normativa ANEEL nº 1.000/2021 - Regras de Prestação do Serviço Público de Distribuição de Energia Elétrica",
+    "year": "2021",
+    "url": "https://www2.aneel.gov.br/cedoc/ren20211000.pdf",
+    "extracted_os_requirements": "Consolida as regras regulatórias e comerciais do setor de distribuição de energia elétrica no Brasil. Estabelece prazos de atendimento e SLAs estritos para ordens de serviço de campo: atendimento emergencial a interrupções acidentais com despacho imediato de prontidão; religação normal em até 24h (urbano) e 48h (rural); religação de urgência em até 4h (urbano) e 8h (rural); vistorias técnicas para conexão de novas cargas e micro/minigeração distribuída (MMGD) entre 5 e 15 dias; execução de obras de extensão de rede com acompanhamento marco a marco; e vistorias in loco para apuração de ressarcimento de danos elétricos em até 10 dias. O descumprimento dos prazos acarreta compensações financeiras automáticas na fatura dos consumidores e autos de infração pela fiscalização regulatória.",
+    "opportunity_assessment": "Implementação do SLA Guard Engine no GeoAssets: cronômetros regressivos em tempo real parametrizados pelas regras da REN 1.000/2021 com alertas preditivos de escalonamento para despachantes e eletricistas. Registro auditável de transições de status (Dispatched, EnRoute, OnSite, Executing, Completed) com geolocalização e carimbo temporal inviolável, fornecendo blindagem jurídica contra contestações de consumidores e multas regulatórias da ANEEL."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Agência Nacional de Energia Elétrica (ANEEL)",
+    "source_type": "Resolução Normativa / Marco Legal",
+    "title_or_id": "Resolução Normativa ANEEL nº 956/2021 - PRODIST Módulo 8 (Qualidade do Fornecimento) e Módulo 10 (SIG-R)",
+    "year": "2021",
+    "url": "https://www2.aneel.gov.br/cedoc/ren2021956.pdf",
+    "extracted_os_requirements": "Regulamenta os procedimentos de distribuição nos módulos de Qualidade do Fornecimento e Sistema de Informação Geográfica Regulatório. Módulo 8: define o cálculo dos indicadores de continuidade do fornecimento (DEC, FEC, DIC, FIC, DMIC, DICRI), exigindo que cada OS de manobra ou manutenção emergencial registre os instantes exatos de abertura da chave, chegada da equipe, manobras de alívio/transferência e restabelecimento total. Módulo 10: impõe modelo de dados geográfico com conectividade topológica estrita de montante a jusante (subestação -> alimentador MT -> chave/transformador -> ramal BT -> unidade consumidora), exigindo que qualquer alteração física em campo alimente continuamente a base geoespacial.",
+    "opportunity_assessment": "Mecanismo de rastreamento de falhas a jusante (Downstream Outage Trace): aproveitando a conectividade de GeoFeatures, o GeoAssets identifica instantaneamente todas as unidades consumidoras (UCs) afetadas por abertura de chave ou falha de transformador, calculando o impacto projetado nos limites de DIC/DMIC antes da chegada da equipe. Exportação automatizada de relatórios de fechamento de OS em conformidade com as regras do Módulo 8 do PRODIST."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Agência Nacional de Energia Elétrica (ANEEL)",
+    "source_type": "Norma Técnica Concessionária",
+    "title_or_id": "Manual de Instruções da Base de Dados Geográfica da Distribuidora (BDGD) e Conjunto de Dados Abertos SIG-R",
+    "year": "2024",
+    "url": "https://dadosabertos.aneel.gov.br/dataset/base-de-dados-geografica-da-distribuidora-bdgd",
+    "extracted_os_requirements": "Padronização obrigatória da infraestrutura física geoespacial das distribuidoras em camadas georreferenciadas (File Geodatabase/Shapefile em SIRGAS 2000 UTM): PONNOT (postes/suportes), UNTRD (transformadores de distribuição), UNREMT/UNREBT (chaves e religadores MT/BT), SEGCON (trechos de condutores com parâmetros elétricos), SS/BAY (subestações) e UC (unidades consumidoras). As OSs de manutenção e obras devem alimentar a conciliação físico-contábil (MCPSE): registro da ação física (instalar, retirar, substituir), tombamento patrimonial antigo/novo, dados de placa (potência kVA, corrente, fabricante, número de série), poste associado e coordenadas GPS precisas.",
+    "opportunity_assessment": "Modelagem nativa de ativos BDGD no GeoAssets e sincronização de cadastro as-built campo-GIS. Elimina o atraso crônico de até 6 meses para atualização cadastral nas distribuidoras brasileiras, permitindo que a equipe de campo, via aplicativo MAUI/Web, atualize os atributos do ativo na própria OS e gere automaticamente camadas delta validadas para ingestão na BDGD da ANEEL."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Neoenergia Coelba (Grupo Neoenergia)",
+    "source_type": "Norma Técnica Concessionária",
+    "title_or_id": "Norma Técnica Unificada DIS-NOR-068 (Rev. 02) - Construção por Terceiros e Incorporação de Redes & Condições Gerais",
+    "year": "2023",
+    "url": "https://comprasneo.com.br",
+    "extracted_os_requirements": "Requisitos obrigatórios para execução de ordens de serviço de construção, expansão, manutenção e incorporação de redes aéreas por empreiteiras credenciadas na Bahia (417 municípios, englobando grandes vazios rurais no semiárido e áreas urbanas de alta densidade). Exigências de OS: habilitação profissional com certificados NR-10 e NR-35 anexos à OS; emissão e validação obrigatória da Análise Preliminar de Risco (APR) diária antes do início dos trabalhos; vistoria de comissionamento de prumo de postes, flecha e amarração de condutores; levantamento cadastral as-built georreferenciado; e protocolo rigoroso de OS de poda de vegetação com fotos obrigatórias (antes, durante e depois da intervenção) respeitando distâncias de segurança da rede viva.",
+    "opportunity_assessment": "Execução móvel offline-first no app MAUI do GeoAssets para atender ao Sertão baiano e áreas sem sinal celular, com persistência local em SQLite e sincronização resiliente. Módulo de APR digital bloqueante que impede a transição da OS para InExecution sem a conferência de EPI/EPC. Captura fotográfica de poda e inspeção de postes com estampagem automática de geocódigo, orientação magnética e timestamp no arquivo EXIF."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Enel Distribuição Ceará / Agência Reguladora do Estado do Ceará (ARCE)",
+    "source_type": "Termo de Referência",
+    "title_or_id": "Fiscalizações da Coordenadoria de Energia da ARCE & Condições Gerais de Contratação Brasil (GCC / WeBUY)",
+    "year": "2024",
+    "url": "https://sistemas2.arce.ce.gov.br/central-servicos/",
+    "extracted_os_requirements": "Fiscalização regulatória de atendimento a prazos de obras, novas ligações, MMGD e restabelecimento emergencial, com aplicação de multas superiores a R$ 28 milhões pela ARCE. As Condições Gerais de Contratação do Grupo Enel (WeBUY/SAP) exigem: formalização estrita de frentes de trabalho via OS digital; despacho de empreiteiras sob SLAs contratuais com penalidades diárias por atraso; rastreabilidade completa da força de trabalho (Workforce Management), registrando tempos de deslocamento, início e conclusão na rede MT/BT; e comprovação fotográfica georreferenciada de manutenção preventiva e destinação de resíduos de poda.",
+    "opportunity_assessment": "Orquestração de Workforce Management (WFM) e blindagem contra penalidades regulatórias. O GeoAssets atua como camada inteligente entre o ERP corporativo (SAP/WeBUY) e as empreiteiras de campo no Ceará, fornecendo registro auditável de impedimentos não imputáveis (ex.: recusa de acesso, obras viárias, intempéries) para fundamentar defesas administrativas perante a ARCE e ANEEL."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Companhia Energética de Minas Gerais (CEMIG Distribuição)",
+    "source_type": "Edital de Licitação / Pregão",
+    "title_or_id": "Licitação Eletrônica nº 530-LS20453 / 530-LS21238 - Obras e Serviços de Construção e Manutenção em RDA",
+    "year": "2024",
+    "url": "https://app2-compras.cemig.com.br/",
+    "extracted_os_requirements": "Contratação de lotes regionais para construção e manutenção pesada em Redes de Distribuição Aérea (substituição de postes trincados, extensão de alimentadores, instalação de transformadores), manutenção leve/emergencial 24/7 (fios partidos, queima de fusíveis, árvores caídas) e serviços comerciais (corte, religação, aferição). Remuneração baseada estritamente em catálogo de Unidades de Serviço (US) por item físico executado. A medição mensal das contratadas exige validação digital de cada OS concluída, conferência fotográfica das intervenções e laudo do fiscal da Cemig.",
+    "opportunity_assessment": "Módulo de apropriação de Unidades de Serviço (US) e geração de Folha de Medição Contratual integrada ao OrderType do GeoAssets. A equipe de campo lança as tarefas físicas executadas diretamente no aplicativo, calculando em tempo real o montante de US apropriado e gerando a prévia da medição contratual, eliminando meses de divergências e glosas entre distribuidora e empreiteiras."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Grupo CPFL Energia (CPFL Paulista / Piratininga / Santa Cruz / RGE)",
+    "source_type": "Norma Técnica Concessionária",
+    "title_or_id": "Normas Técnicas GED-14186 (Construção por Terceiros), GED-94 (Irregularidades em Redes) e GED-15384 (SST)",
+    "year": "2024",
+    "url": "https://www.cpfl.com.br",
+    "extracted_os_requirements": "Procedimentos operacionais para inspeção de redes aéreas e reporte padronizado de irregularidades (GED-94). Tipologia de defeitos que geram ordens de serviço corretivas: Anomalias Críticas/Emergenciais (poste quebrado com risco iminente de queda, condutor energizado ao solo, vazamento severo de óleo em transformador); Anomalias de Alta Prioridade (isolador quebrado em MT, cruzeta de madeira danificada, ferragem exposta, contato de vegetação densa); Anomalias Médias/Baixas (plaqueta ilegível, aterramento solto, estai desregulado). Abertura de ocorrência com GPS do poste, foto do defeito, alimentador e estimativa de materiais.",
+    "opportunity_assessment": "Workflow de ingestão de anomalias e roteirização de inspeção patrimonial. O técnico de patrulhamento reporta a irregularidade no mapa do GeoAssets com fotos e classificação de criticidade. Regras automatizadas do domínio criam instantaneamente a OS corretiva vinculada ao GeoFeature (poste/transformador) e direcionam o despacho conforme a prioridade (despacho imediato para críticas; manutenção programada para médias)."
+  },
+  {
+    "domain": "Electrical Distribution Assets",
+    "organization": "Seminário Nacional de Distribuição de Energia Elétrica (SENDI / ABRADEE) & CGTI",
+    "source_type": "Artigo Técnico / Estudo Setorial",
+    "title_or_id": "Metodologia para Despacho Centralizado e Roteirização de Ordens de Serviço em Concessionárias de Distribuição",
+    "year": "2023",
+    "url": "https://www.cgti.org.br",
+    "extracted_os_requirements": "Estudo analítico sobre centenas de milhares de OSs anuais demonstrando que o despacho manual via rádio/telefone resulta em subotimização severa de rotas, aumento do Tempo Médio de Deslocamento (TMD), elevação do indicador DEC e desperdício de combustível. Requisitos tecnológicos formulados: agrupamento espacial (spatial clustering) de OSs abertas por alimentador ou bairro; algoritmos de roteamento de veículos com janelas de tempo (VRPTW); despacho automatizado considerando a qualificação da equipe (equipe pesada de guindauto vs. moto-técnico leve vs. equipe de linha viva/SEP); e sincronização móvel em tempo real com resiliência offline.",
+    "opportunity_assessment": "Despachante Autônomo com Agentes de IA (GeoAssets.Workflow.Agents): valida a arquitetura existente do GeoAssets. Agentes inteligentes analisam a fila de OSs pendentes, aplicam agrupamento geoespacial sobre os GeoFeatures afetados, cruzam com a localização GPS e competências das equipes disponíveis e executam chamadas de domínio (DispatchServiceOrderExecutor) de forma 100% autônoma."
+  },
+  {
+    "domain": "Water & Sewage Sanitation Utilities",
+    "organization": "URAE-1 Sudeste / SABESP / ARSESP",
+    "source_type": "Contrato de Concessão / PPP",
+    "title_or_id": "Contrato de Concessão nº 01/2024 da URAE-1 - Sudeste & Deliberação ARSESP nº 1.739/2025 (Caderno de Encargos e Indicadores)",
+    "year": "2024",
+    "url": "https://semil.sp.gov.br/desestatizacaosabesp/conselho-deliberativo-urae-1/",
+    "extracted_os_requirements": "Marco pós-desestatização da Sabesp regulado pela ARSESP (vigência até 2060). Indicadores regulatórios que incidem sobre ordens de serviço de campo: ICERP (Indicador de Conformidade na Execução da Reposição de Pavimento), que audita a recomposição asfáltica (CBUQ) e calçadas após abertura de valas de água/esgoto, impactando o Fator Q e tarifas; ISAP (Indicador de Serviços Atendidos no Prazo), impondo SLAs rígidos (vazamento de água na via: 6-12h; vazamento em cavalete/ramal: 24h; extravasamento de esgoto na rua: 4-6h); IFSP (Indicador de Fiscalização por Mobile/PDA), exigindo despacho móvel conectado ao SIGAO e GIS da rede (SIGNOS); e registro fotográfico obrigatório antes, durante e após a recomposição viária com coordenadas GPS.",
+    "opportunity_assessment": "Módulo de Gestão de Recomposição de Pavimento e Cálculo de ICERP no GeoAssets: emissão automatizada de sub-OS dependente para pavimentação viária vinculada ao reparo mecânico da tubulação, cálculo de área em m², controle de prazos municipais e auditoria fotográfica padronizada para blindar a concessionária contra glosas tarifárias e multas de prefeituras."
+  },
+  {
+    "domain": "Water & Sewage Sanitation Utilities",
+    "organization": "CAGECE / SEPLAG-CE / Concessionária Ambiental Ceará (Grupo Aegea)",
+    "source_type": "Contrato de Concessão / PPP",
+    "title_or_id": "Contrato nº 0020/2023/DJU/Cagece - PPP de Esgotamento Sanitário da RMF e Cariri (Bloco 1)",
+    "year": "2023",
+    "url": "https://www.papp.seplag.ce.gov.br/",
+    "extracted_os_requirements": "PPP de esgotamento sanitário por 30 anos (R$ 7,65 bilhões) abrangendo 17 municípios cearenses. Requisitos operacionais de OS: manutenção de redes coletoras e desobstrução de poços de visita (PVs) com caminhões combinados de hidrojato e sucção a vácuo; integração sistêmica contínua entre a plataforma comercial da Cagece e o sistema de gestão de campo da Ambiental Ceará (Aegea); atualização cadastral as-built no GIS com atributos de diâmetro (DN), profundidade, cota de tampa/fundo, material (PVC ocre, PEAD, cerâmica) e declividade de cada trecho recuperado; e laudo de recuperação do leito viário para fiscalização da ARCE.",
+    "opportunity_assessment": "Gateway de Orquestração B2B e Sincronização As-Built em Campo: o GeoAssets atua como elo de integração entre a concessionária pública titular (Cagece) e a operadora privada parceira (Aegea), permitindo despacho unificado de OSs de esgoto e validação cadastral geoespacial direta no canteiro de obras por encarregados de campo."
+  },
+  {
+    "domain": "Water & Sewage Sanitation Utilities",
+    "organization": "Agência Nacional de Águas e Saneamento Básico (ANA)",
+    "source_type": "Resolução Normativa / Marco Legal",
+    "title_or_id": "Resolução ANA nº 211/2024 (Norma de Referência nº 9/2024), NR nº 8/2024 e NR nº 15/2025",
+    "year": "2024",
+    "url": "https://www.gov.br/ana/pt-br/assuntos/saneamento-basico/normas-de-referencia",
+    "extracted_os_requirements": "Normas de Referência nacionais de observância obrigatória para acesso a recursos públicos federais e financiamentos (FGTS/BNDES) conforme Lei 14.026/2020. NR nº 9/2024: padronização de indicadores operacionais e tempos de atendimento de ordens de serviço de interrupção, vazamentos e esgotamento sanitário. NR nº 15/2025: gestão e metas de redução progressiva de perdas de água, exigindo setorização da malha em Distritos de Medição e Controle (DMC / DMA), monitoramento de Vazão Mínima Noturna (MNF) e correlação direta com OSs de pesquisa acústica (geofonamento) e conserto de vazamentos não visíveis. Monitoramento da taxa de extravasamentos de esgoto por 100 km de rede/ano.",
+    "opportunity_assessment": "Suíte Regulatória de Conformidade ANA: templates nativos de indicadores e relatórios auditáveis alinhados às NRs 9 e 15 da ANA. Permite que concessionárias estaduais e privadas comprovem metas de tempo de resposta a vazamentos e controle de perdas por DMC perante as Agências Reguladoras Infranacionais (ERIs) e o Ministério das Cidades."
+  },
+  {
+    "domain": "Water & Sewage Sanitation Utilities",
+    "organization": "Companhia de Saneamento do Paraná (SANEPAR)",
+    "source_type": "Edital de Licitação / Pregão",
+    "title_or_id": "Licitações Eletrônicas nº 248/2026 e nº 235/2026 - Manutenção de Redes e Ramais de Água e Esgoto (SGM/MOS)",
+    "year": "2024",
+    "url": "https://licitacoes.sanepar.com.br/hove/index.php",
+    "extracted_os_requirements": "Licitações públicas de engenharia para manutenção preventiva e corretiva de redes e ramais de água e esgoto em Curitiba e Londrina sob a metodologia SGM (Sistema Gerencial de Manutenção) e MOS (Manual de Obras de Saneamento). Requisitos de OS: reparo de vazamentos em tubos de água (PVC defoFô, PEAD, FoFo); ampliação de redes (SAR); desobstrução e troca de coletores de esgoto; recomposição de pavimento (asfalto CBUQ, calçadas de concreto e petit pavé); baixa de materiais de estoque associada à OS (tubos, conexões de eletrofusão, abraçadeiras de reparo, hidrômetros taqueados e lacres); e rastreamento contínuo das viaturas por GPS.",
+    "opportunity_assessment": "Plataforma de Gestão de Empreiteiras de Saneamento: comercialização direta do GeoAssets para os consórcios e empresas de engenharia que disputam contratos da Sanepar, fornecendo app móvel que atende aos requisitos do SGM/MOS, rastreia materiais aplicados e gera relatórios fotográficos para aprovação da medição financeira mensal."
+  },
+  {
+    "domain": "Water & Sewage Sanitation Utilities",
+    "organization": "Agência Reguladora de Energia e Saneamento do Estado do RJ (AGENERSA) / Águas do Rio (Grupo Aegea)",
+    "source_type": "Contrato de Concessão / PPP",
+    "title_or_id": "Contratos de Concessão de Serviços de Abastecimento e Esgotamento Sanitário - Blocos 1 e 4 do Rio de Janeiro",
+    "year": "2024",
+    "url": "https://www.rj.gov.br/agenersa",
+    "extracted_os_requirements": "Concessão privada dos Blocos 1 e 4 do RJ (investimentos contratuais de R$ 24,4 bilhões em 27 municípios). Requisitos operacionais de OS: Centro de Operações Integradas (COI) despachando milhares de chamados diários para equipes móveis via tablets integrados ao GIS da rede sanitária; campanhas intensivas de caça-vazamentos com geofonamento gerando OSs imediatas de reparo de ramais; recadastramento e substituição massiva de hidrômetros com telemetria (AMR/AMI), cortes, religações e combate a fraudes; e fiscalização da AGENERSA com multas por extravasamentos na Bacia da Baía de Guanabara e atrasos de recomposição asfáltica.",
+    "opportunity_assessment": "COI de Grande Escala e Gestão de OSs Comerciais de Hidrometria: o GeoAssets suporta operações de alto volume integrando equipes de caça-vazamentos à base de tubulações e fornecendo fluxo completo para troca de hidrômetros com leitura óptica de código de barras/QR Code, verificação de lacres e combate a fraudes comerciais."
+  },
+  {
+    "domain": "Water & Sewage Sanitation Utilities",
+    "organization": "Revista DAE (AESabesp) / Saneamento de Goiás S.A. (SANEAGO)",
+    "source_type": "Artigo Técnico / Estudo Setorial",
+    "title_or_id": "Artigo Técnico: Saneago Utiliza Georreferenciamento no Combate às Perdas c/c Diagnóstico de SIG em Saneamento (DOI: 10.4322/dae.2014.122)",
+    "year": "2024",
+    "url": "https://revistadae.com.br/",
+    "extracted_os_requirements": "Estudo técnico-científico comprovando que a integração entre cadastro de redes em GIS e o histórico geoespacial de ordens de serviço de quebra é indispensável para identificar aglomerados de falhas (break rate clusters) e direcionar investimentos de substituição preventiva de redes antigas (como cimento-amianto e ferro fundido sem revestimento). O artigo destaca a exigência operacional de que os técnicos de campo disponham de ferramentas portáteis offline, em função da perda crônica de sinal celular em fundos de vale, periferias e áreas rurais.",
+    "opportunity_assessment": "Manutenção Preditiva com Mapas de Calor de Quebras: algoritmo geoespacial no GeoAssets que analisa o histórico de OSs de vazamento por trecho de tubulação, idade e material, recomendando preventivamente a substituição de ativos críticos. Arquitetura móvel 100% offline para garantir produtividade em valas profundas e locais sem cobertura de internet móvel."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "ANATEL / ANEEL",
+    "source_type": "Resolução Normativa / Marco Legal",
+    "title_or_id": "Resolução Conjunta ANATEL/ANEEL nº 004/2014 & Agenda Regulatória ANATEL 2025-2026 (Item 14, Proc. 53500.014686/2018-89)",
+    "year": "2024",
+    "url": "https://www.gov.br/anatel/pt-br/regulado/prestadoras-de-pequeno-porte/compartilhamento-de-postes",
+    "extracted_os_requirements": "Regulamenta o compartilhamento de postes entre distribuidoras elétricas e operadoras de telecomunicações. Parâmetros técnicos de OS: limite estrito de 1 Ponto de Fixação por prestadora de telecomunicações; faixa de ocupação exclusiva de 500 mm no poste, localizada a pelo menos 0,60 m abaixo da rede secundária de baixa tensão; afastamentos mínimos ao solo de 5,0 m (cruzamento de vias) e 4,5 m (calçadas); identificação obrigatória de todos os cabos e drops com plaquetas padronizadas (nome da empresa, contato e licença); realização de vistorias conjuntas e emissão de notificações com prazo improrrogável de 30 dias para regularização de fiação não autorizada (à revelia).",
+    "opportunity_assessment": "Módulo de Gestão e Auditoria de Compartilhamento de Postes: modelagem de matrizes de ocupação em postes com slots de fixação (máximo 5 a 6 operadoras por poste conforme esforço mecânico), emissão automatizada de ordens de serviço de fiscalização de fiação e geração de notificações de regularização com prazo regulatório de 30 dias para distribuidoras e ISPs."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Presidência da República / Casa Civil (Governo Federal)",
+    "source_type": "Resolução Normativa / Marco Legal",
+    "title_or_id": "Decreto Federal nº 12.068, de 20 de junho de 2024 - Artigo 16 (Cessão Obrigatória de Infraestrutura de Postes / Poste Justo)",
+    "year": "2024",
+    "url": "https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2024/decreto/d12068.htm",
+    "extracted_os_requirements": "Marco legal regulatório que impõe a cessão compulsória da exploração comercial, alocação de espaço e pontos de fixação nos postes das concessionárias de energia para uma pessoa jurídica distinta (entidade exploradora de infraestrutura / 'posteiro neutro'). Determina a regularização obrigatória da fiação aérea caótica em todo o território nacional, exigindo censos cadastrais em campo, identificação de cabos ativos, cobrança com base em custos transparentes e remoção de cabos mortos e clandestinos.",
+    "opportunity_assessment": "Plataforma Central para Operadores Neutros de Postes ('Posteiros Neutros'): maior oportunidade de mercado em infraestrutura utilitária urbana no Brasil. O GeoAssets se posiciona como o software enterprise de GIS e Field Service Management para os novos operadores neutros, oferecendo portal de reserva multi-tenant de pontos de fixação, aplicativo móvel de censo cadastral com leitura de tags RFID/código de barras e despacho automatizado de mutirões de regularização e limpeza."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Neoenergia Coelba (Grupo Neoenergia)",
+    "source_type": "Norma Técnica Concessionária",
+    "title_or_id": "Norma Técnica Corporativa DIS-NOR-056 - Compartilhamento de Infraestrutura de Rede Elétrica com Redes de Telecomunicações",
+    "year": "2024",
+    "url": "https://www.neoenergia.com/web/bahia/seu-negocio/normas-tecnicas",
+    "extracted_os_requirements": "Norma técnica que rege o compartilhamento de postes na Bahia. Exigências: compartilhamento permitido exclusivamente em redes de distribuição aérea até 34,5 kV (vedado em torres de transmissão >= 69 kV ou postes ornamentais); apresentação obrigatória de projeto técnico georreferenciado com identificação numérica dos postes idêntica à BDGD da Coelba, coordenadas UTM SIRGAS 2000 e cálculo de esforço mecânico resultante; relatório fotográfico georreferenciado pré e pós-lançamento de cabos; e emissão de OSs de vistoria em campo pela Coelba para fiscalizar o cumprimento da faixa de 500 mm, plaquetas e amarração de drops.",
+    "opportunity_assessment": "Validador Automático de Conformidade DIS-NOR-056 e Projetos de Compartilhamento: ferramenta que permite aos provedores regionais (ISPs) da Bahia importar os identificadores de postes da Coelba, validar automaticamente o esforço mecânico nos apoios e emitir o dossiê cadastral e fotográfico exigido pela concessionária, agilizando aprovações e prevenindo o corte de fiação em campo."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Enel Distribuição Ceará (Grupo Enel Brasil)",
+    "source_type": "Norma Técnica Concessionária",
+    "title_or_id": "Procedimento de Compartilhamento de Infraestrutura de Postes & Plataforma Digital JoiN-AS",
+    "year": "2024",
+    "url": "https://www.enel.com.br",
+    "extracted_os_requirements": "Entrada digital compulsória de projetos de compartilhamento e regularização via plataforma JoiN-AS (Joint Infrastructure Asset System). Exigências de OS em campo: cumprimento das distâncias de segurança (0,60 m da rede secundária e 1,50 m da média tensão); proibição absoluta de compartilhamento em alta tensão (>= 69 kV); emissão automática de ordens de retirada para fiação clandestina e cabos abandonados ('fios mortos'); e agendamento de vistorias conjuntas entre inspetores da Enel e encarregados das operadoras com assinatura digital de aceite.",
+    "opportunity_assessment": "Sincronizador JoiN-AS para Provedores Regionais no Ceará: atende aos ISPs do polo de telecomunicações do Ceará (ancorado pelo hub submarino da Praia do Futuro), permitindo catalogar postes no GeoAssets, auditar conformidade com a Enel e gerar relatórios de campo para evitar notificações e desconexões abruptas."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Rede Nacional de Ensino e Pesquisa (RNP) / Redecomep",
+    "source_type": "Termo de Referência",
+    "title_or_id": "Termo de Referência de Operação e Manutenção de Redes Ópticas Metropolitanas (Redecomep) e Manuais Técnicos de Construção e Inspeção",
+    "year": "2024",
+    "url": "https://www.redecomep.rnp.br/",
+    "extracted_os_requirements": "Especificação técnica de O&M de redes metropolitanas de fibra óptica: divisão rigorosa das OSs em Manutenção Preventiva (patrulhamento periódico de rotas, inspeção de vãos aéreos, ferragens, cruzetas e contato com vegetação), Manutenção Corretiva Emergencial (rompimento de cabos com MTTR < 4h) e Manutenção Programada (remanejamentos). Testes bidirecionais de OTDR (1310 nm / 1550 nm) obrigatórios em todas as fusões, com atenuação máxima admitida de 0,05 dB por emenda; e entrega de documentação as-built atualizada com folhas de fusão, mapas em GIS e laudos fotográficos das caixas de emenda ópticas (CEO e DGO).",
+    "opportunity_assessment": "Mecanismo de Ingestão e Verificação de Traços OTDR (.SOR): o GeoAssets incorpora módulo de parsing de arquivos binários Telcordia SR-4731 (.SOR), validando automaticamente se as emendas ópticas respeitam o limite de 0,05 dB e gerando relatórios de aceitação de serviços de terceiros em conformidade com o padrão RNP."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Telecomunicações Brasileiras S.A. (Telebras)",
+    "source_type": "Termo de Referência",
+    "title_or_id": "Termo de Referência GMP 001/21 - Serviços Contínuos de Manutenção na Planta Externa da Rede Nacional de Telecomunicações",
+    "year": "2023",
+    "url": "https://www.telebras.com.br/licitacoes-e-contratos/",
+    "extracted_os_requirements": "Referência de contratação pública para manutenção contínua da planta externa de telecomunicações da Telebras: regime 24x7 com despacho emergencial acionado por alarmes do Centro de Gerência de Rede (CIGR/NOC); cumprimento estrito de SLAs de deslocamento e restabelecimento de tráfego; apropriação e baixa de materiais utilizados por OS (metros de cabo óptico lançados, tubetes termocontráteis, caixas de emenda, alças preformadas); e atualização contínua do cadastro técnico geoespacial com a amarração das fibras nas rotas nacionais.",
+    "opportunity_assessment": "Solução FSM Enterprise para Operadoras Públicas e Infovias Estaduais: atende à Telebras, consórcios de infovias estaduais e redes ópticas governamentais, fornecendo cronômetros de MTTR, despacho baseado em geolocalização da frota e conciliação de insumos consumidos por OS de reparo emergencial."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "V.tal (Rede Neutra de Fibra Óptica)",
+    "source_type": "Norma Técnica Concessionária",
+    "title_or_id": "Modelo Operacional de Field Services FTTH Wholesale e Especificação de APIs de Campo",
+    "year": "2024",
+    "url": "https://www.vtal.com",
+    "extracted_os_requirements": "Operação em escala nacional de rede neutra FTTH (> 22 milhões de lares passados - Homes Passed). Ciclo de OS de campo 100% automatizado via APIs padrão TM Forum/MEF: agendamento de janela de atendimento; app móvel de ativação em campo exigindo conferência de porta de CTO e medição de potência óptica com Power Meter (OPM); lançamento de drop compacto e fixação aérea; leitura de código de barras/QR da ONT (número de série FSAN e MAC); teste de potência óptica no PTO do assinante (faixa obrigatória entre -15 dBm e -25 dBm); captura obrigatória de fotos (porta da CTO conectada, vão do drop, PTO e ONT com LED PON verde aceso); e coleta de assinatura digital do cliente na tela.",
+    "opportunity_assessment": "Workflow White-Label de Ativação FTTH para Redes Neutras e Provedores Regionais: módulo pronto de instalação de última milha (drop) com checklists fotográficos inteligentes, validação de potência óptica contra regras de engenharia e webhooks para integração com sistemas de provisionamento e billing (BSS/OSS) de ISPs clientes."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Associação Brasileira de Provedores de Internet e Telecomunicações (ABRINT)",
+    "source_type": "Artigo Técnico / Estudo Setorial",
+    "title_or_id": "Diretrizes Técnicas e Regulatórias sobre Compartilhamento de Postes e Defesa Operacional dos Provedores Regionais",
+    "year": "2024",
+    "url": "https://www.abrint.com.br",
+    "extracted_os_requirements": "Diretrizes operacionais para os mais de 15.000 provedores regionais de internet (PPPs) que lideram a banda larga fixa no Brasil. Demanda urgente por comprovação documental e cadastral contra cortes arbitrários de fiação promovidos por distribuidoras elétricas; ferramentas ágeis de censo de campo para inventariar centenas de milhares de postes e rotas de cabos próprios; e softwares de GIS acessíveis e integrados à rotina de campo para gerenciar CTOs, CEOs, splitters e conexões de clientes sem a complexidade e custos proibitivos de plataformas legadas de GIS desktop.",
+    "opportunity_assessment": "Pacote SaaS 'GeoAssets ISP Edition': solução direcionada ao ecossistema de provedores regionais da ABRINT, entregando censo ágil de postes no celular, inventário de portas de CTO, despacho simplificado de ativações e módulo de contestação com evidências fotográficas e georreferenciadas para barrar cortes arbitrários de cabos."
+  },
+  {
+    "domain": "Telecommunications Wire & Fiber Distribution",
+    "organization": "Teleco (Inteligência em Telecomunicações)",
+    "source_type": "Artigo Técnico / Estudo Setorial",
+    "title_or_id": "Tutoriais Técnicos de Redes Ópticas: Soluções de Atendimento e Arquitetura PON (Tutoriais solfo1 e pontec1)",
+    "year": "2024",
+    "url": "https://www.teleco.com.br/tutoriais/tutorialsolfo1/default.asp",
+    "extracted_os_requirements": "Fundamentos de engenharia óptica para redes PON/GPON: balanço de potência óptica (ópticas Classe B+/C+, potência de transmissão de +1,5 a +5,0 dBm, sensibilidade do receptor de -28 dBm e atenuação máxima admitida de 28 dB); cálculos teóricos de atenuação por divisão de splitters (1:2 = 3,5 dB; 1:4 = 7,2 dB; 1:8 = 10,5 dB; 1:16 = 13,8 dB; 1:32 = 17,1 dB); e perdas padronizadas em componentes passivos (conector SC-APC <= 0,3 dB; fusão <= 0,05 dB; atenuação do cabo a 1310 nm <= 0,36 dB/km e 1550 nm <= 0,22 dB/km).",
+    "opportunity_assessment": "Algoritmo de Cálculo de Balanço Óptico e Localização de Falhas OTDR no GIS: o GeoAssets compara automaticamente a leitura de potência obtida em campo pelo técnico contra a atenuação teórica calculada pelo grafo da rede no GIS. Além disso, o algoritmo traduz a distância óptica 1D obtida no traço de quebra do OTDR em coordenadas geográficas 2D/3D no mapa, descontando o fator de hélice da fibra e as cruzetas de reserva técnica armazenadas nos postes."
+  }
+]
