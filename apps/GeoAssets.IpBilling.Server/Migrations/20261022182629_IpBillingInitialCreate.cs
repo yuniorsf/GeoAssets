@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace GeoAssets.Server.Migrations
+namespace GeoAssets.IpBilling.Server.Migrations
 {
     /// <summary>
     /// Creates the IP-billing (GEOS_FAT_IP) reference-data schema (XD01-176, Phase 0) and seeds

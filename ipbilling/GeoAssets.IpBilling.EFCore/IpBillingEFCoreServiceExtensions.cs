@@ -15,7 +15,7 @@ public static class IpBillingEFCoreServiceExtensions
     /// <paramref name="configureDb"/> should set the database provider, e.g.:
     /// <code>
     ///   services.AddIpBillingPersistence(o => o.UseNpgsql(connectionString,
-    ///       npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+    ///       npgsql => npgsql.MigrationsAssembly("GeoAssets.IpBilling.Server")));
     /// </code>
     /// </summary>
     public static IServiceCollection AddIpBillingPersistence(

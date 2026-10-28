@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
+    <ProjectReference Include="..\..\apps\GeoAssets.IpBilling.Server\GeoAssets.IpBilling.Server.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
   </ItemGroup>
 
 </Project>
