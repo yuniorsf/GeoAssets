@@ -67,6 +67,7 @@ public static class GeoAssetsRestApiExtensions
     private static void MapFeaturesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
         MapFeatureReads(routes, prefix, opts);
+        MapFeatureTopologyReads(routes, prefix, opts);
         MapFeatureWrites(routes, prefix, opts);
     }
 
@@ -74,6 +75,15 @@ public static class GeoAssetsRestApiExtensions
     {
         routes.MapGet($"{prefix}/features", (IAssetProvider provider) =>
             Results.Json(provider.GetAll(), opts))
+            .RequireAuthorization("features:read");
+
+        routes.MapPost($"{prefix}/features/query", async (HttpRequest req, IAssetProvider provider) =>
+        {
+            var query = await JsonSerializer.DeserializeAsync<AssetQuery>(req.Body, opts).ConfigureAwait(false);
+            if (query is null) return Results.BadRequest("Invalid query.");
+            var page = await provider.GetPageAsync(query).ConfigureAwait(false);
+            return Results.Json(page, opts);
+        })
             .RequireAuthorization("features:read");
 
         routes.MapGet($"{prefix}/features/bounds",
@@ -98,6 +108,51 @@ public static class GeoAssetsRestApiExtensions
                     statusCode: StatusCodes.Status403Forbidden);
 
             return Results.Json(f, opts);
+        })
+            .RequireAuthorization("features:read");
+    }
+
+    private static void MapFeatureTopologyReads(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapGet($"{prefix}/features/{{id}}/topology/neighbors", async (
+            string id,
+            string? kind,
+            string? targetAssetTypeId,
+            bool? idsOnly,
+            IAssetProvider provider,
+            IAuthorizationService authz,
+            HttpContext http) =>
+        {
+            var f = provider.GetById(id);
+            if (f is null) return Results.NotFound();
+
+            var result = await authz.AuthorizeAsync(http.User, f, new OrgResourceRequirement("features:read")).ConfigureAwait(false);
+            if (!result.Succeeded)
+                return Results.Json(new { reason = "Not authorized to read this feature." },
+                    statusCode: StatusCodes.Status403Forbidden);
+
+            var neighbors = provider.GetNeighbors(id, kind, targetAssetTypeId);
+            if (idsOnly == true)
+                return Results.Json(neighbors.Select(n => n.Id).ToList(), opts);
+
+            return Results.Json(neighbors, opts);
+        })
+            .RequireAuthorization("features:read");
+
+        routes.MapPost($"{prefix}/features/topology/neighbors-batch", async (
+            HttpRequest req, IAssetProvider provider) =>
+        {
+            var batch = await JsonSerializer.DeserializeAsync<TopologyNeighborsBatchRequest>(req.Body, opts).ConfigureAwait(false);
+            if (batch is null) return Results.BadRequest("Invalid batch request.");
+
+            var result = new Dictionary<string, IReadOnlyList<string>>(batch.FeatureIds.Count, StringComparer.Ordinal);
+            foreach (var id in batch.FeatureIds)
+            {
+                var neighbors = provider.GetNeighbors(id, batch.Kind, batch.TargetAssetTypeId);
+                result[id] = [.. neighbors.Select(n => n.Id)];
+            }
+
+            return Results.Json(result, opts);
         })
             .RequireAuthorization("features:read");
     }

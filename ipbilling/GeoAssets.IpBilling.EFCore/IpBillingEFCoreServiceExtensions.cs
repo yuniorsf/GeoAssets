@@ -1,4 +1,5 @@
 using GeoAssets.IpBilling.Repositories;
+using GeoAssets.IpBilling.Resolution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,7 @@ public static class IpBillingEFCoreServiceExtensions
         services.AddScoped<IUnidadeOrganizacionalRepository, EFUnidadeOrganizacionalRepository>();
         services.AddScoped<IIpTransformerIndexRepository, EFIpTransformerIndexRepository>();
         services.AddScoped<IFaturamentoRepository, EFFaturamentoRepository>();
+        services.AddScoped<ITransformerResolver, DbTransformerResolver>();
 
         return services;
     }

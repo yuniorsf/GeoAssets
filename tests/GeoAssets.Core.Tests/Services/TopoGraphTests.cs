@@ -53,6 +53,28 @@ public class TopoGraphTests
         result.Select(f => f.Id).Should().BeEquivalentTo(["b", "c"]);
     }
 
+    [Fact]
+    public void GetNeighbors_FilteredByEdgeKindAndTargetAssetTypeId_ReturnsMatchingOnly()
+    {
+        var src = new GeoFeature
+        {
+            Id = "tx-1",
+            Topology =
+            [
+                new TopoEdge { TargetId = "pole-1", Kind = "feeds" },
+                new TopoEdge { TargetId = "pole-2", Kind = "adjacent" },
+                new TopoEdge { TargetId = "substation-1", Kind = "feeds" }
+            ]
+        };
+        var pole1 = new GeoFeature { Id = "pole-1", Properties = new GeoFeatureProperties { AssetTypeId = "type-pole" } };
+        var pole2 = new GeoFeature { Id = "pole-2", Properties = new GeoFeatureProperties { AssetTypeId = "type-pole" } };
+        var sub1  = new GeoFeature { Id = "substation-1", Properties = new GeoFeatureProperties { AssetTypeId = "type-substation" } };
+
+        var result = TopoGraph.GetNeighbors("tx-1", [src, pole1, pole2, sub1], edgeKind: "feeds", targetAssetTypeId: "type-pole");
+
+        result.Should().ContainSingle().Which.Id.Should().Be("pole-1");
+    }
+
     // ── GetDescendants ────────────────────────────────────────────────────────
 
     [Fact]

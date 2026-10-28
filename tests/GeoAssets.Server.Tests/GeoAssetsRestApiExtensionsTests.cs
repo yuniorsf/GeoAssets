@@ -1,9 +1,11 @@
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -129,5 +131,80 @@ public class GeoAssetsRestApiExtensionsTests
         using var doc = JsonDocument.Parse(json);
 
         doc.RootElement.GetArrayLength().Should().Be(10_000);
+    }
+
+    [Fact]
+    public async Task QueryFeatures_WithAssetTypeAndAttributeFilters_ReturnsMatchingFeaturesOnly()
+    {
+        var provider = new TestAssetProvider();
+        provider.Add(new GeoFeature
+        {
+            Id = "lamp-sp-1",
+            Properties = new GeoFeatureProperties
+            {
+                AssetTypeId = "type-lamp",
+                CustomAttributes = new Dictionary<string, string>(StringComparer.Ordinal) { ["scopeId"] = "3550308", ["wattageW"] = "150" }
+            }
+        });
+        provider.Add(new GeoFeature
+        {
+            Id = "lamp-rj-1",
+            Properties = new GeoFeatureProperties
+            {
+                AssetTypeId = "type-lamp",
+                CustomAttributes = new Dictionary<string, string>(StringComparer.Ordinal) { ["scopeId"] = "3304557", ["wattageW"] = "150" }
+            }
+        });
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var query = new AssetQuery
+        {
+            AssetTypeId      = "type-lamp",
+            AttributeFilters = new Dictionary<string, string>(StringComparer.Ordinal) { ["scopeId"] = "3550308" }
+        };
+        var response = await client.PostAsJsonAsync(new Uri("/api/geoassets/features/query", UriKind.Relative), query, GeoJsonSerializer.Options);
+        response.EnsureSuccessStatusCode();
+
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<GeoFeature>>(GeoJsonSerializer.Options);
+        page.Should().NotBeNull();
+        page!.TotalCount.Should().Be(1);
+        page.Items.Should().ContainSingle().Which.Id.Should().Be("lamp-sp-1");
+    }
+
+    [Fact]
+    public async Task TopologyNeighborsBatch_FiltersByEdgeKindAndTargetAssetTypeId()
+    {
+        var provider = new TestAssetProvider();
+        provider.Add(new GeoFeature
+        {
+            Id = "tx-1",
+            Topology =
+            [
+                new TopoEdge { TargetId = "pole-1", Kind = "feeds" },
+                new TopoEdge { TargetId = "pole-2", Kind = "adjacent" },
+                new TopoEdge { TargetId = "sub-1", Kind = "feeds" }
+            ]
+        });
+        provider.Add(new GeoFeature { Id = "pole-1", Properties = new GeoFeatureProperties { AssetTypeId = "type-pole" } });
+        provider.Add(new GeoFeature { Id = "pole-2", Properties = new GeoFeatureProperties { AssetTypeId = "type-pole" } });
+        provider.Add(new GeoFeature { Id = "sub-1", Properties = new GeoFeatureProperties { AssetTypeId = "type-sub" } });
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var batchReq = new TopologyNeighborsBatchRequest
+        {
+            FeatureIds        = ["tx-1"],
+            Kind              = "feeds",
+            TargetAssetTypeId = "type-pole"
+        };
+        var response = await client.PostAsJsonAsync(new Uri("/api/geoassets/features/topology/neighbors-batch", UriKind.Relative), batchReq, GeoJsonSerializer.Options);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<Dictionary<string, List<string>>>(GeoJsonSerializer.Options);
+        result.Should().NotBeNull();
+        result!["tx-1"].Should().Equal("pole-1");
     }
 }

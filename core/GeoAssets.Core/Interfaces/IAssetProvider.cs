@@ -33,6 +33,22 @@ public interface IAssetProvider
         if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
             filtered = filtered.Where(f => string.Equals(f.Properties.AssetTypeId, query.AssetTypeId, StringComparison.Ordinal));
 
+        if (query.OrganizationId is { } orgId)
+            filtered = filtered.Where(f => f.Properties.OrganizationId == orgId);
+
+        if (query.FeatureIds is { Count: > 0 } featureIds)
+        {
+            var idSet = featureIds.ToHashSet(StringComparer.Ordinal);
+            filtered = filtered.Where(f => idSet.Contains(f.Id));
+        }
+
+        if (query.AttributeFilters is { Count: > 0 } attrFilters)
+        {
+            filtered = filtered.Where(f => attrFilters.All(kv =>
+                f.Properties.CustomAttributes.TryGetValue(kv.Key, out var val) &&
+                string.Equals(val?.ToString(), kv.Value, StringComparison.Ordinal)));
+        }
+
         filtered = query.SortBy switch
         {
             "name"      => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name, StringComparer.Ordinal)      : filtered.OrderBy(f => f.Properties.Name, StringComparer.Ordinal),
@@ -112,9 +128,23 @@ public interface IAssetProvider
     IReadOnlyList<GeoFeature> GetNeighbors(string featureId) =>
         TopoGraph.GetNeighbors(featureId, GetAll());
 
+    /// <summary>
+    /// Returns the direct downstream neighbors of <paramref name="featureId"/> filtered by
+    /// optional <paramref name="edgeKind"/> and <paramref name="targetAssetTypeId"/>.
+    /// </summary>
+    IReadOnlyList<GeoFeature> GetNeighbors(string featureId, string? edgeKind, string? targetAssetTypeId = null) =>
+        TopoGraph.GetNeighbors(featureId, GetAll(), edgeKind, targetAssetTypeId);
+
     /// <summary>Returns all features reachable from <paramref name="featureId"/> (BFS forward).</summary>
     IReadOnlyList<GeoFeature> GetDescendants(string featureId) =>
         TopoGraph.GetDescendants(featureId, GetAll());
+
+    /// <summary>
+    /// Returns all features reachable from <paramref name="featureId"/> (BFS forward) filtered by
+    /// optional <paramref name="edgeKind"/> and <paramref name="targetAssetTypeId"/>.
+    /// </summary>
+    IReadOnlyList<GeoFeature> GetDescendants(string featureId, string? edgeKind, string? targetAssetTypeId = null) =>
+        TopoGraph.GetDescendants(featureId, GetAll(), edgeKind, targetAssetTypeId);
 
     /// <summary>Returns all features that can reach <paramref name="featureId"/> (BFS reverse).</summary>
     IReadOnlyList<GeoFeature> GetAncestors(string featureId) =>
