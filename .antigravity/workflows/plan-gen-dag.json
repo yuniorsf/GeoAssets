@@ -1,0 +1,258 @@
+{
+  "$schema": "https://antigravity.google/schemas/workflow-dag-v1.json",
+  "workflowId": "geoassets-tri-planar-plan-gen-dag",
+  "name": "GeoAssets Tri-Planar Multi-Agent Planning & Architecture Verification DAG",
+  "version": "1.0.0",
+  "description": "Declarative read-only Outer-Loop planning blueprint for Google Antigravity coordinating Claude Code (Architecture/Domain Reasoning) and GitHub Copilot (Type Signatures/xUnit QA Matrix) with a Deterministic Plan Oracle and zero source-code mutations.",
+  "metadata": {
+    "targetStack": ".NET 10 (C# 14, Blazor WASM, MAUI, ASP.NET Core, EF Core/PostGIS, NetTopologySuite)",
+    "architectureModel": "Tri-Planar Dual-Loop Read-Only Planning with Deterministic Plan Oracle",
+    "repositoryRoot": ".",
+    "baselineBranch": "origin/develop",
+    "mutationPolicy": "READ_ONLY_ZERO_REPO_CHANGES",
+    "handoffTargetWorkflow": "geoassets-tri-planar-code-gen-dag"
+  },
+  "agents": {
+    "orchestrator": {
+      "id": "google-antigravity",
+      "plane": "ControlPlane-OuterLoop",
+      "executionPermissions": "read_only_repo_plus_conversation_artifact",
+      "role": "Planning DAG Orchestrator, Codebase Grounder, Deterministic Plan Oracle Gatekeeper, and Artifact Synthesizer",
+      "contracts": [
+        "CLAUDE.md",
+        "AI-AUGMENTED-DEVELOPMENT.md",
+        ".antigravity/workflows/code-gen-dag.json"
+      ]
+    },
+    "reasoningSpecialist": {
+      "id": "claude-code",
+      "plane": "ExecutionPlane-InnerLoop-DeepReasoning",
+      "executionPermissions": "read_only",
+      "role": "Domain Architecture, Onion Layer Boundaries, Spatial/Topology/Workflow Strategy, Risk Assessment, and Sequenced Task Decomposition",
+      "contractFile": "CLAUDE.md",
+      "personas": [
+        ".claude/agents/arch-designer.md",
+        ".claude/agents/feat-analyzer.md",
+        ".claude/agents/task-planner.md"
+      ],
+      "skills": [
+        ".claude/skills/csharp-conventions/SKILL.md",
+        ".claude/skills/observability-conventions/SKILL.md",
+        ".claude/skills/jira-conventions/SKILL.md",
+        ".claude/skills/ui-ux-pro-max/SKILL.md"
+      ]
+    },
+    "mechanicalWorker": {
+      "id": "github-copilot",
+      "plane": "ExecutionPlane-InnerLoop-MechanicalQA",
+      "executionPermissions": "read_only",
+      "role": "Concrete C# 14 Type/Interface Contract Drafting, Disjoint File Touch Manifest, DomainTestDataBuilders Blueprint, and 100%-Branch xUnit Test Matrix",
+      "contractFile": ".github/copilot-instructions.md",
+      "personas": [
+        ".claude/agents/test-agent.md"
+      ]
+    }
+  },
+  "planOracleSubstrate": {
+    "buildProps": "./Directory.Build.props",
+    "bannedSymbols": "./BannedSymbols.txt",
+    "solutionFile": "./GeoAssets.sln",
+    "statusCodeMap": {
+      "0": "PASS_PLAN_VERIFIED",
+      "2": "FATAL_REPO_MUTATION_DETECTED",
+      "10": "FAIL_STAGE_1_PATH_EXISTENCE_OR_DISJOINT_OWNERSHIP",
+      "20": "FAIL_STAGE_2_BANNED_SYMBOL_OR_SIGNATURE_GUARDRAIL",
+      "30": "FAIL_STAGE_3_ONION_ARCHITECTURE_OR_TEST_COVERAGE_GAP"
+    }
+  },
+  "parameters": {
+    "taskId": {
+      "type": "string",
+      "required": true,
+      "pattern": "^[a-zA-Z0-9._-]+$",
+      "description": "Jira ticket key or task slug (e.g., 'XD01-195-spatial-buffer-cache')"
+    },
+    "baseRef": {
+      "type": "string",
+      "default": "origin/develop",
+      "forbiddenValues": ["main", "origin/main", "master", "origin/master"]
+    },
+    "maxSelfHealRetries": {
+      "type": "integer",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 5
+    },
+    "outputPath": {
+      "type": "string",
+      "required": false,
+      "description": "Optional file path (--out) if the user explicitly requests exporting the Markdown plan beyond the Antigravity conversation artifact."
+    }
+  },
+  "phases": [
+    {
+      "phaseId": "phase-1-scope-and-context-snapshot",
+      "name": "Phase 1: Read-Only Baseline Snapshot & Scope Grounding",
+      "owner": "google-antigravity",
+      "dependsOn": [],
+      "steps": [
+        {
+          "stepId": "1.1-capture-git-baseline",
+          "action": "read_only_shell_inspect",
+          "command": "git status --porcelain && git rev-parse --short HEAD",
+          "workingDirectory": ".",
+          "description": "Record baseline working-tree status to enforce the zero-code-change invariant across all phases. Do not create worktrees, branches, or commits.",
+          "outputs": ["baselineGitStatus", "baselineCommitSha"]
+        },
+        {
+          "stepId": "1.2-ground-requirements-and-dependencies",
+          "action": "analyze_and_ground",
+          "description": "Resolve Jira ticket/prose requirements (checking both formal 'Blocks' links and prose 'Depends on' references), locate existing target projects/interfaces in GeoAssets.sln, and partition planning inputs into (A) architectureBrief for Claude Code and (B) testAndScaffoldingBrief for GitHub Copilot.",
+          "outputs": ["architectureBrief", "testAndScaffoldingBrief", "candidateProjects"]
+        }
+      ]
+    },
+    {
+      "phaseId": "phase-2-parallel-planning-dispatch",
+      "name": "Phase 2: Parallel Read-Only Specialist Dispatch (Claude Code + GitHub Copilot)",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-1-scope-and-context-snapshot"],
+      "executionMode": "parallel",
+      "branches": [
+        {
+          "branchId": "2A-claude-code-architecture-and-domain-plan",
+          "agent": "claude-code",
+          "permissions": "read_only",
+          "inputs": [
+            "architectureBrief",
+            "CLAUDE.md",
+            ".claude/agents/arch-designer.md",
+            ".claude/agents/task-planner.md",
+            ".claude/skills/csharp-conventions/SKILL.md"
+          ],
+          "instructions": [
+            "Operate strictly in READ-ONLY mode: do not create, edit, or delete any files.",
+            "Design the domain model, Onion Architecture boundaries (zero EF Core/Npgsql/PostGIS dependencies in core/), RFC 7946 coordinate-array source-of-truth rules, and observability/UI impacts.",
+            "Specify System.TimeProvider and CancellationToken propagation across all proposed async workflows.",
+            "Produce a sequenced implementation task breakdown, risk/trade-off matrix, and the exact coreLogicSpec file list for Branch 2A of /code-gen-dag."
+          ],
+          "outputs": ["architectureDesignDoc", "coreLogicSpecPlan", "riskAndDependencyMatrix"]
+        },
+        {
+          "branchId": "2B-copilot-contracts-and-qa-matrix",
+          "agent": "github-copilot",
+          "permissions": "read_only",
+          "inputs": [
+            "testAndScaffoldingBrief",
+            ".github/copilot-instructions.md",
+            ".claude/agents/test-agent.md"
+          ],
+          "instructions": [
+            "Operate strictly in READ-ONLY mode: do not create, edit, or delete any files.",
+            "Draft concrete C# 14 / .NET 10 type and interface contracts (readonly record struct, sealed record, JsonSerializerContext, ArgumentNullException.ThrowIfNull) as plan snippets.",
+            "Build the file-by-file touch manifest ([NEW]/[MODIFY]) enforcing .razor + .razor.cs code-behind separation and test project conventions.",
+            "Design an exhaustive xUnit [Fact]/[Theory] test matrix (happy paths, guard clauses, boundary conditions, FakeTimeProvider, cancellation) plus DomainTestDataBuilders and NSubstitute mocks targeting 100% branch coverage.",
+            "Produce the exact testAndBoilerplateSpec file list for Branch 2B of /code-gen-dag."
+          ],
+          "outputs": ["csharpContractSpec", "xUnitTestMatrix", "testAndBoilerplateSpecPlan"]
+        }
+      ],
+      "joinBarrier": "all_branches_completed"
+    },
+    {
+      "phaseId": "phase-3-plan-oracle-verification",
+      "name": "Phase 3: Deterministic Plan Oracle Audit",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-2-parallel-planning-dispatch"],
+      "steps": [
+        {
+          "stepId": "3.1-verify-zero-repo-mutation",
+          "action": "read_only_shell_inspect",
+          "command": "git status --porcelain",
+          "assertion": "matches(phase-1-scope-and-context-snapshot.baselineGitStatus)",
+          "onViolationStatusCode": 2
+        },
+        {
+          "stepId": "3.2-audit-plan-against-oracle-gates",
+          "action": "validate_plan_gates",
+          "checks": [
+            "Stage 1 (Code 10): Every [MODIFY] file and referenced project exists on disk; Razor components include .razor + .razor.cs pairs; coreLogicSpecPlan and testAndBoilerplateSpecPlan file sets have zero intersection (100% disjoint).",
+            "Stage 2 (Code 20): Proposed C# signatures/snippets contain zero BannedSymbols.txt APIs (DateTime.Now/UtcNow, DateTimeOffset.Now/UtcNow, .Result, .Wait, Thread.Sleep) and zero #pragma warning disable or <NoWarn>.",
+            "Stage 3 (Code 30): Zero core/ -> Infrastructure/EF Core/Npgsql/PostGIS dependency violations; RFC 7946 [lon, lat] & SRID 4326 respected; every planned public method/branch has matching xUnit test cases."
+          ],
+          "transitions": {
+            "0": "phase-5-artifact-synthesis-and-handoff",
+            "10": "phase-4-plan-self-healing-loop",
+            "20": "phase-4-plan-self-healing-loop",
+            "30": "phase-4-plan-self-healing-loop",
+            "2": "abort_workflow"
+          }
+        }
+      ]
+    },
+    {
+      "phaseId": "phase-4-plan-self-healing-loop",
+      "name": "Phase 4: Plan Self-Healing Feedback Loop (Bounded Retry)",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-3-plan-oracle-verification"],
+      "loopPolicy": {
+        "maxIterations": "{{parameters.maxSelfHealRetries}}",
+        "counterVariable": "planHealAttempt",
+        "onMaxIterationsExceeded": {
+          "action": "halt_and_surface_open_questions",
+          "message": "Plan Oracle still flagged unresolved architectural or contract issues after {{parameters.maxSelfHealRetries}} iterations. Presenting draft with explicit open decisions for human review."
+        }
+      },
+      "routingRules": [
+        {
+          "whenStatusCode": 10,
+          "failureCategory": "PathExistenceOrDisjointOwnershipViolation",
+          "targetAgent": "github-copilot",
+          "instructions": "Correct non-existent [MODIFY] file paths against the real workspace tree, enforce .razor + .razor.cs pairing, and eliminate any overlapping file ownership between Branch 2A and Branch 2B."
+        },
+        {
+          "whenStatusCode": 20,
+          "failureCategory": "BannedSymbolOrSignatureViolation",
+          "targetAgent": "claude-code",
+          "instructions": "Refactor proposed C# contracts to inject System.TimeProvider, propagate CancellationToken asynchronously, and remove any banned APIs or analyzer suppressions; sync updated signatures with Branch 2B."
+        },
+        {
+          "whenStatusCode": 30,
+          "failureCategory": "OnionArchitectureOrCoverageGap",
+          "targetAgent": "claude-code",
+          "instructions": "Eliminate core/ coupling to infrastructure/PostGIS via domain ports in core/ and adapters in providers/workflow/, and instruct GitHub Copilot to add missing xUnit branch/guard test cases."
+        }
+      ],
+      "postIterationTransition": "phase-3-plan-oracle-verification"
+    },
+    {
+      "phaseId": "phase-5-artifact-synthesis-and-handoff",
+      "name": "Phase 5: Conversation Artifact Synthesis & /code-gen-dag Handoff",
+      "owner": "google-antigravity",
+      "dependsOn": ["phase-3-plan-oracle-verification"],
+      "precondition": "phase-3-plan-oracle-verification.statusCode == 0",
+      "steps": [
+        {
+          "stepId": "5.1-publish-conversation-artifact",
+          "action": "write_conversation_artifact",
+          "artifactName": "plan-{{parameters.taskId}}.md",
+          "requestFeedback": true,
+          "sections": [
+            "1. Executive Summary & Dependency Graph",
+            "2. Architecture & Onion Layer Diagram (Mermaid)",
+            "3. Shared C# 14 Type & Interface Contract",
+            "4. Disjoint File-Ownership Manifest (Branch 2A Claude Code vs. Branch 2B GitHub Copilot)",
+            "5. Exhaustive xUnit Test & DomainTestDataBuilders Matrix",
+            "6. Risks, Observability & Rollback Notes",
+            "7. Ready-to-Run /code-gen-dag Invocation"
+          ]
+        },
+        {
+          "stepId": "5.2-optional-export-and-final-clean-check",
+          "action": "verify_clean_working_tree",
+          "description": "If --out <path> was explicitly supplied, export a copy there; otherwise confirm 'git status --porcelain' remains identical to Phase 1 baseline (zero repository changes)."
+        }
+      ]
+    }
+  ]
+}

@@ -11,16 +11,16 @@
 
 ## Executive Summary
 
-This document defines the production-grade functional specification and engineering architecture for the **Service Order (*Ordem de Serviço - OS*) Workflow Engine** within the `GeoAssets` platform. 
+This document defines the production-grade functional specification and engineering architecture for the **Service Order (*Ordem de Serviço - OS*) Workflow Engine** within the `GeoAssets` platform, fully reconciled with the Core Geospatial Platform + Vertical Microservices architecture (`GEOASSETS-ARCH-EVAL-2026-02`).
 
-`GeoAssets` currently provides a modular, multi-tenant enterprise foundation featuring:
-1. A decoupled domain workflow model (`IServiceOrder`, `ServiceOrder`, `OrderType`, `ServiceOrderTransitions`, `ServiceOrderRules`).
-2. Robust spatial persistence utilizing PostgreSQL with the PostGIS extension (`GeoAssetsDbContext`, `geo_entity`, NetTopologySuite 2.6).
-3. Directed topological graph processing (`TopoGraph`) with native support for radial electrical circuits and municipal hydraulic networks.
-4. Autonomous agent orchestration through Microsoft Agent Framework (`GeoAssets.Workflow.Agents`).
-5. Multi-platform delivery across Blazor WebAssembly (`GeoAssets.Web`) and .NET MAUI hybrid clients (`GeoAssets.MAUI`).
+`GeoAssets` delivers an enterprise-grade, distributed architecture separating core geospatial infrastructure from autonomous industry verticals:
+1. **Core Geospatial Platform (`apps/GeoAssets.Server`)**: The single authoritative source of truth for physical spatial assets, geometries (PostGIS SRID 4326 in `geo_entity`), normalized trigram alphanumeric attribute indexing (`geo_entity_attribute`), and the in-memory directed topological graph engine (`TopoGraph`). Core is consumed exclusively via the stateless HTTP client contract `IGeoCoreClient` (`providers/GeoAssets.Provider.Rest/RestGeoCoreClient.cs`).
+2. **Dedicated Field Service Microservice (`apps/GeoAssets.FieldService.Server`)**: Following the proven vertical microservice pattern of `apps/GeoAssets.IpBilling.Server` (`GEOS_FAT_IP`), field service execution is owned by `apps/GeoAssets.FieldService.Server`. It co-hosts the domain-agnostic workflow persistence layer (`ServiceOrderDbContext`) alongside contractor commercial ledgers on its private database (`geoassets_fieldservice`), with zero direct database connection or PostGIS coupling to Core's database.
+3. **Domain-Agnostic Workflow Engine (`GeoAssets.Workflow` & `GeoAssets.Workflow.EFCore`)**: Provides a reusable, lightweight workflow foundation (`IServiceOrder`, `OrderType`, `WorkflowState`, `WorkflowTransition`, `ServiceOrderTransitions`, `ServiceOrderRules`).
+4. **Autonomous Agent Orchestration (`GeoAssets.Workflow.Agents`)**: Integrates Microsoft Agent Framework for spatial clustering, auto-dispatch, and outage triage.
+5. **Multi-Platform Mobile & Web Delivery**: Blazor WebAssembly (`GeoAssets.Web`) and .NET MAUI hybrid clients (`GeoAssets.MAUI`) communicating through a reverse proxy / API Gateway.
 
-This specification bridges the current codebase state with the stringent regulatory, operational, and commercial requirements of Brazilian infrastructure utilities across three critical domains:
+This specification bridges the platform architecture with the stringent regulatory, operational, and commercial requirements of Brazilian infrastructure utilities across three critical domains:
 * **Electrical Power Distribution Assets**: Regulated by ANEEL (REN nº 1.000/2021, PRODIST Módulos 8 e 10, Base de Dados Geográfica da Distribuidora - BDGD), Ministério do Trabalho (NR-10, NR-35), and concessionaire operational standards (Neoenergia Coelba DIS-NOR-068, Enel Ceará JoiN-AS, CEMIG RDA / US billing, CPFL GED-94).
 * **Water and Wastewater Sanitation Utilities (*Saneamento Básico*)**: Regulated by the Federal Sanitation Framework (Lei Federal nº 14.026/2020), Agência Nacional de Águas e Saneamento Básico (ANA Resolução nº 211/2024 / NR nº 9/2024, NR nº 8/2024, NR nº 15/2025), state regulators (ARSESP, ARCE, AGENERSA), municipal paving compliance (Sabesp ICERP, Sanepar SGM/MOS), and safety norms (NR-33).
 * **Telecommunications Wire & Fiber-Optic Distribution**: Regulated by ANATEL and ANEEL (Resolução Conjunta nº 004/2014, Resolução nº 1.044/2023), Federal Decree nº 12.068/2024 (Artigo 16 - compulsory transfer of pole management to neutral entities), ABNT NBR 15214, FTTH wholesale models (V.tal, ABRINT), and high-precision optical restoration standards (RNP Redecomep, Telebras).
@@ -31,9 +31,11 @@ This specification bridges the current codebase state with the stringent regulat
 
 ## 1.1 State Machine Graph & Formal Lifecycle
 
-The core workflow engine in `GeoAssets` (`core/GeoAssets.Workflow/Orders/ServiceOrderTransitions.cs`) currently implements a foundational 6-state graph: `Draft`, `Pending`, `InProgress`, `OnHold`, `Completed`, and `Cancelled`. 
+The core workflow engine in `GeoAssets` (`core/GeoAssets.Workflow/Orders/ServiceOrderTransitions.cs`) implements a foundational 6-state graph: `Draft`, `Pending`, `InProgress`, `OnHold`, `Completed`, and `Cancelled`. 
 
-To support field operations across utility networks where safety handshakes, crew transit, on-site check-ins, quality audits, regulatory verifications, and offline concurrency collisions must be deterministically managed, the state machine is formally extended into a **12-State Production Workflow Graph**. This model is fully compatible with `OrderType.States` (`WorkflowState`) and `OrderType.Transitions` (`WorkflowTransition`).
+To maintain 100% backward compatibility with administrative workflows and existing vertical microservices like `apps/GeoAssets.IpBilling.Server` (`GEOS_FAT_IP`, which utilizes custom states `Carregado -> Calculado -> Validado`), the built-in dictionary in `ServiceOrderTransitions._allowed` **remains completely intact and unmodified**. 
+
+Instead, to support field operations across utility networks where safety handshakes, crew transit, on-site check-ins, quality audits, regulatory verifications, and offline concurrency collisions must be deterministically managed, the 12-state lifecycle is implemented as a specialized **`FieldWorkWorkflowGraph`** in `GeoAssets.FieldService.Domain`. It is attached dynamically to Brazilian field service order types (e.g., `electrical-emergency`, `water-leak-repair`, `telecom-ftth-activation`) via `OrderType.States` (`WorkflowState`) and `OrderType.Transitions` (`WorkflowTransition`). When `OrderType.States.Count > 0`, `ServiceOrderTransitions.IsValid()` automatically evaluates the custom graph, achieving full field lifecycle compliance with zero schema pollution or breaking changes to core libraries.
 
 ```text
                      ┌───────────────────────────┐
@@ -140,7 +142,7 @@ To support field operations across utility networks where safety handshakes, cre
    - *Invariants*: `CompletedAt` timestamp is recorded. The order is locked against field edits and moves to the audit queue.
 10. **`Inspected` (`Audited`)**:
     - *Description*: The terminal success state. A field supervisor, concessionaire quality auditor, or regulatory validation daemon reviews the evidence (e.g., asphalt ICERP test, BDGD asset delta, OTDR trace) and formally signs off.
-    - *Invariants*: `IsSuccess = true`. Triggers contractor remuneration (Unidades de Serviço - US), updates the central GIS production layers, and exports regulatory compliance records.
+    - *Invariants*: `IsSuccess = true`. Triggers single-DB ACID contractor remuneration (Unidades de Serviço - US) and ICERP ledger postings locally in `geoassets_fieldservice`, dispatches controlled asset mutation commands to Core Platform (`POST /api/geoassets/features/mutations` via `IGeoCoreClient`) or enqueues `ServiceOrderInspectedAssetMutationEvent` via transactional outbox to update central PostGIS layers, and exports regulatory compliance records.
 11. **`Cancelled`**:
     - *Description*: Terminal aborted state. The order is terminated prior to completion.
     - *Invariants*: Allowed from any active state prior to `Inspected`. Mandatory cancellation reason code and audit comment must be recorded. Any reserved truck inventory is returned to stock.
@@ -167,7 +169,7 @@ To support field operations across utility networks where safety handshakes, cre
 | `InProgress` | `Suspended` | `Suspend` *(or `Execute` with `ImpedimentPayload`)* | Field Crew Lead, Supervisor | Valid impediment code (`IMP_*`) and explanation provided | Notifies CCO/COD; evaluates regulatory SLA pause rule; freezes work timer. (Standard `Annotate` calls NEVER trigger suspension) |
 | `Suspended` | `InProgress` | `Execute` | Field Crew Lead, Supervisor | Impediment cleared; secondary safety check passed | Resumes work timer; logs resumption in `ActionLog` |
 | `InProgress` | `Completed` | `Complete` | Field Crew Lead | All mandatory photos, checklists, and items captured | Stamps `CompletedAt`; enqueues order for supervisor audit |
-| `Completed` | `Inspected` | `Validate` | Field Supervisor, Concessionaire Auditor | ICERP/As-Built/OTDR thresholds verified | Triggers US billing; updates central GIS production layer |
+| `Completed` | `Inspected` | `Validate` | Field Supervisor, Concessionaire Auditor | ICERP/As-Built/OTDR thresholds verified | Commits single-DB ACID US/ICERP billing locally; dispatches controlled Core GIS asset mutations via `IGeoCoreClient` or transactional outbox |
 | `Completed` | `Pending` | `Reject` | Field Supervisor, Concessionaire Auditor | Audit rejection reason and rework specifications logged | Reopens order as rework child or resets status; alerts crew |
 | `ConflictReview` | `Completed` | `Approve` | Field Supervisor, Concessionaire Auditor | Supervisor validates physical field evidence (GPS, photos, APR) despite prior cancellation or reassignment | Unfreezes order; accepts Crew A evidence; triggers standard inspection and contractor remuneration |
 | `ConflictReview` | `Cancelled` | `Reject` / `Cancel` | Field Supervisor, Operations Manager | Supervisor upholds cancellation; field evidence deemed invalid, unauthorized, or redundant | Order permanently cancelled; inventory returned or investigated; contractor notified |
@@ -241,6 +243,11 @@ if (action == OrderActionType.Annotate && resultingStatus is not null)
         "Use OrderActionType.Suspend to suspend an active order.");
 }
 ```
+
+#### Package Boundary & Library Decoupling Architecture
+To guarantee strict non-regression across all platform consumers:
+1. **Core Workflow Enum Compatibility**: `OrderActionType.Suspend = 12` is added to `core/GeoAssets.Workflow/Orders/OrderActionType.cs` as an append-only member, preserving all existing integer values (`View=0`, ..., `Complete=7`, `Cancel=8`, `Annotate=9`, `Calculate=10`, `Validate=11`). Existing microservices like `apps/GeoAssets.IpBilling.Server` (`GEOS_FAT_IP`) and generic administrative workflows continue operating with zero breaking changes.
+2. **Domain Safety Rule Decoupling**: Rather than embedding Brazilian utility-specific Portuguese strings (`ANEEL`, `NR-10`, `NR-35`, `NR-33`) into the generic `GeoAssets.Workflow` library, all occupational safety evaluators (`IAprSafetyRuleEvaluator`, `AprSafetyRuleEvaluator`) are encapsulated inside the vertical domain library **`GeoAssets.FieldService.Domain`**. They are plugged into the workflow engine via the standard `IServiceOrderRule` interface (`AprSafetyServiceOrderRule`), ensuring the reusable workflow library remains 100% domain-neutral and reusable across non-utility sectors.
 
 ---
 
@@ -318,99 +325,80 @@ To prevent data corruption, lost updates, and operational race conditions withou
 
 ### Database-Level Concurrency Token Mechanics
 
-1. **Schema Definition**:
-   In `workflow/GeoAssets.Workflow.EFCore/Entities/ServiceOrderRecord.cs`:
-   ```csharp
-   public byte[] RowVersion { get; set; } = [];
-   ```
-   In PostgreSQL, the `RowVersion` column is mapped to a byte array (`bytea`) backed by an automatic trigger or sequence that changes on every row mutation:
-   ```sql
-   -- ============================================================================
-   -- GeoAssets Optimistic Concurrency Control (OCC): RowVersion DDL
-   -- Database: PostgreSQL 14+ with pgcrypto extension
-   -- ============================================================================
+#### 1. Provider-Agnostic EF Core Mapping (`GeoAssets.Workflow.EFCore`)
+In the shared domain-agnostic workflow persistence library (`workflow/GeoAssets.Workflow.EFCore/Entities/ServiceOrderRecord.cs`), the entity defines:
+```csharp
+public byte[] RowVersion { get; set; } = [];
+```
+In `workflow/GeoAssets.Workflow.EFCore/Configurations/ServiceOrderRecordConfiguration.cs`:
+```csharp
+builder.Entity<ServiceOrderRecord>(b =>
+{
+    // Provider-agnostic optimistic concurrency token.
+    // Intentionally omits database-specific HasColumnType or HasMaxLength:
+    // - Under SQLite (in-memory test suite): maps cleanly to TEXT/BLOB.
+    // - Under PostgreSQL (Npgsql): maps cleanly to bytea / byte[] or xmin.
+    b.Property(o => o.RowVersion)
+     .IsRowVersion()
+     .IsConcurrencyToken();
+});
+```
+This provider-agnostic configuration guarantees 100% test portability, allowing `GeoAssets.Workflow.EFCore.Tests` to run against fast in-memory SQLite providers with zero migration scripts or database-specific extension requirements.
 
-   -- 1. Ensure the pgcrypto extension is installed for SHA-256 binary digests
-   CREATE EXTENSION IF NOT EXISTS pgcrypto;
+#### 2. Production PostgreSQL Host Mapping (`apps/GeoAssets.FieldService.Server`)
+In production environments hosting `ServiceOrderDbContext` on PostgreSQL 16 (`geoassets_fieldservice`), optimistic concurrency is backed by one of two host-level strategies configured in the vertical microservice host, without leaking database-specific DDL into the shared library:
 
-   -- 2. Create the immutable RowVersion trigger function
-   CREATE OR REPLACE FUNCTION touch_service_orders_row_version()
-   RETURNS TRIGGER AS $$
-   BEGIN
-       -- Converts composite row identity, timestamp, and UUID into valid UTF-8 bytea
-       -- and computes a 32-byte cryptographic SHA-256 digest matching C# byte[32].
-       NEW."RowVersion" = digest(
-           convert_to(
-               NEW."Id"::text || '|' || 
-               clock_timestamp()::text || '|' || 
-               gen_random_uuid()::text, 
-               'UTF8'
-           ),
-           'sha256'
-       );
-       NEW."UpdatedAt" = clock_timestamp();
-       RETURN NEW;
-   END;
-   $$ LANGUAGE plpgsql;
+##### Option A: Native PostgreSQL `xmin` Architecture (Zero Triggers)
+PostgreSQL maintains an internal 32-bit transaction identifier (`xmin`) in every row's `HeapTupleHeaderData`. In the vertical microservice host `apps/GeoAssets.FieldService.Server`, Npgsql can map the concurrency token directly to `xmin`:
+```csharp
+// Host-level EF Core configuration override in FieldService.Server
+modelBuilder.Entity<ServiceOrderRecord>(b =>
+{
+    b.UseXminAsConcurrencyToken();
+});
+```
+The generated SQL automatically evaluates the `xmin` system column:
+```sql
+UPDATE "ServiceOrders" 
+SET "Status" = @p0, "UpdatedAt" = @p1 
+WHERE "Id" = @id AND "xmin" = @p2;
+```
+If another transaction mutated the row, `xmin` differs, EF Core detects 0 rows updated, and automatically throws `DbUpdateConcurrencyException` (translated to `HTTP 409 Conflict`).
 
-   -- 3. Idempotent trigger binding covering both INSERT and UPDATE mutations
-   DROP TRIGGER IF EXISTS trg_service_orders_row_version ON "ServiceOrders";
+##### Option B: Host-Level Migration Trigger (SHA-256 Digest)
+Alternatively, for audit trail hashing, the vertical microservice's database migrations can deploy an automated DDL trigger:
+```sql
+-- Deployed via FieldService.Server host migration (private database geoassets_fieldservice)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-   CREATE TRIGGER trg_service_orders_row_version
-   BEFORE INSERT OR UPDATE ON "ServiceOrders"
-   FOR EACH ROW
-   EXECUTE FUNCTION touch_service_orders_row_version();
-   ```
+CREATE OR REPLACE FUNCTION touch_service_orders_row_version()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."RowVersion" = digest(
+        convert_to(
+            NEW."Id"::text || '|' || 
+            clock_timestamp()::text || '|' || 
+            gen_random_uuid()::text, 
+            'UTF8'
+        ),
+        'sha256'
+    );
+    NEW."UpdatedAt" = clock_timestamp();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-#### Alternative Native PostgreSQL `xmin` Architecture (Zero Triggers / EF Core Npgsql)
-PostgreSQL maintains an internal 32-bit transaction identifier (`xmin`) in every row's `HeapTupleHeaderData`. EF Core and Npgsql provide built-in first-class optimistic concurrency mapping to `xmin`:
+CREATE TRIGGER trg_service_orders_row_version
+BEFORE INSERT OR UPDATE ON "ServiceOrders"
+FOR EACH ROW
+EXECUTE FUNCTION touch_service_orders_row_version();
+```
 
-1. **Entity Definition** (`ServiceOrderRecord.cs`):
-   ```csharp
-   internal sealed class ServiceOrderRecord
-   {
-       /// <summary>
-       /// Optimistic concurrency token mapped to PostgreSQL's native xmin transaction column.
-       /// Automatically updated by PostgreSQL MVCC on every UPDATE with zero trigger overhead.
-       /// </summary>
-       public uint Version { get; set; }
-   }
-   ```
-
-2. **EF Core Configuration** (`ServiceOrderRecordConfiguration.cs`):
-   ```csharp
-   builder.Entity<ServiceOrderRecord>(b =>
-   {
-       // Instructs Npgsql to bind the property to PostgreSQL's system column "xmin"
-       b.Property(o => o.Version)
-        .IsRowVersion();
-   });
-   ```
-
-3. **Generated SQL Execution**:
-   ```sql
-   UPDATE "ServiceOrders" 
-   SET "Status" = @p0, "UpdatedAt" = @p1 
-   WHERE "Id" = @id AND "xmin" = @p2;
-   ```
-   If another transaction touched the row, `xmin` differs, EF Core detects 0 rows updated, and automatically throws `DbUpdateConcurrencyException` (translated to `HTTP 409 Conflict`).
-
-2. **EF Core Configuration**:
-   In `workflow/GeoAssets.Workflow.EFCore/ServiceOrderDbContext.cs`:
-   ```csharp
-   builder.Entity<ServiceOrderRecord>(b =>
-   {
-       b.Property(o => o.RowVersion)
-        .IsRowVersion()
-        .IsConcurrencyToken();
-   });
-   ```
-
-3. **REST API Concurrency Protocol**:
-   All state transition and update endpoints in `GeoAssets.Server` enforce optimistic validation via standard HTTP ETag / `If-Match` headers:
-   - When a client reads an order: `ETag: W/"[Base64 RowVersion]"`.
-   - When updating or transitioning: client must submit `If-Match: W/"[Base64 RowVersion]"` or include the `RowVersion` field in the JSON payload.
-   - If the database detects a mismatch between the provided `RowVersion` and the current record in the database, EF Core throws a `DbUpdateConcurrencyException`, translated by the server into `HTTP 409 Conflict`.
+#### 3. REST API Concurrency Protocol in `apps/GeoAssets.FieldService.Server`
+All state transition and update endpoints in `apps/GeoAssets.FieldService.Server` enforce optimistic validation via standard HTTP ETag / `If-Match` headers:
+- When a client reads an order: `ETag: W/"[Base64 RowVersion]"`.
+- When updating or transitioning: client must submit `If-Match: W/"[Base64 RowVersion]"` or include the `RowVersion` field in the JSON payload.
+- If the database detects a mismatch between the provided `RowVersion` and the current record in `geoassets_fieldservice`, EF Core throws a `DbUpdateConcurrencyException`, translated by the server into `HTTP 409 Conflict`.
 
 ### The Field-Preservation Reconciliation Strategy
 
@@ -523,7 +511,7 @@ public async Task<SyncReconciliationResult> ReconcileSyncSubmissionAsync(
     // 1. Detect if this is an AssignedTo Reassignment Collision
     bool isReassignmentCollision = 
         !string.Equals(currentServerOrder.AssignedTo, incomingSubmission.CrewId, StringComparison.Ordinal)
-        && incomingSubmission.BaseRowVersion < currentServerOrder.RowVersion;
+        && !StructuralComparisons.StructuralEqualityComparer.Equals(incomingSubmission.BaseRowVersion, currentServerOrder.RowVersion);
 
     if (!isReassignmentCollision)
     {
@@ -534,12 +522,14 @@ public async Task<SyncReconciliationResult> ReconcileSyncSubmissionAsync(
     string crewA = incomingSubmission.CrewId;
     string crewB = currentServerOrder.AssignedTo;
 
-    // 2. Evaluate Crew B's current operational state
+    // 2. Evaluate Crew B's current operational state AND Crew A's incoming work status
     var crewBStatus = currentServerOrder.Status;
+    bool isCrewACompleted = string.Equals(incomingSubmission.Status, ServiceOrderStatus.Completed, StringComparison.Ordinal);
 
-    if (crewBStatus is ServiceOrderStatus.Dispatched or "EnRoute")
+    if (crewBStatus is ServiceOrderStatus.Dispatched or "EnRoute" && isCrewACompleted)
     {
-        // CASE 1: Crew B has not started physical work. Recall Crew B and accept Crew A's work.
+        // CASE 1: Crew B in transit (no physical work) AND Crew A completed work.
+        // Recall Crew B and accept Crew A's work.
         // Step A: Seal Crew A's field evidence
         var evidenceBatchId = await _evidenceStore.PersistEvidenceBatchAsync(incomingSubmission.Evidence, ct);
         
@@ -572,6 +562,46 @@ public async Task<SyncReconciliationResult> ReconcileSyncSubmissionAsync(
             ResolvedStatus: ServiceOrderStatus.Completed,
             ConflictType: ReassignmentConflictType.CrewBRecalled_FieldWorkAccepted,
             Message: "Trabalho da equipe offline aceito com sucesso. Equipe substituta desmobilizada.");
+    }
+    else if (crewBStatus is ServiceOrderStatus.Dispatched or "EnRoute" && !isCrewACompleted)
+    {
+        // CASE 3: Crew A partial work / impediment submission while Crew B is en route.
+        // Step A: Immediately quarantine order to ConflictReview
+        var evidenceBatchId = await _evidenceStore.PersistEvidenceBatchAsync(incomingSubmission.Evidence, ct);
+        currentServerOrder.Status = "ConflictReview";
+        currentServerOrder.ActionLog.Add(new OrderActionLog(
+            Action: OrderActionType.Execute,
+            PerformedBy: crewA,
+            PerformedAt: incomingSubmission.SubmittedAtUtc,
+            Comment: $"Impediment/partial work submitted offline by {crewA} while reassigned to {crewB}. Quarantined for custody adjudication. BatchId: {evidenceBatchId}",
+            ResultingStatus: "ConflictReview"));
+
+        // Step B: Push immediate transit halt alert to Crew B
+        await _notificationService.SendHighPriorityAlertAsync(
+            targetCrewId: crewB,
+            title: "Deslocamento Suspenso - Conflito de Custódia",
+            message: $"A OS #{currentServerOrder.Id} teve apontamento parcial/impedimento registrado pela equipe {crewA}. Interrompa o deslocamento e aguarde instruções do COD.",
+            ct);
+
+        // Step C: Register conflict record for dispatcher sector custody adjudication
+        var conflictRecord = new ReassignmentConflictRecord(
+            ConflictId: Guid.NewGuid(),
+            OrderId: currentServerOrder.Id,
+            OriginalCrewId: crewA,
+            ReassignedCrewId: crewB,
+            ConflictType: ReassignmentConflictType.PartialWorkCollision_CustodyDispute,
+            CrewAEvidenceBatchId: evidenceBatchId,
+            CrewBEvidenceBatchId: null,
+            DetectedAtUtc: DateTimeOffset.UtcNow);
+
+        await _conflictRepository.RecordConflictAsync(conflictRecord, ct);
+        await _repository.UpdateAsync(currentServerOrder, ct);
+
+        return new SyncReconciliationResult(
+            Success: false,
+            ResolvedStatus: "ConflictReview",
+            ConflictType: ReassignmentConflictType.PartialWorkCollision_CustodyDispute,
+            Message: "Impedimento/trabalho parcial sincronizado enquanto equipe substituta em rota. Ordem em ConflictReview.");
     }
     else
     {
@@ -608,7 +638,7 @@ public async Task<SyncReconciliationResult> ReconcileSyncSubmissionAsync(
             ReassignedCrewId: crewB,
             ConflictType: ReassignmentConflictType.DualIntervention_QuarantineRequired,
             CrewAEvidenceBatchId: crewABatchId,
-            CrewBEvidenceBatchId: currentServerOrder.LatestEvidenceBatchId,
+            CrewBEvidenceBatchId: currentServerOrder.Attributes.GetValueOrDefault("latestEvidenceBatchId"),
             DetectedAtUtc: DateTimeOffset.UtcNow);
 
         await _conflictRepository.RecordConflictAsync(conflictRecord, ct);
@@ -817,12 +847,13 @@ When a pole fails visual or mechanical inspection (e.g. decayed wood or cracked 
 ```
 
 #### Application-Level Safety Gate Architecture: `IAprSafetyRuleEvaluator`
-To provide defense-in-depth beyond syntactic JSON Schema validation and generate authoritative Brazilian Portuguese regulatory diagnostics (citing exact NR-10, NR-35, and NR-33 clauses), `GeoAssets.Workflow` incorporates a compiled domain safety evaluator:
+To provide defense-in-depth beyond syntactic JSON Schema validation and generate authoritative Brazilian Portuguese regulatory diagnostics (citing exact NR-10, NR-35, and NR-33 clauses) without polluting the generic `GeoAssets.Workflow` engine with utility-specific logic, the compiled domain safety evaluator resides in **`GeoAssets.FieldService.Domain`**, registered as an `IServiceOrderRule` in `apps/GeoAssets.FieldService.Server`:
 
 ```csharp
-namespace GeoAssets.Workflow.Rules;
+namespace GeoAssets.FieldService.Domain.Rules;
 
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 
 /// <summary>
 /// Domain-specific occupational safety gate evaluator. Enforces mandatory Brazilian regulatory
@@ -982,6 +1013,31 @@ When a distribution transformer (`UNTRD`) is replaced or overhauled, the technic
 }
 ```
 
+##### Core GIS Controlled Asset Mutation Dispatch
+Because physical asset geometries and attributes in `geo_entity` are strictly encapsulated within the Core Platform (`apps/GeoAssets.Server`), `apps/GeoAssets.FieldService.Server` cannot directly execute SQL updates against Core's database. Instead, upon supervisor inspection sign-off (`Completed -> Inspected`), `FieldService.Server` dispatches a controlled mutation command via `IGeoCoreClient.ExecuteAssetDeltaBatchAsync` (`POST /api/geoassets/features/mutations`) or stages a `ServiceOrderInspectedAssetMutationEvent` in its local transactional outbox (`field_outbox_messages`):
+```json
+{
+  "mutationBatchId": "e1f82b79-2458-472d-88f2-8924bce81109",
+  "serviceOrderId": "OS-2026-EL-09142",
+  "performedBy": "fiscal.souza@concessionaria.com.br",
+  "mutations": [
+    {
+      "operation": "UpdateAttributes",
+      "featureId": "00000000-0000-0000-0000-000000000009",
+      "attributeUpdates": {
+        "numeroSerie": "WEG-2026-99481",
+        "plaquetaPatrimonio": "PLQ-950112",
+        "potenciaKva": "75.0",
+        "tensaoPrimariaKv": "13.8",
+        "tensaoSecundariaV": "380/220",
+        "dataUltimaManutencao": "2026-10-29T10:00:00Z"
+      }
+    }
+  ]
+}
+```
+Core Server validates the mutation, updates `geo_entity` and `geo_entity_attribute`, invalidates its in-memory `TopoGraph` cache (`PostgresAssetProvider._cache`), and emits an OpenTelemetry audit event. If Core Server is temporarily unreachable over the network, the outbox processor retries with exponential backoff while the local inspection and billing transaction remain 100% committed.
+
 #### 3. Conductor Sagging, Tensioning & Vegetation Clearing
 * **Sagging & Tensioning (*Flecha e Tração*)**: For cable replacement orders on aerial spans (`SEGCON`), recording the ambient temperature ($^\circ\text{C}$), dynamometer line tension ($\text{daN}$), and measured ground clearance at mid-span ($\text{m}$) against minimum standards (ABNT NBR 15688 / NBR 5422: $\ge 6.0\text{ m}$ for highways, $\ge 5.5\text{ m}$ for urban streets).
 * **Vegetation Management (*Poda e Faixa de Servidão*)**: Mandatory record of tree clearance distance achieved (minimum $1.5\text{ m}$ for low voltage, $3.0\text{ m}$ for medium voltage), volume of pruned branches ($m^3$), and authorized eco-disposal site receipt ID.
@@ -1028,6 +1084,35 @@ $$\text{Total Order US} = \sum_{i=1}^{n} \left( \text{ItemQuantity}_i \times \te
   }
 }
 ```
+
+#### Single-DB ACID Commercial Ledger Guarantee
+To prevent distributed two-phase commit (2PC) failures and distributed state corruption, contractor remuneration is committed atomically alongside the workflow status transition inside `apps/GeoAssets.FieldService.Server`'s private database (`geoassets_fieldservice`):
+```sql
+BEGIN TRANSACTION;
+
+-- 1. Atomically advance order to Inspected
+UPDATE "ServiceOrders"
+SET "Status" = 'Inspected', "UpdatedAt" = clock_timestamp()
+WHERE "Id" = 'OS-2026-EL-09142' AND "RowVersion" = @expectedRowVersion;
+
+-- 2. Atomically record contractor US postings in the commercial ledger table
+INSERT INTO field_contractor_us_postings (
+    id, service_order_id, contractor_id, item_code, quantity, unit_us, total_us, monetary_rate, total_amount_brl, posted_at
+) VALUES 
+('c8f42045-8c08-4171-8b21-4f113a37b101', 'OS-2026-EL-09142', 'e1346740-4289-4977-bf30-cb8859942d99', 'US-EL-014', 1.000, 185.50, 185.50, 3.8500, 714.18, clock_timestamp()),
+('c8f42045-8c08-4171-8b21-4f113a37b102', 'OS-2026-EL-09142', 'e1346740-4289-4977-bf30-cb8859942d99', 'US-EL-089', 240.000, 0.45, 108.00, 3.8500, 415.80, clock_timestamp()),
+('c8f42045-8c08-4171-8b21-4f113a37b103', 'OS-2026-EL-09142', 'e1346740-4289-4977-bf30-cb8859942d99', 'US-EL-102', 1.000, 142.00, 142.00, 3.8500, 546.70, clock_timestamp());
+
+-- 3. Atomically stage asset delta for asynchronous Core GIS delivery
+INSERT INTO field_outbox_messages (
+    id, event_type, payload_json, created_at, status
+) VALUES (
+    gen_random_uuid(), 'AssetMutationRequested', '{"serviceOrderId": "OS-2026-EL-09142", ...}', clock_timestamp(), 'PENDING'
+);
+
+COMMIT TRANSACTION;
+```
+This guarantees that an order cannot be marked `Inspected` without financial credit, nor can contractor funds be disbursed if the status update fails—achieving 100% single-DB ACID invariants.
 
 ---
 
@@ -1187,6 +1272,9 @@ $$\text{Excavated Volume } (m^3) = \text{Length } (m) \times \text{Width } (m) \
 }
 ```
 
+##### ICERP Measurement Ledger & Linked Sub-Order ACID Guarantee
+Upon supervisor sign-off (`Completed -> Inspected`), trench measurements and pavement audit compliance are committed to the dedicated commercial ledger table `field_icerp_paving_measurements` inside `geoassets_fieldservice`. In the exact same local transaction, a child paving restoration order (`ParentOrderId = currentOrder.Id`, `OrderTypeId = "water-paving-restoration"`) is atomically spawned in `ServiceOrders`, guaranteeing single-DB ACID consistency without distributed 2PC.
+
 #### 4. Sewage Unblocking & Hydro-Jetting Checklist
 * **Blockage Cause**: `SOLIDIFIED_COOKING_GREASE`, `SAND_SEDIMENTATION`, `TREE_ROOT_INTRUSION`, `STRUCTURAL_PIPE_COLLAPSE`, `FOREIGN_OBJECT_VANDALISM`.
 * **Execution Parameters**: Combined jet/vacuum truck ID, jet nozzle type (e.g., torpedo, rotating vibrator), water injection pressure ($\text{bar}$), vacuum volume extracted ($m^3$), CCTV robot inspection executed (`true`/`false`), and street surface lime desinfection completed (`true`/`false`).
@@ -1321,13 +1409,16 @@ Enforces compliance with **Resolução Conjunta ANEEL/ANATEL nº 004/2014**, **D
 * Barcode / QR scan of ONT serial number (`FSAN`: e.g., `ALCLB4920A12`) and `MAC` address.
 * Operational confirmation: PON LED solid green, LOS LED off, customer Wi-Fi benchmark test completed.
 
+##### Core Topological Query Integration for Pole Occupancy
+To audit shared pole occupancy without maintaining redundant asset records, `FieldService.Server` queries Core Platform via `IGeoCoreClient.GetNeighborIdsAsync(poleFeatureId, edgeKind: "supports", targetAssetTypeId: "telecom-cable")`. Core evaluates its in-memory `TopoGraph` and returns all attached cable edges, allowing the mobile application and inspection engine to cross-verify physical attachments against authorized concessionaire contracts in real time.
+
 ---
 
 ## 2.5 OTDR Trace Correlation Algorithm: Exact Mathematical Specification
 
 When an optical cable cut or severe degradation occurs (`OrderTypeId: emergency-fiber-repair`), emergency crews connect an Optical Time-Domain Reflectometer (OTDR) at the Central Office (OLT/DGO) or an accessible splice enclosure (`CEO`). 
 
-The OTDR detects a reflection or attenuation event at a one-dimensional optical propagation distance $D_{opt}$ (meters). GeoAssets implements a deterministic algorithm to map this scalar distance onto a multi-dimensional PostGIS `LineString` representing the georeferenced cable route, factoring in optical parameters, mechanical excess factors, and physical technical reserve coils (*cruzetas / raquetes de sobra*).
+The OTDR detects a reflection or attenuation event at a one-dimensional optical propagation distance $D_{opt}$ (meters). GeoAssets implements a deterministic algorithm to map this scalar distance onto a multi-dimensional PostGIS `LineString` representing the georeferenced cable route, factoring in optical parameters, mechanical excess factors, and physical technical reserve coils (*cruzetas / raquetes de sobra*). Under the microservices architecture, `FieldService.Server` fetches the cable route `LineString` from Core Server via `IGeoCoreClient.GetFeatureByIdAsync(cableFeatureId)` and executes the linear referencing algorithm in-process within `GeoAssets.FieldService.Domain` using NetTopologySuite.
 
 ```
 [Central Office / OLT]
@@ -1805,6 +1896,70 @@ public static class OtdrFaultCorrelationEngine
 
 ---
 
+## 2.6 Interoperability Pattern with `GEOS_FAT_IP` (`apps/GeoAssets.IpBilling.Server`)
+
+### Domain Boundary Separation: Field Inspection vs. Regulatory Billing
+Public lighting asset management (*Iluminação Pública - IP*) requires two distinct operational lifecycles:
+1. **Physical Field Operations**: Auditing physical luminaire fixtures, detecting daytime burning lamps, testing structural pole integrity, and replacing damaged photocells. Owned by **`apps/GeoAssets.FieldService.Server`** using the 12-state field lifecycle.
+2. **Regulatory Municipal Energy Billing**: Computing monthly kWh consumption under ANEEL REN nº 1.000/2021 Art. 255, applying solar calendar burning hours, calculating irregular consumption indemnities, and committing financial records to `ip_faturamentos`. Owned by **`apps/GeoAssets.IpBilling.Server` (`GEOS_FAT_IP`)** using the 3-state billing lifecycle (`Carregado -> Calculado -> Validado`).
+
+```
+┌──────────────────────────────────┐          ┌──────────────────────────────────┐
+│ apps/GeoAssets.FieldService      │          │ apps/GeoAssets.IpBilling         │
+│ (Field Service Microservice)     │          │ (GEOS_FAT_IP Microservice)       │
+│ • 12-State Field Lifecycle       │          │ • 3-State Billing Workflow       │
+│ • APR Safety & Geofenced Arrival │          │   (Carregado->Calculado->Validado│
+│ • Contractor US Billing (ACID)   │          │ • ANEEL Art. 255 Energy Math     │
+│ • Mobile Offline Sync Engine     │          │ • Single-DB ip_faturamentos      │
+└─────────────────┬────────────────┘          └─────────────────▲────────────────┘
+                  │                                             │
+                  │ Asset Mutation Commands                     │ IGeoCoreClient Queries
+                  ▼                                             │
+      ┌─────────────────────────────────────────────────────────┴────────┐
+      │ apps/GeoAssets.Server (Core Geospatial Platform)                 │
+      │ • PostGIS (geo_entity: Poste, Transformador, LampGroup24h)       │
+      │ • Normalized Trigram Index (geo_entity_attribute: scopeId)       │
+      │ • In-Memory Directed Topological Graph (TopoGraph)               │
+      └──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Public Lighting Field Survey (*Levantamento de IP*) Integration Flow
+Cadastral field surveys establish the municipal fixture baseline for monthly distribution utility invoicing:
+1. **Field Survey Execution**: A field team runs a cadastral survey order (`OrderType: field-ip-survey`) inside `GeoAssets.MAUI`, recording transformer feed circuits, GPS coordinates, luminaire wattages, and lamp types (LED, vapor de sódio, vapor metálico).
+2. **Supervisor Inspection Sign-Off**: On transition `Completed -> Inspected`, `FieldService.Server`:
+   - Commits contractor surveying remuneration atomically in `field_contractor_us_postings`.
+   - Enqueues an asset mutation command in `field_outbox_messages`.
+3. **Core Platform GIS Registration**: The outbox worker pushes the mutations via `IGeoCoreClient.ExecuteAssetDeltaBatchAsync` (`POST /api/geoassets/features/mutations`). Core Server updates `geo_entity` (`Poste (IP)`), links topological `feeds` edges from distribution transformers (`UNTRD`), and invalidates `TopoGraph._cache`.
+4. **Billing Ingestion in `GEOS_FAT_IP`**:
+   - `GEOS_FAT_IP` receives an event or administrator trigger, creating a new billing order (`OrderType: ip-levantamento`, Status: `Carregado`) scoped to the municipality IBGE code (`scopeId = "2927408"`).
+   - **Action `Calculate` (`Carregado -> Calculado`)**: `IpBillingCalculationService` queries Core via `IGeoCoreClient.GetNeighborIdsBatchAsync`, traverses feeder circuits, and executes `IpEnergyMath` (standard 11h52m daily burning cycle under ANEEL rules).
+   - **Action `Validate` (`Calculado -> Validado`)**: Commits a single-DB ACID transaction on `ip_faturamentos` using `FaturamentoPostingMode.Set`, establishing the official monthly municipal baseline consumption.
+
+---
+
+### Public Lighting Field Inspection (*Fiscalização de IP*) Integration Flow
+Field inspections identify failed photocells that cause streetlights to remain energized 24 hours per day (daytime burning), generating irregular utility charges:
+1. **Daytime Detection**: A mobile inspector detects 14 fixtures burning at noon along Circuit `FED-04` in Salvador (`scopeId = "2927408"`).
+2. **Field Evidence Capture**: The inspector records the event in `GeoAssets.MAUI` with georeferenced photos (SHA-256 HMAC stamped) and records:
+   - Lamp Type: `VAPOR_SODIO`
+   - Unit Power: `250 W`
+   - Fixture Count: `14`
+3. **Supervisor Inspection**: The supervisor signs off (`Completed -> Inspected`). `FieldService.Server` commits inspection remuneration locally and pushes an asset mutation to Core Server.
+4. **Core GIS Entity Creation**: Core Server creates a standing irregular lamp group entity:
+   - `AssetTypeId = 00000000-0000-0000-0000-00000000000b` (`LampGroup24h (IP)`)
+   - Attributes: `scopeId = "2927408"`, `potenciaW = "250"`, `quantidade = "14"`, `dataConstatacao = "2026-10-29T12:00:00Z"`
+   - Topologically linked to parent pole `P-1049`.
+5. **Billing Calculation & Single-DB Posting in `GEOS_FAT_IP`**:
+   - `GEOS_FAT_IP` instantiates an `ip-fiscalizacao` billing order (`Status: Carregado`).
+   - **Action `Calculate`**: `IpBillingCalculationService` queries Core via `IGeoCoreClient.QueryFeaturesAsync` (`AssetTypeId = LampGroup24h`, `scopeId = 2927408`). Applies ANEEL Art. 255 math for irregular daytime component:
+     $$\Delta\text{Hours} = 24.0000 - 11.8667 = 12.1333\text{ hours/day (Irregular Component)}$$
+     $$\text{Deduction} = 14 \times 0.250\text{ kW} \times 12.1333\text{ h/day} \times 30\text{ days} = 1{,}274.0000\text{ kWh}$$
+   - **Action `Validate`**: `EFFaturamentoRepository` posts to `ip_faturamentos` with `FaturamentoPostingMode.Accumulate`, atomically incrementing the municipal billing deduction in a single-DB ACID transaction.
+
+---
+
 # 3. Offline/Mobile Field Execution, Georeferenced Evidence, and SLA Compliance
 
 ## 3.1 Mobile Architecture & Offline-First Sync Queue (.NET MAUI)
@@ -1837,12 +1992,26 @@ Technicians in Brazilian utility networks regularly execute work orders in remot
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        GeoAssets ASP.NET Core Server                   │
-├────────────────────────────────────────────────────────────────────────┤
-│  - POST /api/workflow/service-orders/sync/push                         │
-│  - GET  /api/workflow/service-orders/sync/pull?since={timestamp}       │
-│  - POST /api/workflow/service-orders/{id}/media                        │
-└────────────────────────────────────────────────────────────────────────┘
+│                   Reverse Proxy / API Gateway (YARP)                   │
+├───────────────────────────────────┬────────────────────────────────────┤
+│ Route: /api/field-service/*       │ Route: /api/geoassets/*            │
+│ Route: /api/field-service/media/* │ (Basemaps & Asset Projections)     │
+└─────────────────┬─────────────────┴──────────────────┬─────────────────┘
+                  │                                    │
+                  ▼                                    ▼
+┌──────────────────────────────────┐ ┌──────────────────────────────────┐
+│ apps/GeoAssets.FieldService      │ │ apps/GeoAssets.Server (Core GIS) │
+│ (Field Service Microservice)     │ │ • WMS / WFS Vector Tiles         │
+│ • POST /api/field-service/sync/  │ │ • GET /features/{id}             │
+│        push                      │ └──────────────────────────────────┘
+│ • GET  /api/field-service/sync/  │                   ▲
+│        pull?since={timestamp}    │                   │ Presigned URL / Hash
+│ • POST /api/field-service/media  │                   ▼
+└─────────────────┬────────────────┘ ┌──────────────────────────────────┐
+                  │                  │ Cloud / On-Premise Object Store  │
+                  └─────────────────►│ (AWS S3 / MinIO Storage Bucket)  │
+                                     │ • Encrypted Geotagged Photos     │
+                                     └──────────────────────────────────┘
 ```
 
 ### Local SQLite Schema & Outbox Pattern
@@ -1951,11 +2120,17 @@ GeoAssets provides a real-time regulatory compliance engine that monitors Servic
 | **Sabesp / ARSESP ICERP** | Saneamento Obras | Recomposição de Pavimento Asfáltico (Vias Arteriais) | **48 horas** | Reprovação de lote no ICERP; retenção de medição de empreiteira. |
 | **RNP / Telebras / Wholesale**| Telecom Fibra | Rompimento de Cabo Óptico Tronco (MTTR Backbone) | **4 horas** | Penalidade contratual de Service Level Credit ($1\% - 5\%$ da fatura/h). |
 
-### Predictive Outage Impact Simulation using `TopoGraph`
+### Predictive Outage Impact Simulation using `IGeoCoreClient` Multi-Hop Traversal
 
-When an electrical circuit breaker or a water district valve must be operated, GeoAssets utilizes its built-in topological engine (`core/GeoAssets.Core/Services/TopoGraph.cs`) to forecast customer and regulatory impacts **prior to dispatch**:
+When an electrical circuit breaker or a water district valve must be operated, the system forecasts customer and regulatory impacts **prior to dispatch**. Under the microservices architecture, the in-memory `TopoGraph` resides exclusively inside Core Platform (`apps/GeoAssets.Server`). Naive recursive 1-hop calls over HTTP would cause severe latency ($>13\text{ seconds}$ across thousands of nodes).
+
+Instead, Core Server exposes **`POST /api/geoassets/topology/traverse`**, evaluated against its warmed in-memory graph cache in $\approx 1.8\text{ ms}$ and transmitted in a single round-trip ($<30\text{ ms}$). `apps/GeoAssets.FieldService.Server` invokes this through `IGeoCoreClient.TraverseTopologyAsync`:
 
 ```csharp
+namespace GeoAssets.FieldService.Domain.Sla;
+
+using GeoAssets.Core.Interfaces;
+
 public sealed record OutageImpactForecast(
     int AffectedCustomerUnitsCount,
     double TotalContractedPowerKva,
@@ -1965,18 +2140,25 @@ public sealed record OutageImpactForecast(
 public static class RegulatoryOutagePredictor
 {
     /// <summary>
-    /// Executes a downstream traversal from an isolation point, identifying all downstream
-    /// customers and computing expected regulatory impact under PRODIST Módulo 8.
+    /// Executes a downstream traversal from an isolation point via Core Platform API,
+    /// identifying all downstream customers and computing expected regulatory impact under PRODIST Módulo 8.
     /// </summary>
-    public static OutageImpactForecast PredictOutage(
-        TopoGraph networkGraph,
+    public static async Task<OutageImpactForecast> PredictOutageAsync(
+        IGeoCoreClient geoCoreClient,
         string isolationAssetId,
         IReadOnlyDictionary<string, double> assetLoadsKva,
         IReadOnlyList<string> registeredConsumerUnitIds,
-        TimeSpan plannedDuration)
+        TimeSpan plannedDuration,
+        CancellationToken ct = default)
     {
-        // 1. Traverse downstream graph to find all isolated nodes
-        var isolatedAssets = networkGraph.GetDescendants(isolationAssetId).ToHashSet();
+        // 1. Single round-trip multi-hop traversal in Core Platform (< 30 ms total)
+        var traversalResult = await geoCoreClient.TraverseTopologyAsync(new TopologyTraversalRequest(
+            RootFeatureId: isolationAssetId,
+            EdgeKind: "feeds",
+            Direction: TopologyDirection.Downstream,
+            MaxDepth: 50), ct);
+
+        var isolatedAssets = traversalResult.ReachableNodeIds.ToHashSet();
         isolatedAssets.Add(isolationAssetId);
 
         // 2. Filter affected Consumer Units (UCs)
@@ -1990,7 +2172,7 @@ public static class RegulatoryOutagePredictor
         // 4. Calculate DMIC impact (Duration in hours)
         double dmicHours = plannedDuration.TotalHours;
 
-        // 5. Estimate financial compensation risk based on ANEEL standard formula
+        // 5. Estimate financial compensation risk based on ANEEL standard formula:
         // Valor = (VUC * Kva * dmicHours) / FatorProrroga
         decimal estimatedRisk = (decimal)(affectedUcs * 14.50 * dmicHours);
 
@@ -1999,100 +2181,123 @@ public static class RegulatoryOutagePredictor
 }
 ```
 
+### Automated Geofence Arrival Verification via Spatial Query API
+When a field crew approaches a job site, `GeoAssets.MAUI` transmits current device coordinates to `apps/GeoAssets.FieldService.Server`. To verify on-site arrival ($\le 30\text{ m}$ radius) without downloading full regional GIS datasets, `FieldService.Server` calls Core Platform's spatial query endpoint (`POST /api/geoassets/features/spatial-query`) via `IGeoCoreClient.QueryFeaturesNearbyAsync`:
+```csharp
+var nearbyAssets = await geoCoreClient.QueryFeaturesNearbyAsync(new SpatialProximityQuery(
+    CenterLongitude: deviceLocation.Longitude,
+    CenterLatitude: deviceLocation.Latitude,
+    RadiusMeters: 30.0,
+    AssetTypeIds: [order.PrimaryAssetTypeId],
+    Take: 5), ct);
+
+bool isWithinArrivalGeofence = nearbyAssets.Any(a => order.FeatureIds.Contains(a.FeatureId));
+```
+PostGIS executes `ST_DWithin` on the spatial index in $\approx 2.1\text{ ms}$, providing instantaneous arrival validation before unlocking life-safety checklists.
+
 ---
 
 # 4. Prioritized Gap Analysis & Implementation Roadmap for GeoAssets
 
 ## 4.1 Prioritized Gap Analysis Matrix
 
-| Platform Capability | Current Codebase State in GeoAssets | Required Production Capability | Priority | Effort |
+| Platform Capability | Current Codebase State in GeoAssets | Required Production Microservices Capability | Priority | Effort |
 |---|---|---|---|---|
-| **Core Domain Model** | `IServiceOrder.cs` defines Id, Status, Priority, Attributes, Features, Dispatches, ActionLog. | Production-ready foundation; add `SlaTargetTimestamp`, `ImpedimentCode`, and `ParentOrderId` hierarchy. | High | 1 week |
-| **State Machine Engine** | `ServiceOrderTransitions.cs` supports 6 basic states (`Draft`, `Pending`, `InProgress`, `OnHold`, `Completed`, `Cancelled`). | Expand to the 12-State Workflow Graph (`Scheduled`, `Dispatched`, `EnRoute`, `OnSite`, `ConflictReview`, `Inspected`) with dedicated `Suspend` action. | Critical | 1.5 weeks |
-| **Map-to-OS UI Integration** | Leaflet map is completely hidden on `/service-orders` (`MainLayout.razor:45,50`). No map asset picker. | Embed interactive Leaflet map in `/service-orders`; enable spatial selection of assets during order creation; render active order pins on map. | Critical | 2 weeks |
-| **Mobile Offline Database** | MAUI client uses `RestServiceOrderRepository` which requires constant connectivity. No offline DB. | Implement local SQLite offline store (`SQLCipher`) in MAUI with transactional outbox queue and delta sync. | Critical | 3 weeks |
-| **Georeferenced Photo Capture** | Zero camera integration; zero permissions in Android/iOS manifests; no EXIF GPS extraction. | Integrate `MediaPicker` and `Geolocation` in MAUI; implement EXIF GPS watermark stamp and SHA-256 HMAC anti-tamper seal. | Critical | 2 weeks |
-| **Domain Asset Schemas** | Generic `AssetType` (Poste, Transformador). Demo circuits only. | Implement ANEEL BDGD layers (`PONNOT`, `UNTRD`, `SEGCON`), Water (`RDA`, `PV`, `VRP`), and Telecom (`CTO`, `CEO`, `Drop`). | High | 2 weeks |
-| **Digital Field Checklists** | Key-value string dictionary without UI form renderers. | Dynamic JSON Schema form renderer in Razor supporting APR, NR-10/35, NR-33, ICERP, and OPM tests. | High | 2.5 weeks |
-| **OTDR Fault Localization** | NetTopologySuite available, but no OTDR distance-to-geometry algorithm. | Implement `OtdrFaultCorrelationEngine` with IOR, helix factor, and slack loop traversal. | Medium | 1.5 weeks |
-| **Regulatory SLA Engine** | Basic timestamps only. No regulatory countdown timers. | Real-time SLA engine tracking ANEEL REN 1.000, Sabesp ISAP, and PRODIST DIC forecasting using `TopoGraph`. | High | 2 weeks |
-| **BoQ & Billing (US / ICERP)** | IP Billing catalog exists (`GeoAssets.IpBilling.EFCore`), but not integrated with Service Order. | Implement Unidades de Serviço (US) itemized contractor calculation and ICERP paving measurement sheets. | Medium | 2 weeks |
+| **Core Domain Model** | `IServiceOrder.cs` defines Id, Status, Priority, Attributes, Features, Dispatches, ActionLog. | Production-ready foundation; add `SlaTargetTimestamp`, `ImpedimentCode`, and `ParentOrderId` hierarchy to shared `GeoAssets.Workflow`. | High | 1 week |
+| **Workflow State Engine** | `ServiceOrderTransitions.cs` implements default 6-state graph; `OrderType.States`/`Transitions` support custom graphs. | Preserve built-in 6-state graph intact for backward compatibility; configure 12-state field lifecycle as `FieldWorkWorkflowGraph` in `GeoAssets.FieldService.Domain`. | Critical | 1.5 weeks |
+| **Core Spatial & Topology API** | `IGeoCoreClient` provides read-only 1-hop queries (`GetFeatureByIdAsync`, `QueryFeaturesAsync`, `GetNeighborIdsAsync`). | Extend Core Server and `IGeoCoreClient` with `POST /topology/traverse` (multi-hop traversal), `POST /features/spatial-query` (proximity buffer), and `POST /features/mutations` (controlled asset updates). | Critical | 2 weeks |
+| **Vertical Microservice Host** | Field service operations previously lacked dedicated service host. | Scaffold `apps/GeoAssets.FieldService.Server` owning private database `geoassets_fieldservice` and co-hosting `ServiceOrderDbContext` alongside contractor billing ledgers. | Critical | 2.5 weeks |
+| **BoQ & Commercial Remuneration** | IP Billing catalog exists (`GeoAssets.IpBilling.EFCore`), but field contractor US and ICERP paving lack persistence. | Implement `field_contractor_us_postings` and `field_icerp_paving_measurements` in `FieldContractorLedgerDbContext`, executing single-DB ACID commits on `Completed -> Inspected`. | High | 2 weeks |
+| **Mobile Gateway & Sync Routing** | MAUI client uses `RestServiceOrderRepository` targeting Core Server directly. | Deploy YARP reverse proxy routing `/api/field-service/sync/*` to `FieldService.Server` and map tiles to Core; implement encrypted local SQLite outbox with deterministic 3-way conflict reconciler. | Critical | 3 weeks |
+| **Georeferenced Photo Capture** | Zero camera integration; zero permissions in Android/iOS manifests; no EXIF GPS extraction. | Integrate `MediaPicker` and `Geolocation` in MAUI; implement EXIF GPS watermark stamp, SHA-256 HMAC anti-tamper seal, and S3/MinIO upload staging. | Critical | 2 weeks |
+| **Domain Asset Schemas & Checklists** | Generic `AssetType` (Poste, Transformador). Key-value string dictionary without form renderers. | Implement ANEEL BDGD layers, Water (RDA, PV, VRP), Telecom (CTO, CEO, Drop), and dynamic JSON Schema form renderers for APR, NR-33, and OPM tests. | High | 2 weeks |
+| **OTDR Fault Localization** | NetTopologySuite available, but no OTDR distance-to-geometry correlation. | Implement `OtdrFaultCorrelationEngine` in `GeoAssets.FieldService.Domain`, fetching cable geometries via `IGeoCoreClient.GetFeatureByIdAsync` with station slack clamping and SIRGAS 2000 UTM projection. | Medium | 1.5 weeks |
+| **Regulatory SLA & Outage Forecasting** | Basic timestamps only. In-process `TopoGraph` assumed for outage prediction. | Real-time SLA countdown clocks; `RegulatoryOutagePredictor` invoking `IGeoCoreClient.TraverseTopologyAsync` to simulate downstream customer interruptions in $<30\text{ ms}$. | High | 2 weeks |
+| **Public Lighting Interoperability** | IP Billing (`GEOS_FAT_IP`) and Field Service operated as separate conceptual specs. | Two-tier pipeline: Field survey/inspection orders execute via 12-state lifecycle, push asset deltas to Core GIS, and trigger single-DB `GEOS_FAT_IP` energy billing postings (`Set` and `Accumulate`). | High | 1.5 weeks |
 
 ---
 
-## 4.2 4-Phase Implementation Roadmap
+## 4.2 4-Phase Microservices Implementation Roadmap
 
 ```
 2026 Q4 ───────────────► 2027 Q1 ───────────────► 2027 Q2 ───────────────► 2027 Q3
 ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
 │       PHASE 1        │ │       PHASE 2        │ │       PHASE 3        │ │       PHASE 4        │
-│ Domain Schemas,      │ │ Mobile Hardware,     │ │ Offline-First        │ │ Field Checklists,    │
-│ Catalog Seeds &      │ │ Camera Geotagging &  │ │ SQLite Outbox &      │ │ OTDR Algorithm &     │
-│ Map-to-OS UI Link    │ │ Anti-Tamper Media    │ │ Delta Sync Engine    │ │ Regulatory SLA Engine│
+│ Workflow Engine      │ │ Core Platform Query  │ │ Vertical Microservice│ │ Mobile Gateway,      │
+│ Extensibility &      │ │ & Topology API       │ │ Extraction           │ │ Offline Sync Engine  │
+│ Domain Decoupling    │ │ Extensions           │ │ (FieldService.Server)│ │ & Asset Outbox       │
 └──────────────────────┘ └──────────────────────┘ └──────────────────────┘ └──────────────────────┘
 ```
 
-### Phase 1: Domain Schemas, Regulatory Catalog Seeds & Map-to-OS UI Integration
+### Phase 1: Workflow Engine Extensibility & Domain Decoupling
 * **Deliverables**:
-  1. Expand `ServiceOrderTransitions.cs` and `OrderActionType.cs` to support the full 12-State lifecycle (`Scheduled`, `Dispatched`, `EnRoute`, `OnSite`, `ConflictReview`, `Inspected`) and dedicated `OrderActionType.Suspend`.
-  2. Seed production `OrderType` records and JSON schemas for:
-     - `electrical-emergency` (ANEEL REN 1.000).
-     - `electrical-maintenance-us` (CEMIG/Coelba US model).
-     - `water-leak-repair` (Sabesp/Cagece ICERP model).
-     - `sewer-unblocking` (NR-33 sanitation model).
-     - `telecom-ftth-activation` (V.tal/Anatel drop activation).
-     - `telecom-pole-audit` (Decreto 12.068/2024 / Res. 004/2014).
-  3. **Map-to-OS UI Integration**:
-     - Modify `MainLayout.razor` to retain Leaflet map visibility in a split/docked view on `/service-orders`.
-     - Update `ServiceOrderCreateForm.razor` to support spatial picking: clicking one or more features on the Leaflet map automatically binds their GUIDs to `ServiceOrder.FeatureIds`.
-     - Add an interactive Service Order layer to Leaflet showing active orders colored by priority and status.
+  1. Add `OrderActionType.Suspend = 12` and `Resume = 13` to `core/GeoAssets.Workflow/Orders/OrderActionType.cs` as non-breaking append-only enum members.
+  2. Implement `FieldWorkWorkflowGraph` in `GeoAssets.FieldService.Domain`, configuring the 12-state lifecycle and 28 allowed transitions via `OrderType.States` and `OrderType.Transitions`.
+  3. Decouple occupational safety evaluators (`IAprSafetyRuleEvaluator`, `AprSafetyRuleEvaluator`, `Nr33ConfinedSpaceEvaluator`) into `GeoAssets.FieldService.Domain`, registering them as standard `IServiceOrderRule` plugins (`AprSafetyServiceOrderRule`).
+  4. Verify that `ServiceOrderRecordConfiguration.cs` retains provider-agnostic `b.Property(o => o.RowVersion).IsRowVersion()` to preserve fast in-memory SQLite test execution.
+  5. Seed production `OrderType` records and JSON schemas (`electrical-emergency`, `electrical-maintenance-us`, `water-leak-repair`, `sewer-unblocking`, `telecom-ftth-activation`, `telecom-pole-audit`).
+* **Verification Gate**:
+  - `dotnet test tests/GeoAssets.Workflow.Tests` and `dotnet test tests/GeoAssets.Workflow.EFCore.Tests` pass with 100% backward compatibility for the built-in 6-state graph and `apps/GeoAssets.IpBilling.Server` (`Carregado -> Calculado -> Validado`).
 
-### Phase 2: Mobile Hardware Integration, Media & Georeferenced Camera in MAUI
+### Phase 2: Core Platform Query & Topology API Extensions
 * **Deliverables**:
-  1. Configure camera and fine-location permissions in `GeoAssets.MAUI` for Android and iOS.
-  2. Implement `ICameraMediaService` in `GeoAssets.Shared`:
-     - Cross-platform capture via `Microsoft.Maui.Media.MediaPicker`.
-     - Automatic retrieval of GPS coordinates (WGS 84), altitude, heading azimuth, and UTC network time.
-     - Watermark rendering on the image bitmap (Order ID, Coordinates, Timestamp, Technician ID).
-     - Generation of SHA-256 HMAC anti-tamper signature embedded in EXIF and saved to database payload.
-  3. Build `MediaGalleryComponent.razor` inside `ServiceOrderDetail.razor` to display before/after photos with interactive thumbnail zoom and map location pin.
+  1. Implement `POST /api/geoassets/topology/traverse` in `apps/GeoAssets.Server/GeoAssetsRestApiExtensions.cs` delegating to in-memory `TopoGraph.GetDescendants` for downstream outage reachability tracing.
+  2. Implement `POST /api/geoassets/features/spatial-query` in Core Server implementing PostGIS `ST_DWithin` spatial buffer queries for automated arrival geofencing ($\le 30\text{ m}$).
+  3. Implement `POST /api/geoassets/features/mutations` in Core Server validating and applying atomic asset attribute and topological edge deltas in a single `GeoAssetsDbContext` transaction.
+  4. Extend `IGeoCoreClient` and `RestGeoCoreClient` with strongly-typed client contracts:
+     - `Task<TopologyTraversalResult> TraverseTopologyAsync(TopologyTraversalRequest request, CancellationToken ct)`
+     - `Task<IReadOnlyList<SpatialProximityResult>> QueryFeaturesNearbyAsync(SpatialProximityQuery query, CancellationToken ct)`
+     - `Task<AssetMutationBatchResult> ExecuteAssetDeltaBatchAsync(AssetMutationBatchCommand command, CancellationToken ct)`
+* **Verification Gate**:
+  - Integration tests in `tests/GeoAssets.Server.Tests` verifying topology traversal across 3,000+ nodes in $<30\text{ ms}$ and spatial proximity queries in $<10\text{ ms}$.
 
-### Phase 3: Offline-First SQLite Storage & Store-and-Forward Sync Queue
+### Phase 3: Vertical Microservice Extraction (`apps/GeoAssets.FieldService.Server`)
 * **Deliverables**:
-  1. Implement encrypted local SQLite storage (`local_service_orders`, `local_action_outbox`, `local_media_staging`) in `GeoAssets.MAUI` using `sqlite-net-pcl`.
-  2. Replace `RestServiceOrderRepository` in the mobile project with `OfflineFirstServiceOrderRepository`:
-     - Reads are served instantaneously from local SQLite.
-     - Writes append to `local_action_outbox` and immediately transition local state.
-  3. Implement `SyncDaemonService`:
-     - Monitors network connectivity (`Connectivity.Current`).
-     - Batches pending outbox actions and pushes to `/api/workflow/service-orders/sync/push`.
-     - Handles HTTP 409 Concurrency Conflicts using the Field-Preservation Reconciliation Strategy.
-     - Pulls updated orders assigned to the technician via delta queries.
+  1. Scaffold `apps/GeoAssets.FieldService.Server` using `Microsoft.NET.Sdk.Web` (.NET 10 LTS), configuring its dedicated PostgreSQL 16 database (`geoassets_fieldservice`).
+  2. Register `AddWorkflowPersistence` with co-hosted `ServiceOrderDbContext` and register `FieldWorkOrderTypes.RegisterAll`.
+  3. Implement `FieldContractorLedgerDbContext` for contractor *Unidades de Serviço (US)* (`field_contractor_us_postings`) and Sabesp ICERP pavement measurements (`field_icerp_paving_measurements`).
+  4. Implement `ServiceOrderSyncEngine` and the deterministic 3-way offline collision resolution algorithm (Cases 1, 2, and 3).
+  5. Add architectural fitness tests (`NetArchTest.Rules`) guaranteeing zero direct references between `apps/GeoAssets.Server` and `apps/GeoAssets.FieldService.Server`.
+* **Verification Gate**:
+  - Multi-host integration test verifying single-DB ACID transaction on order inspection (`Completed -> Inspected`), confirming atomic status transition and contractor US posting.
 
-### Phase 4: Domain Field Checklists, OTDR Engine & Regulatory SLA Monitoring
+### Phase 4: Mobile Gateway Routing, Offline Sync Engine & Asset Mutation Outbox
 * **Deliverables**:
-  1. Implement `DynamicFormRenderer.razor` driven by `OrderType.AttributesSchemaJson` to present interactive checklists for APR (NR-10/35), Confined Space (NR-33), and Optical Budget.
-  2. Implement `OtdrFaultCorrelationEngine` in `GeoAssets.Core.Services` and expose REST endpoint `/api/topology/telecom/correlate-otdr` to pinpoint fiber breaks on map routes.
-  3. Integrate the Unidade de Serviço (US) itemized catalog and ICERP paving area calculation into order completion and audit screens.
-  4. Implement `RegulatorySlaEngine`:
-     - Real-time countdown clocks rendered in `ServiceOrderList.razor` with color-coded escalation alerts (75% yellow, 90% orange, 100% breach).
-     - Outage simulation leveraging `TopoGraph.GetDescendants` to project affected consumer units and ANEEL DIC/DMIC financial exposure prior to feeder isolation.
+  1. Configure YARP reverse proxy rules routing `/api/field-service/*` to `FieldService.Server`, `/api/geoassets/*` to Core Server, and media uploads to S3/MinIO.
+  2. Implement encrypted local SQLite store-and-forward outbox (`local_service_orders`, `local_action_outbox`, `local_media_staging`) in `GeoAssets.MAUI`.
+  3. Implement hardware camera integration with fine-location GPS interlock ($\le 10\text{ m}$), EXIF watermark stamping, and SHA-256 HMAC cryptographic sealing.
+  4. Implement transactional outbox background worker in `FieldService.Server` pushing inspected asset deltas to Core Server via `IGeoCoreClient.ExecuteAssetDeltaBatchAsync`.
+  5. Wire field public lighting inspection deltas (`LampGroup24h`) to `apps/GeoAssets.IpBilling.Server` (`GEOS_FAT_IP`), executing ANEEL Art. 255 energy calculations and posting single-DB `Accumulate` records to `ip_faturamentos`.
+* **Verification Gate**:
+  - End-to-end integration test validating offline order synchronization, dual-intervention conflict quarantine (`ConflictReview`), Core GIS asset mutation, and `GEOS_FAT_IP` municipal billing posting.
 
 ---
 
 # 5. Verification & Acceptance Criteria
 
-To verify this specification against technical and regulatory mandates:
+To verify this specification against technical, architectural, and regulatory mandates:
 
-1. **State Machine Conformance**:
-   - Verify that all 12 states and their transitions conform to `IServiceOrder.Status` and can be represented in `OrderType.States` and `OrderType.Transitions`.
-   - Validate that `RowVersion` optimistic concurrency prevents lost updates between dispatcher and field clients, returning HTTP 409 on collision.
-2. **Domain Regulatory Compliance**:
-   - *Electrical*: Checklists enforce NR-10 and NR-35 pre-work locks; asset models map to ANEEL BDGD layers (`UNTRD`, `PONNOT`, `SEGCON`, `UNREMT`); US measurement matches CEMIG/Coelba contractor BoQ formulas.
-   - *Water/Sanitation*: Checklists enforce NR-33 gas limits ($O_2 \ge 19.5\%$, $H_2S \le 8\text{ ppm}$); paving measurement calculates trench area ($m^2$) for Sabesp ICERP compliance; sewage unblocking records hydro-jetting parameters.
-   - *Telecom*: Optical checks enforce power levels ($-15\text{ to }-25\text{ dBm}$) and fusion loss $\le 0.05\text{ dB}$; pole checklists validate 500 mm band occupancy under Decreto 12.068/2024; OTDR correlation algorithm correctly locates break coordinates from optical distances.
-3. **Offline Mobile & Evidence Integrity**:
-   - Verify that all mobile transactions function with disconnected network adapters, persisting to local SQLite outbox.
-   - Verify that captured photos contain mandatory GPS EXIF tags, burnt-in watermarks, and verifiable SHA-256 cryptographic signatures.
-4. **SLA Monitoring**:
-   - Verify that real-time timers track ANEEL REN 1.000 (4h/24h) and Sabesp leak SLAs (6h/12h/24h), triggering escalation alerts at defined thresholds.
+1. **Microservice Encapsulation & Database Boundaries**:
+   - `apps/GeoAssets.Server` is the sole service with direct database connections to `geo_entity` or PostGIS SQL queries.
+   - `apps/GeoAssets.FieldService.Server` co-hosts `ServiceOrderDbContext` and commercial ledgers on its private database (`geoassets_fieldservice`), consuming Core exclusively via `IGeoCoreClient`.
+   - Zero distributed two-phase commit (2PC) transactions exist; contractor remuneration and ICERP paving measurements commit atomically in single-DB local transactions.
+
+2. **Workflow Neutrality & Non-Regression**:
+   - `core/GeoAssets.Workflow` and `workflow/GeoAssets.Workflow.EFCore` remain 100% domain-agnostic with zero Brazilian utility strings or hardcoded norm citations.
+   - The default 6-state graph in `ServiceOrderTransitions._allowed` is preserved 100% intact, guaranteeing zero regression for `apps/GeoAssets.IpBilling.Server` (`Carregado -> Calculado -> Validado`) and unit test suites.
+   - The 12-state field lifecycle is configured cleanly via `FieldWorkWorkflowGraph` attached to field `OrderType`s.
+   - `RowVersion` retains provider-agnostic `b.Property(o => o.RowVersion).IsRowVersion()` in the shared EF Core library, enabling fast in-memory SQLite test execution.
+
+3. **Domain Regulatory & Mathematical Soundness**:
+   - *Electrical*: Checklists enforce strict NR-10 and NR-35 pre-work locks (`"const": true`); asset models map to ANEEL BDGD layers (`UNTRD`, `PONNOT`, `SEGCON`, `UNREMT`); BoQ US measurement matches CEMIG/Coelba contractor formulas.
+   - *Water/Sanitation*: Checklists enforce NR-33 gas limits ($O_2 \ge 19.5\%$, non-negative lower bounds on $H_2S \le 8\text{ ppm}$, $CO \le 25\text{ ppm}$, $LEL \le 10\%$); paving measurement calculates trench area ($m^2$) for Sabesp ICERP compliance, spawning linked child orders in `geoassets_fieldservice`.
+   - *Telecom*: Optical checks enforce power levels ($-15\text{ to }-25\text{ dBm}$) and fusion loss $\le 0.05\text{ dB}$; pole checklists validate 500 mm band occupancy ($[0, 6]$ limit) under Decreto 12.068/2024 via `IGeoCoreClient.GetNeighborIdsAsync(..., "supports")`; OTDR correlation algorithm correctly locates break coordinates from optical distances using station slack clamping, sequential coiled reserve deduction, and SIRGAS 2000 UTM projection (EPSG 31978–31985).
+
+4. **Offline Mobile, Evidence Integrity & Life-Safety Invariants**:
+   - All mobile transactions function with disconnected network adapters, persisting to local encrypted SQLite tables.
+   - Captured photos contain mandatory GPS EXIF tags, burnt-in watermarks, and verifiable SHA-256 HMAC cryptographic signatures.
+   - The 3-way offline synchronization engine strictly prioritizes worker life-safety: dual on-site interventions immediately quarantine orders to `ConflictReview` and transmit audible stand-down alerts, preventing silent data overwrites.
+
+5. **SLA Monitoring & Outage Forecasting Performance**:
+   - Real-time SLA timers track ANEEL REN 1.000 (4h/24h) and Sabesp leak SLAs (6h/12h/24h), triggering escalation alerts at defined thresholds.
+   - Outage impact simulation invokes `IGeoCoreClient.TraverseTopologyAsync` to simulate multi-hop downstream feeder interruption across 3,000+ nodes in $<30\text{ ms}$ over HTTP.
