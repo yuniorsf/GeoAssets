@@ -20,6 +20,7 @@ and [`.antigravity/workflows/plan-gen-dag.md`](../../../.antigravity/workflows/p
 
 - **Planning DAG Blueprint**: [`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json)
 - **Downstream Execution DAG**: [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json)
+- **Categorical & SOLID Synthesis Contracts**: [`../outer-loop-dag-orchestrator/SKILL.md`](../outer-loop-dag-orchestrator/SKILL.md) and [`../solid-code-synthesizer/SKILL.md`](../solid-code-synthesizer/SKILL.md)
 - **Claude Code Contract & Personas (Branch 2A)**: [`CLAUDE.md`](../../../CLAUDE.md), [`.claude/agents/arch-designer.md`](../../../.claude/agents/arch-designer.md), [`.claude/agents/task-planner.md`](../../../.claude/agents/task-planner.md), and `.claude/skills/*/SKILL.md`
 - **GitHub Copilot Contract & Persona (Branch 2B)**: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) and [`.claude/agents/test-agent.md`](../../../.claude/agents/test-agent.md)
 - **Static Guardrails**: [`Directory.Build.props`](../../../Directory.Build.props) and [`BannedSymbols.txt`](../../../BannedSymbols.txt)
@@ -104,8 +105,9 @@ Audit the combined `2A` + `2B` plan deterministically against four gates:
      - Zero `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, `Thread.Sleep`, or unguarded `Task.Run` (`AsyncFixer`).
      - Every proposed async signature accepts `CancellationToken`.
      - Zero `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`.
-4. **Gate 3 — Onion Architecture & Branch Coverage Audit (`Code 30` on failure)**:
+4. **Gate 3 — Onion Architecture, SOLID & Branch Coverage Audit (`Code 30` on failure)**:
    - Confirm zero `Npgsql`, `Microsoft.EntityFrameworkCore`, `GeoAssets.Provider.PostgreSQL`, or raw PostGIS references are planned inside `core/` projects.
+   - Confirm proposed interfaces respect ISP role segregation (`<= 5` cohesive methods per new port; split `I*Reader` vs. `I*Writer`), preserve LSP across providers/REST boundaries (`ServiceOrderRepositoryContractTests` / bidirectional HTTP exception translation), and introduce zero `NotImplementedException` stubs.
    - Confirm geometry plans keep coordinate arrays as the serialized source of truth (RFC 7946 `[lon, lat]`, SRID 4326) rather than NTS objects.
    - Confirm every proposed public method, branch, and guard clause in `2A` has corresponding xUnit test cases in `2B`'s test matrix.
 

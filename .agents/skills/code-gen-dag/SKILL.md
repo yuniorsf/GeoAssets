@@ -16,7 +16,9 @@ and [`.antigravity/workflows/code-gen-dag.md`](../../../.antigravity/workflows/c
 ## Reference Contracts (Read on Demand)
 
 - **DAG Blueprint**: [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json)
+- **Categorical & SOLID DAG Formalism**: [`../outer-loop-dag-orchestrator/SKILL.md`](../outer-loop-dag-orchestrator/SKILL.md) and [`../solid-code-synthesizer/SKILL.md`](../solid-code-synthesizer/SKILL.md)
 - **Sandbox Manager**: [`scripts/agent-sandbox.sh`](../../../scripts/agent-sandbox.sh)
+- **SOLID & Disjoint-Scope Pre-Flight Oracle**: [`scripts/verify-solid-contracts.py`](../../../scripts/verify-solid-contracts.py)
 - **Deterministic Oracle**: [`scripts/verify-agent-worktree.sh`](../../../scripts/verify-agent-worktree.sh)
 - **Claude Code Contract (Branch 2A)**: [`CLAUDE.md`](../../../CLAUDE.md) and `.claude/skills/*/SKILL.md`
 - **GitHub Copilot Contract (Branch 2B)**: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md)
@@ -79,9 +81,10 @@ Execute the 5 DAG phases strictly in order. Do not skip gates or suppress diagno
    - **Branch 2B (`github-copilot` — Mechanical & QA)**:
      - *External CLI mode* (if standalone agentic `copilot` CLI is installed and authenticated): Run headlessly in `../worktrees/<taskId>` with `<testAndBoilerplateSpec + Shared Contract + disjoint file ownership>`.
      - *Native Subagent fallback* (if agentic `copilot` CLI is unavailable): Use `define_subagent` (`EnableWriteTools: true`) and `invoke_subagent` to launch a `github-copilot-worker` subagent bound to [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), restricted strictly to `../worktrees/<taskId>` and `2B`'s owned files.
-3. **Mandatory Guardrails Injected into Both Branches**:
+3. **Mandatory Guardrails & ISP Context Projection Injected into Both Branches**:
+   - **ISP Minimal Context Projection ($\pi_k$)**: Strip unrelated global repository state; pass each branch only the frozen Shared Type/Interface Contract, its strictly assigned target files, and direct upstream port definitions.
    - Inject `System.TimeProvider` (`FakeTimeProvider` in tests); never call `DateTime.Now`/`UtcNow` or `DateTimeOffset.Now`/`UtcNow` (`RS0030` / [`BannedSymbols.txt`](../../../BannedSymbols.txt)).
-   - Preserve strict Onion Architecture: zero `Npgsql`, `Microsoft.EntityFrameworkCore`, or PostGIS references inside `core/` projects.
+   - Preserve strict Onion Architecture & SOLID invariants: zero `Npgsql`, `Microsoft.EntityFrameworkCore`, or PostGIS references inside `core/` projects; zero `NotImplementedException` production stubs; segregate new role ports (`<= 5` methods).
    - Propagate `CancellationToken` across async methods; zero `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, or `Thread.Sleep`.
    - Zero `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`.
 4. **Join Barrier**:
@@ -91,11 +94,16 @@ Execute the 5 DAG phases strictly in order. Do not skip gates or suppress diagno
 
 ### Phase 3 — Deterministic Oracle Verification
 
-1. Run the 3-stage Oracle gatekeeper from the repository root:
+1. Run the fast SOLID & Disjoint-Scope Pre-Flight Oracle (< 1s) first to confirm monoidal scope disjointness (`2A ∩ 2B = ∅`), `.razor.cs` code-behind pairing, and C# 14 SOLID/guardrail invariants:
+   ```bash
+   python3 scripts/verify-solid-contracts.py --target ../worktrees/<taskId> --base origin/develop --scope-a "<2A-paths>" --scope-b "<2B-paths>"
+   ```
+   If `verify-solid-contracts.py` returns `Exit 10`, `20`, or `30`, route directly to **Phase 4** before paying full MSBuild compilation cost.
+2. Run the 3-stage Oracle gatekeeper from the repository root:
    ```bash
    ./scripts/verify-agent-worktree.sh ../worktrees/<taskId>
    ```
-2. Map the exit code strictly:
+3. Map the exit code strictly:
    - **`Exit 0`**: Oracle passed (`dotnet format style --verify-no-changes`, `dotnet build --no-incremental /warnaserror`, and `NetArchTest` architecture invariants). Also execute the touched xUnit test project(s) in `../worktrees/<taskId>` (`dotnet test <test-csproj> --no-build --nologo`) to verify `2B`'s newly generated unit tests pass. If any unit test fails, treat as **`Exit 30`**. Otherwise advance to **Phase 5**.
    - **`Exit 2`**: Fatal environment or protected-branch violation. **Abort immediately** and surface the error.
    - **`Exit 10` / `Exit 20` / `Exit 30`**: Enter **Phase 4**.
@@ -104,7 +112,7 @@ Execute the 5 DAG phases strictly in order. Do not skip gates or suppress diagno
 
 ### Phase 4 — Bounded Self-Healing Feedback Loop
 
-Track `healAttempt` starting at `1` up to `maxSelfHealRetries` (default `3`):
+Track `healAttempt` starting at `1` up to `maxSelfHealRetries` (default `3`). Before each retry iteration, capture a local tree snapshot (`git -C ../worktrees/<taskId> stash create`) so non-convergent edits can be rewound cleanly ($f^{op}$ dual rollback) instead of compounding regressions:
 
 - **`Exit 10` (`FormattingDrift`) → Route to `github-copilot`**:
   - Run `dotnet format style GeoAssets.sln` inside `../worktrees/<taskId>` without altering domain logic, then return to **Phase 3**.
