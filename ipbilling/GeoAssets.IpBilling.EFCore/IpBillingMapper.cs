@@ -113,4 +113,18 @@ internal static class IpBillingMapper
         KwhFaturado = f.KwhFaturado,
         CreatedAt   = f.CreatedAt,
     };
+
+    // ── FaturamentoPosting ───────────────────────────────────────────────────
+
+    public static FaturamentoPosting ToDomain(FaturamentoPostingRecord r) => new()
+    {
+        Id                 = r.Id,
+        ServiceOrderId     = r.ServiceOrderId,
+        MunicipioId        = r.MunicipioId,
+        Competencia        = r.Competencia,
+        Mode               = r.Mode,
+        DeltaOrBaselineKwh = r.DeltaOrBaselineKwh,
+        ResultingKwh       = r.ResultingKwh,
+        PostedAt           = r.PostedAt,
+    };
 }

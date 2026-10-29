@@ -16,12 +16,17 @@ namespace GeoAssets.Workflow.Persistence;
 public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDisposable
 {
     private readonly ServiceOrderDbContext _db;
-    private readonly IAssetProvider?    _assets;
+    private readonly IAssetProvider?       _assets;
+    private readonly OrderTypeRegistry?    _orderTypeRegistry;
 
-    public EFServiceOrderRepository(ServiceOrderDbContext db, IAssetProvider? assets = null)
+    public EFServiceOrderRepository(
+        ServiceOrderDbContext db,
+        IAssetProvider? assets = null,
+        OrderTypeRegistry? orderTypeRegistry = null)
     {
-        _db     = db;
-        _assets = assets;
+        _db                = db;
+        _assets            = assets;
+        _orderTypeRegistry = orderTypeRegistry;
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
@@ -118,9 +123,10 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
-        var previous = existing.Status;
+        var previous  = existing.Status;
+        var orderType = _orderTypeRegistry?.Find(so.OrderTypeId);
 
-        if (!ServiceOrderTransitions.IsValid(previous, so.Status))
+        if (!ServiceOrderTransitions.IsValid(orderType, previous, so.Status))
             throw new InvalidServiceOrderTransitionException(previous, so.Status);
 
         UpdateRecord(existing, so);
@@ -179,9 +185,10 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
-        var previous = record.Status;
+        var previous  = record.Status;
+        var orderType = _orderTypeRegistry?.Find(record.OrderTypeId);
 
-        if (entry.ResultingStatus is not null && !ServiceOrderTransitions.IsValid(previous, entry.ResultingStatus))
+        if (entry.ResultingStatus is not null && !ServiceOrderTransitions.IsValid(orderType, previous, entry.ResultingStatus))
             throw new InvalidServiceOrderTransitionException(previous, entry.ResultingStatus);
 
         _db.OrderActionLogs.Add(new OrderActionLogRecord
@@ -198,7 +205,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         {
             record.Status    = entry.ResultingStatus;
             record.UpdatedAt = entry.PerformedAt;
-            if (ServiceOrderTransitions.IsSuccessState(null, entry.ResultingStatus))
+            if (ServiceOrderTransitions.IsSuccessState(orderType, entry.ResultingStatus))
                 record.CompletedAt = entry.PerformedAt;
         }
         else

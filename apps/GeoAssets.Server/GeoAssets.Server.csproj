@@ -47,8 +47,6 @@
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\projects\GeoAssets.Projects.EFCore\GeoAssets.Projects.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
-    <ProjectReference Include="..\..\core\GeoAssets.IpBilling\GeoAssets.IpBilling.csproj" />
-    <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.EFCore\GeoAssets.IpBilling.EFCore.csproj" />
   </ItemGroup>
 
 </Project>

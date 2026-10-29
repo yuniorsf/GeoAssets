@@ -19,12 +19,14 @@ public static class TopoGraph
     /// <summary>Forward adjacency: id → list of reachable ids.</summary>
     private static Dictionary<string, List<string>> Forward(
         IReadOnlyCollection<GeoFeature> features,
-        Dictionary<string, GeoFeature>  index)
+        Dictionary<string, GeoFeature>  index,
+        string?                         edgeKind = null)
     {
         var adj = features.ToDictionary(f => f.Id, _ => new List<string>(), StringComparer.Ordinal);
         foreach (var f in features)
             foreach (var e in f.Topology)
-                if (index.ContainsKey(e.TargetId))
+                if ((edgeKind is null || string.Equals(e.Kind, edgeKind, StringComparison.Ordinal))
+                    && index.ContainsKey(e.TargetId))
                     adj[f.Id].Add(e.TargetId);
         return adj;
     }
@@ -46,12 +48,24 @@ public static class TopoGraph
 
     /// <summary>Returns the direct downstream neighbors of <paramref name="featureId"/>.</summary>
     public static IReadOnlyList<GeoFeature> GetNeighbors(
-        string featureId, IEnumerable<GeoFeature> features)
+        string featureId,
+        IEnumerable<GeoFeature> features,
+        string? edgeKind = null,
+        string? targetAssetTypeId = null)
     {
         var idx = Index(features);
-        return idx.TryGetValue(featureId, out var src)
-            ? [.. src.Topology.Where(e => idx.ContainsKey(e.TargetId)).Select(e => idx[e.TargetId])]
-            : [];
+        if (!idx.TryGetValue(featureId, out var src))
+            return [];
+
+        var neighbors = src.Topology
+            .Where(e => (edgeKind is null || string.Equals(e.Kind, edgeKind, StringComparison.Ordinal))
+                     && idx.ContainsKey(e.TargetId))
+            .Select(e => idx[e.TargetId]);
+
+        if (targetAssetTypeId is not null)
+            neighbors = neighbors.Where(f => string.Equals(f.Properties.AssetTypeId, targetAssetTypeId, StringComparison.Ordinal));
+
+        return [.. neighbors];
     }
 
     /// <summary>
@@ -59,13 +73,16 @@ public static class TopoGraph
     /// edges forward (BFS). The starting feature itself is excluded.
     /// </summary>
     public static IReadOnlyList<GeoFeature> GetDescendants(
-        string featureId, IEnumerable<GeoFeature> features)
+        string featureId,
+        IEnumerable<GeoFeature> features,
+        string? edgeKind = null,
+        string? targetAssetTypeId = null)
     {
         var all = features.ToList();
         var idx = Index(all);
         if (!idx.ContainsKey(featureId)) return [];
 
-        var fwd     = Forward(all, idx);
+        var fwd     = Forward(all, idx, edgeKind);
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var queue   = new Queue<string>([featureId]);
 
@@ -74,7 +91,11 @@ public static class TopoGraph
                 if (visited.Add(nb))
                     queue.Enqueue(nb);
 
-        return [.. visited.Select(id => idx[id])];
+        var result = visited.Select(id => idx[id]);
+        if (targetAssetTypeId is not null)
+            result = result.Where(f => string.Equals(f.Properties.AssetTypeId, targetAssetTypeId, StringComparison.Ordinal));
+
+        return [.. result];
     }
 
     /// <summary>

@@ -40,7 +40,8 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped(sp =>
             new EFServiceOrderRepository(
                 sp.GetRequiredService<ServiceOrderDbContext>(),
-                sp.GetService<IAssetProvider>()));
+                sp.GetService<IAssetProvider>(),
+                sp.GetService<OrderTypeRegistry>()));
         services.AddScoped<IServiceOrderRepository>(sp =>
             new ObservableServiceOrderRepository(
                 new ValidatingServiceOrderRepository(

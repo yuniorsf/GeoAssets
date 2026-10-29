@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace GeoAssets.Server.Migrations
+namespace GeoAssets.IpBilling.Server.Migrations
 {
     /// <summary>
     /// Creates the IP-billing (GEOS_FAT_IP) reference-data schema (XD01-176, Phase 0) and seeds
@@ -117,6 +117,30 @@ namespace GeoAssets.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FaturamentoPostings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ServiceOrderId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    MunicipioId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Competencia = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false),
+                    Mode = table.Column<int>(type: "integer", nullable: false),
+                    DeltaOrBaselineKwh = table.Column<decimal>(type: "numeric(14,4)", precision: 14, scale: 4, nullable: false),
+                    ResultingKwh = table.Column<decimal>(type: "numeric(14,4)", precision: 14, scale: 4, nullable: false),
+                    PostedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FaturamentoPostings", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FaturamentoPostings_Municipios_MunicipioId",
+                        column: x => x.MunicipioId,
+                        principalTable: "Municipios",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "UnidadesOrganizacionais",
                 columns: table => new
                 {
@@ -140,6 +164,17 @@ namespace GeoAssets.Server.Migrations
                 name: "IX_Faturamentos_MunicipioId_Competencia",
                 table: "Faturamentos",
                 columns: new[] { "MunicipioId", "Competencia" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FaturamentoPostings_MunicipioId",
+                table: "FaturamentoPostings",
+                column: "MunicipioId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FaturamentoPostings_ServiceOrderId_Competencia",
+                table: "FaturamentoPostings",
+                columns: new[] { "ServiceOrderId", "Competencia" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -257,6 +292,9 @@ namespace GeoAssets.Server.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "FaturamentoPostings");
+
             migrationBuilder.DropTable(
                 name: "Faturamentos");
 

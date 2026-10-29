@@ -183,38 +183,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         var db = new GeoAssetsDbContext(_dbOptions);
         try
         {
-            IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
-
-            if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
-                rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
-
-            if (!string.IsNullOrWhiteSpace(query.SearchText))
-            {
-                var pattern = $"%{query.SearchText}%";
-
-                // geo_entity_attribute is a normalized, trigram-indexed copy of custom_attributes
-                // (XD01-171). A correlated EXISTS here (db.GeoEntityAttributes.Any(a => a.EntityId
-                // == r.Id && ...)) was tried first and rejected: OR-ing a correlated subplan into
-                // this predicate makes Postgres abandon bitmap-OR entirely and sequentially scan
-                // geo_entity even for plain Name/Description searches with no attributes involved.
-                // Precomputing the matching ids (same shape the old jsonb_each_text version used —
-                // just backed by a real index now instead of an unconditional full-table scan) keeps
-                // the Name/Description trigram indexes usable below. Matches Search()'s
-                // CustomAttributes.Any(key/value) semantics for parity across IAssetProvider
-                // implementers (XD01-123).
-                var matchingAttributeIds = await db.GeoEntityAttributes
-                    .Where(a => EF.Functions.ILike(a.Key, pattern) || EF.Functions.ILike(a.Value, pattern))
-                    .Select(a => a.EntityId)
-                    .Distinct()
-                    .ToListAsync()
-                    .ConfigureAwait(false);
-
-                rows = rows.Where(r =>
-                    EF.Functions.ILike(r.Name, pattern) ||
-                    EF.Functions.ILike(r.Description, pattern) ||
-                    matchingAttributeIds.Contains(r.Id));
-            }
-
+            var rows = await ApplyPageQueryFiltersAsync(db, query).ConfigureAwait(false);
             var totalCount = await rows.CountAsync().ConfigureAwait(false);
 
             rows = query.SortBy switch
@@ -235,6 +204,58 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         {
             await db.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    private static async Task<IQueryable<GeoEntityRow>> ApplyPageQueryFiltersAsync(
+        GeoAssetsDbContext db, AssetQuery query)
+    {
+        IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
+            rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
+
+        if (query.OrganizationId is { } orgId)
+            rows = rows.Where(r => r.OrganizationId == orgId);
+
+        if (query.FeatureIds is { Count: > 0 } featureIds)
+            rows = rows.Where(r => featureIds.Contains(r.Id));
+
+        if (query.AttributeFilters is { Count: > 0 } attrFilters)
+        {
+            foreach (var (key, value) in attrFilters)
+            {
+                var matchingIdsForKey = await db.GeoEntityAttributes
+                    .Where(a => a.Key == key && a.Value == value)
+                    .Select(a => a.EntityId)
+                    .Distinct()
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                rows = rows.Where(r => matchingIdsForKey.Contains(r.Id));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.SearchText))
+        {
+            var pattern = $"%{query.SearchText}%";
+
+            // geo_entity_attribute is a normalized, trigram-indexed copy of custom_attributes
+            // (XD01-171). Precomputing the matching ids keeps the Name/Description trigram indexes
+            // usable below and matches Search()'s CustomAttributes.Any(key/value) semantics (XD01-123).
+            var matchingAttributeIds = await db.GeoEntityAttributes
+                .Where(a => EF.Functions.ILike(a.Key, pattern) || EF.Functions.ILike(a.Value, pattern))
+                .Select(a => a.EntityId)
+                .Distinct()
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            rows = rows.Where(r =>
+                EF.Functions.ILike(r.Name, pattern) ||
+                EF.Functions.ILike(r.Description, pattern) ||
+                matchingAttributeIds.Contains(r.Id));
+        }
+
+        return rows;
     }
 
     // ── Write ──────────────────────────────────────────────────────────────────

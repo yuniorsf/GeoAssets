@@ -115,4 +115,49 @@ public class EFFaturamentoRepositoryTests
 
         await act.Should().ThrowAsync<DbUpdateException>();
     }
+
+    [Fact]
+    public async Task PostOrderCalculationAsync_SetAndAccumulate_UpdatesLedgerAndDeduplicatesByOrderId()
+    {
+        using var fixture = new SqliteFixture();
+        var municipio = await SeedMunicipioAsync(fixture.Context);
+        var repo = new EFFaturamentoRepository(fixture.Context);
+        var now = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+
+        var baseline = await repo.PostOrderCalculationAsync(
+            "order-lev-1",
+            municipio.Id,
+            "2026-03",
+            1000.1234m,
+            FaturamentoPostingMode.Set,
+            now);
+        await repo.SaveChangesAsync();
+
+        baseline.KwhFaturado.Should().Be(1000.1234m);
+
+        var afterDelta = await repo.PostOrderCalculationAsync(
+            "order-fisc-1",
+            municipio.Id,
+            "2026-03",
+            250.5m,
+            FaturamentoPostingMode.Accumulate,
+            now.AddMinutes(5));
+        await repo.SaveChangesAsync();
+
+        afterDelta.KwhFaturado.Should().Be(1250.6234m);
+
+        var retrySameDeltaOrder = await repo.PostOrderCalculationAsync(
+            "order-fisc-1",
+            municipio.Id,
+            "2026-03",
+            250.5m,
+            FaturamentoPostingMode.Accumulate,
+            now.AddMinutes(10));
+        await repo.SaveChangesAsync();
+
+        retrySameDeltaOrder.KwhFaturado.Should().Be(1250.6234m);
+
+        var postings = await repo.GetPostingsByOrderAsync("order-fisc-1");
+        postings.Should().ContainSingle();
+    }
 }

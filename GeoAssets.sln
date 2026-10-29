@@ -129,6 +129,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.IpBilling.Tests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.IpBilling.EFCore.Tests", "tests\GeoAssets.IpBilling.EFCore.Tests\GeoAssets.IpBilling.EFCore.Tests.csproj", "{910239B4-FB7E-4106-9C37-C86489585350}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.IpBilling.Server", "apps\GeoAssets.IpBilling.Server\GeoAssets.IpBilling.Server.csproj", "{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -751,6 +753,18 @@ Global
 		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x64.Build.0 = Release|Any CPU
 		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x86.ActiveCfg = Release|Any CPU
 		{9F42435C-A6B3-4786-9A3D-4FC1FE69311A}.Release|x86.Build.0 = Release|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Debug|x64.Build.0 = Debug|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Debug|x86.Build.0 = Debug|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Release|x64.ActiveCfg = Release|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Release|x64.Build.0 = Release|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Release|x86.ActiveCfg = Release|Any CPU
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -809,5 +823,6 @@ Global
 		{5AB9DE86-63E1-47CB-9363-BE08D5D7D516} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
 		{110F08E9-8A96-44E8-9ABB-6083F6EE82D6} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{910239B4-FB7E-4106-9C37-C86489585350} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{D1E2F3A4-B5C6-4789-9012-3456789ABCDE} = {5A6B7C8D-9E0F-4321-ABCD-EF0123456789}
 	EndGlobalSection
 EndGlobal

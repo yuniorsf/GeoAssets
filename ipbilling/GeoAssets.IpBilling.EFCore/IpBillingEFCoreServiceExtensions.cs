@@ -1,4 +1,5 @@
 using GeoAssets.IpBilling.Repositories;
+using GeoAssets.IpBilling.Resolution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,7 +15,7 @@ public static class IpBillingEFCoreServiceExtensions
     /// <paramref name="configureDb"/> should set the database provider, e.g.:
     /// <code>
     ///   services.AddIpBillingPersistence(o => o.UseNpgsql(connectionString,
-    ///       npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+    ///       npgsql => npgsql.MigrationsAssembly("GeoAssets.IpBilling.Server")));
     /// </code>
     /// </summary>
     public static IServiceCollection AddIpBillingPersistence(
@@ -28,6 +29,7 @@ public static class IpBillingEFCoreServiceExtensions
         services.AddScoped<IUnidadeOrganizacionalRepository, EFUnidadeOrganizacionalRepository>();
         services.AddScoped<IIpTransformerIndexRepository, EFIpTransformerIndexRepository>();
         services.AddScoped<IFaturamentoRepository, EFFaturamentoRepository>();
+        services.AddScoped<ITransformerResolver, DbTransformerResolver>();
 
         return services;
     }

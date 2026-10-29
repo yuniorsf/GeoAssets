@@ -23,4 +23,24 @@ public static class RestServiceExtensions
         services.AddSingleton<IProviderPlugin, RestProviderPlugin>();
         return services;
     }
+
+    /// <summary>
+    /// Registers the stateless <see cref="IGeoCoreClient"/> (<see cref="RestGeoCoreClient"/>)
+    /// pointed at <paramref name="baseUrl"/> (e.g. <c>http://localhost:5000/api/geoassets</c>)
+    /// for vertical microservices querying the Core GeoAssets Server.
+    /// </summary>
+    public static IServiceCollection AddGeoCoreRestClient(this IServiceCollection services, string baseUrl)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
+        services.AddHttpClient();
+
+        services.AddSingleton<IGeoCoreClient>(sp =>
+        {
+            var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeoAssetsServer");
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            return new RestGeoCoreClient(client);
+        });
+
+        return services;
+    }
 }
