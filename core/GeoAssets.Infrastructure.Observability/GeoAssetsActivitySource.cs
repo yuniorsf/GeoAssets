@@ -56,6 +56,97 @@ public sealed class GeoAssetsActivitySource : IDisposable
                 .AddTag("agent.id", agentId)
                 .AddTag("agent.invocation_id", agentInvocationId);
 
+    // ── Integration Messaging ─────────────────────────────────────────────────
+
+    public Activity? StartIntegrationPublishActivity(
+        string messageType,
+        Guid messageId,
+        string transport,
+        string destination,
+        string? catalogInstanceId = null,
+        ActivityContext parentContext = default)
+    {
+        var activity = _source.StartActivity($"{destination} publish", ActivityKind.Producer, parentContext);
+        if (activity is null) return null;
+
+        activity.SetTag("messaging.system", transport);
+        activity.SetTag("messaging.operation.name", "publish");
+        activity.SetTag("messaging.destination.name", destination);
+        activity.SetTag("messaging.message.id", messageId.ToString("D"));
+        activity.SetTag("geoassets.message.type", messageType);
+        if (catalogInstanceId is not null)
+        {
+            activity.SetTag("geoassets.catalog.id", catalogInstanceId);
+        }
+
+        return activity;
+    }
+
+    public Activity? StartIntegrationConsumeActivity(
+        string messageType,
+        Guid messageId,
+        string transport,
+        string destination,
+        string consumerGroup,
+        string? catalogInstanceId = null,
+        ActivityContext parentContext = default)
+    {
+        var activity = _source.StartActivity($"{destination} process", ActivityKind.Consumer, parentContext);
+        if (activity is null) return null;
+
+        activity.SetTag("messaging.system", transport);
+        activity.SetTag("messaging.operation.name", "process");
+        activity.SetTag("messaging.destination.name", destination);
+        activity.SetTag("messaging.consumer.group.name", consumerGroup);
+        activity.SetTag("messaging.message.id", messageId.ToString("D"));
+        activity.SetTag("geoassets.message.type", messageType);
+        if (catalogInstanceId is not null)
+        {
+            activity.SetTag("geoassets.catalog.id", catalogInstanceId);
+        }
+
+        return activity;
+    }
+
+    public static void InjectTraceContext<TCarrier>(
+        Activity? activity,
+        TCarrier carrier,
+        Action<TCarrier, string, string> setter)
+    {
+        ArgumentNullException.ThrowIfNull(setter);
+        if (activity is null || carrier is null) return;
+
+        DistributedContextPropagator.Current.Inject(
+            activity,
+            carrier,
+            (target, key, value) =>
+            {
+                if (target is TCarrier typed && !string.IsNullOrEmpty(key) && value is not null)
+                {
+                    setter(typed, key, value);
+                }
+            });
+    }
+
+    public static ActivityContext ExtractParentContext<TCarrier>(
+        TCarrier carrier,
+        DistributedContextPropagator.PropagatorGetterCallback getter,
+        bool isRemote = true)
+    {
+        ArgumentNullException.ThrowIfNull(getter);
+        if (carrier is null) return default;
+
+        DistributedContextPropagator.Current.ExtractTraceIdAndState(
+            carrier,
+            getter,
+            out var traceParent,
+            out var traceState);
+
+        return ActivityContext.TryParse(traceParent, traceState, isRemote, out var ctx)
+            ? ctx
+            : default;
+    }
+
     // ── Generic ───────────────────────────────────────────────────────────────
 
     /// <summary>
