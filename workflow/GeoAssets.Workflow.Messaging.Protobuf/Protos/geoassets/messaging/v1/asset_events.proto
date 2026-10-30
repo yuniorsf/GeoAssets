@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package geoassets.messaging.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "GeoAssets.Workflow.Messaging.Protobuf.V1";
+
+enum AssetMutationKindProto {
+  ASSET_MUTATION_KIND_PROTO_UNSPECIFIED = 0;
+  ASSET_MUTATION_KIND_PROTO_UPSERT_FEATURE = 1;
+  ASSET_MUTATION_KIND_PROTO_UPDATE_ATTRIBUTES = 2;
+  ASSET_MUTATION_KIND_PROTO_ADD_TOPOLOGY_EDGE = 3;
+  ASSET_MUTATION_KIND_PROTO_REMOVE_TOPOLOGY_EDGE = 4;
+  ASSET_MUTATION_KIND_PROTO_DECOMMISSION = 5;
+}
+
+enum WireGeometryKindProto {
+  WIRE_GEOMETRY_KIND_PROTO_UNSPECIFIED = 0;
+  WIRE_GEOMETRY_KIND_PROTO_POINT = 1;
+  WIRE_GEOMETRY_KIND_PROTO_LINE_STRING = 2;
+  WIRE_GEOMETRY_KIND_PROTO_POLYGON = 3;
+}
+
+message Rfc7946BoundingBoxProto {
+  double min_longitude = 1;
+  double min_latitude = 2;
+  double max_longitude = 3;
+  double max_latitude = 4;
+}
+
+message CoordinatePositionProto {
+  repeated double values = 1;
+}
+
+message CoordinateRingProto {
+  repeated CoordinatePositionProto positions = 1;
+}
+
+message AssetGeometrySnapshotProto {
+  WireGeometryKindProto kind = 1;
+  int32 srid = 2;
+  repeated double point_coordinates = 3;
+  repeated CoordinatePositionProto line_coordinates = 4;
+  repeated CoordinateRingProto polygon_rings = 5;
+}
+
+message TopoEdgeSnapshotProto {
+  string target_id = 1;
+  string kind = 2;
+  double weight = 3;
+  map<string, string> metadata = 4;
+  bool has_metadata = 5;
+}
+
+message AssetFeatureMutationItemProto {
+  string feature_id = 1;
+  AssetMutationKindProto mutation_kind = 2;
+  string name = 3;
+  string asset_type_id = 4;
+  string description = 5;
+  string layer_id = 6;
+  AssetGeometrySnapshotProto geometry = 7;
+  repeated TopoEdgeSnapshotProto topology_edges = 8;
+  map<string, string> custom_attributes = 9;
+  optional bytes expected_row_version = 10;
+}
+
+message AssetMutationBatchRequestedEventProto {
+  string batch_id = 1;
+  string catalog_instance_id = 2;
+  string organization_id = 3;
+  string requested_by_service = 4;
+  string performed_by_user_id = 5;
+  optional string source_order_id = 6;
+  optional string source_order_type_id = 7;
+  optional string scope_id = 8;
+  repeated AssetFeatureMutationItemProto mutations = 9;
+  google.protobuf.Timestamp requested_at_utc = 10;
+  optional string correlation_id = 11;
+}
+
+message AssetBatchAppliedItemProto {
+  string feature_id = 1;
+  AssetMutationKindProto mutation_kind = 2;
+  string asset_type_id = 3;
+  bytes row_version = 4;
+}
+
+message AssetBatchAppliedEventProto {
+  string batch_id = 1;
+  string catalog_instance_id = 2;
+  string organization_id = 3;
+  string requested_by_service = 4;
+  string applied_by_user_id = 5;
+  optional string source_order_id = 6;
+  optional string source_order_type_id = 7;
+  optional string scope_id = 8;
+  repeated AssetBatchAppliedItemProto applied_items = 9;
+  Rfc7946BoundingBoxProto affected_bounds = 10;
+  google.protobuf.Timestamp applied_at_utc = 11;
+  optional string correlation_id = 12;
+}
+
+message FeatureCatalogMutatedEventProto {
+  string catalog_instance_id = 1;
+  string organization_id = 2;
+  optional string scope_id = 3;
+  string feature_id = 4;
+  AssetMutationKindProto mutation_kind = 5;
+  string name = 6;
+  string asset_type_id = 7;
+  string layer_id = 8;
+  AssetGeometrySnapshotProto geometry = 9;
+  map<string, string> custom_attributes = 10;
+  Rfc7946BoundingBoxProto affected_bounds = 11;
+  bytes row_version = 12;
+  google.protobuf.Timestamp mutated_at_utc = 13;
+  optional string correlation_id = 14;
+}
+
+message TopologyInvalidatedEventProto {
+  string catalog_instance_id = 1;
+  string organization_id = 2;
+  optional string scope_id = 3;
+  repeated string affected_feature_ids = 4;
+  repeated string affected_edge_kinds = 5;
+  Rfc7946BoundingBoxProto affected_bounds = 6;
+  string reason = 7;
+  google.protobuf.Timestamp invalidated_at_utc = 8;
+  optional string correlation_id = 9;
+}
+
