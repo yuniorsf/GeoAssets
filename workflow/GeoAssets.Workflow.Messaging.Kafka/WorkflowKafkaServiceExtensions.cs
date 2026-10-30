@@ -1,6 +1,8 @@
+using GeoAssets.Core.Messaging;
 using GeoAssets.Workflow.Notifications;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Workflow.Messaging.Kafka;
 
@@ -11,58 +13,6 @@ namespace GeoAssets.Workflow.Messaging.Kafka;
 /// call <c>builder.Services.AddGeoAssetsObservability(...)</c> before
 /// <see cref="AddWorkflowKafka(IServiceCollection, IConfiguration)"/>.
 /// </summary>
-/// <example>
-/// <b>appsettings.json</b>
-/// <code>
-/// {
-///   "WorkflowKafka": {
-///     "BootstrapServers": "broker1:9092,broker2:9092",
-///     "TopicName"       : "order-state-changed",
-///     "ClientId"        : "geoassets-api",
-///     "UseOrderIdAsKey" : true,
-///     "AdditionalConfig": {
-///       "acks"            : "all",
-///       "compression.type": "snappy"
-///     }
-///   }
-/// }
-/// </code>
-///
-/// <b>Program.cs — from configuration</b>
-/// <code>
-/// builder.Services.AddWorkflowKafka(builder.Configuration);
-/// </code>
-///
-/// <b>Program.cs — inline</b>
-/// <code>
-/// builder.Services.AddWorkflowKafka(opts =>
-/// {
-///     opts.BootstrapServers = "broker1:9092,broker2:9092";
-///     opts.TopicName        = "order-state-changed";
-///     opts.ClientId         = "geoassets-api";
-///     opts.AdditionalConfig["acks"] = "all";
-/// });
-/// </code>
-///
-/// <b>Consuming the event (Confluent.Kafka consumer)</b>
-/// <code>
-/// var consumer = new ConsumerBuilder&lt;string, string&gt;(new ConsumerConfig
-/// {
-///     BootstrapServers = "broker1:9092",
-///     GroupId          = "notification-worker",
-///     AutoOffsetReset  = AutoOffsetReset.Earliest,
-/// }).Build();
-///
-/// consumer.Subscribe("order-state-changed");
-///
-/// while (!stoppingToken.IsCancellationRequested)
-/// {
-///     var result = consumer.Consume(stoppingToken);
-///     var evt    = JsonSerializer.Deserialize&lt;OrderStateChangedEvent&gt;(result.Message.Value)!;
-///     // evt.Metadata["recipients"] contains the comma-separated actor IDs
-/// }
-/// </code>
-/// </example>
 public static class WorkflowKafkaServiceExtensions
 {
     /// <summary>
@@ -71,10 +21,6 @@ public static class WorkflowKafkaServiceExtensions
     /// <see cref="OrderNotificationService"/> as <see cref="IOrderNotificationService"/>.
     ///
     /// Options are read from <c>configuration["WorkflowKafka"]</c>.
-    ///
-    /// <code>
-    ///   builder.Services.AddWorkflowKafka(builder.Configuration);
-    /// </code>
     /// </summary>
     public static IServiceCollection AddWorkflowKafka(
         this IServiceCollection services,
@@ -91,14 +37,6 @@ public static class WorkflowKafkaServiceExtensions
 
     /// <summary>
     /// Registers <see cref="KafkaOrderEventPublisher"/> with inline options.
-    ///
-    /// <code>
-    ///   builder.Services.AddWorkflowKafka(opts =>
-    ///   {
-    ///       opts.BootstrapServers = "broker1:9092,broker2:9092";
-    ///       opts.TopicName        = "order-state-changed";
-    ///   });
-    /// </code>
     /// </summary>
     public static IServiceCollection AddWorkflowKafka(
         this IServiceCollection       services,
@@ -108,6 +46,84 @@ public static class WorkflowKafkaServiceExtensions
 
         services.AddSingleton<IOrderEventPublisher,      KafkaOrderEventPublisher>();
         services.AddSingleton<IOrderNotificationService, OrderNotificationService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="KafkaIntegrationEventPublisher"/> as <see cref="IIntegrationEventPublisher"/>
+    /// bound from <c>configuration["WorkflowKafka"]</c>.
+    /// </summary>
+    public static IServiceCollection AddKafkaIntegrationPublisher(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.Configure<KafkaPublisherOptions>(opts =>
+            configuration.GetSection(KafkaPublisherOptions.SectionName).Bind(opts));
+        services.AddSingleton<IIntegrationEventPublisher, KafkaIntegrationEventPublisher>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="KafkaIntegrationEventPublisher"/> as <see cref="IIntegrationEventPublisher"/>
+    /// configured via <paramref name="configure"/>.
+    /// </summary>
+    public static IServiceCollection AddKafkaIntegrationPublisher(
+        this IServiceCollection services,
+        Action<KafkaPublisherOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        services.Configure(configure);
+        services.AddSingleton<IIntegrationEventPublisher, KafkaIntegrationEventPublisher>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="KafkaIntegrationEventConsumer{TEvent}"/> and <typeparamref name="THandler"/>
+    /// bound from <c>configuration["WorkflowKafkaConsumer"]</c>.
+    /// </summary>
+    public static IServiceCollection AddKafkaIntegrationConsumer<TEvent, THandler>(
+        this IServiceCollection services,
+        IConfiguration configuration)
+        where TEvent : class
+        where THandler : class, IIntegrationEventHandler<TEvent>
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.Configure<KafkaConsumerOptions>(opts =>
+            configuration.GetSection(KafkaConsumerOptions.SectionName).Bind(opts));
+        services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
+        services.AddHostedService<KafkaIntegrationEventConsumer<TEvent>>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="KafkaIntegrationEventConsumer{TEvent}"/> and <typeparamref name="THandler"/>
+    /// configured via <paramref name="configure"/>.
+    /// </summary>
+    public static IServiceCollection AddKafkaIntegrationConsumer<TEvent, THandler>(
+        this IServiceCollection services,
+        Action<KafkaConsumerOptions> configure)
+        where TEvent : class
+        where THandler : class, IIntegrationEventHandler<TEvent>
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.Configure(configure);
+        services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
+        services.AddHostedService<KafkaIntegrationEventConsumer<TEvent>>();
 
         return services;
     }

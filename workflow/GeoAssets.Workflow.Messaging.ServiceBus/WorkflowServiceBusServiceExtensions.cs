@@ -1,6 +1,8 @@
+using GeoAssets.Core.Messaging;
 using GeoAssets.Workflow.Notifications;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Workflow.Messaging.ServiceBus;
 
@@ -11,46 +13,6 @@ namespace GeoAssets.Workflow.Messaging.ServiceBus;
 /// call <c>builder.Services.AddGeoAssetsObservability(...)</c> before
 /// <see cref="AddWorkflowServiceBus(IServiceCollection, IConfiguration)"/>.
 /// </summary>
-/// <example>
-/// <b>appsettings.json</b>
-/// <code>
-/// {
-///   "WorkflowServiceBus": {
-///     "ConnectionString": "Endpoint=sb://my-ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=...",
-///     "TopicName"       : "order-state-changed",
-///     "MessageSubject"  : "OrderStateChanged"
-///   }
-/// }
-/// </code>
-///
-/// <b>Program.cs — from configuration</b>
-/// <code>
-/// builder.Services.AddWorkflowServiceBus(builder.Configuration);
-/// </code>
-///
-/// <b>Program.cs — inline (e.g. from Key Vault / environment variable)</b>
-/// <code>
-/// builder.Services.AddWorkflowServiceBus(opts =>
-/// {
-///     opts.ConnectionString = Environment.GetEnvironmentVariable("SB_CONNSTR")!;
-///     opts.TopicName        = "order-state-changed";
-/// });
-/// </code>
-///
-/// <b>Consuming the event in a Service Bus trigger (Azure Functions / Worker)</b>
-/// <code>
-/// [Function("HandleOrderStateChanged")]
-/// public Task RunAsync(
-///     [ServiceBusTrigger("order-state-changed", "my-subscription",
-///                         Connection = "SB_CONNSTR")] ServiceBusReceivedMessage msg,
-///     FunctionContext ctx)
-/// {
-///     var evt = JsonSerializer.Deserialize&lt;OrderStateChangedEvent&gt;(msg.Body)!;
-///     // fan-out to individual recipients via evt.Metadata["recipients"]
-///     return Task.CompletedTask;
-/// }
-/// </code>
-/// </example>
 public static class WorkflowServiceBusServiceExtensions
 {
     /// <summary>
@@ -59,10 +21,6 @@ public static class WorkflowServiceBusServiceExtensions
     /// <see cref="OrderNotificationService"/> as <see cref="IOrderNotificationService"/>.
     ///
     /// Options are read from <c>configuration["WorkflowServiceBus"]</c>.
-    ///
-    /// <code>
-    ///   builder.Services.AddWorkflowServiceBus(builder.Configuration);
-    /// </code>
     /// </summary>
     public static IServiceCollection AddWorkflowServiceBus(
         this IServiceCollection services,
@@ -79,14 +37,6 @@ public static class WorkflowServiceBusServiceExtensions
 
     /// <summary>
     /// Registers <see cref="ServiceBusOrderEventPublisher"/> with inline options.
-    ///
-    /// <code>
-    ///   builder.Services.AddWorkflowServiceBus(opts =>
-    ///   {
-    ///       opts.ConnectionString = "Endpoint=sb://...";
-    ///       opts.TopicName        = "order-state-changed";
-    ///   });
-    /// </code>
     /// </summary>
     public static IServiceCollection AddWorkflowServiceBus(
         this IServiceCollection          services,
@@ -96,6 +46,84 @@ public static class WorkflowServiceBusServiceExtensions
 
         services.AddSingleton<IOrderEventPublisher,      ServiceBusOrderEventPublisher>();
         services.AddSingleton<IOrderNotificationService, OrderNotificationService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ServiceBusIntegrationEventPublisher"/> as <see cref="IIntegrationEventPublisher"/>
+    /// bound from <c>configuration["WorkflowServiceBus"]</c>.
+    /// </summary>
+    public static IServiceCollection AddServiceBusIntegrationPublisher(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.Configure<ServiceBusPublisherOptions>(opts =>
+            configuration.GetSection(ServiceBusPublisherOptions.SectionName).Bind(opts));
+        services.AddSingleton<IIntegrationEventPublisher, ServiceBusIntegrationEventPublisher>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ServiceBusIntegrationEventPublisher"/> as <see cref="IIntegrationEventPublisher"/>
+    /// configured via <paramref name="configure"/>.
+    /// </summary>
+    public static IServiceCollection AddServiceBusIntegrationPublisher(
+        this IServiceCollection services,
+        Action<ServiceBusPublisherOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        services.Configure(configure);
+        services.AddSingleton<IIntegrationEventPublisher, ServiceBusIntegrationEventPublisher>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ServiceBusIntegrationEventConsumer{TEvent}"/> and <typeparamref name="THandler"/>
+    /// bound from <c>configuration["WorkflowServiceBusConsumer"]</c>.
+    /// </summary>
+    public static IServiceCollection AddServiceBusIntegrationConsumer<TEvent, THandler>(
+        this IServiceCollection services,
+        IConfiguration configuration)
+        where TEvent : class
+        where THandler : class, IIntegrationEventHandler<TEvent>
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.Configure<ServiceBusConsumerOptions>(opts =>
+            configuration.GetSection(ServiceBusConsumerOptions.SectionName).Bind(opts));
+        services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
+        services.AddHostedService<ServiceBusIntegrationEventConsumer<TEvent>>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ServiceBusIntegrationEventConsumer{TEvent}"/> and <typeparamref name="THandler"/>
+    /// configured via <paramref name="configure"/>.
+    /// </summary>
+    public static IServiceCollection AddServiceBusIntegrationConsumer<TEvent, THandler>(
+        this IServiceCollection services,
+        Action<ServiceBusConsumerOptions> configure)
+        where TEvent : class
+        where THandler : class, IIntegrationEventHandler<TEvent>
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.Configure(configure);
+        services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
+        services.AddHostedService<ServiceBusIntegrationEventConsumer<TEvent>>();
 
         return services;
     }

@@ -1,9 +1,12 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
+using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Workflow;
@@ -57,6 +60,36 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
 
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the EF Core transactional outbox (<see cref="IOutboxWriter"/>,
+    /// <see cref="IOutboxDispatcherStore"/>), idempotent inbox (<see cref="IIdempotentInbox"/>),
+    /// and background <see cref="OutboxRelayProcessor"/> hosted service.
+    /// </summary>
+    public static IServiceCollection AddWorkflowOutbox(
+        this IServiceCollection services,
+        Action<OutboxRelayOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<OutboxRelayOptions>();
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.AddScoped(sp => new EFOutboxStore(
+            sp.GetRequiredService<ServiceOrderDbContext>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<IIntegrationMessageSerializer>()));
+        services.AddScoped<IOutboxWriter>(sp => sp.GetRequiredService<EFOutboxStore>());
+        services.AddScoped<IOutboxDispatcherStore>(sp => sp.GetRequiredService<EFOutboxStore>());
+        services.AddScoped<IIdempotentInbox, EFIdempotentInbox>();
+        services.AddHostedService<OutboxRelayProcessor>();
 
         return services;
     }

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package geoassets.messaging.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "GeoAssets.Workflow.Messaging.Protobuf.V1";
+
+message IntegrationEnvelopeProto {
+  string message_id = 1;
+  string message_type = 2;
+  int32 schema_version = 3;
+  string partition_key = 4;
+  string content_type = 5;
+  bytes payload = 6;
+  google.protobuf.Timestamp occurred_at_utc = 7;
+  optional string source_service = 8;
+  optional string correlation_id = 9;
+  optional string causation_id = 10;
+  optional string trace_parent = 11;
+  optional string trace_state = 12;
+  map<string, string> headers = 13;
+  bool has_headers = 14;
+  optional string catalog_instance_id = 15;
+}
+

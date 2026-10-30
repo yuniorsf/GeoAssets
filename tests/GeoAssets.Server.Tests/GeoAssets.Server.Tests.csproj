@@ -28,6 +28,9 @@
     <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
     <ProjectReference Include="..\..\apps\GeoAssets.IpBilling.Server\GeoAssets.IpBilling.Server.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj" />
   </ItemGroup>
 
 </Project>

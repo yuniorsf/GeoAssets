@@ -25,14 +25,16 @@ namespace GeoAssets.Workflow.Persistence;
 public class ServiceOrderDbContext(DbContextOptions<ServiceOrderDbContext> options)
     : DbContext(options)
 {
-    internal DbSet<ServiceOrderRecord>          ServiceOrders      => Set<ServiceOrderRecord>();
-    internal DbSet<OrderDispatchRecord>         OrderDispatches    => Set<OrderDispatchRecord>();
-    internal DbSet<OrderActionLogRecord>        OrderActionLogs    => Set<OrderActionLogRecord>();
-    internal DbSet<OrderTypeRecord>             OrderTypes         => Set<OrderTypeRecord>();
-    internal DbSet<OrderCreationPolicyRecord>   CreationPolicies   => Set<OrderCreationPolicyRecord>();
-    internal DbSet<OrderActionPermissionRecord> ActionPermissions  => Set<OrderActionPermissionRecord>();
-    internal DbSet<OrderTypeStateRecord>        OrderTypeStates    => Set<OrderTypeStateRecord>();
-    internal DbSet<OrderTypeTransitionRecord>   OrderTypeTransitions => Set<OrderTypeTransitionRecord>();
+    internal DbSet<ServiceOrderRecord>           ServiceOrders          => Set<ServiceOrderRecord>();
+    internal DbSet<OrderDispatchRecord>          OrderDispatches        => Set<OrderDispatchRecord>();
+    internal DbSet<OrderActionLogRecord>         OrderActionLogs        => Set<OrderActionLogRecord>();
+    internal DbSet<OrderTypeRecord>              OrderTypes             => Set<OrderTypeRecord>();
+    internal DbSet<OrderCreationPolicyRecord>    CreationPolicies       => Set<OrderCreationPolicyRecord>();
+    internal DbSet<OrderActionPermissionRecord>  ActionPermissions      => Set<OrderActionPermissionRecord>();
+    internal DbSet<OrderTypeStateRecord>         OrderTypeStates        => Set<OrderTypeStateRecord>();
+    internal DbSet<OrderTypeTransitionRecord>    OrderTypeTransitions   => Set<OrderTypeTransitionRecord>();
+    internal DbSet<OutboxMessageRecord>          OutboxMessages         => Set<OutboxMessageRecord>();
+    internal DbSet<InboxProcessedMessageRecord>  InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

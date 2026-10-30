@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package geoassets.messaging.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "GeoAssets.Workflow.Messaging.Protobuf.V1";
+
+message OrderStateChangedEventProto {
+  string order_id = 1;
+  string order_type_id = 2;
+  string previous_status = 3;
+  string new_status = 4;
+  string performed_by = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+  optional string correlation_id = 7;
+  map<string, string> metadata = 8;
+  bool has_metadata = 9;
+}
+
