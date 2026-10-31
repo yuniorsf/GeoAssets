@@ -100,6 +100,10 @@ builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
     new ClaimsPrincipalCurrentUserAccessor(
         () => sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.User));
 
+// ITenantContext (XD01-200) — resolves GeoAssetsDbContext's row-level tenant scoping from the
+// same per-request ICurrentUserAccessor above, replacing the NullTenantContext default.
+builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
+
 // AuthZ bridge (XD01-13) — lets endpoints declare .RequireAuthorization("SomePolicyName")
 // (matching an AppPolicy.Name row) and get evaluated against IGeoAuthorizationService,
 // the same policy engine the Blazor client already uses.

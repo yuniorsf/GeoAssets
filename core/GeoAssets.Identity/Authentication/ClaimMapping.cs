@@ -10,22 +10,35 @@ namespace GeoAssets.Identity.Authentication;
 /// </summary>
 public sealed class ClaimMapping
 {
-    public IReadOnlyList<string> ObjectIdClaimTypes     { get; init; } = [];
-    public IReadOnlyList<string> EmailClaimTypes        { get; init; } = [];
-    public IReadOnlyList<string> DisplayNameClaimTypes  { get; init; } = [];
-    public IReadOnlyList<string> RoleClaimTypes         { get; init; } = [];
+    public IReadOnlyList<string> ObjectIdClaimTypes { get; init; } = [];
+    public IReadOnlyList<string> EmailClaimTypes { get; init; } = [];
+    public IReadOnlyList<string> DisplayNameClaimTypes { get; init; } = [];
+    public IReadOnlyList<string> RoleClaimTypes { get; init; } = [];
+
+    /// <summary>
+    /// Claim types carrying the authenticated user's organization/tenant id (XD01-200), checked
+    /// in order; the first value that parses as a <see cref="Guid"/> becomes
+    /// <see cref="CurrentUser.OrganizationId"/>. Empty by default (see
+    /// <see cref="EntraDefault"/>) — no claim configured means every caller resolves to
+    /// <see cref="Guid.Empty"/>, preserving today's single-tenant behavior until an operator
+    /// configures a custom claim for their Entra CIAM tenant.
+    /// </summary>
+    public IReadOnlyList<string> OrganizationIdClaimTypes { get; init; } = [];
 
     /// <summary>
     /// The claim shape Microsoft Entra ID / Entra External ID (CIAM) tokens use — this
     /// codebase's only IdP today, preserved as the default so existing deployments need no
-    /// configuration change.
+    /// configuration change. <see cref="OrganizationIdClaimTypes"/> is deliberately left empty:
+    /// Entra CIAM doesn't emit an organization claim out of the box, so deployments that need
+    /// one configure it explicitly (e.g. a custom claim mapped via a CIAM custom policy) rather
+    /// than guessing a claim type here that may not exist in their tenant.
     /// </summary>
     public static readonly ClaimMapping EntraDefault = new()
     {
-        ObjectIdClaimTypes    = ["oid", "http://schemas.microsoft.com/identity/claims/objectidentifier"],
-        EmailClaimTypes       = ["preferred_username", "upn"],
+        ObjectIdClaimTypes = ["oid", "http://schemas.microsoft.com/identity/claims/objectidentifier"],
+        EmailClaimTypes = ["preferred_username", "upn"],
         DisplayNameClaimTypes = ["name"],
-        RoleClaimTypes        = ["roles"],
+        RoleClaimTypes = ["roles"],
     };
 
     /// <summary>
@@ -54,7 +67,11 @@ public sealed class ClaimMapping
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        return new CurrentUser(objectId, email, displayName, roles);
+        var organizationId = Guid.TryParse(FindFirst(principal, OrganizationIdClaimTypes), out var parsed)
+            ? parsed
+            : Guid.Empty;
+
+        return new CurrentUser(objectId, email, displayName, roles, organizationId);
     }
 
     private static string? FindFirst(ClaimsPrincipal principal, IReadOnlyList<string> claimTypes)
