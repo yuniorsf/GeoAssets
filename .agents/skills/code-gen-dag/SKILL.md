@@ -3,15 +3,18 @@ name: code-gen-dag
 description: >-
   Orchestrate GeoAssets' 5-phase Tri-Planar Outer-Loop code generation and verification DAG over
   Claude Code (deep reasoning/core domain) and GitHub Copilot (mechanical scaffolding/xUnit QA)
-  inside an isolated Git worktree. Activate when the user invokes /code-gen-dag or asks Antigravity
-  to orchestrate a task across Claude Code and GitHub Copilot.
+  inside an isolated Git worktree. Activate when the user invokes /code-gen-dag or asks any agent
+  — Google Antigravity, Claude Code, GitHub Copilot, or a human operator — to orchestrate a task
+  across the Claude Code and GitHub Copilot inner loops.
 ---
 
 # GeoAssets Tri-Planar Outer-Loop Orchestrator (`/code-gen-dag`)
 
-Act as **Google Antigravity** in the **ControlPlane-OuterLoop** role defined in
-[`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json)
-and [`.antigravity/workflows/code-gen-dag.md`](../../../.antigravity/workflows/code-gen-dag.md).
+You are the **Outer-Loop Orchestrator** for GeoAssets' Tri-Planar Dual-Loop Architecture: you decompose a task, provision an isolated Git worktree, dispatch Claude Code (`2A` — deep reasoning/core domain) and GitHub Copilot (`2B` — mechanical scaffolding/xUnit QA) in parallel inside it, run the deterministic Oracle gatekeeper, drive the bounded self-healing loop, and prepare the rebase/merge. This protocol is **agent-neutral** — any agent capable of running shell commands and dispatching two parallel workers can execute it directly from this skill, not only Google Antigravity:
+
+- Running inside **Google Antigravity**: its native **ControlPlane-OuterLoop** workflow spec at [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json) / [`.antigravity/workflows/code-gen-dag.md`](../../../.antigravity/workflows/code-gen-dag.md) is Antigravity's concrete implementation of the phases below.
+- Running inside **Claude Code**: use [`.claude/skills/code-gen-dag/SKILL.md`](../../../.claude/skills/code-gen-dag/SKILL.md) (or the `/code-gen-dag` command), which dispatches `2A`/`2B` via the `Agent` tool with `isolation: "worktree"`.
+- Running inside **GitHub Copilot**: use [`.github/skills/code-gen-dag/SKILL.md`](../../../.github/skills/code-gen-dag/SKILL.md).
 
 ## Reference Contracts (Read on Demand)
 
@@ -77,10 +80,10 @@ Execute the 5 DAG phases strictly in order. Do not skip gates or suppress diagno
 2. **Dispatch Branch 2A (`claude-code`) and Branch 2B (`github-copilot`) in Parallel** inside `../worktrees/<taskId>`:
    - **Branch 2A (`claude-code` — Deep Reasoning)**:
      - *External CLI mode* (if `claude` is installed and authenticated): Run headlessly in `../worktrees/<taskId>` (e.g., `claude -p "<coreLogicSpec + Shared Contract + disjoint file ownership>" --allowedTools "Read,Edit,Write,Glob,Grep,Bash"`).
-     - *Native Subagent fallback* (if `claude` CLI is unavailable): Use `define_subagent` (`EnableWriteTools: true`) and `invoke_subagent` to launch a `claude-code-specialist` subagent bound to [`CLAUDE.md`](../../../CLAUDE.md) and `.claude/skills/*`, restricted strictly to `../worktrees/<taskId>` and `2A`'s owned files.
+     - *Orchestrator-native subagent fallback* (if `claude` CLI is unavailable): Use the orchestrating agent's own parallel-dispatch mechanism — e.g. Antigravity's `define_subagent` (`EnableWriteTools: true`) + `invoke_subagent`, or Claude Code's `Agent` tool with `isolation: "worktree"` — to launch a `claude-code-specialist` subagent bound to [`CLAUDE.md`](../../../CLAUDE.md) and `.claude/skills/*`, restricted strictly to `../worktrees/<taskId>` and `2A`'s owned files.
    - **Branch 2B (`github-copilot` — Mechanical & QA)**:
      - *External CLI mode* (if standalone agentic `copilot` CLI is installed and authenticated): Run headlessly in `../worktrees/<taskId>` with `<testAndBoilerplateSpec + Shared Contract + disjoint file ownership>`.
-     - *Native Subagent fallback* (if agentic `copilot` CLI is unavailable): Use `define_subagent` (`EnableWriteTools: true`) and `invoke_subagent` to launch a `github-copilot-worker` subagent bound to [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), restricted strictly to `../worktrees/<taskId>` and `2B`'s owned files.
+     - *Orchestrator-native subagent fallback* (if agentic `copilot` CLI is unavailable): Use the orchestrating agent's own parallel-dispatch mechanism to launch a `github-copilot-worker` subagent bound to [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), restricted strictly to `../worktrees/<taskId>` and `2B`'s owned files.
 3. **Mandatory Guardrails & ISP Context Projection Injected into Both Branches**:
    - **ISP Minimal Context Projection ($\pi_k$)**: Strip unrelated global repository state; pass each branch only the frozen Shared Type/Interface Contract, its strictly assigned target files, and direct upstream port definitions.
    - Inject `System.TimeProvider` (`FakeTimeProvider` in tests); never call `DateTime.Now`/`UtcNow` or `DateTimeOffset.Now`/`UtcNow` (`RS0030` / [`BannedSymbols.txt`](../../../BannedSymbols.txt)).

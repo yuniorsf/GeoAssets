@@ -2,7 +2,7 @@
 
 ## Tri-Planar Agent Role & .NET 10 Clean Code Contract
 
-Within GeoAssets' **Tri-Planar Dual-Loop Architecture**, **GitHub Copilot** operates as the **High-Velocity Mechanical & QA Worker** (complementing Google Antigravity as Outer-Loop DAG Orchestrator and Claude Code as Deep Reasoning / Refactoring Specialist).
+Within GeoAssets' **Tri-Planar Dual-Loop Architecture**, **GitHub Copilot** operates as the **High-Velocity Mechanical & QA Worker** (complementing Google Antigravity as Outer-Loop DAG Orchestrator and Claude Code as Deep Reasoning / Refactoring Specialist). That outer-loop orchestration is agent-neutral, not Antigravity-exclusive: Copilot can also run `/code-gen-dag` / `/plan-gen-dag` directly as the orchestrator via [`.github/skills/code-gen-dag/SKILL.md`](skills/code-gen-dag/SKILL.md) / [`.github/skills/plan-gen-dag/SKILL.md`](skills/plan-gen-dag/SKILL.md).
 
 ### 1. Copilot Responsibilities (Inner-Loop Mechanical & QA)
 - **Mechanical Implementation & Boilerplate**: Rapidly scaffold DTOs, EF Core entity configurations, REST client request/response contracts, DI registration extensions, and Razor code-behind (`.razor.cs`) bindings following established interfaces.

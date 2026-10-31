@@ -4,14 +4,17 @@ description: >-
   Orchestrate GeoAssets' 5-phase Tri-Planar Outer-Loop read-only planning and architecture
   verification DAG over Claude Code (architecture/domain reasoning) and GitHub Copilot
   (C# 14 contracts/xUnit QA matrix) with zero code or working-tree changes. Activate when the
-  user invokes /plan-gen-dag or asks for a multi-agent implementation plan without modifying code.
+  user invokes /plan-gen-dag or asks any agent — Google Antigravity, Claude Code, GitHub
+  Copilot, or a human operator — for a multi-agent implementation plan without modifying code.
 ---
 
 # GeoAssets Tri-Planar Read-Only Planning Orchestrator (`/plan-gen-dag`)
 
-Act as **Google Antigravity** in the **ControlPlane-OuterLoop (Read-Only Planning)** role defined in
-[`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json)
-and [`.antigravity/workflows/plan-gen-dag.md`](../../../.antigravity/workflows/plan-gen-dag.md).
+You are the **Outer-Loop Orchestrator** for GeoAssets' Tri-Planar Dual-Loop Architecture, running the **Read-Only Planning** variant of the protocol: you dispatch Claude Code (`2A` — architecture/domain reasoning) and GitHub Copilot (`2B` — C# 14 contracts/xUnit QA matrix) in parallel, audit their combined plan against four deterministic gates, and synthesize a verified implementation plan — with **zero** code or working-tree changes. This protocol is **agent-neutral** — any agent capable of dispatching two read-only reasoning passes can execute it directly from this skill, not only Google Antigravity:
+
+- Running inside **Google Antigravity**: its native **ControlPlane-OuterLoop (Read-Only Planning)** workflow spec at [`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json) / [`.antigravity/workflows/plan-gen-dag.md`](../../../.antigravity/workflows/plan-gen-dag.md) is Antigravity's concrete implementation of the phases below.
+- Running inside **Claude Code**: use [`.claude/skills/plan-gen-dag/SKILL.md`](../../../.claude/skills/plan-gen-dag/SKILL.md) (or the `/plan-gen-dag` command).
+- Running inside **GitHub Copilot**: use [`.github/skills/plan-gen-dag/SKILL.md`](../../../.github/skills/plan-gen-dag/SKILL.md).
 
 > **Non-Negotiable Invariant — Zero Repository Changes:**
 > Never create, edit, stage, or delete files in the repository workspace, and never create branches, worktrees, or commits during `/plan-gen-dag` (unless the user explicitly passes `--out <path>` for Phase 5 export). All inner-loop agents **must** run strictly with read-only permissions.
@@ -73,13 +76,13 @@ Execute the 5 read-only planning phases strictly in order.
    - **Branch 2A (`claude-code` — Architecture & Domain Reasoning)**:
      - *External CLI mode* (if `claude` is installed): Run strictly read-only:
        `claude -p "<architectureBrief>" --allowedTools "Read,Glob,Grep"` (never grant `Edit`, `Write`, or mutating `Bash`).
-     - *Native Subagent fallback* (if `claude` CLI is unavailable): Invoke the read-only `research` subagent (or `define_subagent` with **`EnableWriteTools: false`**) loaded with [`CLAUDE.md`](../../../CLAUDE.md), [`.claude/agents/arch-designer.md`](../../../.claude/agents/arch-designer.md), [`.claude/agents/task-planner.md`](../../../.claude/agents/task-planner.md), and relevant `.claude/skills/*`.
+     - *Orchestrator-native subagent fallback* (if `claude` CLI is unavailable): Invoke the orchestrating agent's own read-only subagent mechanism — e.g. a read-only `research`/`Plan` subagent, or Antigravity's `define_subagent` with **`EnableWriteTools: false`** — loaded with [`CLAUDE.md`](../../../CLAUDE.md), [`.claude/agents/arch-designer.md`](../../../.claude/agents/arch-designer.md), [`.claude/agents/task-planner.md`](../../../.claude/agents/task-planner.md), and relevant `.claude/skills/*`.
      - *Required Outputs*:
        1. Architectural & Onion-layer design (`core/` isolation, provider/workflow ports & adapters, RFC 7946 `[lon, lat]` SRID 4326 coordinate-array source-of-truth).
        2. `System.TimeProvider`, `CancellationToken`, and OpenTelemetry `ActivitySource` / UI token considerations.
        3. Sequenced implementation tasks, risk/trade-off matrix, and proposed `coreLogicSpec` file list (`[NEW]` / `[MODIFY]`).
    - **Branch 2B (`github-copilot` — Contracts, Manifest & xUnit QA Matrix)**:
-     - *External CLI mode* (if read-only non-mutating prompt flag is verified) or *Native Subagent mode* (`research` or `define_subagent` with **`EnableWriteTools: false`**) loaded with [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) and [`.claude/agents/test-agent.md`](../../../.claude/agents/test-agent.md).
+     - *External CLI mode* (if read-only non-mutating prompt flag is verified) or *orchestrator-native subagent mode* (a read-only subagent, or Antigravity's `define_subagent` with **`EnableWriteTools: false`**) loaded with [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) and [`.claude/agents/test-agent.md`](../../../.claude/agents/test-agent.md).
      - *Required Outputs*:
        1. Concrete C# 14 / .NET 10 type & interface signatures (`readonly record struct`, `sealed record`, `JsonSerializerContext`, `ArgumentNullException.ThrowIfNull`, `TimeProvider`, `CancellationToken`) as Markdown code blocks.
        2. File-by-file touch manifest enforcing `.razor` + `.razor.cs` code-behind separation and proposed `testAndBoilerplateSpec` file list (`[NEW]` / `[MODIFY]`).

@@ -1,6 +1,6 @@
 # GeoAssets — Tri-Planar Multi-Agent Planning Blueprint (Read-Only)
 
-This directory contains the declarative planning workflow specification ([`plan-gen-dag.json`](plan-gen-dag.json)) for **Google Antigravity** acting as the **Read-Only Outer-Loop Planning DAG Orchestrator** over **Claude Code** and **GitHub Copilot**—producing an execution-ready implementation plan **without modifying any repository code**.
+This directory contains the declarative planning workflow specification ([`plan-gen-dag.json`](plan-gen-dag.json)) for **Google Antigravity** acting as the **Read-Only Outer-Loop Planning DAG Orchestrator** over **Claude Code** and **GitHub Copilot**—producing an execution-ready implementation plan **without modifying any repository code**. It is Antigravity's own concrete implementation of the agent-neutral protocol defined in [`.agents/skills/plan-gen-dag/SKILL.md`](../../.agents/skills/plan-gen-dag/SKILL.md) — the same `/plan-gen-dag` orchestration can also be run natively from [Claude Code](../../.claude/skills/plan-gen-dag/SKILL.md) or [GitHub Copilot](../../.github/skills/plan-gen-dag/SKILL.md).
 
 ## Architectural Model
 

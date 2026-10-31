@@ -1,6 +1,6 @@
 # GeoAssets — Tri-Planar Multi-Agent Orchestration Blueprint
 
-This directory contains the declarative workflow specification ([`code-gen-dag.json`](code-gen-dag.json)) for **Google Antigravity** acting as the Outer-Loop DAG Orchestrator over **Claude Code** and **GitHub Copilot**.
+This directory contains the declarative workflow specification ([`code-gen-dag.json`](code-gen-dag.json)) for **Google Antigravity** acting as the Outer-Loop DAG Orchestrator over **Claude Code** and **GitHub Copilot**. It is Antigravity's own concrete implementation of the agent-neutral protocol defined in [`.agents/skills/code-gen-dag/SKILL.md`](../../.agents/skills/code-gen-dag/SKILL.md) — the same `/code-gen-dag` orchestration can also be run natively from [Claude Code](../../.claude/skills/code-gen-dag/SKILL.md) or [GitHub Copilot](../../.github/skills/code-gen-dag/SKILL.md).
 
 ## Architectural Model
 
