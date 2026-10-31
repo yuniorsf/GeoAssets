@@ -51,6 +51,53 @@ public static class ServiceOrderAttributeValidator
             throw new ServiceOrderAttributeValidationException(orderType.Id, errors);
     }
 
+    /// <summary>
+    /// Validates a candidate <see cref="OrderType.AttributesSchemaJson"/> document itself —
+    /// before it is persisted — rather than validating order attribute values against an
+    /// already-trusted schema (that is what <see cref="Validate"/> does). Rejects anything
+    /// that isn't well-formed JSON, anything <see cref="JsonSchema.FromText(string)"/> can't
+    /// parse as a schema, a <c>$schema</c> keyword naming a dialect other than draft 2020-12,
+    /// and anything the draft 2020-12 meta-schema itself rejects — so a malformed dialect form
+    /// (e.g. a client admin's own JSON Schema for <c>OrderType.AttributesSchemaJson</c>) is
+    /// caught here instead of silently corrupting live order intake later.
+    /// </summary>
+    public static IReadOnlyList<string> ValidateSchemaDocument(string schemaJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(schemaJson);
+
+        JsonElement element;
+        try
+        {
+            element = JsonDocument.Parse(schemaJson).RootElement;
+        }
+        catch (JsonException ex)
+        {
+            return [$"Not valid JSON: {ex.Message}"];
+        }
+
+        if (element.TryGetProperty("$schema", out var declaredDialect))
+        {
+            var isDraft202012 = declaredDialect.ValueKind == JsonValueKind.String
+                && Uri.TryCreate(declaredDialect.GetString(), UriKind.Absolute, out var declaredUri)
+                && declaredUri == MetaSchemas.Draft202012Id;
+
+            if (!isDraft202012)
+                return [$"'$schema' must be \"{MetaSchemas.Draft202012Id}\" (draft 2020-12) when present; found {declaredDialect.GetRawText()}"];
+        }
+
+        try
+        {
+            JsonSchema.FromText(schemaJson);
+        }
+        catch (JsonSchemaException ex)
+        {
+            return [ex.Message];
+        }
+
+        var metaResult = MetaSchemas.Draft202012.Evaluate(element, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        return metaResult.IsValid ? [] : [.. CollectErrors(metaResult)];
+    }
+
     private static IEnumerable<string> CollectErrors(EvaluationResults result)
     {
         if (result.Errors is { Count: > 0 })

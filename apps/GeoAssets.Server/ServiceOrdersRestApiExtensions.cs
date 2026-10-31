@@ -42,6 +42,8 @@ namespace GeoAssets.Server;
 /// </summary>
 public static class ServiceOrdersRestApiExtensions
 {
+    private static readonly string[] EmptySchemaBodyError = ["Request body must contain a JSON Schema document."];
+
     public static IEndpointRouteBuilder MapServiceOrdersApi(
         this IEndpointRouteBuilder routes,
         string prefix = "/api/workflow")
@@ -314,6 +316,25 @@ public static class ServiceOrdersRestApiExtensions
             await repo.DeleteAsync(id).ConfigureAwait(false);
             await repo.SaveChangesAsync().ConfigureAwait(false);
             return Results.NoContent();
+        });
+
+        // Pre-validates a candidate OrderType.AttributesSchemaJson document via the same
+        // JsonSchema.Net machinery ServiceOrderAttributeValidator already uses to validate
+        // order attributes against a stored schema (XD01-205) — lets a client admin check
+        // their own dialect form (e.g. Coelba's DIS-NOR-068) before it's ever persisted,
+        // with zero code deploy.
+        routes.MapPost($"{prefix}/order-types/validate-schema", async (HttpRequest req) =>
+        {
+            using var reader = new StreamReader(req.Body);
+            var schemaJson = await reader.ReadToEndAsync().ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(schemaJson))
+                return Results.BadRequest(new { valid = false, errors = EmptySchemaBodyError });
+
+            var errors = ServiceOrderAttributeValidator.ValidateSchemaDocument(schemaJson);
+            return errors.Count == 0
+                ? Results.Ok(new { valid = true })
+                : Results.BadRequest(new { valid = false, errors });
         });
     }
 }
