@@ -59,3 +59,11 @@ deploy/server/.env
 # Per-developer AzureAdCiam tenant/client IDs for the WASM client (real values kept out of
 # the public repo; dotnet user-secrets covers the equivalent Server-side values)
 apps/GeoAssets.Web/wwwroot/appsettings.Local.json
+
+# Stray caches that land in the repo root when $HOME gets redirected here during a sandboxed run
+/.local/
+/Library/
+tests/GeoAssets.Workflow.Tests/.local/
+
+# Business/sales planning docs — not project source
+/Opportunity/
