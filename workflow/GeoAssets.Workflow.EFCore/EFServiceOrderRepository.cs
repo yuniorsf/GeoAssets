@@ -16,31 +16,39 @@ namespace GeoAssets.Workflow.Persistence;
 public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDisposable
 {
     private readonly ServiceOrderDbContext _db;
-    private readonly IAssetProvider?       _assets;
-    private readonly OrderTypeRegistry?    _orderTypeRegistry;
+    private readonly IAssetProvider? _assets;
+    private readonly OrderTypeRegistry? _orderTypeRegistry;
 
     public EFServiceOrderRepository(
         ServiceOrderDbContext db,
         IAssetProvider? assets = null,
         OrderTypeRegistry? orderTypeRegistry = null)
     {
-        _db                = db;
-        _assets            = assets;
+        _db = db;
+        _assets = assets;
         _orderTypeRegistry = orderTypeRegistry;
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
 
-    public event EventHandler<IServiceOrder>?                                      OrderAdded;
-    public event EventHandler<IServiceOrder>?                                      OrderUpdated;
+    public event EventHandler<IServiceOrder>? OrderAdded;
+    public event EventHandler<IServiceOrder>? OrderUpdated;
     public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
-    public event EventHandler<string>?                                             OrderDeleted;
+    public event EventHandler<string>? OrderDeleted;
 
     // ── Read ──────────────────────────────────────────────────────────────────
+
+    // Single-record fetches below (GetByIdAsync, GetParentAsync's own-id lookup, and the
+    // write-path fetches further down) deliberately call IgnoreQueryFilters(): unlike
+    // GeoEntityRow, ServiceOrderRecord has a real cross-org delegation mechanism
+    // (CrossOrgGrantRule/WorkflowOrgGrant) that the REST layer evaluates against the fetched
+    // record — see ServiceOrderDbContext.OnModelCreating's own doc comment. The tenant-equality
+    // query filter is for the list/search surface (LoadAllAsync and its callers), not these.
 
     public async Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default)
     {
         var record = await _db.ServiceOrders
+            .IgnoreQueryFilters()
             .Include(o => o.Dispatches)
             .Include(o => o.ActionLog)
             .FirstOrDefaultAsync(o => o.Id == id, ct).ConfigureAwait(false);
@@ -48,6 +56,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         if (record is null) return null;
 
         var childIds = await _db.ServiceOrders
+            .IgnoreQueryFilters()
             .Where(o => o.ParentOrderId == id)
             .Select(o => o.Id)
             .ToListAsync(ct).ConfigureAwait(false);
@@ -67,6 +76,7 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     public async Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default)
     {
         var parentId = await _db.ServiceOrders
+            .IgnoreQueryFilters()
             .Where(o => o.Id == childId)
             .Select(o => o.ParentOrderId)
             .FirstOrDefaultAsync(ct).ConfigureAwait(false);
@@ -120,10 +130,11 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         if (order is not ServiceOrder so)
             throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
 
-        var existing = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == order.Id, ct).ConfigureAwait(false)
+        var existing = await _db.ServiceOrders.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(o => o.Id == order.Id, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{order.Id}' not found.");
 
-        var previous  = existing.Status;
+        var previous = existing.Status;
         var orderType = _orderTypeRegistry?.Find(so.OrderTypeId);
 
         if (!ServiceOrderTransitions.IsValid(orderType, previous, so.Status))
@@ -159,17 +170,18 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     public async Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(dispatch);
-        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
+        var record = await _db.ServiceOrders.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
         _db.OrderDispatches.Add(new OrderDispatchRecord
         {
             ServiceOrderId = orderId,
-            TargetId       = dispatch.TargetId,
-            TargetType     = (int)dispatch.TargetType,
-            DispatchedBy   = dispatch.DispatchedBy,
-            DispatchedAt   = dispatch.DispatchedAt,
-            Note           = dispatch.Note,
+            TargetId = dispatch.TargetId,
+            TargetType = (int)dispatch.TargetType,
+            DispatchedBy = dispatch.DispatchedBy,
+            DispatchedAt = dispatch.DispatchedAt,
+            Note = dispatch.Note,
         });
         record.UpdatedAt = dispatch.DispatchedAt;
 
@@ -182,10 +194,11 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     public async Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        var record = await _db.ServiceOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
+        var record = await _db.ServiceOrders.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
-        var previous  = record.Status;
+        var previous = record.Status;
         var orderType = _orderTypeRegistry?.Find(record.OrderTypeId);
 
         if (entry.ResultingStatus is not null && !ServiceOrderTransitions.IsValid(orderType, previous, entry.ResultingStatus))
@@ -193,17 +206,17 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         _db.OrderActionLogs.Add(new OrderActionLogRecord
         {
-            ServiceOrderId  = orderId,
-            Action          = (int)entry.Action,
-            PerformedBy     = entry.PerformedBy,
-            PerformedAt     = entry.PerformedAt,
-            Comment         = entry.Comment,
+            ServiceOrderId = orderId,
+            Action = (int)entry.Action,
+            PerformedBy = entry.PerformedBy,
+            PerformedAt = entry.PerformedAt,
+            Comment = entry.Comment,
             ResultingStatus = entry.ResultingStatus,
         });
 
         if (entry.ResultingStatus is not null)
         {
-            record.Status    = entry.ResultingStatus;
+            record.Status = entry.ResultingStatus;
             record.UpdatedAt = entry.PerformedAt;
             if (ServiceOrderTransitions.IsSuccessState(orderType, entry.ResultingStatus))
                 record.CompletedAt = entry.PerformedAt;
@@ -224,7 +237,11 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
-        var record = await _db.ServiceOrders.FindAsync([id], ct).ConfigureAwait(false);
+        // FindAsync (unlike IgnoreQueryFilters().FirstOrDefaultAsync) applies the global query
+        // filter when nothing matching is already tracked, which would wrongly block deleting a
+        // cross-org grant target — see the comment above GetByIdAsync.
+        var record = await _db.ServiceOrders.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(o => o.Id == id, ct).ConfigureAwait(false);
         if (record is null) return;
 
         _db.ServiceOrders.Remove(record);
@@ -251,8 +268,8 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         if (records.Count == 0) return [];
 
-        var ids       = records.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
-        var childMap  = (await _db.ServiceOrders
+        var ids = records.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        var childMap = (await _db.ServiceOrders
             .Where(o => o.ParentOrderId != null && ids.Contains(o.ParentOrderId!))
             .Select(o => new { o.Id, ParentId = o.ParentOrderId! })
             .ToListAsync(ct).ConfigureAwait(false))
@@ -275,18 +292,18 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     /// </summary>
     private static void UpdateRecord(ServiceOrderRecord target, ServiceOrder source)
     {
-        target.Title           = source.Title;
-        target.Description     = source.Description;
-        target.OrderTypeId     = source.OrderTypeId;
-        target.Status          = source.Status;
-        target.Priority        = (int)source.Priority;
-        target.AssignedTo      = source.AssignedTo;
-        target.UpdatedAt       = source.UpdatedAt;
-        target.ScheduledAt     = source.ScheduledAt;
-        target.CompletedAt     = source.CompletedAt;
-        target.ParentOrderId   = source.ParentOrderId;
-        target.AttributesJson  = System.Text.Json.JsonSerializer.Serialize(source.Attributes);
-        target.FeatureIdsJson  = System.Text.Json.JsonSerializer.Serialize(
+        target.Title = source.Title;
+        target.Description = source.Description;
+        target.OrderTypeId = source.OrderTypeId;
+        target.Status = source.Status;
+        target.Priority = (int)source.Priority;
+        target.AssignedTo = source.AssignedTo;
+        target.UpdatedAt = source.UpdatedAt;
+        target.ScheduledAt = source.ScheduledAt;
+        target.CompletedAt = source.CompletedAt;
+        target.ParentOrderId = source.ParentOrderId;
+        target.AttributesJson = System.Text.Json.JsonSerializer.Serialize(source.Attributes);
+        target.FeatureIdsJson = System.Text.Json.JsonSerializer.Serialize(
                                      source.Features.Count > 0
                                          ? source.Features.Select(f => f.Id).ToArray()
                                          : source.FeatureIds);
