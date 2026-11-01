@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Domain.Sanitation</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Deliberately no ProjectReference at all (not even GeoAssets.Core), same as
+       GeoAssets.Domain.Electrical — this family of archetype domain assemblies is meant to
+       evolve independently of each other and of GeoAssets.Workflow's generic state machine
+       (XD01-209's AC, applied consistently here too). -->
+
+</Project>
