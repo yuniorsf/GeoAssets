@@ -22,6 +22,13 @@ namespace GeoAssets.Workflow.FieldWork;
 /// legal edges in this graph but are additionally gated by <see cref="IFieldWorkTransitionGuard"/>
 /// — see <see cref="FieldWorkOrderTransitioner"/>, the entry point that enforces both the graph
 /// and the guard together.
+///
+/// <see cref="FieldWorkStatus.ConflictReview"/> is not itself terminal: a human reviewer's
+/// adjudication (<see cref="ThreeWayConflictReconciler.Adjudicate"/>, XD01-223) routes it to
+/// <see cref="FieldWorkStatus.Inspected"/> or back to <see cref="FieldWorkStatus.Pending"/>.
+/// <see cref="ThreeWayConflictReconciler"/>'s own escalation *into* ConflictReview deliberately
+/// does not go through this graph at all (see that type's own doc comment for why) — only the
+/// adjudication *out* of it is an ordinary graph-legal edge.
 /// </summary>
 public static class FieldWorkWorkflowGraph
 {
@@ -66,6 +73,13 @@ public static class FieldWorkWorkflowGraph
 
         new(FieldWorkStatus.Completed, FieldWorkStatus.Inspected, OrderActionType.Approve),
         new(FieldWorkStatus.Completed, FieldWorkStatus.ConflictReview, OrderActionType.Reject),
+
+        // Adjudication (XD01-223): a human reviewer resolves a ConflictReview case either way —
+        // Approve confirms the disputed work actually happened as claimed (same action tag as
+        // Completed's own Inspected edge, since it's the same kind of decision); Reject bounces
+        // it back to Pending for rescheduling/redo, same destination a fresh order starts from.
+        new(FieldWorkStatus.ConflictReview, FieldWorkStatus.Inspected, OrderActionType.Approve),
+        new(FieldWorkStatus.ConflictReview, FieldWorkStatus.Pending, OrderActionType.Reject),
     ];
 
     public const string InitialStateKey = FieldWorkStatus.Draft;

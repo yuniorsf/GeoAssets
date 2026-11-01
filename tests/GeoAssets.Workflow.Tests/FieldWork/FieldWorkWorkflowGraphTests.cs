@@ -34,6 +34,8 @@ public class FieldWorkWorkflowGraphTests
         { FieldWorkStatus.InProgress, FieldWorkStatus.Completed },
         { FieldWorkStatus.Completed, FieldWorkStatus.Inspected },
         { FieldWorkStatus.Completed, FieldWorkStatus.ConflictReview },
+        { FieldWorkStatus.ConflictReview, FieldWorkStatus.Inspected },
+        { FieldWorkStatus.ConflictReview, FieldWorkStatus.Pending },
     };
 
     [Theory]
@@ -49,7 +51,7 @@ public class FieldWorkWorkflowGraphTests
         { FieldWorkStatus.InProgress, FieldWorkStatus.Cancelled },
         { FieldWorkStatus.Completed, FieldWorkStatus.Cancelled },
         { FieldWorkStatus.Inspected, FieldWorkStatus.InProgress },
-        { FieldWorkStatus.ConflictReview, FieldWorkStatus.Inspected },
+        { FieldWorkStatus.ConflictReview, FieldWorkStatus.Completed },
         { FieldWorkStatus.Cancelled, FieldWorkStatus.Draft },
         { FieldWorkStatus.EnRoute, FieldWorkStatus.Dispatched },
     };
