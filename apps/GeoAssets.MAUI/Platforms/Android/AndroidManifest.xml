@@ -14,6 +14,10 @@
      See the AzureAdCiamMaui comment in appsettings.json. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
+  <!-- Field-work photo evidence capture (XD01-244): camera for MediaPicker.CapturePhotoAsync,
+       fine location for the GNSS accuracy/mock-provider interlock. -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
   <application>
     <activity
         android:name="com.microsoft.identity.client.BrowserTabActivity"

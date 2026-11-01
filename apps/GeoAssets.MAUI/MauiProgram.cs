@@ -8,12 +8,14 @@ using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.MAUI.Extensions;
 using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.MAUI.Services.Localization;
+using GeoAssets.MAUI.Services.Evidence;
 using GeoAssets.MAUI.Services.Offline;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
+using GeoAssets.Shared.Services.Evidence;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.Offline;
 using GeoAssets.Workflow;
@@ -73,6 +75,7 @@ public static class MauiProgram
         AddServiceOrderWorkflow(builder);
         AddAssetsAndMap(builder);
         AddOfflineSync(builder);
+        AddEvidenceCapture(builder);
 
         return builder.Build();
     }
@@ -216,5 +219,24 @@ public static class MauiProgram
         var fieldServiceServerBaseUrl = builder.Configuration["FieldServiceServer:BaseUrl"]
             ?? throw new InvalidOperationException("FieldServiceServer:BaseUrl is not configured.");
         builder.Services.AddFieldServiceOfflineSync(fieldServiceServerBaseUrl.TrimEnd('/') + "/api/field-service/sync");
+    }
+
+    /// <summary>
+    /// Field-work photo evidence capture (XD01-244): the portable gate/sign/verify pipeline
+    /// (<see cref="EvidenceCaptureService"/>, <c>GeoAssets.Shared</c>) layered under the
+    /// SkiaSharp watermark composer and GPS/compass/camera orchestration, both MAUI-only.
+    ///
+    /// Deliberately not wired here: a per-tenant HMAC secret. <see cref="MauiEvidenceCaptureGateway.CaptureAsync"/>
+    /// takes it as a caller-supplied parameter rather than reading a config key, because no real
+    /// secret-provisioning mechanism exists yet (it must be issued per tenant by a trusted
+    /// server, not committed to source or generated locally like the offline DB's encryption key
+    /// in <see cref="LocalOfflineDatabase"/>) — and no caller exists yet either: see
+    /// XD01-295, which also covers the UI/API gap this gateway has no host to be invoked from.
+    /// </summary>
+    private static void AddEvidenceCapture(MauiAppBuilder builder)
+    {
+        builder.Services.AddFieldWorkEvidenceCapture();
+        builder.Services.AddSingleton<IEvidenceWatermarkComposer, SkiaEvidenceWatermarkComposer>();
+        builder.Services.AddScoped<MauiEvidenceCaptureGateway>();
     }
 }

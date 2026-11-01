@@ -46,5 +46,11 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Field-work photo evidence capture (XD01-244): MediaPicker.CapturePhotoAsync and
+	     Geolocation both require an iOS usage-description string or the OS silently denies them. -->
+	<key>NSCameraUsageDescription</key>
+	<string>GeoAssets uses the camera to capture signed field-work evidence photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GeoAssets uses your location to geotag field-work evidence photos.</string>
 </dict>
 </plist>

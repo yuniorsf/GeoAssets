@@ -27,6 +27,9 @@
     <PackageReference Include="Microsoft.Identity.Client" Version="4.87.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
+    <!-- Watermark burn-in for field-work evidence photos (XD01-244) — version pinned to match
+         apps/GeoAssets.Server/GeoAssets.Server.csproj's existing reference. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.2" />
   </ItemGroup>
 
   <PropertyGroup>

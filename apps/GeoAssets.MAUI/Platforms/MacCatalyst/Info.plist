@@ -34,5 +34,10 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Same rationale as Platforms/iOS/Info.plist (XD01-244). -->
+	<key>NSCameraUsageDescription</key>
+	<string>GeoAssets uses the camera to capture signed field-work evidence photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GeoAssets uses your location to geotag field-work evidence photos.</string>
 </dict>
 </plist>
