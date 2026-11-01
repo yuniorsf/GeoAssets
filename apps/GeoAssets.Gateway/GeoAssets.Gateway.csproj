@@ -14,6 +14,16 @@
 
   <ItemGroup>
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+    <!-- Decodes (never signature-validates — see OrganizationIdPartitionKeyResolver's own doc
+         comment) the caller's bearer token to resolve the rate limiter's partition key (XD01-214). -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reuses ClaimMapping (XD01-48) — the same configurable organization-claim lookup every
+         other host in this solution already uses (HttpTenantContext), rather than a third,
+         gateway-specific copy of that claim-shape logic. -->
+    <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
   </ItemGroup>
 
 </Project>

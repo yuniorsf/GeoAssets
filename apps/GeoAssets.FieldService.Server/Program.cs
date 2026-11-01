@@ -2,6 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Workflow.Contractors;
@@ -42,6 +43,14 @@ var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
     ?? throw new InvalidOperationException(
         "Connection string 'GeoAssets' not found. " +
         "Set it in appsettings.json or via the ConnectionStrings__GeoAssets environment variable.");
+
+// "Noisy neighbor" backstop (XD01-214) — complements the gateway's per-OrganizationId rate
+// limiting: even a request the gateway let through can't hold a connection/lock open
+// indefinitely on this shared database. Opt-in via "Postgres:StatementTimeoutMs" — unset (the
+// default) leaves the connection string, and Postgres' own server-level default, untouched.
+var statementTimeoutMs = builder.Configuration.GetValue<int?>("Postgres:StatementTimeoutMs");
+if (statementTimeoutMs is { } timeoutMs)
+    connectionString = PostgresConnectionStringHelper.WithStatementTimeout(connectionString, TimeSpan.FromMilliseconds(timeoutMs));
 
 builder.Services.AddScoped<TenantSessionInterceptor>();
 builder.Services.AddScoped<TenantTransactionInterceptor>();

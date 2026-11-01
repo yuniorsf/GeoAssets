@@ -3,7 +3,6 @@ using FluentAssertions;
 using GeoAssets.Gateway;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -26,10 +25,10 @@ public sealed class GatewayRoutingTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _sharedBackend = await StartBackendAsync("shared");
-        _siloBackend = await StartBackendAsync("silo");
+        _sharedBackend = await TestBackend.StartAsync("shared");
+        _siloBackend = await TestBackend.StartAsync("silo");
 
-        var destinations = new GatewayRouteCatalog.ServiceDestinations(BackendAddress(_sharedBackend), BackendAddress(_siloBackend));
+        var destinations = new GatewayRouteCatalog.ServiceDestinations(TestBackend.Address(_sharedBackend), TestBackend.Address(_siloBackend));
         var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
 
         var host = await new HostBuilder()
@@ -47,18 +46,6 @@ public sealed class GatewayRoutingTests : IAsyncLifetime
 
         _gateway = host.GetTestServer();
     }
-
-    private static async Task<WebApplication> StartBackendAsync(string identity)
-    {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        var app = builder.Build();
-        app.MapGet("/{**catchAll}", () => Results.Ok(new { backend = identity }));
-        await app.StartAsync();
-        return app;
-    }
-
-    private static string BackendAddress(WebApplication app) => app.Urls.Single();
 
     [Fact]
     public async Task RequestWithoutTenantDomainHeader_FallsThroughToSharedCluster()

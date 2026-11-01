@@ -12,7 +12,12 @@ var fieldService = ReadServiceDestinations(builder.Configuration, "FieldService"
 var (routes, clusters) = GatewayRouteCatalog.Build(geoAssets, ipBilling, fieldService);
 builder.Services.AddReverseProxy().LoadFromMemory(routes, clusters);
 
+// ── Per-OrganizationId token-bucket rate limiting (XD01-214) ────────────────────────────────
+builder.Services.AddTenantRateLimiting(builder.Configuration);
+
 var app = builder.Build();
+
+app.UseRateLimiter();
 
 app.MapReverseProxy();
 
