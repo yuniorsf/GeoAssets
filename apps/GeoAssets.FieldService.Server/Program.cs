@@ -151,6 +151,10 @@ app.MapContractorUsLedgerApi();
 // FieldServiceSyncRestApiExtensions for the full endpoint list.
 app.MapFieldServiceSyncApi();
 
+// Supervisor sign-off endpoint under /api/field-service/orders (XD01-248) — see
+// FieldWorkInspectionRestApiExtensions for the full endpoint list.
+app.MapFieldWorkInspectionApi();
+
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
 // MapXModuleApi() call only ever adds its own routes, so there's nothing shared to break.
