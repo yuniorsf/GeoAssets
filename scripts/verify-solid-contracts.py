@@ -28,6 +28,12 @@ from typing import Iterable
 
 RAZOR_SINGLE_FILE_EXCEPTIONS = {
     "apps/GeoAssets.MAUI/Pages/MauiLogin.razor",
+    # XD01-277: splitting this page into .razor + .razor.cs fails to build outright
+    # (CS0115: no suitable method found to override on OnInitializedAsync) rather than the
+    # false-unused-field warning MauiLogin.razor hit — confirmed empirically, same underlying
+    # GeoAssets.MAUI Razor-codegen degradation CLAUDE.md's MauiLogin paragraph (XD01-121)
+    # documents. User-approved exception.
+    "apps/GeoAssets.MAUI/Pages/FieldWorkChecklist.razor",
 }
 
 RAZOR_COMPONENT_PREFIXES = (

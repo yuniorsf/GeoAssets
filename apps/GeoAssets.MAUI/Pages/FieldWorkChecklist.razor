@@ -1,9 +1,204 @@
 @page "/field-work/checklist"
 @attribute [Authorize]
+@using System.Text.Json
+@using GeoAssets.Core.Services
+@using GeoAssets.MAUI.Services.Evidence
+@using GeoAssets.MAUI.Services.Scanning
+@using GeoAssets.Shared.Services.Evidence
+@using GeoAssets.Shared.Services.FieldWork
+@using GeoAssets.Shared.Services.Offline
+@using GeoAssets.Shared.Services.Scanning
+@using GeoAssets.Workflow.FieldWork
+@using GeoAssets.Workflow.Orders
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Configuration
+@inject ILocalServiceOrderStore LocalServiceOrderStore
+@inject ILocalActionOutbox Outbox
+@inject MauiEvidenceCaptureGateway EvidenceGateway
+@inject IConfiguration Configuration
 
-@* XD01-276: route/navigation scaffolding only — the OPM checklist, barcode scanning, and
-   evidence capture steps this page is meant to host are assembled end-to-end in XD01-277. *@
+@* XD01-277: assembles the FTTH drop-install state machine (XD01-273), OPM budget verification
+   (XD01-274), barcode/QR scanning (XD01-275), and the four mandatory evidence photos (XD01-278)
+   into one technician-facing checklist — upgrading the route stub XD01-276 left here. Every
+   mutation goes through FtthDropInstallChecklistService (GeoAssets.Shared, fully unit-tested);
+   this file is UI/device-I/O glue only.
+
+   Single-file (no .razor.cs split): empirically confirmed during this ticket that splitting
+   causes "CS0115: no suitable method found to override" on OnInitializedAsync for a page in
+   GeoAssets.MAUI/Pages — the generated partial class doesn't merge with a .razor.cs partial the
+   way CLAUDE.md's MauiLogin paragraph (XD01-121) already documented as a known risk for this
+   project's Razor toolchain, just manifesting as a harder failure than the false-unused-warning
+   case recorded there. Confirmed empirically, not theorized — see this ticket's Jira closing
+   comment for the exact repro. Needs the same scripts/verify-solid-contracts.py
+   RAZOR_SINGLE_FILE_EXCEPTIONS entry MauiLogin.razor already has; that edit was blocked by this
+   environment's own permission layer (gatekeeper-script changes need human sign-off), so it is
+   pending the user's decision — see the conversation for the explicit ask. Could not be
+   runtime-verified on a device/simulator in this environment either way — compile-verified only,
+   same caveat as every other MAUI ticket this session. *@
 
 <h3>FTTH Drop Install Checklist</h3>
-<p>Coming soon — this screen hosts the CTO arrival → OPM reading → drop launch/tag scan → PTO reading → ONT scan → photo capture → sync flow.</p>
+
+@if (_order is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <p><strong>Status:</strong> @_order.Status</p>
+
+    @if (!string.IsNullOrEmpty(_lastExplanation))
+    {
+        <p class="checklist-error" style="color: var(--danger, #d20f39);">@_lastExplanation</p>
+    }
+
+    @switch (_order.Status)
+    {
+        case FtthDropInstallStatus.CrmSale:
+            <button @onclick="RecordCtoArrivalAsync">Confirm CTO Arrival</button>
+            break;
+
+        case FtthDropInstallStatus.CtoPortTest:
+            <label>CTO OPM reading (dBm): <input type="number" step="0.1" @bind="_ctoReadingDbm" /></label>
+            <button @onclick="RecordCtoReadingAsync">Record CTO Reading</button>
+            break;
+
+        case FtthDropInstallStatus.DropLaunch:
+            <button @onclick="ScanYellowTagAsync">Scan Yellow Tag</button>
+            break;
+
+        case FtthDropInstallStatus.TagAffixed:
+            <label>PTO OPM reading (dBm): <input type="number" step="0.1" @bind="_ptoReadingDbm" /></label>
+            <button @onclick="RecordPtoReadingAsync">Record PTO Reading &amp; Verify Budget</button>
+            break;
+
+        case FtthDropInstallStatus.PtoPower:
+            <button @onclick="ScanOntFsanAsync">Scan ONT FSAN @(_scannedFsan is null ? "" : "✓")</button>
+            <button @onclick="ScanOntMacAsync">Scan ONT MAC @(_scannedMac is null ? "" : "✓")</button>
+            @if (_scannedFsan is not null && _scannedMac is not null)
+            {
+                <button @onclick="RecordOntScanAsync">Confirm ONT Scan</button>
+            }
+            break;
+
+        case FtthDropInstallStatus.OntProvisioned:
+            @foreach (var slot in FtthEvidenceCompletenessChecker.RequiredSlots)
+            {
+                var captured = _capturedSlots.Contains(slot);
+                <button disabled="@captured" @onclick="() => CaptureEvidenceAsync(slot)">
+                    @slot @(captured ? "✓" : "")
+                </button>
+            }
+            <button @onclick="TryCompleteAsync">Complete Checklist</button>
+            break;
+
+        case FtthDropInstallStatus.Activated:
+            <p>Drop activated — queued for sync.</p>
+            break;
+    }
+}
+
+@code {
+    private static readonly OrderType FtthOrderType = FtthDropInstallWorkflowGraph.BuildOrderType("ftth-drop-install", "FTTH Drop Install");
+    private static readonly OrderType CtoRepairOrderType = new() { Id = "cto-repair", DisplayName = "CTO Repair", InitialStateKey = "Open" };
+    private static readonly FtthDropInstallChecklistService Checklist = new(FtthOrderType, CtoRepairOrderType);
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private ServiceOrder? _order;
+    private string? _technicianId;
+    private double _ctoReadingDbm;
+    private double _ptoReadingDbm;
+    private string? _scannedFsan;
+    private string? _scannedMac;
+    private string? _lastExplanation;
+    private IReadOnlySet<FtthEvidenceSlot> _capturedSlots = new HashSet<FtthEvidenceSlot>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = AuthStateTask is null ? null : await AuthStateTask;
+        _technicianId = authState?.User.Identity?.Name ?? "unknown-technician";
+
+        _order = new ServiceOrder
+        {
+            Title = "FTTH drop install",
+            Status = FtthDropInstallStatus.CrmSale,
+            OrganizationId = Guid.NewGuid(),
+            CreatedBy = _technicianId,
+        };
+    }
+
+    private async Task RecordCtoArrivalAsync() => await ApplyStepAsync(() => Checklist.RecordCtoArrival(_order!, TimeProvider.System));
+
+    private async Task RecordCtoReadingAsync() => await ApplyStepAsync(() => Checklist.RecordCtoReading(_order!, _ctoReadingDbm, TimeProvider.System));
+
+    private async Task ScanYellowTagAsync()
+    {
+        var scanned = await MauiBarcodeScanGateway.ScanAsync(ExpectedScanField.YellowTagId);
+        if (!scanned.IsValid)
+        {
+            _lastExplanation = scanned.RejectionReason;
+            return;
+        }
+
+        await ApplyStepAsync(() => Checklist.RecordTagScan(_order!, scanned.NormalizedValue!, TimeProvider.System));
+    }
+
+    private async Task RecordPtoReadingAsync() => await ApplyStepAsync(() => Checklist.RecordPtoReadingAndVerifyBudget(_order!, _ptoReadingDbm, TimeProvider.System));
+
+    private async Task ScanOntFsanAsync()
+    {
+        var scanned = await MauiBarcodeScanGateway.ScanAsync(ExpectedScanField.OntFsan);
+        _lastExplanation = scanned.IsValid ? null : scanned.RejectionReason;
+        if (scanned.IsValid) _scannedFsan = scanned.NormalizedValue;
+        StateHasChanged();
+    }
+
+    private async Task ScanOntMacAsync()
+    {
+        var scanned = await MauiBarcodeScanGateway.ScanAsync(ExpectedScanField.OntMacAddress);
+        _lastExplanation = scanned.IsValid ? null : scanned.RejectionReason;
+        if (scanned.IsValid) _scannedMac = scanned.NormalizedValue;
+        StateHasChanged();
+    }
+
+    private async Task RecordOntScanAsync() => await ApplyStepAsync(() => Checklist.RecordOntScan(_order!, _scannedFsan!, _scannedMac!, TimeProvider.System));
+
+    private async Task CaptureEvidenceAsync(FtthEvidenceSlot slot)
+    {
+        var tenantSecret = Configuration["Evidence:TenantSecret"]
+            ?? throw new InvalidOperationException("Evidence:TenantSecret is not configured — no real per-tenant secret-provisioning mechanism exists yet (XD01-244's own flagged gap).");
+
+        var context = new EvidenceCaptureContext(_order!.Id, _technicianId ?? "unknown-technician", slot.ToString(), DateTimeOffset.UtcNow, CompassHeadingDegrees: null);
+        await EvidenceGateway.CaptureAsync(context, tenantSecret);
+
+        FtthDropInstallChecklistService.RecordEvidencePhoto(_order, slot);
+        _capturedSlots = ServiceOrderFtthEvidenceAttributes.ReadCapturedSlots(_order.Attributes);
+        await PersistAsync();
+    }
+
+    private async Task TryCompleteAsync() => await ApplyStepAsync(() => Checklist.TryComplete(_order!, TimeProvider.System));
+
+    private async Task ApplyStepAsync(Func<FtthChecklistStepResult> step)
+    {
+        var result = step();
+        _lastExplanation = result.Succeeded ? null : result.Explanation;
+
+        if (result.Succeeded)
+            await PersistAsync();
+
+        if (result.UpstreamRepairOrder is not null)
+            await LocalServiceOrderStore.UpsertAsync(result.UpstreamRepairOrder);
+
+        StateHasChanged();
+    }
+
+    private async Task PersistAsync()
+    {
+        await LocalServiceOrderStore.UpsertAsync(_order!);
+
+        var sequenceNumber = await Outbox.NextSequenceNumberAsync();
+        await Outbox.EnqueueAsync(new LocalOutboxEntry(
+            Guid.NewGuid(), sequenceNumber, _order!.Id, JsonSerializer.Serialize(_order, GeoJsonSerializer.Options), DateTime.UtcNow, AttemptCount: 0, LastError: null));
+    }
+}

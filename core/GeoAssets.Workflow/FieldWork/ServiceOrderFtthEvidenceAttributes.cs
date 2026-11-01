@@ -32,4 +32,22 @@ public static class ServiceOrderFtthEvidenceAttributes
 
         return new HashSet<FtthEvidenceSlot>(parsed.Select(s => Enum.Parse<FtthEvidenceSlot>(s, ignoreCase: true)));
     }
+
+    /// <summary>
+    /// Marks <paramref name="slot"/> as captured on <paramref name="order"/> (XD01-277) —
+    /// idempotent, a no-op if already recorded. Mutates <see cref="ServiceOrder.Attributes"/>
+    /// directly rather than returning a new value, same convention
+    /// <c>WaterPavingSubOrderSpawner</c>/<c>FtthDropInstallTransitioner</c> already use for
+    /// in-place <see cref="ServiceOrder"/> mutation.
+    /// </summary>
+    public static void RecordCapturedSlot(ServiceOrder order, FtthEvidenceSlot slot)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+
+        var current = ReadCapturedSlots(order.Attributes);
+        if (current.Contains(slot)) return;
+
+        var updated = new HashSet<FtthEvidenceSlot>(current) { slot };
+        order.Attributes[CapturedSlotsKey] = JsonSerializer.Serialize(updated.Select(s => s.ToString()));
+    }
 }
