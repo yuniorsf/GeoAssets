@@ -71,6 +71,33 @@ public class GeoAssetsMeterTests
         measurement.Tags.Should().Contain(new KeyValuePair<string, object?>("transport", "servicebus"));
     }
 
+    /// <summary>
+    /// XD01-219's cardinality-safety requirement: organization.id/tenant id must never be a
+    /// metric tag, since a metric series is keyed by its full tag set and a per-tenant tag would
+    /// multiply every instrument's series count by the tenant count. Asserts this across every
+    /// recording method this meter exposes today, so a future addition that tags a new
+    /// instrument with a tenant identifier fails this test rather than shipping unnoticed.
+    /// </summary>
+    [Fact]
+    public void NoInstrument_EverTagsAnOrganizationOrTenantIdentifier()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordOrderTransition("inspection", "Draft", "Pending");
+        meter.RecordNotificationPublished("kafka");
+        meter.RecordNotificationDuration(42.5, "servicebus");
+
+        capture.Measurements.Should().NotBeEmpty();
+        foreach (var measurement in capture.Measurements)
+        {
+            measurement.Tags.Select(t => t.Key).Should().NotContain(
+                key => key.Contains("organization", StringComparison.OrdinalIgnoreCase)
+                    || key.Contains("tenant", StringComparison.OrdinalIgnoreCase),
+                $"instrument '{measurement.Instrument}' must never carry a per-tenant tag — that belongs on a span attribute, not a metric dimension");
+        }
+    }
+
     [Fact]
     public void Dispose_DisposesUnderlyingMeter_FurtherRecordingsAreNoOps()
     {

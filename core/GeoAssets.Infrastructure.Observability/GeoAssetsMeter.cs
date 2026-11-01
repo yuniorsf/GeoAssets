@@ -16,6 +16,13 @@ namespace GeoAssets.Infrastructure.Observability;
 ///     }
 /// }
 /// </code>
+///
+/// Never add <c>organization.id</c>/tenant id as a tag on any instrument here (XD01-219): a
+/// metric series is keyed by its full tag set, so a per-tenant tag multiplies every metric's
+/// series count by the tenant count and keeps growing as tenants are onboarded — unlike a span
+/// attribute, which costs nothing extra per trace. Per-tenant drill-down goes through
+/// <see cref="GeoAssetsActivitySource"/>/<see cref="TelemetryEnrichmentMiddleware"/>'s
+/// <c>organization.id</c> span attribute and trace search instead.
 /// </summary>
 public sealed class GeoAssetsMeter : IDisposable
 {
@@ -60,9 +67,9 @@ public sealed class GeoAssetsMeter : IDisposable
 
     public void RecordOrderTransition(string orderTypeId, string previousStatus, string newStatus) =>
         _orderTransitions.Add(1,
-            new KeyValuePair<string, object?>("order.type",        orderTypeId),
+            new KeyValuePair<string, object?>("order.type", orderTypeId),
             new KeyValuePair<string, object?>("order.prev_status", previousStatus),
-            new KeyValuePair<string, object?>("order.new_status",  newStatus));
+            new KeyValuePair<string, object?>("order.new_status", newStatus));
 
     public void RecordNotificationPublished(string transport) =>
         _notificationsPublished.Add(1,
