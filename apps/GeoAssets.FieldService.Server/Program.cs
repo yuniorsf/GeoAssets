@@ -1,13 +1,18 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
+using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.FieldWork;
+using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
+using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -73,14 +78,45 @@ builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
         sp.GetRequiredService<TenantTransactionInterceptor>()));
 builder.Services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
 
+// ── Contractor US postings + catalog (XD01-242/XD01-247/XD01-228) — same ServiceOrderDbContext,
+// same per-request tenant interceptors. ──────────────────────────────────────────────────────
+builder.Services.AddScoped<IUsCatalogRepository, EFUsCatalogRepository>();
+builder.Services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
+
+// ── OrderType registry (XD01-228) — registered (with the "field-work" graph) so
+// IServiceOrderRepository below can actually validate a transition into any FieldWork state
+// (Inspected included); without it, ServiceOrderTransitions.IsValid would only ever consult the
+// global default graph, which doesn't know these states at all (see
+// FieldWorkWorkflowGraph's own doc comment) and would reject every one of them. ────────────────
+builder.Services.AddOrderTypeRegistry(FieldWorkOrderTypes.RegisterAll);
+
 // ── Mobile offline-sync (XD01-208) — same ServiceOrderDbContext registration above backs
-// IServiceOrderRepository too. Registered directly as EFServiceOrderRepository wrapped only in
-// ValidatingServiceOrderRepository (status-transition enforcement) — not the full
-// ObservableServiceOrderRepository/OrderTypeRegistry/ServiceOrderRules stack GeoAssets.Server
-// wires, since this host maps no order-creation endpoint that would need order-type-aware
-// creation rules (see FieldServiceSyncRestApiExtensions' own doc comment). ─────────────────────
+// IServiceOrderRepository too. Registered as EFServiceOrderRepository (now carrying the
+// OrderTypeRegistry above) wrapped in ValidatingServiceOrderRepository (status-transition
+// enforcement) — not the full ObservableServiceOrderRepository/ServiceOrderRules stack
+// GeoAssets.Server wires, since this host maps no order-creation endpoint that would need
+// order-type-aware creation rules (see FieldServiceSyncRestApiExtensions' own doc comment). ─────
 builder.Services.AddScoped<IServiceOrderRepository>(sp =>
-    new ValidatingServiceOrderRepository(new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>())));
+    new ValidatingServiceOrderRepository(
+        new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>(), orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>()),
+        sp.GetRequiredService<OrderTypeRegistry>()));
+
+// ── Transactional outbox (XD01-228) — IOutboxWriter only (no background OutboxRelayProcessor):
+// draining PENDING rows into actual Core GIS mutations is XD01-229's own scope, still To Do, and
+// this ticket's own AC only requires the outbox row to be present and PENDING immediately after
+// commit, not dispatched. Protobuf chosen as the wire serializer since
+// AssetMutationBatchRequestedEvent (the message InspectionCommitService stages) already has a
+// ProtobufIntegrationMessageSerializer mapping — see that type's own switch cases. ───────────────
+builder.Services.AddWorkflowProtobufMessaging();
+builder.Services.AddScoped<EFOutboxStore>(sp => new EFOutboxStore(
+    sp.GetRequiredService<ServiceOrderDbContext>(),
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetService<IIntegrationMessageSerializer>(),
+    sourceService: "GeoAssets.FieldService.Server"));
+builder.Services.AddScoped<IOutboxWriter>(sp => sp.GetRequiredService<EFOutboxStore>());
+
+// ── Single-DB ACID inspection commit (XD01-228) ───────────────────────────────────────────────
+builder.Services.AddScoped<InspectionCommitService>();
 
 // ── Archetype domain modules (XD01-212) — each toggled independently via
 // "Modules:{Name}:Enabled" (default true). NeutralPoleRegistry is this module's only stateful

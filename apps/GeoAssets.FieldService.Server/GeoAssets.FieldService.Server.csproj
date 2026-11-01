@@ -47,6 +47,7 @@
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
   </ItemGroup>
 
 </Project>
