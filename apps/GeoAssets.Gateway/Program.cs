@@ -28,8 +28,15 @@ static GatewayRouteCatalog.ServiceDestinations ReadServiceDestinations(IConfigur
     var section = configuration.GetSection($"Destinations:{serviceName}");
     var shared = section["Shared"]
         ?? throw new InvalidOperationException($"Configuration 'Destinations:{serviceName}:Shared' not found.");
-    var silo = section["Silo"]
-        ?? throw new InvalidOperationException($"Configuration 'Destinations:{serviceName}:Silo' not found.");
 
-    return new GatewayRouteCatalog.ServiceDestinations(shared, silo);
+    // One entry per provisioned Tier-2 dedicated-silo tenant (XD01-289) — domain -> silo base
+    // address. Empty (no "Silos" section, or none configured) is valid: every request then
+    // falls through to the shared cluster above.
+    var silos = section.GetSection("Silos").GetChildren()
+        .ToDictionary(
+            c => c.Key,
+            c => c.Value ?? throw new InvalidOperationException($"Configuration 'Destinations:{serviceName}:Silos:{c.Key}' has no value."),
+            StringComparer.OrdinalIgnoreCase);
+
+    return new GatewayRouteCatalog.ServiceDestinations(shared, silos);
 }

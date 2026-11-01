@@ -34,7 +34,9 @@ public sealed class GatewayAdversarialInputTests : IAsyncLifetime
         _sharedBackend = await TestBackend.StartAsync("shared");
         _siloBackend = await TestBackend.StartAsync("silo");
 
-        var destinations = new GatewayRouteCatalog.ServiceDestinations(TestBackend.Address(_sharedBackend), TestBackend.Address(_siloBackend));
+        var destinations = new GatewayRouteCatalog.ServiceDestinations(
+            TestBackend.Address(_sharedBackend),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["acme.example.com"] = TestBackend.Address(_siloBackend) });
         var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
 
         var configuration = new ConfigurationBuilder()
@@ -69,23 +71,34 @@ public sealed class GatewayAdversarialInputTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Documents a real finding from this audit (tracked separately, not fixed here — see
-    /// XD01-216's audit report under docs/security/): <see cref="GatewayRouteCatalog"/>'s silo
-    /// route matches on <see cref="HeaderMatchMode.Exists"/> alone, never the header's value, and
-    /// there is exactly one silo destination per Gateway deployment (not one per tenant domain).
-    /// Today that is a traffic-steering ambiguity, not a cross-tenant data leak: whichever silo
-    /// the Gateway proxies to still enforces its own real bearer-token authentication
-    /// (RequireAuthenticatedUser FallbackPolicy) before any data is returned, same as proven live
-    /// in XD01-215. It becomes a real routing-correctness problem the moment a second Tier-2
-    /// silo exists (XD01-217/218), since this Gateway cannot yet pick between them by header
-    /// value — tracked as a follow-up rather than redesigned under this audit ticket.
+    /// XD01-289 fixed the finding this test used to document: <see cref="GatewayRouteCatalog"/>'s
+    /// silo route now matches the <see cref="GatewayRouteCatalog.TenantDomainHeader"/>'s exact value (case-insensitively)
+    /// against the set of provisioned tenant domains, not merely the header's presence — only a
+    /// known tenant's own domain reaches a silo at all, any other value (including a value that
+    /// happens to look like another tenant's domain, or garbage) falls through to the shared
+    /// cluster.
     /// </summary>
+    [Theory]
+    [InlineData("some-other-tenant-entirely.example.com")]
+    [InlineData("x")]
+    [InlineData("")]
+    public async Task UnprovisionedTenantDomainHeaderValue_FallsThroughToSharedCluster_NeverAnArbitrarySilo(string headerValue)
+    {
+        using var client = _gateway.CreateClient();
+        if (!string.IsNullOrEmpty(headerValue))
+            client.DefaultRequestHeaders.Add(GatewayRouteCatalog.TenantDomainHeader, headerValue);
+
+        var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
+        var body = await response.Content.ReadFromJsonAsync<BackendIdentity>();
+
+        body!.Backend.Should().Be("shared",
+            "only a header value matching a provisioned tenant domain may reach a silo — everything else, including a well-formed but unknown domain, falls through to shared");
+    }
+
     [Theory]
     [InlineData("acme.example.com")]
     [InlineData("ACME.EXAMPLE.COM")]
-    [InlineData("some-other-tenant-entirely.example.com")]
-    [InlineData("x")]
-    public async Task AnyNonEmptyTenantDomainHeaderValue_RoutesToSiloCluster_RegardlessOfValue(string headerValue)
+    public async Task ProvisionedTenantDomainHeaderValue_RoutesToItsOwnSilo_RegardlessOfCase(string headerValue)
     {
         using var client = _gateway.CreateClient();
         client.DefaultRequestHeaders.Add(GatewayRouteCatalog.TenantDomainHeader, headerValue);
@@ -93,20 +106,21 @@ public sealed class GatewayAdversarialInputTests : IAsyncLifetime
         var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
         var body = await response.Content.ReadFromJsonAsync<BackendIdentity>();
 
-        body!.Backend.Should().Be("silo",
-            "the current route match is HeaderMatchMode.Exists — any non-empty value reaches the one configured silo destination, not just a known tenant's own domain");
+        body!.Backend.Should().Be("silo", "a provisioned tenant's own domain, in any case, must reach its silo");
     }
 
     [Fact]
-    public async Task TenantDomainHeader_WithSqlInjectionLikeValue_IsHandledSafelyAndStillRoutesToSilo()
+    public async Task TenantDomainHeader_WithSqlInjectionLikeValue_IsHandledSafelyAndFallsThroughToShared()
     {
         using var client = _gateway.CreateClient();
         client.DefaultRequestHeaders.Add(GatewayRouteCatalog.TenantDomainHeader, "'; DROP TABLE geo_entity; --");
 
         var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
+        var body = await response.Content.ReadFromJsonAsync<BackendIdentity>();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "the Gateway never interpolates header values into SQL — YARP's header match is a literal existence check — so a SQL-injection-shaped value must be inert, not cause a crash");
+            "the Gateway never interpolates header values into SQL — YARP's header match is a literal value comparison — so a SQL-injection-shaped value must be inert, not cause a crash");
+        body!.Backend.Should().Be("shared", "an injection-shaped value matches no provisioned tenant domain, so it falls through to shared like any other unknown value");
     }
 
     [Theory]

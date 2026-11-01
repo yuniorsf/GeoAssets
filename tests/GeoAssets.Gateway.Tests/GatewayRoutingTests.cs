@@ -28,7 +28,9 @@ public sealed class GatewayRoutingTests : IAsyncLifetime
         _sharedBackend = await TestBackend.StartAsync("shared");
         _siloBackend = await TestBackend.StartAsync("silo");
 
-        var destinations = new GatewayRouteCatalog.ServiceDestinations(TestBackend.Address(_sharedBackend), TestBackend.Address(_siloBackend));
+        var destinations = new GatewayRouteCatalog.ServiceDestinations(
+            TestBackend.Address(_sharedBackend),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["acme.example.com"] = TestBackend.Address(_siloBackend) });
         var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
 
         var host = await new HostBuilder()
@@ -59,7 +61,7 @@ public sealed class GatewayRoutingTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RequestWithTenantDomainHeader_RoutesToSiloClusterDespiteMatchingTheSamePathAsTheSharedRoute()
+    public async Task RequestWithProvisionedTenantDomainHeader_RoutesToSiloClusterDespiteMatchingTheSamePathAsTheSharedRoute()
     {
         using var client = _gateway.CreateClient();
         client.DefaultRequestHeaders.Add(GatewayRouteCatalog.TenantDomainHeader, "acme.example.com");
@@ -67,7 +69,31 @@ public sealed class GatewayRoutingTests : IAsyncLifetime
         var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
         var body = await response.Content.ReadFromJsonAsync<BackendIdentity>();
 
-        body!.Backend.Should().Be("silo", "a silo tenant's request must win over the shared route even though both match /api/geoassets/widgets");
+        body!.Backend.Should().Be("silo", "a provisioned silo tenant's request must win over the shared route even though both match /api/geoassets/widgets");
+    }
+
+    [Fact]
+    public async Task RequestWithUnprovisionedTenantDomainHeader_FallsThroughToSharedCluster()
+    {
+        using var client = _gateway.CreateClient();
+        client.DefaultRequestHeaders.Add(GatewayRouteCatalog.TenantDomainHeader, "some-other-tenant-entirely.example.com");
+
+        var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
+        var body = await response.Content.ReadFromJsonAsync<BackendIdentity>();
+
+        body!.Backend.Should().Be("shared", "a domain with no provisioned silo must never reach an arbitrary/wrong tenant's silo (XD01-289)");
+    }
+
+    [Fact]
+    public async Task RequestWithTenantDomainHeaderDifferingOnlyByCase_StillRoutesToSiloCluster()
+    {
+        using var client = _gateway.CreateClient();
+        client.DefaultRequestHeaders.Add(GatewayRouteCatalog.TenantDomainHeader, "ACME.EXAMPLE.COM");
+
+        var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
+        var body = await response.Content.ReadFromJsonAsync<BackendIdentity>();
+
+        body!.Backend.Should().Be("silo", "domain matching must be case-insensitive, same as DNS itself");
     }
 
     [Fact]

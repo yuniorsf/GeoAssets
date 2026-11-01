@@ -3,19 +3,26 @@ using Yarp.ReverseProxy.Configuration;
 namespace GeoAssets.Gateway;
 
 /// <summary>
-/// Builds the gateway's route/cluster table (XD01-213): for each proxied service, a
-/// dedicated-silo route (<see cref="TenantDomainHeader"/> present, <c>Order = 1</c> — lower
-/// runs first in YARP's precedence) and a shared multi-tenant route matching the identical path
-/// pattern with no header condition (<c>Order = 2</c>), so a silo tenant's request is routed to
-/// its own cluster even though both routes match the same path, and every other request falls
-/// through to the shared cluster.
+/// Builds the gateway's route/cluster table (XD01-213, per-tenant silo selection XD01-289): for
+/// each proxied service, one dedicated-silo route per provisioned tenant domain (<see cref="TenantDomainHeader"/>
+/// matched against that domain's exact value, case-insensitively, each at a lower <c>Order</c>
+/// than the shared route — lower runs first in YARP's precedence) and a shared multi-tenant
+/// route matching the identical path pattern with no header condition, so a silo tenant's
+/// request is routed to its own cluster even though all routes match the same path, while a
+/// request carrying no domain, or a domain with no provisioned silo, falls through to the shared
+/// cluster rather than an arbitrary/wrong tenant's silo.
 /// </summary>
 internal static class GatewayRouteCatalog
 {
     public const string TenantDomainHeader = "X-Tenant-Domain";
 
-    /// <summary>The shared-cluster and dedicated-silo-cluster base addresses for one proxied service.</summary>
-    internal sealed record ServiceDestinations(string SharedAddress, string SiloAddress);
+    /// <summary>
+    /// The shared-cluster address and the dedicated-silo addresses for one proxied service,
+    /// keyed by the tenant domain each silo is provisioned for. Empty
+    /// <paramref name="SiloAddressesByTenantDomain"/> is valid — every request then falls
+    /// through to <paramref name="SharedAddress"/>.
+    /// </summary>
+    internal sealed record ServiceDestinations(string SharedAddress, IReadOnlyDictionary<string, string> SiloAddressesByTenantDomain);
 
     public static (IReadOnlyList<RouteConfig> Routes, IReadOnlyList<ClusterConfig> Clusters) Build(
         ServiceDestinations geoAssets, ServiceDestinations ipBilling, ServiceDestinations fieldService)
@@ -33,28 +40,39 @@ internal static class GatewayRouteCatalog
     private static void AddService(
         List<RouteConfig> routes, List<ClusterConfig> clusters, string serviceName, string pathPattern, ServiceDestinations destinations)
     {
-        var siloClusterId = $"{serviceName}-silo";
         var sharedClusterId = $"{serviceName}-shared";
-
-        clusters.Add(SingleDestinationCluster(siloClusterId, destinations.SiloAddress));
         clusters.Add(SingleDestinationCluster(sharedClusterId, destinations.SharedAddress));
 
-        routes.Add(new RouteConfig
+        var order = 1;
+        foreach (var (tenantDomain, siloAddress) in destinations.SiloAddressesByTenantDomain)
         {
-            RouteId = $"{serviceName}-silo-route",
-            Order = 1,
-            ClusterId = siloClusterId,
-            Match = new RouteMatch
+            var slug = Slugify(tenantDomain);
+            var siloClusterId = $"{serviceName}-silo-{slug}";
+            clusters.Add(SingleDestinationCluster(siloClusterId, siloAddress));
+
+            routes.Add(new RouteConfig
             {
-                Path = pathPattern,
-                Headers = [new RouteHeader { Name = TenantDomainHeader, Mode = HeaderMatchMode.Exists }],
-            },
-        });
+                RouteId = $"{serviceName}-silo-route-{slug}",
+                Order = order++,
+                ClusterId = siloClusterId,
+                Match = new RouteMatch
+                {
+                    Path = pathPattern,
+                    Headers = [new RouteHeader
+                    {
+                        Name = TenantDomainHeader,
+                        Mode = HeaderMatchMode.ExactHeader,
+                        Values = [tenantDomain],
+                        IsCaseSensitive = false,
+                    }],
+                },
+            });
+        }
 
         routes.Add(new RouteConfig
         {
             RouteId = $"{serviceName}-shared-route",
-            Order = 2,
+            Order = order,
             ClusterId = sharedClusterId,
             Match = new RouteMatch { Path = pathPattern },
         });
@@ -68,4 +86,11 @@ internal static class GatewayRouteCatalog
             ["destination1"] = new DestinationConfig { Address = address },
         },
     };
+
+    /// <summary>A tenant domain turned into a valid, readable route/cluster id fragment — dots and anything non-alphanumeric become hyphens.</summary>
+    private static string Slugify(string tenantDomain)
+    {
+        var chars = tenantDomain.ToUpperInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray();
+        return new string(chars);
+    }
 }
