@@ -15,6 +15,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <!-- XD01-230: reuses TrenchDimensions/PavementReinstatementCalculator for the water-paving
+         sub-order spawn rule rather than duplicating ICERP trench math here. -->
+    <ProjectReference Include="..\GeoAssets.Domain.Sanitation\GeoAssets.Domain.Sanitation.csproj" />
   </ItemGroup>
 
 </Project>
