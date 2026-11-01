@@ -1,4 +1,5 @@
 using System.Globalization;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using GeoAssets.Domain.Sanitation.Icerp;
@@ -68,6 +69,22 @@ public static class WaterPavingSubOrderSpawner
     {
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["trenchLengthMeters"] = recordedTrench.LengthMeters.ToString(CultureInfo.InvariantCulture),
+            ["trenchWidthMeters"] = recordedTrench.WidthMeters.ToString(CultureInfo.InvariantCulture),
+            ["trenchDepthMeters"] = recordedTrench.DepthMeters.ToString(CultureInfo.InvariantCulture),
+            ["trenchAreaSquareMeters"] = recordedTrench.AreaSquareMeters.ToString(CultureInfo.InvariantCulture),
+            ["trenchVolumeCubicMeters"] = recordedTrench.VolumeCubicMeters.ToString(CultureInfo.InvariantCulture),
+        };
+
+        // XD01-252: the child inherits the parent's IScopeableResource.ScopeId (if any) so an
+        // OrganizationGrant scoped to the parent's município/subset (XD01-250) also authorizes
+        // the auto-spawned paving sub-order — without this, the child would silently fall
+        // outside any scoped grant that covered the parent.
+        if (((IScopeableResource)parentOrder).ScopeId is { } parentScopeId)
+            attributes["scopeId"] = parentScopeId;
+
         return new ServiceOrder
         {
             Title = $"Paving restoration — {parentOrder.Title}",
@@ -77,14 +94,7 @@ public static class WaterPavingSubOrderSpawner
             CreatedBy = parentOrder.CreatedBy,
             CreatedAt = now,
             Status = pavingOrderType.InitialStateKey ?? ServiceOrderStatus.Draft,
-            Attributes = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["trenchLengthMeters"] = recordedTrench.LengthMeters.ToString(CultureInfo.InvariantCulture),
-                ["trenchWidthMeters"] = recordedTrench.WidthMeters.ToString(CultureInfo.InvariantCulture),
-                ["trenchDepthMeters"] = recordedTrench.DepthMeters.ToString(CultureInfo.InvariantCulture),
-                ["trenchAreaSquareMeters"] = recordedTrench.AreaSquareMeters.ToString(CultureInfo.InvariantCulture),
-                ["trenchVolumeCubicMeters"] = recordedTrench.VolumeCubicMeters.ToString(CultureInfo.InvariantCulture),
-            },
+            Attributes = attributes,
         };
     }
 }

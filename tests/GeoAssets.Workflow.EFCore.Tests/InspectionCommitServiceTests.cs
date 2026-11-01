@@ -198,7 +198,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
     }
 
     private async Task<(string OrderId, byte[] RowVersion)> SeedPavingEligibleOrderAsync(
-        double trenchLengthMeters, double trenchWidthMeters, string boqLinesJson = "[]")
+        double trenchLengthMeters, double trenchWidthMeters, string boqLinesJson = "[]", string? scopeId = null)
     {
         _registry.Register(WaterSewerRepairOrderType);
         _registry.Register(PavingRestorationOrderType);
@@ -207,6 +207,20 @@ public sealed class InspectionCommitServiceTests : IDisposable
         var boundaryGeoJson = JsonSerializer.Serialize(boundary, GeoJsonSerializer.Options);
 
         var repo = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _registry);
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [ServiceOrderBoqAttributes.ContractorOrganizationIdKey] = Guid.Empty.ToString(),
+            [ServiceOrderBoqAttributes.BoqLinesKey] = boqLinesJson,
+            [ServiceOrderPavingAttributes.PavingEligibleKey] = "true",
+            [ServiceOrderPavingAttributes.PavingOrderTypeIdKey] = PavingRestorationOrderType.Id,
+            [ServiceOrderPavingAttributes.RecordedTrenchLengthMetersKey] = trenchLengthMeters.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [ServiceOrderPavingAttributes.RecordedTrenchWidthMetersKey] = trenchWidthMeters.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [ServiceOrderPavingAttributes.RecordedTrenchDepthMetersKey] = "1.5",
+            [ServiceOrderPavingAttributes.RecordedBoundaryGeoJsonKey] = boundaryGeoJson,
+        };
+        if (scopeId is not null)
+            attributes["scopeId"] = scopeId;
+
         var order = new ServiceOrder
         {
             OrderTypeId = WaterSewerRepairOrderType.Id,
@@ -214,17 +228,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
             CreatedBy = "tech-1",
             OrganizationId = Guid.Empty,
             CreatedAt = FixedNowUtc.UtcDateTime,
-            Attributes = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [ServiceOrderBoqAttributes.ContractorOrganizationIdKey] = Guid.Empty.ToString(),
-                [ServiceOrderBoqAttributes.BoqLinesKey] = boqLinesJson,
-                [ServiceOrderPavingAttributes.PavingEligibleKey] = "true",
-                [ServiceOrderPavingAttributes.PavingOrderTypeIdKey] = PavingRestorationOrderType.Id,
-                [ServiceOrderPavingAttributes.RecordedTrenchLengthMetersKey] = trenchLengthMeters.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                [ServiceOrderPavingAttributes.RecordedTrenchWidthMetersKey] = trenchWidthMeters.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                [ServiceOrderPavingAttributes.RecordedTrenchDepthMetersKey] = "1.5",
-                [ServiceOrderPavingAttributes.RecordedBoundaryGeoJsonKey] = boundaryGeoJson,
-            },
+            Attributes = attributes,
         };
 
         await repo.AddAsync(order);
@@ -245,6 +249,8 @@ public sealed class InspectionCommitServiceTests : IDisposable
         using var verifyContext = _fixture.NewContext();
         var reloadedParent = await new EFServiceOrderRepository(verifyContext, orderTypeRegistry: _registry).GetByIdAsync(orderId);
         reloadedParent!.Status.Should().Be(FieldWorkStatus.Inspected);
+        reloadedParent.ChildOrderIds.Should().Contain(result.PavingChildServiceOrderId,
+            "the parent/child relationship must be visible from the parent's own audit trail too (XD01-252)");
 
         var reloadedChild = await new EFServiceOrderRepository(verifyContext, orderTypeRegistry: _registry).GetByIdAsync(result.PavingChildServiceOrderId!);
         reloadedChild.Should().NotBeNull();
@@ -256,6 +262,21 @@ public sealed class InspectionCommitServiceTests : IDisposable
         measurements[0].ChildServiceOrderId.Should().Be(result.PavingChildServiceOrderId);
         measurements[0].RecordedAreaSquareMeters.Should().Be(100.0);
         measurements[0].VolumeCubicMeters.Should().Be(150.0);
+    }
+
+    [Fact]
+    public async Task CommitAsync_PavingEligible_ParentHasScopeId_PersistedChildInheritsIt()
+    {
+        var (orderId, rowVersion) = await SeedPavingEligibleOrderAsync(trenchLengthMeters: 10, trenchWidthMeters: 10, scopeId: "municipio-123");
+        var service = BuildService();
+
+        var result = await service.CommitAsync(orderId, rowVersion, performedByUserId: "inspector-1", catalogInstanceId: "catalog-primary");
+
+        using var verifyContext = _fixture.NewContext();
+        var reloadedChild = await new EFServiceOrderRepository(verifyContext, orderTypeRegistry: _registry).GetByIdAsync(result.PavingChildServiceOrderId!);
+
+        reloadedChild!.Attributes["scopeId"].Should().Be("municipio-123",
+            "a grant scoped to the parent's município must also authorize the persisted child after reload, not just the in-memory spawn (XD01-252)");
     }
 
     [Fact]

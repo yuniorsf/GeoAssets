@@ -98,6 +98,34 @@ public class WaterPavingSubOrderSpawnerTests
         act.Should().Throw<TrenchGeometryDivergenceException>();
     }
 
+    [Fact]
+    public void TransitionToInspectedWithPavingSubOrder_ParentHasScopeId_ChildInheritsIt()
+    {
+        var parent = ParentOrder();
+        parent.Attributes["scopeId"] = "municipio-123";
+        var boundary = SquareOfSide(-46.633, -23.55, sideMeters: 10);
+        var recordedTrench = new TrenchDimensions(LengthMeters: 10, WidthMeters: 10);
+
+        var child = WaterPavingSubOrderSpawner.TransitionToInspectedWithPavingSubOrder(
+            parent, recordedTrench, boundary, ParentOrderType, PavingOrderType, TimeProvider.System);
+
+        child.Attributes["scopeId"].Should().Be("municipio-123",
+            "an OrganizationGrant scoped to the parent's município (XD01-250) must also authorize the auto-spawned child (XD01-252)");
+    }
+
+    [Fact]
+    public void TransitionToInspectedWithPavingSubOrder_ParentHasNoScopeId_ChildHasNoneEither()
+    {
+        var parent = ParentOrder();
+        var boundary = SquareOfSide(-46.633, -23.55, sideMeters: 10);
+        var recordedTrench = new TrenchDimensions(LengthMeters: 10, WidthMeters: 10);
+
+        var child = WaterPavingSubOrderSpawner.TransitionToInspectedWithPavingSubOrder(
+            parent, recordedTrench, boundary, ParentOrderType, PavingOrderType, TimeProvider.System);
+
+        child.Attributes.Should().NotContainKey("scopeId");
+    }
+
     [Theory]
     [InlineData(115, 100, true)]   // exactly +15%
     [InlineData(85, 100, true)]    // exactly -15%
