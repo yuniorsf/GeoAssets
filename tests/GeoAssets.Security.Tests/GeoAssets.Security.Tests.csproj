@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <!-- Real Postgres+PostGIS instance — RLS can only be verified against a real Postgres
+         engine, and geo_entity's geometry column requires the postgis extension. -->
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- GeoAssetsDbContext (geo_entity) — its real migrations, including
+         AddGeoEntityRowLevelSecurity/ForceGeoEntityRowLevelSecurity, live in this project. -->
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
+    <!-- ServiceOrderDbContext (ServiceOrders, ContractorUsLedgerEntries) is declared here, but
+         its real migrations — AddServiceOrdersRowLevelSecurity,
+         AddContractorUsLedgerEntriesRowLevelSecurity — live in GeoAssets.Server's
+         MigrationsAssembly. Referencing it only loads types; its Program.cs top-level
+         statements never execute unless something invokes the compiler-synthesized Main
+         (confirmed precedent: GeoAssets.Server.Tests already references this same Exe-output
+         project for the same reason). This suite deliberately applies the REAL migrations
+         (Database.MigrateAsync()), not a hand-copied schema+policy, so a dropped or
+         misconfigured RLS migration fails this suite loudly (XD01-204's AC) instead of being
+         silently reapplied by the test itself. -->
+    <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
+  </ItemGroup>
+
+</Project>
