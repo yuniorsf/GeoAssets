@@ -12,10 +12,10 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 {
     // ── Identity ──────────────────────────────────────────────────────────────
 
-    public string Id          { get; init; } = Guid.NewGuid().ToString();
-    public string Title       { get; set;  } = string.Empty;
-    public string Description { get; set;  } = string.Empty;
-    public string OrderTypeId { get; set;  } = string.Empty;
+    public string Id { get; init; } = Guid.NewGuid().ToString();
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string OrderTypeId { get; set; } = string.Empty;
 
     // ── Concurrency ────────────────────────────────────────────────────────────
 
@@ -23,11 +23,11 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 
     // ── Workflow metadata ─────────────────────────────────────────────────────
 
-    public string               Status   { get; set; } = ServiceOrderStatus.Draft;
+    public string Status { get; set; } = ServiceOrderStatus.Draft;
     public ServiceOrderPriority Priority { get; set; } = ServiceOrderPriority.Normal;
 
-    public string  CreatedBy  { get; init; } = string.Empty;
-    public string? AssignedTo { get; set;  }
+    public string CreatedBy { get; init; } = string.Empty;
+    public string? AssignedTo { get; set; }
 
     /// <summary>See <see cref="IOrgOwnedResource"/>. Set-once at creation, like <see cref="CreatedBy"/>.</summary>
     public Guid OrganizationId { get; init; } = Guid.Empty;
@@ -38,10 +38,10 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
     /// initializer has no access to an injected <see cref="TimeProvider"/>). Callers that create
     /// a real order set this themselves from their own injected <see cref="TimeProvider"/>.
     /// </summary>
-    public DateTime  CreatedAt   { get; init; } = DateTime.MinValue;
-    public DateTime? UpdatedAt   { get; set;  }
-    public DateTime? ScheduledAt { get; set;  }
-    public DateTime? CompletedAt { get; set;  }
+    public DateTime CreatedAt { get; init; } = DateTime.MinValue;
+    public DateTime? UpdatedAt { get; set; }
+    public DateTime? ScheduledAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
 
     public Dictionary<string, string> Attributes { get; init; } = [];
     IReadOnlyDictionary<string, string> IServiceOrder.Attributes => Attributes;
@@ -68,7 +68,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 
     // ── Hierarchy ─────────────────────────────────────────────────────────────
 
-    public string?      ParentOrderId { get; set; }
+    public string? ParentOrderId { get; set; }
 
     /// <summary>
     /// Derived from <see cref="ParentOrderId"/> by the repository on every read.
@@ -80,31 +80,44 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 
     // ── Dispatch & audit ──────────────────────────────────────────────────────
 
-    public List<OrderDispatch>  Dispatches { get; init; } = [];
-    public List<OrderActionLog> ActionLog  { get; init; } = [];
+    public List<OrderDispatch> Dispatches { get; init; } = [];
+    public List<OrderActionLog> ActionLog { get; init; } = [];
 
-    IReadOnlyList<OrderDispatch>  IServiceOrder.Dispatches => Dispatches;
-    IReadOnlyList<OrderActionLog> IServiceOrder.ActionLog  => ActionLog;
+    IReadOnlyList<OrderDispatch> IServiceOrder.Dispatches => Dispatches;
+    IReadOnlyList<OrderActionLog> IServiceOrder.ActionLog => ActionLog;
 
     // ── Status transitions ────────────────────────────────────────────────────
 
     /// <summary>
     /// Moves the order to <paramref name="newStatus"/> and stamps <see cref="UpdatedAt"/>.
     /// Throws <see cref="InvalidServiceOrderTransitionException"/> if the transition is
-    /// not structurally legal per <see cref="ServiceOrderTransitions.IsValid"/>.
+    /// not structurally legal per <see cref="ServiceOrderTransitions.IsValid(string, string)"/>
+    /// (the global default graph).
     /// </summary>
     public ServiceOrder Transition(string newStatus, TimeProvider timeProvider)
+        => Transition(newStatus, timeProvider, orderType: null);
+
+    /// <summary>
+    /// Same as <see cref="Transition(string, TimeProvider)"/>, but validates against
+    /// <paramref name="orderType"/>'s own custom workflow graph when it defines one (see
+    /// <see cref="ServiceOrderTransitions.IsValid(OrderType?, string, string)"/>), falling back
+    /// to the global default graph when it doesn't (or when <paramref name="orderType"/> is
+    /// null — same behavior as the overload above). Added for <see cref="FieldWork.FieldWorkWorkflowGraph"/>
+    /// (XD01-220), whose states (e.g. "Scheduled", "EnRoute") the global default graph doesn't
+    /// know and would otherwise always reject.
+    /// </summary>
+    public ServiceOrder Transition(string newStatus, TimeProvider timeProvider, OrderType? orderType)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
-        if (!ServiceOrderTransitions.IsValid(Status, newStatus))
+        if (!ServiceOrderTransitions.IsValid(orderType, Status, newStatus))
             throw new InvalidServiceOrderTransitionException(Status, newStatus);
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
-        Status    = newStatus;
+        Status = newStatus;
         UpdatedAt = now;
 
-        if (ServiceOrderTransitions.IsSuccessState(null, newStatus))
+        if (ServiceOrderTransitions.IsSuccessState(orderType, newStatus))
             CompletedAt = now;
 
         return this;
@@ -112,29 +125,29 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 
     /// <summary>Appends a dispatch event and logs the action.</summary>
     public ServiceOrder DispatchTo(
-        string             targetId,
+        string targetId,
         DispatchTargetType targetType,
-        string             dispatchedBy,
-        TimeProvider       timeProvider,
-        string?            note              = null,
-        ActorKind          actorKind         = ActorKind.Human,
-        string?            agentInvocationId = null)
+        string dispatchedBy,
+        TimeProvider timeProvider,
+        string? note = null,
+        ActorKind actorKind = ActorKind.Human,
+        string? agentInvocationId = null)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
-        var now      = timeProvider.GetUtcNow().UtcDateTime;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         var dispatch = new OrderDispatch(targetId, targetType, dispatchedBy, now, note)
         {
-            ActorKind         = actorKind,
+            ActorKind = actorKind,
             AgentInvocationId = agentInvocationId
         };
         Dispatches.Add(dispatch);
         ActionLog.Add(new OrderActionLog(
-            Action         : OrderActionType.Dispatch,
-            PerformedBy    : dispatchedBy,
-            PerformedAt    : dispatch.DispatchedAt,
-            Comment        : note)
+            Action: OrderActionType.Dispatch,
+            PerformedBy: dispatchedBy,
+            PerformedAt: dispatch.DispatchedAt,
+            Comment: note)
         {
-            ActorKind         = actorKind,
+            ActorKind = actorKind,
             AgentInvocationId = agentInvocationId
         });
         UpdatedAt = now;
@@ -144,18 +157,18 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
     /// <summary>Records a performed action in the audit log and optionally transitions status.</summary>
     public ServiceOrder RecordAction(
         OrderActionType action,
-        string          performedBy,
-        TimeProvider    timeProvider,
-        string?         comment           = null,
-        string?         resultingStatus   = null,
-        ActorKind       actorKind         = ActorKind.Human,
-        string?         agentInvocationId = null)
+        string performedBy,
+        TimeProvider timeProvider,
+        string? comment = null,
+        string? resultingStatus = null,
+        ActorKind actorKind = ActorKind.Human,
+        string? agentInvocationId = null)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
         var now = timeProvider.GetUtcNow().UtcDateTime;
         ActionLog.Add(new OrderActionLog(action, performedBy, now, comment, resultingStatus)
         {
-            ActorKind         = actorKind,
+            ActorKind = actorKind,
             AgentInvocationId = agentInvocationId
         });
         if (resultingStatus is not null)

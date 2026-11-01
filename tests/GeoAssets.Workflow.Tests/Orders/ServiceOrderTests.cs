@@ -70,6 +70,52 @@ public class ServiceOrderTests
         order.Status.Should().Be(ServiceOrderStatus.Draft);
     }
 
+    // ── Transition(string, TimeProvider, OrderType?) ────────────────────────────
+
+    [Fact]
+    public void Transition_WithCustomOrderTypeGraph_AllowsAnEdgeTheDefaultGraphDoesNotKnow()
+    {
+        var orderType = new OrderType
+        {
+            Id = "custom",
+            DisplayName = "Custom",
+            States = [new WorkflowState("Weird", "Weird"), new WorkflowState("AlsoWeird", "Also Weird")],
+            Transitions = [new WorkflowTransition("Weird", "AlsoWeird")],
+        };
+        var order = new ServiceOrder { Status = "Weird" };
+
+        order.Transition("AlsoWeird", TimeProvider.System, orderType);
+
+        order.Status.Should().Be("AlsoWeird");
+    }
+
+    [Fact]
+    public void Transition_WithCustomOrderTypeGraph_IllegalEdge_ThrowsInvalidServiceOrderTransitionException()
+    {
+        var orderType = new OrderType
+        {
+            Id = "custom",
+            DisplayName = "Custom",
+            States = [new WorkflowState("Weird", "Weird"), new WorkflowState("AlsoWeird", "Also Weird")],
+            Transitions = [],
+        };
+        var order = new ServiceOrder { Status = "Weird" };
+
+        var act = () => order.Transition("AlsoWeird", TimeProvider.System, orderType);
+
+        act.Should().Throw<InvalidServiceOrderTransitionException>();
+    }
+
+    [Fact]
+    public void Transition_WithNullOrderType_BehavesLikeTheTwoArgumentOverload()
+    {
+        var order = new ServiceOrder { Status = ServiceOrderStatus.Draft };
+
+        order.Transition(ServiceOrderStatus.Pending, TimeProvider.System, orderType: null);
+
+        order.Status.Should().Be(ServiceOrderStatus.Pending);
+    }
+
     // ── RecordAction ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -192,7 +238,7 @@ public class ServiceOrderTests
     public void WithFeatures_ReplacesFeaturesAndRecordsSpec()
     {
         var order = new ServiceOrder();
-        var spec  = new FeatureSelectionSpec { StrategyId = "bounding-box", ExecutedAt = TimeProvider.System.GetUtcNow().UtcDateTime };
+        var spec = new FeatureSelectionSpec { StrategyId = "bounding-box", ExecutedAt = TimeProvider.System.GetUtcNow().UtcDateTime };
 
         order.WithFeatures([new GeoFeature { Id = "f1" }], TimeProvider.System, spec);
 
