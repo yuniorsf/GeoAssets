@@ -97,12 +97,12 @@ public static class IspAssetTypes
         Name = "ONT",
         IsBuiltIn = true,
         AllowedGeometryType = GeometryType.Point,
-        AttributesSchemaJson = """
+        AttributesSchemaJson = $$"""
         {
           "type": "object",
           "properties": {
-            "fsan":               { "type": "string", "pattern": "^[A-Za-z0-9]{8,20}$" },
-            "macAddress":         { "type": "string", "pattern": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$" },
+            "fsan":               { "type": "string", "pattern": "{{OpticalNetworkTerminalPatterns.FsanPattern}}" },
+            "macAddress":         { "type": "string", "pattern": "{{OpticalNetworkTerminalPatterns.MacAddressPattern}}" },
             "parentPtoFeatureId": { "type": "string", "minLength": 1 }
           },
           "required": ["fsan", "macAddress", "parentPtoFeatureId"]

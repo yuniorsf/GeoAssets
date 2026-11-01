@@ -30,6 +30,13 @@
     <!-- Watermark burn-in for field-work evidence photos (XD01-244) — version pinned to match
          apps/GeoAssets.Server/GeoAssets.Server.csproj's existing reference. -->
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
+    <!-- On-device barcode/QR decoding for FTTH tag/ONT label scanning (XD01-275) — the pure,
+         platform-agnostic ZXing.Net decode engine (BarcodeReaderGeneric + RGBLuminanceSource)
+         fed from a MediaPicker-captured still photo decoded via the SkiaSharp reference above,
+         rather than ZXing.Net.Maui.Controls' live-camera-preview XAML control — avoids pulling
+         in a second, less mature per-platform handler/view package on top of SkiaSharp, and
+         reuses the exact capture pattern MauiEvidenceCaptureGateway (XD01-244) already does. -->
+    <PackageReference Include="ZXing.Net" Version="0.16.9" />
   </ItemGroup>
 
   <PropertyGroup>
