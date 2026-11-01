@@ -5,13 +5,13 @@ using Xunit;
 
 namespace GeoAssets.Workflow.Tests.FieldWork;
 
-public class ConcessionaireSafetyChecklistSchemasTests
+public class SafetyChecklistSchemasTests
 {
     private static readonly OrderType ElectricalOrderType =
-        ConcessionaireSafetyChecklistSchemas.BuildElectricalOrderType("field-work-electrical", "Electrical Field Work");
+        SafetyChecklistSchemas.BuildElectricalOrderType("field-work-electrical", "Electrical Field Work");
 
     private static readonly OrderType SanitationOrderType =
-        ConcessionaireSafetyChecklistSchemas.BuildSanitationOrderType("field-work-sanitation", "Sanitation Field Work");
+        SafetyChecklistSchemas.BuildConfinedSpaceOrderType("field-work-sanitation", "Sanitation Field Work");
 
     private static Dictionary<string, string> AllTrueElectricalAttributes() => new(StringComparer.Ordinal)
     {

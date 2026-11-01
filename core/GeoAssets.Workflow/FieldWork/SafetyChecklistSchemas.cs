@@ -10,7 +10,7 @@ namespace GeoAssets.Workflow.FieldWork;
 ///
 /// <see cref="ElectricalAprSchema"/>'s boolean gates (NR-10 electrical safety, NR-35 work at
 /// height — including <c>nr35_pole_structural_integrity</c> and
-/// <c>nr35_weatherConditionsAcceptable</c>, XD01-245) and <see cref="SanitationNr33Schema"/>'s
+/// <c>nr35_weatherConditionsAcceptable</c>, XD01-245) and <see cref="ConfinedSpaceNr33Schema"/>'s
 /// gas-range bounds (NR-33 confined space) are a representative, structurally-correct starting
 /// checklist — the gate *names* and *mechanics* (every safety-critical boolean is
 /// <c>const: true</c>, so an explicit "false" or "not yet confirmed" omission both fail
@@ -23,7 +23,7 @@ namespace GeoAssets.Workflow.FieldWork;
 /// team before relying on them for a real crew's go/no-go decision, the same caveat
 /// XD01-209/210/211's regulatory domain assemblies carry for their own unverified constants.
 /// </summary>
-public static class ConcessionaireSafetyChecklistSchemas
+public static class SafetyChecklistSchemas
 {
     public const string ElectricalAprSchema = """
     {
@@ -58,7 +58,7 @@ public static class ConcessionaireSafetyChecklistSchemas
     }
     """;
 
-    public const string SanitationNr33Schema = """
+    public const string ConfinedSpaceNr33Schema = """
     {
       "type": "object",
       "properties": {
@@ -91,7 +91,7 @@ public static class ConcessionaireSafetyChecklistSchemas
     public static OrderType BuildElectricalOrderType(string id, string displayName, string description = "") =>
         FieldWorkWorkflowGraph.BuildOrderType(id, displayName, description, attributesSchemaJson: ElectricalAprSchema);
 
-    /// <summary>Builds a field-work <see cref="OrderType"/> gated by <see cref="SanitationNr33Schema"/>.</summary>
-    public static OrderType BuildSanitationOrderType(string id, string displayName, string description = "") =>
-        FieldWorkWorkflowGraph.BuildOrderType(id, displayName, description, attributesSchemaJson: SanitationNr33Schema);
+    /// <summary>Builds a field-work <see cref="OrderType"/> gated by <see cref="ConfinedSpaceNr33Schema"/>.</summary>
+    public static OrderType BuildConfinedSpaceOrderType(string id, string displayName, string description = "") =>
+        FieldWorkWorkflowGraph.BuildOrderType(id, displayName, description, attributesSchemaJson: ConfinedSpaceNr33Schema);
 }

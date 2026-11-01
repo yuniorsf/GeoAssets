@@ -7,7 +7,7 @@ namespace GeoAssets.Workflow.FieldWork;
 /// Real implementation of <see cref="IFieldWorkTransitionGuard.CanStartWorkAsync"/> (XD01-222):
 /// true once the order's own <see cref="IServiceOrder.Attributes"/> — the crew's digital
 /// checklist submission — validates against its <see cref="OrderType.AttributesSchemaJson"/>
-/// (see <see cref="ConcessionaireSafetyChecklistSchemas"/>), via the existing
+/// (see <see cref="SafetyChecklistSchemas"/>), via the existing
 /// <see cref="ServiceOrderAttributeValidator"/> pipeline.
 ///
 /// An order whose type isn't registered, or is registered with no

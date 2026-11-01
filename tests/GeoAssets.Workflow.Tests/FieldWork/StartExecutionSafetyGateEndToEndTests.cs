@@ -17,7 +17,7 @@ namespace GeoAssets.Workflow.Tests.FieldWork;
 public class StartExecutionSafetyGateEndToEndTests
 {
     private static readonly OrderType ElectricalOrderType =
-        ConcessionaireSafetyChecklistSchemas.BuildElectricalOrderType("field-work-electrical", "Electrical Field Work");
+        SafetyChecklistSchemas.BuildElectricalOrderType("field-work-electrical", "Electrical Field Work");
 
     private static Dictionary<string, string> AllTrueElectricalAttributes() => new(StringComparer.Ordinal)
     {
