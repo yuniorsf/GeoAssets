@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "geoassets-fieldservice.fullname" . }}
+  labels:
+    {{- include "geoassets-fieldservice.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "geoassets-fieldservice.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "geoassets-fieldservice.labels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      containers:
+        - name: geoassets-fieldservice-server
+          image: "{{ required "image.repository is required" .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: ConnectionStrings__GeoAssets
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "geoassets-fieldservice.secretName" . }}
+                  key: connectionString
+            - name: AzureAdCiam__Instance
+              value: {{ .Values.azureAdCiam.instance | quote }}
+            - name: AzureAdCiam__TenantId
+              value: {{ .Values.azureAdCiam.tenantId | quote }}
+            - name: AzureAdCiam__ClientId
+              value: {{ .Values.azureAdCiam.clientId | quote }}
+            {{- if .Values.postgres.statementTimeoutMs }}
+            - name: Postgres__StatementTimeoutMs
+              value: {{ .Values.postgres.statementTimeoutMs | quote }}
+            {{- end }}
+            - name: Observability__ServiceName
+              value: {{ .Values.observability.serviceName | quote }}
+            - name: Observability__ServiceVersion
+              value: {{ .Values.observability.serviceVersion | quote }}
+            {{- if .Values.observability.otlpEndpoint }}
+            - name: Observability__Otlp__Endpoint
+              value: {{ .Values.observability.otlpEndpoint | quote }}
+            - name: Observability__Otlp__Protocol
+              value: {{ .Values.observability.otlpProtocol | quote }}
+            {{- end }}
+            - name: Modules__Electrical__Enabled
+              value: {{ .Values.modules.electrical.enabled | quote }}
+            - name: Modules__Sanitation__Enabled
+              value: {{ .Values.modules.sanitation.enabled | quote }}
+            - name: Modules__NeutralPole__Enabled
+              value: {{ .Values.modules.neutralPole.enabled | quote }}
+            # Informational only — see values.yaml's multiTenancy.mode comment; no application
+            # code reads these today.
+            - name: MultiTenancy__Mode
+              value: {{ .Values.multiTenancy.mode | quote }}
+            {{- if .Values.multiTenancy.tenantName }}
+            - name: MultiTenancy__TenantName
+              value: {{ .Values.multiTenancy.tenantName | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,5 +1,8 @@
 using System.Net;
+using System.Text.Encodings.Web;
 using FluentAssertions;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
@@ -7,12 +10,29 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace GeoAssets.Infrastructure.Observability.Tests;
 
 public class ObservabilityApplicationExtensionsTests
 {
+    /// <summary>
+    /// Stands in for real bearer-token authentication — same pattern as
+    /// <c>GeoAssets.FieldService.Server.Tests.HostWiringTests.NoOpAuthenticationHandler</c>. Never
+    /// authenticates anyone; its only purpose here is to give <c>AddAuthentication</c> a
+    /// resolvable default scheme so <c>RequireAuthenticatedUser()</c> has something to challenge
+    /// against for an anonymous request.
+    /// </summary>
+    private sealed class NoOpAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+            => Task.FromResult(AuthenticateResult.NoResult());
+    }
+
     private static async Task<TestServer> BuildServerAsync()
     {
         var host = await new HostBuilder()
@@ -114,5 +134,46 @@ public class ObservabilityApplicationExtensionsTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         body.Should().Be("downstream");
+    }
+
+    /// <summary>
+    /// Regression test for a real bug (XD01-215): every host wired via
+    /// <c>GeoAssetsAuthenticationExtensions.AddGeoAssetsAuthentication</c> (GeoAssets.Server,
+    /// GeoAssets.FieldService.Server) sets a <c>FallbackPolicy</c> requiring an authenticated
+    /// user on every endpoint without an endpoint-specific policy. Discovered live: deploying
+    /// GeoAssets.FieldService.Server's real container image to a kind cluster under XD01-215's
+    /// Helm chart, Kubernetes' liveness/readiness probes (which carry no bearer token) got 401
+    /// from <c>/healthz</c> and the pod never became Ready. Uses minimal-hosting
+    /// <see cref="WebApplication"/> (not the bare <see cref="IApplicationBuilder"/>
+    /// <c>HostBuilder</c> pipeline the other tests in this file use) because only
+    /// <see cref="WebApplication"/> is also an <c>IEndpointRouteBuilder</c> — the exact condition
+    /// <see cref="ObservabilityApplicationExtensions.UseGeoAssetsObservability"/> branches on.
+    /// </summary>
+    [Fact]
+    public async Task Healthz_RemainsReachable_EvenWhenFallbackPolicyRequiresAuthentication()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddHealthChecks();
+        builder.Services.AddAuthentication("Test")
+            .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
+        builder.Services.AddAuthorization(options =>
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build());
+
+        var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseGeoAssetsObservability();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.GetAsync(new Uri("/healthz", UriKind.Relative));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK,
+            "a Kubernetes liveness/readiness probe carries no bearer token and must not be rejected by the FallbackPolicy");
+
+        await app.StopAsync();
     }
 }

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "geoassets-fieldservice.fullname" . }}-test-healthz
+  labels:
+    {{- include "geoassets-fieldservice.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: healthz-check
+      image: curlimages/curl:8.10.1
+      command:
+        - sh
+        - -c
+        - >-
+          curl -sf
+          http://{{ include "geoassets-fieldservice.fullname" . }}:{{ .Values.service.port }}/healthz

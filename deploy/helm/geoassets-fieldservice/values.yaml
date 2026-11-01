@@ -1,0 +1,68 @@
+# Default values target the shared multi-tenant SaaS tier. A Tier-2 dedicated
+# silo is the *same* chart with a different values file/--set overrides — see
+# values-dedicated-silo.yaml and docs/runbooks/tier2-silo-onboarding.md.
+
+image:
+  repository: ""   # e.g. ghcr.io/yourorg/geoassets-fieldservice-server — no registry/CI push exists yet (tracked gap, see chart README)
+  tag: ""          # required — pin an explicit digest/tag, never "latest"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+multiTenancy:
+  # "Shared" | "DedicatedSingleTenant" — informational/operational labeling only (surfaced as an
+  # env var and a pod label for telemetry and `kubectl` filtering). No application code branches
+  # on this value today — the actual isolation mechanism is simply which database
+  # connectionString below points at, per the "Zero Code Branching Invariant".
+  mode: Shared
+  tenantName: ""   # required when mode=DedicatedSingleTenant — becomes the "tenant" pod label
+
+# The GeoAssets Postgres connection string (maps to ConnectionStrings__GeoAssets). Required.
+# Supplied directly only for local/dev use — in any real cluster, leave this empty and set
+# existingSecretName instead (see README "Secrets").
+connectionString: ""
+
+# Name of a pre-existing Secret (e.g. provisioned by External Secrets Operator / the Key Vault
+# CSI driver, or by the Terraform module in deploy/terraform/tier2-silo) with keys
+# "connectionString" and, optionally, "azureAdCiamClientSecret". When set, this chart never
+# renders a Secret of its own and `connectionString` above is ignored.
+existingSecretName: ""
+
+azureAdCiam:
+  instance: ""     # e.g. https://<tenant>.ciamlogin.com/
+  tenantId: ""
+  clientId: ""
+
+postgres:
+  statementTimeoutMs: null   # XD01-214 "noisy neighbor" backstop — unset leaves Postgres' own default untouched
+
+modules:
+  electrical:
+    enabled: true
+  sanitation:
+    enabled: true
+  neutralPole:
+    enabled: true
+
+observability:
+  serviceName: geoassets-fieldservice-server
+  serviceVersion: "1.0.0"
+  otlpEndpoint: ""     # e.g. https://otlp.nr-data.net:4317 — see deploy/otel/README.md
+  otlpProtocol: Grpc
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

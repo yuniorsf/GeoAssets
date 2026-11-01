@@ -67,3 +67,12 @@ tests/GeoAssets.Workflow.Tests/.local/
 
 # Business/sales planning docs — not project source
 /Opportunity/
+
+# Terraform local state/provider cache (deploy/terraform/*) — the .lock.hcl file is committed
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log

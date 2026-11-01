@@ -1,0 +1,14 @@
+GeoAssets.FieldService.Server deployed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+  Mode:   {{ .Values.multiTenancy.mode }}{{ if .Values.multiTenancy.tenantName }} (tenant: {{ .Values.multiTenancy.tenantName }}){{ end }}
+  Image:  {{ .Values.image.repository }}:{{ .Values.image.tag }}
+
+Check rollout status:
+  kubectl rollout status deployment/{{ include "geoassets-fieldservice.fullname" . }} -n {{ .Release.Namespace }}
+
+Verify liveness from inside the cluster:
+  kubectl run -n {{ .Release.Namespace }} curl-check --rm -it --image=curlimages/curl --restart=Never -- \
+    curl -sf http://{{ include "geoassets-fieldservice.fullname" . }}:{{ .Values.service.port }}/healthz
+
+Or run this chart's own Helm test:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: geoassets-fieldservice
+description: >-
+  GeoAssets.FieldService.Server — deploys the exact same container image for
+  both the shared multi-tenant SaaS tier and a Tier-2 dedicated-silo tenant
+  (XD01-215). Which one a release produces is entirely a function of this
+  chart's values (connectionString, multiTenancy.mode) — no image variant,
+  build flag, or source change distinguishes them ("Zero Code Branching
+  Invariant").
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
