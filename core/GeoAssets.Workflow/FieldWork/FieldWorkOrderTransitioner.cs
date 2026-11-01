@@ -1,3 +1,4 @@
+using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.FieldWork;
@@ -8,7 +9,8 @@ namespace GeoAssets.Workflow.FieldWork;
 /// <see cref="ServiceOrderTransitions.IsValid(OrderType?, string, string)"/>), additionally
 /// consults <see cref="IFieldWorkTransitionGuard"/> for the two guarded edges, then applies the
 /// mutation through <see cref="ServiceOrder.Transition(string, TimeProvider, OrderType?)"/>.
-/// Pure domain logic — no infrastructure dependency.
+/// Pure domain logic — no infrastructure dependency of its own (a supplied
+/// <see cref="IFieldWorkTransitionGuard"/> may have one).
 /// </summary>
 public static class FieldWorkOrderTransitioner
 {
@@ -16,22 +18,35 @@ public static class FieldWorkOrderTransitioner
     /// Throws <see cref="InvalidServiceOrderTransitionException"/> both for a structurally
     /// illegal edge and for a structurally legal one whose guard rejects it — callers don't need
     /// to distinguish the two to handle the failure.
+    ///
+    /// <paramref name="devicePoint"/> is required (throws <see cref="ArgumentException"/> if
+    /// null) only when the edge being attempted is <see cref="FieldWorkStatus.EnRoute"/> →
+    /// <see cref="FieldWorkStatus.OnSite"/> — every other edge ignores it.
     /// </summary>
-    public static ServiceOrder Transition(
+    public static async Task<ServiceOrder> TransitionAsync(
         ServiceOrder order,
         string newStatus,
         TimeProvider timeProvider,
         OrderType fieldWorkOrderType,
-        IFieldWorkTransitionGuard? guard = null)
+        IFieldWorkTransitionGuard? guard = null,
+        GeoPoint? devicePoint = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(order);
         ArgumentNullException.ThrowIfNull(fieldWorkOrderType);
         guard ??= NullFieldWorkTransitionGuard.Instance;
 
-        if (IsGuardedEdge(order.Status, newStatus, FieldWorkStatus.EnRoute, FieldWorkStatus.OnSite) && !guard.CanArrive(order))
-            throw new InvalidServiceOrderTransitionException(order.Status, newStatus);
+        if (IsGuardedEdge(order.Status, newStatus, FieldWorkStatus.EnRoute, FieldWorkStatus.OnSite))
+        {
+            if (devicePoint is null)
+                throw new ArgumentException($"A device point is required for the {FieldWorkStatus.EnRoute} -> {FieldWorkStatus.OnSite} transition.", nameof(devicePoint));
 
-        if (IsGuardedEdge(order.Status, newStatus, FieldWorkStatus.OnSite, FieldWorkStatus.InProgress) && !guard.CanStartWork(order))
+            if (!await guard.CanArriveAsync(order, devicePoint, ct).ConfigureAwait(false))
+                throw new InvalidServiceOrderTransitionException(order.Status, newStatus);
+        }
+
+        if (IsGuardedEdge(order.Status, newStatus, FieldWorkStatus.OnSite, FieldWorkStatus.InProgress)
+            && !await guard.CanStartWorkAsync(order, ct).ConfigureAwait(false))
             throw new InvalidServiceOrderTransitionException(order.Status, newStatus);
 
         return order.Transition(newStatus, timeProvider, fieldWorkOrderType);

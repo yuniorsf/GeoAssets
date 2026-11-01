@@ -51,14 +51,14 @@ public interface IAssetProvider
 
         filtered = query.SortBy switch
         {
-            "name"      => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name, StringComparer.Ordinal)      : filtered.OrderBy(f => f.Properties.Name, StringComparer.Ordinal),
+            "name" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name, StringComparer.Ordinal) : filtered.OrderBy(f => f.Properties.Name, StringComparer.Ordinal),
             "createdAt" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.CreatedAt) : filtered.OrderBy(f => f.Properties.CreatedAt),
             "updatedAt" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.UpdatedAt) : filtered.OrderBy(f => f.Properties.UpdatedAt),
-            _           => query.SortDescending ? filtered.OrderByDescending(f => f.Id, StringComparer.Ordinal)                   : filtered.OrderBy(f => f.Id, StringComparer.Ordinal)
+            _ => query.SortDescending ? filtered.OrderByDescending(f => f.Id, StringComparer.Ordinal) : filtered.OrderBy(f => f.Id, StringComparer.Ordinal)
         };
 
         var matching = filtered.ToList();
-        var page     = matching.Skip(query.Skip).Take(query.Take).ToList();
+        var page = matching.Skip(query.Skip).Take(query.Take).ToList();
         return Task.FromResult(new PagedResult<GeoFeature> { Items = page, TotalCount = matching.Count });
     }
 
@@ -116,6 +116,29 @@ public interface IAssetProvider
     /// <paramref name="center"/>, ordered by ascending distance.
     /// </summary>
     IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees);
+
+    /// <summary>
+    /// True when <paramref name="point"/> is within <paramref name="toleranceMeters"/> of the
+    /// feature identified by <paramref name="featureId"/> — a real-world (meters), not
+    /// coordinate-degree, distance (XD01-221; see <see cref="Services.GeodeticDistanceCalculator"/>
+    /// for why that distinction matters and why <see cref="GetNearby"/>'s degree-based contract
+    /// isn't reused here). False when the feature doesn't exist or has no geometry.
+    ///
+    /// Default implementation uses <see cref="Services.GeodeticDistanceCalculator"/> against the
+    /// feature's <see cref="GeoGeometry.Centroid"/> — accurate enough for a field-crew arrival
+    /// tolerance measured in tens of meters, and correct for every existing implementer (in-memory
+    /// caches, REST, WFS) with no extra code. A provider backed by a real spatial database (e.g.
+    /// <c>PostgresAssetProvider</c>) may override this with a genuine server-side geodesic
+    /// predicate (PostGIS <c>ST_DWithin</c> on a <c>geography</c> cast) for full spheroidal
+    /// accuracy and to push the computation off this process.
+    /// </summary>
+    Task<bool> IsWithinDistanceAsync(string featureId, GeoPoint point, double toleranceMeters)
+    {
+        var feature = GetById(featureId);
+        if (feature?.Geometry is null) return Task.FromResult(false);
+
+        return Task.FromResult(Services.GeodeticDistanceCalculator.IsWithinDistance(feature.Geometry.Centroid, point, toleranceMeters));
+    }
 
     // ── Topology queries (graph-backed) ───────────────────────────────────────
     //
