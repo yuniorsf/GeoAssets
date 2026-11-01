@@ -46,6 +46,7 @@ public class ServiceOrderDbContext(
     internal DbSet<OutboxMessageRecord> OutboxMessages => Set<OutboxMessageRecord>();
     internal DbSet<InboxProcessedMessageRecord> InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
     internal DbSet<ContractorUsLedgerEntryRecord> ContractorUsLedgerEntries => Set<ContractorUsLedgerEntryRecord>();
+    internal DbSet<UsCatalogItemRecord> UsCatalogItems => Set<UsCatalogItemRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +75,12 @@ public class ServiceOrderDbContext(
         // above, this filter applies uniformly to every read path, including single-record
         // fetches: EFContractorUsLedgerRepository never calls IgnoreQueryFilters().
         modelBuilder.Entity<ContractorUsLedgerEntryRecord>()
+            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        // UsCatalogItemRecord (XD01-241) has no cross-contractor delegation mechanism either —
+        // same reasoning and same uniform-filter treatment as ContractorUsLedgerEntryRecord
+        // above: EFUsCatalogRepository never calls IgnoreQueryFilters().
+        modelBuilder.Entity<UsCatalogItemRecord>()
             .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
     }
 }
