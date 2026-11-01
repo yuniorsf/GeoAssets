@@ -206,6 +206,38 @@ public class MauiSyncGatewayTests
         savedBase!.Status.Should().Be(FieldWorkStatus.Pending);
     }
 
+    /// <summary>
+    /// XD01-276's AC: "Outbox flush is idempotent — reconnecting twice doesn't double-submit a
+    /// queued action." A connectivity-triggered reconnect just calls <see cref="MauiSyncGateway.SyncAsync"/>
+    /// again (see <c>GeoAssets.MAUI.Services.Offline.ConnectivitySyncTrigger</c>); this proves
+    /// the second call finds nothing left pending once the first call's dispatched entry is
+    /// excluded from <see cref="FakeLocalActionOutbox.GetPendingInOrderAsync"/>, so the sync
+    /// client's <c>PushAsync</c> is never invoked a second time for the same entry.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_CalledTwiceAfterSuccessfulPush_SecondCallPushesNothingAdditional()
+    {
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var localStore = new FakeLocalServiceOrderStore();
+        var outbox = new FakeLocalActionOutbox();
+        var cursorStore = new FakeLocalSyncCursorStore(new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+        var client = new FakeFieldServiceSyncClient
+        {
+            PushHandler = orders => orders.Select(o => new RemoteSyncPushResult(o.Id, true, null)).ToList(),
+        };
+        var order = Order("order-1", FieldWorkStatus.Pending);
+        var entry = Entry(order, sequenceNumber: 1);
+        outbox.Seed(entry);
+        var sut = Sut(localStore, outbox, cursorStore, client, timeProvider);
+
+        var first = await sut.SyncAsync();
+        var second = await sut.SyncAsync();
+
+        first.Pushed.Should().Be(1);
+        second.Pushed.Should().Be(0, "the entry dispatched in the first call must not be re-flushed");
+        client.PushedOrderIdsInCallOrder.Should().ContainSingle().Which.Should().Be("order-1");
+    }
+
     [Fact]
     public async Task SyncAsync_MultiplePendingEntriesOutOfInsertionOrder_FlushesInAscendingSequenceOrder()
     {

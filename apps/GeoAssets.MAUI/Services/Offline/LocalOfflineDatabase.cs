@@ -16,6 +16,14 @@ namespace GeoAssets.MAUI.Services.Offline;
 /// no recent release; it is still the functional, widely-used option. This could not be
 /// runtime-verified on a device/simulator in this environment (same caveat as XD01-52/121) — only
 /// build-verified across the android/ios/maccatalyst TFMs.
+///
+/// Schema migration path for future columns (XD01-276's AC): <c>CreateTableAsync&lt;T&gt;</c>
+/// is sqlite-net-pcl's own additive migration — called again against an existing table, it runs
+/// <c>ALTER TABLE ADD COLUMN</c> for any property present on the C# row type but missing from the
+/// table, and is a no-op for columns that already exist. Every call below already goes through
+/// this path on every app start, so a future ticket adding a property to e.g.
+/// <see cref="LocalCtoPortCacheRow"/> gets its column added automatically — no separate
+/// version-number table was introduced on top of this existing mechanism.
 /// </summary>
 internal static class LocalOfflineDatabase
 {
@@ -50,6 +58,7 @@ internal static class LocalOfflineDatabase
             await connection.CreateTableAsync<LocalSyncCursorRow>().ConfigureAwait(false);
             await connection.CreateTableAsync<LocalMediaStagingRow>().ConfigureAwait(false);
             await connection.CreateTableAsync<LocalVectorTileRow>().ConfigureAwait(false);
+            await connection.CreateTableAsync<LocalCtoPortCacheRow>().ConfigureAwait(false);
 
             _connection = connection;
             return connection;

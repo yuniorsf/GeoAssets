@@ -215,10 +215,15 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILocalSyncCursorStore, SqliteLocalSyncCursorStore>();
         builder.Services.AddSingleton<ILocalMediaStagingStore, SqliteLocalMediaStagingStore>();
         builder.Services.AddSingleton<ILocalVectorTileCache, SqliteLocalVectorTileCache>();
+        // XD01-276: offline cache backing NearestAvailableCtoAssigner (XD01-273) with zero connectivity.
+        builder.Services.AddSingleton<ILocalCtoPortCacheStore, SqliteLocalCtoPortCacheStore>();
 
         var fieldServiceServerBaseUrl = builder.Configuration["FieldServiceServer:BaseUrl"]
             ?? throw new InvalidOperationException("FieldServiceServer:BaseUrl is not configured.");
         builder.Services.AddFieldServiceOfflineSync(fieldServiceServerBaseUrl.TrimEnd('/') + "/api/field-service/sync");
+
+        // XD01-276: connectivity-aware outbox flush on reconnect, started once from App's constructor.
+        builder.Services.AddSingleton<ConnectivitySyncTrigger>();
     }
 
     /// <summary>
