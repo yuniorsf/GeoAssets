@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Domain.NeutralPole</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Deliberately no ProjectReference at all (not even GeoAssets.Core), same isolation as
+       GeoAssets.Domain.Electrical/GeoAssets.Domain.Sanitation — this family of archetype
+       domain assemblies evolves independently of each other and of GeoAssets.Workflow's
+       generic state machine. -->
+
+</Project>
