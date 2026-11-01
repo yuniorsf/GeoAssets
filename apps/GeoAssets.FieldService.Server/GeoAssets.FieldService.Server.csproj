@@ -37,6 +37,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <!-- Archetype domain assemblies (XD01-212) — each stays independent of the others and of
+         GeoAssets.Workflow (see each one's own csproj doc comment); this host is where they get
+         composed, not where that independence is relaxed. -->
+    <ProjectReference Include="..\..\core\GeoAssets.Domain.Electrical\GeoAssets.Domain.Electrical.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Domain.Sanitation\GeoAssets.Domain.Sanitation.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Domain.NeutralPole\GeoAssets.Domain.NeutralPole.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />

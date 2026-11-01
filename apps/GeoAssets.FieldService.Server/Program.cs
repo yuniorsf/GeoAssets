@@ -73,6 +73,12 @@ builder.Services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRe
 builder.Services.AddScoped<IServiceOrderRepository>(sp =>
     new ValidatingServiceOrderRepository(new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>())));
 
+// ── Archetype domain modules (XD01-212) — each toggled independently via
+// "Modules:{Name}:Enabled" (default true). NeutralPoleRegistry is this module's only stateful
+// dependency; Electrical/Sanitation map purely stateless computation endpoints with nothing to
+// register here. ─────────────────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton<NeutralPoleRegistry>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -92,5 +98,17 @@ app.MapContractorUsLedgerApi();
 // Mobile offline-sync endpoints under /api/field-service/sync (XD01-208) — see
 // FieldServiceSyncRestApiExtensions for the full endpoint list.
 app.MapFieldServiceSyncApi();
+
+// Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
+// left disabled (or one whose own registration fails) never prevents another from mapping: each
+// MapXModuleApi() call only ever adds its own routes, so there's nothing shared to break.
+if (app.Configuration.GetValue("Modules:Electrical:Enabled", defaultValue: true))
+    app.MapElectricalModuleApi();
+
+if (app.Configuration.GetValue("Modules:Sanitation:Enabled", defaultValue: true))
+    app.MapSanitationModuleApi();
+
+if (app.Configuration.GetValue("Modules:NeutralPole:Enabled", defaultValue: true))
+    app.MapNeutralPoleModuleApi();
 
 await app.RunAsync().ConfigureAwait(false);
