@@ -87,6 +87,104 @@ public sealed class CrossTenantRowLevelSecurityTests
             .Where(e => e.SqlState == "42501", because: "WITH CHECK must reject a row claiming a different tenant than the session's own, even via raw SQL");
     }
 
+    // ── asset_type (XD01-216/XD01-288) ───────────────────────────────────────
+
+    [Fact]
+    public async Task AssetType_SelectAcrossTenants_OnlyReturnsOwnTenantsRowsAndGlobalBuiltIns()
+    {
+        var globalId = Guid.NewGuid();
+        var tenantAId = Guid.NewGuid();
+        var tenantBId = Guid.NewGuid();
+        var allIds = new[] { globalId, tenantAId, tenantBId };
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO asset_type ("Id", "Name", "IsBuiltIn", "IsProtected", "OrganizationId")
+                VALUES
+                    (@globalId, 'Global Built-In', true, true, '00000000-0000-0000-0000-000000000000'),
+                    (@tenantAId, 'Tenant A Custom', false, false, @orgA),
+                    (@tenantBId, 'Tenant B Custom', false, false, @orgB);
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("globalId", globalId));
+            insert.Parameters.Add(new NpgsqlParameter("tenantAId", tenantAId));
+            insert.Parameters.Add(new NpgsqlParameter("tenantBId", tenantBId));
+            insert.Parameters.Add(new NpgsqlParameter("orgA", TenantA));
+            insert.Parameters.Add(new NpgsqlParameter("orgB", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        try
+        {
+            await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+            await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+            await using var select = connection.CreateCommand();
+            select.CommandText = "SELECT \"Id\" FROM asset_type WHERE \"Id\" = ANY(@ids) ORDER BY \"Id\"";
+            select.Parameters.Add(new NpgsqlParameter("ids", allIds));
+            var ids = new List<Guid>();
+            await using (var reader = await select.ExecuteReaderAsync())
+                while (await reader.ReadAsync())
+                    ids.Add(reader.GetGuid(0));
+
+            ids.Should().BeEquivalentTo([globalId, tenantAId],
+                "tenant A must see its own custom asset type plus the global built-in, but never tenant B's");
+        }
+        finally
+        {
+            await using var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync();
+            await using var cleanup = owner.CreateCommand();
+            cleanup.CommandText = "DELETE FROM asset_type WHERE \"Id\" = ANY(@ids)";
+            cleanup.Parameters.Add(new NpgsqlParameter("ids", allIds));
+            await cleanup.ExecuteNonQueryAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AssetType_InsertClaimingGlobalOwnership_ViolatesRowSecurityPolicy()
+    {
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () =>
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO asset_type ("Id", "Name", "IsBuiltIn", "IsProtected", "OrganizationId")
+                VALUES (@id, 'Rogue Global Type', false, false, '00000000-0000-0000-0000-000000000000');
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+            await insert.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501",
+                because: "a tenant must never mint a new asset type visible to every other tenant by claiming OrganizationId = Guid.Empty");
+    }
+
+    [Fact]
+    public async Task AssetType_InsertUnderAnotherTenant_ViolatesRowSecurityPolicy()
+    {
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () =>
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO asset_type ("Id", "Name", "IsBuiltIn", "IsProtected", "OrganizationId")
+                VALUES (@id, 'Impersonated Type', false, false, @orgId);
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501");
+    }
+
     // ── ServiceOrders ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -278,15 +376,16 @@ public sealed class CrossTenantRowLevelSecurityTests
     /// two flat, fully literal queries), then matches rows against the EF-derived table-name set in
     /// memory — deliberately avoiding ever interpolating a table name into SQL text.
     ///
-    /// <c>asset_type</c> (<c>AssetTypeRow.OrganizationId</c>) is excluded: it has no RLS policy
-    /// today, a real pre-existing gap discovered while writing this test, tracked by XD01-288
-    /// rather than fixed here (out of this ticket's stated scope — see that ticket). Remove this
-    /// exclusion once XD01-288 lands.
+    /// <c>asset_type</c> was previously excluded here (XD01-288: it had an OrganizationId column
+    /// but no RLS policy at all). Fixed by AddAssetTypeRowLevelSecurity (XD01-216's cross-tenant
+    /// audit) — see <see cref="AssetType_SelectAcrossTenants_OnlyReturnsOwnTenantsRowsAndGlobalBuiltIns"/>
+    /// below for its dedicated coverage, including the global-built-in-row nuance that made this
+    /// table's policy not just a copy of geo_entity's.
     /// </summary>
     [Fact]
     public async Task EveryOrganizationScopedTable_HasRowLevelSecurityEnabledWithAtLeastOnePolicy()
     {
-        var knownGapsTrackedSeparately = new HashSet<string>(StringComparer.Ordinal) { "asset_type" }; // XD01-288
+        var knownGapsTrackedSeparately = new HashSet<string>(StringComparer.Ordinal);
         var connectionString = await SecurityTestContainerFixture.EnsureStartedAsync();
 
         var orgScopedTables = new HashSet<string>(StringComparer.Ordinal);
