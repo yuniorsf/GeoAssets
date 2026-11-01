@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Domain.Electrical</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Deliberately no ProjectReference at all (not even GeoAssets.Core) — this assembly's own
+       AC is "No dependency leakage into other archetype assemblies"; the ANEEL REN 1.000/PRODIST
+       Módulo 8 rules here are expressed purely over .NET primitives (TimeSpan, DateTimeOffset),
+       so this sector's rules can evolve independently of GeoAssets.Workflow's generic state
+       machine or any other archetype's own domain assembly (GeoAssets.Domain.Sanitation,
+       GeoAssets.Domain.NeutralPole). -->
+
+</Project>
