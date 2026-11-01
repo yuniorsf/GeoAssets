@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.Rules;
@@ -381,7 +382,12 @@ file sealed class RoleBasedActionRule(
 /// (<see cref="IServiceOrder.OrganizationId"/>). Matches on resource org, optional resource
 /// type (null = any), the action's permission code (<c>"serviceorders:{action}"</c>, lowercase
 /// — e.g. <c>"serviceorders:complete"</c>, matching the format decided when
-/// <c>OrganizationGrant</c> was designed), and an optional required role.
+/// <c>OrganizationGrant</c> was designed), an optional required role, and — when the grant
+/// names one (XD01-250) — the order's own <see cref="IScopeableResource.ScopeId"/>, by exact,
+/// case-sensitive match per that interface's own contract. A grant with no
+/// <see cref="WorkflowOrgGrant.ScopeId"/> stays ungated within <c>ResourceType</c>, the
+/// original behavior; a grant that does name one never matches an order whose own ScopeId is
+/// null (there is no subset to match against) or implements no scoping at all.
 ///
 /// Same pattern as every other built-in rule: abstains (returns <c>null</c>) rather than
 /// denying when no grant applies, so same-org access via the existing rules (Creator/
@@ -396,12 +402,14 @@ file sealed class CrossOrgGrantRule : IServiceOrderRule
     {
         var actionCode = $"serviceorders:{action.ToString().ToLowerInvariant()}";
         var resourceOrganizationId = ctx.Order.OrganizationId.ToString();
+        var orderScopeId = (ctx.Order as IScopeableResource)?.ScopeId;
 
         var hasGrant = ctx.Principal.OrgGrants.Any(g =>
             g.ResourceOrganizationId.Equals(resourceOrganizationId, StringComparison.OrdinalIgnoreCase) &&
             (g.ResourceType is null || g.ResourceType.Equals(nameof(Orders.ServiceOrder), StringComparison.OrdinalIgnoreCase)) &&
             g.AllowedActions.Contains(actionCode, StringComparer.OrdinalIgnoreCase) &&
-            (g.RequiredRole is null || ctx.Principal.HasRole(g.RequiredRole)));
+            (g.RequiredRole is null || ctx.Principal.HasRole(g.RequiredRole)) &&
+            (g.ScopeId is null || string.Equals(g.ScopeId, orderScopeId, StringComparison.Ordinal)));
 
         return hasGrant ? true : null;
     }

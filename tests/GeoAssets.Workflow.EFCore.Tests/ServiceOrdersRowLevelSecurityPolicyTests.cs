@@ -77,13 +77,15 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
                     "GranteeOrganizationId" uuid NOT NULL,
                     "ResourceOrganizationId" uuid NOT NULL,
                     "ResourceType" text NULL,
+                    "ScopeId" character varying(128) NULL,
                     "IsActive" boolean NOT NULL,
                     "ExpiresAt" timestamp with time zone NULL
                 );
                 """);
 
-            // Duplicated verbatim from AddServiceOrdersRowLevelSecurity.Up() — see that
-            // migration for why every identifier is quoted and the rationale for each clause.
+            // Duplicated verbatim from AddServiceOrdersRowLevelSecurity.Up() plus
+            // UpdateServiceOrdersRowLevelSecurityForScopeId.Up() (XD01-250) — see those
+            // migrations for why every identifier is quoted and the rationale for each clause.
             await db.Database.ExecuteSqlRawAsync(
                 """
                 ALTER TABLE "ServiceOrders" ENABLE ROW LEVEL SECURITY;
@@ -100,6 +102,7 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
                               AND g."IsActive"
                               AND (g."ExpiresAt" IS NULL OR g."ExpiresAt" > now())
                               AND (g."ResourceType" IS NULL OR g."ResourceType" = 'ServiceOrder')
+                              AND (g."ScopeId" IS NULL OR g."ScopeId" = ("ServiceOrders"."AttributesJson"::jsonb ->> 'scopeId'))
                         )
                     )
                     WITH CHECK (
@@ -111,6 +114,7 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
                               AND g."IsActive"
                               AND (g."ExpiresAt" IS NULL OR g."ExpiresAt" > now())
                               AND (g."ResourceType" IS NULL OR g."ResourceType" = 'ServiceOrder')
+                              AND (g."ScopeId" IS NULL OR g."ScopeId" = ("ServiceOrders"."AttributesJson"::jsonb ->> 'scopeId'))
                         )
                     );
                 """);
@@ -156,7 +160,7 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
         await db.Database.ExecuteSqlRawAsync("""TRUNCATE TABLE "ServiceOrders" CASCADE; TRUNCATE TABLE "OrganizationGrants" CASCADE;""");
     }
 
-    private static async Task SeedServiceOrderAsync(string id, Guid organizationId)
+    private static async Task SeedServiceOrderAsync(string id, Guid organizationId, string? scopeId = null)
     {
         await using var db = new ServiceOrderDbContext(CreateOptions(await EnsureContainerAsync()));
         await db.Database.OpenConnectionAsync();
@@ -168,26 +172,29 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
             INSERT INTO "ServiceOrders"
                 ("Id", "Title", "Description", "OrderTypeId", "Status", "Priority", "CreatedBy", "OrganizationId", "CreatedAt", "AttributesJson", "FeatureIdsJson", "RowVersion")
             VALUES
-                (@id, 'Test Order', '', 'type-a', 'Draft', 0, 'tester', @orgId, now(), '{}', '[]', E'\x01')
+                (@id, 'Test Order', '', 'type-a', 'Draft', 0, 'tester', @orgId, now(), @attributesJson::json, '[]', E'\x01')
             """;
         cmd.Parameters.Add(new NpgsqlParameter("id", id));
         cmd.Parameters.Add(new NpgsqlParameter("orgId", organizationId));
+        cmd.Parameters.Add(new NpgsqlParameter("attributesJson", scopeId is null ? "{}" : $"{{\"scopeId\":\"{scopeId}\"}}"));
         await cmd.ExecuteNonQueryAsync();
     }
 
-    private static async Task SeedGrantAsync(Guid resourceOrg, Guid granteeOrg, bool isActive, DateTime? expiresAt, string? resourceType)
+    private static async Task SeedGrantAsync(
+        Guid resourceOrg, Guid granteeOrg, bool isActive, DateTime? expiresAt, string? resourceType, string? scopeId = null)
     {
         await using var db = new ServiceOrderDbContext(CreateOptions(await EnsureContainerAsync()));
         await db.Database.OpenConnectionAsync();
         await using var cmd = db.Database.GetDbConnection().CreateCommand();
         cmd.CommandText = """
-            INSERT INTO "OrganizationGrants" ("Id", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "IsActive", "ExpiresAt")
-            VALUES (@id, @granteeOrg, @resourceOrg, @resourceType, @isActive, @expiresAt)
+            INSERT INTO "OrganizationGrants" ("Id", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId", "IsActive", "ExpiresAt")
+            VALUES (@id, @granteeOrg, @resourceOrg, @resourceType, @scopeId, @isActive, @expiresAt)
             """;
         cmd.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
         cmd.Parameters.Add(new NpgsqlParameter("granteeOrg", granteeOrg));
         cmd.Parameters.Add(new NpgsqlParameter("resourceOrg", resourceOrg));
         cmd.Parameters.Add(new NpgsqlParameter("resourceType", resourceType is null ? DBNull.Value : resourceType));
+        cmd.Parameters.Add(new NpgsqlParameter("scopeId", scopeId is null ? DBNull.Value : scopeId));
         cmd.Parameters.Add(new NpgsqlParameter("isActive", isActive));
         cmd.Parameters.Add(new NpgsqlParameter("expiresAt", expiresAt is null ? DBNull.Value : expiresAt));
         await cmd.ExecuteNonQueryAsync();
@@ -300,5 +307,71 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
         var ids = await ReadServiceOrderIdsAsync(connection);
 
         ids.Should().BeEmpty(because: "a grant scoped to a different ResourceType must not authorize ServiceOrder access, mirroring Evaluate_GrantForDifferentResourceType_DoesNotLeakAccess");
+    }
+
+    // ── ScopeId (XD01-250) ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SelectAsScopedRole_GranteeOrgWithGrantForMatchingScopeId_ReturnsRow()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("scope-match", ConcessionaireOrg, scopeId: "municipio-123");
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: null, scopeId: "municipio-123");
+
+        await using var connection = new NpgsqlConnection(await BuildScopedRoleConnectionStringAsync());
+        await connection.OpenAsync();
+        await SetSessionOrganizationAsync(connection, ContractorOrg);
+
+        var ids = await ReadServiceOrderIdsAsync(connection);
+
+        ids.Should().Equal(["scope-match"], because: "a grant scoped to the order's own ScopeId must authorize access, mirroring Evaluate_GrantWithMatchingScopeId_Allows");
+    }
+
+    [Fact]
+    public async Task SelectAsScopedRole_GranteeOrgWithGrantForDifferentScopeId_ReturnsNoRows()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("scope-mismatch", ConcessionaireOrg, scopeId: "municipio-999");
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: null, scopeId: "municipio-123");
+
+        await using var connection = new NpgsqlConnection(await BuildScopedRoleConnectionStringAsync());
+        await connection.OpenAsync();
+        await SetSessionOrganizationAsync(connection, ContractorOrg);
+
+        var ids = await ReadServiceOrderIdsAsync(connection);
+
+        ids.Should().BeEmpty(because: "a grant scoped to a different município must not leak access, mirroring Evaluate_GrantWithDifferentScopeId_DoesNotLeakAccess");
+    }
+
+    [Fact]
+    public async Task SelectAsScopedRole_GrantWithScopeId_OrderHasNoScopeId_ReturnsNoRows()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("no-scope-on-order", ConcessionaireOrg, scopeId: null);
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: null, scopeId: "municipio-123");
+
+        await using var connection = new NpgsqlConnection(await BuildScopedRoleConnectionStringAsync());
+        await connection.OpenAsync();
+        await SetSessionOrganizationAsync(connection, ContractorOrg);
+
+        var ids = await ReadServiceOrderIdsAsync(connection);
+
+        ids.Should().BeEmpty(because: "a scoped grant has nothing to match against an order with no scopeId of its own, mirroring Evaluate_GrantWithScopeId_OrderHasNoScopeId_DoesNotLeakAccess");
+    }
+
+    [Fact]
+    public async Task SelectAsScopedRole_GrantWithNullScopeId_AppliesRegardlessOfOrdersOwnScopeId()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("ungated-grant", ConcessionaireOrg, scopeId: "municipio-123");
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: null, scopeId: null);
+
+        await using var connection = new NpgsqlConnection(await BuildScopedRoleConnectionStringAsync());
+        await connection.OpenAsync();
+        await SetSessionOrganizationAsync(connection, ContractorOrg);
+
+        var ids = await ReadServiceOrderIdsAsync(connection);
+
+        ids.Should().Equal(["ungated-grant"], because: "a grant with no ScopeId stays ungated within ResourceType, the original pre-XD01-250 behavior");
     }
 }

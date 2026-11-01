@@ -22,11 +22,13 @@ public class ServiceOrderRulesTests
         string? assignedTo = null,
         string orderTypeId = "",
         string status = ServiceOrderStatus.Draft,
-        Guid? organizationId = null)
+        Guid? organizationId = null,
+        string? scopeId = null)
         => new()
         {
             CreatedBy = createdBy, AssignedTo = assignedTo, OrderTypeId = orderTypeId, Status = status,
             OrganizationId = organizationId ?? Guid.Empty,
+            Attributes = scopeId is null ? [] : new Dictionary<string, string>(StringComparer.Ordinal) { ["scopeId"] = scopeId },
         };
 
     private sealed class DelegateCreationRule(Func<WorkflowPrincipal, OrderType, bool?> fn) : IOrderCreationRule
@@ -794,6 +796,70 @@ public class ServiceOrderRulesTests
 
         rules.Evaluate(Principal(orgGrants: [grant], roles: ["Supervisor"]), OrderActionType.Complete, order)
             .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithMatchingScopeId_Allows()
+    {
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId, scopeId: "municipio-123");
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null, ScopeId: "municipio-123");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithDifferentScopeId_DoesNotLeakAccess()
+    {
+        // Non-leakage: a grant scoped to one município must not authorize another's orders.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId, scopeId: "municipio-999");
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null, ScopeId: "municipio-123");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithScopeId_OrderHasNoScopeId_DoesNotLeakAccess()
+    {
+        // Non-leakage: a scoped grant has nothing to match against an order with no ScopeId of its own.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId, scopeId: null);
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null, ScopeId: "municipio-123");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithNullScopeId_AppliesRegardlessOfOrdersOwnScopeId()
+    {
+        // Ungated: the original pre-XD01-250 behavior for a grant that never set ScopeId.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId, scopeId: "municipio-123");
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null, ScopeId: null);
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_GrantWithScopeId_MatchIsCaseSensitive()
+    {
+        // IScopeableResource.ScopeId's own contract: exact, case-sensitive match.
+        var resourceOrgId = Guid.NewGuid();
+        var order = Order(organizationId: resourceOrgId, scopeId: "Municipio-123");
+        var grant = new WorkflowOrgGrant(resourceOrgId.ToString(), ResourceType: null, ["serviceorders:complete"], RequiredRole: null, ScopeId: "municipio-123");
+        var rules = new ServiceOrderRules();
+
+        rules.Evaluate(Principal(orgGrants: [grant]), OrderActionType.Complete, order)
+            .Allowed.Should().BeFalse();
     }
 
     [Fact]

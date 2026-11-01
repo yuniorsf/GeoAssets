@@ -47,7 +47,8 @@ public sealed class ServerWorkflowPrincipalFactory(
                 ResourceOrganizationId: g.ResourceOrganizationId.ToString(),
                 ResourceType: g.ResourceType,
                 AllowedActions: g.AllowedActions,
-                RequiredRole: g.RequiredRole))],
+                RequiredRole: g.RequiredRole,
+                ScopeId: g.ScopeId))],
         };
     }
 }
