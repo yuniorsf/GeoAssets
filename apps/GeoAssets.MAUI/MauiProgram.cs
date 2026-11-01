@@ -8,12 +8,14 @@ using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.MAUI.Extensions;
 using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.MAUI.Services.Localization;
+using GeoAssets.MAUI.Services.Offline;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
+using GeoAssets.Shared.Services.Offline;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -40,9 +42,25 @@ public static class MauiProgram
         if (configStream is not null)
             builder.Configuration.AddJsonStream(configStream);
 
-#pragma warning disable CA1416 // Validate platform compatibility
+        // AddMauiBlazorWebView() is annotated supported from Android API 23 — matching this
+        // project's own AndroidMinSdkVersion (GeoAssets.MAUI.csproj) — while CA1416 reads the
+        // net10.0-android TFM's default platform-version floor (API 21) unless the call is
+        // flow-guarded by a version check the analyzer recognizes (a runtime-value disjunction
+        // like "!IsAndroid() || IsAndroidVersionAtLeast(23)" is NOT recognized; it must be the
+        // bare "if (IsAndroidVersionAtLeast(n))" shape). That shape would always evaluate false
+        // on iOS/MacCatalyst/Windows at runtime, silently skipping registration there — so the
+        // guard is scoped to the Android compile only via #if ANDROID (a MAUI SDK-defined
+        // preprocessor symbol), leaving the other TFMs' call unguarded exactly as before. This
+        // replaces a prior #pragma warning disable CA1416 with the documented fix instead of a
+        // suppression; CA1416 did not fire on this call for any other TFM.
+#if ANDROID
+        if (OperatingSystem.IsAndroidVersionAtLeast(23))
+        {
+            builder.Services.AddMauiBlazorWebView();
+        }
+#else
         builder.Services.AddMauiBlazorWebView();
-#pragma warning restore CA1416 // Validate platform compatibility
+#endif
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
@@ -54,6 +72,7 @@ public static class MauiProgram
         AddIdentityAuthorization(builder);
         AddServiceOrderWorkflow(builder);
         AddAssetsAndMap(builder);
+        AddOfflineSync(builder);
 
         return builder.Build();
     }
@@ -177,5 +196,25 @@ public static class MauiProgram
             sp.GetRequiredService<AssetService>(),
             sp.GetRequiredService<ILogger<ObservableAssetService>>(),
             sp.GetRequiredService<TimeProvider>()));
+    }
+
+    /// <summary>
+    /// Offline-first scaffolding for contractor field crews (XD01-243): SQLCipher-encrypted
+    /// local stores (<see cref="SqliteLocalServiceOrderStore"/> and friends) registered here
+    /// since they're MAUI-only/platform-specific, then layered under <see cref="MauiSyncGateway"/>
+    /// via <see cref="OfflineSyncServiceExtensions.AddFieldServiceOfflineSync"/> — the same
+    /// REST-vs-local DI split <see cref="AddServiceOrderWorkflow"/> already uses.
+    /// </summary>
+    private static void AddOfflineSync(MauiAppBuilder builder)
+    {
+        builder.Services.AddSingleton<ILocalServiceOrderStore, SqliteLocalServiceOrderStore>();
+        builder.Services.AddSingleton<ILocalActionOutbox, SqliteLocalActionOutbox>();
+        builder.Services.AddSingleton<ILocalSyncCursorStore, SqliteLocalSyncCursorStore>();
+        builder.Services.AddSingleton<ILocalMediaStagingStore, SqliteLocalMediaStagingStore>();
+        builder.Services.AddSingleton<ILocalVectorTileCache, SqliteLocalVectorTileCache>();
+
+        var fieldServiceServerBaseUrl = builder.Configuration["FieldServiceServer:BaseUrl"]
+            ?? throw new InvalidOperationException("FieldServiceServer:BaseUrl is not configured.");
+        builder.Services.AddFieldServiceOfflineSync(fieldServiceServerBaseUrl.TrimEnd('/') + "/api/field-service/sync");
     }
 }

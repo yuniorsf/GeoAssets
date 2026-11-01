@@ -25,6 +25,8 @@
     <!-- MSAL.NET public-client interactive/silent token acquisition (XD01-52) — version pinned
          to match apps/GeoAssets.Server/GeoAssets.Server.csproj's existing reference. -->
     <PackageReference Include="Microsoft.Identity.Client" Version="4.87.0" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
   </ItemGroup>
 
   <PropertyGroup>
