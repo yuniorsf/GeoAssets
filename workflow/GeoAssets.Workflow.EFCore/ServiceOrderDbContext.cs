@@ -45,6 +45,7 @@ public class ServiceOrderDbContext(
     internal DbSet<OrderTypeTransitionRecord> OrderTypeTransitions => Set<OrderTypeTransitionRecord>();
     internal DbSet<OutboxMessageRecord> OutboxMessages => Set<OutboxMessageRecord>();
     internal DbSet<InboxProcessedMessageRecord> InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
+    internal DbSet<ContractorUsLedgerEntryRecord> ContractorUsLedgerEntries => Set<ContractorUsLedgerEntryRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -67,5 +68,12 @@ public class ServiceOrderDbContext(
         // every legitimate cross-org grant target before that rule gets a chance to evaluate.
         modelBuilder.Entity<ServiceOrderRecord>()
             .HasQueryFilter(o => o.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        // ContractorUsLedgerEntryRecord has no cross-contractor delegation mechanism (XD01-202
+        // deliberately omits one — "no grant-based exception needed") so, unlike ServiceOrderRecord
+        // above, this filter applies uniformly to every read path, including single-record
+        // fetches: EFContractorUsLedgerRepository never calls IgnoreQueryFilters().
+        modelBuilder.Entity<ContractorUsLedgerEntryRecord>()
+            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
     }
 }

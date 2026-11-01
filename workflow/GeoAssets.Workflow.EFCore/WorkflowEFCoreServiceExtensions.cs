@@ -1,6 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
@@ -60,6 +61,7 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
 
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
+        services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
 
         return services;
     }
@@ -109,9 +111,9 @@ public static class WorkflowEFCoreServiceExtensions
         this IServiceProvider services,
         CancellationToken ct = default)
     {
-        using var scope      = services.CreateScope();
-        var registry         = scope.ServiceProvider.GetRequiredService<OrderTypeRegistry>();
-        var orderTypeRepo    = scope.ServiceProvider.GetRequiredService<IOrderTypeRepository>();
+        using var scope = services.CreateScope();
+        var registry = scope.ServiceProvider.GetRequiredService<OrderTypeRegistry>();
+        var orderTypeRepo = scope.ServiceProvider.GetRequiredService<IOrderTypeRepository>();
         await registry.LoadFromAsync(orderTypeRepo, ct).ConfigureAwait(false);
     }
 }
