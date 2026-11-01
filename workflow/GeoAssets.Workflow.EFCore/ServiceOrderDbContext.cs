@@ -48,6 +48,7 @@ public class ServiceOrderDbContext(
     internal DbSet<ContractorUsLedgerEntryRecord> ContractorUsLedgerEntries => Set<ContractorUsLedgerEntryRecord>();
     internal DbSet<UsCatalogItemRecord> UsCatalogItems => Set<UsCatalogItemRecord>();
     internal DbSet<ContractorUsPostingRecord> ContractorUsPostings => Set<ContractorUsPostingRecord>();
+    internal DbSet<PavingMeasurementRecord> PavingMeasurements => Set<PavingMeasurementRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -89,5 +90,11 @@ public class ServiceOrderDbContext(
         // IgnoreQueryFilters() either.
         modelBuilder.Entity<ContractorUsPostingRecord>()
             .HasQueryFilter(e => e.ContractorOrganizationId == _tenantContext.CurrentOrganizationId);
+
+        // PavingMeasurementRecord (XD01-291) — same uniform-filter treatment as
+        // ContractorUsPostingRecord: EFPavingMeasurementRepository never calls
+        // IgnoreQueryFilters() either.
+        modelBuilder.Entity<PavingMeasurementRecord>()
+            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
     }
 }

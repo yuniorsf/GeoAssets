@@ -495,6 +495,57 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("WorkflowOutboxMessages", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PavingMeasurementRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("ActualAreaSquareMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ChildServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<double>("DepthMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("LengthMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ParentServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<double>("RecordedAreaSquareMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("VolumeCubicMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("WidthMeters")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChildServiceOrderId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ParentServiceOrderId");
+
+                    b.ToTable("field_icerp_paving_measurements", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>
                 {
                     b.Property<string>("Id")
@@ -715,6 +766,23 @@ namespace GeoAssets.Server.Migrations
                         .IsRequired();
 
                     b.Navigation("OrderType");
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PavingMeasurementRecord", b =>
+                {
+                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ChildServiceOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_field_icerp_paving_measurements_ServiceOrders_Child");
+
+                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ParentServiceOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_field_icerp_paving_measurements_ServiceOrders_Parent");
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>

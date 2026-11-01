@@ -100,6 +100,7 @@ public sealed class FieldWorkInspectionApiTests : IAsyncLifetime, IDisposable
                             sp.GetRequiredService<OrderTypeRegistry>()));
                     services.AddScoped<IUsCatalogRepository, EFUsCatalogRepository>();
                     services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
+                    services.AddScoped<IPavingMeasurementRepository, EFPavingMeasurementRepository>();
                     services.AddSingleton(TimeProvider.System);
                     services.AddScoped<IOutboxWriter>(sp => new EFOutboxStore(
                         sp.GetRequiredService<ServiceOrderDbContext>(), sp.GetRequiredService<TimeProvider>(),

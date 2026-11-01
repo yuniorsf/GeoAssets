@@ -82,6 +82,7 @@ builder.Services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRe
 // same per-request tenant interceptors. ──────────────────────────────────────────────────────
 builder.Services.AddScoped<IUsCatalogRepository, EFUsCatalogRepository>();
 builder.Services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
+builder.Services.AddScoped<IPavingMeasurementRepository, EFPavingMeasurementRepository>();
 
 // ── OrderType registry (XD01-228) — registered (with the "field-work" graph) so
 // IServiceOrderRepository below can actually validate a transition into any FieldWork state

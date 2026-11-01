@@ -1,5 +1,6 @@
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
+using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Orders;
@@ -11,27 +12,26 @@ namespace GeoAssets.Workflow.Persistence;
 /// <see cref="ServiceOrder.Status"/> to <see cref="FieldWorkStatus.Inspected"/> under optimistic
 /// concurrency, posts one <see cref="ContractorUsPosting"/> ledger row per BoQ line (see
 /// <see cref="ServiceOrderBoqAttributes"/> for how the lines/contractor are read off the order),
-/// and stages an <see cref="AssetMutationBatchRequestedEvent"/> on the transactional outbox for
-/// async Core GIS mutation — all three writes commit or roll back together.
+/// stages an <see cref="AssetMutationBatchRequestedEvent"/> on the transactional outbox for async
+/// Core GIS mutation, and — only when <see cref="ServiceOrderPavingAttributes.IsPavingEligible"/>
+/// — spawns the paving/ICERP restoration child order and persists its
+/// <see cref="PavingMeasurement"/> audit row (XD01-291, completing the "blueprint text" XD01-228
+/// itself deliberately deferred). Every write commits or rolls back together.
 ///
 /// Atomicity depends on <see cref="db"/>/<paramref name="serviceOrders"/>-via-DI/
-/// <paramref name="postings"/>-via-DI/<paramref name="outboxWriter"/>-via-DI all resolving to
-/// repositories backed by the exact same <see cref="ServiceOrderDbContext"/> instance (i.e. all
-/// registered <c>Scoped</c> in the same DI scope/HTTP request) — the explicit transaction below
-/// is opened on <see cref="db"/>'s connection, and every repository call here must share it or
-/// the "single transaction" guarantee silently breaks.
-///
-/// Deliberately excludes this ticket's own blueprint text's "inserting
-/// field_icerp_paving_measurements when applicable, spawning a child paving sub-order" —
-/// no persisted schema for that table exists yet (XD01-230 only built the in-memory
-/// domain/validation logic). Tracked separately; this service only implements the three writes
-/// XD01-228's own Acceptance Criteria actually test.
+/// <paramref name="postings"/>-via-DI/<paramref name="pavingMeasurements"/>-via-DI/
+/// <paramref name="outboxWriter"/>-via-DI all resolving to repositories backed by the exact same
+/// <see cref="ServiceOrderDbContext"/> instance (i.e. all registered <c>Scoped</c> in the same DI
+/// scope/HTTP request) — the explicit transaction below is opened on <see cref="db"/>'s
+/// connection, and every repository call here must share it or the "single transaction"
+/// guarantee silently breaks.
 /// </summary>
 public sealed class InspectionCommitService(
     ServiceOrderDbContext db,
     IServiceOrderRepository serviceOrders,
     IContractorUsPostingRepository postings,
     IUsCatalogRepository catalog,
+    IPavingMeasurementRepository pavingMeasurements,
     IOutboxWriter outboxWriter,
     OrderTypeRegistry orderTypeRegistry,
     TimeProvider timeProvider)
@@ -69,7 +69,13 @@ public sealed class InspectionCommitService(
             {
                 var postedPostings = await PostLedgerLinesAsync(order, contractorOrganizationId, lines, ct).ConfigureAwait(false);
 
-                concreteOrder.Transition(FieldWorkStatus.Inspected, timeProvider, fieldWorkOrderType);
+                var spawnedChildOrderId = ServiceOrderPavingAttributes.IsPavingEligible(order.Attributes)
+                    ? await SpawnPavingChildIfEligibleAsync(concreteOrder, fieldWorkOrderType, ct).ConfigureAwait(false)
+                    : null;
+
+                if (spawnedChildOrderId is null)
+                    concreteOrder.Transition(FieldWorkStatus.Inspected, timeProvider, fieldWorkOrderType);
+
                 await serviceOrders.UpdateAsync(CopyWithRowVersion(concreteOrder, expectedRowVersion), ct).ConfigureAwait(false);
 
                 var outboxMessageId = await StageMutationEventAsync(order, performedByUserId, catalogInstanceId, ct).ConfigureAwait(false);
@@ -83,6 +89,7 @@ public sealed class InspectionCommitService(
                     TotalBrl = postedPostings.Sum(p => p.TotalBrl),
                     Postings = postedPostings,
                     OutboxMessageId = outboxMessageId,
+                    PavingChildServiceOrderId = spawnedChildOrderId,
                 };
             }
             catch
@@ -117,6 +124,49 @@ public sealed class InspectionCommitService(
         }
 
         return postedPostings;
+    }
+
+    /// <summary>
+    /// Spawns the paving/ICERP restoration child order for a paving-eligible water/sewer repair
+    /// (XD01-291): resolves the recorded trench and georeferenced boundary off
+    /// <paramref name="parentOrder"/>, delegates to <see cref="WaterPavingSubOrderSpawner"/>
+    /// (which transitions <paramref name="parentOrder"/> to <see cref="FieldWorkStatus.Inspected"/>
+    /// as part of the same call — a <see cref="TrenchGeometryDivergenceException"/> therefore
+    /// leaves it untouched), then persists the child order and its measurement audit row in the
+    /// same transaction as every other write this service makes. Returns the child order's id.
+    /// </summary>
+    private async Task<string> SpawnPavingChildIfEligibleAsync(
+        ServiceOrder parentOrder, OrderType parentOrderType, CancellationToken ct)
+    {
+        var pavingOrderTypeId = ServiceOrderPavingAttributes.ReadPavingOrderTypeId(parentOrder.Attributes);
+        var pavingOrderType = orderTypeRegistry.Find(pavingOrderTypeId)
+            ?? throw new KeyNotFoundException($"OrderType '{pavingOrderTypeId}' is not registered.");
+
+        var recordedTrench = ServiceOrderPavingAttributes.ReadRecordedTrench(parentOrder.Attributes);
+        var georeferencedBoundary = ServiceOrderPavingAttributes.ReadGeoreferencedBoundary(parentOrder.Attributes);
+
+        var child = WaterPavingSubOrderSpawner.TransitionToInspectedWithPavingSubOrder(
+            parentOrder, recordedTrench, georeferencedBoundary, parentOrderType, pavingOrderType, timeProvider);
+
+        await serviceOrders.AddAsync(child, ct).ConfigureAwait(false);
+
+        var measurement = new PavingMeasurement
+        {
+            ParentServiceOrderId = parentOrder.Id,
+            ChildServiceOrderId = child.Id,
+            OrganizationId = parentOrder.OrganizationId,
+            LengthMeters = recordedTrench.LengthMeters,
+            WidthMeters = recordedTrench.WidthMeters,
+            DepthMeters = recordedTrench.DepthMeters,
+            RecordedAreaSquareMeters = recordedTrench.AreaSquareMeters,
+            ActualAreaSquareMeters = GeodeticAreaCalculator.AreaSquareMeters(georeferencedBoundary),
+            VolumeCubicMeters = recordedTrench.VolumeCubicMeters,
+            RecordedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
+        };
+        await pavingMeasurements.AddAsync(measurement, ct).ConfigureAwait(false);
+        await pavingMeasurements.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return child.Id;
     }
 
     private Task<Guid> StageMutationEventAsync(
