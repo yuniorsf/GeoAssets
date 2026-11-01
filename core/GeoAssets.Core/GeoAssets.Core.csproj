@@ -12,6 +12,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
     <PackageReference Include="NetTopologySuite.IO.GeoJSON4STJ" Version="4.0.0" />
+    <!-- XD01-224: SIRGAS 2000 UTM reprojection — same package/version GeoAssets.Provider.Shapefile
+         already uses to reproject shapefile .prj sidecars to WGS84. -->
+    <PackageReference Include="ProjNET" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup>
