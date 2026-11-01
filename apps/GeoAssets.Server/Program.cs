@@ -4,6 +4,8 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Projects;
 using GeoAssets.Provider.PostgreSQL;
+using GeoAssets.Provider.PostgreSQL.Data;
+using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
@@ -49,6 +51,12 @@ await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).Con
 // tile request opens its own short-lived, thread-safe DbContext without touching
 // the shared IAssetProvider in-memory cache.
 builder.Services.AddGeoAssetsDbContextFactory(connectionString);
+
+// IAppliedMutationBatchStore (XD01-229) — same factory, a scoped per-request DbContext
+// (disposed by EFAppliedMutationBatchStore's own IAsyncDisposable, since nothing created
+// inside this factory lambda is tracked by the container directly).
+builder.Services.AddScoped<IAppliedMutationBatchStore>(sp =>
+    new EFAppliedMutationBatchStore(sp.GetRequiredService<IDbContextFactory<GeoAssetsDbContext>>().CreateDbContext()));
 
 // WMS renderer — queries PostGIS directly (geometry + color projection only).
 builder.Services.AddSingleton<WmsPostGisRenderer>();

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 
@@ -67,8 +68,8 @@ public sealed class RestGeoCoreClient(HttpClient http) : IGeoCoreClient
 
         var request = new TopologyNeighborsBatchRequest
         {
-            FeatureIds        = featureIds,
-            Kind              = edgeKind,
+            FeatureIds = featureIds,
+            Kind = edgeKind,
             TargetAssetTypeId = targetAssetTypeId
         };
 
@@ -83,6 +84,16 @@ public sealed class RestGeoCoreClient(HttpClient http) : IGeoCoreClient
             kv => kv.Key,
             kv => (IReadOnlyList<string>)kv.Value,
             StringComparer.Ordinal);
+    }
+
+    public async Task<AssetBatchAppliedEvent> ExecuteAssetDeltaBatchAsync(
+        AssetMutationBatchRequestedEvent batch, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        var response = await http.PostAsJsonAsync("mutation-batches", batch, _opts, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<AssetBatchAppliedEvent>(_opts, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Core GeoAssets Server returned an empty mutation-batch apply response.");
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)

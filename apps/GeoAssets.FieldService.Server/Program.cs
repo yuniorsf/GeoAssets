@@ -6,13 +6,13 @@ using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
+using GeoAssets.Provider.Rest;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
-using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -101,19 +101,26 @@ builder.Services.AddScoped<IServiceOrderRepository>(sp =>
         new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>(), orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>()),
         sp.GetRequiredService<OrderTypeRegistry>()));
 
-// ── Transactional outbox (XD01-228) — IOutboxWriter only (no background OutboxRelayProcessor):
-// draining PENDING rows into actual Core GIS mutations is XD01-229's own scope, still To Do, and
-// this ticket's own AC only requires the outbox row to be present and PENDING immediately after
-// commit, not dispatched. Protobuf chosen as the wire serializer since
-// AssetMutationBatchRequestedEvent (the message InspectionCommitService stages) already has a
-// ProtobufIntegrationMessageSerializer mapping — see that type's own switch cases. ───────────────
+// ── Transactional outbox + relay dispatcher (XD01-228/XD01-229) — AddWorkflowOutbox wires
+// IOutboxWriter, IOutboxDispatcherStore, IIdempotentInbox, and the background
+// OutboxRelayProcessor hosted service (claim → publish → mark dispatched/failed with
+// exponential backoff). Protobuf chosen as the wire serializer since
+// AssetMutationBatchRequestedEvent (the only message type this host's outbox stages, from
+// InspectionCommitService) already has a ProtobufIntegrationMessageSerializer mapping — see
+// that type's own switch cases. ───────────────────────────────────────────────────────────────
 builder.Services.AddWorkflowProtobufMessaging();
-builder.Services.AddScoped<EFOutboxStore>(sp => new EFOutboxStore(
-    sp.GetRequiredService<ServiceOrderDbContext>(),
-    sp.GetRequiredService<TimeProvider>(),
-    sp.GetService<IIntegrationMessageSerializer>(),
-    sourceService: "GeoAssets.FieldService.Server"));
-builder.Services.AddScoped<IOutboxWriter>(sp => sp.GetRequiredService<EFOutboxStore>());
+builder.Services.AddWorkflowOutbox();
+
+// ── Core GeoAssets Server bridge (XD01-229) — IIntegrationEventPublisher that
+// OutboxRelayProcessor calls per claimed message; GeoCoreBridgeEventPublisher turns that into a
+// direct HTTP call to Core's /api/geoassets/mutation-batches endpoint instead of a real broker
+// (this outbox has exactly one consumer, Core itself, so a broker hop buys nothing here). ───────
+var coreServerBaseUrl = builder.Configuration["GeoCoreServer:BaseUrl"]
+    ?? throw new InvalidOperationException(
+        "Configuration 'GeoCoreServer:BaseUrl' not found. " +
+        "Set it in appsettings.json or via the GeoCoreServer__BaseUrl environment variable.");
+builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
+builder.Services.AddScoped<IIntegrationEventPublisher, GeoCoreBridgeEventPublisher>();
 
 // ── Single-DB ACID inspection commit (XD01-228) ───────────────────────────────────────────────
 builder.Services.AddScoped<InspectionCommitService>();

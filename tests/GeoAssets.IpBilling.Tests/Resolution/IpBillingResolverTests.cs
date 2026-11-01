@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.IpBilling.AssetTypes;
 using GeoAssets.IpBilling.Models;
@@ -35,6 +36,7 @@ public class IpBillingResolverTests
 
         public Task<GeoFeature?> GetFeatureByIdAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<PagedResult<GeoFeature>> QueryFeaturesAsync(AssetQuery query, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<AssetBatchAppliedEvent> ExecuteAssetDeltaBatchAsync(AssetMutationBatchRequestedEvent batch, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<string>> GetNeighborIdsAsync(
             string featureId, string? edgeKind = null, string? targetAssetTypeId = null, CancellationToken ct = default)
@@ -57,9 +59,9 @@ public class IpBillingResolverTests
         var expectedId = Guid.NewGuid();
         var repo = new FakeTransformerIndexRepository(new IpTransformerIndex
         {
-            Id                   = Guid.NewGuid(),
-            MunicipioIbgeCode    = "3550308",
-            CodigoInstalacao     = "INST-001",
+            Id = Guid.NewGuid(),
+            MunicipioIbgeCode = "3550308",
+            CodigoInstalacao = "INST-001",
             TransformerFeatureId = expectedId
         });
         var sut = new DbTransformerResolver(repo);

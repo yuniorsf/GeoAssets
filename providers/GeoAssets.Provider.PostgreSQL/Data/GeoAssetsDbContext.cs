@@ -34,10 +34,11 @@ public class GeoAssetsDbContext(
 
     public DbSet<GeoEntityRow> GeoEntities => Set<GeoEntityRow>();
     public DbSet<GeoEntityAttributeRow> GeoEntityAttributes => Set<GeoEntityAttributeRow>();
-    public DbSet<AssetTypeRow> AssetTypes  => Set<AssetTypeRow>();
+    public DbSet<AssetTypeRow> AssetTypes => Set<AssetTypeRow>();
     public DbSet<LayerRow> Layers => Set<LayerRow>();
     public DbSet<LayerRuleRow> LayerRules => Set<LayerRuleRow>();
     public DbSet<LayerRuleConditionRow> LayerRuleConditions => Set<LayerRuleConditionRow>();
+    public DbSet<AppliedMutationBatchRow> AppliedMutationBatches => Set<AppliedMutationBatchRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

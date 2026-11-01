@@ -1,10 +1,11 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 
-namespace  GeoAssets.Server;
+namespace GeoAssets.Server;
 
 /// <summary>
 /// Maps GeoAssets REST API endpoints onto any <see cref="IEndpointRouteBuilder"/>.
@@ -48,12 +49,13 @@ public static class GeoAssetsRestApiExtensions
     public static IEndpointRouteBuilder MapGeoAssetsApi(
         this IEndpointRouteBuilder routes,
         string prefix = "/api/geoassets",
-        bool   wmsRequireAuthentication = true)
+        bool wmsRequireAuthentication = true)
     {
         var opts = GeoJsonSerializer.Options;
 
         MapFeaturesApi(routes, prefix, opts);
         MapAssetTypesApi(routes, prefix, opts);
+        MapMutationBatchesApi(routes, prefix, opts);
 
         // WFS 2.0 and WMS 1.1.1 handlers mounted under the same CORS-configured prefix so
         // Blazor WASM clients can reach them without separate CORS origin entries.
@@ -236,6 +238,31 @@ public static class GeoAssetsRestApiExtensions
             return Results.NoContent();
         })
             .RequireAuthorization("features:delete");
+    }
+
+    /// <summary>
+    /// Applies an <see cref="AssetMutationBatchRequestedEvent"/> atomically against
+    /// <see cref="IAssetProvider"/> (XD01-229) — the apply side of the outbox-dispatched batch
+    /// <c>InspectionCommitService</c> (XD01-228) stages from <c>GeoAssets.FieldService.Server</c>.
+    /// Idempotent by <see cref="AssetMutationBatchRequestedEvent.BatchId"/>: a redelivered batch
+    /// returns the original <see cref="AssetBatchAppliedEvent"/> without re-applying anything —
+    /// see <see cref="AssetMutationBatchApplier"/>'s own doc comment for why this is
+    /// <c>BatchId</c>-keyed rather than per-item optimistic concurrency.
+    /// </summary>
+    private static void MapMutationBatchesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapPost($"{prefix}/mutation-batches", async (
+            HttpRequest req, IAssetProvider provider, IAppliedMutationBatchStore store, TimeProvider timeProvider, CancellationToken ct) =>
+        {
+            var batch = await JsonSerializer.DeserializeAsync<AssetMutationBatchRequestedEvent>(req.Body, opts, ct).ConfigureAwait(false);
+            if (batch is null) return Results.BadRequest("Invalid mutation batch.");
+
+            var applied = await new IdempotentMutationBatchApplier(provider, store, timeProvider)
+                .ApplyAsync(batch, ct).ConfigureAwait(false);
+
+            return Results.Json(applied, opts);
+        })
+            .RequireAuthorization("features:edit");
     }
 
     private static void MapAssetTypesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
