@@ -151,6 +151,53 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("WorkflowInboxProcessedMessages", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ManholeAuditRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AuditedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AuditedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<double>("BoreOccupancyPercentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ConduitFeatureId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Nr33ChecklistAttributesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SpliceEnclosureCondition")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("SubDuctsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConduitFeatureId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("field_manhole_audits", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderActionLogRecord", b =>
                 {
                     b.Property<int>("Id")

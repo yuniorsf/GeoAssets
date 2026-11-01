@@ -358,6 +358,111 @@ public sealed class CrossTenantRowLevelSecurityTests
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
+    // ── field_manhole_audits (XD01-265) ───────────────────────────────────────
+
+    [Fact]
+    public async Task ManholeAudits_SelectAcrossTenants_OnlyReturnsOwnTenantsRows()
+    {
+        var idA = Guid.NewGuid();
+        var idB = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE field_manhole_audits CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO field_manhole_audits
+                    ("Id", "ConduitFeatureId", "OrganizationId", "BoreOccupancyPercentage", "SubDuctsJson", "SpliceEnclosureCondition", "Nr33ChecklistAttributesJson", "AuditedBy", "AuditedAtUtc")
+                VALUES
+                    (@idA, 'conduit-a', @orgA, 50, '[]', 'Good', '{}', 'tech-a', now()),
+                    (@idB, 'conduit-b', @orgB, 50, '[]', 'Good', '{}', 'tech-b', now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("idA", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgA", TenantA));
+            insert.Parameters.Add(new NpgsqlParameter("idB", idB));
+            insert.Parameters.Add(new NpgsqlParameter("orgB", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT \"Id\" FROM field_manhole_audits ORDER BY \"Id\"";
+        var ids = new List<Guid>();
+        await using (var reader = await select.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                ids.Add(reader.GetGuid(0));
+
+        ids.Should().Equal(idA);
+    }
+
+    [Fact]
+    public async Task ManholeAudits_InsertUnderAnotherTenant_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE field_manhole_audits CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () =>
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO field_manhole_audits
+                    ("Id", "ConduitFeatureId", "OrganizationId", "BoreOccupancyPercentage", "SubDuctsJson", "SpliceEnclosureCondition", "Nr33ChecklistAttributesJson", "AuditedBy", "AuditedAtUtc")
+                VALUES (@id, 'conduit-c', @orgId, 50, '[]', 'Good', '{}', 'tech-c', now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501");
+    }
+
+    [Fact]
+    public async Task ManholeAudits_DeleteAcrossTenants_AffectsNoRows()
+    {
+        var idA = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE field_manhole_audits CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO field_manhole_audits
+                    ("Id", "ConduitFeatureId", "OrganizationId", "BoreOccupancyPercentage", "SubDuctsJson", "SpliceEnclosureCondition", "Nr33ChecklistAttributesJson", "AuditedBy", "AuditedAtUtc")
+                VALUES (@id, 'conduit-a', @orgId, 50, '[]', 'Good', '{}', 'tech-a', now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantA));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
+
+        await using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM field_manhole_audits WHERE \"Id\" = @id";
+        delete.Parameters.Add(new NpgsqlParameter("id", idA));
+        var affected = await delete.ExecuteNonQueryAsync();
+
+        affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
+    }
+
     // ── Generic discovery: every org-scoped table must be RLS-protected ──────
 
     /// <summary>
