@@ -14,6 +14,12 @@ public interface IContractorUsLedgerRepository
     Task<IReadOnlyList<ContractorUsLedgerEntry>> GetAllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ContractorUsLedgerEntry>> GetByServiceOrderIdAsync(string serviceOrderId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Entries created in [<paramref name="fromUtc"/>, <paramref name="toExclusiveUtc"/>) —
+    /// backs a monthly "Espelho de Medição" style statement (XD01-207).
+    /// </summary>
+    Task<IReadOnlyList<ContractorUsLedgerEntry>> GetByPeriodAsync(DateTime fromUtc, DateTime toExclusiveUtc, CancellationToken ct = default);
+
     Task AddAsync(ContractorUsLedgerEntry entry, CancellationToken ct = default);
     Task UpdateAsync(ContractorUsLedgerEntry entry, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);

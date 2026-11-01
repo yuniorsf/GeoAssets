@@ -33,6 +33,16 @@ public sealed class EFContractorUsLedgerRepository(ServiceOrderDbContext db) : I
         return records.Select(ContractorUsLedgerMapper.ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<ContractorUsLedgerEntry>> GetByPeriodAsync(DateTime fromUtc, DateTime toExclusiveUtc, CancellationToken ct = default)
+    {
+        var records = await db.ContractorUsLedgerEntries
+            .Where(e => e.CreatedAt >= fromUtc && e.CreatedAt < toExclusiveUtc)
+            .OrderBy(e => e.CreatedAt)
+            .ToListAsync(ct).ConfigureAwait(false);
+
+        return records.Select(ContractorUsLedgerMapper.ToDomain).ToList();
+    }
+
     public async Task AddAsync(ContractorUsLedgerEntry entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);

@@ -4,6 +4,8 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
+using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,8 +17,7 @@ builder.Services.AddHealthChecks();
 
 // ── Authentication (bearer-token validation against the CIAM tenant; see "AzureAdCiam"
 // section in appsettings.json) — every endpoint requires an authenticated caller by default,
-// identical to GeoAssets.Server (XD01-12). No business endpoints exist yet to actually exercise
-// this (XD01-206's own AC), but the fallback policy already applies to anything mapped later. ──
+// identical to GeoAssets.Server (XD01-12). ───────────────────────────────────────────────────
 builder.Services.AddGeoAssetsAuthentication(builder.Configuration);
 
 // ── Tenant resolution (XD01-200/206) — same ICurrentUserAccessor/HttpTenantContext pattern as
@@ -33,8 +34,9 @@ builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 // interceptors attached via the (IServiceProvider, DbContextOptionsBuilder) overload, so each
 // request's own scoped ITenantContext drives TenantSessionInterceptor/TenantTransactionInterceptor
 // rather than a single process-wide value. Scoped (not the IDbContextFactory/warmed-singleton
-// pattern GeoAssets.Server uses for its IAssetProvider cache) since this host has no business
-// reads yet to warm a cache for. ──────────────────────────────────────────────────────────────
+// pattern GeoAssets.Server uses for its IAssetProvider cache) — no endpoint on this host reads
+// geo_entity yet, so there's no cache to warm; registered here regardless so the archetype
+// domain assemblies this host is meant to carry (XD01-209/210/211) have it ready. ──────────────
 var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
     ?? throw new InvalidOperationException(
         "Connection string 'GeoAssets' not found. " +
@@ -48,13 +50,33 @@ builder.Services.AddDbContext<GeoAssetsDbContext>((sp, options) => options
         sp.GetRequiredService<TenantSessionInterceptor>(),
         sp.GetRequiredService<TenantTransactionInterceptor>()));
 
+// ── Contractor US ledger (XD01-207) — ServiceOrderDbContext (ContractorUsLedgerEntries) shares
+// the same connection/database and the same two tenant interceptors as GeoAssetsDbContext above.
+// Its real migrations live in GeoAssets.Server's MigrationsAssembly (XD01-202) — this host
+// connects to the already-migrated schema rather than owning its own copy of the migration
+// history. ────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
+    .UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server"))
+    .AddInterceptors(
+        sp.GetRequiredService<TenantSessionInterceptor>(),
+        sp.GetRequiredService<TenantTransactionInterceptor>()));
+builder.Services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
+
+// ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
+builder.Services.AddOpenApi();
+
 var app = builder.Build();
 
 app.UseGeoAssetsAuthentication();
 app.UseGeoAssetsObservability();
 
-// No business endpoints yet — see XD01-206's own AC. Later tickets (XD01-207 contractor US
-// ledger, XD01-208 mobile offline sync, the Electrical/Sanitation/NeutralPole domain assemblies)
-// map their own endpoints here.
+// AllowAnonymous: API documentation discoverability shouldn't itself require a bearer token —
+// deliberate, minor exception to "every endpoint requires an authenticated caller by default".
+app.MapOpenApi().AllowAnonymous();
+
+// Contractor US ledger REST endpoints under /api/fieldservice/contractor-us-ledger (XD01-207) —
+// see ContractorUsLedgerRestApiExtensions for the full endpoint list.
+app.MapContractorUsLedgerApi();
 
 await app.RunAsync().ConfigureAwait(false);

@@ -15,7 +15,7 @@ public sealed class ContractorUsLedgerEntry : IOrgOwnedResource
     public Guid OrganizationId { get; init; } = Guid.Empty;
 
     /// <summary>The ServiceOrder this line item is claimed against, if any.</summary>
-    public string? ServiceOrderId { get; init; }
+    public string? ServiceOrderId { get; set; }
 
     public string UsCode { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

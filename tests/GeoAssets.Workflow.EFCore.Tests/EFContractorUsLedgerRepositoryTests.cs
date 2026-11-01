@@ -163,6 +163,38 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
         results.Should().ContainSingle().Which.ServiceOrderId.Should().Be("order-1");
     }
 
+    [Fact]
+    public async Task GetByPeriodAsync_FiltersByCreatedAtWithinTenant()
+    {
+        using var db = NewContext(TenantA);
+        var repo = new EFContractorUsLedgerRepository(db);
+
+        var january = new ContractorUsLedgerEntry
+        {
+            OrganizationId = TenantA,
+            ServiceOrderId = "order-jan",
+            UsCode = "US-JAN",
+            CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var february = new ContractorUsLedgerEntry
+        {
+            OrganizationId = TenantA,
+            ServiceOrderId = "order-feb",
+            UsCode = "US-FEB",
+            CreatedAt = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+
+        await repo.AddAsync(january);
+        await repo.AddAsync(february);
+        await repo.SaveChangesAsync();
+
+        var results = await repo.GetByPeriodAsync(
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        results.Should().ContainSingle().Which.ServiceOrderId.Should().Be("order-jan");
+    }
+
     // ── UpdateAsync ───────────────────────────────────────────────────────────
 
     [Fact]

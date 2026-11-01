@@ -17,6 +17,10 @@
          otherwise resolves to, which conflicts (MSB3277) with the 10.0.7 the FieldService.Server
          ProjectReference brings in transitively via Npgsql.EntityFrameworkCore.PostgreSQL. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+    <!-- Microsoft.EntityFrameworkCore.Sqlite transitively pins SQLitePCLRaw 2.1.11, which has a
+         known high-severity advisory (GHSA-2m69-gcr7-jv3q). Force the patched line directly. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
