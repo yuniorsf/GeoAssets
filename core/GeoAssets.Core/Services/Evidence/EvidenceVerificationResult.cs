@@ -1,3 +1,3 @@
-namespace GeoAssets.Shared.Services.Evidence;
+namespace GeoAssets.Core.Services.Evidence;
 
 public sealed record EvidenceVerificationResult(bool IsValid, string? FailureReason);

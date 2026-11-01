@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace GeoAssets.Shared.Services.Evidence;
+namespace GeoAssets.Core.Services.Evidence;
 
 /// <summary>
 /// The composite value written into an evidence photo's EXIF <c>ImageDescription</c> — the HMAC

@@ -156,6 +156,10 @@ app.MapFieldServiceSyncApi();
 // FieldWorkInspectionRestApiExtensions for the full endpoint list.
 app.MapFieldWorkInspectionApi();
 
+// Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
+// EvidenceVerificationRestApiExtensions for the full endpoint list.
+app.MapEvidenceVerificationApi();
+
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
 // MapXModuleApi() call only ever adds its own routes, so there's nothing shared to break.

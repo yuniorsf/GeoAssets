@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using GeoAssets.Core.Services.Evidence;
 
 namespace GeoAssets.Shared.Services.Evidence;
 
@@ -27,25 +26,7 @@ public sealed class EvidenceCaptureService(IEvidenceWatermarkComposer watermarkC
         return new EvidenceCaptureResult(signed, signature);
     }
 
-    public EvidenceVerificationResult Verify(byte[] signedJpegBytes, string tenantSecret)
-    {
-        ArgumentNullException.ThrowIfNull(signedJpegBytes);
-
-        if (!JpegExifImageDescriptionCodec.TryReadImageDescription(signedJpegBytes, out var raw))
-            return new EvidenceVerificationResult(false, "No evidence signature found in EXIF ImageDescription.");
-
-        if (!EvidenceSignatureDescriptor.TryParse(raw, out var descriptor) || descriptor is null)
-            return new EvidenceVerificationResult(false, "Evidence signature descriptor is malformed.");
-
-        var stripped = JpegExifImageDescriptionCodec.StripImageDescriptionSegment(signedJpegBytes);
-        var recomputed = EvidenceHmacSigner.ComputeSignature(
-            stripped, descriptor.Latitude, descriptor.Longitude, descriptor.CapturedAtUtc, descriptor.OrderId, tenantSecret);
-
-        var matches = CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(recomputed), Encoding.UTF8.GetBytes(descriptor.Signature));
-
-        return matches
-            ? new EvidenceVerificationResult(true, null)
-            : new EvidenceVerificationResult(false, "Signature does not match image/metadata — evidence may have been altered after capture.");
-    }
+    /// <summary>Delegates to <see cref="EvidenceVerificationService.Verify"/> (XD01-278) — moved to <c>GeoAssets.Core</c> so a non-Blazor host can call it too.</summary>
+    public EvidenceVerificationResult Verify(byte[] signedJpegBytes, string tenantSecret) =>
+        EvidenceVerificationService.Verify(signedJpegBytes, tenantSecret);
 }

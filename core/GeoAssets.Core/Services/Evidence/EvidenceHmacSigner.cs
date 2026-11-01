@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace GeoAssets.Shared.Services.Evidence;
+namespace GeoAssets.Core.Services.Evidence;
 
 /// <summary>
 /// XD01-244's "HMAC-SHA256 signature over image bytes + lat/lon/date/order-id" acceptance

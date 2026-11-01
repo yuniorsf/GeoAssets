@@ -1,8 +1,8 @@
 using FluentAssertions;
-using GeoAssets.Shared.Services.Evidence;
+using GeoAssets.Core.Services.Evidence;
 using Xunit;
 
-namespace GeoAssets.Shared.Tests.Services.Evidence;
+namespace GeoAssets.Core.Tests.Services.Evidence;
 
 public class EvidenceHmacSignerTests
 {

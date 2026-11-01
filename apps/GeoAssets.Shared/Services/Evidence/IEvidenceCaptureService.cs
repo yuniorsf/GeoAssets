@@ -1,3 +1,5 @@
+using GeoAssets.Core.Services.Evidence;
+
 namespace GeoAssets.Shared.Services.Evidence;
 
 /// <summary>

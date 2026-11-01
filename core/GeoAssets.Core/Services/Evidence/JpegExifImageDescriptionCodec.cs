@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace GeoAssets.Shared.Services.Evidence;
+namespace GeoAssets.Core.Services.Evidence;
 
 /// <summary>
 /// Writes and reads a single EXIF <c>ImageDescription</c> tag (0x010E) on a JPEG, as a minimal
