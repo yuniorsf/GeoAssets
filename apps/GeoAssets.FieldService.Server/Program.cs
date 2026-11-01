@@ -5,6 +5,7 @@ using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,6 +64,15 @@ builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
         sp.GetRequiredService<TenantTransactionInterceptor>()));
 builder.Services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
 
+// ── Mobile offline-sync (XD01-208) — same ServiceOrderDbContext registration above backs
+// IServiceOrderRepository too. Registered directly as EFServiceOrderRepository wrapped only in
+// ValidatingServiceOrderRepository (status-transition enforcement) — not the full
+// ObservableServiceOrderRepository/OrderTypeRegistry/ServiceOrderRules stack GeoAssets.Server
+// wires, since this host maps no order-creation endpoint that would need order-type-aware
+// creation rules (see FieldServiceSyncRestApiExtensions' own doc comment). ─────────────────────
+builder.Services.AddScoped<IServiceOrderRepository>(sp =>
+    new ValidatingServiceOrderRepository(new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>())));
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -78,5 +88,9 @@ app.MapOpenApi().AllowAnonymous();
 // Contractor US ledger REST endpoints under /api/fieldservice/contractor-us-ledger (XD01-207) —
 // see ContractorUsLedgerRestApiExtensions for the full endpoint list.
 app.MapContractorUsLedgerApi();
+
+// Mobile offline-sync endpoints under /api/field-service/sync (XD01-208) — see
+// FieldServiceSyncRestApiExtensions for the full endpoint list.
+app.MapFieldServiceSyncApi();
 
 await app.RunAsync().ConfigureAwait(false);
