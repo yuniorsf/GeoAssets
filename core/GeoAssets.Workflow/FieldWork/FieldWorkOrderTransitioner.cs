@@ -49,6 +49,10 @@ public static class FieldWorkOrderTransitioner
             && !await guard.CanStartWorkAsync(order, ct).ConfigureAwait(false))
             throw new InvalidServiceOrderTransitionException(order.Status, newStatus);
 
+        if (IsGuardedEdge(order.Status, newStatus, FieldWorkStatus.InProgress, FieldWorkStatus.Completed)
+            && !await guard.CanCompleteAsync(order, ct).ConfigureAwait(false))
+            throw new InvalidServiceOrderTransitionException(order.Status, newStatus);
+
         return order.Transition(newStatus, timeProvider, fieldWorkOrderType);
     }
 

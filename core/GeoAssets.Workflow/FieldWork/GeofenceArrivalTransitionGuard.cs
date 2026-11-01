@@ -38,4 +38,7 @@ public sealed class GeofenceArrivalTransitionGuard(IAssetProvider assetProvider)
     }
 
     public Task<bool> CanStartWorkAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(true);
+
+    /// <summary>Not this ticket's scope (XD01-246 owns completion's photo-evidence gate) — always true, same as <see cref="NullFieldWorkTransitionGuard"/>.</summary>
+    public Task<bool> CanCompleteAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(true);
 }

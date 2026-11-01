@@ -9,10 +9,11 @@ namespace GeoAssets.Workflow.Tests.FieldWork;
 
 public class FieldWorkOrderTransitionerTests
 {
-    private sealed class FakeGuard(bool canArrive = true, bool canStartWork = true) : IFieldWorkTransitionGuard
+    private sealed class FakeGuard(bool canArrive = true, bool canStartWork = true, bool canComplete = true) : IFieldWorkTransitionGuard
     {
         public Task<bool> CanArriveAsync(IServiceOrder order, GeoPoint devicePoint, CancellationToken ct = default) => Task.FromResult(canArrive);
         public Task<bool> CanStartWorkAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(canStartWork);
+        public Task<bool> CanCompleteAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(canComplete);
     }
 
     private static readonly OrderType FieldWorkOrderType =
@@ -75,6 +76,28 @@ public class FieldWorkOrderTransitionerTests
     }
 
     [Fact]
+    public Task TransitionAsync_InProgressToCompleted_GuardRejectsCompletion_ThrowsInvalidServiceOrderTransitionException()
+    {
+        var order = new ServiceOrder { Status = FieldWorkStatus.InProgress };
+        var guard = new FakeGuard(canComplete: false);
+
+        var act = () => FieldWorkOrderTransitioner.TransitionAsync(order, FieldWorkStatus.Completed, TimeProvider.System, FieldWorkOrderType, guard);
+
+        return act.Should().ThrowAsync<InvalidServiceOrderTransitionException>();
+    }
+
+    [Fact]
+    public async Task TransitionAsync_InProgressToCompleted_GuardAllowsCompletion_Succeeds()
+    {
+        var order = new ServiceOrder { Status = FieldWorkStatus.InProgress };
+        var guard = new FakeGuard(canComplete: true);
+
+        await FieldWorkOrderTransitioner.TransitionAsync(order, FieldWorkStatus.Completed, TimeProvider.System, FieldWorkOrderType, guard);
+
+        order.Status.Should().Be(FieldWorkStatus.Completed);
+    }
+
+    [Fact]
     public async Task TransitionAsync_UnguardedEdge_IgnoresARejectingGuardAndNeedsNoDevicePoint()
     {
         // A guard that rejects CanArrive/CanStartWork must never affect edges it doesn't own —
@@ -99,12 +122,13 @@ public class FieldWorkOrderTransitionerTests
     }
 
     [Fact]
-    public async Task NullFieldWorkTransitionGuard_AllowsBothGuardedTransitions()
+    public async Task NullFieldWorkTransitionGuard_AllowsAllThreeGuardedTransitions()
     {
         var order = new ServiceOrder();
         var guard = NullFieldWorkTransitionGuard.Instance;
 
         (await guard.CanArriveAsync(order, SomeDevicePoint)).Should().BeTrue();
         (await guard.CanStartWorkAsync(order)).Should().BeTrue();
+        (await guard.CanCompleteAsync(order)).Should().BeTrue();
     }
 }

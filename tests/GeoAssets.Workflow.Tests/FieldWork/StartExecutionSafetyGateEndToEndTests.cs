@@ -40,7 +40,8 @@ public class StartExecutionSafetyGateEndToEndTests
         registry.Register(ElectricalOrderType);
         return new CompositeFieldWorkTransitionGuard(
             NullFieldWorkTransitionGuard.Instance,
-            new SafetyChecklistTransitionGuard(registry));
+            new SafetyChecklistTransitionGuard(registry),
+            NullFieldWorkTransitionGuard.Instance);
     }
 
     [Fact]

@@ -34,4 +34,7 @@ public sealed class SafetyChecklistTransitionGuard(OrderTypeRegistry orderTypeRe
         var errors = ServiceOrderAttributeValidator.Validate(orderType, order.Attributes);
         return Task.FromResult(errors.Count == 0);
     }
+
+    /// <summary>Not this ticket's scope (XD01-246 owns completion's photo-evidence gate) — always true, same as <see cref="NullFieldWorkTransitionGuard"/>.</summary>
+    public Task<bool> CanCompleteAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(true);
 }

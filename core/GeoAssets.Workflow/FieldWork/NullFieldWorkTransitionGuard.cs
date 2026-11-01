@@ -16,4 +16,6 @@ public sealed class NullFieldWorkTransitionGuard : IFieldWorkTransitionGuard
     public Task<bool> CanArriveAsync(IServiceOrder order, GeoPoint devicePoint, CancellationToken ct = default) => Task.FromResult(true);
 
     public Task<bool> CanStartWorkAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(true);
+
+    public Task<bool> CanCompleteAsync(IServiceOrder order, CancellationToken ct = default) => Task.FromResult(true);
 }
