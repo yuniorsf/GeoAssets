@@ -9,16 +9,19 @@ namespace GeoAssets.Workflow.FieldWork;
 /// order's own attribute set, so no new submission/storage mechanism is needed.
 ///
 /// <see cref="ElectricalAprSchema"/>'s boolean gates (NR-10 electrical safety, NR-35 work at
-/// height) and <see cref="SanitationNr33Schema"/>'s gas-range bounds (NR-33 confined space) are a
-/// representative, structurally-correct starting checklist — the gate *names* and *mechanics*
-/// (every safety-critical boolean is <c>const: true</c>, so an explicit "false" or "not yet
-/// confirmed" omission both fail validation the same way; the gas bounds are a real, commonly
-/// cited atmospheric-testing range) are what this ticket owns. The exact current wording and
-/// numeric thresholds in Brazil's official NR-10/NR-33/NR-35 texts were not independently
-/// re-verified against the regulator's current publication — review these specific values with
-/// the concessionaire's own safety/compliance team before relying on them for a real crew's
-/// go/no-go decision, the same caveat XD01-209/210/211's regulatory domain assemblies carry for
-/// their own unverified constants.
+/// height — including <c>nr35_pole_structural_integrity</c> and
+/// <c>nr35_weatherConditionsAcceptable</c>, XD01-245) and <see cref="SanitationNr33Schema"/>'s
+/// gas-range bounds (NR-33 confined space) are a representative, structurally-correct starting
+/// checklist — the gate *names* and *mechanics* (every safety-critical boolean is
+/// <c>const: true</c>, so an explicit "false" or "not yet confirmed" omission both fail
+/// validation the same way; the gas bounds are a real, commonly cited atmospheric-testing range;
+/// <c>aprSignedAtUtc</c> is a required ISO-8601 UTC timestamp, so an APR submission is always
+/// dated — XD01-245's "timestamped APR submission" acceptance criterion) are what this ticket
+/// owns. The exact current wording and numeric thresholds in Brazil's official
+/// NR-10/NR-33/NR-35 texts were not independently re-verified against the regulator's current
+/// publication — review these specific values with the concessionaire's own safety/compliance
+/// team before relying on them for a real crew's go/no-go decision, the same caveat
+/// XD01-209/210/211's regulatory domain assemblies carry for their own unverified constants.
 /// </summary>
 public static class ConcessionaireSafetyChecklistSchemas
 {
@@ -33,7 +36,10 @@ public static class ConcessionaireSafetyChecklistSchemas
         "ppeInspected":          { "const": true },
         "workAreaIsolated":      { "const": true },
         "fallProtectionAnchored": { "const": true },
-        "riskAnalysisSignedByCrew": { "const": true }
+        "riskAnalysisSignedByCrew": { "const": true },
+        "nr35_pole_structural_integrity": { "const": true },
+        "nr35_weatherConditionsAcceptable": { "const": true },
+        "aprSignedAtUtc": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$" }
       },
       "required": [
         "circuitDeenergized",
@@ -43,7 +49,10 @@ public static class ConcessionaireSafetyChecklistSchemas
         "ppeInspected",
         "workAreaIsolated",
         "fallProtectionAnchored",
-        "riskAnalysisSignedByCrew"
+        "riskAnalysisSignedByCrew",
+        "nr35_pole_structural_integrity",
+        "nr35_weatherConditionsAcceptable",
+        "aprSignedAtUtc"
       ],
       "additionalProperties": false
     }

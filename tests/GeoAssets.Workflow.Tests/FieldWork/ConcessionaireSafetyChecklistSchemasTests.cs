@@ -23,6 +23,9 @@ public class ConcessionaireSafetyChecklistSchemasTests
         ["workAreaIsolated"] = "true",
         ["fallProtectionAnchored"] = "true",
         ["riskAnalysisSignedByCrew"] = "true",
+        ["nr35_pole_structural_integrity"] = "true",
+        ["nr35_weatherConditionsAcceptable"] = "true",
+        ["aprSignedAtUtc"] = "2026-11-01T14:32:00Z",
     };
 
     private static Dictionary<string, string> ValidSanitationAttributes() => new(StringComparer.Ordinal)
@@ -53,6 +56,8 @@ public class ConcessionaireSafetyChecklistSchemasTests
     [InlineData("workAreaIsolated")]
     [InlineData("fallProtectionAnchored")]
     [InlineData("riskAnalysisSignedByCrew")]
+    [InlineData("nr35_pole_structural_integrity")]
+    [InlineData("nr35_weatherConditionsAcceptable")]
     public void Electrical_AnyGateFalse_IsInvalid(string gate)
     {
         var attributes = AllTrueElectricalAttributes();
@@ -64,10 +69,24 @@ public class ConcessionaireSafetyChecklistSchemasTests
     [Theory]
     [InlineData("circuitDeenergized")]
     [InlineData("riskAnalysisSignedByCrew")]
+    [InlineData("nr35_pole_structural_integrity")]
+    [InlineData("aprSignedAtUtc")]
     public void Electrical_AnyGateMissingEntirely_IsInvalid(string gate)
     {
         var attributes = AllTrueElectricalAttributes();
         attributes.Remove(gate);
+
+        ServiceOrderAttributeValidator.Validate(ElectricalOrderType, attributes).Should().NotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("not-a-timestamp")]
+    [InlineData("2026-11-01")] // date only, no time component
+    [InlineData("2026-11-01T14:32:00")] // no UTC designator/offset
+    public void Electrical_AprSignedAtUtc_MalformedTimestamp_IsInvalid(string malformedTimestamp)
+    {
+        var attributes = AllTrueElectricalAttributes();
+        attributes["aprSignedAtUtc"] = malformedTimestamp;
 
         ServiceOrderAttributeValidator.Validate(ElectricalOrderType, attributes).Should().NotBeEmpty();
     }

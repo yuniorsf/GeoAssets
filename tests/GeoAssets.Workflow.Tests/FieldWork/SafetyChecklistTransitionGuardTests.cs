@@ -21,6 +21,9 @@ public class SafetyChecklistTransitionGuardTests
         ["workAreaIsolated"] = "true",
         ["fallProtectionAnchored"] = "true",
         ["riskAnalysisSignedByCrew"] = "true",
+        ["nr35_pole_structural_integrity"] = "true",
+        ["nr35_weatherConditionsAcceptable"] = "true",
+        ["aprSignedAtUtc"] = "2026-11-01T14:32:00Z",
     };
 
     private static OrderTypeRegistry RegistryWith(OrderType orderType)
