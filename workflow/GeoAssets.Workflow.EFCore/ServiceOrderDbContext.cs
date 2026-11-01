@@ -47,6 +47,7 @@ public class ServiceOrderDbContext(
     internal DbSet<InboxProcessedMessageRecord> InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
     internal DbSet<ContractorUsLedgerEntryRecord> ContractorUsLedgerEntries => Set<ContractorUsLedgerEntryRecord>();
     internal DbSet<UsCatalogItemRecord> UsCatalogItems => Set<UsCatalogItemRecord>();
+    internal DbSet<ContractorUsPostingRecord> ContractorUsPostings => Set<ContractorUsPostingRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -82,5 +83,11 @@ public class ServiceOrderDbContext(
         // above: EFUsCatalogRepository never calls IgnoreQueryFilters().
         modelBuilder.Entity<UsCatalogItemRecord>()
             .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        // ContractorUsPostingRecord (XD01-242) — same uniform-filter treatment, scoped by
+        // ContractorOrganizationId: EFContractorUsPostingRepository never calls
+        // IgnoreQueryFilters() either.
+        modelBuilder.Entity<ContractorUsPostingRecord>()
+            .HasQueryFilter(e => e.ContractorOrganizationId == _tenantContext.CurrentOrganizationId);
     }
 }

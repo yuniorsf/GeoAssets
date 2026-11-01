@@ -73,6 +73,57 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("ContractorUsLedgerEntries", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ContractorUsPostingRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContractorOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ItemCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<decimal>("MonetaryRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<DateTime>("PostedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<decimal>("TotalBrl")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalUs")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<decimal>("UnitUs")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceOrderId");
+
+                    b.HasIndex("ContractorOrganizationId", "PostedAtUtc");
+
+                    b.ToTable("field_contractor_us_postings", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.InboxProcessedMessageRecord", b =>
                 {
                     b.Property<Guid>("MessageId")
@@ -589,6 +640,15 @@ namespace GeoAssets.Server.Migrations
                     b.HasIndex("OrganizationId", "ItemCode");
 
                     b.ToTable("UsCatalogItems", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ContractorUsPostingRecord", b =>
+                {
+                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderActionLogRecord", b =>
