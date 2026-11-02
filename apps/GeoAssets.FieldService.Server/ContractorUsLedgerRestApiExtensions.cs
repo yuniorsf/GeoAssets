@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.FieldService.Server;
 
@@ -27,6 +28,7 @@ internal static class ContractorUsLedgerRestApiExtensions
         MapCreate(routes, prefix);
         MapUpdate(routes, prefix);
         MapDelete(routes, prefix);
+        MapEspelhoDeMedicaoDossier(routes, prefix);
 
         return routes;
     }
@@ -158,5 +160,38 @@ internal static class ContractorUsLedgerRestApiExtensions
         .WithName("DeleteContractorUsLedgerEntry")
         .WithSummary("Deletes a US ledger entry. A no-op (still 204) if the id doesn't exist or belongs to another contractor organization.")
         .Produces(StatusCodes.Status204NoContent);
+    }
+
+    /// <summary>
+    /// The automated Espelho de Medição dossier (XD01-249) — distinct from <see cref="MapReads"/>'s
+    /// un-signed monthly "espelho-medicao" listing above. A POST despite being read-only: see
+    /// <see cref="EspelhoDeMedicaoDossierRequest"/>'s own doc comment for why the tenant secret
+    /// can't go in a query string.
+    /// </summary>
+    private static void MapEspelhoDeMedicaoDossier(IEndpointRouteBuilder routes, string prefix)
+    {
+        routes.MapPost($"{prefix}/by-service-order/{{serviceOrderId}}/espelho-de-medicao-dossier", async (
+            string serviceOrderId,
+            EspelhoDeMedicaoDossierRequest request,
+            IServiceOrderRepository orderRepo,
+            IContractorUsPostingRepository postingRepo,
+            IContractorUsLedgerRepository ledgerRepo,
+            CancellationToken ct) =>
+        {
+            var order = await orderRepo.GetByIdAsync(serviceOrderId, ct).ConfigureAwait(false);
+            if (order is null) return Results.NotFound();
+
+            var postings = await postingRepo.GetByServiceOrderIdAsync(serviceOrderId, ct).ConfigureAwait(false);
+            var ledgerEntries = await ledgerRepo.GetByServiceOrderIdAsync(serviceOrderId, ct).ConfigureAwait(false);
+
+            var result = EspelhoDeMedicaoDossierGenerator.Generate(
+                order, contractorName: null, postings, ledgerEntries, request.RetentionRate, request.TenantSecret);
+
+            return Results.Ok(result);
+        })
+        .WithName("GenerateEspelhoDeMedicaoDossier")
+        .WithSummary("Compiles the signed Espelho de Medição pre-billing dossier for one inspected service order.")
+        .Produces<EspelhoDeMedicaoDossierResult>()
+        .Produces(StatusCodes.Status404NotFound);
     }
 }

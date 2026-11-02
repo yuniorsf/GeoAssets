@@ -7,6 +7,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -83,6 +84,11 @@ public sealed class ContractorUsLedgerApiTests : IAsyncLifetime, IDisposable
                     services.AddSingleton(TimeProvider.System);
                     services.AddDbContext<ServiceOrderDbContext>(options => options.UseSqlite(_connection));
                     services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
+                    // Needed for MapContractorUsLedgerApi's Espelho de Medição dossier endpoint
+                    // (XD01-249) to resolve at all, even though none of this file's own tests
+                    // call it — same whole-group lazy-metadata-building issue XD01-177 hit.
+                    services.AddScoped<IServiceOrderRepository, EFServiceOrderRepository>();
+                    services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
                 });
                 webHost.Configure(app =>
                 {
@@ -234,6 +240,24 @@ public sealed class ContractorUsLedgerApiTests : IAsyncLifetime, IDisposable
         var response = await client.PostAsJsonAsync(new Uri("/api/fieldservice/contractor-us-ledger", UriKind.Relative), NewRequest());
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // A full round-trip test seeding a ServiceOrder through this file's plain ServiceOrderDbContext
+    // hits the same SQLite "RowVersion NOT NULL" gap GeoAssets.IpBilling.EFCore.Tests'
+    // ServiceOrderSqliteTestDbContext already works around for its own fixture (XD01-180) — this
+    // file doesn't use that workaround. The 404 test below still proves the endpoint is wired and
+    // reachable through the real route group; EspelhoDeMedicaoDossierGeneratorTests (unit level)
+    // already covers reproduction/idempotency/signing thoroughly without needing EF at all.
+    [Fact]
+    public async Task EspelhoDeMedicaoDossier_UnknownServiceOrder_Returns404()
+    {
+        using var client = CreateClient(TenantA);
+
+        var response = await client.PostAsJsonAsync(
+            new Uri("/api/fieldservice/contractor-us-ledger/by-service-order/unknown-order/espelho-de-medicao-dossier", UriKind.Relative),
+            new EspelhoDeMedicaoDossierRequest("test-tenant-secret"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     public Task DisposeAsync()
