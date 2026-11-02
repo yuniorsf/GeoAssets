@@ -3,6 +3,7 @@ using GeoAssets.Core.Isp;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.FieldWork;
 
 namespace GeoAssets.FieldService.Server;
@@ -12,6 +13,11 @@ namespace GeoAssets.FieldService.Server;
 /// vertical host scaffolding. The performing user comes from the authenticated principal
 /// (<see cref="ICurrentUserAccessor"/>), never the request body, same audit-critical-action
 /// convention <see cref="FieldWorkInspectionRestApiExtensions"/> documents for its own endpoint.
+///
+/// Also records XD01-287's CTO occupancy-discrepancy KPI
+/// (<see cref="GeoAssetsMeter.RecordCtoOccupancyDiscrepancy"/>) whenever a reconciliation
+/// finds one — the magnitude only, never the CTO feature id, per the "no high-cardinality
+/// label on a metric" rule (per-CTO drill-down belongs in a trace/log attribute, not here).
 /// </summary>
 internal static class IspCtoOccupancyRestApiExtensions
 {
@@ -93,6 +99,7 @@ internal static class IspCtoOccupancyRestApiExtensions
         string id,
         CtoOccupancyReconcileRequest request,
         IGeoCoreClient geoCoreClient,
+        GeoAssetsMeter metrics,
         CancellationToken ct)
     {
         var feature = await geoCoreClient.GetFeatureByIdAsync(id, ct).ConfigureAwait(false);
@@ -101,6 +108,10 @@ internal static class IspCtoOccupancyRestApiExtensions
 
         var (occupied, _) = CtoCapacityCalculator.GetOccupiedAndTotal(feature.Properties.CustomAttributes);
         var discrepancy = CtoOccupancyDiscrepancyDetector.Detect(id, request.BssReportedOccupied, occupied);
+
+        if (discrepancy.HasDiscrepancy)
+            metrics.RecordCtoOccupancyDiscrepancy(discrepancy.Difference);
+
         return Results.Ok(discrepancy);
     }
 }

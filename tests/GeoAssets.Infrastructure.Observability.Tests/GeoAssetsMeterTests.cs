@@ -71,6 +71,73 @@ public class GeoAssetsMeterTests
         measurement.Tags.Should().Contain(new KeyValuePair<string, object?>("transport", "servicebus"));
     }
 
+    [Fact]
+    public void RecordFtthDropInstallDuration_RecordsHistogramValue()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordFtthDropInstallDuration(3_600);
+
+        var measurement = capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.isp.ftth_drop_install.duration").Subject;
+        measurement.Value.Should().Be(3_600);
+    }
+
+    [Theory]
+    [InlineData("Passed")]
+    [InlineData("GuardBlocked")]
+    public void RecordOpticalBudgetOutcome_IncrementsCounterWithOutcomeTag(string outcome)
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordOpticalBudgetOutcome(outcome);
+
+        var measurement = capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.isp.optical_budget.outcomes").Subject;
+        measurement.Value.Should().Be(1);
+        measurement.Tags.Should().Contain(new KeyValuePair<string, object?>("outcome", outcome));
+    }
+
+    [Fact]
+    public void RecordUtilityCutOutageDispatched_IncrementsCounterWithNoTags()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordUtilityCutOutageDispatched();
+
+        var measurement = capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.isp.utility_cut.outages_dispatched").Subject;
+        measurement.Value.Should().Be(1);
+        measurement.Tags.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecordFaultDispatchLatency_RecordsHistogramValue()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordFaultDispatchLatency(128.4);
+
+        var measurement = capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.isp.fault.dispatch_latency").Subject;
+        measurement.Value.Should().Be(128.4);
+    }
+
+    [Theory]
+    [InlineData(3, 3)]
+    [InlineData(-3, 3)]
+    [InlineData(0, 0)]
+    public void RecordCtoOccupancyDiscrepancy_RecordsAbsoluteMagnitude(int difference, double expectedRecorded)
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordCtoOccupancyDiscrepancy(difference);
+
+        var measurement = capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.isp.cto.occupancy_discrepancy").Subject;
+        measurement.Value.Should().Be(expectedRecorded);
+    }
+
     /// <summary>
     /// XD01-219's cardinality-safety requirement: organization.id/tenant id must never be a
     /// metric tag, since a metric series is keyed by its full tag set and a per-tenant tag would
@@ -87,6 +154,11 @@ public class GeoAssetsMeterTests
         meter.RecordOrderTransition("inspection", "Draft", "Pending");
         meter.RecordNotificationPublished("kafka");
         meter.RecordNotificationDuration(42.5, "servicebus");
+        meter.RecordFtthDropInstallDuration(3_600);
+        meter.RecordOpticalBudgetOutcome("Passed");
+        meter.RecordUtilityCutOutageDispatched();
+        meter.RecordFaultDispatchLatency(128.4);
+        meter.RecordCtoOccupancyDiscrepancy(3);
 
         capture.Measurements.Should().NotBeEmpty();
         foreach (var measurement in capture.Measurements)

@@ -7,6 +7,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Orders;
@@ -153,6 +154,7 @@ public sealed class IspOrderSpawnAndFtthTransitionRoutingTests
                     services.AddSingleton<ITenantContext>(new FixedTenantContext(organizationId));
                     services.AddSingleton<BssOrderSpawnService>();
                     services.AddSingleton<FtthDropInstallActivationDispatchService>();
+                    services.AddSingleton(new GeoAssetsMeter("test"));
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>

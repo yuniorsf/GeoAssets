@@ -8,6 +8,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.FieldWork;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -87,6 +88,7 @@ public sealed class IspOtdrFaultDispatchRoutingTests
                     services.AddSingleton(geoCoreClient ?? new FakeGeoCoreClient());
                     services.AddSingleton<IOtdrFaultCorrelationEngine, OtdrFaultCorrelationEngine>();
                     services.AddSingleton<OtdrEmergencyFaultDispatchService>();
+                    services.AddSingleton(new GeoAssetsMeter("test"));
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>

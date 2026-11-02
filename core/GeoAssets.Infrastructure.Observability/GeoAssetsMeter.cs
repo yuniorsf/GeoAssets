@@ -43,6 +43,21 @@ public sealed class GeoAssetsMeter : IDisposable
     /// <summary>Duration of notification publish calls in milliseconds.</summary>
     private readonly Histogram<double> _notificationDurationMs;
 
+    /// <summary>ISP rollout KPI #1: FTTH drop-install elapsed time, CrmSale to Activated (XD01-287).</summary>
+    private readonly Histogram<double> _ftthDropInstallDurationSeconds;
+
+    /// <summary>ISP rollout KPI #2: optical-budget verification outcomes (tag: outcome) (XD01-287).</summary>
+    private readonly Counter<long> _opticalBudgetOutcomes;
+
+    /// <summary>ISP rollout KPI #3: utility-cut/fault outages successfully dispatched (XD01-287).</summary>
+    private readonly Counter<long> _utilityCutOutagesDispatched;
+
+    /// <summary>ISP rollout KPI #4: OTDR fault-dispatch processing latency (XD01-287).</summary>
+    private readonly Histogram<double> _faultDispatchLatencyMs;
+
+    /// <summary>ISP rollout KPI #5: CTO splitter-port occupancy discrepancy magnitude (XD01-287).</summary>
+    private readonly Histogram<double> _ctoOccupancyDiscrepancy;
+
     public GeoAssetsMeter(string version)
     {
         _meter = new Meter(MeterName, version);
@@ -61,6 +76,31 @@ public sealed class GeoAssetsMeter : IDisposable
             "geoassets.notifications.duration",
             unit: "ms",
             description: "End-to-end duration of a notification publish call.");
+
+        _ftthDropInstallDurationSeconds = _meter.CreateHistogram<double>(
+            "geoassets.isp.ftth_drop_install.duration",
+            unit: "s",
+            description: "Elapsed time from CrmSale to Activated for a completed FTTH drop-install order.");
+
+        _opticalBudgetOutcomes = _meter.CreateCounter<long>(
+            "geoassets.isp.optical_budget.outcomes",
+            unit: "{readings}",
+            description: "Optical-budget verification outcomes observed while transitioning a FTTH drop into PtoPower (tag: outcome).");
+
+        _utilityCutOutagesDispatched = _meter.CreateCounter<long>(
+            "geoassets.isp.utility_cut.outages_dispatched",
+            unit: "{outages}",
+            description: "OTDR-correlated fault/outage events successfully dispatched to a pole pair.");
+
+        _faultDispatchLatencyMs = _meter.CreateHistogram<double>(
+            "geoassets.isp.fault.dispatch_latency",
+            unit: "ms",
+            description: "Processing latency of OTDR fault correlation/dispatch — a lower bound on real-world MTTR; this codebase has no fault-resolution timestamp to compute true detection-to-repair MTTR from.");
+
+        _ctoOccupancyDiscrepancy = _meter.CreateHistogram<double>(
+            "geoassets.isp.cto.occupancy_discrepancy",
+            unit: "{ports}",
+            description: "Absolute difference between a BSS-reported and GeoAssets-tracked CTO splitter-port occupancy count.");
     }
 
     // ── Recording helpers ─────────────────────────────────────────────────────
@@ -78,6 +118,21 @@ public sealed class GeoAssetsMeter : IDisposable
     public void RecordNotificationDuration(double milliseconds, string transport) =>
         _notificationDurationMs.Record(milliseconds,
             new KeyValuePair<string, object?>("transport", transport));
+
+    public void RecordFtthDropInstallDuration(double seconds) =>
+        _ftthDropInstallDurationSeconds.Record(seconds);
+
+    public void RecordOpticalBudgetOutcome(string outcome) =>
+        _opticalBudgetOutcomes.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
+    public void RecordUtilityCutOutageDispatched() =>
+        _utilityCutOutagesDispatched.Add(1);
+
+    public void RecordFaultDispatchLatency(double milliseconds) =>
+        _faultDispatchLatencyMs.Record(milliseconds);
+
+    public void RecordCtoOccupancyDiscrepancy(int difference) =>
+        _ctoOccupancyDiscrepancy.Record(Math.Abs(difference));
 
     public void Dispose() => _meter.Dispose();
 }

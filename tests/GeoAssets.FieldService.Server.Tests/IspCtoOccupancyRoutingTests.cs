@@ -10,6 +10,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Infrastructure.Observability;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -116,6 +117,7 @@ public sealed class IspCtoOccupancyRoutingTests
                     services.AddSingleton<ICurrentUserAccessor>(currentUserAccessor
                         ?? new FakeCurrentUserAccessor(new CurrentUser("test-user-oid", "test@example.com", "Test User", [])));
                     services.AddSingleton<TimeProvider>(new FakeTimeProvider());
+                    services.AddSingleton(new GeoAssetsMeter("test"));
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>
