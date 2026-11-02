@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Persistence.Entities;
 
@@ -126,5 +127,97 @@ internal static class IpBillingMapper
         DeltaOrBaselineKwh = r.DeltaOrBaselineKwh,
         ResultingKwh       = r.ResultingKwh,
         PostedAt           = r.PostedAt,
+    };
+
+    // ── LevantamentoHeader ───────────────────────────────────────────────────
+
+    public static LevantamentoHeader ToDomain(LevantamentoHeaderRecord r) => new()
+    {
+        ServiceOrderId = r.ServiceOrderId,
+        MunicipioId    = r.MunicipioId,
+        Competencia    = r.Competencia,
+        IsValidated    = r.IsValidated,
+    };
+
+    public static LevantamentoHeaderRecord ToRecord(LevantamentoHeader h) => new()
+    {
+        ServiceOrderId = h.ServiceOrderId,
+        MunicipioId    = h.MunicipioId,
+        Competencia    = h.Competencia,
+        IsValidated    = h.IsValidated,
+    };
+
+    // ── LevantamentoTransformerLine / LevantamentoLampDetail ────────────────
+
+    public static LevantamentoTransformerLine ToDomain(LevantamentoTransformerLineRecord r) => new()
+    {
+        Id                   = r.Id,
+        ServiceOrderId       = r.ServiceOrderId,
+        CodigoInstalacao     = r.CodigoInstalacao,
+        TransformerFeatureId = r.TransformerFeatureId,
+        IsNewTransformer     = r.IsNewTransformer,
+        Tipo                 = r.Tipo,
+        NormalKwh            = r.NormalKwh,
+        RetroativoKwh        = r.RetroativoKwh,
+        LampDetails          = r.LampDetails.Select(ToDomain).ToList(),
+    };
+
+    public static LevantamentoTransformerLineRecord ToRecord(LevantamentoTransformerLine l)
+    {
+        var record = new LevantamentoTransformerLineRecord
+        {
+            Id                   = l.Id,
+            ServiceOrderId       = l.ServiceOrderId,
+            CodigoInstalacao     = l.CodigoInstalacao,
+            TransformerFeatureId = l.TransformerFeatureId,
+            IsNewTransformer     = l.IsNewTransformer,
+            Tipo                 = l.Tipo,
+            NormalKwh            = l.NormalKwh,
+            RetroativoKwh        = l.RetroativoKwh,
+        };
+        record.LampDetails.AddRange(l.LampDetails.Select(ToRecord));
+        return record;
+    }
+
+    public static LevantamentoLampDetail ToDomain(LevantamentoLampDetailRecord r) => new()
+    {
+        Id                = r.Id,
+        TransformerLineId = r.TransformerLineId,
+        Code              = r.Code,
+        WattageW          = r.WattageW,
+        Quantity          = r.Quantity,
+    };
+
+    public static LevantamentoLampDetailRecord ToRecord(LevantamentoLampDetail d) => new()
+    {
+        Id                = d.Id,
+        TransformerLineId = d.TransformerLineId,
+        Code              = d.Code,
+        WattageW          = d.WattageW,
+        Quantity          = d.Quantity,
+    };
+
+    // ── Levantamento24hLine ──────────────────────────────────────────────────
+
+    public static Levantamento24hLine ToDomain(Levantamento24hLineRecord r) => new()
+    {
+        Id             = r.Id,
+        ServiceOrderId = r.ServiceOrderId,
+        FeatureId      = r.FeatureId,
+        Code           = r.Code,
+        WattageW       = r.WattageW,
+        Quantity       = r.Quantity,
+        Kwh            = r.Kwh,
+    };
+
+    public static Levantamento24hLineRecord ToRecord(Levantamento24hLine l) => new()
+    {
+        Id             = l.Id,
+        ServiceOrderId = l.ServiceOrderId,
+        FeatureId      = l.FeatureId,
+        Code           = l.Code,
+        WattageW       = l.WattageW,
+        Quantity       = l.Quantity,
+        Kwh            = l.Kwh,
     };
 }

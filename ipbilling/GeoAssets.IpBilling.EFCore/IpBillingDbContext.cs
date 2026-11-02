@@ -27,6 +27,10 @@ public class IpBillingDbContext(DbContextOptions<IpBillingDbContext> options)
     internal DbSet<IpTransformerIndexRecord>    IpTransformerIndexes   => Set<IpTransformerIndexRecord>();
     internal DbSet<FaturamentoRecord>           Faturamentos           => Set<FaturamentoRecord>();
     internal DbSet<FaturamentoPostingRecord>    FaturamentoPostings    => Set<FaturamentoPostingRecord>();
+    internal DbSet<LevantamentoHeaderRecord>           LevantamentoHeaders           => Set<LevantamentoHeaderRecord>();
+    internal DbSet<LevantamentoTransformerLineRecord>  LevantamentoTransformerLines  => Set<LevantamentoTransformerLineRecord>();
+    internal DbSet<LevantamentoLampDetailRecord>       LevantamentoLampDetails       => Set<LevantamentoLampDetailRecord>();
+    internal DbSet<Levantamento24hLineRecord>          Levantamento24hLines          => Set<Levantamento24hLineRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
