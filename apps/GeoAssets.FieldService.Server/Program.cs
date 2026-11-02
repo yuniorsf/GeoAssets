@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Isp.Compliance;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Server;
@@ -8,6 +9,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Provider.Rest;
+using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
@@ -138,6 +140,16 @@ builder.Services.AddSingleton<NeutralPoleRegistry>();
 builder.Services.AddSingleton<IOtdrFaultCorrelationEngine, OtdrFaultCorrelationEngine>();
 builder.Services.AddSingleton<OtdrEmergencyFaultDispatchService>();
 
+// Concessionaire compliance dossier exporter (XD01-284) — AddGeoAssetsShapefile also registers
+// IShapefileExportService, which DisNor056Exporter consumes via the interface Core already owns
+// (Onion layering stays intact: Core never references GeoAssets.Provider.Shapefile directly).
+// Adding a third distributor's exporter is exactly one more AddSingleton<IConcessionaireDossierExporter, …>()
+// line here — neither existing exporter nor the registry needs to change (XD01-284's AC3).
+builder.Services.AddGeoAssetsShapefile();
+builder.Services.AddSingleton<IConcessionaireDossierExporter, DisNor056Exporter>();
+builder.Services.AddSingleton<IConcessionaireDossierExporter, JoinAsExporter>();
+builder.Services.AddSingleton<ConcessionaireDossierExporterRegistry>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -191,6 +203,9 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
 
     // OTDR .SOR trace ingestion & emergency fault dispatch (XD01-283).
     app.MapIspOtdrFaultDispatchApi();
+
+    // Concessionaire compliance dossier exporter (XD01-284).
+    app.MapIspComplianceDossierApi();
 }
 
 await app.RunAsync().ConfigureAwait(false);

@@ -49,6 +49,9 @@
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
+    <!-- Concessionaire compliance dossier exporter (XD01-284) needs IShapefileExportService's
+         concrete implementation for the DIS-NOR-056 Shapefile half. -->
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Shapefile\GeoAssets.Provider.Shapefile.csproj" />
   </ItemGroup>
 
 </Project>

@@ -23,13 +23,13 @@ public sealed class ShapefileExportService : IShapefileExportService
         "GEOGCS[\"GCS_WGS_1984\",DATUM[\"D_WGS_1984\",SPHEROID[\"WGS_1984\",6378137.0,298.257223563]]," +
         "PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]]";
 
-    public byte[] ExportToZip(IReadOnlyList<GeoFeature> features)
+    public byte[] ExportToZip(IReadOnlyList<GeoFeature> features, string? targetCrsWkt = null, int? targetSrid = null)
     {
         ArgumentNullException.ThrowIfNull(features);
         var buckets = new Dictionary<string, List<GeoFeature>>(StringComparer.Ordinal)
         {
-            ["points"]   = [],
-            ["lines"]    = [],
+            ["points"] = [],
+            ["lines"] = [],
             ["polygons"] = [],
         };
 
@@ -42,10 +42,10 @@ public sealed class ShapefileExportService : IShapefileExportService
             // e.g. Polygon and MultiPolygon together, just not across these three categories.
             var bucket = geom.GeometryType switch
             {
-                "Point" or "MultiPoint"           => "points",
+                "Point" or "MultiPoint" => "points",
                 "LineString" or "MultiLineString" => "lines",
-                "Polygon" or "MultiPolygon"       => "polygons",
-                _                                  => null,
+                "Polygon" or "MultiPolygon" => "polygons",
+                _ => null,
             };
             if (bucket is not null) buckets[bucket].Add(feature);
         }
@@ -57,11 +57,11 @@ public sealed class ShapefileExportService : IShapefileExportService
         Directory.CreateDirectory(tempDir);
         try
         {
-            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            var factory = new GeometryFactory(new PrecisionModel(), targetSrid ?? 4326);
             foreach (var (baseName, bucketFeatures) in buckets)
             {
                 if (bucketFeatures.Count > 0)
-                    WriteBucket(tempDir, baseName, bucketFeatures, factory);
+                    WriteBucket(tempDir, baseName, bucketFeatures, factory, targetCrsWkt ?? Wgs84Wkt);
             }
 
             var zipPath = Path.Combine(tempDir, "export.zip");
@@ -83,7 +83,7 @@ public sealed class ShapefileExportService : IShapefileExportService
     }
 
     private static void WriteBucket(
-        string tempDir, string baseName, List<GeoFeature> features, GeometryFactory factory)
+        string tempDir, string baseName, List<GeoFeature> features, GeometryFactory factory, string crsWkt)
     {
         var columnMap = BuildColumnNameMap(features.SelectMany(f => f.Properties.CustomAttributes.Keys).Distinct(StringComparer.Ordinal));
 
@@ -100,9 +100,13 @@ public sealed class ShapefileExportService : IShapefileExportService
             // custom attribute) — ShapefileDataWriter looks values up by column name per
             // feature, so a sparse AttributesTable would fail on records missing a key another
             // feature in the same bucket happens to have.
-#pragma warning disable MA0002 // AttributesTable (NetTopologySuite.IO.ShapeFile) has no constructor overload accepting an IEqualityComparer<string>
-            var attrs = new AttributesTable { { "NAME", feature.Properties.Name } };
-#pragma warning restore MA0002
+            //
+            // XD01-284: the IEqualityComparer<string> overload below DOES exist on
+            // NetTopologySuite.Features.AttributesTable (confirmed via reflection against the
+            // 2.1.0 package this project actually resolves) — the #pragma this replaced was
+            // suppressing a real, fixable MA0002 finding based on a stale comment, not a genuine
+            // library limitation.
+            var attrs = new AttributesTable(StringComparer.Ordinal) { { "NAME", feature.Properties.Name } };
             foreach (var (originalKey, dbfName) in columnMap)
             {
                 feature.Properties.CustomAttributes.TryGetValue(originalKey, out var value);
@@ -115,7 +119,7 @@ public sealed class ShapefileExportService : IShapefileExportService
         var writer = new ShapefileDataWriter(basePath, factory) { Header = header };
         writer.Write(ntsFeatures);
 
-        File.WriteAllText(basePath + ".prj", Wgs84Wkt);
+        File.WriteAllText(basePath + ".prj", crsWkt);
     }
 
     /// <summary>

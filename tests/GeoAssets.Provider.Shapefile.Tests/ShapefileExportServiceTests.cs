@@ -191,6 +191,57 @@ public class ShapefileExportServiceTests
         map.Values.Should().OnlyContain(v => v.Length <= 10);
     }
 
+    [Fact]
+    public void ExportToZip_NoTargetCrsOrSrid_PrjStaysTheHardcodedWgs84Default()
+    {
+        var sut = new ShapefileExportService();
+        var feature = PointFeature("A", 1, 2);
+
+        var zip = sut.ExportToZip([feature]);
+        var dir = Unzip(zip);
+        try
+        {
+            File.ReadAllText(Path.Combine(dir, "points.prj")).Should().Contain("WGS_1984");
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void ExportToZip_WithTargetCrsWktAndSrid_PrjContainsTheCustomWktInstead()
+    {
+        var sut = new ShapefileExportService();
+        var feature = PointFeature("A", 500_000, 7_800_000);
+        const string customWkt = "PROJCS[\"SIRGAS_2000_UTM_Zone_23S\",GEOGCS[\"GCS_SIRGAS_2000\"]]";
+
+        var zip = sut.ExportToZip([feature], customWkt, 31983);
+        var dir = Unzip(zip);
+        try
+        {
+            File.ReadAllText(Path.Combine(dir, "points.prj")).Should().Be(customWkt);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void ExportToZip_WithTargetSrid_GeometryRoundTripsWithThatSrid()
+    {
+        var sut = new ShapefileExportService();
+        var feature = PointFeature("A", 500_000, 7_800_000);
+        const string customWkt = "PROJCS[\"SIRGAS_2000_UTM_Zone_23S\",GEOGCS[\"GCS_SIRGAS_2000\"]]";
+
+        var zip = sut.ExportToZip([feature], customWkt, 31983);
+        var dir = Unzip(zip);
+        try
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 31983);
+            using var reader = new ShapefileDataReader(Path.Combine(dir, "points"), factory);
+            reader.Read().Should().BeTrue();
+            reader.Geometry.Coordinate.X.Should().BeApproximately(500_000, 0.01);
+            reader.Geometry.Coordinate.Y.Should().BeApproximately(7_800_000, 0.01);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
     private static List<string> ReadNames(string basePath)
     {
         var factory = new GeometryFactory(new PrecisionModel(), 4326);

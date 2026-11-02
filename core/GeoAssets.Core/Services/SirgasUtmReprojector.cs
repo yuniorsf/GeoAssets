@@ -61,6 +61,13 @@ public static class SirgasUtmReprojector
     }
 
     /// <summary>
+    /// Public wrapper over <see cref="SirgasUtmWkt"/> (XD01-284) — for a caller writing its own
+    /// sidecar file (e.g. a Shapefile's <c>.prj</c>) that needs the same WKT this reprojector
+    /// itself builds its <see cref="MathTransform"/> from, rather than re-deriving it.
+    /// </summary>
+    public static string WktFor(int zone) => SirgasUtmWkt(zone);
+
+    /// <summary>
     /// ESRI-style WKT for SIRGAS 2000 / UTM zone {zone}S — same dialect (capitalized
     /// <c>Transverse_Mercator</c>/<c>Central_Meridian</c>/etc. parameter names) as the real-world
     /// SAD69 UTM fixture already proven to parse correctly against this ProjNET version in

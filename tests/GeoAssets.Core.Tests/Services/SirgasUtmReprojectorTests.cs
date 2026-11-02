@@ -63,4 +63,28 @@ public class SirgasUtmReprojectorTests
 
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void WktFor_Zone23_ReturnsNonEmptySirgas2000WktContainingZoneNumber()
+    {
+        var wkt = SirgasUtmReprojector.WktFor(23);
+
+        wkt.Should().NotBeNullOrWhiteSpace();
+        wkt.Should().Contain("SIRGAS_2000");
+        wkt.Should().Contain("UTM_Zone_23S");
+    }
+
+    [Fact]
+    public void WktFor_ZoneToSirgasUtmItselfResolvesTo_IsConsistentWithThatZone()
+    {
+        // ToSirgasUtm builds its own MathTransform from this same private WKT builder (see
+        // SirgasUtmReprojector.GetOrBuildTransform) — WktFor is a public wrapper over it, so a
+        // caller writing a .prj sidecar for these exact coordinates must get the matching zone.
+        var (_, _, epsgCode) = SirgasUtmReprojector.ToSirgasUtm(new GeoPoint(-46.633, -23.55));
+        var zone = epsgCode - 31978 + 18;
+
+        var wkt = SirgasUtmReprojector.WktFor(zone);
+
+        wkt.Should().Contain($"UTM_Zone_{zone}S");
+    }
 }
