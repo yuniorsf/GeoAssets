@@ -176,6 +176,12 @@ if (app.Configuration.GetValue("Modules:NeutralPole:Enabled", defaultValue: true
 // XD01-280/281/283/284 register their real logic behind. Same independently-toggled module shape
 // as Electrical/Sanitation/NeutralPole above.
 if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
+{
     app.MapIspModuleApi();
+
+    // CTO splitter port capacity tracking & occupancy heatmap (XD01-281) — same module toggle,
+    // registered right alongside the scaffolding it builds on.
+    app.MapIspCtoOccupancyApi();
+}
 
 await app.RunAsync().ConfigureAwait(false);

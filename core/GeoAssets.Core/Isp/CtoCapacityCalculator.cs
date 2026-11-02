@@ -24,12 +24,19 @@ public static class CtoCapacityCalculator
     /// </summary>
     public static double OccupiedPortPercentage(IReadOnlyDictionary<string, string> customAttributes)
     {
-        ArgumentNullException.ThrowIfNull(customAttributes);
-
-        var total = ParseNonNegativeInt(customAttributes, TotalSplitterPortsKey);
-        var occupied = ParseNonNegativeInt(customAttributes, OccupiedSplitterPortsKey);
-
+        var (occupied, total) = GetOccupiedAndTotal(customAttributes);
         return total <= 0 ? 0 : 100.0 * occupied / total;
+    }
+
+    /// <summary>
+    /// Raw occupied/total splitter port counts (XD01-281) — the pair <see cref="OccupiedPortPercentage"/>
+    /// derives from, exposed directly for callers (occupancy adjustment, heatmap queries) that need
+    /// the counts themselves rather than just the percentage.
+    /// </summary>
+    public static (int Occupied, int Total) GetOccupiedAndTotal(IReadOnlyDictionary<string, string> customAttributes)
+    {
+        ArgumentNullException.ThrowIfNull(customAttributes);
+        return (ParseNonNegativeInt(customAttributes, OccupiedSplitterPortsKey), ParseNonNegativeInt(customAttributes, TotalSplitterPortsKey));
     }
 
     private static int ParseNonNegativeInt(IReadOnlyDictionary<string, string> attributes, string key) =>
