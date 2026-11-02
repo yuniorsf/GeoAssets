@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
+using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
@@ -132,6 +133,11 @@ builder.Services.AddScoped<InspectionCommitService>();
 // register here. ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<NeutralPoleRegistry>();
 
+// OTDR .SOR trace ingestion & emergency fault dispatch (XD01-283) — both are pure/stateless, so
+// singleton is safe (same reasoning as every other stateless engine/service registered above).
+builder.Services.AddSingleton<IOtdrFaultCorrelationEngine, OtdrFaultCorrelationEngine>();
+builder.Services.AddSingleton<OtdrEmergencyFaultDispatchService>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -182,6 +188,9 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
     // CTO splitter port capacity tracking & occupancy heatmap (XD01-281) — same module toggle,
     // registered right alongside the scaffolding it builds on.
     app.MapIspCtoOccupancyApi();
+
+    // OTDR .SOR trace ingestion & emergency fault dispatch (XD01-283).
+    app.MapIspOtdrFaultDispatchApi();
 }
 
 await app.RunAsync().ConfigureAwait(false);
