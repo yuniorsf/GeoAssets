@@ -214,6 +214,9 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
 
     // Pole-sharing audit & yellow-tag legal defense evidence repository (XD01-285).
     app.MapIspPoleAuditApi();
+
+    // Emergency legal defense dossier generator (XD01-286).
+    app.MapIspLegalDefenseDossierApi();
 }
 
 await app.RunAsync().ConfigureAwait(false);
