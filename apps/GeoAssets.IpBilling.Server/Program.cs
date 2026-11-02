@@ -14,6 +14,11 @@ builder.Services.AddGeoAssetsObservability(builder.Configuration);
 builder.Services.AddHealthChecks();
 builder.Services.AddSingleton(TimeProvider.System);
 
+// ── Authentication (bearer-token validation against the CIAM tenant; see
+// "AzureAdCiam" section in appsettings.json) — every endpoint requires an
+// authenticated caller by default (XD01-177, closing a previously-flagged gap). ────
+builder.Services.AddGeoAssetsAuthentication(builder.Configuration);
+
 var connectionString = builder.Configuration.GetConnectionString("IpBilling")
     ?? builder.Configuration.GetConnectionString("GeoAssets")
     ?? throw new InvalidOperationException(
@@ -38,6 +43,7 @@ builder.Services.AddScoped<IIpBillingCalculationService, IpBillingCalculationSer
 
 var app = builder.Build();
 
+app.UseGeoAssetsAuthentication();
 app.UseGeoAssetsObservability();
 app.MapIpBillingApi();
 

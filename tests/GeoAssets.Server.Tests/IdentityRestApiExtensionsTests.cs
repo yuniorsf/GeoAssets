@@ -7,6 +7,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.Server.IpBilling;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -73,6 +74,9 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IGroupRepository>(new NeverCalledGroupRepository());
                     // Same reasoning — POST /organizations now also seeds a default Project (XD01-144).
                     services.AddSingleton<IProjectRepository>(new NeverCalledProjectRepository());
+                    // Same reasoning — the XD01-177 municipio-grants routes are in the same group.
+                    services.AddSingleton<IOrganizationGrantRepository>(new NeverCalledOrganizationGrantRepository());
+                    services.AddScoped<MunicipioProvisioningService>();
                 });
                 webHost.Configure(app =>
                 {
@@ -87,10 +91,10 @@ public class IdentityRestApiExtensionsTests
 
     private static AppUser NewUser(string email = "user@example.com", string externalObjectId = "") => new()
     {
-        Id               = Guid.NewGuid(),
-        Email            = email,
-        DisplayName      = "Test User",
-        CreatedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
+        Id = Guid.NewGuid(),
+        Email = email,
+        DisplayName = "Test User",
+        CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
         ExternalObjectId = externalObjectId,
     };
 
@@ -100,9 +104,9 @@ public class IdentityRestApiExtensionsTests
         var user = NewUser();
         var ctx = new AuthorizationContext
         {
-            User        = user,
-            Roles       = ["Administrator"],
-            Claims      = [new UserClaim { UserId = user.Id, Type = "zone", Value = "north" }],
+            User = user,
+            Roles = ["Administrator"],
+            Claims = [new UserClaim { UserId = user.Id, Type = "zone", Value = "north" }],
             Permissions = ["features:read", "features:edit"]
         };
 
@@ -148,10 +152,10 @@ public class IdentityRestApiExtensionsTests
     {
         var policy = new AppPolicy
         {
-            Id          = Guid.NewGuid(),
-            Name        = "CanEditFeatures",
+            Id = Guid.NewGuid(),
+            Name = "CanEditFeatures",
             Description = "Puede editar activos GIS",
-            Operator    = PolicyOperator.All,
+            Operator = PolicyOperator.All,
             Requirements = [new PolicyRequirement { Type = RequirementType.Permission, Value = "features:edit" }]
         };
         // Simulates EF's Include(p => p.Requirements) fixup: PolicyRequirement.Policy back-reference.
@@ -371,18 +375,18 @@ public class IdentityRestApiExtensionsTests
 
     private static Organization NewOrganization(string name = "Empresa Test", string slug = "test") => new()
     {
-        Id        = Guid.NewGuid(),
-        Name      = name,
-        Slug      = slug,
-        IsActive  = true,
+        Id = Guid.NewGuid(),
+        Name = name,
+        Slug = slug,
+        IsActive = true,
         CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
     };
 
     private static AppGroup NewGroup(string name = "Cuadrilla Norte") => new()
     {
-        Id        = Guid.NewGuid(),
-        Name      = name,
-        IsActive  = true,
+        Id = Guid.NewGuid(),
+        Name = name,
+        IsActive = true,
         CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
     };
 
@@ -632,7 +636,8 @@ public class IdentityRestApiExtensionsTests
         IUserClaimRepository? claimRepo = null,
         IOrganizationRepository? orgRepo = null,
         IGroupRepository? groupRepo = null,
-        IProjectRepository? projectRepo = null)
+        IProjectRepository? projectRepo = null,
+        IOrganizationGrantRepository? grantRepo = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -650,7 +655,8 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton(userRepo);
                     services.AddSingleton(roleRepo);
                     services.AddSingleton(permissionRepo);
-                    services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
+                    services.AddSingleton(grantRepo ?? new NeverCalledOrganizationGrantRepository());
+                    services.AddScoped<MunicipioProvisioningService>();
                     // MapIdentityApi() maps /me and /policies too; endpoint metadata for the
                     // whole group is built lazily on first request, so IPolicyRepository must
                     // be resolvable even though these tests never call /policies.
@@ -1783,14 +1789,14 @@ public class IdentityRestApiExtensionsTests
     private static PendingInvitation NewInvitation(
         string email = "invitee@example.com", string externalObjectId = "invitee-oid",
         InvitationStatus status = InvitationStatus.Pending) => new()
-    {
-        Id               = Guid.NewGuid(),
-        Email            = email,
-        ExternalObjectId = externalObjectId,
-        InvitedByUserId  = Guid.NewGuid(),
-        InvitedAt        = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
-        Status           = status,
-    };
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            ExternalObjectId = externalObjectId,
+            InvitedByUserId = Guid.NewGuid(),
+            InvitedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
+            Status = status,
+        };
 
     [Fact]
     public async Task Invitations_Status_BothProvidersReal_ReturnsEnabled()
@@ -2125,10 +2131,10 @@ public class IdentityRestApiExtensionsTests
 
     private static UserClaim NewClaim(Guid userId, string type = "zone", string value = "north") => new()
     {
-        Id     = Guid.NewGuid(),
+        Id = Guid.NewGuid(),
         UserId = userId,
-        Type   = type,
-        Value  = value,
+        Type = type,
+        Value = value,
     };
 
     private static FakeAuthorizationService AuthServiceFor(AppUser caller) =>
@@ -2143,7 +2149,7 @@ public class IdentityRestApiExtensionsTests
         var othersClaim = NewClaim(Guid.NewGuid());
         var claimRepo = new FakeUserClaimRepository(new Dictionary<Guid, List<UserClaim>>
         {
-            [caller.Id]          = [ownClaim],
+            [caller.Id] = [ownClaim],
             [othersClaim.UserId] = [othersClaim],
         });
         var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
@@ -2327,5 +2333,98 @@ public class IdentityRestApiExtensionsTests
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         claimRepo.RemovedAllForUserId.Should().Be(caller.Id);
         claimRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    // ── Município grant provisioning (XD01-177) ───────────────────────────────
+
+    private sealed class InMemoryOrganizationGrantRepository : IOrganizationGrantRepository
+    {
+        public List<OrganizationGrant> Grants { get; } = [];
+
+        public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult(Grants.FirstOrDefault(g => g.Id == id));
+
+        public Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<OrganizationGrant>>(Grants);
+
+        public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(
+            Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<OrganizationGrant>>(Grants
+                .Where(g => g.IsActive && g.GranteeOrganizationId == granteeOrganizationId && g.ResourceOrganizationId == resourceOrganizationId)
+                .ToList());
+
+        public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(Guid granteeOrganizationId, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default)
+        {
+            Grants.Add(grant);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task MunicipioGrantsSync_MissingManagePermission_Returns403()
+    {
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService());
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.PostAsJsonAsync(
+            new Uri("/api/identity/municipio-grants/sync", UriKind.Relative),
+            new MunicipioGrantSyncRequest("3550308", Guid.NewGuid(), Guid.NewGuid(), null, "admin@test"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task MunicipioGrantsSync_WithManagePermission_CreatesScopedGrant()
+    {
+        var grantRepo = new InMemoryOrganizationGrantRepository();
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("ip-billing:reference-manage"),
+            grantRepo: grantRepo);
+        using var client = AuthenticatedClient(server);
+        var distribuidoraId = Guid.NewGuid();
+        var prefeituraId = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync(
+            new Uri("/api/identity/municipio-grants/sync", UriKind.Relative),
+            new MunicipioGrantSyncRequest("3550308", distribuidoraId, prefeituraId, null, "admin@test"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        grantRepo.Grants.Should().ContainSingle();
+        grantRepo.Grants[0].GranteeOrganizationId.Should().Be(prefeituraId);
+        grantRepo.Grants[0].ScopeId.Should().Be("3550308");
+    }
+
+    [Fact]
+    public async Task MunicipioGrantsRevoke_WithManagePermission_RevokesActiveGrant()
+    {
+        var grantRepo = new InMemoryOrganizationGrantRepository();
+        var (userRepo, roleRepo, permRepo) = EmptyAdminRepos();
+        using var server = await BuildAdminServerAsync(
+            userRepo, roleRepo, permRepo, new FakePermissionAuthorizationService("ip-billing:reference-manage"),
+            grantRepo: grantRepo);
+        using var client = AuthenticatedClient(server);
+        var distribuidoraId = Guid.NewGuid();
+        var prefeituraId = Guid.NewGuid();
+        await client.PostAsJsonAsync(
+            new Uri("/api/identity/municipio-grants/sync", UriKind.Relative),
+            new MunicipioGrantSyncRequest("3550308", distribuidoraId, prefeituraId, null, "admin@test"));
+
+        var response = await client.PostAsJsonAsync(
+            new Uri("/api/identity/municipio-grants/revoke", UriKind.Relative),
+            new MunicipioGrantRevokeRequest("3550308", distribuidoraId, prefeituraId));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        grantRepo.Grants.Should().ContainSingle();
+        grantRepo.Grants[0].IsActive.Should().BeFalse();
     }
 }

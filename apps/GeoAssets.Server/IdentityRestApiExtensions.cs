@@ -3,6 +3,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.Server.IpBilling;
 
 namespace GeoAssets.Server;
 
@@ -44,6 +45,7 @@ public static class IdentityRestApiExtensions
         MapRoleSyncApi(routes, prefix);
         MapInvitationsApi(routes, prefix);
         MapUserClaimsApi(routes, prefix);
+        MapMunicipioGrantsApi(routes, prefix);
 
         return routes;
     }
@@ -635,6 +637,52 @@ public static class IdentityRestApiExtensions
         var ctx = await authService.GetAuthorizationContextAsync().ConfigureAwait(false);
         var claims = await claimRepo.GetByUserIdAsync(ctx.User.Id).ConfigureAwait(false);
         return claims.FirstOrDefault(c => c.Id == claimId);
+    }
+
+    // ── Município grant provisioning (XD01-177) ───────────────────────────────
+
+    /// <summary>
+    /// Sync/revoke endpoints for <see cref="MunicipioProvisioningService"/>, called by the
+    /// standalone <c>GeoAssets.IpBilling.Server</c> microservice over HTTP whenever a município's
+    /// Prefeitura-organization link changes — never a direct assembly reference, per
+    /// <c>ServerArchitectureTests</c>/<c>MessagingArchitectureTests</c>' decoupling invariants
+    /// (see <see cref="MunicipioProvisioningService"/>'s own doc comment).
+    ///
+    /// <strong>Known gap, flagged for a follow-up decision:</strong> this codebase has no
+    /// service-to-service authentication mechanism yet for a vertical microservice calling back
+    /// into <c>GeoAssets.Server</c> — every existing cross-host call (<c>RestGeoCoreClient</c>/
+    /// <c>HttpPoleResolver</c>) is a read-only, unauthenticated lookup, which is a materially
+    /// different risk than this grant-provisioning write. These two endpoints are therefore gated
+    /// behind the real <c>ip-billing:reference-manage</c> permission check like every other
+    /// sensitive write in this file, but <c>GeoAssets.IpBilling.Server</c> has no caller identity
+    /// to present yet — it isn't itself an authenticated principal. Until a real service-identity
+    /// story exists (e.g. a client-credentials token, mTLS, or HMAC-signed internal requests),
+    /// <c>GeoAssets.IpBilling.Server</c>'s own município write endpoints cannot actually reach
+    /// these two without a human first deciding how that credential works — they are NOT wired up
+    /// from that side in this ticket. See the ticket's own closing comment for the filed follow-up.
+    /// </summary>
+    private static void MapMunicipioGrantsApi(IEndpointRouteBuilder routes, string prefix)
+    {
+        routes.MapPost($"{prefix}/municipio-grants/sync", async (
+            MunicipioGrantSyncRequest req,
+            MunicipioProvisioningService provisioning,
+            CancellationToken ct) =>
+        {
+            await provisioning.SyncGrantAsync(
+                req.IbgeCode, req.DistribuidoraOrganizationId, req.PrefeituraOrganizationId,
+                req.PreviousPrefeituraOrganizationId, req.GrantedBy, ct).ConfigureAwait(false);
+            return Results.NoContent();
+        }).RequireAuthorization("ip-billing:reference-manage");
+
+        routes.MapPost($"{prefix}/municipio-grants/revoke", async (
+            MunicipioGrantRevokeRequest req,
+            MunicipioProvisioningService provisioning,
+            CancellationToken ct) =>
+        {
+            await provisioning.RevokeAsync(
+                req.IbgeCode, req.DistribuidoraOrganizationId, req.PrefeituraOrganizationId, ct).ConfigureAwait(false);
+            return Results.NoContent();
+        }).RequireAuthorization("ip-billing:reference-manage");
     }
 
     private static UserSummaryDto ToSummaryDto(AppUser u) =>

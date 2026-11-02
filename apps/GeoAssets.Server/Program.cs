@@ -7,6 +7,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
+using GeoAssets.Server.IpBilling;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
@@ -100,6 +101,10 @@ builder.Services.AddGeoIdentity(o => o.UseNpgsql(
     connectionString,
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
 
+// MunicipioProvisioningService (XD01-177) — grant provisioning for município↔Prefeitura
+// authorization, layered on top of IOrganizationGrantRepository (AddGeoIdentity, above).
+builder.Services.AddScoped<MunicipioProvisioningService>();
+
 // ICurrentUserAccessor reads the authenticated ClaimsPrincipal populated by
 // AddGeoAssetsAuthentication (XD01-12) — pattern documented on
 // GeoIdentityEFCoreServiceExtensions.AddGeoIdentity's own XML doc comment.
@@ -180,7 +185,8 @@ app.MapServiceOrdersApi();
 // see ProjectsRestApiExtensions for the full endpoint list.
 app.MapProjectsApi();
 
-// Read-only identity/authorization endpoints under /api/identity (XD01-18) —
+// Read-only identity/authorization endpoints under /api/identity (XD01-18) — also includes
+// the município↔Prefeitura grant-provisioning endpoints (XD01-177, MapMunicipioGrantsApi) —
 // see IdentityRestApiExtensions for the full endpoint list.
 app.MapIdentityApi();
 
