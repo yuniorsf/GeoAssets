@@ -463,6 +463,111 @@ public sealed class CrossTenantRowLevelSecurityTests
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
+    // ── applied_mutation_batches (XD01-296) ───────────────────────────────────
+
+    [Fact]
+    public async Task AppliedMutationBatches_SelectAcrossTenants_OnlyReturnsOwnTenantsRows()
+    {
+        var idA = Guid.NewGuid();
+        var idB = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE applied_mutation_batches CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO applied_mutation_batches
+                    ("BatchId", "CatalogInstanceId", "OrganizationId", "RequestedByService", "AppliedByUserId", "AppliedItemsJson", "AppliedAtUtc")
+                VALUES
+                    (@idA, 'catalog-1', @orgA, 'svc-a', 'user-a', '[]', now()),
+                    (@idB, 'catalog-1', @orgB, 'svc-b', 'user-b', '[]', now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("idA", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgA", TenantA));
+            insert.Parameters.Add(new NpgsqlParameter("idB", idB));
+            insert.Parameters.Add(new NpgsqlParameter("orgB", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT \"BatchId\" FROM applied_mutation_batches ORDER BY \"BatchId\"";
+        var ids = new List<Guid>();
+        await using (var reader = await select.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                ids.Add(reader.GetGuid(0));
+
+        ids.Should().Equal(idA);
+    }
+
+    [Fact]
+    public async Task AppliedMutationBatches_InsertUnderAnotherTenant_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE applied_mutation_batches CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () =>
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO applied_mutation_batches
+                    ("BatchId", "CatalogInstanceId", "OrganizationId", "RequestedByService", "AppliedByUserId", "AppliedItemsJson", "AppliedAtUtc")
+                VALUES (@id, 'catalog-1', @orgId, 'svc-c', 'user-c', '[]', now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501");
+    }
+
+    [Fact]
+    public async Task AppliedMutationBatches_DeleteAcrossTenants_AffectsNoRows()
+    {
+        var idA = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE applied_mutation_batches CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO applied_mutation_batches
+                    ("BatchId", "CatalogInstanceId", "OrganizationId", "RequestedByService", "AppliedByUserId", "AppliedItemsJson", "AppliedAtUtc")
+                VALUES (@id, 'catalog-1', @orgId, 'svc-a', 'user-a', '[]', now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantA));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
+
+        await using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM applied_mutation_batches WHERE \"BatchId\" = @id";
+        delete.Parameters.Add(new NpgsqlParameter("id", idA));
+        var affected = await delete.ExecuteNonQueryAsync();
+
+        affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
+    }
+
     // ── Generic discovery: every org-scoped table must be RLS-protected ──────
 
     /// <summary>
