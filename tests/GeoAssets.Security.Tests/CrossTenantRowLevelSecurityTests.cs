@@ -705,6 +705,111 @@ public sealed class CrossTenantRowLevelSecurityTests
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
+    // ── UsCatalogItems (XD01-298) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task UsCatalogItems_SelectAcrossTenants_OnlyReturnsOwnTenantsRows()
+    {
+        var idA = Guid.NewGuid();
+        var idB = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE \"UsCatalogItems\" CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO "UsCatalogItems"
+                    ("Id", "OrganizationId", "ItemCode", "Description", "Unit", "BaseUsFactor", "RegionalMultiplier", "MonetaryConversionRate", "EffectiveFrom")
+                VALUES
+                    (@idA, @orgA, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 10.5, now()),
+                    (@idB, @orgB, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 12.0, now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("idA", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgA", TenantA));
+            insert.Parameters.Add(new NpgsqlParameter("idB", idB));
+            insert.Parameters.Add(new NpgsqlParameter("orgB", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT \"Id\" FROM \"UsCatalogItems\" ORDER BY \"Id\"";
+        var ids = new List<Guid>();
+        await using (var reader = await select.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                ids.Add(reader.GetGuid(0));
+
+        ids.Should().Equal(idA);
+    }
+
+    [Fact]
+    public async Task UsCatalogItems_InsertUnderAnotherTenant_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE \"UsCatalogItems\" CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () =>
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO "UsCatalogItems"
+                    ("Id", "OrganizationId", "ItemCode", "Description", "Unit", "BaseUsFactor", "RegionalMultiplier", "MonetaryConversionRate", "EffectiveFrom")
+                VALUES (@id, @orgId, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 10.5, now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501");
+    }
+
+    [Fact]
+    public async Task UsCatalogItems_DeleteAcrossTenants_AffectsNoRows()
+    {
+        var idA = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE \"UsCatalogItems\" CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO "UsCatalogItems"
+                    ("Id", "OrganizationId", "ItemCode", "Description", "Unit", "BaseUsFactor", "RegionalMultiplier", "MonetaryConversionRate", "EffectiveFrom")
+                VALUES (@id, @orgId, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 10.5, now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantA));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
+
+        await using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM \"UsCatalogItems\" WHERE \"Id\" = @id";
+        delete.Parameters.Add(new NpgsqlParameter("id", idA));
+        var affected = await delete.ExecuteNonQueryAsync();
+
+        affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
+    }
+
     // ── Generic discovery: every org-scoped table must be RLS-protected ──────
 
     /// <summary>
