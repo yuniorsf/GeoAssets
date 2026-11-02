@@ -172,4 +172,10 @@ if (app.Configuration.GetValue("Modules:Sanitation:Enabled", defaultValue: true)
 if (app.Configuration.GetValue("Modules:NeutralPole:Enabled", defaultValue: true))
     app.MapNeutralPoleModuleApi();
 
+// ISP vertical host scaffolding (XD01-279) — webhook ingestion shell + IGeoCoreClient proxy that
+// XD01-280/281/283/284 register their real logic behind. Same independently-toggled module shape
+// as Electrical/Sanitation/NeutralPole above.
+if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
+    app.MapIspModuleApi();
+
 await app.RunAsync().ConfigureAwait(false);
