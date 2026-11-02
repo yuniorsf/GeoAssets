@@ -98,7 +98,7 @@ public class RestFieldServiceSyncClientTests
         var sut = Sut(handler);
         var order = new ServiceOrder { Id = "order-1", Status = FieldWorkStatus.Pending };
 
-        await sut.PushAsync([order]);
+        await sut.PushAsync([new PushServiceOrderItem(order, "idem-key-1")]);
 
         var request = handler.Requests.Should().ContainSingle().Subject;
         request.Method.Should().Be(HttpMethod.Post);
@@ -118,13 +118,13 @@ public class RestFieldServiceSyncClientTests
             """;
         var handler = new FakeHttpMessageHandler(_ => JsonResponse(json));
         var sut = Sut(handler);
-        var orders = new[]
+        var items = new[]
         {
-            new ServiceOrder { Id = "order-1" },
-            new ServiceOrder { Id = "order-2" },
+            new PushServiceOrderItem(new ServiceOrder { Id = "order-1" }, "idem-key-1"),
+            new PushServiceOrderItem(new ServiceOrder { Id = "order-2" }, "idem-key-2"),
         };
 
-        var results = await sut.PushAsync(orders);
+        var results = await sut.PushAsync(items);
 
         results.Should().HaveCount(2);
         results[0].Should().Be(new RemoteSyncPushResult("order-1", true, null));
@@ -138,7 +138,7 @@ public class RestFieldServiceSyncClientTests
         var sut = Sut(handler);
         var order = new ServiceOrder { Id = "order-1" };
 
-        var act = () => sut.PushAsync([order]);
+        var act = () => sut.PushAsync([new PushServiceOrderItem(order, "idem-key-1")]);
 
         return act.Should().ThrowAsync<HttpRequestException>();
     }

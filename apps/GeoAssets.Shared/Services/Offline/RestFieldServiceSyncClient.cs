@@ -22,9 +22,9 @@ public sealed class RestFieldServiceSyncClient(HttpClient http) : IFieldServiceS
         return orders ?? [];
     }
 
-    public async Task<IReadOnlyList<RemoteSyncPushResult>> PushAsync(IReadOnlyList<ServiceOrder> orders, CancellationToken ct = default)
+    public async Task<IReadOnlyList<RemoteSyncPushResult>> PushAsync(IReadOnlyList<PushServiceOrderItem> items, CancellationToken ct = default)
     {
-        var response = await http.PostAsJsonAsync("service-orders", orders, _opts, ct).ConfigureAwait(false);
+        var response = await http.PostAsJsonAsync("service-orders", items, _opts, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         var results = await response.Content.ReadFromJsonAsync<List<RemoteSyncPushResult>>(_opts, ct).ConfigureAwait(false);

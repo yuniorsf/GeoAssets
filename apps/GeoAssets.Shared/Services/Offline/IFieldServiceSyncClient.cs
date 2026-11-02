@@ -12,6 +12,12 @@ public interface IFieldServiceSyncClient
     /// <summary>Orders created or updated at or after <paramref name="sinceUtc"/>, scoped server-side to the caller's tenant.</summary>
     Task<IReadOnlyList<ServiceOrder>> PullSinceAsync(DateTime sinceUtc, CancellationToken ct = default);
 
-    /// <summary>Pushes locally-modified orders; each result reports its own order's outcome independently.</summary>
-    Task<IReadOnlyList<RemoteSyncPushResult>> PushAsync(IReadOnlyList<ServiceOrder> orders, CancellationToken ct = default);
+    /// <summary>
+    /// Pushes a batch of locally-modified orders, each carrying its own idempotency key
+    /// (XD01-236) so a reconnect-burst replay of an already-applied item is recognized and
+    /// short-circuited server-side rather than re-applied. Each result reports its own item's
+    /// outcome independently — a failure partway through the batch never prevents the rest from
+    /// being attempted.
+    /// </summary>
+    Task<IReadOnlyList<RemoteSyncPushResult>> PushAsync(IReadOnlyList<PushServiceOrderItem> items, CancellationToken ct = default);
 }

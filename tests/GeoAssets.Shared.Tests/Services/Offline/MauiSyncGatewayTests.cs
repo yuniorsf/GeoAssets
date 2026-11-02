@@ -103,9 +103,11 @@ public class MauiSyncGatewayTests
     {
         public List<DateTime> PullSinceCalls { get; } = [];
         public List<string> PushedOrderIdsInCallOrder { get; } = [];
+        public List<string> PushedIdempotencyKeysInCallOrder { get; } = [];
+        public int PushCallCount { get; private set; }
 
         public Func<DateTime, IReadOnlyList<ServiceOrder>> PullSinceHandler { get; set; } = _ => [];
-        public Func<IReadOnlyList<ServiceOrder>, IReadOnlyList<RemoteSyncPushResult>> PushHandler { get; set; } = _ => [];
+        public Func<IReadOnlyList<PushServiceOrderItem>, IReadOnlyList<RemoteSyncPushResult>> PushHandler { get; set; } = _ => [];
 
         public Task<IReadOnlyList<ServiceOrder>> PullSinceAsync(DateTime sinceUtc, CancellationToken ct = default)
         {
@@ -113,10 +115,12 @@ public class MauiSyncGatewayTests
             return Task.FromResult(PullSinceHandler(sinceUtc));
         }
 
-        public Task<IReadOnlyList<RemoteSyncPushResult>> PushAsync(IReadOnlyList<ServiceOrder> orders, CancellationToken ct = default)
+        public Task<IReadOnlyList<RemoteSyncPushResult>> PushAsync(IReadOnlyList<PushServiceOrderItem> items, CancellationToken ct = default)
         {
-            PushedOrderIdsInCallOrder.AddRange(orders.Select(o => o.Id));
-            return Task.FromResult(PushHandler(orders));
+            PushCallCount++;
+            PushedOrderIdsInCallOrder.AddRange(items.Select(i => i.Order.Id));
+            PushedIdempotencyKeysInCallOrder.AddRange(items.Select(i => i.IdempotencyKey));
+            return Task.FromResult(PushHandler(items));
         }
     }
 
@@ -189,7 +193,7 @@ public class MauiSyncGatewayTests
         var cursorStore = new FakeLocalSyncCursorStore(new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
         var client = new FakeFieldServiceSyncClient
         {
-            PushHandler = orders => orders.Select(o => new RemoteSyncPushResult(o.Id, true, null)).ToList(),
+            PushHandler = items => items.Select(i => new RemoteSyncPushResult(i.Order.Id, true, null)).ToList(),
         };
         var order = Order("order-1", FieldWorkStatus.Pending);
         var entry = Entry(order, sequenceNumber: 1);
@@ -223,7 +227,7 @@ public class MauiSyncGatewayTests
         var cursorStore = new FakeLocalSyncCursorStore(new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
         var client = new FakeFieldServiceSyncClient
         {
-            PushHandler = orders => orders.Select(o => new RemoteSyncPushResult(o.Id, true, null)).ToList(),
+            PushHandler = items => items.Select(i => new RemoteSyncPushResult(i.Order.Id, true, null)).ToList(),
         };
         var order = Order("order-1", FieldWorkStatus.Pending);
         var entry = Entry(order, sequenceNumber: 1);
@@ -238,6 +242,77 @@ public class MauiSyncGatewayTests
         client.PushedOrderIdsInCallOrder.Should().ContainSingle().Which.Should().Be("order-1");
     }
 
+    /// <summary>
+    /// XD01-236's AC: "A batch of queued offline actions replays against the server exactly
+    /// once each (idempotency key dedup verified)." Proves the gateway sends each outbox
+    /// entry's own stable <c>Guid</c> Id as its idempotency key — the server-side dedup check
+    /// (<c>FieldServiceSyncRestApiExtensions.PushOneAsync</c>) depends on this being the same
+    /// value across a retried/replayed call, not a freshly-generated one.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_PendingEntries_PassesEachEntrysOwnIdAsTheIdempotencyKey()
+    {
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var localStore = new FakeLocalServiceOrderStore();
+        var outbox = new FakeLocalActionOutbox();
+        var cursorStore = new FakeLocalSyncCursorStore(new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+        var client = new FakeFieldServiceSyncClient
+        {
+            PushHandler = items => items.Select(i => new RemoteSyncPushResult(i.Order.Id, true, null)).ToList(),
+        };
+        var order1 = Order("order-1", FieldWorkStatus.Pending);
+        var order2 = Order("order-2", FieldWorkStatus.Pending);
+        var entry1 = Entry(order1, sequenceNumber: 1);
+        var entry2 = Entry(order2, sequenceNumber: 2);
+        outbox.Seed(entry1);
+        outbox.Seed(entry2);
+        var sut = Sut(localStore, outbox, cursorStore, client, timeProvider);
+
+        await sut.SyncAsync();
+
+        client.PushCallCount.Should().Be(1, "all pending entries must flush in one batch, not one HTTP round-trip each");
+        client.PushedIdempotencyKeysInCallOrder.Should().Equal(
+            entry1.Id.ToString("D"), entry2.Id.ToString("D"));
+    }
+
+    /// <summary>
+    /// XD01-236's AC: "Partial-batch failure doesn't corrupt local outbox state (safe retry)."
+    /// One entry failing must not prevent the other entry in the same batch from being marked
+    /// dispatched, and the failed entry must remain the only one left pending for a future retry.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_OneEntryFailsInBatch_OtherEntryStillDispatchedAndOnlyFailedOneRemainsPending()
+    {
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var localStore = new FakeLocalServiceOrderStore();
+        var outbox = new FakeLocalActionOutbox();
+        var cursorStore = new FakeLocalSyncCursorStore(new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+        var client = new FakeFieldServiceSyncClient
+        {
+            PushHandler = items => items
+                .Select(i => string.Equals(i.Order.Id, "order-bad", StringComparison.Ordinal)
+                    ? new RemoteSyncPushResult(i.Order.Id, false, "validation failed")
+                    : new RemoteSyncPushResult(i.Order.Id, true, null))
+                .ToList(),
+        };
+        var goodOrder = Order("order-good", FieldWorkStatus.Pending);
+        var badOrder = Order("order-bad", FieldWorkStatus.Pending);
+        var goodEntry = Entry(goodOrder, sequenceNumber: 1);
+        var badEntry = Entry(badOrder, sequenceNumber: 2);
+        outbox.Seed(goodEntry);
+        outbox.Seed(badEntry);
+        var sut = Sut(localStore, outbox, cursorStore, client, timeProvider);
+
+        var result = await sut.SyncAsync();
+
+        result.Pushed.Should().Be(1);
+        result.Failed.Should().Be(1);
+        outbox.DispatchedIds.Should().Equal(goodEntry.Id);
+        outbox.FailedCalls.Should().ContainSingle(c => c.Id == badEntry.Id);
+        var stillPending = await outbox.GetPendingInOrderAsync();
+        stillPending.Should().ContainSingle().Which.Id.Should().Be(badEntry.Id);
+    }
+
     [Fact]
     public async Task SyncAsync_MultiplePendingEntriesOutOfInsertionOrder_FlushesInAscendingSequenceOrder()
     {
@@ -247,7 +322,7 @@ public class MauiSyncGatewayTests
         var cursorStore = new FakeLocalSyncCursorStore(new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc));
         var client = new FakeFieldServiceSyncClient
         {
-            PushHandler = orders => orders.Select(o => new RemoteSyncPushResult(o.Id, true, null)).ToList(),
+            PushHandler = items => items.Select(i => new RemoteSyncPushResult(i.Order.Id, true, null)).ToList(),
         };
         var orderHighSeq = Order("order-high-seq", FieldWorkStatus.Pending);
         var orderLowSeq = Order("order-low-seq", FieldWorkStatus.Pending);

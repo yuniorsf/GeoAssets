@@ -31,6 +31,12 @@ namespace GeoAssets.FieldService.Server;
 /// </summary>
 internal static class FieldServiceSyncRestApiExtensions
 {
+    /// <summary>
+    /// <see cref="ServiceOrder.Attributes"/> key the last successfully-applied push's
+    /// idempotency key is stamped under (XD01-236) — the dedup check's source of truth.
+    /// </summary>
+    internal const string LastPushIdempotencyKeyAttribute = "lastPushIdempotencyKey";
+
     public static IEndpointRouteBuilder MapFieldServiceSyncApi(
         this IEndpointRouteBuilder routes,
         string prefix = "/api/field-service/sync")
@@ -66,32 +72,49 @@ internal static class FieldServiceSyncRestApiExtensions
         routes.MapPost($"{prefix}/service-orders", async (
             HttpRequest req, IServiceOrderRepository repo, ITenantContext tenantContext, CancellationToken ct) =>
         {
-            var incoming = await JsonSerializer.DeserializeAsync<List<ServiceOrder>>(req.Body, opts, ct).ConfigureAwait(false);
+            var incoming = await JsonSerializer.DeserializeAsync<List<PushServiceOrderItem>>(req.Body, opts, ct).ConfigureAwait(false);
             if (incoming is null) return Results.BadRequest("Invalid service order batch.");
 
+            // Sequential, not parallel: multiple items in one batch can legitimately target the
+            // same ServiceOrder.Id (a device that queued several edits offline before
+            // reconnecting) — each item's own fresh GetByIdAsync must see the previous item's
+            // write, not race it.
             var results = new List<PushServiceOrderResult>(incoming.Count);
-            foreach (var order in incoming)
+            foreach (var item in incoming)
             {
-                results.Add(await PushOneAsync(order, repo, tenantContext, ct).ConfigureAwait(false));
+                results.Add(await PushOneAsync(item, repo, tenantContext, ct).ConfigureAwait(false));
             }
 
             return Results.Ok(results);
         })
         .WithName("PushServiceOrderDeltas")
-        .WithSummary("Pushes locally-modified ServiceOrders for orders that already exist under the caller's own tenant.")
+        .WithSummary("Pushes locally-modified ServiceOrders for orders that already exist under the caller's own tenant, deduped by idempotency key.")
         .Produces<List<PushServiceOrderResult>>()
         .Produces(StatusCodes.Status400BadRequest);
     }
 
     private static async Task<PushServiceOrderResult> PushOneAsync(
-        ServiceOrder order, IServiceOrderRepository repo, ITenantContext tenantContext, CancellationToken ct)
+        PushServiceOrderItem item, IServiceOrderRepository repo, ITenantContext tenantContext, CancellationToken ct)
     {
+        var order = item.Order;
         var existing = await repo.GetByIdAsync(order.Id, ct).ConfigureAwait(false);
         if (existing is null)
             return new PushServiceOrderResult(order.Id, Success: false, Error: "ServiceOrder not found.");
 
         if (existing.OrganizationId != tenantContext.CurrentOrganizationId)
             return new PushServiceOrderResult(order.Id, Success: false, Error: "ServiceOrder not found.");
+
+        // A reconnect burst may replay the same already-applied item (the client never saw the
+        // first attempt's ack) — short-circuit rather than re-run UpdateAsync, which would
+        // otherwise either silently double-apply or spuriously conflict against the RowVersion
+        // the first successful attempt already advanced.
+        if (existing.Attributes.TryGetValue(LastPushIdempotencyKeyAttribute, out var lastKey) &&
+            string.Equals(lastKey, item.IdempotencyKey, StringComparison.Ordinal))
+        {
+            return new PushServiceOrderResult(order.Id, Success: true, Error: null, Duplicate: true);
+        }
+
+        order.Attributes[LastPushIdempotencyKeyAttribute] = item.IdempotencyKey;
 
         try
         {

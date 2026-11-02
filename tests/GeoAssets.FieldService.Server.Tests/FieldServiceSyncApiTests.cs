@@ -195,11 +195,11 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
         seeded.Status = ServiceOrderStatus.Pending; // valid transition from the seeded Draft default
 
         using var client = CreateClient(TenantA);
-        var response = await client.PostAsJsonAsync(PushUri, new List<ServiceOrder> { seeded });
+        var response = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(seeded, "idem-1") });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var results = await response.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
-        results!.Should().ContainSingle(r => r.Id == "order-1" && r.Success);
+        results!.Should().ContainSingle(r => r.Id == "order-1" && r.Success && !r.Duplicate);
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
         var phantom = new ServiceOrder { Id = "does-not-exist", Title = "x", OrderTypeId = "type-a", CreatedBy = "tester", OrganizationId = TenantA };
 
         using var client = CreateClient(TenantA);
-        var response = await client.PostAsJsonAsync(PushUri, new List<ServiceOrder> { phantom });
+        var response = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(phantom, "idem-1") });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var results = await response.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
@@ -230,7 +230,7 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
         };
 
         using var attackerClient = CreateClient(TenantB);
-        var response = await attackerClient.PostAsJsonAsync(PushUri, new List<ServiceOrder> { tampered });
+        var response = await attackerClient.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(tampered, "idem-1") });
         var results = await response.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
 
         results!.Should().ContainSingle(r => r.Id == "order-1" && !r.Success,
@@ -266,10 +266,60 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
         // InProgress state) using the now-stale RowVersion it last pulled.
         staleClientCopy.Status = ServiceOrderStatus.Completed;
         using var client = CreateClient(TenantA);
-        var response = await client.PostAsJsonAsync(PushUri, new List<ServiceOrder> { staleClientCopy });
+        var response = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(staleClientCopy, "idem-1") });
         var results = await response.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
 
         results!.Should().ContainSingle(r => r.Id == "order-1" && !r.Success && r.Error!.Contains("Conflict", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// XD01-236's AC: "A batch of queued offline actions replays against the server exactly
+    /// once each (idempotency key dedup verified)." Simulates a reconnect burst replaying the
+    /// exact same push (the client never saw the first attempt's ack): the second call with the
+    /// same idempotency key must not re-apply the mutation (RowVersion stays what the first
+    /// call's own successful write advanced it to) or spuriously conflict.
+    /// </summary>
+    [Fact]
+    public async Task Push_SameIdempotencyKeyTwice_SecondCallIsDedupedAndFlaggedDuplicate()
+    {
+        var seeded = await SeedAsync(TenantA, "order-1", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        seeded.Status = ServiceOrderStatus.Pending;
+
+        using var client = CreateClient(TenantA);
+        var firstResponse = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(seeded, "idem-replay-1") });
+        var firstResults = await firstResponse.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
+        firstResults!.Should().ContainSingle(r => r.Success && !r.Duplicate);
+
+        // Client never saw the ack and replays the exact same payload/idempotency key.
+        var secondResponse = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(seeded, "idem-replay-1") });
+        var secondResults = await secondResponse.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
+
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        secondResults!.Should().ContainSingle(r => r.Id == "order-1" && r.Success && r.Duplicate,
+            "a replayed idempotency key must be recognized and short-circuited, not re-applied or rejected as a conflict");
+    }
+
+    /// <summary>XD01-236's AC: "Partial-batch failure doesn't corrupt local outbox state" — the
+    /// server-side half of that guarantee: one item failing in a batch must not prevent the
+    /// other item from being applied, and the response reports each independently.</summary>
+    [Fact]
+    public async Task Push_BatchWithOneFailingItem_OtherItemStillSucceeds()
+    {
+        var good = await SeedAsync(TenantA, "order-good", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        good.Status = ServiceOrderStatus.Pending;
+        var phantom = new ServiceOrder { Id = "order-missing", Title = "x", OrderTypeId = "type-a", CreatedBy = "tester", OrganizationId = TenantA };
+
+        using var client = CreateClient(TenantA);
+        var response = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem>
+        {
+            new(good, "idem-good"),
+            new(phantom, "idem-missing"),
+        });
+        var results = await response.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
+
+        results!.Should().HaveCount(2);
+        results!.Should().ContainSingle(r => r.Id == "order-good" && r.Success);
+        results!.Should().ContainSingle(r => r.Id == "order-missing" && !r.Success);
     }
 
     [Fact]
