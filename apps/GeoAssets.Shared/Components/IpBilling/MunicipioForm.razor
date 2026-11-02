@@ -1,0 +1,112 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Repositories
+@using GeoAssets.IpBilling.Models
+@using GeoAssets.IpBilling.Repositories
+@inject IMunicipioRepository Repository
+@inject IOrganizationRepository OrganizationRepository
+
+@if (_loading)
+{
+    <div class="empty-state"><p>@L["app.loading"]</p></div>
+}
+else
+{
+    <div>
+        <h5>@(IsNew ? L["admin.ipBilling.municipios.newMunicipio"] : L["admin.ipBilling.municipios.editTitle"])</h5>
+
+        <EditForm Model="@_editModel" OnValidSubmit="HandleSave">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.ibgeCode"]</label>
+                <InputText class="form-control" @bind-Value="_editModel.IbgeCode" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.name"]</label>
+                <InputText class="form-control" @bind-Value="_editModel.Name" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.uf"]</label>
+                <InputText class="form-control" @bind-Value="_editModel.Uf" maxlength="2" />
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.distribuidora"]</label>
+                <select class="form-control" @onchange="OnDistribuidoraChanged">
+                    <option value="">@L["admin.ipBilling.municipios.selectOrganization"]</option>
+                    @foreach (var organization in _organizations)
+                    {
+                        <option value="@organization.Id" selected="@(_editModel.DistribuidoraOrganizationId == organization.Id)">@organization.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.prefeitura"]</label>
+                <select class="form-control" @onchange="OnPrefeituraChanged">
+                    <option value="" selected="@(_editModel.PrefeituraOrganizationId is null)">@L["admin.ipBilling.municipios.prefeituraNone"]</option>
+                    @foreach (var organization in _organizations)
+                    {
+                        <option value="@organization.Id" selected="@(_editModel.PrefeituraOrganizationId == organization.Id)">@organization.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.origemLevantamento"]</label>
+                <InputSelect class="form-control" @bind-Value="_editModel.OrigemLevantamento">
+                    @foreach (var origem in Enum.GetValues<OrigemWorkflow>())
+                    {
+                        <option value="@origem">@origem</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.origemFiscalizacao"]</label>
+                <InputSelect class="form-control" @bind-Value="_editModel.OrigemFiscalizacao">
+                    @foreach (var origem in Enum.GetValues<OrigemWorkflow>())
+                    {
+                        <option value="@origem">@origem</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.origemOficio"]</label>
+                <InputSelect class="form-control" @bind-Value="_editModel.OrigemOficio">
+                    @foreach (var origem in Enum.GetValues<OrigemWorkflow>())
+                    {
+                        <option value="@origem">@origem</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.municipios.origemMemoriaCalculo"]</label>
+                <InputSelect class="form-control" @bind-Value="_editModel.OrigemMemoriaCalculo">
+                    @foreach (var origem in Enum.GetValues<OrigemWorkflow>())
+                    {
+                        <option value="@origem">@origem</option>
+                    }
+                </InputSelect>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="attribute-errors">@_error</p>
+            }
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+                @if (!IsNew)
+                {
+                    <button class="btn btn-danger" type="button" @onclick="HandleDelete">@L["admin.ipBilling.municipios.delete"]</button>
+                }
+            </div>
+        </EditForm>
+    </div>
+}

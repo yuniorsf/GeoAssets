@@ -1,0 +1,33 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Repositories
+@inject ILampTypeRepository Repository
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["admin.ipBilling.lampReference.title"] (@_lampTypes.Count)</h6>
+    </div>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (_lampTypes.Count == 0)
+    {
+        <div class="empty-state"><p>@L["admin.ipBilling.lampReference.empty"]</p></div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var lampType in _lampTypes)
+            {
+                <div class="asset-list-item @(SelectedLampTypeId == lampType.Id ? "selected" : "")"
+                     @onclick="() => SelectLampType(lampType)">
+                    <span class="asset-name">@lampType.Name</span>
+                    <span style="color:var(--text-secondary)">@lampType.Code</span>
+                </div>
+            }
+        </div>
+    }
+</div>

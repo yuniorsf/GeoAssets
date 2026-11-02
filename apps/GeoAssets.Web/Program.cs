@@ -123,9 +123,29 @@ builder.Services.AddHttpClient("GeoAssetsServer")
         return handler;
     });
 
+// GeoAssets.IpBilling.Server base URL (XD01-178) — a separate host/origin/CIAM-app-registration
+// from GeoAssets.Server (XD01-177), so it gets its own AuthorizationMessageHandler scoped to its
+// own URL/API scope, mirroring the "GeoAssetsServer" client above rather than reusing it.
+var geoAssetsIpBillingServerBaseUrl = builder.Configuration["GeoAssetsIpBillingServer:BaseUrl"]
+    ?? throw new InvalidOperationException("GeoAssetsIpBillingServer:BaseUrl is not configured.");
+
+builder.Services.AddHttpClient("GeoAssetsIpBillingServer")
+    .AddHttpMessageHandler(sp =>
+    {
+        var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
+        handler.ConfigureHandler(
+            authorizedUrls: [geoAssetsIpBillingServerBaseUrl],
+            scopes: [builder.Configuration["GeoAssetsIpBillingServer:ApiScope"] ?? ""]);
+        return handler;
+    });
+
 // ── GeoAssets Identity — HTTP-backed against GeoAssets.Server (XD01-18). InMemory removed
 // as an option (XD01-130) — Rest is the only supported backend.
 builder.Services.AddGeoIdentityRest();
+
+// IpBilling reference-data admin UI (XD01-178) — Municípios/Lamp Reference pages, backed by
+// GeoAssets.IpBilling.Server.
+builder.Services.AddIpBillingRest();
 
 // Pending-invitation redirect check (XD01-89) — registered here (not inside AddGeoIdentityRest)
 // since its dependencies (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager)

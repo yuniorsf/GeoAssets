@@ -23,6 +23,10 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
         // which would break the interactive login itself.
         var serverApiScope = configuration["GeoAssetsServer:ApiScope"];
 
+        // Same placeholder-guard reasoning as above, for GeoAssets.IpBilling.Server's own CIAM
+        // app registration (XD01-178) — a separate audience from GeoAssetsServer:ApiScope.
+        var ipBillingApiScope = configuration["GeoAssetsIpBillingServer:ApiScope"];
+
         services.AddMsalAuthentication(options =>
         {
             configuration.Bind("AzureAdCiam", options.ProviderOptions.Authentication);
@@ -38,6 +42,11 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
             // expand a refresh token's scope via the refresh_token grant.
             if (!string.IsNullOrWhiteSpace(serverApiScope))
                 options.ProviderOptions.DefaultAccessTokenScopes.Add(serverApiScope);
+
+            // Same reasoning, for GeoAssets.IpBilling.Server's own API scope (XD01-178) — its
+            // own CIAM app registration/audience, distinct from GeoAssetsServer's.
+            if (!string.IsNullOrWhiteSpace(ipBillingApiScope))
+                options.ProviderOptions.DefaultAccessTokenScopes.Add(ipBillingApiScope);
         })
         // See RolesClaimsPrincipalFactory's doc comment — the default factory doesn't split
         // Entra's array-valued "roles" claim into individual claims.

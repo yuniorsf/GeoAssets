@@ -41,8 +41,23 @@ builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
 builder.Services.AddScoped<IPoleResolver, HttpPoleResolver>();
 builder.Services.AddScoped<IIpBillingCalculationService, IpBillingCalculationService>();
 
+// ── CORS (XD01-178) — allow the Blazor WASM dev server origins configured in
+// appsettings.json, same pattern as GeoAssets.Server. Needed because the admin
+// Municípios/Lamp Reference pages in GeoAssets.Web call this host directly (a
+// separate origin from GeoAssets.Server). ──────────────────────────────────────
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? [];
+
+builder.Services.AddCors(opts =>
+    opts.AddDefaultPolicy(p =>
+        p.WithOrigins(allowedOrigins)
+         .AllowAnyHeader()
+         .AllowAnyMethod()));
+
 var app = builder.Build();
 
+app.UseCors();
 app.UseGeoAssetsAuthentication();
 app.UseGeoAssetsObservability();
 app.MapIpBillingApi();
