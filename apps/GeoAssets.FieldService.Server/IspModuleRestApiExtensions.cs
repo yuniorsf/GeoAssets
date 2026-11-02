@@ -1,41 +1,32 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Workflow.Isp.Bss;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GeoAssets.FieldService.Server;
 
 /// <summary>
-/// ISP vertical host scaffolding (XD01-279): a webhook ingestion endpoint shell and a thin
+/// ISP vertical host scaffolding (XD01-279): a webhook ingestion endpoint and a thin
 /// <see cref="IGeoCoreClient"/> proxy, mirroring the Electrical/Sanitation/NeutralPole archetype
 /// modules' own <c>MapXModuleApi</c> shape (<see cref="ElectricalModuleRestApiExtensions"/> et
-/// al.) so the BSS/OSS webhook integration (XD01-280), CTO splitter capacity tracking (XD01-281),
-/// OTDR fault dispatch (XD01-283), and compliance dossier exporter (XD01-284) tickets register
-/// their real logic behind these two routes rather than re-deriving host wiring of their own.
+/// al.). The ingest endpoint now dispatches real order-spawn logic for
+/// <c>EventType == "order.spawn"</c> (XD01-280) when <c>ProviderId</c> resolves to a registered
+/// <see cref="IBssOssOrderAdapter"/>; every other envelope (including every event type XD01-279's
+/// own tests already cover) keeps the original shell-acceptance behavior unchanged, so adding real
+/// dispatch here never breaks an existing integration that hasn't opted into it.
 /// </summary>
 internal static class IspModuleRestApiExtensions
 {
+    private const string OrderSpawnEventType = "order.spawn";
+
     public static IEndpointRouteBuilder MapIspModuleApi(
         this IEndpointRouteBuilder routes,
         string prefix = "/api/field-service/isp")
     {
-        routes.MapPost($"{prefix}/webhooks/ingest", (IspWebhookIngestRequest? request) =>
-        {
-            if (request is null ||
-                string.IsNullOrWhiteSpace(request.ProviderId) ||
-                string.IsNullOrWhiteSpace(request.EventType) ||
-                string.IsNullOrWhiteSpace(request.PayloadJson))
-            {
-                return Results.BadRequest("ProviderId, EventType, and PayloadJson are all required.");
-            }
-
-            if (!IsWellFormedJson(request.PayloadJson))
-                return Results.BadRequest("PayloadJson must be well-formed JSON.");
-
-            // Shell acceptance only — XD01-280 replaces this with real per-ProviderId dispatch
-            // (IXC Soft, MK-Auth, SGP, Voalle) once that integration lands.
-            return Results.Accepted(value: new IspWebhookAckResponse("Accepted"));
-        })
+        routes.MapPost($"{prefix}/webhooks/ingest", IngestWebhookAsync)
         .WithName("IngestIspWebhook")
-        .WithSummary("Shell webhook ingestion endpoint for the ISP vertical — validates envelope shape and acknowledges; XD01-280 adds real per-provider dispatch.")
+        .WithSummary("Webhook ingestion endpoint for the ISP vertical — validates envelope shape, dispatches order-spawn events to the matching BSS/OSS adapter, and shell-acknowledges everything else.")
         .Produces<IspWebhookAckResponse>(StatusCodes.Status202Accepted)
+        .Produces(StatusCodes.Status201Created)
         .Produces(StatusCodes.Status400BadRequest);
 
         routes.MapGet($"{prefix}/geo-core/features/{{id}}", async (string id, IGeoCoreClient client, CancellationToken ct) =>
@@ -48,6 +39,50 @@ internal static class IspModuleRestApiExtensions
         .Produces(StatusCodes.Status404NotFound);
 
         return routes;
+    }
+
+    private static async Task<IResult> IngestWebhookAsync(
+        [FromBody] IspWebhookIngestRequest? request, [FromServices] BssOssOrderAdapterRegistry adapterRegistry,
+        [FromServices] BssOrderSpawnService spawnService, [FromServices] ITenantContext tenantContext, CancellationToken ct)
+    {
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.ProviderId) ||
+            string.IsNullOrWhiteSpace(request.EventType) ||
+            string.IsNullOrWhiteSpace(request.PayloadJson))
+        {
+            return Results.BadRequest("ProviderId, EventType, and PayloadJson are all required.");
+        }
+
+        if (!IsWellFormedJson(request.PayloadJson))
+            return Results.BadRequest("PayloadJson must be well-formed JSON.");
+
+        if (!string.Equals(request.EventType, OrderSpawnEventType, StringComparison.Ordinal))
+            return Results.Accepted(value: new IspWebhookAckResponse("Accepted"));
+
+        return await DispatchOrderSpawnAsync(request, adapterRegistry, spawnService, tenantContext, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> DispatchOrderSpawnAsync(
+        IspWebhookIngestRequest request, BssOssOrderAdapterRegistry adapterRegistry,
+        BssOrderSpawnService spawnService, ITenantContext tenantContext, CancellationToken ct)
+    {
+        if (!adapterRegistry.TryResolve(request.ProviderId, out var adapter))
+        {
+            return Results.BadRequest(
+                $"Unknown BSS/OSS provider '{request.ProviderId}'. Registered: {string.Join(", ", adapterRegistry.RegisteredProviderIds)}.");
+        }
+
+        try
+        {
+            var spec = adapter.ParseOrderSpawn(request.PayloadJson);
+            var order = await spawnService.SpawnFtthDropInstallOrderAsync(
+                adapter.ProviderId, spec, tenantContext.CurrentOrganizationId, ct).ConfigureAwait(false);
+            return Results.Created(new Uri($"/api/field-service/orders/{order.Id}", UriKind.Relative), new IspWebhookAckResponse("Accepted"));
+        }
+        catch (BssOrderSpawnParseException ex)
+        {
+            return Results.BadRequest(ex.Message);
+        }
     }
 
     private static bool IsWellFormedJson(string json)

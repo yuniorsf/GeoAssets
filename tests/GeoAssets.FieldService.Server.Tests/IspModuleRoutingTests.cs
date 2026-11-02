@@ -7,6 +7,8 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
+using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -55,6 +57,25 @@ public sealed class IspModuleRoutingTests
             throw new NotSupportedException();
     }
 
+    private sealed class NoOpServiceOrderWriter : IServiceOrderWriter
+    {
+        public Task AddAsync(IServiceOrder order, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task DeleteAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public event EventHandler<IServiceOrder>? OrderAdded { add { } remove { } }
+        public event EventHandler<IServiceOrder>? OrderUpdated { add { } remove { } }
+        public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged { add { } remove { } }
+        public event EventHandler<string>? OrderDeleted { add { } remove { } }
+    }
+
+    private sealed class FixedTenantContext(Guid organizationId) : ITenantContext
+    {
+        public Guid CurrentOrganizationId => organizationId;
+    }
+
     private static async Task<TestServer> BuildServerAsync(IGeoCoreClient? geoCoreClient = null)
     {
         var host = await new HostBuilder()
@@ -65,6 +86,14 @@ public sealed class IspModuleRoutingTests
                 {
                     services.AddRouting();
                     services.AddSingleton(geoCoreClient ?? new FakeGeoCoreClient(feature: null));
+                    // None of this file's tests exercise EventType == "order.spawn" dispatch — these
+                    // three are only registered so DI can construct the endpoint's [FromServices]
+                    // parameters at all (empty adapter registry: no adapter ever resolves).
+                    services.AddSingleton(new BssOssOrderAdapterRegistry([]));
+                    services.AddSingleton<IServiceOrderWriter, NoOpServiceOrderWriter>();
+                    services.AddSingleton(TimeProvider.System);
+                    services.AddSingleton<BssOrderSpawnService>();
+                    services.AddSingleton<ITenantContext>(new FixedTenantContext(Guid.Empty));
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>

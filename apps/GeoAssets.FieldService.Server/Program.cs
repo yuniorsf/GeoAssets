@@ -14,6 +14,7 @@ using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
+using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -92,8 +93,14 @@ builder.Services.AddScoped<IPavingMeasurementRepository, EFPavingMeasurementRepo
 // IServiceOrderRepository below can actually validate a transition into any FieldWork state
 // (Inspected included); without it, ServiceOrderTransitions.IsValid would only ever consult the
 // global default graph, which doesn't know these states at all (see
-// FieldWorkWorkflowGraph's own doc comment) and would reject every one of them. ────────────────
-builder.Services.AddOrderTypeRegistry(FieldWorkOrderTypes.RegisterAll);
+// FieldWorkWorkflowGraph's own doc comment) and would reject every one of them. Also registers
+// the "ftth-drop-install" graph (XD01-273, first actually host-wired by XD01-280) for the same
+// reason. ──────────────────────────────────────────────────────────────────────────────────────
+builder.Services.AddOrderTypeRegistry(registry =>
+{
+    FieldWorkOrderTypes.RegisterAll(registry);
+    FtthDropInstallOrderTypes.RegisterAll(registry);
+});
 
 // ── Mobile offline-sync (XD01-208) — same ServiceOrderDbContext registration above backs
 // IServiceOrderRepository too. Registered as EFServiceOrderRepository (now carrying the
@@ -154,6 +161,17 @@ builder.Services.AddSingleton<ConcessionaireDossierExporterRegistry>();
 // Pole-sharing audit & yellow-tag legal defense evidence repository (XD01-285) — in-memory
 // stateful singleton, same shape as NeutralPoleRegistry; no persistence-layer ticket exists yet.
 builder.Services.AddSingleton<IPoleAuditEvidenceRepository, InMemoryPoleAuditEvidenceRepository>();
+
+// BSS/OSS bi-directional webhook integration (XD01-280) — IXC Soft is the only adapter
+// implemented (priority vendor per the ticket; no credentials/API docs available in this
+// environment for MK-Auth/SGP/Voalle). Adding one of those later is exactly one more
+// AddSingleton<IBssOssOrderAdapter, …>() line, same shape as the dossier exporters above.
+builder.Services.AddHttpClient(HttpBssOssOutboundWebhookDispatcher.HttpClientName);
+builder.Services.AddSingleton<IBssOssOrderAdapter, IxcSoftOrderAdapter>();
+builder.Services.AddSingleton<BssOssOrderAdapterRegistry>();
+builder.Services.AddSingleton<IBssOssOutboundWebhookDispatcher, HttpBssOssOutboundWebhookDispatcher>();
+builder.Services.AddScoped<BssOrderSpawnService>();
+builder.Services.AddScoped<FtthDropInstallActivationDispatchService>();
 
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
@@ -217,6 +235,9 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
 
     // Emergency legal defense dossier generator (XD01-286).
     app.MapIspLegalDefenseDossierApi();
+
+    // FTTH drop-install order transitions (XD01-280) — the BSS/OSS activation-webhook trigger.
+    app.MapFtthDropInstallApi();
 }
 
 await app.RunAsync().ConfigureAwait(false);
