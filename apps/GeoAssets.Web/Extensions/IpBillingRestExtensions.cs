@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.Web.Services.IpBilling.Rest;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +18,10 @@ namespace GeoAssets.Web.Extensions;
 /// — the two reference-data surfaces XD01-178's admin pages (Municípios, Lamp Reference)
 /// consume. <c>IUnidadeOrganizacionalRepository</c> has no admin page yet (out of scope for
 /// this ticket) and is intentionally not registered here.
+///
+/// Also registers <see cref="ILevantamentoRestClient"/> (XD01-181) — the Levantamento upload/
+/// calculate/validate/memória-de-cálculo pages' gateway to XD01-180's REST API, on this same
+/// named HttpClient.
 /// </summary>
 internal static class IpBillingRestExtensions
 {
@@ -27,6 +32,9 @@ internal static class IpBillingRestExtensions
 
         services.AddScoped<ILampTypeRepository>(sp =>
             new RestLampTypeRepository(CreateIpBillingClient(sp)));
+
+        services.AddScoped<ILevantamentoRestClient>(sp =>
+            new LevantamentoRestClient(CreateIpBillingClient(sp)));
 
         return services;
     }

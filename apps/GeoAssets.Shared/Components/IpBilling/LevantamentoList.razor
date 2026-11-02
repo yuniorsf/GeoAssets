@@ -1,0 +1,34 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Workflow.Orders
+@inject IServiceOrderRepository Repository
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["admin.ipBilling.levantamentos.title"] (@_orders.Count)</h6>
+        <button class="btn-icon" title="@L["admin.ipBilling.levantamentos.newLevantamento"]" @onclick="() => OnCreateRequested.InvokeAsync()">＋</button>
+    </div>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (_orders.Count == 0)
+    {
+        <div class="empty-state"><p>@L["admin.ipBilling.levantamentos.empty"]</p></div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var order in _orders)
+            {
+                <div class="asset-list-item @(SelectedOrderId == order.Id ? "selected" : "")"
+                     @onclick="() => SelectOrder(order)">
+                    <span class="asset-name">@order.Title</span>
+                    <span style="color:var(--text-secondary)">@order.Status</span>
+                </div>
+            }
+        </div>
+    }
+</div>

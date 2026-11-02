@@ -1,0 +1,70 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+<div>
+    <h5>@L["admin.ipBilling.levantamentos.memoriaCalculoTitle"]</h5>
+
+    <div class="sidebar-section" style="display:flex;gap:1.5rem;flex-wrap:wrap">
+        <div><strong>@L["admin.ipBilling.levantamentos.normalKwh"]:</strong> @Memoria.NormalKwh.ToString("N4")</div>
+        <div><strong>@L["admin.ipBilling.levantamentos.retroativoKwh"]:</strong> @Memoria.RetroativoKwh.ToString("N4")</div>
+        <div><strong>@L["admin.ipBilling.levantamentos.irregular24hKwh"]:</strong> @Memoria.Irregular24hKwh.ToString("N4")</div>
+        <div><strong>@L["admin.ipBilling.levantamentos.totalKwh"]:</strong> @Memoria.TotalCalculatedKwh.ToString("N4")</div>
+    </div>
+
+    <h6>@L["admin.ipBilling.levantamentos.transformerLines"]</h6>
+    @if (Memoria.TransformerLines.Count == 0)
+    {
+        <p class="empty-state">@L["admin.ipBilling.levantamentos.noTransformerLines"]</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>@L["admin.ipBilling.levantamentos.codigoInstalacao"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.isNew"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.tipoRetroacao"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.normalKwh"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.retroativoKwh"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Memoria.TransformerLines)
+                {
+                    <tr>
+                        <td>@line.CodigoInstalacao</td>
+                        <td>@(line.IsNewTransformer ? L["admin.ipBilling.levantamentos.yes"] : L["admin.ipBilling.levantamentos.no"])</td>
+                        <td>@(line.Tipo?.ToString() ?? "—")</td>
+                        <td>@line.NormalKwh.ToString("N4")</td>
+                        <td>@(line.RetroativoKwh?.ToString("N4") ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (Memoria.Lines24h.Count > 0)
+    {
+        <h6>@L["admin.ipBilling.levantamentos.lines24h"]</h6>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>@L["admin.ipBilling.levantamentos.lampType"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.wattage"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.quantity"]</th>
+                    <th>@L["admin.ipBilling.levantamentos.totalKwh"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Memoria.Lines24h)
+                {
+                    <tr>
+                        <td>@line.Code</td>
+                        <td>@line.WattageW W</td>
+                        <td>@line.Quantity</td>
+                        <td>@line.Kwh.ToString("N4")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

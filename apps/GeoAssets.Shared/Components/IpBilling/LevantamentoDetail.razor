@@ -1,0 +1,47 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Workflow
+@using GeoAssets.Workflow.Orders
+
+<div>
+    <div class="section-header-row">
+        <h5>@Order.Title</h5>
+        <button class="btn-icon" @onclick="() => OnClose.InvokeAsync()">✕</button>
+    </div>
+    <p style="color:var(--text-secondary)">
+        @L["admin.ipBilling.levantamentos.status"]: <strong>@Order.Status</strong>
+    </p>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="attribute-errors">@_error</p>
+    }
+
+    @if (string.Equals(Order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal))
+    {
+        <LevantamentoUploadPanel OrderId="@Order.Id" OnUploaded="HandleUploaded" />
+    }
+
+    @if (string.Equals(Order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal) ||
+         string.Equals(Order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal))
+    {
+        <div class="form-actions">
+            <button class="btn btn-primary" disabled="@_busy" @onclick="HandleCalculateAsync">
+                @L["admin.ipBilling.levantamentos.calculate"]
+            </button>
+        </div>
+    }
+
+    @if (string.Equals(Order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal))
+    {
+        <div class="form-actions">
+            <button class="btn btn-success" disabled="@_busy" @onclick="HandleValidateAsync">
+                @L["admin.ipBilling.levantamentos.validate"]
+            </button>
+        </div>
+    }
+
+    @if (_memoria is not null)
+    {
+        <LevantamentoMemoriaCalculoTable Memoria="@_memoria" />
+    }
+</div>
