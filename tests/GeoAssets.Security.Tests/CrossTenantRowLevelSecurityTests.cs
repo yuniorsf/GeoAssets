@@ -568,6 +568,143 @@ public sealed class CrossTenantRowLevelSecurityTests
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
+    // ── field_icerp_paving_measurements (XD01-297) ────────────────────────────
+
+    /// <summary>
+    /// Unlike every other table in this suite, <c>field_icerp_paving_measurements</c> has real FK
+    /// constraints to <c>"ServiceOrders"</c> (parent + child), so each test seeds the referenced
+    /// orders first via <c>ON CONFLICT ... DO NOTHING</c> (idempotent, and deliberately not a
+    /// <c>"ServiceOrders"</c> truncate — that would cascade-wipe every other test's fixture data
+    /// sharing this table).
+    /// </summary>
+    private static async Task SeedServiceOrderAsync(NpgsqlConnection owner, string id, Guid organizationId)
+    {
+        await using var insert = owner.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO "ServiceOrders"
+                ("Id", "Title", "Description", "OrderTypeId", "Status", "Priority", "CreatedBy", "OrganizationId", "CreatedAt", "AttributesJson", "FeatureIdsJson")
+            VALUES (@id, @id, '', 'type-a', 'Draft', 0, 'tester', @orgId, now(), '{}', '[]')
+            ON CONFLICT ("Id") DO NOTHING;
+            """;
+        insert.Parameters.Add(new NpgsqlParameter("id", id));
+        insert.Parameters.Add(new NpgsqlParameter("orgId", organizationId));
+        await insert.ExecuteNonQueryAsync();
+    }
+
+    [Fact]
+    public async Task PavingMeasurements_SelectAcrossTenants_OnlyReturnsOwnTenantsRows()
+    {
+        var idA = Guid.NewGuid();
+        var idB = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE field_icerp_paving_measurements CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await SeedServiceOrderAsync(owner, "paving-parent-a", TenantA);
+            await SeedServiceOrderAsync(owner, "paving-child-a", TenantA);
+            await SeedServiceOrderAsync(owner, "paving-parent-b", TenantB);
+            await SeedServiceOrderAsync(owner, "paving-child-b", TenantB);
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO field_icerp_paving_measurements
+                    ("Id", "ParentServiceOrderId", "ChildServiceOrderId", "OrganizationId", "LengthMeters", "WidthMeters", "DepthMeters", "RecordedAreaSquareMeters", "ActualAreaSquareMeters", "VolumeCubicMeters", "RecordedAtUtc")
+                VALUES
+                    (@idA, 'paving-parent-a', 'paving-child-a', @orgA, 2, 1, 0.5, 2, 2, 1, now()),
+                    (@idB, 'paving-parent-b', 'paving-child-b', @orgB, 2, 1, 0.5, 2, 2, 1, now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("idA", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgA", TenantA));
+            insert.Parameters.Add(new NpgsqlParameter("idB", idB));
+            insert.Parameters.Add(new NpgsqlParameter("orgB", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT \"Id\" FROM field_icerp_paving_measurements ORDER BY \"Id\"";
+        var ids = new List<Guid>();
+        await using (var reader = await select.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                ids.Add(reader.GetGuid(0));
+
+        ids.Should().Equal(idA);
+    }
+
+    [Fact]
+    public async Task PavingMeasurements_InsertUnderAnotherTenant_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE field_icerp_paving_measurements CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await SeedServiceOrderAsync(owner, "paving-parent-c", TenantA);
+            await SeedServiceOrderAsync(owner, "paving-child-c", TenantA);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () =>
+        {
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO field_icerp_paving_measurements
+                    ("Id", "ParentServiceOrderId", "ChildServiceOrderId", "OrganizationId", "LengthMeters", "WidthMeters", "DepthMeters", "RecordedAreaSquareMeters", "ActualAreaSquareMeters", "VolumeCubicMeters", "RecordedAtUtc")
+                VALUES (@id, 'paving-parent-c', 'paving-child-c', @orgId, 2, 1, 0.5, 2, 2, 1, now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantB));
+            await insert.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501");
+    }
+
+    [Fact]
+    public async Task PavingMeasurements_DeleteAcrossTenants_AffectsNoRows()
+    {
+        var idA = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await using var truncate = owner.CreateCommand();
+            truncate.CommandText = "TRUNCATE TABLE field_icerp_paving_measurements CASCADE";
+            await truncate.ExecuteNonQueryAsync();
+
+            await SeedServiceOrderAsync(owner, "paving-parent-a", TenantA);
+            await SeedServiceOrderAsync(owner, "paving-child-a", TenantA);
+
+            await using var insert = owner.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO field_icerp_paving_measurements
+                    ("Id", "ParentServiceOrderId", "ChildServiceOrderId", "OrganizationId", "LengthMeters", "WidthMeters", "DepthMeters", "RecordedAreaSquareMeters", "ActualAreaSquareMeters", "VolumeCubicMeters", "RecordedAtUtc")
+                VALUES (@id, 'paving-parent-a', 'paving-child-a', @orgId, 2, 1, 0.5, 2, 2, 1, now());
+                """;
+            insert.Parameters.Add(new NpgsqlParameter("id", idA));
+            insert.Parameters.Add(new NpgsqlParameter("orgId", TenantA));
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
+
+        await using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM field_icerp_paving_measurements WHERE \"Id\" = @id";
+        delete.Parameters.Add(new NpgsqlParameter("id", idA));
+        var affected = await delete.ExecuteNonQueryAsync();
+
+        affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
+    }
+
     // ── Generic discovery: every org-scoped table must be RLS-protected ──────
 
     /// <summary>

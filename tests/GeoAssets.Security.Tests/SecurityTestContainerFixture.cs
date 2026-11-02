@@ -82,6 +82,7 @@ internal static class SecurityTestContainerFixture
                 GRANT SELECT, INSERT, UPDATE, DELETE ON asset_type TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON field_manhole_audits TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON applied_mutation_batches TO {TenantScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_icerp_paving_measurements TO {TenantScopedRole};
                 -- ServiceOrders' RLS policy's EXISTS clause reads "OrganizationGrants" (its
                 -- grant-aware exception) — Postgres checks SELECT privilege on every table a
                 -- policy references, even for rows that end up not matching.
