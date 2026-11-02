@@ -105,9 +105,9 @@ public sealed class IspPoleAuditRoutingTests
                     services.AddSingleton(repository ?? new InMemoryPoleAuditEvidenceRepository());
                     services.AddSingleton<TimeProvider>(timeProvider ?? new FakeTimeProvider());
                     services.AddSingleton<IShapefileExportService, ShapefileExportService>();
-                    services.AddSingleton<IConcessionaireDossierExporter, DisNor056Exporter>();
-                    services.AddSingleton<IConcessionaireDossierExporter, JoinAsExporter>();
-                    services.AddSingleton<ConcessionaireDossierExporterRegistry>();
+                    services.AddSingleton<IDossierExporter, DisNor056Exporter>();
+                    services.AddSingleton<IDossierExporter, JoinAsExporter>();
+                    services.AddSingleton<DossierExporterRegistry>();
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>

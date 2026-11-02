@@ -17,8 +17,8 @@ public class PoleLegalDefenseDossierGeneratorTests
     private static PoleLicenseRecord License(string poleFeatureId, DateTimeOffset? expiresAtUtc = null) =>
         new(poleFeatureId, "SCM-123", "Acme Telecom", GeneratedAtUtc.AddYears(-1), expiresAtUtc);
 
-    private static PoleDossierRecord Dossier(string poleFeatureId, IReadOnlyList<ConcessionaireDossierFile> files) =>
-        new(poleFeatureId, "Enel", GeneratedAtUtc.AddDays(-1), new ConcessionaireDossierResult(files));
+    private static PoleDossierRecord Dossier(string poleFeatureId, IReadOnlyList<DossierFile> files) =>
+        new(poleFeatureId, "Enel", GeneratedAtUtc.AddDays(-1), new DossierResult(files));
 
     private static PoleDefenseBundle EmptyBundle(string poleFeatureId) =>
         new(poleFeatureId, [], [], []);
@@ -176,8 +176,8 @@ public class PoleLegalDefenseDossierGeneratorTests
     [Fact]
     public void Generate_NonEmptyDossierRecordsWithFiles_ProduceOneAttachmentPerFileWithOriginalContentAndNoMissingItem()
     {
-        var file1 = new ConcessionaireDossierFile("manifest.csv", [1, 2, 3]);
-        var file2 = new ConcessionaireDossierFile("manifest.xml", [4, 5, 6]);
+        var file1 = new DossierFile("manifest.csv", [1, 2, 3]);
+        var file2 = new DossierFile("manifest.xml", [4, 5, 6]);
         var dossierRecord = Dossier("pole-1", [file1, file2]);
         var bundle = new PoleDefenseBundle("pole-1", [], [], [dossierRecord]);
 

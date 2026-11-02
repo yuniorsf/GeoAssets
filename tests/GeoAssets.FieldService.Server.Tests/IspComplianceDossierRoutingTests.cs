@@ -31,7 +31,7 @@ namespace GeoAssets.FieldService.Server.Tests;
 /// (XD01-284): distributor resolution, status-code mapping, and the "every endpoint requires an
 /// authenticated caller" boundary, mirroring <see cref="IspCtoOccupancyRoutingTests"/>'s host
 /// bootstrap. Uses the REAL <see cref="DisNor056Exporter"/>/<see cref="JoinAsExporter"/>/
-/// <see cref="ConcessionaireDossierExporterRegistry"/> and the REAL
+/// <see cref="DossierExporterRegistry"/> and the REAL
 /// <see cref="ShapefileExportService"/> (not faked) to prove the end-to-end DI wiring that
 /// <c>Program.cs</c> performs actually produces a working dossier.
 /// </summary>
@@ -87,9 +87,9 @@ public sealed class IspComplianceDossierRoutingTests
                     services.AddRouting();
                     services.AddSingleton(geoCoreClient ?? new FakeGeoCoreClient());
                     services.AddSingleton<IShapefileExportService, ShapefileExportService>();
-                    services.AddSingleton<IConcessionaireDossierExporter, DisNor056Exporter>();
-                    services.AddSingleton<IConcessionaireDossierExporter, JoinAsExporter>();
-                    services.AddSingleton<ConcessionaireDossierExporterRegistry>();
+                    services.AddSingleton<IDossierExporter, DisNor056Exporter>();
+                    services.AddSingleton<IDossierExporter, JoinAsExporter>();
+                    services.AddSingleton<DossierExporterRegistry>();
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>

@@ -4,4 +4,4 @@ namespace GeoAssets.Core.Isp.Compliance.PoleAudit;
 public sealed record PoleLegalDefenseDossierResult(
     string DocumentText,
     IReadOnlyList<PoleLegalDefenseMissingItem> MissingItems,
-    IReadOnlyList<ConcessionaireDossierFile> AttachmentFiles);
+    IReadOnlyList<DossierFile> AttachmentFiles);

@@ -7,8 +7,8 @@ namespace GeoAssets.FieldService.Server;
 
 /// <summary>
 /// Concessionaire compliance dossier exporter (XD01-284), built on XD01-279's ISP vertical host
-/// scaffolding. The thin HTTP façade over <see cref="ConcessionaireDossierExporterRegistry"/> and
-/// whichever <see cref="IConcessionaireDossierExporter"/> it resolves — all the real format logic
+/// scaffolding. The thin HTTP façade over <see cref="DossierExporterRegistry"/> and
+/// whichever <see cref="IDossierExporter"/> it resolves — all the real format logic
 /// lives in <c>GeoAssets.Core.Isp.Compliance</c>.
 /// </summary>
 internal static class IspComplianceDossierRestApiExtensions
@@ -30,7 +30,7 @@ internal static class IspComplianceDossierRestApiExtensions
     private static async Task<IResult> GenerateAsync(
         IspComplianceDossierRequest request,
         IGeoCoreClient geoCoreClient,
-        ConcessionaireDossierExporterRegistry registry,
+        DossierExporterRegistry registry,
         CancellationToken ct)
     {
         if (request.PoleFeatureIds.Count == 0)
@@ -60,7 +60,7 @@ internal static class IspComplianceDossierRestApiExtensions
         }
     }
 
-    private static byte[] ZipDossierFiles(IReadOnlyList<ConcessionaireDossierFile> files)
+    private static byte[] ZipDossierFiles(IReadOnlyList<DossierFile> files)
     {
         using var memoryStream = new MemoryStream();
         using (var zip = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))

@@ -151,12 +151,12 @@ builder.Services.AddSingleton<OtdrEmergencyFaultDispatchService>();
 // Concessionaire compliance dossier exporter (XD01-284) — AddGeoAssetsShapefile also registers
 // IShapefileExportService, which DisNor056Exporter consumes via the interface Core already owns
 // (Onion layering stays intact: Core never references GeoAssets.Provider.Shapefile directly).
-// Adding a third distributor's exporter is exactly one more AddSingleton<IConcessionaireDossierExporter, …>()
+// Adding a third distributor's exporter is exactly one more AddSingleton<IDossierExporter, …>()
 // line here — neither existing exporter nor the registry needs to change (XD01-284's AC3).
 builder.Services.AddGeoAssetsShapefile();
-builder.Services.AddSingleton<IConcessionaireDossierExporter, DisNor056Exporter>();
-builder.Services.AddSingleton<IConcessionaireDossierExporter, JoinAsExporter>();
-builder.Services.AddSingleton<ConcessionaireDossierExporterRegistry>();
+builder.Services.AddSingleton<IDossierExporter, DisNor056Exporter>();
+builder.Services.AddSingleton<IDossierExporter, JoinAsExporter>();
+builder.Services.AddSingleton<DossierExporterRegistry>();
 
 // Pole-sharing audit & yellow-tag legal defense evidence repository (XD01-285) — in-memory
 // stateful singleton, same shape as NeutralPoleRegistry; no persistence-layer ticket exists yet.

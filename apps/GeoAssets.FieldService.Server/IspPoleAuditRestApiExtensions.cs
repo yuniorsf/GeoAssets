@@ -89,7 +89,7 @@ internal static class IspPoleAuditRestApiExtensions
 
     private static async Task<IResult> GenerateDossierAsync(
         string poleId, PoleDossierRecordRequest request, IGeoCoreClient geoCoreClient,
-        ConcessionaireDossierExporterRegistry registry, IPoleAuditEvidenceRepository repository,
+        DossierExporterRegistry registry, IPoleAuditEvidenceRepository repository,
         TimeProvider timeProvider, CancellationToken ct)
     {
         var feature = await geoCoreClient.GetFeatureByIdAsync(poleId, ct).ConfigureAwait(false);

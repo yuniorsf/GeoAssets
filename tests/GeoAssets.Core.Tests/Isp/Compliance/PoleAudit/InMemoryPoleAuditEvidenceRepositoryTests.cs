@@ -17,7 +17,7 @@ public class InMemoryPoleAuditEvidenceRepositoryTests
         new(poleFeatureId, "SCM-123", "Acme Telecom", CutoffUtc.AddYears(-1), CutoffUtc.AddYears(5));
 
     private static PoleDossierRecord Dossier(string poleFeatureId) =>
-        new(poleFeatureId, "Enel", CutoffUtc.AddDays(-1), new ConcessionaireDossierResult([]));
+        new(poleFeatureId, "Enel", CutoffUtc.AddDays(-1), new DossierResult([]));
 
     [Fact]
     public void BuildDefenseBundle_EvidenceCapturedExactlyAtCutoff_IsIncluded()

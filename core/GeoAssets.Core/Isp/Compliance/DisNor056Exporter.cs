@@ -15,13 +15,13 @@ namespace GeoAssets.Core.Isp.Compliance;
 /// <see cref="IShapefileExportService"/> (the interface Core already owns), never the concrete
 /// provider, so Onion layering stays intact.
 /// </summary>
-public sealed class DisNor056Exporter(IShapefileExportService shapefileExportService) : IConcessionaireDossierExporter
+public sealed class DisNor056Exporter(IShapefileExportService shapefileExportService) : IDossierExporter
 {
     private const string CodIdAttributeKey = "COD_ID";
 
     public string DistributorName => "Neoenergia";
 
-    public ConcessionaireDossierResult Export(IReadOnlyList<GeoFeature> poleFeatures)
+    public DossierResult Export(IReadOnlyList<GeoFeature> poleFeatures)
     {
         var poles = SelectLabeledPoles(poleFeatures);
         var firstLongitude = ((GeoPoint)poles[0].Geometry!).Longitude;
@@ -48,9 +48,9 @@ public sealed class DisNor056Exporter(IShapefileExportService shapefileExportSer
         var dxfBytes = DxfWriter.WritePoints(dxfPoints);
         var shapefileZip = shapefileExportService.ExportToZip(reprojectedFeatures, SirgasUtmReprojector.WktFor(zone), epsgCode);
 
-        return new ConcessionaireDossierResult([
-            new ConcessionaireDossierFile("dis-nor-056-poles.dxf", dxfBytes),
-            new ConcessionaireDossierFile("dis-nor-056-poles-shapefile.zip", shapefileZip),
+        return new DossierResult([
+            new DossierFile("dis-nor-056-poles.dxf", dxfBytes),
+            new DossierFile("dis-nor-056-poles-shapefile.zip", shapefileZip),
         ]);
     }
 

@@ -5,18 +5,18 @@ using Xunit;
 
 namespace GeoAssets.Core.Tests.Isp.Compliance;
 
-/// <summary>Covers <see cref="ConcessionaireDossierExporterRegistry"/>'s name resolution, independent of the real exporters.</summary>
-public class ConcessionaireDossierExporterRegistryTests
+/// <summary>Covers <see cref="DossierExporterRegistry"/>'s name resolution, independent of the real exporters.</summary>
+public class DossierExporterRegistryTests
 {
-    private sealed class FakeExporter(string distributorName) : IConcessionaireDossierExporter
+    private sealed class FakeExporter(string distributorName) : IDossierExporter
     {
         public string DistributorName => distributorName;
 
-        public ConcessionaireDossierResult Export(IReadOnlyList<GeoFeature> poleFeatures) =>
+        public DossierResult Export(IReadOnlyList<GeoFeature> poleFeatures) =>
             throw new NotSupportedException();
     }
 
-    private static ConcessionaireDossierExporterRegistry BuildRegistry() =>
+    private static DossierExporterRegistry BuildRegistry() =>
         new([new FakeExporter("Neoenergia"), new FakeExporter("Enel")]);
 
     [Theory]

@@ -5,4 +5,4 @@ public sealed record PoleDossierRecord(
     string PoleFeatureId,
     string DistributorName,
     DateTimeOffset GeneratedAtUtc,
-    ConcessionaireDossierResult Dossier);
+    DossierResult Dossier);

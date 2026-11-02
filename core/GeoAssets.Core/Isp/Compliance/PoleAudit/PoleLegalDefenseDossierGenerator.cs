@@ -33,7 +33,7 @@ public static class PoleLegalDefenseDossierGenerator
             throw new ArgumentException("At least one pole must be requested.", nameof(bundles));
 
         var missingItems = new List<PoleLegalDefenseMissingItem>();
-        var attachments = new List<ConcessionaireDossierFile>();
+        var attachments = new List<DossierFile>();
         var document = new StringBuilder();
 
         AppendHeader(document, bundles.Count + notFoundPoleFeatureIds.Count, generatedAtUtc);
@@ -64,7 +64,7 @@ public static class PoleLegalDefenseDossierGenerator
 
     private static void AppendPoleSection(
         StringBuilder document, PoleDefenseBundle bundle, DateTimeOffset generatedAtUtc,
-        List<PoleLegalDefenseMissingItem> missingItems, List<ConcessionaireDossierFile> attachments)
+        List<PoleLegalDefenseMissingItem> missingItems, List<DossierFile> attachments)
     {
         document.AppendLine(CultureInfo.InvariantCulture, $"--- Pole {bundle.PoleFeatureId} ---");
 
@@ -77,7 +77,7 @@ public static class PoleLegalDefenseDossierGenerator
 
     private static void AppendEvidenceSection(
         StringBuilder document, PoleDefenseBundle bundle, List<PoleLegalDefenseMissingItem> missingItems,
-        List<ConcessionaireDossierFile> attachments)
+        List<DossierFile> attachments)
     {
         var index = 0;
         foreach (var kind in Enum.GetValues<PoleAuditEvidenceKind>())
@@ -95,7 +95,7 @@ public static class PoleLegalDefenseDossierGenerator
             {
                 document.AppendLine(CultureInfo.InvariantCulture,
                     $"Evidence: {entry.Kind} captured {entry.CapturedAtUtc:O} at ({entry.Latitude}, {entry.Longitude})");
-                attachments.Add(new ConcessionaireDossierFile(
+                attachments.Add(new DossierFile(
                     $"{bundle.PoleFeatureId}/evidence-{entry.Kind}-{index}.jpg", entry.SignedJpegBytes));
                 index++;
             }
@@ -104,7 +104,7 @@ public static class PoleLegalDefenseDossierGenerator
 
     private static void AppendLicenseSection(
         StringBuilder document, PoleDefenseBundle bundle, DateTimeOffset generatedAtUtc,
-        List<PoleLegalDefenseMissingItem> missingItems, List<ConcessionaireDossierFile> attachments)
+        List<PoleLegalDefenseMissingItem> missingItems, List<DossierFile> attachments)
     {
         if (bundle.LicenseRecords.Count == 0)
         {
@@ -128,11 +128,11 @@ public static class PoleLegalDefenseDossierGenerator
             document.AppendLine(CultureInfo.InvariantCulture,
                 $"License: {license.ScmLicenseNumber} ({license.LicenseHolderName}), issued {license.IssuedAtUtc:O}, expires {license.ExpiresAtUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never"}");
             var licenseText = $"ScmLicenseNumber: {license.ScmLicenseNumber}\nLicenseHolderName: {license.LicenseHolderName}\nIssuedAtUtc: {license.IssuedAtUtc:O}\nExpiresAtUtc: {license.ExpiresAtUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never"}\n";
-            attachments.Add(new ConcessionaireDossierFile($"{bundle.PoleFeatureId}/license-{i}.txt", Encoding.UTF8.GetBytes(licenseText)));
+            attachments.Add(new DossierFile($"{bundle.PoleFeatureId}/license-{i}.txt", Encoding.UTF8.GetBytes(licenseText)));
         }
     }
 
-    private static void AppendDossierSection(StringBuilder document, PoleDefenseBundle bundle, List<ConcessionaireDossierFile> attachments)
+    private static void AppendDossierSection(StringBuilder document, PoleDefenseBundle bundle, List<DossierFile> attachments)
     {
         if (bundle.DossierRecords.Count == 0)
         {
@@ -145,7 +145,7 @@ public static class PoleLegalDefenseDossierGenerator
             document.AppendLine(CultureInfo.InvariantCulture,
                 $"Compliance dossier: {dossierRecord.DistributorName}, generated {dossierRecord.GeneratedAtUtc:O}");
             foreach (var file in dossierRecord.Dossier.Files)
-                attachments.Add(new ConcessionaireDossierFile($"{bundle.PoleFeatureId}/dossier/{file.FileName}", file.Content));
+                attachments.Add(new DossierFile($"{bundle.PoleFeatureId}/dossier/{file.FileName}", file.Content));
         }
     }
 }

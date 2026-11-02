@@ -13,19 +13,19 @@ namespace GeoAssets.Core.Isp.Compliance;
 /// this exporter never references that one, satisfying AC3 (a third distributor needs no changes
 /// to either).
 /// </summary>
-public sealed class JoinAsExporter : IConcessionaireDossierExporter
+public sealed class JoinAsExporter : IDossierExporter
 {
     private const string CodIdAttributeKey = "COD_ID";
 
     public string DistributorName => "Enel";
 
-    public ConcessionaireDossierResult Export(IReadOnlyList<GeoFeature> poleFeatures)
+    public DossierResult Export(IReadOnlyList<GeoFeature> poleFeatures)
     {
         var poles = SelectLabeledPoles(poleFeatures);
 
-        return new ConcessionaireDossierResult([
-            new ConcessionaireDossierFile("join-as-manifest.csv", Encoding.UTF8.GetBytes(BuildCsv(poles))),
-            new ConcessionaireDossierFile("join-as-manifest.xml", Encoding.UTF8.GetBytes(BuildXml(poles))),
+        return new DossierResult([
+            new DossierFile("join-as-manifest.csv", Encoding.UTF8.GetBytes(BuildCsv(poles))),
+            new DossierFile("join-as-manifest.xml", Encoding.UTF8.GetBytes(BuildXml(poles))),
         ]);
     }
 
