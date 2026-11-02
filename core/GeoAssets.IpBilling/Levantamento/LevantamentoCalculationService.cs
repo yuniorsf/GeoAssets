@@ -25,6 +25,51 @@ public sealed class LevantamentoCalculationService(
 {
     public const string AttrRetroativoKwh = "retroativoKwh";
 
+    public async Task<int> UploadAsync(
+        string serviceOrderId,
+        IReadOnlyList<LevantamentoWorkbookRow> rows,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceOrderId);
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var order = await LoadMutableOrderAsync(serviceOrderId, ct).ConfigureAwait(false);
+        if (!string.Equals(order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Cannot upload to order '{serviceOrderId}' — status is '{order.Status}', expected '{IpBillingWorkflowGraph.Carregado}'.");
+        }
+
+        var (ibgeCode, competencia, _, _, _) = ReadOrderBillingMetadata(order);
+        var municipio = await municipioRepository.GetByIbgeCodeAsync(ibgeCode, ct).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Município with IBGE code '{ibgeCode}' not found.");
+
+        await EnsureHeaderExistsAsync(serviceOrderId, municipio.Id, competencia, ct).ConfigureAwait(false);
+
+        var transformerLines = LevantamentoWorkbookMapper.ToTransformerLines(serviceOrderId, rows);
+        await levantamentoRepository.ReplaceTransformerLinesAsync(serviceOrderId, transformerLines, ct).ConfigureAwait(false);
+        await levantamentoRepository.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return transformerLines.Count;
+    }
+
+    public async Task<LevantamentoCalculationResult> CalculateStoredAsync(
+        string serviceOrderId,
+        DateOnly? asOf = null,
+        string? performedBy = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceOrderId);
+
+        var storedLines = await levantamentoRepository.GetTransformerLinesAsync(serviceOrderId, ct).ConfigureAwait(false);
+        var rows = storedLines
+            .SelectMany(line => line.LampDetails.Select(detail =>
+                new LevantamentoWorkbookRow(line.CodigoInstalacao, detail.Code, detail.WattageW, detail.Quantity)))
+            .ToList();
+
+        return await CalculateAsync(serviceOrderId, rows, asOf, performedBy, ct).ConfigureAwait(false);
+    }
+
     public async Task<LevantamentoCalculationResult> CalculateAsync(
         string serviceOrderId,
         IReadOnlyList<LevantamentoWorkbookRow> rows,
@@ -36,7 +81,8 @@ public sealed class LevantamentoCalculationService(
         ArgumentNullException.ThrowIfNull(rows);
 
         var order = await LoadMutableOrderAsync(serviceOrderId, ct).ConfigureAwait(false);
-        if (!string.Equals(order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal))
+        if (!string.Equals(order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal) &&
+            !string.Equals(order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal))
         {
             throw new InvalidServiceOrderTransitionException(order.Status, IpBillingWorkflowGraph.Calculado);
         }

@@ -40,6 +40,7 @@
     <ProjectReference Include="..\..\core\GeoAssets.IpBilling\GeoAssets.IpBilling.csproj" />
     <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.EFCore\GeoAssets.IpBilling.EFCore.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Xlsx\GeoAssets.Provider.Xlsx.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />

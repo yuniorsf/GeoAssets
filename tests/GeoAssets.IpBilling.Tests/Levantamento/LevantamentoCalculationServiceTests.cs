@@ -336,4 +336,74 @@ public class LevantamentoCalculationServiceTests
         // Billing still proceeds for unresolved transformers — a map/GIS gap doesn't lose kWh.
         result.NormalKwh.Should().BeGreaterThan(0m);
     }
+
+    [Fact]
+    public async Task UploadAsync_LandsLinesWithoutComputingAnything()
+    {
+        var municipio = new Municipio { Id = MunicipioId, IbgeCode = IbgeCode, Name = "Teste", Uf = "SP", DistribuidoraOrganizationId = Guid.NewGuid() };
+        var orderRepo = new FakeServiceOrderRepository();
+        var order = NewLevantamentoOrder("order-upload", "2027-01");
+        orderRepo.Seed(order);
+        var levantamentoRepo = new FakeLevantamentoRepository();
+
+        var service = new LevantamentoCalculationService(
+            orderRepo, new FakeMunicipioRepository(municipio), new FakeLampTypeRepository(), levantamentoRepo,
+            new FakeTransformerResolver(), new NullInterveningOperationLookup(), new FakeFaturamentoRepository(),
+            new EmptyGeoCoreClient(), TimeProvider.System);
+
+        var count = await service.UploadAsync("order-upload",
+            [new LevantamentoWorkbookRow("INST-001", LampTypeCode.LD, 100, 10)]);
+
+        count.Should().Be(1);
+        var lines = await levantamentoRepo.GetTransformerLinesAsync("order-upload");
+        lines.Should().ContainSingle();
+        lines[0].NormalKwh.Should().Be(0m); // not computed yet — Upload only lands raw rows
+        lines[0].IsNewTransformer.Should().BeFalse();
+        order.Status.Should().Be("Carregado"); // Upload doesn't transition status
+    }
+
+    [Fact]
+    public Task UploadAsync_WhileAlreadyCalculado_Throws()
+    {
+        var municipio = new Municipio { Id = MunicipioId, IbgeCode = IbgeCode, Name = "Teste", Uf = "SP", DistribuidoraOrganizationId = Guid.NewGuid() };
+        var orderRepo = new FakeServiceOrderRepository();
+        var order = NewLevantamentoOrder("order-upload-2", "2027-01");
+        order.Status = "Calculado";
+        orderRepo.Seed(order);
+
+        var service = new LevantamentoCalculationService(
+            orderRepo, new FakeMunicipioRepository(municipio), new FakeLampTypeRepository(), new FakeLevantamentoRepository(),
+            new FakeTransformerResolver(), new NullInterveningOperationLookup(), new FakeFaturamentoRepository(),
+            new EmptyGeoCoreClient(), TimeProvider.System);
+
+        var act = () => service.UploadAsync("order-upload-2", [new LevantamentoWorkbookRow("INST-001", LampTypeCode.LD, 100, 1)]);
+
+        return act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task CalculateStoredAsync_ReadsBackPreviouslyUploadedRows_ThenComputes()
+    {
+        var municipio = new Municipio { Id = MunicipioId, IbgeCode = IbgeCode, Name = "Teste", Uf = "SP", DistribuidoraOrganizationId = Guid.NewGuid() };
+        var orderRepo = new FakeServiceOrderRepository();
+        var order = NewLevantamentoOrder("order-calc-stored", "2027-01");
+        orderRepo.Seed(order);
+        var levantamentoRepo = new FakeLevantamentoRepository();
+
+        var service = new LevantamentoCalculationService(
+            orderRepo, new FakeMunicipioRepository(municipio), new FakeLampTypeRepository(), levantamentoRepo,
+            new FakeTransformerResolver(), new NullInterveningOperationLookup(), new FakeFaturamentoRepository(),
+            new EmptyGeoCoreClient(), TimeProvider.System);
+
+        await service.UploadAsync("order-calc-stored", [new LevantamentoWorkbookRow("INST-001", LampTypeCode.LD, 100, 10)]);
+
+        var result = await service.CalculateStoredAsync("order-calc-stored", new DateOnly(2027, 1, 31));
+
+        result.TransformerLines.Should().ContainSingle();
+        result.NormalKwh.Should().BeGreaterThan(0m);
+
+        // Re-running Calculate while already Calculado is a same-status no-op recompute.
+        var recompute = await service.CalculateStoredAsync("order-calc-stored", new DateOnly(2027, 1, 31));
+        recompute.NormalKwh.Should().Be(result.NormalKwh);
+    }
 }

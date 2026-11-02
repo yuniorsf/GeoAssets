@@ -10,11 +10,13 @@ using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.IpBilling.AssetTypes;
 using GeoAssets.IpBilling.Calculation;
+using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Resolution;
 using GeoAssets.IpBilling.Server;
 using GeoAssets.IpBilling.Workflow;
+using GeoAssets.Provider.Xlsx;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Workflow;
@@ -105,6 +107,147 @@ public sealed class IpBillingServerIntegrationTests
         idempotentRetry.EnsureSuccessStatusCode();
         var retryBody = await idempotentRetry.Content.ReadFromJsonAsync<IpBillingValidationResult>();
         retryBody!.Faturamento.KwhFaturado.Should().Be(fiscVal.Faturamento.KwhFaturado);
+    }
+
+    [Fact]
+    public async Task LevantamentoUploadCalculateValidate_HappyPath_SetsLedgerBaselineAndMemoriaCalculo()
+    {
+        var (provider, transformerId, _, _) = SeedTestNetwork();
+
+        using var coreServer = await BuildCoreServerAsync(provider);
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+
+        var transformerResolver = new StubTransformerResolver(
+            new Dictionary<(string, string), Guid> { [("3550308", "INST-001")] = transformerId });
+
+        var rawRows = new List<IReadOnlyList<string?>>
+        {
+            new string?[] { "Código de Instalação", "Tipo de Lâmpada", "Potência (W)", "Quantidade" },
+            new string?[] { "INST-001", "LD", "100", "10" },
+        };
+
+        using var ipBillingServer = await BuildIpBillingServerAsync(coreHttpClient, transformerResolver, new StubWorkbookReader(rawRows));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(IpBillingOrderTypes.LevantamentoId, "Levantamento", "3550308", "2026-03", null, "tester"));
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var order = await createResp.Content.ReadFromJsonAsync<ServiceOrder>();
+
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent([0x01, 0x02]), "file", "levantamento.xlsx");
+        var uploadResp = await ipBillingClient.PostAsync(
+            new Uri($"/api/ip-billing/levantamento/{order!.Id}/upload", UriKind.Relative), uploadContent);
+        uploadResp.EnsureSuccessStatusCode();
+
+        var calcResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/calculate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoCalculateRequest(new DateOnly(2026, 3, 31), "tester"));
+        calcResp.EnsureSuccessStatusCode();
+        var calcResult = await calcResp.Content.ReadFromJsonAsync<LevantamentoCalculationResult>();
+        calcResult!.Status.Should().Be(IpBillingWorkflowGraph.Calculado);
+        calcResult.TransformerLines.Should().ContainSingle();
+        calcResult.UnresolvedCodigosInstalacao.Should().BeEmpty();
+        calcResult.NormalKwh.Should().BeGreaterThan(0m);
+
+        // Re-running Calculate while already Calculado is a same-status no-op recompute.
+        var recalcResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/calculate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoCalculateRequest(new DateOnly(2026, 3, 31), "tester"));
+        recalcResp.EnsureSuccessStatusCode();
+
+        var valResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/validate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoValidateRequest("auditor"));
+        valResp.EnsureSuccessStatusCode();
+        var valResult = await valResp.Content.ReadFromJsonAsync<LevantamentoValidationResult>();
+        valResult!.Status.Should().Be(IpBillingWorkflowGraph.Validado);
+        valResult.Faturamento.KwhFaturado.Should().Be(calcResult.TotalCalculatedKwh);
+
+        var memResp = await ipBillingClient.GetAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/memoria-calculo", UriKind.Relative));
+        memResp.EnsureSuccessStatusCode();
+        var mem = await memResp.Content.ReadFromJsonAsync<IpBillingLevantamentoRestApiExtensions.LevantamentoMemoriaCalculoResponse>();
+        mem!.OrderStatus.Should().Be(IpBillingWorkflowGraph.Validado);
+        mem.TotalCalculatedKwh.Should().Be(calcResult.TotalCalculatedKwh);
+        mem.TransformerLines.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task LevantamentoCalculate_UnresolvedTransformerCode_ReportsTogetherInResponseWithoutBlockingBilling()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+
+        var transformerResolver = new StubTransformerResolver(new Dictionary<(string, string), Guid>());
+
+        var rawRows = new List<IReadOnlyList<string?>>
+        {
+            new string?[] { "Código de Instalação", "Tipo de Lâmpada", "Potência (W)", "Quantidade" },
+            new string?[] { "INST-UNKNOWN-1", "LD", "100", "10" },
+            new string?[] { "INST-UNKNOWN-2", "LD", "100", "5" },
+        };
+
+        using var ipBillingServer = await BuildIpBillingServerAsync(coreHttpClient, transformerResolver, new StubWorkbookReader(rawRows));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(IpBillingOrderTypes.LevantamentoId, "Levantamento", "3550308", "2026-03", null, "tester"));
+        var order = await createResp.Content.ReadFromJsonAsync<ServiceOrder>();
+
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent([0x01]), "file", "levantamento.xlsx");
+        var uploadResp = await ipBillingClient.PostAsync(
+            new Uri($"/api/ip-billing/levantamento/{order!.Id}/upload", UriKind.Relative), uploadContent);
+        uploadResp.EnsureSuccessStatusCode();
+
+        var calcResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/calculate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoCalculateRequest(new DateOnly(2026, 3, 31), "tester"));
+        calcResp.EnsureSuccessStatusCode();
+        var calcResult = await calcResp.Content.ReadFromJsonAsync<LevantamentoCalculationResult>();
+
+        calcResult!.UnresolvedCodigosInstalacao.Should().BeEquivalentTo(["INST-UNKNOWN-1", "INST-UNKNOWN-2"]);
+        // Billing still proceeds for unresolved transformers — a map/GIS gap doesn't lose kWh.
+        calcResult.NormalKwh.Should().BeGreaterThan(0m);
+    }
+
+    [Fact]
+    public async Task LevantamentoUpload_MalformedRows_RejectedWithStructuredRowErrors()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+
+        var rawRows = new List<IReadOnlyList<string?>>
+        {
+            new string?[] { "Código de Instalação", "Tipo de Lâmpada", "Potência (W)", "Quantidade" },
+            new string?[] { "INST-001", "NOPE", "100", "10" },  // bad lamp type
+            new string?[] { null, "LD", "100", "10" },          // missing código
+        };
+
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient, new StubTransformerResolver(new Dictionary<(string, string), Guid>()), new StubWorkbookReader(rawRows));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(IpBillingOrderTypes.LevantamentoId, "Levantamento", "3550308", "2026-03", null, "tester"));
+        var order = await createResp.Content.ReadFromJsonAsync<ServiceOrder>();
+
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent([0x01]), "file", "levantamento.xlsx");
+        var uploadResp = await ipBillingClient.PostAsync(
+            new Uri($"/api/ip-billing/levantamento/{order!.Id}/upload", UriKind.Relative), uploadContent);
+
+        uploadResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await uploadResp.Content.ReadAsStringAsync();
+        body.Should().Contain("Tipo de Lâmpada");
+        body.Should().Contain("Código de Instalação");
     }
 
     private static async Task<IpBillingValidationResult> RunOrderCalculationAndValidationAsync(
@@ -243,7 +386,8 @@ public sealed class IpBillingServerIntegrationTests
 
     private static async Task<TestServer> BuildIpBillingServerAsync(
         HttpClient coreHttpClient,
-        ITransformerResolver transformerResolver)
+        ITransformerResolver transformerResolver,
+        IWorkbookReader? workbookReader = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -265,6 +409,11 @@ public sealed class IpBillingServerIntegrationTests
                     services.AddSingleton(transformerResolver);
                     services.AddScoped<IPoleResolver, HttpPoleResolver>();
                     services.AddScoped<IIpBillingCalculationService, IpBillingCalculationService>();
+                    services.AddSingleton<ILevantamentoRepository>(new InMemoryLevantamentoRepository());
+                    services.AddSingleton<IInterveningOperationLookup, NullInterveningOperationLookup>();
+                    services.AddScoped<ILevantamentoCalculationService, LevantamentoCalculationService>();
+                    if (workbookReader is not null) services.AddSingleton(workbookReader);
+                    else services.AddGeoAssetsXlsx();
                 });
                 webHost.Configure(app =>
                 {
@@ -275,6 +424,17 @@ public sealed class IpBillingServerIntegrationTests
             .StartAsync();
 
         return host.GetTestServer();
+    }
+
+    /// <summary>
+    /// Returns pre-configured raw rows regardless of the uploaded bytes — TestHost-level
+    /// routing tests exercise <see cref="IpBillingLevantamentoRestApiExtensions"/>'s multipart
+    /// handling and <see cref="LevantamentoWorkbookRowParser"/> wiring, not ClosedXML's real
+    /// .xlsx parsing (covered separately, at the provider level).
+    /// </summary>
+    private sealed class StubWorkbookReader(IReadOnlyList<IReadOnlyList<string?>> rows) : IWorkbookReader
+    {
+        public IReadOnlyList<IReadOnlyList<string?>> ReadRows(Stream workbookStream, string? worksheetName = null) => rows;
     }
 
     private sealed class StubTransformerResolver(
@@ -405,6 +565,77 @@ public sealed class IpBillingServerIntegrationTests
         public Task<IReadOnlyList<FaturamentoPosting>> GetPostingsByOrderAsync(string serviceOrderId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<FaturamentoPosting>>(
                 _postings.Where(p => string.Equals(p.ServiceOrderId, serviceOrderId, StringComparison.Ordinal)).ToList());
+
+        public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class InMemoryLevantamentoRepository : ILevantamentoRepository
+    {
+        private readonly Dictionary<string, LevantamentoHeader> _headers = [];
+        private readonly Dictionary<string, List<LevantamentoTransformerLine>> _lines = [];
+        private readonly Dictionary<string, List<Levantamento24hLine>> _lines24h = [];
+
+        public Task<LevantamentoHeader?> GetHeaderAsync(string serviceOrderId, CancellationToken ct = default) =>
+            Task.FromResult(_headers.GetValueOrDefault(serviceOrderId));
+
+        public Task AddHeaderAsync(LevantamentoHeader header, CancellationToken ct = default)
+        {
+            _headers[header.ServiceOrderId] = header;
+            return Task.CompletedTask;
+        }
+
+        public Task MarkValidatedAsync(string serviceOrderId, CancellationToken ct = default)
+        {
+            _headers[serviceOrderId].IsValidated = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<LevantamentoTransformerLine>> GetTransformerLinesAsync(string serviceOrderId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<LevantamentoTransformerLine>>(_lines.GetValueOrDefault(serviceOrderId) ?? []);
+
+        public Task ReplaceTransformerLinesAsync(string serviceOrderId, IReadOnlyList<LevantamentoTransformerLine> lines, CancellationToken ct = default)
+        {
+            _lines[serviceOrderId] = [.. lines];
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<Levantamento24hLine>> Get24hLinesAsync(string serviceOrderId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Levantamento24hLine>>(_lines24h.GetValueOrDefault(serviceOrderId) ?? []);
+
+        public Task Replace24hLinesAsync(string serviceOrderId, IReadOnlyList<Levantamento24hLine> lines, CancellationToken ct = default)
+        {
+            _lines24h[serviceOrderId] = [.. lines];
+            return Task.CompletedTask;
+        }
+
+        public Task<LevantamentoHeader?> GetMostRecentValidatedAsync(Guid municipioId, string beforeCompetencia, CancellationToken ct = default) =>
+            Task.FromResult(_headers.Values
+                .Where(h => h.MunicipioId == municipioId && h.IsValidated &&
+                            string.Compare(h.Competencia, beforeCompetencia, StringComparison.Ordinal) < 0)
+                .OrderByDescending(h => h.Competencia, StringComparer.Ordinal)
+                .FirstOrDefault());
+
+        public Task<LevantamentoHeader?> GetFirstValidatedAsync(Guid municipioId, CancellationToken ct = default) =>
+            Task.FromResult(_headers.Values
+                .Where(h => h.MunicipioId == municipioId && h.IsValidated)
+                .OrderBy(h => h.Competencia, StringComparer.Ordinal)
+                .FirstOrDefault());
+
+        public Task<IReadOnlySet<string>> GetAllValidatedCodigosInstalacaoAsync(Guid municipioId, CancellationToken ct = default)
+        {
+            var validatedOrderIds = _headers.Values
+                .Where(h => h.MunicipioId == municipioId && h.IsValidated)
+                .Select(h => h.ServiceOrderId)
+                .ToHashSet(StringComparer.Ordinal);
+
+            var codigos = _lines
+                .Where(kvp => validatedOrderIds.Contains(kvp.Key))
+                .SelectMany(kvp => kvp.Value)
+                .Select(l => l.CodigoInstalacao)
+                .ToHashSet(StringComparer.Ordinal);
+
+            return Task.FromResult<IReadOnlySet<string>>(codigos);
+        }
 
         public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
     }

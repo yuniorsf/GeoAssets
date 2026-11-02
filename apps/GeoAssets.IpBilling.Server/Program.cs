@@ -5,6 +5,7 @@ using GeoAssets.IpBilling.Resolution;
 using GeoAssets.IpBilling.Server;
 using GeoAssets.IpBilling.Workflow;
 using GeoAssets.Provider.Rest;
+using GeoAssets.Provider.Xlsx;
 using GeoAssets.Workflow;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,6 +41,7 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
 builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
 builder.Services.AddScoped<IPoleResolver, HttpPoleResolver>();
 builder.Services.AddScoped<IIpBillingCalculationService, IpBillingCalculationService>();
+builder.Services.AddGeoAssetsXlsx();
 
 // ── CORS (XD01-178) — allow the Blazor WASM dev server origins configured in
 // appsettings.json, same pattern as GeoAssets.Server. Needed because the admin

@@ -14,6 +14,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GeoAssets.Workflow.EFCore.Tests" />
+    <!-- XD01-180's optimistic-concurrency test needs the same SQLite-only ServiceOrderRecord.
+         RowVersion default-value workaround SqliteTestDbContext already applies in
+         GeoAssets.Workflow.EFCore.Tests — ServiceOrder.RowVersion concurrency is specifically
+         what that test proves LevantamentoCalculationService surfaces correctly. -->
+    <InternalsVisibleTo Include="GeoAssets.IpBilling.EFCore.Tests" />
   </ItemGroup>
 
   <ItemGroup>

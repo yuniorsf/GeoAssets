@@ -29,7 +29,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.IpBilling\GeoAssets.IpBilling.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.EFCore\GeoAssets.IpBilling.EFCore.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
   </ItemGroup>
 
 </Project>
