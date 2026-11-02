@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Isp.Compliance;
+using GeoAssets.Core.Isp.Compliance.PoleAudit;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Server;
@@ -150,6 +151,10 @@ builder.Services.AddSingleton<IConcessionaireDossierExporter, DisNor056Exporter>
 builder.Services.AddSingleton<IConcessionaireDossierExporter, JoinAsExporter>();
 builder.Services.AddSingleton<ConcessionaireDossierExporterRegistry>();
 
+// Pole-sharing audit & yellow-tag legal defense evidence repository (XD01-285) — in-memory
+// stateful singleton, same shape as NeutralPoleRegistry; no persistence-layer ticket exists yet.
+builder.Services.AddSingleton<IPoleAuditEvidenceRepository, InMemoryPoleAuditEvidenceRepository>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -206,6 +211,9 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
 
     // Concessionaire compliance dossier exporter (XD01-284).
     app.MapIspComplianceDossierApi();
+
+    // Pole-sharing audit & yellow-tag legal defense evidence repository (XD01-285).
+    app.MapIspPoleAuditApi();
 }
 
 await app.RunAsync().ConfigureAwait(false);
