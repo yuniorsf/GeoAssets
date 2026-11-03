@@ -10,6 +10,7 @@ using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.IpBilling.AssetTypes;
 using GeoAssets.IpBilling.Calculation;
+using GeoAssets.IpBilling.FaturamentoLedger;
 using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Oficio;
@@ -544,6 +545,106 @@ public sealed class IpBillingServerIntegrationTests
         body.Should().Contain("Código de Instalação");
     }
 
+    [Fact]
+    public async Task FaturamentoManualEntry_NewPair_CreatesThenRejectsOnRetry()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient, new StubTransformerResolver(new Dictionary<(string, string), Guid>()));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var municipioId = Guid.NewGuid();
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/faturamentos/manual-entry", UriKind.Relative),
+            new IpBillingFaturamentoRestApiExtensions.ManualEntryRequest(municipioId, "2026-03", 500m, "operator-1"));
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResp.Content.ReadFromJsonAsync<Faturamento>();
+        created!.KwhFaturado.Should().Be(500m);
+
+        // Manual entry is insert-only — a second call for the same (município, competência)
+        // must be rejected, not silently overwrite the first entry.
+        var retryResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/faturamentos/manual-entry", UriKind.Relative),
+            new IpBillingFaturamentoRestApiExtensions.ManualEntryRequest(municipioId, "2026-03", 999m, "operator-2"));
+        retryResp.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var conflict = await retryResp.Content.ReadFromJsonAsync<IpBillingFaturamentoRestApiExtensions.FaturamentoAlreadyPostedResponse>();
+        conflict!.MunicipioId.Should().Be(municipioId);
+        conflict.Competencia.Should().Be("2026-03");
+    }
+
+    [Fact]
+    public async Task FaturamentoBatchLoad_ExistingAndNewPairs_InsertsNewAndSkipsExistingWithLegacyMessage()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient, new StubTransformerResolver(new Dictionary<(string, string), Guid>()));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var existingMunicipio = Guid.NewGuid();
+        (await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/faturamentos/manual-entry", UriKind.Relative),
+            new IpBillingFaturamentoRestApiExtensions.ManualEntryRequest(existingMunicipio, "2026-03", 100m, "seed")))
+            .EnsureSuccessStatusCode();
+
+        var newMunicipio = Guid.NewGuid();
+        var batchResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/faturamentos/batch-load", UriKind.Relative),
+            new IpBillingFaturamentoRestApiExtensions.BatchRequest(
+                [
+                    new FaturamentoBatchItem(newMunicipio, "2026-03", 200m),
+                    new FaturamentoBatchItem(existingMunicipio, "2026-03", 999m),
+                ],
+                "batch-operator"));
+        batchResp.EnsureSuccessStatusCode();
+        var result = await batchResp.Content.ReadFromJsonAsync<FaturamentoBatchResult>();
+
+        result!.Applied.Should().ContainSingle(f => f.MunicipioId == newMunicipio && f.KwhFaturado == 200m);
+        result.Skipped.Should().ContainSingle(s => s.MunicipioId == existingMunicipio && s.Reason == "Faturamento já cadastrado");
+    }
+
+    [Fact]
+    public async Task FaturamentoRecarga_ExistingAndMissingPairs_UpdatesExistingAndSkipsMissingWithLegacyMessage()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient, new StubTransformerResolver(new Dictionary<(string, string), Guid>()));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var existingMunicipio = Guid.NewGuid();
+        (await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/faturamentos/manual-entry", UriKind.Relative),
+            new IpBillingFaturamentoRestApiExtensions.ManualEntryRequest(existingMunicipio, "2026-03", 100m, "seed")))
+            .EnsureSuccessStatusCode();
+
+        var missingMunicipio = Guid.NewGuid();
+        var recargaResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/faturamentos/recarga", UriKind.Relative),
+            new IpBillingFaturamentoRestApiExtensions.BatchRequest(
+                [
+                    new FaturamentoBatchItem(existingMunicipio, "2026-03", 777m),
+                    new FaturamentoBatchItem(missingMunicipio, "2026-03", 200m),
+                ],
+                "recarga-operator"));
+        recargaResp.EnsureSuccessStatusCode();
+        var result = await recargaResp.Content.ReadFromJsonAsync<FaturamentoBatchResult>();
+
+        result!.Applied.Should().ContainSingle(f => f.MunicipioId == existingMunicipio && f.KwhFaturado == 777m);
+        result.Skipped.Should().ContainSingle(s => s.MunicipioId == missingMunicipio && s.Reason == "Faturamento inexistente");
+
+        // Query/consulta endpoint: by município+competência should reflect the update.
+        var queryResp = await ipBillingClient.GetAsync(
+            new Uri($"/api/ip-billing/faturamentos/{existingMunicipio}/consulta?competencia=2026-03", UriKind.Relative));
+        queryResp.EnsureSuccessStatusCode();
+        var queried = await queryResp.Content.ReadFromJsonAsync<List<Faturamento>>();
+        queried.Should().ContainSingle(f => f.KwhFaturado == 777m);
+    }
+
     private static async Task<IpBillingValidationResult> RunOrderCalculationAndValidationAsync(
         HttpClient ipBillingClient,
         string orderTypeId,
@@ -703,6 +804,8 @@ public sealed class IpBillingServerIntegrationTests
                     services.AddSingleton<IMunicipioRepository>(new InMemoryMunicipioRepository());
                     services.AddSingleton<ILampTypeRepository>(new InMemoryLampTypeRepository());
                     services.AddSingleton<IFaturamentoRepository>(new InMemoryFaturamentoRepository());
+                    services.AddSingleton<IFaturamentoLedgerService, FaturamentoLedgerService>();
+                    services.AddSingleton<IFaturamentoManualEntryService, FaturamentoManualEntryService>();
                     services.AddSingleton<IGeoCoreClient>(new RestGeoCoreClient(coreHttpClient));
                     services.AddSingleton(transformerResolver);
                     services.AddScoped<IPoleResolver, HttpPoleResolver>();

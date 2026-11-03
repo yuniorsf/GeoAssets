@@ -34,6 +34,7 @@ public static class IpBillingEFCoreServiceExtensions
         services.AddScoped<IIpTransformerIndexRepository, EFIpTransformerIndexRepository>();
         services.AddScoped<IFaturamentoRepository, EFFaturamentoRepository>();
         services.AddScoped<IFaturamentoLedgerService, FaturamentoLedgerService>();
+        services.AddScoped<IFaturamentoManualEntryService, FaturamentoManualEntryService>();
         services.AddScoped<ITransformerResolver, DbTransformerResolver>();
         services.AddScoped<ILevantamentoRepository, EFLevantamentoRepository>();
 
