@@ -10,14 +10,18 @@ public class EspelhoDeMedicaoDossierGeneratorTests
 {
     private const string TenantSecret = "test-tenant-secret";
 
-    private static ServiceOrder Order(string id = "order-1", Guid? organizationId = null, DateTime? completedAt = null) => new()
-    {
-        Id = id,
-        Title = "Troca de poste",
-        OrganizationId = organizationId ?? Guid.NewGuid(),
-        CreatedAt = new DateTime(2026, 1, 10, 8, 0, 0, DateTimeKind.Utc),
-        CompletedAt = completedAt,
-    };
+    private static ServiceOrder Order(
+        string id = "order-1", Guid? organizationId = null, DateTime? completedAt = null, string? aprSignedAtUtc = null) => new()
+        {
+            Id = id,
+            Title = "Troca de poste",
+            OrganizationId = organizationId ?? Guid.NewGuid(),
+            CreatedAt = new DateTime(2026, 1, 10, 8, 0, 0, DateTimeKind.Utc),
+            CompletedAt = completedAt,
+            Attributes = aprSignedAtUtc is null
+            ? []
+            : new Dictionary<string, string>(StringComparer.Ordinal) { ["aprSignedAtUtc"] = aprSignedAtUtc },
+        };
 
     private static ContractorUsPosting Posting(string orderId, Guid contractorOrgId, string itemCode = "US-001") => new()
     {
@@ -139,6 +143,34 @@ public class EspelhoDeMedicaoDossierGeneratorTests
         var result = EspelhoDeMedicaoDossierGenerator.Generate(order, null, [], [], 0m, TenantSecret);
 
         result.ContractorName.Should().Be(orgId.ToString());
+    }
+
+    [Fact]
+    public void Generate_AprChecklistSigned_EmbedsTimestampInResultAndDocument()
+    {
+        var orgId = Guid.NewGuid();
+        var order = Order(organizationId: orgId, aprSignedAtUtc: "2026-01-16T08:00:00Z");
+        var posting = Posting(order.Id, orgId);
+
+        var result = EspelhoDeMedicaoDossierGenerator.Generate(
+            order, "Empreiteira", [posting], [], retentionRate: 0m, TenantSecret);
+
+        result.AprChecklistSignedAtUtc.Should().Be("2026-01-16T08:00:00Z");
+        result.DocumentText.Should().Contain("APR safety checklist: 2026-01-16T08:00:00Z");
+    }
+
+    [Fact]
+    public void Generate_NoAprChecklist_FlagsMissingInResultAndDocument()
+    {
+        var orgId = Guid.NewGuid();
+        var order = Order(organizationId: orgId);
+        var posting = Posting(order.Id, orgId);
+
+        var result = EspelhoDeMedicaoDossierGenerator.Generate(
+            order, "Empreiteira", [posting], [], retentionRate: 0m, TenantSecret);
+
+        result.AprChecklistSignedAtUtc.Should().BeNull();
+        result.DocumentText.Should().Contain("APR safety checklist: MISSING: no digital APR checklist on file");
     }
 
     [Fact]

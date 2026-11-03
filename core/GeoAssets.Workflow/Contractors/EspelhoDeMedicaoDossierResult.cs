@@ -13,6 +13,11 @@ namespace GeoAssets.Workflow.Contractors;
 /// content/signature deterministically and leaves PDF/A container generation to whichever host
 /// layer eventually adds that dependency, exactly as the ISP precedent does for its own zip
 /// packaging.
+///
+/// <see cref="AprChecklistSignedAtUtc"/> (XD01-237) cross-references the order's digital APR
+/// safety checklist (<c>IServiceOrder.Attributes["aprSignedAtUtc"]</c>, XD01-222) alongside the
+/// photo evidence already embedded per item — null when the order's <c>OrderType</c> isn't
+/// APR-gated or the checklist hasn't been signed yet.
 /// </summary>
 public sealed record EspelhoDeMedicaoDossierResult(
     string ServiceOrderId,
@@ -26,5 +31,6 @@ public sealed record EspelhoDeMedicaoDossierResult(
     decimal RetentionRate,
     decimal RetentionBrl,
     decimal NetPayableBrl,
+    string? AprChecklistSignedAtUtc,
     string DocumentText,
     string SignatureBase64);

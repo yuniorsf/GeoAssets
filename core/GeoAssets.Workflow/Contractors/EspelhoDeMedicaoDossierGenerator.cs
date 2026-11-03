@@ -54,9 +54,11 @@ public static class EspelhoDeMedicaoDossierGenerator
         var totalBrl = Round(items.Sum(i => i.TotalBrl));
         var retentionBrl = Round(totalBrl * retentionRate);
         var netPayableBrl = Round(totalBrl - retentionBrl);
+        var aprChecklistSignedAtUtc = order.Attributes.GetValueOrDefault("aprSignedAtUtc");
 
         var documentText = BuildDocumentText(
-            order, resolvedContractorName, items, totalBrl, retentionRate, retentionBrl, netPayableBrl);
+            order, resolvedContractorName, items, totalBrl, retentionRate, retentionBrl, netPayableBrl,
+            aprChecklistSignedAtUtc);
         var signature = ComputeDossierSignature(documentText, tenantSecret);
 
         return new EspelhoDeMedicaoDossierResult(
@@ -71,6 +73,7 @@ public static class EspelhoDeMedicaoDossierGenerator
             retentionRate,
             retentionBrl,
             netPayableBrl,
+            aprChecklistSignedAtUtc,
             documentText,
             signature);
     }
@@ -128,7 +131,8 @@ public static class EspelhoDeMedicaoDossierGenerator
         decimal totalBrl,
         decimal retentionRate,
         decimal retentionBrl,
-        decimal netPayableBrl)
+        decimal netPayableBrl,
+        string? aprChecklistSignedAtUtc)
     {
         var document = new StringBuilder();
         document.AppendLine("ESPELHO DE MEDIÇÃO");
@@ -137,6 +141,8 @@ public static class EspelhoDeMedicaoDossierGenerator
         document.AppendLine(CultureInfo.InvariantCulture, $"Execution started: {order.CreatedAt:O}");
         document.AppendLine(CultureInfo.InvariantCulture,
             $"Execution completed: {order.CompletedAt?.ToString("O", CultureInfo.InvariantCulture) ?? "(not yet completed)"}");
+        document.AppendLine(CultureInfo.InvariantCulture,
+            $"APR safety checklist: {aprChecklistSignedAtUtc ?? "MISSING: no digital APR checklist on file for this order."}");
         document.AppendLine();
 
         foreach (var item in items)
