@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Resolution;
@@ -33,11 +34,14 @@ public static class IpBillingEFCoreServiceExtensions
         services.AddScoped<ITransformerResolver, DbTransformerResolver>();
         services.AddScoped<ILevantamentoRepository, EFLevantamentoRepository>();
 
-        // No Fiscalização/Ofício data exists yet (Phase 2/3, XD01-182/185) — see
-        // NullInterveningOperationLookup's own doc comment for why "no coverage" is correct,
-        // not just a stub, until those phases provide a real implementation.
+        // No Ofício data exists yet (Phase 3, XD01-185) — see NullInterveningOperationLookup's
+        // own doc comment for why "no coverage" is correct, not just a stub, until that phase
+        // provides a real implementation.
         services.AddScoped<IInterveningOperationLookup, NullInterveningOperationLookup>();
         services.AddScoped<ILevantamentoCalculationService, LevantamentoCalculationService>();
+
+        services.AddScoped<IFiscalizacaoRepository, EFFiscalizacaoRepository>();
+        services.AddScoped<IFiscalizacaoCalculationService, FiscalizacaoCalculationService>();
 
         return services;
     }

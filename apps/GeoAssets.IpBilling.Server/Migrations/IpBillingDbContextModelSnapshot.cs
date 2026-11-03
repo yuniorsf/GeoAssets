@@ -93,6 +93,82 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.ToTable("Faturamentos", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoHeaderRecord", b =>
+                {
+                    b.Property<string>("ServiceOrderId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Competencia")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<bool>("IsValidated")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MunicipioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ServiceOrderId");
+
+                    b.HasIndex("MunicipioId", "Competencia");
+
+                    b.ToTable("FiscalizacaoHeaders", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLineRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Agregado")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CodigoInstalacao")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Retroativo")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceOrderId", "CodigoInstalacao")
+                        .IsUnique();
+
+                    b.ToTable("FiscalizacaoLines", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoOperationGroupDetailRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("OperationGroup")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LineId");
+
+                    b.ToTable("FiscalizacaoOperationGroupDetails", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.IpTransformerIndexRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -394,6 +470,15 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoOperationGroupDetailRecord", b =>
+                {
+                    b.HasOne("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLineRecord", null)
+                        .WithMany("OperationGroups")
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.LampWattageOptionRecord", b =>
                 {
                     b.HasOne("GeoAssets.IpBilling.Persistence.Entities.LampTypeRecord", "LampType")
@@ -421,6 +506,11 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .HasForeignKey("MunicipioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLineRecord", b =>
+                {
+                    b.Navigation("OperationGroups");
                 });
 
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.LampTypeRecord", b =>

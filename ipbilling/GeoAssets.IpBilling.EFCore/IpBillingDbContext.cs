@@ -31,6 +31,9 @@ public class IpBillingDbContext(DbContextOptions<IpBillingDbContext> options)
     internal DbSet<LevantamentoTransformerLineRecord>  LevantamentoTransformerLines  => Set<LevantamentoTransformerLineRecord>();
     internal DbSet<LevantamentoLampDetailRecord>       LevantamentoLampDetails       => Set<LevantamentoLampDetailRecord>();
     internal DbSet<Levantamento24hLineRecord>          Levantamento24hLines          => Set<Levantamento24hLineRecord>();
+    internal DbSet<FiscalizacaoHeaderRecord>           FiscalizacaoHeaders           => Set<FiscalizacaoHeaderRecord>();
+    internal DbSet<FiscalizacaoLineRecord>             FiscalizacaoLines             => Set<FiscalizacaoLineRecord>();
+    internal DbSet<FiscalizacaoOperationGroupDetailRecord> FiscalizacaoOperationGroupDetails => Set<FiscalizacaoOperationGroupDetailRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

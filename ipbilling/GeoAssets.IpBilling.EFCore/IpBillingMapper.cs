@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Persistence.Entities;
@@ -219,5 +220,65 @@ internal static class IpBillingMapper
         WattageW       = l.WattageW,
         Quantity       = l.Quantity,
         Kwh            = l.Kwh,
+    };
+
+    // ── FiscalizacaoHeader ───────────────────────────────────────────────────
+
+    public static FiscalizacaoHeader ToDomain(FiscalizacaoHeaderRecord r) => new()
+    {
+        ServiceOrderId = r.ServiceOrderId,
+        MunicipioId    = r.MunicipioId,
+        Competencia    = r.Competencia,
+        IsValidated    = r.IsValidated,
+    };
+
+    public static FiscalizacaoHeaderRecord ToRecord(FiscalizacaoHeader h) => new()
+    {
+        ServiceOrderId = h.ServiceOrderId,
+        MunicipioId    = h.MunicipioId,
+        Competencia    = h.Competencia,
+        IsValidated    = h.IsValidated,
+    };
+
+    // ── FiscalizacaoLine / FiscalizacaoOperationGroupDetail ─────────────────
+
+    public static FiscalizacaoLine ToDomain(FiscalizacaoLineRecord r) => new()
+    {
+        Id               = r.Id,
+        ServiceOrderId   = r.ServiceOrderId,
+        CodigoInstalacao = r.CodigoInstalacao,
+        Agregado         = r.Agregado,
+        Retroativo       = r.Retroativo,
+        OperationGroups  = r.OperationGroups.Select(ToDomain).ToList(),
+    };
+
+    public static FiscalizacaoLineRecord ToRecord(FiscalizacaoLine l)
+    {
+        var record = new FiscalizacaoLineRecord
+        {
+            Id               = l.Id,
+            ServiceOrderId   = l.ServiceOrderId,
+            CodigoInstalacao = l.CodigoInstalacao,
+            Agregado         = l.Agregado,
+            Retroativo       = l.Retroativo,
+        };
+        record.OperationGroups.AddRange(l.OperationGroups.Select(ToRecord));
+        return record;
+    }
+
+    public static FiscalizacaoOperationGroupDetail ToDomain(FiscalizacaoOperationGroupDetailRecord r) => new()
+    {
+        Id             = r.Id,
+        LineId         = r.LineId,
+        OperationGroup = r.OperationGroup,
+        Count          = r.Count,
+    };
+
+    public static FiscalizacaoOperationGroupDetailRecord ToRecord(FiscalizacaoOperationGroupDetail d) => new()
+    {
+        Id             = d.Id,
+        LineId         = d.LineId,
+        OperationGroup = d.OperationGroup,
+        Count          = d.Count,
     };
 }
