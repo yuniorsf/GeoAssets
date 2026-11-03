@@ -10,6 +10,7 @@ using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.IpBilling.AssetTypes;
 using GeoAssets.IpBilling.Calculation;
+using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Repositories;
@@ -173,6 +174,93 @@ public sealed class IpBillingServerIntegrationTests
         mem!.OrderStatus.Should().Be(IpBillingWorkflowGraph.Validado);
         mem.TotalCalculatedKwh.Should().Be(calcResult.TotalCalculatedKwh);
         mem.TransformerLines.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task FiscalizacaoUploadCalculateValidate_HappyPath_AccumulatesIntoLedger()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+
+        var rawRows = new List<IReadOnlyList<string?>>
+        {
+            new string?[] { "Código de Instalação", "Grupo de Operação", "Quantidade" },
+            new string?[] { "INST-001", "1", "10" },
+            new string?[] { "INST-001", "2", "3" },
+            new string?[] { "INST-001", "3", "2" },
+            new string?[] { "INST-001", "4", "1" },
+        };
+
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient, new StubTransformerResolver(new Dictionary<(string, string), Guid>()), new StubWorkbookReader(rawRows));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(IpBillingOrderTypes.FiscalizacaoId, "Fiscalização", "3550308", "2026-03", null, "tester"));
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var order = await createResp.Content.ReadFromJsonAsync<ServiceOrder>();
+
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent([0x01, 0x02]), "file", "fiscalizacao.xlsx");
+        var uploadResp = await ipBillingClient.PostAsync(
+            new Uri($"/api/ip-billing/fiscalizacao/{order!.Id}/upload", UriKind.Relative), uploadContent);
+        uploadResp.EnsureSuccessStatusCode();
+
+        var calcResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/fiscalizacao/{order.Id}/calculate", UriKind.Relative),
+            new IpBillingFiscalizacaoRestApiExtensions.FiscalizacaoCalculateRequest("tester"));
+        calcResp.EnsureSuccessStatusCode();
+        var calcResult = await calcResp.Content.ReadFromJsonAsync<FiscalizacaoCalculationResult>();
+        calcResult!.Status.Should().Be(IpBillingWorkflowGraph.Calculado);
+        calcResult.Lines.Should().ContainSingle();
+        // Agregado = 10 - 3 + 2 - 1 = 8; Retroativo = 10 - 3 = 7 (ops 3/4 excluded).
+        calcResult.TotalAgregado.Should().Be(8);
+        calcResult.TotalRetroativo.Should().Be(7);
+
+        var valResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/fiscalizacao/{order.Id}/validate", UriKind.Relative),
+            new IpBillingFiscalizacaoRestApiExtensions.FiscalizacaoValidateRequest("auditor"));
+        valResp.EnsureSuccessStatusCode();
+        var valResult = await valResp.Content.ReadFromJsonAsync<FiscalizacaoValidationResult>();
+        valResult!.Status.Should().Be(IpBillingWorkflowGraph.Validado);
+        valResult.TotalAgregado.Should().Be(8);
+        valResult.TotalRetroativo.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task FiscalizacaoUpload_MalformedRows_RejectedWithStructuredRowErrors()
+    {
+        using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+
+        var rawRows = new List<IReadOnlyList<string?>>
+        {
+            new string?[] { "Código de Instalação", "Grupo de Operação", "Quantidade" },
+            new string?[] { "INST-001", "9", "10" },  // unrecognized operation group
+            new string?[] { null, "1", "10" },        // missing código
+        };
+
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient, new StubTransformerResolver(new Dictionary<(string, string), Guid>()), new StubWorkbookReader(rawRows));
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(IpBillingOrderTypes.FiscalizacaoId, "Fiscalização", "3550308", "2026-03", null, "tester"));
+        var order = await createResp.Content.ReadFromJsonAsync<ServiceOrder>();
+
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent([0x01]), "file", "fiscalizacao.xlsx");
+        var uploadResp = await ipBillingClient.PostAsync(
+            new Uri($"/api/ip-billing/fiscalizacao/{order!.Id}/upload", UriKind.Relative), uploadContent);
+
+        uploadResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await uploadResp.Content.ReadAsStringAsync();
+        body.Should().Contain("Grupo de Operação");
+        body.Should().Contain("Código de Instalação");
     }
 
     [Fact]
@@ -412,6 +500,8 @@ public sealed class IpBillingServerIntegrationTests
                     services.AddSingleton<ILevantamentoRepository>(new InMemoryLevantamentoRepository());
                     services.AddSingleton<IInterveningOperationLookup, NullInterveningOperationLookup>();
                     services.AddScoped<ILevantamentoCalculationService, LevantamentoCalculationService>();
+                    services.AddSingleton<IFiscalizacaoRepository>(new InMemoryFiscalizacaoRepository());
+                    services.AddScoped<IFiscalizacaoCalculationService, FiscalizacaoCalculationService>();
                     if (workbookReader is not null) services.AddSingleton(workbookReader);
                     else services.AddGeoAssetsXlsx();
                 });
@@ -635,6 +725,38 @@ public sealed class IpBillingServerIntegrationTests
                 .ToHashSet(StringComparer.Ordinal);
 
             return Task.FromResult<IReadOnlySet<string>>(codigos);
+        }
+
+        public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class InMemoryFiscalizacaoRepository : IFiscalizacaoRepository
+    {
+        private readonly Dictionary<string, FiscalizacaoHeader> _headers = [];
+        private readonly Dictionary<string, List<FiscalizacaoLine>> _lines = [];
+
+        public Task<FiscalizacaoHeader?> GetHeaderAsync(string serviceOrderId, CancellationToken ct = default) =>
+            Task.FromResult(_headers.GetValueOrDefault(serviceOrderId));
+
+        public Task AddHeaderAsync(FiscalizacaoHeader header, CancellationToken ct = default)
+        {
+            _headers[header.ServiceOrderId] = header;
+            return Task.CompletedTask;
+        }
+
+        public Task MarkValidatedAsync(string serviceOrderId, CancellationToken ct = default)
+        {
+            _headers[serviceOrderId].IsValidated = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<FiscalizacaoLine>> GetLinesAsync(string serviceOrderId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<FiscalizacaoLine>>(_lines.GetValueOrDefault(serviceOrderId) ?? []);
+
+        public Task ReplaceLinesAsync(string serviceOrderId, IReadOnlyList<FiscalizacaoLine> lines, CancellationToken ct = default)
+        {
+            _lines[serviceOrderId] = [.. lines];
+            return Task.CompletedTask;
         }
 
         public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;

@@ -66,6 +66,7 @@ internal static class IpBillingRestApiExtensions
         MapResolutionEndpoints(group);
         MapOrderWorkflowEndpoints(group);
         IpBillingLevantamentoRestApiExtensions.MapLevantamentoApi(group);
+        IpBillingFiscalizacaoRestApiExtensions.MapFiscalizacaoApi(group);
 
         return endpoints;
     }
