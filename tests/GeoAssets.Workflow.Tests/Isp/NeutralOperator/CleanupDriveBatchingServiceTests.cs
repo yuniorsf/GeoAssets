@@ -28,6 +28,12 @@ public class CleanupDriveBatchingServiceTests
 
         public Task<IReadOnlyList<ClandestineFlagResult>> GetElapsedUnregularizedAsync(DateTimeOffset asOfUtc, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ClandestineFlagResult>>(ElapsedResults);
+
+        public Task<ClandestineFlagResult> DisputeAsync(string serviceOrderId, string evidenceReference, string? performedBy = null, CancellationToken ct = default) =>
+            throw new NotSupportedException("Not needed by these tests.");
+
+        public Task<IReadOnlyList<IServiceOrder>> GetActiveFlaggedForOrganizationAsync(Guid organizationId, CancellationToken ct = default) =>
+            throw new NotSupportedException("Not needed by these tests.");
     }
 
     private sealed record CapturedNotification(string OrderId, IReadOnlyList<string> RecipientIds, IReadOnlyDictionary<string, string>? Metadata);
