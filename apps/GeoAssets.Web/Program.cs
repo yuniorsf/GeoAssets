@@ -213,6 +213,12 @@ builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
 
+// SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
+// (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in
+// its documented "not configured" state until a host supplies the real REN 1.000/Sabesp ISAP
+// durations.
+builder.Services.AddSlaBreachReporting();
+
 // ── Project session (XD01-142) — REST-backed against GeoAssets.Server, same pattern as
 // the Service Order workflow above. IProjectSessionService owns the currently-open Project's
 // load/reconnect/dirty/save-discard/close-guard lifecycle; nothing calls OpenAsync yet (that's

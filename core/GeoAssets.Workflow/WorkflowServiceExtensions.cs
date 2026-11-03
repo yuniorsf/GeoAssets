@@ -1,6 +1,7 @@
 using GeoAssets.Workflow.Notifications;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
+using GeoAssets.Workflow.SlaGuard;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoAssets.Workflow;
@@ -81,6 +82,25 @@ public static class WorkflowServiceExtensions
             roleGrants: options.RoleGrants.Count > 0 ? options.RoleGrants : null,
             unrestrictedRoles: options.UnrestrictedRoles.Count > 0 ? options.UnrestrictedRoles : null,
             recipientRoleGrants: options.RecipientRoleGrants.Count > 0 ? options.RecipientRoleGrants : null));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ISlaBreachQueryService"/> (XD01-233) for whatever
+    /// <see cref="IServiceOrderReader"/> is already in DI. Pass a configured
+    /// <see cref="SlaGuardEngine"/> (sourced from the current official regulatory text — see
+    /// <see cref="SlaMatrixRow"/>'s doc comment) once one exists; without it, every query
+    /// correctly reports <see cref="SlaBreachSummary.NotConfigured"/>.
+    /// </summary>
+    public static IServiceCollection AddSlaBreachReporting(
+        this IServiceCollection services,
+        SlaGuardEngine? engine = null)
+    {
+        services.AddScoped<ISlaBreachQueryService>(sp => new SlaBreachQueryService(
+            sp.GetRequiredService<IServiceOrderReader>(),
+            engine,
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
 
         return services;
     }
