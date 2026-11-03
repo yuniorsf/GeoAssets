@@ -427,6 +427,98 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.ToTable("Municipios", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioHeaderRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Competencia")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<bool>("IsValidated")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MunicipioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NumeroPrefeitura")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceOrderId")
+                        .IsUnique();
+
+                    b.HasIndex("MunicipioId", "Competencia");
+
+                    b.HasIndex("MunicipioId", "NumeroPrefeitura")
+                        .IsUnique()
+                        .HasFilter("\"NumeroPrefeitura\" IS NOT NULL");
+
+                    b.ToTable("OficioHeaders", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Agregado")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CodigoInstalacao")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Retroativo")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceOrderId", "CodigoInstalacao")
+                        .IsUnique();
+
+                    b.ToTable("OficioLines", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioOperationGroupDetailRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("OperationGroup")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LineId");
+
+                    b.ToTable("OficioOperationGroupDetails", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.UnidadeOrganizacionalRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -499,6 +591,15 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioOperationGroupDetailRecord", b =>
+                {
+                    b.HasOne("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", null)
+                        .WithMany("OperationGroups")
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.UnidadeOrganizacionalRecord", b =>
                 {
                     b.HasOne("GeoAssets.IpBilling.Persistence.Entities.MunicipioRecord", null)
@@ -521,6 +622,11 @@ namespace GeoAssets.IpBilling.Server.Migrations
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.LevantamentoTransformerLineRecord", b =>
                 {
                     b.Navigation("LampDetails");
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", b =>
+                {
+                    b.Navigation("OperationGroups");
                 });
         }
     }

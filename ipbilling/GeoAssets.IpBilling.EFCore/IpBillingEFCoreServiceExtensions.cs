@@ -1,5 +1,6 @@
 using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
+using GeoAssets.IpBilling.Oficio;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Resolution;
 using Microsoft.EntityFrameworkCore;
@@ -34,14 +35,17 @@ public static class IpBillingEFCoreServiceExtensions
         services.AddScoped<ITransformerResolver, DbTransformerResolver>();
         services.AddScoped<ILevantamentoRepository, EFLevantamentoRepository>();
 
-        // No Ofício data exists yet (Phase 3, XD01-185) — see NullInterveningOperationLookup's
-        // own doc comment for why "no coverage" is correct, not just a stub, until that phase
-        // provides a real implementation.
+        // NullInterveningOperationLookup covers a different concern (Levantamento's
+        // cross-time transformer-history lookup) than Ofício's own data below — see that
+        // type's own doc comment for why "no coverage" is still correct there.
         services.AddScoped<IInterveningOperationLookup, NullInterveningOperationLookup>();
         services.AddScoped<ILevantamentoCalculationService, LevantamentoCalculationService>();
 
         services.AddScoped<IFiscalizacaoRepository, EFFiscalizacaoRepository>();
         services.AddScoped<IFiscalizacaoCalculationService, FiscalizacaoCalculationService>();
+
+        services.AddScoped<IOficioRepository, EFOficioRepository>();
+        services.AddScoped<IOficioCalculationService, OficioCalculationService>();
 
         return services;
     }

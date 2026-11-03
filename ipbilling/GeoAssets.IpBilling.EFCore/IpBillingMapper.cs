@@ -1,6 +1,7 @@
 using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Models;
+using GeoAssets.IpBilling.Oficio;
 using GeoAssets.IpBilling.Persistence.Entities;
 
 namespace GeoAssets.IpBilling.Persistence;
@@ -275,6 +276,70 @@ internal static class IpBillingMapper
     };
 
     public static FiscalizacaoOperationGroupDetailRecord ToRecord(FiscalizacaoOperationGroupDetail d) => new()
+    {
+        Id             = d.Id,
+        LineId         = d.LineId,
+        OperationGroup = d.OperationGroup,
+        Count          = d.Count,
+    };
+
+    // ── OficioHeader ─────────────────────────────────────────────────────────
+
+    public static OficioHeader ToDomain(OficioHeaderRecord r) => new()
+    {
+        Id               = r.Id,
+        ServiceOrderId   = r.ServiceOrderId,
+        MunicipioId      = r.MunicipioId,
+        Competencia      = r.Competencia,
+        NumeroPrefeitura = r.NumeroPrefeitura,
+        IsValidated      = r.IsValidated,
+    };
+
+    public static OficioHeaderRecord ToRecord(OficioHeader h) => new()
+    {
+        Id               = h.Id,
+        ServiceOrderId   = h.ServiceOrderId,
+        MunicipioId      = h.MunicipioId,
+        Competencia      = h.Competencia,
+        NumeroPrefeitura = h.NumeroPrefeitura,
+        IsValidated      = h.IsValidated,
+    };
+
+    // ── OficioLine / OficioOperationGroupDetail ─────────────────────────────
+
+    public static OficioLine ToDomain(OficioLineRecord r) => new()
+    {
+        Id               = r.Id,
+        ServiceOrderId   = r.ServiceOrderId,
+        CodigoInstalacao = r.CodigoInstalacao,
+        Agregado         = r.Agregado,
+        Retroativo       = r.Retroativo,
+        OperationGroups  = r.OperationGroups.Select(ToDomain).ToList(),
+    };
+
+    public static OficioLineRecord ToRecord(OficioLine l)
+    {
+        var record = new OficioLineRecord
+        {
+            Id               = l.Id,
+            ServiceOrderId   = l.ServiceOrderId,
+            CodigoInstalacao = l.CodigoInstalacao,
+            Agregado         = l.Agregado,
+            Retroativo       = l.Retroativo,
+        };
+        record.OperationGroups.AddRange(l.OperationGroups.Select(ToRecord));
+        return record;
+    }
+
+    public static OficioOperationGroupDetail ToDomain(OficioOperationGroupDetailRecord r) => new()
+    {
+        Id             = r.Id,
+        LineId         = r.LineId,
+        OperationGroup = r.OperationGroup,
+        Count          = r.Count,
+    };
+
+    public static OficioOperationGroupDetailRecord ToRecord(OficioOperationGroupDetail d) => new()
     {
         Id             = d.Id,
         LineId         = d.LineId,
