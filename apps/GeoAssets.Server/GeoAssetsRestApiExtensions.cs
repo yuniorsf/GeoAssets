@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Isp.NeutralOperator.GisExport;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
@@ -56,6 +57,7 @@ public static class GeoAssetsRestApiExtensions
         MapFeaturesApi(routes, prefix, opts);
         MapAssetTypesApi(routes, prefix, opts);
         MapMutationBatchesApi(routes, prefix, opts);
+        MapGisExportApi(routes, prefix);
 
         // WFS 2.0 and WMS 1.1.1 handlers mounted under the same CORS-configured prefix so
         // Blazor WASM clients can reach them without separate CORS origin entries.
@@ -263,6 +265,30 @@ public static class GeoAssetsRestApiExtensions
             return Results.Json(applied, opts);
         })
             .RequireAuthorization("features:edit");
+    }
+
+    /// <summary>
+    /// Generic concessionaire GIS export (XD01-271) — projects every feature of the given
+    /// <paramref name="assetTypeId"/> (the caller's own configured asset-type catalog has no
+    /// fixed "pole" id, so the caller names which of their asset types that is) through
+    /// <see cref="GisExportProjector"/> into the versioned contract documented on
+    /// <see cref="GisExportSchema"/>, and returns it as plain RFC 7946 GeoJSON
+    /// (<c>application/geo+json</c>) — consumable by GE Smallworld/Esri ArcGIS Enterprise or any
+    /// other generic GIS import with zero GeoAssets-specific knowledge. No vendor-specific
+    /// adapter is implemented here, by design (out of scope for this epic). Compliance-status
+    /// fields report <see cref="GisExportSchema.ComplianceUnknown"/> for every feature until a
+    /// persisted <see cref="PoleAttachmentSlotMatrix"/> store/DI registration exists — none does
+    /// as of this ticket (see <see cref="NullPoleAttachmentSlotMatrixProvider"/>).
+    /// </summary>
+    private static void MapGisExportApi(IEndpointRouteBuilder routes, string prefix)
+    {
+        routes.MapGet($"{prefix}/export/gis/v1", (string assetTypeId, IAssetProvider provider) =>
+        {
+            var features = provider.GetByAssetType(assetTypeId);
+            var collection = GisExportProjector.Project(features);
+            return Results.Text(GisExportProjector.ToGeoJson(collection), "application/geo+json");
+        })
+            .RequireAuthorization("features:read");
     }
 
     private static void MapAssetTypesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)

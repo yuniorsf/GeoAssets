@@ -207,4 +207,41 @@ public class GeoAssetsRestApiExtensionsTests
         result.Should().NotBeNull();
         result!["tx-1"].Should().Equal("pole-1");
     }
+
+    [Fact]
+    public async Task GisExport_ReturnsGeoJsonFeatureCollectionWithVersionedPoleFields()
+    {
+        var provider = new TestAssetProvider();
+        provider.Add(new GeoFeature
+        {
+            Id = "pole-1",
+            Geometry = new GeoPoint(-46.6, -23.5),
+            Properties = new GeoFeatureProperties { AssetTypeId = "type-pole", Name = "Poste 1" }
+        });
+        provider.Add(new GeoFeature
+        {
+            Id = "lamp-1",
+            Geometry = new GeoPoint(-46.7, -23.6),
+            Properties = new GeoFeatureProperties { AssetTypeId = "type-lamp", Name = "Lamp 1" }
+        });
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync(new Uri("/api/geoassets/export/gis/v1?assetTypeId=type-pole", UriKind.Relative));
+        response.EnsureSuccessStatusCode();
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/geo+json");
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        doc.RootElement.GetProperty("type").GetString().Should().Be("FeatureCollection");
+        var features = doc.RootElement.GetProperty("features");
+        features.GetArrayLength().Should().Be(1);
+
+        var props = features[0].GetProperty("properties");
+        props.GetProperty("poleFeatureId").GetString().Should().Be("pole-1");
+        props.GetProperty("schemaVersion").GetString().Should().Be("1");
+        props.GetProperty("complianceStatus").GetString().Should().Be("unknown");
+    }
 }
