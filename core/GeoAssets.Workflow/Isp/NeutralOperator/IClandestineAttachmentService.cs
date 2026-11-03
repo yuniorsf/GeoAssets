@@ -43,6 +43,28 @@ public interface IClandestineAttachmentService
     Task<ClandestineFlagResult> DisputeAsync(string serviceOrderId, string evidenceReference, string? performedBy = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Resolves a dispute (XD01-270) — added for the neutral operator's mediation team.
+    /// <paramref name="upheld"/> <c>true</c> transitions <see cref="ClandestineAttachmentWorkflowGraph.Disputed"/>
+    /// → <see cref="ClandestineAttachmentWorkflowGraph.Regularized"/> (the tenant's contest is
+    /// accepted — the attachment was legitimate all along). <c>false</c> transitions back to
+    /// <see cref="ClandestineAttachmentWorkflowGraph.CaboARevelia"/>, where the original
+    /// statutory deadline — stamped once at flag-time by <see cref="FlagAsync"/> and never
+    /// reset — still applies; if it has already elapsed, the next cleanup-drive batching run's
+    /// <see cref="GetElapsedUnregularizedAsync"/> call picks the order straight back up, which
+    /// is this ticket's "back to the cleanup-drive path" resolution outcome.
+    /// </summary>
+    Task<ClandestineFlagResult> ResolveDisputeAsync(string serviceOrderId, bool upheld, string? performedBy = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// All disputes (XD01-270) still in <see cref="ClandestineAttachmentWorkflowGraph.Disputed"/>
+    /// whose mediation SLA (<see cref="ClandestineAttachmentService.DisputeMediationSla"/>,
+    /// stamped at <see cref="DisputeAsync"/>-time) has already elapsed as of
+    /// <paramref name="asOfUtc"/> — the read surface a neutral operator's mediation dashboard
+    /// queries for overdue follow-up. Deliberately does not itself resolve or escalate anything.
+    /// </summary>
+    Task<IReadOnlyList<ClandestineDisputeResult>> GetOverdueDisputesAsync(DateTimeOffset asOfUtc, CancellationToken ct = default);
+
+    /// <summary>
     /// All clandestine-notice orders currently in <see cref="ClandestineAttachmentWorkflowGraph.CaboARevelia"/>
     /// — i.e. actively flagged and not yet resolved — belonging to <paramref name="organizationId"/>.
     /// The read surface XD01-269's tenant portal uses to show a logged-in ISP "poles flagged for

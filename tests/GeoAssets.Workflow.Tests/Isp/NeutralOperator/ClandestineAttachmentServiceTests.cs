@@ -164,6 +164,101 @@ public class ClandestineAttachmentServiceTests
     }
 
     [Fact]
+    public async Task DisputeAsync_Stamps15DayMediationDeadline()
+    {
+        var order = NewActiveOrder();
+        var (repo, time, service) = await SetUpAsync(order);
+        await service.FlagAsync(order.Id);
+
+        await service.DisputeAsync(order.Id, "receipt-digest-abc123");
+
+        var reloaded = await repo.GetByIdAsync(order.Id);
+        var deadlineText = reloaded!.Attributes[ClandestineAttachmentService.AttrDisputeDeadlineUtc];
+        DateTimeOffset.Parse(deadlineText, System.Globalization.CultureInfo.InvariantCulture).Should()
+            .Be(time.GetUtcNow() + ClandestineAttachmentService.DisputeMediationSla);
+    }
+
+    [Fact]
+    public async Task ResolveDisputeAsync_Upheld_TransitionsToRegularized()
+    {
+        var order = NewActiveOrder();
+        var (repo, _, service) = await SetUpAsync(order);
+        await service.FlagAsync(order.Id);
+        await service.DisputeAsync(order.Id, "receipt-digest-abc123");
+
+        var result = await service.ResolveDisputeAsync(order.Id, upheld: true, "operator-1");
+
+        result.Status.Should().Be(ClandestineAttachmentWorkflowGraph.Regularized);
+        var reloaded = await repo.GetByIdAsync(order.Id);
+        reloaded!.Status.Should().Be(ClandestineAttachmentWorkflowGraph.Regularized);
+        reloaded.ActionLog.Should().ContainSingle(a => a.Action == OrderActionType.Approve && a.ResultingStatus == ClandestineAttachmentWorkflowGraph.Regularized);
+    }
+
+    [Fact]
+    public async Task ResolveDisputeAsync_Rejected_RevertsToCaboARevelia_SoCleanupDrivePicksItBackUp()
+    {
+        var order = NewActiveOrder();
+        var (repo, time, service) = await SetUpAsync(order);
+        await service.FlagAsync(order.Id);
+        await service.DisputeAsync(order.Id, "receipt-digest-abc123");
+
+        var result = await service.ResolveDisputeAsync(order.Id, upheld: false, "operator-1");
+
+        result.Status.Should().Be(ClandestineAttachmentWorkflowGraph.CaboARevelia);
+        var reloaded = await repo.GetByIdAsync(order.Id);
+        reloaded!.Status.Should().Be(ClandestineAttachmentWorkflowGraph.CaboARevelia);
+        reloaded.ActionLog.Should().ContainSingle(a => a.Action == OrderActionType.Reject && a.ResultingStatus == ClandestineAttachmentWorkflowGraph.CaboARevelia);
+
+        // The original statutory deadline (stamped once at flag-time) never reset, so once
+        // elapsed the order is immediately visible again to the cleanup-drive batching query —
+        // this is the "back to the cleanup-drive path" resolution outcome, no re-flagging needed.
+        time.Advance(TimeSpan.FromDays(31));
+        var elapsed = await service.GetElapsedUnregularizedAsync(time.GetUtcNow());
+        elapsed.Should().ContainSingle(r => r.ServiceOrderId == order.Id);
+    }
+
+    [Fact]
+    public async Task ResolveDisputeAsync_WhenNotDisputed_Throws()
+    {
+        var order = NewActiveOrder();
+        var (_, _, service) = await SetUpAsync(order);
+        await service.FlagAsync(order.Id);
+
+        var act = () => service.ResolveDisputeAsync(order.Id, upheld: true);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task GetOverdueDisputesAsync_ReturnsOnlyDisputesPastTheMediationDeadline()
+    {
+        var overdue = NewActiveOrder("order-overdue");
+        var notYetDue = NewActiveOrder("order-not-due");
+        var repo = new FakeServiceOrderRepository();
+        await repo.AddAsync(overdue);
+        await repo.AddAsync(notYetDue);
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero));
+        var service = new ClandestineAttachmentService(repo, time);
+
+        await service.FlagAsync(overdue.Id);
+        await service.DisputeAsync(overdue.Id, "receipt-overdue");
+
+        time.Advance(TimeSpan.FromDays(10));
+        await service.FlagAsync(notYetDue.Id);
+        await service.DisputeAsync(notYetDue.Id, "receipt-not-due");
+
+        // overdue was disputed at t=0 with a 15-day SLA (deadline t=15); notYetDue was disputed
+        // at t=10 with the same 15-day SLA (deadline t=25). Advancing to t=16 puts only the
+        // first past its deadline.
+        time.Advance(TimeSpan.FromDays(6));
+
+        var result = await service.GetOverdueDisputesAsync(time.GetUtcNow());
+
+        result.Should().ContainSingle(r => r.ServiceOrderId == overdue.Id);
+        result.Should().NotContain(r => r.ServiceOrderId == notYetDue.Id);
+    }
+
+    [Fact]
     public async Task GetActiveFlaggedForOrganizationAsync_ReturnsOnlyThatOrganizationsFlaggedOrders()
     {
         var orgA = Guid.NewGuid();

@@ -34,6 +34,12 @@ public class CleanupDriveBatchingServiceTests
 
         public Task<IReadOnlyList<IServiceOrder>> GetActiveFlaggedForOrganizationAsync(Guid organizationId, CancellationToken ct = default) =>
             throw new NotSupportedException("Not needed by these tests.");
+
+        public Task<ClandestineFlagResult> ResolveDisputeAsync(string serviceOrderId, bool upheld, string? performedBy = null, CancellationToken ct = default) =>
+            throw new NotSupportedException("Not needed by these tests.");
+
+        public Task<IReadOnlyList<ClandestineDisputeResult>> GetOverdueDisputesAsync(DateTimeOffset asOfUtc, CancellationToken ct = default) =>
+            throw new NotSupportedException("Not needed by these tests.");
     }
 
     private sealed record CapturedNotification(string OrderId, IReadOnlyList<string> RecipientIds, IReadOnlyDictionary<string, string>? Metadata);
