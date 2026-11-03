@@ -97,6 +97,23 @@ public sealed class FiscalizacaoCalculationService(
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Validates a Fiscalização order. <b>Does not post to the <c>Faturamento</c> ledger</b> —
+    /// investigated as part of XD01-188 (the ledger write-path ticket) and found to be a real
+    /// blocker, not an oversight: <see cref="AttrAgregado"/>/<see cref="AttrRetroativo"/> are
+    /// point-count deltas (see <see cref="FiscalizacaoLineCalculator"/> and XD01-182's own
+    /// scoping note, "a point-count reconciliation, not kWh — no lamp/wattage/transformer
+    /// -resolution complexity"), and the ledger (<see cref="Models.Faturamento.KwhFaturado"/>)
+    /// is denominated in kWh. There is no wattage/lamp-type data anywhere on a Fiscalização
+    /// line to derive a real kWh figure from a point count — this is a missing INPUT, not a
+    /// missing conversion CONSTANT, so XD01-188 deliberately did not invent one (multiplying an
+    /// unrelated point count by any made-up rate would post a fabricated number to a real
+    /// financial ledger). <see cref="IFaturamentoLedgerService.AccumulateInspectionDeltaAsync"/>
+    /// exists, is implemented, and is tested — it is ready to be called here the moment a real
+    /// business-owned point-to-kWh rule (or a redesign giving Fiscalização real wattage data)
+    /// is confirmed. Flagging for a human decision rather than silently leaving this unwired
+    /// forever or guessing a number.
+    /// </summary>
     public async Task<FiscalizacaoValidationResult> ValidateAsync(
         string serviceOrderId,
         string? performedBy = null,
@@ -133,7 +150,7 @@ public sealed class FiscalizacaoCalculationService(
                     OrderActionType.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
-                    $"Validated Fiscalização (Agregado={totalAgregado}, Retroativo={totalRetroativo}); Faturamento accumulate-posting pending XD01-188",
+                    $"Validated Fiscalização (Agregado={totalAgregado}, Retroativo={totalRetroativo}); Faturamento accumulate-posting blocked — no point-to-kWh conversion rule exists (see XD01-188)",
                     IpBillingWorkflowGraph.Validado),
                 ct).ConfigureAwait(false);
         }

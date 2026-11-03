@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.FaturamentoLedger;
 using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Oficio;
@@ -32,6 +33,7 @@ public static class IpBillingEFCoreServiceExtensions
         services.AddScoped<IUnidadeOrganizacionalRepository, EFUnidadeOrganizacionalRepository>();
         services.AddScoped<IIpTransformerIndexRepository, EFIpTransformerIndexRepository>();
         services.AddScoped<IFaturamentoRepository, EFFaturamentoRepository>();
+        services.AddScoped<IFaturamentoLedgerService, FaturamentoLedgerService>();
         services.AddScoped<ITransformerResolver, DbTransformerResolver>();
         services.AddScoped<ILevantamentoRepository, EFLevantamentoRepository>();
 

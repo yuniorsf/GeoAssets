@@ -64,12 +64,10 @@ public class LevantamentoCalculationServiceTests
 
         // Test double only implements events because IServiceOrderWriter requires them —
         // nothing in these tests needs to raise or observe them.
-#pragma warning disable CS0067
-        public event EventHandler<IServiceOrder>? OrderAdded;
-        public event EventHandler<IServiceOrder>? OrderUpdated;
-        public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
-        public event EventHandler<string>? OrderDeleted;
-#pragma warning restore CS0067
+        public event EventHandler<IServiceOrder>? OrderAdded { add { } remove { } }
+        public event EventHandler<IServiceOrder>? OrderUpdated { add { } remove { } }
+        public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged { add { } remove { } }
+        public event EventHandler<string>? OrderDeleted { add { } remove { } }
     }
 
     private sealed class FakeMunicipioRepository(Municipio municipio) : IMunicipioRepository
@@ -204,6 +202,15 @@ public class LevantamentoCalculationServiceTests
             FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default)
         {
             var faturamento = new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhDeltaOrBaseline, CreatedAt = postedAt };
+            Posted.Add(faturamento);
+            return Task.FromResult(faturamento);
+        }
+
+        public Task<Faturamento> OverwriteManualEntryAsync(
+            Guid municipioId, string competencia, decimal kwhFaturado, string enteredByReference,
+            DateTimeOffset postedAt, CancellationToken ct = default)
+        {
+            var faturamento = new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhFaturado, CreatedAt = postedAt };
             Posted.Add(faturamento);
             return Task.FromResult(faturamento);
         }

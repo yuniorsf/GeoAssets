@@ -82,6 +82,8 @@ public class LevantamentoCalculationServiceConcurrencyTests
         public Task AddAsync(Faturamento faturamento, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Faturamento> PostOrderCalculationAsync(string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline, FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default) =>
             Task.FromResult(new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhDeltaOrBaseline, CreatedAt = postedAt });
+        public Task<Faturamento> OverwriteManualEntryAsync(Guid municipioId, string competencia, decimal kwhFaturado, string enteredByReference, DateTimeOffset postedAt, CancellationToken ct = default) =>
+            Task.FromResult(new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhFaturado, CreatedAt = postedAt });
         public Task<IReadOnlyList<FaturamentoPosting>> GetPostingsByOrderAsync(string serviceOrderId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<FaturamentoPosting>>([]);
         public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
     }

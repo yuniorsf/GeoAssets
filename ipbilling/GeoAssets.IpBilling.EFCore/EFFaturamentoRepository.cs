@@ -74,9 +74,9 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
         }
         else
         {
-            ledger.KwhFaturado = mode == FaturamentoPostingMode.Set
-                ? roundedInput
-                : IpEnergyMath.Round(ledger.KwhFaturado + roundedInput);
+            ledger.KwhFaturado = mode == FaturamentoPostingMode.Accumulate
+                ? IpEnergyMath.Round(ledger.KwhFaturado + roundedInput)
+                : roundedInput;
         }
 
         await db.FaturamentoPostings.AddAsync(new FaturamentoPostingRecord
@@ -86,6 +86,58 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
             MunicipioId        = municipioId,
             Competencia        = competencia,
             Mode               = mode,
+            DeltaOrBaselineKwh = roundedInput,
+            ResultingKwh       = ledger.KwhFaturado,
+            PostedAt           = postedAt,
+        }, ct).ConfigureAwait(false);
+
+        return IpBillingMapper.ToDomain(ledger);
+    }
+
+    public async Task<Faturamento> OverwriteManualEntryAsync(
+        Guid municipioId,
+        string competencia,
+        decimal kwhFaturado,
+        string enteredByReference,
+        DateTimeOffset postedAt,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(competencia);
+        ArgumentException.ThrowIfNullOrWhiteSpace(enteredByReference);
+
+        var roundedInput = IpEnergyMath.Round(kwhFaturado);
+
+        var ledger = await db.Faturamentos.FirstOrDefaultAsync(
+            f => f.MunicipioId == municipioId && f.Competencia == competencia, ct).ConfigureAwait(false);
+
+        if (ledger is null)
+        {
+            ledger = new FaturamentoRecord
+            {
+                Id          = Guid.NewGuid(),
+                MunicipioId = municipioId,
+                Competencia = competencia,
+                KwhFaturado = roundedInput,
+                CreatedAt   = postedAt,
+            };
+            await db.Faturamentos.AddAsync(ledger, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            ledger.KwhFaturado = roundedInput;
+        }
+
+        // No idempotency dedup here (unlike PostOrderCalculationAsync): a manual entry is an
+        // intentional, human-triggered correction, not an automated retry-prone path — each call
+        // is a deliberate new overwrite, identified for audit purposes by the caller-supplied
+        // enteredByReference rather than a ServiceOrderId (manual entries have no ServiceOrder).
+        await db.FaturamentoPostings.AddAsync(new FaturamentoPostingRecord
+        {
+            Id                 = Guid.NewGuid(),
+            ServiceOrderId     = enteredByReference,
+            MunicipioId        = municipioId,
+            Competencia        = competencia,
+            Mode               = FaturamentoPostingMode.Overwrite,
             DeltaOrBaselineKwh = roundedInput,
             ResultingKwh       = ledger.KwhFaturado,
             PostedAt           = postedAt,

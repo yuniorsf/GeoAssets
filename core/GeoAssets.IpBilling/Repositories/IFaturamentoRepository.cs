@@ -34,6 +34,22 @@ public interface IFaturamentoRepository
         DateTimeOffset postedAt,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Overwrites the <see cref="Faturamento"/> ledger with an external ground-truth kWh figure
+    /// — the manual entry/batch load/recarga path (XD01-189's legacy-parity screens will call
+    /// this once built). Always applies <see cref="FaturamentoPostingMode.Overwrite"/>; not
+    /// idempotent by design (each call is a deliberate human-triggered correction, not an
+    /// automated retry-prone path) — <paramref name="enteredByReference"/> identifies the
+    /// correction in the audit trail since there's no <c>ServiceOrderId</c> to key on.
+    /// </summary>
+    Task<Faturamento> OverwriteManualEntryAsync(
+        Guid municipioId,
+        string competencia,
+        decimal kwhFaturado,
+        string enteredByReference,
+        DateTimeOffset postedAt,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<FaturamentoPosting>> GetPostingsByOrderAsync(
         string serviceOrderId, CancellationToken ct = default);
 

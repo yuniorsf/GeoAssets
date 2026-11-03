@@ -160,4 +160,33 @@ public class EFFaturamentoRepositoryTests
         var postings = await repo.GetPostingsByOrderAsync("order-fisc-1");
         postings.Should().ContainSingle();
     }
+
+    [Fact]
+    public async Task OverwriteManualEntryAsync_IgnoresExistingLedgerValueAndIsNotIdempotent()
+    {
+        using var fixture = new SqliteFixture();
+        var municipio = await SeedMunicipioAsync(fixture.Context);
+        var repo = new EFFaturamentoRepository(fixture.Context);
+        var now = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+
+        await repo.PostOrderCalculationAsync("order-lev-1", municipio.Id, "2026-03", 1000m, FaturamentoPostingMode.Set, now);
+        await repo.SaveChangesAsync();
+
+        var overwritten = await repo.OverwriteManualEntryAsync(
+            municipio.Id, "2026-03", 42.5m, "manual-correction-ref-1", now.AddDays(1));
+        await repo.SaveChangesAsync();
+
+        overwritten.KwhFaturado.Should().Be(42.5m);
+
+        // Unlike PostOrderCalculationAsync, a second manual entry is a deliberate new
+        // correction, not a retry — it is NOT deduplicated, and applies again.
+        var secondCorrection = await repo.OverwriteManualEntryAsync(
+            municipio.Id, "2026-03", 10m, "manual-correction-ref-2", now.AddDays(2));
+        await repo.SaveChangesAsync();
+
+        secondCorrection.KwhFaturado.Should().Be(10m);
+
+        var postings = await repo.GetPostingsByOrderAsync("manual-correction-ref-1");
+        postings.Should().ContainSingle().Which.Mode.Should().Be(FaturamentoPostingMode.Overwrite);
+    }
 }

@@ -177,8 +177,106 @@ public sealed class IpBillingServerIntegrationTests
         mem.TransformerLines.Should().ContainSingle();
     }
 
+    /// <summary>
+    /// XD01-188's rollback/idempotency-safety acceptance criterion. <see cref="LevantamentoCalculationService.ValidateAsync"/>
+    /// posts to the Faturamento ledger and <c>SaveChangesAsync</c>s FIRST, then transitions the
+    /// ServiceOrder to Validado via a separate <c>AppendActionAsync</c> call afterward — a
+    /// deliberate ordering (see <see cref="GeoAssets.IpBilling.FaturamentoLedger.FaturamentoLedgerService"/>'s
+    /// doc comment for the full reasoning) that never leaves a "Validado with no posted money"
+    /// state, at the cost of a transient window where the ledger is posted but the order hasn't
+    /// caught up. This test forces a crash in exactly that window (inside the order-transition
+    /// call, after the ledger write has already committed) and proves: (1) the ledger was
+    /// genuinely posted despite the order failing to transition — the real, non-rolled-back
+    /// state — and (2) retrying the same validate call is idempotency-safe: it does not
+    /// double-post, and it completes the transition the second time.
+    /// </summary>
     [Fact]
-    public async Task FiscalizacaoUploadCalculateValidate_HappyPath_AccumulatesIntoLedger()
+    public async Task LevantamentoValidate_CrashAfterLedgerWriteBeforeOrderTransition_IsSafeToRetry()
+    {
+        var (provider, transformerId, _, _) = SeedTestNetwork();
+
+        using var coreServer = await BuildCoreServerAsync(provider);
+        using var coreHttpClient = coreServer.CreateClient();
+        coreHttpClient.BaseAddress = new Uri(coreServer.BaseAddress, "api/geoassets/");
+
+        var transformerResolver = new StubTransformerResolver(
+            new Dictionary<(string, string), Guid> { [("3550308", "INST-001")] = transformerId });
+
+        var rawRows = new List<IReadOnlyList<string?>>
+        {
+            new string?[] { "Código de Instalação", "Tipo de Lâmpada", "Potência (W)", "Quantidade" },
+            new string?[] { "INST-001", "LD", "100", "10" },
+        };
+
+        FaultInjectingOrderRepository? faultRepo = null;
+        using var ipBillingServer = await BuildIpBillingServerAsync(
+            coreHttpClient,
+            transformerResolver,
+            new StubWorkbookReader(rawRows),
+            decorateOrderRepository: real =>
+            {
+                faultRepo = new FaultInjectingOrderRepository(real);
+                return faultRepo;
+            });
+        using var ipBillingClient = ipBillingServer.CreateClient();
+
+        var createResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(IpBillingOrderTypes.LevantamentoId, "Levantamento", "3550308", "2026-03", null, "tester"));
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        var order = await createResp.Content.ReadFromJsonAsync<ServiceOrder>();
+
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent([0x01, 0x02]), "file", "levantamento.xlsx");
+        (await ipBillingClient.PostAsync(
+            new Uri($"/api/ip-billing/levantamento/{order!.Id}/upload", UriKind.Relative), uploadContent))
+            .EnsureSuccessStatusCode();
+
+        var calcResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/calculate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoCalculateRequest(new DateOnly(2026, 3, 31), "tester"));
+        calcResp.EnsureSuccessStatusCode();
+        var calcResult = await calcResp.Content.ReadFromJsonAsync<LevantamentoCalculationResult>();
+
+        // Arm the fault, then validate — the ledger write happens, then the order-transition
+        // call throws an InvalidOperationException, which the endpoint's own catch block
+        // (apps/GeoAssets.IpBilling.Server/IpBillingLevantamentoRestApiExtensions.cs) converts
+        // to a 400 rather than letting it surface as an unhandled 500 — either way, the point
+        // is the ledger write already committed by the time this failure happens.
+        faultRepo!.FaultArmed = true;
+        var failedValResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/validate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoValidateRequest("auditor"));
+        failedValResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // The real, non-rolled-back state: the ledger WAS posted even though the order never
+        // transitioned to Validado (still Calculado) — proving this is genuinely NOT a two-phase
+        // rollback, exactly as documented.
+        var orderAfterCrash = await ipBillingClient.GetAsync(new Uri($"/api/ip-billing/orders/{order.Id}", UriKind.Relative));
+        orderAfterCrash.EnsureSuccessStatusCode();
+        var orderStateAfterCrash = await orderAfterCrash.Content.ReadFromJsonAsync<ServiceOrder>();
+        orderStateAfterCrash!.Status.Should().Be(IpBillingWorkflowGraph.Calculado,
+            "the fault threw inside the order-transition call, after the ledger write had already committed");
+
+        // Disarm the fault and retry the identical validate call — idempotency-safe: no
+        // double-post, and the transition now completes.
+        faultRepo.FaultArmed = false;
+        var retryValResp = await ipBillingClient.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/levantamento/{order.Id}/validate", UriKind.Relative),
+            new IpBillingLevantamentoRestApiExtensions.LevantamentoValidateRequest("auditor"));
+        retryValResp.EnsureSuccessStatusCode();
+        var retryResult = await retryValResp.Content.ReadFromJsonAsync<LevantamentoValidationResult>();
+        retryResult!.Status.Should().Be(IpBillingWorkflowGraph.Validado);
+        retryResult.Faturamento.KwhFaturado.Should().Be(calcResult!.TotalCalculatedKwh,
+            "the retry must not double-post the already-committed ledger entry");
+    }
+
+    [Fact]
+    // Renamed from "...AccumulatesIntoLedger" during XD01-188's investigation: this test never
+    // actually asserted anything about the Faturamento ledger, and per that ticket's findings,
+    // Fiscalização validation does NOT post to the ledger (no point-to-kWh conversion rule
+    // exists) — the old name was aspirational/inaccurate, not a description of real behavior.
+    public async Task FiscalizacaoUploadCalculateValidate_HappyPath_ComputesAgregadoAndRetroativo()
     {
         using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
         using var coreHttpClient = coreServer.CreateClient();
@@ -583,7 +681,8 @@ public sealed class IpBillingServerIntegrationTests
     private static async Task<TestServer> BuildIpBillingServerAsync(
         HttpClient coreHttpClient,
         ITransformerResolver transformerResolver,
-        IWorkbookReader? workbookReader = null)
+        IWorkbookReader? workbookReader = null,
+        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrderRepository = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -595,9 +694,12 @@ public sealed class IpBillingServerIntegrationTests
                     services.AddSingleton(TimeProvider.System);
                     services.AddOrderTypeRegistry(IpBillingOrderTypes.RegisterAll);
                     services.AddSingleton<IServiceOrderRepository>(sp =>
-                        new ValidatingServiceOrderRepository(
+                    {
+                        IServiceOrderRepository repo = new ValidatingServiceOrderRepository(
                             new InMemoryOrderRepository(),
-                            sp.GetRequiredService<OrderTypeRegistry>()));
+                            sp.GetRequiredService<OrderTypeRegistry>());
+                        return decorateOrderRepository?.Invoke(repo) ?? repo;
+                    });
                     services.AddSingleton<IMunicipioRepository>(new InMemoryMunicipioRepository());
                     services.AddSingleton<ILampTypeRepository>(new InMemoryLampTypeRepository());
                     services.AddSingleton<IFaturamentoRepository>(new InMemoryFaturamentoRepository());
@@ -743,9 +845,9 @@ public sealed class IpBillingServerIntegrationTests
             }
             else
             {
-                faturamento.KwhFaturado = mode == FaturamentoPostingMode.Set
-                    ? rounded
-                    : IpEnergyMath.Round(faturamento.KwhFaturado + rounded);
+                faturamento.KwhFaturado = mode == FaturamentoPostingMode.Accumulate
+                    ? IpEnergyMath.Round(faturamento.KwhFaturado + rounded)
+                    : rounded;
             }
 
             _postings.Add(new FaturamentoPosting
@@ -754,6 +856,45 @@ public sealed class IpBillingServerIntegrationTests
                 MunicipioId        = municipioId,
                 Competencia        = competencia,
                 Mode               = mode,
+                DeltaOrBaselineKwh = rounded,
+                ResultingKwh       = faturamento.KwhFaturado,
+                PostedAt           = postedAt,
+            });
+
+            return Task.FromResult(faturamento);
+        }
+
+        public Task<Faturamento> OverwriteManualEntryAsync(
+            Guid municipioId,
+            string competencia,
+            decimal kwhFaturado,
+            string enteredByReference,
+            DateTimeOffset postedAt,
+            CancellationToken ct = default)
+        {
+            var rounded = IpEnergyMath.Round(kwhFaturado);
+            if (!_ledger.TryGetValue((municipioId, competencia), out var faturamento))
+            {
+                faturamento = new Faturamento
+                {
+                    MunicipioId = municipioId,
+                    Competencia = competencia,
+                    KwhFaturado = rounded,
+                    CreatedAt   = postedAt,
+                };
+                _ledger[(municipioId, competencia)] = faturamento;
+            }
+            else
+            {
+                faturamento.KwhFaturado = rounded;
+            }
+
+            _postings.Add(new FaturamentoPosting
+            {
+                ServiceOrderId     = enteredByReference,
+                MunicipioId        = municipioId,
+                Competencia        = competencia,
+                Mode               = FaturamentoPostingMode.Overwrite,
                 DeltaOrBaselineKwh = rounded,
                 ResultingKwh       = faturamento.KwhFaturado,
                 PostedAt           = postedAt,
@@ -979,6 +1120,55 @@ public sealed class IpBillingServerIntegrationTests
             if (_orders.Remove(id)) OrderDeleted?.Invoke(this, id);
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>
+    /// Decorates a real <see cref="IServiceOrderRepository"/>, forwarding every call unchanged
+    /// except <see cref="AppendActionAsync"/>, where it throws exactly once (then behaves
+    /// normally) — simulating a crash between the Faturamento ledger write (which, per
+    /// <c>LevantamentoCalculationService.ValidateAsync</c>'s established ordering, already
+    /// committed by the time this call happens) and the ServiceOrder's own Validado transition
+    /// (which this call is what actually performs, per <see cref="OrderActionLog.ResultingStatus"/>).
+    /// Used by XD01-188's rollback/idempotency-safety test.
+    /// </summary>
+    private sealed class FaultInjectingOrderRepository(IServiceOrderRepository inner) : IServiceOrderRepository
+    {
+        private bool _hasThrown;
+
+        public bool FaultArmed { get; set; }
+
+        public Task<IServiceOrder?> GetByIdAsync(string id, CancellationToken ct = default) => inner.GetByIdAsync(id, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default) => inner.GetAllAsync(ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetRootsAsync(CancellationToken ct = default) => inner.GetRootsAsync(ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetChildrenAsync(string parentId, CancellationToken ct = default) => inner.GetChildrenAsync(parentId, ct);
+        public Task<IServiceOrder?> GetParentAsync(string childId, CancellationToken ct = default) => inner.GetParentAsync(childId, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetByStatusAsync(string status, CancellationToken ct = default) => inner.GetByStatusAsync(status, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetByAssigneeAsync(string userId, CancellationToken ct = default) => inner.GetByAssigneeAsync(userId, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetByCreatorAsync(string userId, CancellationToken ct = default) => inner.GetByCreatorAsync(userId, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetByOrderTypeAsync(string orderTypeId, CancellationToken ct = default) => inner.GetByOrderTypeAsync(orderTypeId, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default) => inner.GetByDateRangeAsync(from, toExclusive, ct);
+        public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(string targetId, DispatchTargetType targetType, CancellationToken ct = default) => inner.GetDispatchedToAsync(targetId, targetType, ct);
+
+        public Task AddAsync(IServiceOrder order, CancellationToken ct = default) => inner.AddAsync(order, ct);
+        public Task UpdateAsync(IServiceOrder order, CancellationToken ct = default) => inner.UpdateAsync(order, ct);
+        public Task AppendDispatchAsync(string orderId, OrderDispatch dispatch, CancellationToken ct = default) => inner.AppendDispatchAsync(orderId, dispatch, ct);
+        public Task DeleteAsync(string id, CancellationToken ct = default) => inner.DeleteAsync(id, ct);
+
+        public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
+        {
+            if (FaultArmed && !_hasThrown && entry.Action == OrderActionType.Validate)
+            {
+                _hasThrown = true;
+                throw new InvalidOperationException("Simulated crash after the Faturamento ledger write, before the ServiceOrder's Validado transition.");
+            }
+
+            return inner.AppendActionAsync(orderId, entry, ct);
+        }
+
+        public event EventHandler<IServiceOrder>? OrderAdded { add => inner.OrderAdded += value; remove => inner.OrderAdded -= value; }
+        public event EventHandler<IServiceOrder>? OrderUpdated { add => inner.OrderUpdated += value; remove => inner.OrderUpdated -= value; }
+        public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged { add => inner.OrderStatusChanged += value; remove => inner.OrderStatusChanged -= value; }
+        public event EventHandler<string>? OrderDeleted { add => inner.OrderDeleted += value; remove => inner.OrderDeleted -= value; }
     }
 
     private sealed class AllowAllAuthorizationService : IGeoAuthorizationService

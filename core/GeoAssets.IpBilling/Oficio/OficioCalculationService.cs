@@ -105,6 +105,15 @@ public sealed class OficioCalculationService(
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Validates an Ofício order. <b>Does not post to the <c>Faturamento</c> ledger</b> — same
+    /// blocker as <c>FiscalizacaoCalculationService.ValidateAsync</c>, investigated as part of
+    /// XD01-188: <see cref="AttrAgregado"/>/<see cref="AttrRetroativo"/> are point-count deltas
+    /// with no wattage/lamp-type data to derive a real kWh figure from, and the ledger is
+    /// kWh-denominated. See that method's doc comment for the full reasoning — it applies here
+    /// identically. <see cref="IFaturamentoLedgerService.AccumulateInspectionDeltaAsync"/> is
+    /// ready to be called here once a real business-owned point-to-kWh rule is confirmed.
+    /// </summary>
     public async Task<OficioValidationResult> ValidateAsync(
         string serviceOrderId,
         string? performedBy = null,
@@ -141,7 +150,7 @@ public sealed class OficioCalculationService(
                     OrderActionType.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
-                    $"Validated Ofício (Agregado={totalAgregado}, Retroativo={totalRetroativo}); Faturamento accumulate-posting pending XD01-188",
+                    $"Validated Ofício (Agregado={totalAgregado}, Retroativo={totalRetroativo}); Faturamento accumulate-posting blocked — no point-to-kWh conversion rule exists (see XD01-188)",
                     IpBillingWorkflowGraph.Validado),
                 ct).ConfigureAwait(false);
         }
