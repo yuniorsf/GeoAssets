@@ -120,4 +120,91 @@ public class ClandestineAttachmentServiceTests
 
         elapsed.Should().ContainSingle(r => r.ServiceOrderId == elapsedOrder.Id);
     }
+
+    [Fact]
+    public async Task DisputeAsync_FromCaboARevelia_TransitionsToDisputed_AndStoresEvidenceReference()
+    {
+        var order = NewActiveOrder();
+        var (repo, _, service) = await SetUpAsync(order);
+        await service.FlagAsync(order.Id);
+
+        var result = await service.DisputeAsync(order.Id, "receipt-digest-abc123", "tenant-user-1");
+
+        result.Status.Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
+        var reloaded = await repo.GetByIdAsync(order.Id);
+        reloaded!.Status.Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
+        reloaded.Attributes[ClandestineAttachmentService.AttrDisputeEvidenceReference].Should().Be("receipt-digest-abc123");
+        reloaded.ActionLog.Should().ContainSingle(a => a.Action == OrderActionType.Dispute);
+    }
+
+    [Fact]
+    public async Task DisputeAsync_PastTheStatutoryDeadline_StillSucceeds()
+    {
+        // Contesting that the flag was ever valid is a different claim from having fixed it —
+        // unlike RegularizeAsync, elapsed time must not block a dispute.
+        var order = NewActiveOrder();
+        var (_, time, service) = await SetUpAsync(order);
+        await service.FlagAsync(order.Id);
+        time.Advance(TimeSpan.FromDays(45));
+
+        var result = await service.DisputeAsync(order.Id, "receipt-digest-abc123");
+
+        result.Status.Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
+    }
+
+    [Fact]
+    public async Task DisputeAsync_WhenNotFlagged_Throws()
+    {
+        var order = NewActiveOrder();
+        var (_, _, service) = await SetUpAsync(order);
+
+        var act = () => service.DisputeAsync(order.Id, "receipt-digest-abc123");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task GetActiveFlaggedForOrganizationAsync_ReturnsOnlyThatOrganizationsFlaggedOrders()
+    {
+        var orgA = Guid.NewGuid();
+        var orgB = Guid.NewGuid();
+        var flaggedForA = new ServiceOrder
+        {
+            Id = "order-a",
+            OrderTypeId = ClandestineAttachmentOrderTypes.ClandestineNoticeId,
+            Status = ClandestineAttachmentWorkflowGraph.Active,
+            OrganizationId = orgA,
+        };
+        var flaggedForB = new ServiceOrder
+        {
+            Id = "order-b",
+            OrderTypeId = ClandestineAttachmentOrderTypes.ClandestineNoticeId,
+            Status = ClandestineAttachmentWorkflowGraph.Active,
+            OrganizationId = orgB,
+        };
+        var regularizedForA = new ServiceOrder
+        {
+            Id = "order-a-regularized",
+            OrderTypeId = ClandestineAttachmentOrderTypes.ClandestineNoticeId,
+            Status = ClandestineAttachmentWorkflowGraph.Active,
+            OrganizationId = orgA,
+        };
+
+        var repo = new FakeServiceOrderRepository();
+        await repo.AddAsync(flaggedForA);
+        await repo.AddAsync(flaggedForB);
+        await repo.AddAsync(regularizedForA);
+
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero));
+        var service = new ClandestineAttachmentService(repo, time);
+        await service.FlagAsync(flaggedForA.Id);
+        await service.FlagAsync(flaggedForB.Id);
+        await service.FlagAsync(regularizedForA.Id);
+        await service.RegularizeAsync(regularizedForA.Id);
+
+        var result = await service.GetActiveFlaggedForOrganizationAsync(orgA);
+
+        result.Should().ContainSingle(o => o.Id == flaggedForA.Id,
+            "orgB's flagged order and orgA's already-regularized order must both be excluded");
+    }
 }

@@ -82,7 +82,7 @@ builder.Services.AddBlazoredLocalStorage();
 // ── Localization ──────────────────────────────────────────────────────────────
 builder.Services.AddGeoAssetsLocalization(opts =>
 {
-    opts.DefaultCulture    = "es";
+    opts.DefaultCulture = "es";
     opts.SupportedCultures = ["es", "en", "pt"];
 });
 
@@ -119,7 +119,7 @@ builder.Services.AddHttpClient("GeoAssetsServer")
         var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
         handler.ConfigureHandler(
             authorizedUrls: [geoAssetsServerBaseUrl],
-            scopes:         [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
+            scopes: [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
         return handler;
     });
 
@@ -146,6 +146,10 @@ builder.Services.AddGeoIdentityRest();
 // IpBilling reference-data admin UI (XD01-178) — Municípios/Lamp Reference pages, backed by
 // GeoAssets.IpBilling.Server.
 builder.Services.AddIpBillingRest();
+
+// Tenant ISP self-service portal (XD01-269) — backed by GeoAssets.Server's
+// /api/isp/tenant-portal/* endpoints.
+builder.Services.AddIspTenantPortalRest();
 
 // Pending-invitation redirect check (XD01-89) — registered here (not inside AddGeoIdentityRest)
 // since its dependencies (ICurrentUserAccessor, IPendingInvitationRepository, NavigationManager)
@@ -240,7 +244,7 @@ var logger = host.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("GeoAssets starting — environment: {Environment}", builder.HostEnvironment.Environment);
 
 var orderTypeRegistry = host.Services.GetRequiredService<OrderTypeRegistry>();
-var orderTypeRepo     = host.Services.GetRequiredService<IOrderTypeRepository>();
+var orderTypeRepo = host.Services.GetRequiredService<IOrderTypeRepository>();
 try
 {
     await orderTypeRegistry.LoadFromAsync(orderTypeRepo);

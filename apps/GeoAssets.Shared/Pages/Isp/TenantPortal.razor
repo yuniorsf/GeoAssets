@@ -1,0 +1,113 @@
+@page "/isp/tenant-portal"
+@attribute [Authorize]
+@layout MainLayout
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using Microsoft.AspNetCore.Authorization
+@using GeoAssets.Workflow.Orders
+
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <h1>@L["isp.tenantPortal.title"]</h1>
+    </div>
+</aside>
+
+<main class="order-main">
+    @if (_loadError is not null)
+    {
+        <p class="attribute-errors">@_loadError</p>
+    }
+
+    <section>
+        <h2>@L["isp.tenantPortal.attachmentRequests.title"]</h2>
+
+        <div class="form-group">
+            <label>@L["isp.tenantPortal.attachmentRequests.poleFeatureId"]</label>
+            <input class="form-control" @bind="_newRequestPoleFeatureId" />
+        </div>
+        <div class="form-group">
+            <label>@L["isp.tenantPortal.attachmentRequests.description"]</label>
+            <input class="form-control" @bind="_newRequestDescription" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" type="button" @onclick="SubmitAttachmentRequestAsync" disabled="@_submittingRequest">
+                @L["isp.tenantPortal.attachmentRequests.submit"]
+            </button>
+        </div>
+
+        @if (_attachmentRequests.Count == 0)
+        {
+            <div class="empty-state">@L["isp.tenantPortal.attachmentRequests.empty"]</div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>@L["isp.tenantPortal.attachmentRequests.poleFeatureId"]</th>
+                        <th>@L["isp.tenantPortal.attachmentRequests.description"]</th>
+                        <th>@L["isp.tenantPortal.status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var request in _attachmentRequests)
+                    {
+                        <tr>
+                            <td>@request.Attributes.GetValueOrDefault("poleFeatureId")</td>
+                            <td>@request.Description</td>
+                            <td>@request.Status</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section>
+        <h2>@L["isp.tenantPortal.flaggedNotices.title"]</h2>
+
+        @if (_flaggedNotices.Count == 0)
+        {
+            <div class="empty-state">@L["isp.tenantPortal.flaggedNotices.empty"]</div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>@L["isp.tenantPortal.flaggedNotices.orderId"]</th>
+                        <th>@L["isp.tenantPortal.status"]</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var notice in _flaggedNotices)
+                    {
+                        <tr>
+                            <td>@notice.Id</td>
+                            <td>@notice.Status</td>
+                            <td>
+                                @if (_disputingOrderId == notice.Id)
+                                {
+                                    <input class="form-control" @bind="_disputeEvidenceReference"
+                                           placeholder="@L["isp.tenantPortal.flaggedNotices.evidenceReferencePlaceholder"]" />
+                                    <button class="btn btn-primary" type="button" @onclick="SubmitDisputeAsync">
+                                        @L["isp.tenantPortal.flaggedNotices.disputeSubmit"]
+                                    </button>
+                                    <button class="btn btn-secondary" type="button" @onclick="() => _disputingOrderId = null">
+                                        @L["isp.tenantPortal.flaggedNotices.disputeCancel"]
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-secondary" type="button" @onclick="() => _disputingOrderId = notice.Id">
+                                        @L["isp.tenantPortal.flaggedNotices.disputeStart"]
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</main>

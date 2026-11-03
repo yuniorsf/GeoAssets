@@ -62,4 +62,13 @@ public enum OrderActionType
     /// <see cref="Annotate"/> (which carries no state-transition semantics).
     /// </summary>
     FlagClandestine,
+
+    /// <summary>
+    /// Contest a <see cref="FlagClandestine"/> flag by submitting evidence (e.g. a historical
+    /// approval receipt) — added for XD01-269's tenant self-service portal. Distinct from
+    /// <see cref="FlagClandestine"/>'s own counterpart <c>Approve</c> (which means "I fixed the
+    /// irregularity"): a dispute means "I'm contesting that this was ever an irregularity,"
+    /// moving the order into a reviewable state rather than closing it.
+    /// </summary>
+    Dispute,
 }

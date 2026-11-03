@@ -9,6 +9,7 @@ using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
 using GeoAssets.Server.IpBilling;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.EntityFrameworkCore;
@@ -66,7 +67,14 @@ builder.Services.AddSingleton<WmsPostGisRenderer>();
 // as assets; workflow tables live alongside geo_entity/asset_type. OrderTypes seeded
 // in-code by default, then overlaid with any DB-persisted types after the host builds
 // (see LoadRegistryFromDbAsync below).
-builder.Services.AddOrderTypeRegistry();
+// Isp.NeutralOperator order types (XD01-263's clandestine-notice, XD01-269's tenant
+// attachment-request) — registered here since XD01-263 built the OrderType itself but never
+// wired it into any host's registry; this is the first REST/Blazor surface exercising either.
+builder.Services.AddOrderTypeRegistry(registry =>
+{
+    ClandestineAttachmentOrderTypes.RegisterAll(registry);
+    TenantAttachmentRequestOrderTypes.RegisterAll(registry);
+});
 builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     connectionString,
     // ServiceOrderDbContext lives in GeoAssets.Workflow.EFCore (kept provider-agnostic —
@@ -93,6 +101,10 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 // against from the authenticated caller (IGeoAuthorizationService, registered below).
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
+
+// IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
+// IServiceOrderRepository as every other order-driven workflow in this host.
+builder.Services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
 
 // SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
 // (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in
@@ -190,6 +202,10 @@ app.MapServiceOrdersApi();
 // Project REST endpoints under /api/projects (XD01-141) —
 // see ProjectsRestApiExtensions for the full endpoint list.
 app.MapProjectsApi();
+
+// Tenant ISP self-service portal REST endpoints under /api/isp/tenant-portal (XD01-269) —
+// see IspTenantPortalRestApiExtensions for the full endpoint list.
+app.MapIspTenantPortalApi();
 
 // Read-only identity/authorization endpoints under /api/identity (XD01-18) — also includes
 // the município↔Prefeitura grant-provisioning endpoints (XD01-177, MapMunicipioGrantsApi) —

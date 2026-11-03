@@ -10,6 +10,8 @@ public sealed class ClandestineAttachmentService(
 {
     public const string AttrFlaggedAtUtc = "clandestineFlaggedAtUtc";
     public const string AttrDeadlineUtc = "clandestineRegularizationDeadlineUtc";
+    public const string AttrDisputeEvidenceReference = "clandestineDisputeEvidenceReference";
+    public const string AttrDisputeSubmittedAtUtc = "clandestineDisputeSubmittedAtUtc";
 
     private static readonly TimeSpan RegularizationWindow = TimeSpan.FromDays(30);
 
@@ -69,6 +71,47 @@ public sealed class ClandestineAttachmentService(
             ct).ConfigureAwait(false);
 
         return new ClandestineFlagResult(serviceOrderId, ClandestineAttachmentWorkflowGraph.Regularized, flaggedAt, deadline);
+    }
+
+    public async Task<ClandestineFlagResult> DisputeAsync(string serviceOrderId, string evidenceReference, string? performedBy = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(evidenceReference);
+
+        var order = await LoadMutableOrderAsync(serviceOrderId, ct).ConfigureAwait(false);
+        if (!string.Equals(order.Status, ClandestineAttachmentWorkflowGraph.CaboARevelia, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Cannot dispute order '{serviceOrderId}' — status is '{order.Status}', expected '{ClandestineAttachmentWorkflowGraph.CaboARevelia}'.");
+        }
+
+        var (flaggedAt, deadline) = ReadFlagAttributes(order);
+        var now = timeProvider.GetUtcNow();
+
+        order.Attributes[AttrDisputeEvidenceReference] = evidenceReference;
+        order.Attributes[AttrDisputeSubmittedAtUtc] = now.ToString("O", CultureInfo.InvariantCulture);
+        await orderRepository.UpdateAsync(order, ct).ConfigureAwait(false);
+
+        await orderRepository.AppendActionAsync(
+            serviceOrderId,
+            new OrderActionLog(
+                OrderActionType.Dispute,
+                performedBy ?? "system",
+                now.UtcDateTime,
+                $"Disputed with evidence reference '{evidenceReference}'",
+                ClandestineAttachmentWorkflowGraph.Disputed),
+            ct).ConfigureAwait(false);
+
+        return new ClandestineFlagResult(serviceOrderId, ClandestineAttachmentWorkflowGraph.Disputed, flaggedAt, deadline);
+    }
+
+    public async Task<IReadOnlyList<IServiceOrder>> GetActiveFlaggedForOrganizationAsync(Guid organizationId, CancellationToken ct = default)
+    {
+        var candidates = await orderRepository.GetByOrderTypeAsync(
+            ClandestineAttachmentOrderTypes.ClandestineNoticeId, ct).ConfigureAwait(false);
+
+        return [.. candidates.Where(o =>
+            o.OrganizationId == organizationId &&
+            string.Equals(o.Status, ClandestineAttachmentWorkflowGraph.CaboARevelia, StringComparison.Ordinal))];
     }
 
     public async Task<IReadOnlyList<ClandestineFlagResult>> GetElapsedUnregularizedAsync(DateTimeOffset asOfUtc, CancellationToken ct = default)
