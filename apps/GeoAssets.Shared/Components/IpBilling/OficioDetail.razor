@@ -1,0 +1,75 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Workflow
+@using GeoAssets.Workflow.Orders
+
+<div>
+    <div class="section-header-row">
+        <h5>@Order.Title</h5>
+        <button class="btn-icon" @onclick="() => OnClose.InvokeAsync()">✕</button>
+    </div>
+    <p style="color:var(--text-secondary)">
+        @L["admin.ipBilling.oficios.status"]: <strong>@Order.Status</strong>
+    </p>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="attribute-errors">@_error</p>
+    }
+
+    @if (string.Equals(Order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal))
+    {
+        <OficioUploadPanel OrderId="@Order.Id" OnUploaded="HandleUploaded" />
+    }
+
+    @if (string.Equals(Order.Status, IpBillingWorkflowGraph.Carregado, StringComparison.Ordinal) ||
+         string.Equals(Order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal))
+    {
+        <div class="form-actions">
+            <button class="btn btn-primary" disabled="@_busy" @onclick="HandleCalculateAsync">
+                @L["admin.ipBilling.oficios.calculate"]
+            </button>
+        </div>
+    }
+
+    @if (string.Equals(Order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal))
+    {
+        <div class="form-actions">
+            <button class="btn btn-success" disabled="@_busy" @onclick="HandleValidateAsync">
+                @L["admin.ipBilling.oficios.validate"]
+            </button>
+        </div>
+    }
+
+    @if (_totalAgregado is not null)
+    {
+        <div class="sidebar-section" style="display:flex;gap:1.5rem;flex-wrap:wrap">
+            <div><strong>@L["admin.ipBilling.oficios.totalAgregado"]:</strong> @_totalAgregado</div>
+            <div><strong>@L["admin.ipBilling.oficios.totalRetroativo"]:</strong> @_totalRetroativo</div>
+        </div>
+
+        @if (_lines.Count > 0)
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>@L["admin.ipBilling.oficios.codigoInstalacao"]</th>
+                        <th>@L["admin.ipBilling.oficios.totalAgregado"]</th>
+                        <th>@L["admin.ipBilling.oficios.totalRetroativo"]</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _lines)
+                    {
+                        <tr>
+                            <td>@line.CodigoInstalacao</td>
+                            <td>@line.Agregado</td>
+                            <td>@line.Retroativo</td>
+                            <td><OficioSwapBadge IsSwap="@IsLineSwapped(_swaps, line.Id)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</div>
