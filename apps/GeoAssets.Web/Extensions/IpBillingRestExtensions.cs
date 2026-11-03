@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.FaturamentoLedger;
 using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Oficio;
@@ -25,7 +26,9 @@ namespace GeoAssets.Web.Extensions;
 /// calculate/validate/memória-de-cálculo pages' gateway to XD01-180's REST API, on this same
 /// named HttpClient — and <see cref="IFiscalizacaoRestClient"/> (XD01-184), the equivalent
 /// gateway to XD01-183's Fiscalização REST API — and <see cref="IOficioRestClient"/>
-/// (XD01-187), the equivalent gateway to XD01-186's Ofício REST API.
+/// (XD01-187), the equivalent gateway to XD01-186's Ofício REST API — and
+/// <see cref="IFaturamentoRestClient"/> (XD01-190), the equivalent gateway to XD01-189's
+/// Faturamento ledger REST API.
 /// </summary>
 internal static class IpBillingRestExtensions
 {
@@ -45,6 +48,9 @@ internal static class IpBillingRestExtensions
 
         services.AddScoped<IOficioRestClient>(sp =>
             new OficioRestClient(CreateIpBillingClient(sp)));
+
+        services.AddScoped<IFaturamentoRestClient>(sp =>
+            new FaturamentoRestClient(CreateIpBillingClient(sp)));
 
         return services;
     }

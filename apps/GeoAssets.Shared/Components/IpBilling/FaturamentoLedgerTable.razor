@@ -1,0 +1,37 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Models
+
+@if (Rows.Count == 0)
+{
+    <div class="empty-state">@L["admin.ipBilling.faturamento.empty"]</div>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@L["admin.ipBilling.municipios.title"]</th>
+                <th>@L["admin.ipBilling.oficios.competencia"]</th>
+                <th>@L["admin.ipBilling.faturamento.kwhFaturado"]</th>
+                <th>@L["admin.ipBilling.faturamento.createdAt"]</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr>
+                    <td>@MunicipioLabel(row.MunicipioId)</td>
+                    <td>@row.Competencia</td>
+                    <td>@row.KwhFaturado.ToString("N2")</td>
+                    <td>@row.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" type="button" @onclick="() => OnRecargaRequested.InvokeAsync(row)">
+                            @L["admin.ipBilling.faturamento.recarga"]
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

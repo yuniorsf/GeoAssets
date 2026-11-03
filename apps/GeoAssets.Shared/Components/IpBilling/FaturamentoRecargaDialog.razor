@@ -1,0 +1,33 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+@if (Visible && Target is not null)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box" @onclick:stopPropagation="true">
+            <h6>@L["admin.ipBilling.faturamento.recargaTitle"]</h6>
+            <p>@L.GetString("admin.ipBilling.faturamento.recargaHint", Target.Competencia)</p>
+
+            <div class="form-group">
+                <label>@L["admin.ipBilling.faturamento.kwhFaturado"]</label>
+                <input class="form-control" type="number" step="0.01" @bind="_kwhFaturado" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_resultMessage))
+            {
+                <p>@_resultMessage</p>
+            }
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="attribute-errors">@_error</p>
+            }
+
+            <div class="dialog-actions">
+                <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel" disabled="@_submitting">@L["assets.cancel"]</button>
+                <button class="btn btn-primary btn-sm" type="button" @onclick="HandleSubmitAsync" disabled="@_submitting">
+                    @(_submitting ? L["admin.ipBilling.faturamento.submitting"] : L["admin.ipBilling.faturamento.recarga"])
+                </button>
+            </div>
+        </div>
+    </div>
+}

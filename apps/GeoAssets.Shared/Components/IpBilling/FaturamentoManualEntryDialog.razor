@@ -1,0 +1,48 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Models
+
+@if (Visible)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box" @onclick:stopPropagation="true">
+            <h6>@L["admin.ipBilling.faturamento.manualEntryTitle"]</h6>
+
+            <EditForm Model="@_editModel" OnValidSubmit="HandleSubmitAsync">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>@L["admin.ipBilling.municipios.title"]</label>
+                    <InputSelect class="form-control" @bind-Value="_editModel.MunicipioId">
+                        <option value="">@L["admin.ipBilling.municipios.selectOrganization"]</option>
+                        @foreach (var municipio in Municipios)
+                        {
+                            <option value="@municipio.Id">@municipio.Name (@municipio.Uf)</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-group">
+                    <label>@L["admin.ipBilling.oficios.competencia"]</label>
+                    <InputText class="form-control" @bind-Value="_editModel.Competencia" placeholder="yyyy-MM" />
+                </div>
+
+                <div class="form-group">
+                    <label>@L["admin.ipBilling.faturamento.kwhFaturado"]</label>
+                    <InputNumber class="form-control" @bind-Value="_editModel.KwhFaturado" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors">@_error</p>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel" disabled="@_submitting">@L["assets.cancel"]</button>
+                    <button class="btn btn-primary btn-sm" type="submit" disabled="@_submitting">
+                        @(_submitting ? L["admin.ipBilling.faturamento.submitting"] : L["assets.save"])
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
