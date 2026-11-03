@@ -53,4 +53,13 @@ public enum OrderActionType
     /// rather than this workflow's own explicit validation step.
     /// </summary>
     Validate,
+
+    /// <summary>
+    /// Flag a neutral-operator pole attachment as an undeclared ("à revelia") occupant with no
+    /// on-file sharing authorization — added for XD01-263's clandestine-fiber detection workflow.
+    /// A dedicated action rather than overloading <see cref="Reject"/> (which implies rejecting
+    /// a pending request, not accusing an already-installed occupant of an irregularity) or
+    /// <see cref="Annotate"/> (which carries no state-transition semantics).
+    /// </summary>
+    FlagClandestine,
 }
