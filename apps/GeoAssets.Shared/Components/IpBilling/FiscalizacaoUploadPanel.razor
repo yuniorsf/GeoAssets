@@ -1,0 +1,48 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Fiscalizacao
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFiscalizacaoRestClient Client
+
+<div class="sidebar-section">
+    <h5>@L["admin.ipBilling.fiscalizacoes.uploadTitle"]</h5>
+    <p style="color:var(--text-secondary)">@L["admin.ipBilling.fiscalizacoes.uploadHint"]</p>
+
+    <InputFile OnChange="OnFileSelectedAsync" disabled="@_uploading" />
+
+    @if (_uploading)
+    {
+        <p>@L["admin.ipBilling.fiscalizacoes.uploading"]</p>
+    }
+
+    @if (_successCount is { } count)
+    {
+        <p style="color:var(--success)">@L.GetString("admin.ipBilling.fiscalizacoes.uploadSuccess", count)</p>
+    }
+
+    @if (_rowErrors.Count > 0)
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>@L["admin.ipBilling.fiscalizacoes.rowNumber"]</th>
+                    <th>@L["admin.ipBilling.fiscalizacoes.column"]</th>
+                    <th>@L["admin.ipBilling.fiscalizacoes.message"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var error in _rowErrors)
+                {
+                    <tr>
+                        <td>@error.RowNumber</td>
+                        <td>@error.Column</td>
+                        <td>@error.Message</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else if (!string.IsNullOrEmpty(_genericError))
+    {
+        <p class="attribute-errors">@_genericError</p>
+    }
+</div>
