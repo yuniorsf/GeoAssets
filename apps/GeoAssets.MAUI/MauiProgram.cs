@@ -242,6 +242,7 @@ public static class MauiProgram
     {
         builder.Services.AddFieldWorkEvidenceCapture();
         builder.Services.AddSingleton<IEvidenceWatermarkComposer, SkiaEvidenceWatermarkComposer>();
+        builder.Services.AddSingleton<ITrustedTimestampProvider, SntpTrustedTimestampProvider>();
         builder.Services.AddScoped<MauiEvidenceCaptureGateway>();
     }
 }
