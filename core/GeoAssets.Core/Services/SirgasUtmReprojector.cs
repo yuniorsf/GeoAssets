@@ -43,6 +43,18 @@ public static class SirgasUtmReprojector
         return new GeoPoint(longitude, latitude);
     }
 
+    /// <summary>
+    /// The same WGS84 → SIRGAS 2000 UTM transform <see cref="ToSirgasUtm"/> applies to a
+    /// <see cref="GeoPoint"/>, exposed for a raw longitude/latitude pair — for reprojecting every
+    /// vertex of a non-point geometry (e.g. a BDGD SEGCON <see cref="GeoLineString"/>, XD01-225)
+    /// into the same zone, one coordinate at a time.
+    /// </summary>
+    public static (double Easting, double Northing) TransformCoordinate(double longitude, double latitude, int zone)
+    {
+        var transform = GetOrBuildTransform(zone);
+        return transform.Transform(longitude, latitude);
+    }
+
     private static MathTransform GetOrBuildTransform(int zone)
     {
         lock (BuildLock)

@@ -87,4 +87,26 @@ public class SirgasUtmReprojectorTests
 
         wkt.Should().Contain($"UTM_Zone_{zone}S");
     }
+
+    [Theory]
+    [InlineData(-46.633, -23.55, 23)]  // São Paulo, zone 23S
+    [InlineData(-38.5, -12.97, 24)]    // Salvador, zone 24S
+    public void TransformCoordinate_MatchesToSirgasUtm_ForTheSameLongitudeLatitude(double longitude, double latitude, int zone)
+    {
+        var (easting, northing, _) = SirgasUtmReprojector.ToSirgasUtm(new GeoPoint(longitude, latitude));
+
+        var (transformedEasting, transformedNorthing) = SirgasUtmReprojector.TransformCoordinate(longitude, latitude, zone);
+
+        transformedEasting.Should().Be(easting);
+        transformedNorthing.Should().Be(northing);
+    }
+
+    [Fact]
+    public void TransformCoordinate_CalledTwiceWithSameInputs_IsDeterministic()
+    {
+        var first = SirgasUtmReprojector.TransformCoordinate(-46.633, -23.55, 23);
+        var second = SirgasUtmReprojector.TransformCoordinate(-46.633, -23.55, 23);
+
+        second.Should().Be(first);
+    }
 }
