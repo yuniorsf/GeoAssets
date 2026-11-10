@@ -55,6 +55,9 @@
     <!-- Concessionaire compliance dossier exporter (XD01-284) needs IShapefileExportService's
          concrete implementation for the DIS-NOR-056 Shapefile half. -->
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Shapefile\GeoAssets.Provider.Shapefile.csproj" />
+    <!-- ANEEL BDGD File Geodatabase export (XD01-225) needs IFileGeodatabaseExportService's
+         GDAL-backed concrete implementation. -->
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.FileGeodatabase\GeoAssets.Provider.FileGeodatabase.csproj" />
   </ItemGroup>
 
 </Project>
