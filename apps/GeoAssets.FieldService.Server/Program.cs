@@ -14,10 +14,12 @@ using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
+using GeoAssets.Workflow.Erp.Sap;
 using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
+using GeoAssets.Workflow.SlaGuard;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -173,6 +175,23 @@ builder.Services.AddSingleton<IBssOssOutboundWebhookDispatcher, HttpBssOssOutbou
 builder.Services.AddScoped<BssOrderSpawnService>();
 builder.Services.AddScoped<FtthDropInstallActivationDispatchService>();
 
+// SAP PM/S4HANA inbound work-order webhook + outbound BAPI confirmation (XD01-231) — same
+// adapter/dispatcher split as the BSS/OSS integration above. IIdempotentInbox/IOutboxWriter
+// (AddWorkflowOutbox, registered above) back SapPmOrderSpawnService's inbound-retry dedup.
+builder.Services.AddHttpClient(HttpSapPmConfirmationDispatcher.HttpClientName);
+builder.Services.AddSingleton<ISapPmOrderAdapter, SapPmOrderAdapter>();
+builder.Services.AddSingleton<ISapPmConfirmationDispatcher, HttpSapPmConfirmationDispatcher>();
+builder.Services.AddScoped<SapPmOrderSpawnService>();
+builder.Services.AddScoped<SapPmOrderConfirmationDispatchService>();
+
+// SlaGuardEngine's matrix is read from configuration (Sla:Matrix), never hardcoded here — the
+// real statutory durations are a regulatory fact to source from the current official text (see
+// SlaMatrixRow's own doc comment), the same posture XD01-226 already established. An
+// unconfigured ServiceCategory/TerritorialSetting combination fails loudly (KeyNotFoundException)
+// rather than silently skipping the deadline — deliberate, not an oversight.
+var slaMatrix = builder.Configuration.GetSection("Sla:Matrix").Get<List<SlaMatrixRow>>() ?? [];
+builder.Services.AddSingleton(new SlaGuardEngine(slaMatrix));
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -200,6 +219,12 @@ app.MapFieldWorkInspectionApi();
 // Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
 // EvidenceVerificationRestApiExtensions for the full endpoint list.
 app.MapEvidenceVerificationApi();
+
+// SAP PM/S4HANA inbound work-order webhook + outbound BAPI confirmation under
+// /api/field-service/sap-pm (XD01-231) — see SapPmModuleRestApiExtensions for the full endpoint
+// list. Same independently-toggled module shape as Electrical/Sanitation/NeutralPole below.
+if (app.Configuration.GetValue("Modules:SapPm:Enabled", defaultValue: true))
+    app.MapSapPmApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
