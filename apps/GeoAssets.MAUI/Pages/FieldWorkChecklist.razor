@@ -169,7 +169,7 @@ else
         var tenantSecret = Configuration["Evidence:TenantSecret"]
             ?? throw new InvalidOperationException("Evidence:TenantSecret is not configured — no real per-tenant secret-provisioning mechanism exists yet (XD01-244's own flagged gap).");
 
-        var context = new EvidenceCaptureContext(_order!.Id, _technicianId ?? "unknown-technician", slot.ToString(), DateTimeOffset.UtcNow, CompassHeadingDegrees: null);
+        var context = new EvidenceCaptureContext(_order!.Id, _technicianId ?? "unknown-technician", slot.ToString(), TimeProvider.System.GetUtcNow(), CompassHeadingDegrees: null);
         await EvidenceGateway.CaptureAsync(context, tenantSecret);
 
         FtthDropInstallChecklistService.RecordEvidencePhoto(_order, slot);
