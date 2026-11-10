@@ -6,6 +6,9 @@
 #   Stage 1: `dotnet format --verify-no-changes`
 #   Stage 2: `dotnet build --no-incremental /warnaserror`
 #            (Roslyn latest-all, AsyncFixer, Meziantou.Analyzer, BannedApiAnalyzers)
+#            On macOS, GeoAssets.MAUI's net10.0-ios/net10.0-maccatalyst TFMs are built separately
+#            at baseline (no /warnaserror) — an uncoded Apple MacDev SDK warning there can't be
+#            fixed or suppressed; real compile errors on those TFMs still fail this stage (XD01-293).
 #   Stage 3: `dotnet test --no-build` for architecture tests (NetArchTest)
 #
 # Exit Codes:
@@ -45,6 +48,7 @@ trap 'rm -rf "${LOG_DIR}"' EXIT
 
 FORMAT_LOG="${LOG_DIR}/01-format.log"
 BUILD_LOG="${LOG_DIR}/02-build.log"
+APPLE_TFM_BUILD_LOG="${LOG_DIR}/02-build-apple-tfms.log"
 TEST_LOG="${LOG_DIR}/03-arch-test.log"
 
 print_header() {
@@ -94,14 +98,29 @@ printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 1 passed: Zero code style drift.\n"
 # ------------------------------------------------------------------------------
 # Stage 2: Strict Non-Incremental Build & Static Analyzers (/warnaserror)
 # ------------------------------------------------------------------------------
-print_header "Stage 2/3: Running 'dotnet build --no-incremental /warnaserror'"
-if ! dotnet build "${SOLUTION_FILE}" --no-incremental /warnaserror -consoleLoggerParameters:NoSummary >"${BUILD_LOG}" 2>&1; then
+print_header "Stage 2/3: Running 'dotnet build --no-incremental /warnaserror' (net10.0-ios/net10.0-maccatalyst scoped out on macOS — XD01-293)"
+if ! dotnet build "${SOLUTION_FILE}" --no-incremental /warnaserror -p:GeoAssetsOracleSkipAppleTfms=true -consoleLoggerParameters:NoSummary >"${BUILD_LOG}" 2>&1; then
     printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 2 failed (Exit Code 20): Compiler or static analyzer violation.\n" >&2
     parse_compiler_diagnostics "${BUILD_LOG}"
     printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Fix all reported diagnostics in source. Do NOT suppress rules via #pragma or <NoWarn>.\n" >&2
     exit 20
 fi
 printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 2 passed: Clean build with zero Roslyn/AsyncFixer/Meziantou/BannedApi warnings.\n"
+
+# On macOS, confirm the Apple TFMs still compile for real (baseline, no /warnaserror) — this
+# still fails the gate on genuine compile errors, just not on the known uncoded MacDev SDK
+# warning that blocks /warnaserror for net10.0-ios/net10.0-maccatalyst (XD01-293).
+if [[ "$(uname)" == "Darwin" ]]; then
+    print_header "Stage 2/3 (macOS baseline): net10.0-ios / net10.0-maccatalyst compile check"
+    if ! dotnet build apps/GeoAssets.MAUI/GeoAssets.MAUI.csproj -f net10.0-ios --no-incremental -consoleLoggerParameters:NoSummary >"${APPLE_TFM_BUILD_LOG}" 2>&1 \
+        || ! dotnet build apps/GeoAssets.MAUI/GeoAssets.MAUI.csproj -f net10.0-maccatalyst --no-incremental -consoleLoggerParameters:NoSummary >>"${APPLE_TFM_BUILD_LOG}" 2>&1; then
+        printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 2 failed (Exit Code 20): net10.0-ios/net10.0-maccatalyst baseline compile error.\n" >&2
+        parse_compiler_diagnostics "${APPLE_TFM_BUILD_LOG}"
+        printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Fix all reported diagnostics in source. Do NOT suppress rules via #pragma or <NoWarn>.\n" >&2
+        exit 20
+    fi
+    printf "\033[1;32m[ORACLE:PASS]\033[0m Apple TFM baseline compile check passed.\n"
+fi
 
 # ------------------------------------------------------------------------------
 # Stage 3: Architecture & Domain Invariant Tests (NetArchTest)
