@@ -2,7 +2,9 @@
 
   <PropertyGroup>
     <TargetFrameworks>net10.0-android</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+    <!-- XD01-293: Oracle opt-out knob for an uncoded, SDK-internal MacDev build warning under
+         /warnaserror — not a toggle for ordinary builds, which always include both Apple TFMs. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx')) AND '$(GeoAssetsOracleSkipAppleTfms)' != 'true'">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
     <RootNamespace>GeoAssets.MAUI</RootNamespace>
     <Nullable>enable</Nullable>
