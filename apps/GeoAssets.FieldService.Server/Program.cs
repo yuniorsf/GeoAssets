@@ -18,6 +18,7 @@ using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
+using GeoAssets.Workflow.Scada;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,13 +47,17 @@ builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 // interceptors attached via the (IServiceProvider, DbContextOptionsBuilder) overload, so each
 // request's own scoped ITenantContext drives TenantSessionInterceptor/TenantTransactionInterceptor
 // rather than a single process-wide value. Scoped (not the IDbContextFactory/warmed-singleton
-// pattern GeoAssets.Server uses for its IAssetProvider cache) — no endpoint on this host reads
-// geo_entity yet, so there's no cache to warm; registered here regardless so the archetype
-// domain assemblies this host is meant to carry (XD01-209/210/211) have it ready. ──────────────
+// pattern GeoAssets.Server uses for its IAssetProvider cache) — registered here regardless so the
+// archetype domain assemblies this host is meant to carry (XD01-209/210/211) have it ready. ─────
 var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
     ?? throw new InvalidOperationException(
         "Connection string 'GeoAssets' not found. " +
         "Set it in appsettings.json or via the ConnectionStrings__GeoAssets environment variable.");
+
+// TimeProvider registered up front (before AddWarmedPostgresAssetProviderAsync below, which
+// needs it resolvable from the interim container it builds) — same ordering GeoAssets.Server
+// uses.
+builder.Services.AddSingleton(TimeProvider.System);
 
 // "Noisy neighbor" backstop (XD01-214) — complements the gateway's per-OrganizationId rate
 // limiting: even a request the gateway let through can't hold a connection/lock open
@@ -70,12 +75,19 @@ builder.Services.AddDbContext<GeoAssetsDbContext>((sp, options) => options
         sp.GetRequiredService<TenantSessionInterceptor>(),
         sp.GetRequiredService<TenantTransactionInterceptor>()));
 
+// ── Topology-driven SCADA/OMS emergency dispatch (XD01-239) — the first endpoint on this host
+// to read geo_entity. Pre-warmed IAssetProvider singleton via the exact
+// AddGeoAssetsPostgres()/AddWarmedPostgresAssetProviderAsync() pattern GeoAssets.Server already
+// uses (XD01-173) rather than inventing a second cache strategy.
+builder.Services.AddGeoAssetsPostgres();
+await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
+builder.Services.AddScoped<IFeederOutageDispatchService, FeederOutageDispatchService>();
+
 // ── Contractor US ledger (XD01-207) — ServiceOrderDbContext (ContractorUsLedgerEntries) shares
 // the same connection/database and the same two tenant interceptors as GeoAssetsDbContext above.
 // Its real migrations live in GeoAssets.Server's MigrationsAssembly (XD01-202) — this host
 // connects to the already-migrated schema rather than owning its own copy of the migration
 // history. ────────────────────────────────────────────────────────────────────────────────────
-builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
     .UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server"))
     .AddInterceptors(
@@ -200,6 +212,10 @@ app.MapFieldWorkInspectionApi();
 // Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
 // EvidenceVerificationRestApiExtensions for the full endpoint list.
 app.MapEvidenceVerificationApi();
+
+// SCADA/OMS breaker-trip ingest under /api/geoassets/topology/traverse (XD01-239) — see
+// ScadaTopologyTraverseRestApiExtensions.
+app.MapScadaTopologyTraverseApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
