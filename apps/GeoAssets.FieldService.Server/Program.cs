@@ -1,3 +1,4 @@
+using GeoAssets.Core.Erp.Maximo;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Isp.Compliance;
 using GeoAssets.Core.Isp.Compliance.PoleAudit;
@@ -133,6 +134,15 @@ var coreServerBaseUrl = builder.Configuration["GeoCoreServer:BaseUrl"]
         "Set it in appsettings.json or via the GeoCoreServer__BaseUrl environment variable.");
 builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
 builder.Services.AddScoped<IIntegrationEventPublisher, GeoCoreBridgeEventPublisher>();
+
+// ── IBM Maximo MIF asset lifecycle sync (XD01-232) — GeoCoreBridgeEventPublisher offers every
+// claimed AssetMutationBatchRequestedEvent to MaximoAssetLifecycleSyncService after the Core GIS
+// mutation succeeds; it's a no-op unless the batch is an asset-swap pair (one Decommission +
+// one UpsertFeature, both carrying a serialNumber). Exactly-once dispatch reuses the same
+// IIdempotentInbox the outbox/inbox stack above already registers. ───────────────────────────────
+builder.Services.AddHttpClient(HttpMaximoAssetLifecycleDispatcher.HttpClientName);
+builder.Services.AddScoped<IMaximoAssetLifecycleDispatcher, HttpMaximoAssetLifecycleDispatcher>();
+builder.Services.AddScoped<MaximoAssetLifecycleSyncService>();
 
 // ── Single-DB ACID inspection commit (XD01-228) ───────────────────────────────────────────────
 builder.Services.AddScoped<InspectionCommitService>();
