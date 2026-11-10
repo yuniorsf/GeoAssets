@@ -13,6 +13,7 @@ using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Contractors.Governance;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Messaging.Protobuf;
@@ -173,6 +174,11 @@ builder.Services.AddSingleton<IBssOssOutboundWebhookDispatcher, HttpBssOssOutbou
 builder.Services.AddScoped<BssOrderSpawnService>();
 builder.Services.AddScoped<FtthDropInstallActivationDispatchService>();
 
+// Contractor governance portal integration (XD01-238) — SAP WeBUY / CEMIG Portal de
+// Fornecedores. No real portal endpoint/credentials configured by default in this environment.
+builder.Services.AddHttpClient(HttpContractorGovernancePortalClient.HttpClientName);
+builder.Services.AddSingleton<IContractorGovernancePortalClient, HttpContractorGovernancePortalClient>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -196,6 +202,10 @@ app.MapFieldServiceSyncApi();
 // Supervisor sign-off endpoint under /api/field-service/orders (XD01-248) — see
 // FieldWorkInspectionRestApiExtensions for the full endpoint list.
 app.MapFieldWorkInspectionApi();
+
+// Contractor governance portal endpoints under /api/fieldservice/contractor-governance-portal
+// (XD01-238) — see ContractorGovernancePortalRestApiExtensions for the full endpoint list.
+app.MapContractorGovernancePortalApi();
 
 // Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
 // EvidenceVerificationRestApiExtensions for the full endpoint list.
