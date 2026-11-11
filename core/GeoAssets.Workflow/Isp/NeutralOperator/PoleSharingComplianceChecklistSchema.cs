@@ -40,7 +40,9 @@ public static class PoleSharingComplianceChecklistSchema
     public const string ClearanceMeasurementsKey = "clearanceMeasurements";
 
     /// <summary>Attribute key holding the JSON-encoded occupant array (one entry per physically
-    /// observed attachment, up to <see cref="GeoAssets.Core.Isp.NeutralOperator.PoleAttachmentSlotMatrix.MaxSlots"/>).</summary>
+    /// observed attachment, up to <see cref="GeoAssets.Core.Isp.NeutralOperator.PoleAttachmentSlotMatrix.MaxSlots"/>).
+    /// Each entry's optional <c>cableLoadDaN</c> (XD01-262) is the inspector-recorded mechanical
+    /// load of that attachment, omitted/0 when not measured.</summary>
     public const string OccupantsKey = "occupants";
 
     /// <summary>Attribute key holding whether the inspector flagged an unauthorized
@@ -79,7 +81,8 @@ public static class PoleSharingComplianceChecklistSchema
                 "type": "string",
                 "enum": ["ActiveReservation", "AuthorizedContracted", "AbandonedDeadDrop", "ClandestineUnauthorized"]
               },
-              "operatorCnpj": { "type": "string" }
+              "operatorCnpj": { "type": "string" },
+              "cableLoadDaN": { "type": "number", "minimum": 0 }
             },
             "required": ["slotIndex", "status"],
             "additionalProperties": false

@@ -25,7 +25,7 @@ public class PoleComplianceChecklistProjectorTests
         ["clearanceMeasurements"] = """{"groundToLowestCableMeters": 4.8, "powerToCommunicationBandMeters": 0.55}""",
         ["occupants"] = """
             [
-              {"slotIndex": 1, "status": "AuthorizedContracted", "operatorCnpj": "12345678000190"},
+              {"slotIndex": 1, "status": "AuthorizedContracted", "operatorCnpj": "12345678000190", "cableLoadDaN": 350.5},
               {"slotIndex": 2, "status": "ClandestineUnauthorized"}
             ]
             """,
@@ -60,10 +60,12 @@ public class PoleComplianceChecklistProjectorTests
         var authorized = matrix.Slots.Single(s => s.SlotIndex == 1);
         authorized.Status.Should().Be(PoleAttachmentOccupantStatus.AuthorizedContracted);
         authorized.OperatorCnpj.Should().Be("12345678000190");
+        authorized.CableLoadDaN.Should().Be(350.5m);
 
         var clandestine = matrix.Slots.Single(s => s.SlotIndex == 2);
         clandestine.Status.Should().Be(PoleAttachmentOccupantStatus.ClandestineUnauthorized);
         clandestine.OperatorCnpj.Should().BeNull();
+        clandestine.CableLoadDaN.Should().Be(0m, "an occupant submitted with no cableLoadDaN hasn't had its load measured yet");
     }
 
     [Fact]
