@@ -15,6 +15,7 @@ using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.Workflow.Isp.NeutralOperator.Leasing.Settlement;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -173,6 +174,19 @@ builder.Services.AddSingleton<IBssOssOutboundWebhookDispatcher, HttpBssOssOutbou
 builder.Services.AddScoped<BssOrderSpawnService>();
 builder.Services.AddScoped<FtthDropInstallActivationDispatchService>();
 
+// Lease-invoice settlement — NF Com issuance, PIX/Boleto payment-instrument issuance, and ERP
+// posting for Poste Justo lease invoices (XD01-268). Only Pix has a shipped
+// IPaymentInstrumentIssuer; see PaymentInstrumentKind's remarks for why BoletoRegistrado isn't
+// registered yet. In-memory settlement-progress store, same proportionality call as
+// InMemoryPoleAuditEvidenceRepository above — a durable store is a separate infra ticket.
+builder.Services.AddHttpClient(HttpErpFinancialPostingClient.HttpClientName);
+builder.Services.Configure<PixSettlementOptions>(builder.Configuration.GetSection(PixSettlementOptions.SectionName));
+builder.Services.AddSingleton<INfComDocumentGenerator, NfComDocumentGenerator>();
+builder.Services.AddSingleton<IPaymentInstrumentIssuer, PixBrCodePaymentInstrumentIssuer>();
+builder.Services.AddSingleton<IErpFinancialPostingClient, HttpErpFinancialPostingClient>();
+builder.Services.AddSingleton<ILeaseInvoiceSettlementRepository, InMemoryLeaseInvoiceSettlementRepository>();
+builder.Services.AddSingleton<LeaseInvoiceSettlementOrchestrator>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -238,6 +252,9 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
 
     // FTTH drop-install order transitions (XD01-280) — the BSS/OSS activation-webhook trigger.
     app.MapFtthDropInstallApi();
+
+    // Lease-invoice settlement run trigger + paid-webhook reconciliation (XD01-268).
+    app.MapLeaseInvoiceSettlementApi();
 }
 
 await app.RunAsync().ConfigureAwait(false);
