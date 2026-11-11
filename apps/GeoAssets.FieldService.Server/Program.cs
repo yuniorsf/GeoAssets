@@ -12,6 +12,7 @@ using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Agents;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Isp.Bss;
@@ -82,6 +83,11 @@ builder.Services.AddDbContext<GeoAssetsDbContext>((sp, options) => options
 builder.Services.AddGeoAssetsPostgres();
 await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
 builder.Services.AddScoped<IFeederOutageDispatchService, FeederOutageDispatchService>();
+
+// Day-to-day, yield-ranked VRPTW dispatch advisor (XD01-256) — reuses the same ICrewRoutingEngine
+// XD01-240 registers for the emergency path; TryAddSingleton there/here means registering both
+// is safe regardless of order.
+builder.Services.AddDynamicCrewDispatchAdvisor();
 
 // ── Contractor US ledger (XD01-207) — ServiceOrderDbContext (ContractorUsLedgerEntries) shares
 // the same connection/database and the same two tenant interceptors as GeoAssetsDbContext above.
@@ -216,6 +222,10 @@ app.MapEvidenceVerificationApi();
 // SCADA/OMS breaker-trip ingest under /api/geoassets/topology/traverse (XD01-239) — see
 // ScadaTopologyTraverseRestApiExtensions.
 app.MapScadaTopologyTraverseApi();
+
+// Day-to-day dynamic dispatch advisory preview under /api/geoassets/dispatch/advisory-plan
+// (XD01-256) — see DynamicDispatchAdvisoryRestApiExtensions.
+app.MapDynamicDispatchAdvisoryApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each

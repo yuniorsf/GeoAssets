@@ -27,11 +27,12 @@ internal sealed class SnapshottingServiceOrderRepository : IServiceOrderReposito
 
     private static ServiceOrder Clone(ServiceOrder order) => new()
     {
-        Id            = order.Id,
-        Title         = order.Title,
-        Description   = order.Description,
-        OrderTypeId   = order.OrderTypeId,
-        Status        = order.Status,
+        Id             = order.Id,
+        Title          = order.Title,
+        Description    = order.Description,
+        OrderTypeId    = order.OrderTypeId,
+        OrganizationId = order.OrganizationId,
+        Status         = order.Status,
         Priority      = order.Priority,
         CreatedBy     = order.CreatedBy,
         AssignedTo    = order.AssignedTo,
@@ -50,7 +51,9 @@ internal sealed class SnapshottingServiceOrderRepository : IServiceOrderReposito
     public Task AddAsync(IServiceOrder order, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(order);
-        _store[order.Id] = Clone((ServiceOrder)order);
+        var clone = Clone((ServiceOrder)order);
+        _store[order.Id] = clone;
+        OrderAdded?.Invoke(this, Clone(clone));
         return Task.CompletedTask;
     }
 
@@ -66,6 +69,7 @@ internal sealed class SnapshottingServiceOrderRepository : IServiceOrderReposito
         updated.ActionLog.Clear();
         updated.ActionLog.AddRange(existing.ActionLog);
         _store[order.Id] = updated;
+        OrderUpdated?.Invoke(this, Clone(updated));
         return Task.CompletedTask;
     }
 
@@ -81,13 +85,20 @@ internal sealed class SnapshottingServiceOrderRepository : IServiceOrderReposito
         var order = _store[orderId];
         order.ActionLog.Add(entry);
         if (entry.ResultingStatus is not null)
+        {
+            var previous = order.Status;
             order.Status = entry.ResultingStatus;
+            if (!string.Equals(previous, order.Status, StringComparison.Ordinal))
+                OrderStatusChanged?.Invoke(this, (Clone(order), previous));
+        }
+
         return Task.CompletedTask;
     }
 
     public Task DeleteAsync(string id, CancellationToken ct = default)
     {
-        _store.Remove(id);
+        if (_store.Remove(id))
+            OrderDeleted?.Invoke(this, id);
         return Task.CompletedTask;
     }
 
@@ -128,11 +139,8 @@ internal sealed class SnapshottingServiceOrderRepository : IServiceOrderReposito
         Task.FromResult<IReadOnlyList<IServiceOrder>>(
             [.. _store.Values.Where(o => o.Dispatches.Any(d => string.Equals(d.TargetId, targetId, StringComparison.Ordinal) && d.TargetType == targetType)).Select(Clone)]);
 
-    // Never fire — this test double tracks snapshots only, no test relies on these.
-#pragma warning disable CS0067
     public event EventHandler<IServiceOrder>? OrderAdded;
     public event EventHandler<IServiceOrder>? OrderUpdated;
     public event EventHandler<(IServiceOrder Order, string Previous)>? OrderStatusChanged;
     public event EventHandler<string>? OrderDeleted;
-#pragma warning restore CS0067
 }
