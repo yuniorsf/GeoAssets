@@ -25,11 +25,27 @@ namespace GeoAssets.Server;
 /// that's caught here and treated as "requirement not met" rather than propagating as an
 /// unhandled 500. An unknown permission code needs no such handling — <c>HasPermissionAsync</c>
 /// just returns false for any code the caller doesn't hold, known or not.
+///
+/// A caller holding the <see cref="ServiceCallerAppRole"/> app role (XD01-299) satisfies every
+/// <see cref="GeoPolicyRequirement"/> without going through <c>IGeoAuthorizationService</c> at
+/// all: that service answers "what can this *user* do", keyed off per-user permission rows, and
+/// a service principal calling as itself (client-credentials, no human behind it) has none —
+/// it's not a user to grant permissions to. Assigning this app role to a service principal in
+/// its Entra app registration is therefore the whole authorization decision for that caller,
+/// not a shortcut around one.
 /// </summary>
 public sealed partial class GeoAuthorizationHandler(
     IGeoAuthorizationService authorizationService,
     ILogger<GeoAuthorizationHandler> logger) : AuthorizationHandler<GeoPolicyRequirement>
 {
+    /// <summary>
+    /// Entra app role that marks a caller as a trusted internal service (XD01-299) rather than a
+    /// human/application user — assigned to a service principal's app registration, surfaced on
+    /// its access token as a <c>roles</c> claim that ASP.NET Core's JWT bearer handler maps to
+    /// <see cref="System.Security.Claims.ClaimTypes.Role"/> by default.
+    /// </summary>
+    public const string ServiceCallerAppRole = "GeoAssets.ServiceCaller";
+
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context, GeoPolicyRequirement requirement)
     {
@@ -41,6 +57,12 @@ public sealed partial class GeoAuthorizationHandler(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(requirement);
         if (context.User.Identity?.IsAuthenticated != true) return;
+
+        if (context.User.IsInRole(ServiceCallerAppRole))
+        {
+            context.Succeed(requirement);
+            return;
+        }
 
         var isPermissionCode = requirement.PolicyName.Contains(':', StringComparison.Ordinal);
 

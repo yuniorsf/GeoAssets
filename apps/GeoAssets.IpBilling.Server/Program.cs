@@ -38,6 +38,7 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     connectionString,
     npgsql => npgsql.MigrationsAssembly("GeoAssets.IpBilling.Server")));
 
+builder.Services.AddServiceAuthTokenProvider(builder.Configuration);
 builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
 builder.Services.AddScoped<IPoleResolver, HttpPoleResolver>();
 builder.Services.AddScoped<IIpBillingCalculationService, IpBillingCalculationService>();

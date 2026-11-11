@@ -131,6 +131,7 @@ var coreServerBaseUrl = builder.Configuration["GeoCoreServer:BaseUrl"]
     ?? throw new InvalidOperationException(
         "Configuration 'GeoCoreServer:BaseUrl' not found. " +
         "Set it in appsettings.json or via the GeoCoreServer__BaseUrl environment variable.");
+builder.Services.AddServiceAuthTokenProvider(builder.Configuration);
 builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
 builder.Services.AddScoped<IIntegrationEventPublisher, GeoCoreBridgeEventPublisher>();
 
