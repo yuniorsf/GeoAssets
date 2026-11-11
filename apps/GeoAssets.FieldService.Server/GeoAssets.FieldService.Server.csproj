@@ -48,6 +48,9 @@
     <ProjectReference Include="..\..\core\GeoAssets.Domain.NeutralPole\GeoAssets.Domain.NeutralPole.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <!-- Dynamic dispatch advisory endpoint (XD01-256) needs ICrewRoutingEngine's concrete
+         Clarke-Wright implementation and DynamicCrewDispatchAdvisorService. -->
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Agents\GeoAssets.Workflow.Agents.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />

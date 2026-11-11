@@ -16,6 +16,7 @@ using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Agents;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Contractors.Governance;
 using GeoAssets.Workflow.Erp.Totvs;
@@ -109,6 +110,11 @@ builder.Services.AddSingleton(TimeProvider.System);
 // ── Topology-driven SCADA/OMS emergency dispatch (XD01-239) — reuses the pre-warmed
 // IAssetProvider singleton registered above (XD01-295). ─────────────────────────────────────
 builder.Services.AddScoped<IFeederOutageDispatchService, FeederOutageDispatchService>();
+
+// Day-to-day, yield-ranked VRPTW dispatch advisor (XD01-256) — reuses the same ICrewRoutingEngine
+// XD01-240 registers for the emergency path; TryAddSingleton there/here means registering both
+// is safe regardless of order.
+builder.Services.AddDynamicCrewDispatchAdvisor();
 
 builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
     .UseNpgsql(fieldServiceConnectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.FieldService.Server"))
@@ -386,6 +392,10 @@ if (app.Configuration.GetValue("Modules:Totvs:Enabled", defaultValue: true))
 // SiengeSyncApiExtensions for the full endpoint list.
 if (app.Configuration.GetValue("Modules:Sienge:Enabled", defaultValue: true))
     app.MapSiengeSyncApi();
+
+// Day-to-day dynamic dispatch advisory preview under /api/geoassets/dispatch/advisory-plan
+// (XD01-256) — see DynamicDispatchAdvisoryRestApiExtensions.
+app.MapDynamicDispatchAdvisoryApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
