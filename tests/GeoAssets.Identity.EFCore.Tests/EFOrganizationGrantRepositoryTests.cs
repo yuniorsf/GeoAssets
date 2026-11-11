@@ -185,4 +185,82 @@ public class EFOrganizationGrantRepositoryTests
 
         active.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task AddAsync_QueuesASyncOutboxEntrySnapshottingTheGrant()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        var timeProvider = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(
+            DateTimeOffset.Parse("2026-11-11T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        var repo = new EFOrganizationGrantRepository(db, timeProvider);
+        var granteeOrg = Guid.NewGuid();
+        var resourceOrg = Guid.NewGuid();
+        var grant = Grant(granteeOrg, resourceOrg);
+        grant.ResourceType = "ServiceOrder";
+        grant.ScopeId = "municipio-123";
+
+        await repo.AddAsync(grant);
+        await repo.SaveChangesAsync();
+
+        var batch = await repo.GetSyncBatchAsync(afterSequence: 0, take: 10);
+
+        batch.Should().ContainSingle();
+        var entry = batch[0];
+        entry.GrantId.Should().Be(grant.Id);
+        entry.GranteeOrganizationId.Should().Be(granteeOrg);
+        entry.ResourceOrganizationId.Should().Be(resourceOrg);
+        entry.ResourceType.Should().Be("ServiceOrder");
+        entry.ScopeId.Should().Be("municipio-123");
+        entry.IsActive.Should().BeTrue();
+        entry.SequenceNumber.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_RevokingAGrant_QueuesANewSyncOutboxEntryReflectingRevocation()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
+        var grant = Grant(Guid.NewGuid(), Guid.NewGuid());
+        await repo.AddAsync(grant);
+        await repo.SaveChangesAsync();
+
+        grant.IsActive = false;
+        await repo.UpdateAsync(grant);
+        await repo.SaveChangesAsync();
+
+        var batch = await repo.GetSyncBatchAsync(afterSequence: 0, take: 10);
+
+        batch.Should().HaveCount(2);
+        batch[0].IsActive.Should().BeTrue();
+        batch[1].IsActive.Should().BeFalse();
+        batch[1].GrantId.Should().Be(grant.Id);
+    }
+
+    [Fact]
+    public async Task GetSyncBatchAsync_RespectsAfterSequenceAndTake()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
+        for (var i = 0; i < 5; i++)
+        {
+            await repo.AddAsync(Grant(Guid.NewGuid(), Guid.NewGuid()));
+        }
+        await repo.SaveChangesAsync();
+
+        var firstPage = await repo.GetSyncBatchAsync(afterSequence: 0, take: 2);
+        firstPage.Should().HaveCount(2);
+
+        var secondPage = await repo.GetSyncBatchAsync(afterSequence: firstPage[^1].SequenceNumber, take: 10);
+        secondPage.Should().HaveCount(3);
+        secondPage.Select(e => e.SequenceNumber).Should().BeInAscendingOrder();
+    }
 }

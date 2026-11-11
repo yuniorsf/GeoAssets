@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
+using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Orders;
@@ -92,6 +93,30 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IOutboxDispatcherStore>(sp => sp.GetRequiredService<EFOutboxStore>());
         services.AddScoped<IIdempotentInbox, EFIdempotentInbox>();
         services.AddHostedService<OutboxRelayProcessor>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the background <see cref="OrganizationGrantSyncWorker"/> hosted service
+    /// (XD01-290) that mirrors <c>OrganizationGrant</c> changes into this database — the host
+    /// must separately register an <see cref="IOrganizationGrantSyncClient"/> implementation
+    /// (e.g. an HTTP client calling back to the Core Platform's identity host).
+    /// </summary>
+    public static IServiceCollection AddOrganizationGrantSync(
+        this IServiceCollection services,
+        Action<OrganizationGrantSyncOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<OrganizationGrantSyncOptions>();
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.AddHostedService<OrganizationGrantSyncWorker>();
 
         return services;
     }

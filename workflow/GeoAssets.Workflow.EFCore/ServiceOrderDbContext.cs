@@ -50,6 +50,8 @@ public class ServiceOrderDbContext(
     internal DbSet<ContractorUsPostingRecord> ContractorUsPostings => Set<ContractorUsPostingRecord>();
     internal DbSet<PavingMeasurementRecord> PavingMeasurements => Set<PavingMeasurementRecord>();
     internal DbSet<ManholeAuditRecord> ManholeAudits => Set<ManholeAuditRecord>();
+    internal DbSet<OrganizationGrantMirrorRecord> OrganizationGrantMirror => Set<OrganizationGrantMirrorRecord>();
+    internal DbSet<OrganizationGrantSyncCursorRecord> OrganizationGrantSyncCursor => Set<OrganizationGrantSyncCursorRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

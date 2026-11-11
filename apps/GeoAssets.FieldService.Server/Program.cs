@@ -5,6 +5,7 @@ using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
@@ -18,6 +19,7 @@ using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
+using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -70,14 +72,26 @@ builder.Services.AddDbContext<GeoAssetsDbContext>((sp, options) => options
         sp.GetRequiredService<TenantSessionInterceptor>(),
         sp.GetRequiredService<TenantTransactionInterceptor>()));
 
-// ── Contractor US ledger (XD01-207) — ServiceOrderDbContext (ContractorUsLedgerEntries) shares
-// the same connection/database and the same two tenant interceptors as GeoAssetsDbContext above.
-// Its real migrations live in GeoAssets.Server's MigrationsAssembly (XD01-202) — this host
-// connects to the already-migrated schema rather than owning its own copy of the migration
-// history. ────────────────────────────────────────────────────────────────────────────────────
+// ── Contractor US ledger (XD01-207) — ServiceOrderDbContext (ContractorUsLedgerEntries, etc.)
+// (XD01-290) now lives in its OWN "FieldService" database/connection string, with its own
+// migration history — MigrationsAssembly points at THIS host's own assembly now
+// ("GeoAssets.FieldService.Server"), not GeoAssets.Server's, since GeoAssets.Workflow.EFCore
+// itself is deliberately provider-agnostic (no Npgsql package reference) and can't host
+// provider-specific migration code. The one real blocker this required —
+// ServiceOrders' grant-aware RLS exception needing OrganizationGrants, which now lives in a
+// DIFFERENT physical database — is resolved by OrganizationGrantSyncWorker below, mirroring
+// grants into this database's own OrganizationGrantMirror table (see that worker's and the
+// isolation migration's own doc comments for the resulting staleness-window tradeoff). Still
+// shares the same two tenant interceptors as GeoAssetsDbContext above — those are
+// per-ITenantContext, not per-connection. ────────────────────────────────────────────────────
+var fieldServiceConnectionString = builder.Configuration.GetConnectionString("FieldService")
+    ?? throw new InvalidOperationException(
+        "Connection string 'FieldService' not found. " +
+        "Set it in appsettings.json or via the ConnectionStrings__FieldService environment variable.");
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
-    .UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server"))
+    .UseNpgsql(fieldServiceConnectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.FieldService.Server"))
     .AddInterceptors(
         sp.GetRequiredService<TenantSessionInterceptor>(),
         sp.GetRequiredService<TenantTransactionInterceptor>()));
@@ -133,6 +147,16 @@ var coreServerBaseUrl = builder.Configuration["GeoCoreServer:BaseUrl"]
         "Set it in appsettings.json or via the GeoCoreServer__BaseUrl environment variable.");
 builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
 builder.Services.AddScoped<IIntegrationEventPublisher, GeoCoreBridgeEventPublisher>();
+
+// ── OrganizationGrant sync (XD01-290) — HttpOrganizationGrantSyncClient polls Core's
+// /api/identity/organization-grants/sync; OrganizationGrantSyncWorker applies each batch into
+// this host's now-isolated database. Bound from config, not left at code defaults, since
+// PollInterval is a real security-relevant staleness bound (see OrganizationGrantSyncOptions). ──
+builder.Services.AddHttpClient(HttpOrganizationGrantSyncClient.HttpClientName);
+builder.Services.AddSingleton<IOrganizationGrantSyncClient, HttpOrganizationGrantSyncClient>();
+builder.Services.AddOrganizationGrantSync();
+builder.Services.Configure<OrganizationGrantSyncOptions>(
+    builder.Configuration.GetSection(OrganizationGrantSyncOptions.SectionName));
 
 // ── Single-DB ACID inspection commit (XD01-228) ───────────────────────────────────────────────
 builder.Services.AddScoped<InspectionCommitService>();

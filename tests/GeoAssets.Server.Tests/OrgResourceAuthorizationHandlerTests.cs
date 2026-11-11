@@ -68,6 +68,7 @@ public class OrgResourceAuthorizationHandlerTests
         public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<OrganizationGrantSyncEntry>> GetSyncBatchAsync(long afterSequence, int take, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private static OrgResourceAuthorizationHandler Sut(
