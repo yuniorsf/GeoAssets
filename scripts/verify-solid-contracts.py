@@ -34,6 +34,9 @@ RAZOR_SINGLE_FILE_EXCEPTIONS = {
     # GeoAssets.MAUI Razor-codegen degradation CLAUDE.md's MauiLogin paragraph (XD01-121)
     # documents. User-approved exception.
     "apps/GeoAssets.MAUI/Pages/FieldWorkChecklist.razor",
+    # XD01-260: same CS0115 failure re-confirmed empirically on a third apps/GeoAssets.MAUI/Pages
+    # page — identical root cause already documented above for FieldWorkChecklist.razor.
+    "apps/GeoAssets.MAUI/Pages/PoleCensusInspection.razor",
 }
 
 RAZOR_COMPONENT_PREFIXES = (
