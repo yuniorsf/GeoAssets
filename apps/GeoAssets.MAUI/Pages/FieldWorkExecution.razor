@@ -1,0 +1,252 @@
+@page "/field-work/execution"
+@attribute [Authorize]
+@using GeoAssets.Shared.Services.FieldWork
+@using GeoAssets.Shared.Services.Offline
+@using GeoAssets.Workflow.FieldWork
+@using GeoAssets.Workflow.Orders
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Maui.Devices.Sensors
+@inject ILocalServiceOrderStore LocalServiceOrderStore
+@inject IFieldWorkTransitionClient TransitionClient
+@inject TimeProvider TimeProvider
+
+@* XD01-295: the crew-facing host for FieldWorkOrderTransitioner/CompositeFieldWorkTransitionGuard's
+   already-implemented guarded state machine (XD01-220/221/222/246), which had zero UI anywhere in
+   the repo before this ticket. The one safety-checklist electrical-APR form here is this page's
+   own concern — everything else (geofence check, photo-evidence gate, the transition itself) is
+   enforced server-side by the guarded endpoint this page calls through IFieldWorkTransitionClient.
+
+   Deliberately online-only, unlike FieldWorkChecklist's fully offline-first SQLCipher+outbox
+   flow: the EnRoute -> OnSite geofence check needs a live IAssetProvider lookup, which only
+   exists server-side (GeoAssets.Provider.PostgreSQL is explicitly server-only per this repo's
+   architecture) — there is no offline equivalent to defer to an outbox. A future ticket could
+   still queue the OTHER two guarded edges (safety checklist, photo evidence) for offline retry;
+   this one keeps the whole flow online for simplicity and because EnRoute -> OnSite is the first
+   edge a crew hits anyway.
+
+   Single-file (no .razor.cs split): empirically confirmed during this ticket that splitting
+   causes every @bind-bound field (_circuitDeenergized etc.) to fail with "CS0649: never assigned
+   to" — the generated markup partial's bind-setter isn't recognized as touching a field declared
+   in a separate .razor.cs partial, the same degraded-codegen family CLAUDE.md's MauiLogin
+   (XD01-121) and FieldWorkChecklist (XD01-277) paragraphs already document for this project's
+   Razor toolchain, just a different manifestation (CS0649 here vs. a false-unused warning or
+   CS0115 there). Needs the same scripts/verify-solid-contracts.py RAZOR_SINGLE_FILE_EXCEPTIONS
+   entry those two already have. *@
+
+<h3>Field Work</h3>
+
+@if (_order is null)
+{
+    <p>No active field-work order found on this device.</p>
+}
+else
+{
+    <p><strong>Order:</strong> @_order.Title (@_order.Id)</p>
+    <p><strong>Status:</strong> @_order.Status</p>
+
+    @if (!string.IsNullOrEmpty(_lastExplanation))
+    {
+        <p class="field-work-error" style="color: var(--danger, #d20f39);">@_lastExplanation</p>
+    }
+
+    @switch (_order.Status)
+    {
+        case FieldWorkStatus.Dispatched:
+            <button disabled="@_busy" @onclick="AcceptAndDepartAsync">Accept &amp; Depart</button>
+            break;
+
+        case FieldWorkStatus.EnRoute:
+            <button disabled="@_busy" @onclick="ConfirmArrivalAsync">Confirm Arrival</button>
+            break;
+
+        case FieldWorkStatus.OnSite:
+            @* XD01-295 finding: no host currently registers a field-work OrderType that carries
+               SafetyChecklistSchemas' electrical-APR schema (ValidatingServiceOrderRepository's
+               per-write validation makes that impossible to use safely until a follow-up ticket
+               resolves it — see Program.cs's own note). The checklist form this AC asks for is
+               still here, submitting through the same generic attribute-merge path
+               AttemptAsync/IFieldWorkTransitionClient already support for whichever OrderType a
+               future ticket does register with a schema — it just isn't gated by anything today. *@
+            <h4>Safety Checklist (Electrical APR — NR-10 / NR-35)</h4>
+            <label><input type="checkbox" @bind="_circuitDeenergized" /> Circuit de-energized</label><br />
+            <label><input type="checkbox" @bind="_lockoutTagoutApplied" /> Lockout/tagout applied</label><br />
+            <label><input type="checkbox" @bind="_voltageAbsenceVerified" /> Voltage absence verified</label><br />
+            <label><input type="checkbox" @bind="_groundingApplied" /> Grounding applied</label><br />
+            <label><input type="checkbox" @bind="_ppeInspected" /> PPE inspected</label><br />
+            <label><input type="checkbox" @bind="_workAreaIsolated" /> Work area isolated</label><br />
+            <label><input type="checkbox" @bind="_fallProtectionAnchored" /> Fall protection anchored</label><br />
+            <label><input type="checkbox" @bind="_riskAnalysisSignedByCrew" /> Risk analysis signed by crew</label><br />
+            <label><input type="checkbox" @bind="_nr35PoleStructuralIntegrity" /> Pole structural integrity confirmed (NR-35)</label><br />
+            <label><input type="checkbox" @bind="_nr35WeatherConditionsAcceptable" /> Weather conditions acceptable (NR-35)</label><br />
+            <button disabled="@_busy" @onclick="StartWorkAsync">Start Work (no checklist required for this order type)</button>
+            <button disabled="@(_busy || !IsElectricalChecklistComplete())" @onclick="SubmitChecklistAndStartWorkAsync">Submit Checklist &amp; Start Work</button>
+            break;
+
+        case FieldWorkStatus.InProgress:
+            <button disabled="@_busy" @onclick="SuspendAsync">Suspend</button>
+            <button disabled="@_busy" @onclick="CompleteAsync">Complete</button>
+            break;
+
+        case FieldWorkStatus.Suspended:
+            <button disabled="@_busy" @onclick="ResumeAsync">Resume</button>
+            break;
+
+        case FieldWorkStatus.Completed:
+            <p>Work complete — awaiting supervisor sign-off.</p>
+            break;
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private ServiceOrder? _order;
+    private string? _lastExplanation;
+    private bool _busy;
+
+    // Electrical APR checklist fields — SafetyChecklistSchemas.ElectricalAprSchema's required booleans.
+    private bool _circuitDeenergized;
+    private bool _lockoutTagoutApplied;
+    private bool _voltageAbsenceVerified;
+    private bool _groundingApplied;
+    private bool _ppeInspected;
+    private bool _workAreaIsolated;
+    private bool _fallProtectionAnchored;
+    private bool _riskAnalysisSignedByCrew;
+    private bool _nr35PoleStructuralIntegrity;
+    private bool _nr35WeatherConditionsAcceptable;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateTask is not null) await AuthStateTask;
+
+        var orders = await LocalServiceOrderStore.GetAllAsync();
+        _order = orders.FirstOrDefault(o =>
+            o.OrderTypeId.StartsWith("field-work", StringComparison.Ordinal)
+            && o.Status is not (FieldWorkStatus.Inspected or FieldWorkStatus.ConflictReview or FieldWorkStatus.Cancelled));
+    }
+
+    private bool IsElectricalChecklistComplete() =>
+        _circuitDeenergized && _lockoutTagoutApplied && _voltageAbsenceVerified && _groundingApplied
+        && _ppeInspected && _workAreaIsolated && _fallProtectionAnchored && _riskAnalysisSignedByCrew
+        && _nr35PoleStructuralIntegrity && _nr35WeatherConditionsAcceptable;
+
+    private Task AcceptAndDepartAsync() => AttemptAsync(FieldWorkStatus.EnRoute);
+
+    private async Task ConfirmArrivalAsync()
+    {
+        var status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+        if (status != PermissionStatus.Granted)
+        {
+            _lastExplanation = "Location permission was not granted.";
+            return;
+        }
+
+        var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
+        var location = await Geolocation.Default.GetLocationAsync(request);
+        if (location is null)
+        {
+            _lastExplanation = "Unable to determine device location.";
+            return;
+        }
+
+        await AttemptAsync(FieldWorkStatus.OnSite, deviceLongitude: location.Longitude, deviceLatitude: location.Latitude);
+    }
+
+    private Task StartWorkAsync() => AttemptAsync(FieldWorkStatus.InProgress);
+
+    private Task SubmitChecklistAndStartWorkAsync()
+    {
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["circuitDeenergized"] = "true",
+            ["lockoutTagoutApplied"] = "true",
+            ["voltageAbsenceVerified"] = "true",
+            ["groundingApplied"] = "true",
+            ["ppeInspected"] = "true",
+            ["workAreaIsolated"] = "true",
+            ["fallProtectionAnchored"] = "true",
+            ["riskAnalysisSignedByCrew"] = "true",
+            ["nr35_pole_structural_integrity"] = "true",
+            ["nr35_weatherConditionsAcceptable"] = "true",
+            ["aprSignedAtUtc"] = TimeProvider.GetUtcNow().UtcDateTime.ToString("O"),
+        };
+
+        return AttemptAsync(FieldWorkStatus.InProgress, attributes: attributes);
+    }
+
+    private Task SuspendAsync() => AttemptAsync(FieldWorkStatus.Suspended);
+
+    private Task ResumeAsync() => AttemptAsync(FieldWorkStatus.InProgress);
+
+    private Task CompleteAsync() => AttemptAsync(FieldWorkStatus.Completed);
+
+    private async Task AttemptAsync(
+        string newStatus,
+        IReadOnlyDictionary<string, string>? attributes = null,
+        double? deviceLongitude = null,
+        double? deviceLatitude = null)
+    {
+        if (_order is null || _busy) return;
+
+        _busy = true;
+        _lastExplanation = null;
+        StateHasChanged();
+
+        try
+        {
+            var outcome = await TransitionClient.AttemptTransitionAsync(
+                _order.Id, newStatus, _order.RowVersion, attributes, deviceLongitude, deviceLatitude);
+
+            if (!outcome.Succeeded)
+            {
+                _lastExplanation = outcome.RejectionReason;
+                return;
+            }
+
+            if (attributes is not null)
+            {
+                foreach (var (key, value) in attributes)
+                    _order.Attributes[key] = value;
+            }
+
+            _order.Status = outcome.NewStatus!;
+            _order = WithRowVersion(_order, outcome.NewRowVersion!);
+
+            await LocalServiceOrderStore.UpsertAsync(_order);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="ServiceOrder.RowVersion"/> is <c>init</c>-only, so advancing it on an in-memory
+    /// instance (the server already persisted the real row) needs a full copy — same field list
+    /// as <c>InspectionCommitService.CopyWithRowVersion</c>'s own private helper.
+    /// </summary>
+    private static ServiceOrder WithRowVersion(ServiceOrder source, byte[] rowVersion) => new()
+    {
+        Id = source.Id,
+        RowVersion = rowVersion,
+        Title = source.Title,
+        Description = source.Description,
+        OrderTypeId = source.OrderTypeId,
+        Status = source.Status,
+        Priority = source.Priority,
+        CreatedBy = source.CreatedBy,
+        AssignedTo = source.AssignedTo,
+        OrganizationId = source.OrganizationId,
+        CreatedAt = source.CreatedAt,
+        UpdatedAt = source.UpdatedAt,
+        ScheduledAt = source.ScheduledAt,
+        CompletedAt = source.CompletedAt,
+        Attributes = source.Attributes,
+        Features = source.Features,
+        SelectionSpec = source.SelectionSpec,
+        FeatureIds = source.FeatureIds,
+        ParentOrderId = source.ParentOrderId,
+    };
+}
