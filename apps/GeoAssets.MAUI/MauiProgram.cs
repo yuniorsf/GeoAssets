@@ -16,6 +16,7 @@ using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Evidence;
+using GeoAssets.Shared.Services.FieldWork;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.Offline;
 using GeoAssets.Workflow;
@@ -221,6 +222,11 @@ public static class MauiProgram
         var fieldServiceServerBaseUrl = builder.Configuration["FieldServiceServer:BaseUrl"]
             ?? throw new InvalidOperationException("FieldServiceServer:BaseUrl is not configured.");
         builder.Services.AddFieldServiceOfflineSync(fieldServiceServerBaseUrl.TrimEnd('/') + "/api/field-service/sync");
+
+        // Guarded field-work transitions (XD01-295) — same base host, different endpoint; see
+        // FieldWorkTransitionServiceExtensions' own doc comment for why this one stays online-only
+        // rather than going through the offline sync/outbox pair above.
+        builder.Services.AddFieldWorkTransitionClient(fieldServiceServerBaseUrl.TrimEnd('/') + "/api/field-service/orders");
 
         // XD01-276: connectivity-aware outbox flush on reconnect, started once from App's constructor.
         builder.Services.AddSingleton<ConnectivitySyncTrigger>();
