@@ -13,6 +13,7 @@ using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Erp.Totvs;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Isp.Bss;
 using GeoAssets.Workflow.Messaging.Protobuf;
@@ -173,6 +174,21 @@ builder.Services.AddSingleton<IBssOssOutboundWebhookDispatcher, HttpBssOssOutbou
 builder.Services.AddScoped<BssOrderSpawnService>();
 builder.Services.AddScoped<FtthDropInstallActivationDispatchService>();
 
+// Totvs Protheus nightly sync (XD01-253) — technician certification/equipment-calibration pull
+// (gates APR submission via TechnicianComplianceTransitionGuard once a host wires
+// CompositeFieldWorkTransitionGuard to a real transition endpoint — not this ticket's scope),
+// approved-US-postings payroll export push, and warehouse-stock shrinkage reconciliation. The
+// in-memory compliance repository is the same "no persistence ticket yet" shape as
+// InMemoryPoleAuditEvidenceRepository above; the nightly sync repopulates it from scratch every
+// run regardless.
+builder.Services.AddSingleton<ITechnicianComplianceRepository, InMemoryTechnicianComplianceRepository>();
+builder.Services.AddSingleton(builder.Configuration.GetSection(TotvsSyncRetryOptions.SectionName).Get<TotvsSyncRetryOptions>() ?? new TotvsSyncRetryOptions());
+builder.Services.AddHttpClient(HttpTotvsProtheusSyncClient.HttpClientName);
+builder.Services.AddScoped<ITotvsProtheusSyncClient, HttpTotvsProtheusSyncClient>();
+builder.Services.AddScoped<IApprovedUsPostingSource, LedgerBackedApprovedUsPostingSource>();
+builder.Services.AddScoped<IFieldMaterialConsumptionSource, LedgerBackedFieldMaterialConsumptionSource>();
+builder.Services.AddScoped<TotvsNightlySyncOrchestrator>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -200,6 +216,11 @@ app.MapFieldWorkInspectionApi();
 // Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
 // EvidenceVerificationRestApiExtensions for the full endpoint list.
 app.MapEvidenceVerificationApi();
+
+// Totvs Protheus nightly-sync trigger under /api/fieldservice/erp/totvs/sync (XD01-253) — see
+// TotvsProtheusSyncApiExtensions for the full endpoint list.
+if (app.Configuration.GetValue("Modules:Totvs:Enabled", defaultValue: true))
+    app.MapTotvsProtheusSyncApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
