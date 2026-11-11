@@ -41,7 +41,13 @@ public class BdgdAssetTypesTests
     [Fact]
     public void Ponnot_DocumentedAttributeSet_ValidatesAndRoundTrips()
     {
-        var attributes = new Dictionary<string, string>(StringComparer.Ordinal) { ["COD_ID"] = "PN0001" };
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["COD_ID"] = "PN0001",
+            ["TIP_EST"] = "Concreto DT",
+            ["ALT_TOT"] = "11",
+            ["CAP_TRC"] = "600",
+        };
         var feature = FeatureWith(BdgdAssetTypeIds.Ponnot, new GeoPoint(-46.633, -23.55), attributes);
 
         GeoFeatureAttributeValidator.Validate(BdgdAssetTypes.Ponnot, attributes).Should().BeEmpty();

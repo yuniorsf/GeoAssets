@@ -13,6 +13,7 @@ public static class ShapefileServiceExtensions
     {
         services.AddSingleton<IProviderPlugin, ShapefileProviderPlugin>();
         services.AddSingleton<IShapefileExportService, ShapefileExportService>();
+        services.AddSingleton<IBdgdPonnotImportService, BdgdPonnotImportService>();
         return services;
     }
 }

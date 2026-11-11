@@ -22,6 +22,12 @@ namespace GeoAssets.Core.Bdgd;
 /// <c>COD_ID</c> alone rather than inventing further field codes with no real confidence behind
 /// them; extend each schema against ANEEL's current "Módulo 8 BDGD" manual before treating any
 /// of these as a complete, submission-ready field list.
+///
+/// <see cref="Ponnot"/>'s own schema was extended for XD01-257 with 3 more fields the ticket's AC
+/// names by role rather than code — structural class, height, and daN (traction/load) rating —
+/// mapped here to <c>TIP_EST</c>/<c>ALT_TOT</c>/<c>CAP_TRC</c> respectively, the same kind of
+/// judgment call as the <see cref="Untrd"/>/<see cref="Segcon"/> field assignments above, not a
+/// verified mapping from ANEEL's manual.
 /// </summary>
 public static class BdgdAssetTypes
 {
@@ -39,7 +45,18 @@ public static class BdgdAssetTypes
         Name = "PONNOT",
         IsBuiltIn = true,
         AllowedGeometryType = GeometryType.Point,
-        AttributesSchemaJson = CodIdOnlySchema,
+        AttributesSchemaJson = """
+        {
+          "type": "object",
+          "properties": {
+            "COD_ID":  { "type": "string", "minLength": 1 },
+            "TIP_EST": { "type": "string", "minLength": 1 },
+            "ALT_TOT": { "type": "number", "minimum": 0 },
+            "CAP_TRC": { "type": "number", "minimum": 0 }
+          },
+          "required": ["COD_ID", "TIP_EST", "ALT_TOT", "CAP_TRC"]
+        }
+        """,
     };
 
     public static readonly AssetType Untrd = new()
