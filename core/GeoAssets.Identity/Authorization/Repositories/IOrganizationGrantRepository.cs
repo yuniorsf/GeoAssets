@@ -30,4 +30,13 @@ public interface IOrganizationGrantRepository
     Task AddAsync(OrganizationGrant grant, CancellationToken ct = default);
     Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default);
     Task SaveChangesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Fetches up to <paramref name="take"/> grant-change sync entries recorded after
+    /// <paramref name="afterSequence"/> (XD01-290) — backs the REST endpoint
+    /// <see cref="IOrganizationGrantSyncClient"/> implementations poll to mirror grants into an
+    /// isolated vertical microservice's own database.
+    /// </summary>
+    Task<IReadOnlyList<Models.OrganizationGrantSyncEntry>> GetSyncBatchAsync(
+        long afterSequence, int take, CancellationToken ct = default);
 }
