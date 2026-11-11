@@ -15,6 +15,7 @@ namespace GeoAssets.Server.Migrations
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
+#pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
@@ -452,6 +453,58 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("OrderTypeTransitions", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrganizationGrantMirrorRecord", b =>
+                {
+                    b.Property<Guid>("GrantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GranteeOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ResourceOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ScopeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("SyncedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("GrantId");
+
+                    b.HasIndex("GranteeOrganizationId", "ResourceOrganizationId");
+
+                    b.ToTable("OrganizationGrantMirror", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrganizationGrantSyncCursorRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("LastSequenceNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OrganizationGrantSyncCursor", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OutboxMessageRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -857,6 +910,7 @@ namespace GeoAssets.Server.Migrations
 
                     b.Navigation("Dispatches");
                 });
+#pragma warning restore 612, 618
         }
     }
 }

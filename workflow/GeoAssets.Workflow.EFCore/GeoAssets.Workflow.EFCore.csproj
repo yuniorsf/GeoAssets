@@ -25,6 +25,9 @@
     <ProjectReference Include="../../core/GeoAssets.Core/GeoAssets.Core.csproj" />
     <ProjectReference Include="../../core/GeoAssets.Workflow/GeoAssets.Workflow.csproj" />
     <ProjectReference Include="../../core/GeoAssets.Infrastructure.Observability/GeoAssets.Infrastructure.Observability.csproj" />
+    <!-- IOrganizationGrantSyncClient only (XD01-290) — GeoAssets.Identity is a dependency-free
+         leaf project, so this adds nothing heavier than that one interface + its DTO. -->
+    <ProjectReference Include="../../core/GeoAssets.Identity/GeoAssets.Identity.csproj" />
   </ItemGroup>
 
 </Project>
