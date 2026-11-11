@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Identity.Authentication;
 using Microsoft.Extensions.Options;
 
 namespace GeoAssets.Provider.Rest;
@@ -15,7 +16,8 @@ public sealed class FederatedGeoCoreClientResolver : IGeoCoreClientResolver
 
     public FederatedGeoCoreClientResolver(
         IHttpClientFactory httpClientFactory,
-        IOptions<GeoCoreFederationOptions> options)
+        IOptions<GeoCoreFederationOptions> options,
+        IServiceAuthTokenProvider? tokenProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         ArgumentNullException.ThrowIfNull(options);
@@ -28,7 +30,7 @@ public sealed class FederatedGeoCoreClientResolver : IGeoCoreClientResolver
 
         foreach (var (key, endpoint) in config.Catalogs)
         {
-            RegisterCatalogEndpoint(httpClientFactory, key, endpoint);
+            RegisterCatalogEndpoint(httpClientFactory, key, endpoint, tokenProvider);
         }
 
         if (config.DefaultCatalogInstanceId is not null)
@@ -47,7 +49,8 @@ public sealed class FederatedGeoCoreClientResolver : IGeoCoreClientResolver
     private void RegisterCatalogEndpoint(
         IHttpClientFactory httpClientFactory,
         string key,
-        GeoCoreCatalogEndpoint? endpoint)
+        GeoCoreCatalogEndpoint? endpoint,
+        IServiceAuthTokenProvider? tokenProvider)
     {
         if (endpoint is null)
         {
@@ -91,7 +94,7 @@ public sealed class FederatedGeoCoreClientResolver : IGeoCoreClientResolver
 
         var httpClient = httpClientFactory.CreateClient($"GeoAssetsServer:{catalogId}");
         httpClient.BaseAddress = new Uri(endpoint.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
-        _clientsByCatalog.Add(catalogId, new RestGeoCoreClient(httpClient));
+        _clientsByCatalog.Add(catalogId, new RestGeoCoreClient(httpClient, tokenProvider));
     }
 
     public IReadOnlyCollection<string> RegisteredCatalogIds => _clientsByCatalog.Keys;

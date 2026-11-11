@@ -92,6 +92,40 @@ public class GeoAuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task HandleRequirementAsync_ServiceCallerAppRole_SucceedsWithoutCallingTheAuthorizationService()
+    {
+        // XD01-299: a service principal calling as itself has no per-user permission rows to
+        // evaluate — IGeoAuthorizationService must never be asked about it. Fails without the
+        // fix (the fake would throw, since it has no human-user policy satisfied).
+        var handler = Sut(_ => throw new InvalidOperationException(
+            "Must not evaluate the policy for a service-caller token."));
+        var requirement = new GeoPolicyRequirement("CanEditFeatures");
+        var identity = new ClaimsIdentity(
+            authenticationType: "TestAuth",
+            claims: [new Claim(ClaimTypes.Role, GeoAuthorizationHandler.ServiceCallerAppRole)]);
+        var context = new AuthorizationHandlerContext(
+            [requirement], new ClaimsPrincipal(identity), resource: null);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleRequirementAsync_AuthenticatedUserWithoutServiceCallerRole_StillEvaluatesPermission()
+    {
+        // Non-leakage: an ordinary authenticated human caller must still go through the real
+        // permission check — only the specific app role bypasses it.
+        var handler = Sut(_ => false);
+        var requirement = new GeoPolicyRequirement("CanEditFeatures");
+        var context = Context(requirement);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task HandleRequirementAsync_EvaluatesTheRequirementsOwnPolicyName_NotAnyOther()
     {
         // Non-leakage: a handler that granted based on the wrong policy name would pass a
