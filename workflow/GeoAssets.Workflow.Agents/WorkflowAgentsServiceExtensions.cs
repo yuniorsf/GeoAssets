@@ -1,8 +1,10 @@
 using GeoAssets.Workflow.Agents.Dispatch;
 using GeoAssets.Workflow.Agents.Identity;
+using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Dispatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Workflow.Agents;
 
@@ -76,6 +78,24 @@ public static class WorkflowAgentsServiceExtensions
     {
         services.AddSingleton<ICrewRoutingEngine, ClarkeWrightVrptwRoutingEngine>();
         services.AddScoped<FeederClusterAutoDispatchService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ICrewRoutingEngine"/> (idempotently — safe alongside
+    /// <see cref="AddFeederClusterAutoDispatch"/>, which registers the same engine), plus
+    /// <see cref="OrderRemunerationCalculator"/> and <see cref="DynamicCrewDispatchAdvisorService"/>
+    /// for XD01-256's day-to-day, yield-ranked dispatch advisory pass. Requires
+    /// <see cref="IUsCatalogRepository"/> to already be registered (see
+    /// <c>GeoAssets.Provider.PostgreSQL</c>'s <c>AddGeoAssetsPostgres</c> or an equivalent
+    /// server-side registration) — this method does not provide one.
+    /// </summary>
+    public static IServiceCollection AddDynamicCrewDispatchAdvisor(this IServiceCollection services)
+    {
+        services.TryAddSingleton<ICrewRoutingEngine, ClarkeWrightVrptwRoutingEngine>();
+        services.AddScoped<OrderRemunerationCalculator>();
+        services.AddScoped<DynamicCrewDispatchAdvisorService>();
 
         return services;
     }
