@@ -189,6 +189,10 @@ app.MapOpenApi().AllowAnonymous();
 // see ContractorUsLedgerRestApiExtensions for the full endpoint list.
 app.MapContractorUsLedgerApi();
 
+// SAP WeBUY clearing-package export under /api/fieldservice/erp/sap-webuy (XD01-255) — see
+// SapWeBuyClearingPackageRestApiExtensions.
+app.MapSapWeBuyClearingPackageApi();
+
 // Mobile offline-sync endpoints under /api/field-service/sync (XD01-208) — see
 // FieldServiceSyncRestApiExtensions for the full endpoint list.
 app.MapFieldServiceSyncApi();
