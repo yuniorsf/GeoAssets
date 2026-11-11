@@ -70,6 +70,9 @@ public static class PoleComplianceChecklistProjector
             if (occupant.TryGetProperty("operatorCnpj", out var cnpj) && cnpj.ValueKind == JsonValueKind.String)
                 slot.OperatorCnpj = cnpj.GetString();
 
+            if (occupant.TryGetProperty("cableLoadDaN", out var load) && load.ValueKind == JsonValueKind.Number)
+                slot.CableLoadDaN = load.GetDecimal();
+
             matrix.AddSlot(slot);
         }
 

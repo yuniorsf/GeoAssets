@@ -55,4 +55,57 @@ public class PoleCensusSlotOccupancyMutationFactoryTests
 
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void BuildMutation_AuthorizedLoadExceedsRatedCapacity_FlagsOverload()
+    {
+        var pole = PoleFeature();
+        pole.Properties.CustomAttributes["CAP_TRC"] = "600";
+        var attributes = ConformantAttributes();
+        attributes["occupants"] = """[{"slotIndex": 1, "status": "AuthorizedContracted", "cableLoadDaN": 750}]""";
+        var order = OrderTargeting(pole, attributes);
+
+        var mutation = PoleCensusSlotOccupancyMutationFactory.BuildMutation(order);
+
+        mutation.CustomAttributes["mechanicalOverloadFlagged"].Should().Be("true");
+    }
+
+    [Fact]
+    public void BuildMutation_AuthorizedLoadUnderRatedCapacity_DoesNotFlagOverload()
+    {
+        var pole = PoleFeature();
+        pole.Properties.CustomAttributes["CAP_TRC"] = "600";
+        var attributes = ConformantAttributes();
+        attributes["occupants"] = """[{"slotIndex": 1, "status": "AuthorizedContracted", "cableLoadDaN": 200}]""";
+        var order = OrderTargeting(pole, attributes);
+
+        var mutation = PoleCensusSlotOccupancyMutationFactory.BuildMutation(order);
+
+        mutation.CustomAttributes["mechanicalOverloadFlagged"].Should().Be("false");
+    }
+
+    [Fact]
+    public void BuildMutation_NoRatedCapacityOnPole_LeavesOverloadFlagUnset()
+    {
+        // A pole never ingested through the BDGD ETL (XD01-257) has no CAP_TRC rating, so there's
+        // nothing to compare the authorized load against.
+        var pole = PoleFeature();
+        var order = OrderTargeting(pole, ConformantAttributes());
+
+        var mutation = PoleCensusSlotOccupancyMutationFactory.BuildMutation(order);
+
+        mutation.CustomAttributes.Should().NotContainKey("mechanicalOverloadFlagged");
+    }
+
+    [Fact]
+    public void BuildMutation_UnparseableRatedCapacity_LeavesOverloadFlagUnset()
+    {
+        var pole = PoleFeature();
+        pole.Properties.CustomAttributes["CAP_TRC"] = "not-a-number";
+        var order = OrderTargeting(pole, ConformantAttributes());
+
+        var mutation = PoleCensusSlotOccupancyMutationFactory.BuildMutation(order);
+
+        mutation.CustomAttributes.Should().NotContainKey("mechanicalOverloadFlagged");
+    }
 }
