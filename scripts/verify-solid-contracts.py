@@ -34,6 +34,12 @@ RAZOR_SINGLE_FILE_EXCEPTIONS = {
     # GeoAssets.MAUI Razor-codegen degradation CLAUDE.md's MauiLogin paragraph (XD01-121)
     # documents. User-approved exception.
     "apps/GeoAssets.MAUI/Pages/FieldWorkChecklist.razor",
+    # XD01-295: splitting this page fails with CS0649 ("never assigned to") on every @bind-bound
+    # field — the generated markup partial's bind-setter isn't recognized as touching a field
+    # declared in a separate .razor.cs partial. A third, distinct manifestation of the same
+    # GeoAssets.MAUI Razor-codegen degradation documented above — confirmed empirically before
+    # adding this exception, not assumed from precedent.
+    "apps/GeoAssets.MAUI/Pages/FieldWorkExecution.razor",
 }
 
 RAZOR_COMPONENT_PREFIXES = (

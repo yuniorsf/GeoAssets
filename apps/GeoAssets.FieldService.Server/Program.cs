@@ -45,14 +45,19 @@ builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 // ── PostgreSQL (XD01-199/XD01-203) — GeoAssetsDbContext registered with both tenant
 // interceptors attached via the (IServiceProvider, DbContextOptionsBuilder) overload, so each
 // request's own scoped ITenantContext drives TenantSessionInterceptor/TenantTransactionInterceptor
-// rather than a single process-wide value. Scoped (not the IDbContextFactory/warmed-singleton
-// pattern GeoAssets.Server uses for its IAssetProvider cache) — no endpoint on this host reads
-// geo_entity yet, so there's no cache to warm; registered here regardless so the archetype
-// domain assemblies this host is meant to carry (XD01-209/210/211) have it ready. ──────────────
+// rather than a single process-wide value. ───────────────────────────────────────────────────────
 var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
     ?? throw new InvalidOperationException(
         "Connection string 'GeoAssets' not found. " +
         "Set it in appsettings.json or via the ConnectionStrings__GeoAssets environment variable.");
+
+// IAssetProvider (XD01-295) — the first endpoint on this host to read geo_entity:
+// GeofenceArrivalTransitionGuard.CanArriveAsync needs it to confirm a crew's device-reported GPS
+// position is actually near the order's target asset. Same AddGeoAssetsPostgres +
+// AddWarmedPostgresAssetProviderAsync pair GeoAssets.Server uses for the same reason — see that
+// method's own doc comment for why this must run before builder.Build().
+builder.Services.AddGeoAssetsPostgres();
+await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
 
 // "Noisy neighbor" backstop (XD01-214) — complements the gateway's per-OrganizationId rate
 // limiting: even a request the gateway let through can't hold a connection/lock open
@@ -101,6 +106,33 @@ builder.Services.AddOrderTypeRegistry(registry =>
     FieldWorkOrderTypes.RegisterAll(registry);
     FtthDropInstallOrderTypes.RegisterAll(registry);
 });
+
+// XD01-295 finding, deliberately not registered: SafetyChecklistSchemas.BuildElectricalOrderType
+// / BuildConfinedSpaceOrderType (XD01-222) look like the obvious real types to dispatch a crew
+// into so SafetyChecklistTransitionGuard has something to actually gate — but
+// ValidatingServiceOrderRepository.AddAsync/UpdateAsync validate the FULL attribute schema on
+// every write, including the very first AddAsync. A schema with "required"+"const: true" on
+// every field (by design, XD01-222) therefore can never be satisfied at creation time, before any
+// checklist has been submitted — registering either type would make it impossible to ever
+// create/dispatch an order of that type at all. This is a pre-existing tension between XD01-222's
+// schema mechanism and XD01-228's repository-level validation, not something this host-wiring
+// ticket should silently resolve. Flagged for a follow-up ticket; the plain "field-work" type
+// above (no schema) stays the only one registered, so the guard is a documented no-op until that
+// follow-up lands.
+
+// Guarded field-work transitions (XD01-295) — composes the three single-purpose guards
+// (XD01-221/222/246) that already existed with zero host wiring anywhere in the repo before this
+// ticket. PhotoGatingRuleRegistry starts empty (no BoQ-item photo-gating rule catalog exists yet
+// in this codebase) — same "no rule = unrestricted" convention as the safety-checklist schema
+// above; a host that wants real photo-gating rules calls Register on it before this point.
+builder.Services.AddSingleton<PhotoGatingRuleRegistry>();
+builder.Services.AddScoped<GeofenceArrivalTransitionGuard>();
+builder.Services.AddScoped<SafetyChecklistTransitionGuard>();
+builder.Services.AddScoped<PhotoGatingTransitionGuard>();
+builder.Services.AddScoped<IFieldWorkTransitionGuard>(sp => new CompositeFieldWorkTransitionGuard(
+    sp.GetRequiredService<GeofenceArrivalTransitionGuard>(),
+    sp.GetRequiredService<SafetyChecklistTransitionGuard>(),
+    sp.GetRequiredService<PhotoGatingTransitionGuard>()));
 
 // ── Mobile offline-sync (XD01-208) — same ServiceOrderDbContext registration above backs
 // IServiceOrderRepository too. Registered as EFServiceOrderRepository (now carrying the
@@ -196,6 +228,10 @@ app.MapFieldServiceSyncApi();
 // Supervisor sign-off endpoint under /api/field-service/orders (XD01-248) — see
 // FieldWorkInspectionRestApiExtensions for the full endpoint list.
 app.MapFieldWorkInspectionApi();
+
+// Crew-facing guarded field-work transition endpoint under /api/field-service/orders (XD01-295)
+// — see FieldWorkTransitionRestApiExtensions for the full endpoint list.
+app.MapFieldWorkTransitionApi();
 
 // Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
 // EvidenceVerificationRestApiExtensions for the full endpoint list.
