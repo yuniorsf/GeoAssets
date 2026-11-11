@@ -9,8 +9,10 @@ using GeoAssets.MAUI.Extensions;
 using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.MAUI.Services.Localization;
 using GeoAssets.MAUI.Services.Evidence;
+using GeoAssets.MAUI.Services.FieldWork;
 using GeoAssets.MAUI.Services.Offline;
 using GeoAssets.Provider.PostgreSQL;
+using GeoAssets.Provider.Rest;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Navigation;
@@ -77,6 +79,7 @@ public static class MauiProgram
         AddAssetsAndMap(builder);
         AddOfflineSync(builder);
         AddEvidenceCapture(builder);
+        AddPoleCensus(builder);
 
         return builder.Build();
     }
@@ -154,6 +157,10 @@ public static class MauiProgram
             client.BaseAddress = new Uri(geoAssetsServerBaseUrl.TrimEnd('/') + "/api/identity/");
             return new RestGeoAuthorizationService(client);
         });
+
+        // XD01-260: pole census's "pole lookup via IGeoCoreClient.GetFeatureByIdAsync" AC —
+        // same Core GeoAssets Server this host already talks to for everything else.
+        builder.Services.AddGeoCoreRestClient(geoAssetsServerBaseUrl.TrimEnd('/') + "/api/geoassets");
 
         // Localization stand-in (XD01-24) — see NoOpJsonStringLocalizer's doc comment: MAUI has
         // no real translation loader yet, so LocalizedComponentBase-derived components (Service
@@ -250,5 +257,11 @@ public static class MauiProgram
         builder.Services.AddSingleton<IEvidenceWatermarkComposer, SkiaEvidenceWatermarkComposer>();
         builder.Services.AddSingleton<ITrustedTimestampProvider, SntpTrustedTimestampProvider>();
         builder.Services.AddScoped<MauiEvidenceCaptureGateway>();
+    }
+
+    /// <summary>Pole census mobile workflow (XD01-260) — registers <see cref="MauiPoleCensusGateway"/>.</summary>
+    private static void AddPoleCensus(MauiAppBuilder builder)
+    {
+        builder.Services.AddScoped<MauiPoleCensusGateway>();
     }
 }

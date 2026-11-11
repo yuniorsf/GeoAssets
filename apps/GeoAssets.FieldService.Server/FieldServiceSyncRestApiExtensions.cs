@@ -1,6 +1,8 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.FieldService.Server;
@@ -70,7 +72,8 @@ internal static class FieldServiceSyncRestApiExtensions
     private static void MapPush(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
         routes.MapPost($"{prefix}/service-orders", async (
-            HttpRequest req, IServiceOrderRepository repo, ITenantContext tenantContext, CancellationToken ct) =>
+            HttpRequest req, IServiceOrderRepository repo, ITenantContext tenantContext,
+            IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct) =>
         {
             var incoming = await JsonSerializer.DeserializeAsync<List<PushServiceOrderItem>>(req.Body, opts, ct).ConfigureAwait(false);
             if (incoming is null) return Results.BadRequest("Invalid service order batch.");
@@ -82,7 +85,7 @@ internal static class FieldServiceSyncRestApiExtensions
             var results = new List<PushServiceOrderResult>(incoming.Count);
             foreach (var item in incoming)
             {
-                results.Add(await PushOneAsync(item, repo, tenantContext, ct).ConfigureAwait(false));
+                results.Add(await PushOneAsync(item, repo, tenantContext, geoCoreClient, timeProvider, ct).ConfigureAwait(false));
             }
 
             return Results.Ok(results);
@@ -94,10 +97,24 @@ internal static class FieldServiceSyncRestApiExtensions
     }
 
     private static async Task<PushServiceOrderResult> PushOneAsync(
-        PushServiceOrderItem item, IServiceOrderRepository repo, ITenantContext tenantContext, CancellationToken ct)
+        PushServiceOrderItem item, IServiceOrderRepository repo, ITenantContext tenantContext,
+        IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct)
     {
         var order = item.Order;
         var existing = await repo.GetByIdAsync(order.Id, ct).ConfigureAwait(false);
+
+        // XD01-260: a pole census inspection is the one order type this field client originates
+        // itself rather than receiving pre-dispatched (MapPull's doc comment's "never originates
+        // a brand-new order type from the field" rule still holds for every other order type —
+        // this is a narrow, explicitly-scoped exception for this one, not a general
+        // field-origination mechanism). First push creates it, then stages its geo_entity
+        // slot-occupancy mutation directly — the ACID transactional-outbox route
+        // (InspectionCommitService) is reserved for billable contractor BoQ postings, which a
+        // census submission has none of, so this applies the mutation inline, best-effort, on
+        // the sync path itself rather than reusing that unrelated pipeline.
+        if (existing is null && string.Equals(order.OrderTypeId, PoleCensusOrderTypes.PoleCensusInspectionId, StringComparison.Ordinal))
+            return await PushNewPoleCensusAsync(order, repo, geoCoreClient, timeProvider, ct).ConfigureAwait(false);
+
         if (existing is null)
             return new PushServiceOrderResult(order.Id, Success: false, Error: "ServiceOrder not found.");
 
@@ -130,5 +147,42 @@ internal static class FieldServiceSyncRestApiExtensions
         {
             return new PushServiceOrderResult(order.Id, Success: false, Error: ex.Message);
         }
+    }
+
+    /// <summary>
+    /// First sync of a mobile-originated pole census (XD01-260): persists the order, then builds
+    /// and applies its slot-occupancy mutation directly via <see cref="IGeoCoreClient"/> — the
+    /// AC's "synced submission updates the pole's slot occupancy in geo_entity". The order is
+    /// still created even if the mutation fails (the census record itself is the primary
+    /// artifact; the geo_entity projection is reported as a per-item error so the client can
+    /// retry just the projection without re-submitting the whole form).
+    /// </summary>
+    private static async Task<PushServiceOrderResult> PushNewPoleCensusAsync(
+        ServiceOrder order, IServiceOrderRepository repo, IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct)
+    {
+        await repo.AddAsync(order, ct).ConfigureAwait(false);
+
+        AssetFeatureMutationItem mutation;
+        try
+        {
+            mutation = PoleCensusSlotOccupancyMutationFactory.BuildMutation(order);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new PushServiceOrderResult(order.Id, Success: false, Error: $"Census recorded, but slot-occupancy projection failed: {ex.Message}");
+        }
+
+        var batch = AssetMutationBatchRequestedEvent.Create(
+            catalogInstanceId: "default",
+            organizationId: order.OrganizationId,
+            requestedByService: "GeoAssets.FieldService.Server",
+            performedByUserId: order.CreatedBy,
+            mutations: [mutation],
+            timeProvider: timeProvider,
+            sourceOrderId: order.Id,
+            sourceOrderTypeId: order.OrderTypeId);
+
+        await geoCoreClient.ExecuteAssetDeltaBatchAsync(batch, ct).ConfigureAwait(false);
+        return new PushServiceOrderResult(order.Id, Success: true, Error: null);
     }
 }

@@ -1,0 +1,176 @@
+@page "/field-work/pole-census/{PoleId}"
+@attribute [Authorize]
+@using System.Text.Json
+@using GeoAssets.Core.Models
+@using GeoAssets.Identity.Authentication
+@using GeoAssets.Core.Services
+@using GeoAssets.MAUI.Services.FieldWork
+@using GeoAssets.Shared.Services.Evidence
+@using GeoAssets.Shared.Services.FieldWork
+@using GeoAssets.Shared.Services.Offline
+@using GeoAssets.Workflow.Isp.NeutralOperator
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject MauiPoleCensusGateway PoleCensusGateway
+@inject ILocalServiceOrderStore LocalServiceOrderStore
+@inject ILocalActionOutbox Outbox
+@inject ICurrentUserAccessor CurrentUserAccessor
+
+@* XD01-260: pole lookup (IGeoCoreClient), GPS/proximity hard interlock, structured capture
+   against PoleSharingComplianceChecklistSchema, then local SQLite queuing — mirrors
+   FieldWorkChecklist.razor's (XD01-277) device-I/O-glue-only shape, delegating all domain logic
+   to PoleCensusInspectionService (GeoAssets.Shared, fully unit-tested).
+
+   Single-file (no .razor.cs split): empirically re-confirmed for a third time on this exact
+   project — splitting produces the identical "CS0115: no suitable method found to override" on
+   OnInitializedAsync that FieldWorkChecklist.razor (XD01-277) hit, not just the milder
+   false-unused-field warning MauiLogin.razor (XD01-121) hit. Added to
+   scripts/verify-solid-contracts.py's RAZOR_SINGLE_FILE_EXCEPTIONS alongside those two, same
+   justification. *@
+
+<h3>Pole Census Inspection</h3>
+
+@if (_pole is null && _lookupAttempted)
+{
+    <p class="checklist-error" style="color: var(--danger, #d20f39);">Pole '@PoleId' was not found.</p>
+}
+else if (_pole is null)
+{
+    <p>Loading pole…</p>
+}
+else
+{
+    <p><strong>Pole:</strong> @_pole.Properties.Name (@_pole.Id)</p>
+
+    @if (!string.IsNullOrEmpty(_lastExplanation))
+    {
+        <p class="checklist-error" style="color: var(--danger, #d20f39);">@_lastExplanation</p>
+    }
+
+    @if (!_interlockPassed)
+    {
+        <button @onclick="CheckInterlockAsync">Check GPS &amp; Start Census</button>
+    }
+    else if (!_queued)
+    {
+        <h4>Structural condition</h4>
+        <select @bind="_structuralCondition">
+            <option value="Good">Good</option>
+            <option value="Fair">Fair</option>
+            <option value="Poor">Poor</option>
+            <option value="Critical">Critical</option>
+        </select>
+
+        <h4>500mm telecom band compliant</h4>
+        <input type="checkbox" @bind="_band500MmCompliant" />
+
+        <h4>Clearance measurements (meters)</h4>
+        <label>Ground to lowest cable: <input type="number" step="0.01" @bind="_groundToLowestCableMeters" /></label>
+        <label>Power to communication band: <input type="number" step="0.01" @bind="_powerToCommunicationBandMeters" /></label>
+
+        <h4>Occupant slots (1-6)</h4>
+        @for (var i = 0; i < 6; i++)
+        {
+            var slotIndex = i;
+            <div>
+                Slot @(slotIndex + 1):
+                <select @bind="_occupantStatuses[slotIndex]">
+                    <option value="">(empty)</option>
+                    <option value="ActiveReservation">ActiveReservation</option>
+                    <option value="AuthorizedContracted">AuthorizedContracted</option>
+                    <option value="AbandonedDeadDrop">AbandonedDeadDrop</option>
+                    <option value="ClandestineUnauthorized">ClandestineUnauthorized</option>
+                </select>
+                <input placeholder="Operator CNPJ (optional)" @bind="_occupantCnpjs[slotIndex]" />
+            </div>
+        }
+
+        <h4>Unauthorized cable detected</h4>
+        <input type="checkbox" @bind="_unauthorizedCableDetected" />
+
+        <button @onclick="SubmitAsync">Submit Census</button>
+    }
+    else
+    {
+        <p>Census submitted — queued for sync.</p>
+    }
+}
+
+@code {
+    [Parameter] public string PoleId { get; set; } = string.Empty;
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private GeoFeature? _pole;
+    private bool _lookupAttempted;
+    private bool _interlockPassed;
+    private bool _queued;
+    private string? _lastExplanation;
+    private string? _technicianId;
+    private Guid _organizationId;
+
+    private string _structuralCondition = "Good";
+    private bool _band500MmCompliant = true;
+    private double _groundToLowestCableMeters;
+    private double _powerToCommunicationBandMeters;
+    private bool _unauthorizedCableDetected;
+    private readonly string[] _occupantStatuses = new string[6];
+    private readonly string?[] _occupantCnpjs = new string?[6];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = AuthStateTask is null ? null : await AuthStateTask;
+        _technicianId = authState?.User.Identity?.Name ?? "unknown-technician";
+
+        var currentUser = await CurrentUserAccessor.GetCurrentUserAsync();
+        _organizationId = currentUser?.OrganizationId ?? Guid.Empty;
+
+        _pole = await PoleCensusGateway.LookupPoleAsync(PoleId);
+        _lookupAttempted = true;
+    }
+
+    private async Task CheckInterlockAsync()
+    {
+        var fix = await PoleCensusGateway.TryGetInterlockedFixAsync(_pole!);
+        if (fix is null)
+        {
+            _lastExplanation = $"GPS accuracy or proximity (within {PoleCensusProximityGate.MaxProximityMeters:F0}m of the pole) failed the interlock; the census form will not open.";
+            return;
+        }
+
+        _lastExplanation = null;
+        _interlockPassed = true;
+    }
+
+    private async Task SubmitAsync()
+    {
+        var occupants = new List<PoleCensusOccupantSubmission>();
+        for (var i = 0; i < 6; i++)
+        {
+            if (!string.IsNullOrEmpty(_occupantStatuses[i]))
+                occupants.Add(new PoleCensusOccupantSubmission(i + 1, _occupantStatuses[i], _occupantCnpjs[i]));
+        }
+
+        var submission = new PoleCensusSubmission(
+            _structuralCondition, _band500MmCompliant, _groundToLowestCableMeters, _powerToCommunicationBandMeters,
+            occupants, _unauthorizedCableDetected);
+
+        var order = PoleCensusInspectionService.CreateOrder(_pole!, _technicianId ?? "unknown-technician", _organizationId, TimeProvider.System);
+        var result = PoleCensusInspectionService.RecordSubmission(order, submission, TimeProvider.System);
+
+        _lastExplanation = result.Succeeded ? null : result.Explanation;
+        if (!result.Succeeded)
+        {
+            StateHasChanged();
+            return;
+        }
+
+        await LocalServiceOrderStore.UpsertAsync(order);
+
+        var sequenceNumber = await Outbox.NextSequenceNumberAsync();
+        await Outbox.EnqueueAsync(new LocalOutboxEntry(
+            Guid.NewGuid(), sequenceNumber, order.Id, JsonSerializer.Serialize(order, GeoJsonSerializer.Options), DateTime.UtcNow, AttemptCount: 0, LastError: null));
+
+        _queued = true;
+        StateHasChanged();
+    }
+}

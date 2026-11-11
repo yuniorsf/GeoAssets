@@ -4,8 +4,11 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging.Events;
+using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;
@@ -44,6 +47,7 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
     private static readonly Guid TenantB = Guid.Parse("66666666-6666-6666-6666-666666666666");
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
+    private readonly FakeGeoCoreClient _geoCoreClient = new();
     private TestServer _server = null!;
 
     public async Task InitializeAsync()
@@ -58,6 +62,34 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
             => Task.FromResult(AuthenticateResult.NoResult());
+    }
+
+    /// <summary>Captures every <see cref="ExecuteAssetDeltaBatchAsync"/> call so XD01-260's pole
+    /// census creation path can assert on the mutation it staged, without a real Core GeoAssets
+    /// Server.</summary>
+    private sealed class FakeGeoCoreClient : IGeoCoreClient
+    {
+        public readonly List<AssetMutationBatchRequestedEvent> AppliedBatches = [];
+
+        public Task<GeoFeature?> GetFeatureByIdAsync(string id, CancellationToken ct = default) =>
+            Task.FromResult<GeoFeature?>(null);
+
+        public Task<PagedResult<GeoFeature>> QueryFeaturesAsync(AssetQuery query, CancellationToken ct = default) =>
+            Task.FromResult(new PagedResult<GeoFeature> { Items = [], TotalCount = 0 });
+
+        public Task<IReadOnlyList<string>> GetNeighborIdsAsync(string featureId, string? edgeKind = null, string? targetAssetTypeId = null, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetNeighborIdsBatchAsync(IReadOnlyList<string> featureIds, string? edgeKind = null, string? targetAssetTypeId = null, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<string>>>(new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal));
+
+        public Task<AssetBatchAppliedEvent> ExecuteAssetDeltaBatchAsync(AssetMutationBatchRequestedEvent batch, CancellationToken ct = default)
+        {
+            AppliedBatches.Add(batch);
+            return Task.FromResult(AssetBatchAppliedEvent.Create(
+                batch.BatchId, batch.CatalogInstanceId, batch.OrganizationId, batch.RequestedByService, batch.PerformedByUserId,
+                appliedItems: [], timeProvider: TimeProvider.System, sourceOrderId: batch.SourceOrderId, sourceOrderTypeId: batch.SourceOrderTypeId));
+        }
     }
 
     private async Task BuildServerAsync()
@@ -88,6 +120,8 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
                         .ReplaceService<IModelCustomizer, RowVersionDefaultModelCustomizer>());
                     services.AddScoped<IServiceOrderRepository>(sp =>
                         new ValidatingServiceOrderRepository(new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>())));
+                    services.AddSingleton<IGeoCoreClient>(_geoCoreClient);
+                    services.AddSingleton(TimeProvider.System);
                 });
                 webHost.Configure(app =>
                 {
@@ -320,6 +354,53 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
         results!.Should().HaveCount(2);
         results!.Should().ContainSingle(r => r.Id == "order-good" && r.Success);
         results!.Should().ContainSingle(r => r.Id == "order-missing" && !r.Success);
+    }
+
+    /// <summary>
+    /// XD01-260's AC: "The synced submission updates the pole's slot occupancy in geo_entity."
+    /// A pole census inspection is the one order type this field client originates itself
+    /// (never pre-dispatched/seeded) — its first push must create it AND stage the geo_entity
+    /// mutation, rather than the generic "unknown order id" failure every other order type gets.
+    /// </summary>
+    [Fact]
+    public async Task Push_NewPoleCensusInspection_CreatesOrderAndAppliesSlotOccupancyMutation()
+    {
+        var pole = new GeoFeature { Id = "pole-1", Properties = new() { AssetTypeId = "neutral-pole" } };
+        var order = new ServiceOrder
+        {
+            Id = "census-1",
+            Title = "Pole census — pole-1",
+            OrderTypeId = PoleCensusOrderTypes.PoleCensusInspectionId,
+            CreatedBy = "tech-1",
+            OrganizationId = TenantA,
+            Features = [pole],
+            Attributes = new(StringComparer.Ordinal)
+            {
+                ["structuralCondition"] = "Fair",
+                ["band500mmCompliant"] = "true",
+                ["clearanceMeasurements"] = """{"groundToLowestCableMeters": 4.8, "powerToCommunicationBandMeters": 0.55}""",
+                ["occupants"] = """[{"slotIndex": 1, "status": "AuthorizedContracted", "operatorCnpj": "12345678000190"}]""",
+                ["unauthorizedCableDetected"] = "false",
+            },
+        };
+
+        using var client = CreateClient(TenantA);
+        var response = await client.PostAsJsonAsync(PushUri, new List<PushServiceOrderItem> { new(order, "idem-census-1") });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var results = await response.Content.ReadFromJsonAsync<List<PushServiceOrderResult>>();
+        results!.Should().ContainSingle(r => r.Id == "census-1" && r.Success);
+
+        _geoCoreClient.AppliedBatches.Should().ContainSingle();
+        var mutation = _geoCoreClient.AppliedBatches[0].Mutations.Should().ContainSingle().Subject;
+        mutation.FeatureId.Should().Be("pole-1");
+        mutation.CustomAttributes["structuralCondition"].Should().Be("Fair");
+        mutation.CustomAttributes["occupants"].Should().Contain("AuthorizedContracted");
+
+        using var pullClient = CreateClient(TenantA);
+        var pullResponse = await pullClient.GetAsync(PullUri(DateTime.MinValue));
+        var pulled = await pullResponse.Content.ReadFromJsonAsync<List<ServiceOrder>>();
+        pulled!.Should().ContainSingle(o => o.Id == "census-1");
     }
 
     [Fact]
