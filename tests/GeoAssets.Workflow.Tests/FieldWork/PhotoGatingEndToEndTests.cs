@@ -17,7 +17,7 @@ public class PhotoGatingEndToEndTests
     private static readonly OrderType FieldWorkOrderType = FieldWorkWorkflowGraph.BuildOrderType("field-work", "Field Work Order");
 
     private static CompositeFieldWorkTransitionGuard BuildGuard(PhotoGatingRuleRegistry ruleRegistry) =>
-        new(NullFieldWorkTransitionGuard.Instance, NullFieldWorkTransitionGuard.Instance, new PhotoGatingTransitionGuard(ruleRegistry));
+        new(NullFieldWorkTransitionGuard.Instance, NullFieldWorkTransitionGuard.Instance, new PhotoGatingTransitionGuard(ruleRegistry), NullFieldWorkTransitionGuard.Instance);
 
     private static ServiceOrder OrderWithBoqLineAndEvidence(string status, string itemCode, params string[] capturedStages)
     {
