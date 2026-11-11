@@ -1,4 +1,6 @@
+using GeoAssets.Workflow.Agents.Dispatch;
 using GeoAssets.Workflow.Agents.Identity;
+using GeoAssets.Workflow.Dispatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -60,6 +62,20 @@ public static class WorkflowAgentsServiceExtensions
         services.Configure(configure);
 
         services.AddSingleton<IAgentIdentityProvider, ConfiguredAgentIdentityProvider>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="ICrewRoutingEngine"/> (Clarke-Wright savings heuristic) and
+    /// <see cref="FeederClusterAutoDispatchService"/> for feeder-clustered VRPTW crew dispatch
+    /// (XD01-240). Does not itself register <see cref="IAgentIdentityProvider"/> — call one of
+    /// the <see cref="AddWorkflowAgents(IServiceCollection, IConfiguration)"/> overloads too.
+    /// </summary>
+    public static IServiceCollection AddFeederClusterAutoDispatch(this IServiceCollection services)
+    {
+        services.AddSingleton<ICrewRoutingEngine, ClarkeWrightVrptwRoutingEngine>();
+        services.AddScoped<FeederClusterAutoDispatchService>();
 
         return services;
     }
