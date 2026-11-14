@@ -1,0 +1,227 @@
+{
+  "$schema": "https://antigravity.google/schemas/multi-agent-harness-v1.json",
+  "project": {
+    "name": "GeoAssets",
+    "stack": "dotnet",
+    "ticketPrefix": "XD01",
+    "integrationBranch": "origin/develop",
+    "mergeTargetBranch": "develop",
+    "protectedBranches": [
+      "main",
+      "master"
+    ],
+    "maxConcurrentWorktrees": 5
+  },
+  "e2e": {
+    "apiBaseUrl": "http://localhost:8080",
+    "webBaseUrl": "http://localhost:8081",
+    "healthEndpoint": "/healthz",
+    "defaultRetries": 2,
+    "clients": [
+      {
+        "name": "web",
+        "path": "apps/GeoAssets.Web",
+        "port": 8081
+      }
+    ]
+  },
+  "architecture": {
+    "domainCoreDirs": [
+      "core",
+      "src/core",
+      "src/domain",
+      "domain"
+    ],
+    "testDirs": [
+      "tests",
+      "test",
+      "__tests__",
+      "spec"
+    ],
+    "sourceExtensions": [
+      ".cs",
+      ".razor",
+      ".py",
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx",
+      ".go",
+      ".rs",
+      ".java",
+      ".kt"
+    ],
+    "forbiddenCoreImports": [
+      "Microsoft.EntityFrameworkCore",
+      "Npgsql",
+      "GeoAssets.Provider.",
+      "GeoAssets.Server",
+      "GeoAssets.Web",
+      "GeoAssets.MAUI",
+      "GeoAssets.Shared",
+      "sqlalchemy",
+      "psycopg",
+      "psycopg2",
+      "prisma",
+      "typeorm",
+      "drizzle-orm",
+      "axios",
+      "database/sql",
+      "gorm.io",
+      "sqlx",
+      "diesel",
+      "reqwest",
+      "jakarta.persistence",
+      "org.springframework.web"
+    ],
+    "concreteAdapterInstantiationsInCore": [
+      "\\bnew\\s+(?:HttpClient|PrismaClient|DataSource|Pool|Redis|[A-Z]\\w*DbContext|NpgsqlConnection|SqlConnection)\\s*\\(",
+      "\\b(?:requests\\.(?:get|post|put|delete)|httpx\\.(?:Client|AsyncClient)|psycopg2?\\.connect|sql\\.Open|reqwest::Client::new)\\s*\\("
+    ],
+    "bannedApiPatterns": [
+      {
+        "pattern": "\\b(?:DateTime(?:Offset)?\\.(?:UtcNow|Now|Today))\\b",
+        "extensions": [
+          ".cs"
+        ],
+        "message": "Direct wall-clock access is banned (RS0030); inject System.TimeProvider instead."
+      },
+      {
+        "pattern": "(\\.GetAwaiter\\s*\\(\\s*\\)\\s*\\.GetResult\\s*\\(|\\bTask\\.Wait(?:All|Any)?\\s*\\(|\\bThread\\.Sleep\\s*\\()",
+        "extensions": [
+          ".cs"
+        ],
+        "message": "Sync-over-async or thread-blocking call is banned; await asynchronously with CancellationToken."
+      }
+    ],
+    "suppressionPatterns": [
+      {
+        "pattern": "^\\s*#\\s*pragma\\s+warning\\s+disable\\b",
+        "extensions": [
+          ".cs"
+        ],
+        "message": "Compiler/analyzer suppression '#pragma warning disable' is prohibited."
+      },
+      {
+        "pattern": "\\[\\s*(?:System\\.Diagnostics\\.CodeAnalysis\\.)?SuppressMessage\\b",
+        "extensions": [
+          ".cs"
+        ],
+        "message": "Analyzer suppression '[SuppressMessage]' is prohibited."
+      },
+      {
+        "pattern": "<NoWarn>",
+        "extensions": [
+          ".csproj",
+          ".props",
+          ".targets"
+        ],
+        "message": "MSBuild '<NoWarn>' suppression is prohibited."
+      },
+      {
+        "pattern": "(?:eslint-disable|@ts-ignore|@ts-nocheck)",
+        "extensions": [
+          ".ts",
+          ".tsx",
+          ".js",
+          ".jsx"
+        ],
+        "message": "Linter/typechecker suppression (eslint-disable / @ts-ignore / @ts-nocheck) is prohibited."
+      },
+      {
+        "pattern": "#\\s*(?:noqa|type:\\s*ignore)\\b",
+        "extensions": [
+          ".py"
+        ],
+        "message": "Linter/typechecker suppression ('# noqa' / '# type: ignore') is prohibited."
+      },
+      {
+        "pattern": "#\\s*\\[\\s*allow\\s*\\(",
+        "extensions": [
+          ".rs"
+        ],
+        "message": "Compiler/Clippy suppression '#[allow(...)]' is prohibited."
+      },
+      {
+        "pattern": "//\\s*nolint\\b",
+        "extensions": [
+          ".go"
+        ],
+        "message": "Linter suppression '//nolint' is prohibited."
+      },
+      {
+        "pattern": "@SuppressWarnings\\b",
+        "extensions": [
+          ".java",
+          ".kt"
+        ],
+        "message": "Compiler suppression '@SuppressWarnings' is prohibited."
+      }
+    ],
+    "unimplementedStubPatterns": [
+      {
+        "pattern": "\\bthrow\\s+new\\s+NotImplementedException\\s*\\(",
+        "extensions": [
+          ".cs"
+        ]
+      },
+      {
+        "pattern": "\\braise\\s+NotImplementedError\\b",
+        "extensions": [
+          ".py"
+        ]
+      },
+      {
+        "pattern": "\\b(?:todo|unimplemented)!\\s*\\(",
+        "extensions": [
+          ".rs"
+        ]
+      },
+      {
+        "pattern": "\\bpanic\\s*\\(\\s*\"(?i:not implemented|todo)\"",
+        "extensions": [
+          ".go"
+        ]
+      },
+      {
+        "pattern": "\\bthrow\\s+new\\s+Error\\s*\\(\\s*['\"](?i:not implemented|todo)",
+        "extensions": [
+          ".ts",
+          ".tsx",
+          ".js",
+          ".jsx"
+        ]
+      },
+      {
+        "pattern": "\\bthrow\\s+new\\s+UnsupportedOperationException\\s*\\(\\s*\"(?i:not implemented|todo)",
+        "extensions": [
+          ".java",
+          ".kt"
+        ]
+      }
+    ],
+    "pairedFileRules": [
+      {
+        "extension": ".razor",
+        "companionSuffix": ".cs",
+        "pathPrefixes": [
+          "apps/GeoAssets.Shared/Components/",
+          "apps/GeoAssets.Shared/Pages/",
+          "apps/GeoAssets.Web/Components/",
+          "apps/GeoAssets.Web/Pages/",
+          "apps/GeoAssets.MAUI/Components/",
+          "apps/GeoAssets.MAUI/Pages/"
+        ],
+        "exceptions": [
+          "apps/GeoAssets.MAUI/Pages/MauiLogin.razor",
+          "apps/GeoAssets.MAUI/Pages/FieldWorkChecklist.razor"
+        ]
+      }
+    ],
+    "metrics": {
+      "maxInterfaceMethods": 5,
+      "maxPublicMethods": 10,
+      "maxLoc": 500
+    }
+  }
+}

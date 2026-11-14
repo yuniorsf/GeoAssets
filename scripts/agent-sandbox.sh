@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# GeoAssets — Multi-Agent Git Worktree Sandbox Manager
+# Multi-Agent Git Worktree Sandbox Manager (Language-Agnostic)
 # ==============================================================================
 # Safely creates, initializes, lists, and destroys isolated Git Worktrees
-# under ../worktrees/<task-id> to guarantee zero contamination of `main` and
-# deterministic branch isolation for concurrent agents (Antigravity, Claude Code,
-# GitHub Copilot).
+# under ../worktrees/<task-id> to guarantee zero contamination of protected
+# branches (`main`, `master`) and deterministic isolation for concurrent agents
+# (Google Antigravity, Claude Code, GitHub Copilot).
 #
 # Usage:
 #   ./scripts/agent-sandbox.sh create <task-id> [base-ref]
@@ -18,9 +18,26 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKTREES_ROOT="$(cd "${REPO_ROOT}/.." && pwd)/worktrees"
-DEFAULT_BASE_REF="origin/develop"
-PROTECTED_BRANCHES=("main" "master" "develop")
+DEFAULT_WORKTREES_ROOT="$(cd "${REPO_ROOT}/.." && pwd)/worktrees"
+if [[ -z "${WORKTREES_ROOT:-}" ]]; then
+    if mkdir -p "${DEFAULT_WORKTREES_ROOT}" 2>/dev/null; then
+        WORKTREES_ROOT="${DEFAULT_WORKTREES_ROOT}"
+    else
+        WORKTREES_ROOT="${REPO_ROOT}/.claude/worktrees"
+    fi
+fi
+HARNESS_ENV="${REPO_ROOT}/.harness/harness.env"
+
+if [[ -f "${HARNESS_ENV}" ]]; then
+    # shellcheck disable=SC1090
+    source "${HARNESS_ENV}"
+fi
+
+PROJECT_NAME="${PROJECT_NAME:-<app>}"
+DEFAULT_BASE_REF="${INTEGRATION_BRANCH:-origin/develop}"
+MERGE_TARGET="${MERGE_TARGET_BRANCH:-develop}"
+read -r -a PROTECTED_ARRAY <<< "${PROTECTED_BRANCHES:-main master}"
+ALL_PROTECTED=("${PROTECTED_ARRAY[@]}" "${MERGE_TARGET}")
 
 log_info()  { printf "\033[1;34m[SANDBOX:INFO]\033[0m  %s\n" "$*"; }
 log_ok()    { printf "\033[1;32m[SANDBOX:OK]\033[0m    %s\n" "$*"; }
@@ -33,8 +50,8 @@ Usage: $(basename "$0") <command> [arguments]
 
 Commands:
   create <task-id> [base-ref]   Create and initialize an isolated worktree at ../worktrees/<task-id>
-                                (defaults to branching from ${DEFAULT_BASE_REF}; 'main' is forbidden).
-  init <task-id>                Restore NuGet packages and validate an existing worktree.
+                                (defaults to branching from ${DEFAULT_BASE_REF}; main/master forbidden).
+  init <task-id>                Run configured INIT_CMD from .harness/harness.env inside the worktree.
   list                          List all active Git worktrees and their status.
   destroy <task-id> [--force]   Remove ../worktrees/<task-id>, prune metadata, and delete its local branch.
   prune                         Prune stale Git worktree administrative files.
@@ -54,7 +71,7 @@ validate_task_id() {
         exit 2
     fi
 
-    for protected in "${PROTECTED_BRANCHES[@]}"; do
+    for protected in "${ALL_PROTECTED[@]}"; do
         if [[ "${task_id}" == "${protected}" || "${task_id}" == "origin/${protected}" ]]; then
             log_error "Task ID '${task_id}' collides with protected branch '${protected}'. Operation rejected."
             exit 2
@@ -64,10 +81,12 @@ validate_task_id() {
 
 validate_base_ref() {
     local base_ref="${1}"
-    if [[ "${base_ref}" == "main" || "${base_ref}" == "origin/main" || "${base_ref}" == "master" || "${base_ref}" == "origin/master" ]]; then
-        log_error "Branching from '${base_ref}' is strictly forbidden by GeoAssets Branching Policy. Always branch from '${DEFAULT_BASE_REF}'."
-        exit 2
-    fi
+    for protected in "${PROTECTED_ARRAY[@]}"; do
+        if [[ "${base_ref}" == "${protected}" || "${base_ref}" == "origin/${protected}" ]]; then
+            log_error "Branching from '${base_ref}' is strictly forbidden by Branching Policy. Always branch from '${DEFAULT_BASE_REF}'."
+            exit 2
+        fi
+    done
 }
 
 normalize_branch_name() {
@@ -93,13 +112,13 @@ cmd_create() {
 
     mkdir -p "${WORKTREES_ROOT}"
 
-    log_info "Fetching latest '${DEFAULT_BASE_REF}' in ${REPO_ROOT}..."
-    git -C "${REPO_ROOT}" fetch origin develop --quiet || log_warn "Offline or unable to fetch origin/develop; using local ref '${base_ref}'."
+    log_info "Fetching latest '${MERGE_TARGET}' in ${REPO_ROOT}..."
+    git -C "${REPO_ROOT}" fetch origin "${MERGE_TARGET}" --quiet 2>/dev/null || log_warn "Offline or no 'origin' remote yet; using local ref."
 
     if ! git -C "${REPO_ROOT}" rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1; then
-        if git -C "${REPO_ROOT}" rev-parse --verify "develop^{commit}" >/dev/null 2>&1; then
-            log_warn "Ref '${base_ref}' not found locally; falling back to 'develop'."
-            base_ref="develop"
+        if git -C "${REPO_ROOT}" rev-parse --verify "${MERGE_TARGET}^{commit}" >/dev/null 2>&1; then
+            log_warn "Ref '${base_ref}' not found locally; falling back to '${MERGE_TARGET}'."
+            base_ref="${MERGE_TARGET}"
         else
             log_error "Base ref '${base_ref}' could not be resolved."
             exit 1
@@ -129,21 +148,25 @@ cmd_init() {
 
     local current_branch
     current_branch="$(git -C "${worktree_path}" rev-parse --abbrev-ref HEAD)"
-    if [[ "${current_branch}" == "main" || "${current_branch}" == "master" ]]; then
-        log_error "Worktree '${worktree_path}' is checked out on protected branch '${current_branch}'! Aborting."
-        exit 2
-    fi
+    for protected in "${PROTECTED_ARRAY[@]}"; do
+        if [[ "${current_branch}" == "${protected}" ]]; then
+            log_error "Worktree '${worktree_path}' is checked out on protected branch '${current_branch}'! Aborting."
+            exit 2
+        fi
+    done
 
-    log_info "Initializing .NET dependencies in '${worktree_path}'..."
-    (
-        cd "${worktree_path}"
-        dotnet restore GeoAssets.sln --nologo --verbosity quiet
-    )
+    if [[ -n "${INIT_CMD:-}" ]]; then
+        log_info "Running worktree INIT_CMD ('${INIT_CMD}') in '${worktree_path}'..."
+        (
+            cd "${worktree_path}"
+            eval "${INIT_CMD}"
+        )
+    fi
     log_ok "Initialized worktree '${task_id}' on branch '${current_branch}'."
 }
 
 cmd_list() {
-    log_info "Active Git worktrees for GeoAssets:"
+    log_info "Active Git worktrees for ${PROJECT_NAME}:"
     git -C "${REPO_ROOT}" worktree list
     echo ""
     if [[ -d "${WORKTREES_ROOT}" ]]; then
@@ -156,11 +179,9 @@ cmd_list() {
         else
             for wt in "${entries[@]}"; do
                 if [[ -d "${wt}" ]]; then
-                    local wt_name
+                    local wt_name branch dirty_count
                     wt_name="$(basename "${wt}")"
-                    local branch
                     branch="$(git -C "${wt}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
-                    local dirty_count
                     dirty_count="$(git -C "${wt}" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
                     printf "  - %-36s branch: %-32s modified_files: %s\n" "${wt_name}" "${branch}" "${dirty_count}"
                 fi
@@ -192,7 +213,7 @@ cmd_destroy() {
 
     git -C "${REPO_ROOT}" worktree prune -v
 
-    for protected in "${PROTECTED_BRANCHES[@]}"; do
+    for protected in "${ALL_PROTECTED[@]}"; do
         if [[ "${branch_name}" == "${protected}" ]]; then
             log_warn "Skipping deletion of protected branch '${branch_name}'."
             return 0
@@ -241,4 +262,3 @@ main() {
 }
 
 main "$@"
-

@@ -1,49 +1,42 @@
 ---
 name: solid-code-synthesizer
 description: >-
-  Scaffold C# 14 / .NET 10 value objects, segregated interfaces, Razor
-  code-behind components, NSubstitute mocks, DomainTestDataBuilders, and LSP
-  contract / xUnit 100%-branch-coverage test suites with deterministic SOLID
-  verification. Use when generating boilerplate, DTOs, adapters, UI bindings,
-  or automated unit/contract tests in GeoAssets.
+  Scaffold immutable value objects, DTOs, segregated interface mocks,
+  TestDataBuilders, shared LSP contract suites, and 100%-branch-coverage
+  automated unit tests in any programming language with deterministic SOLID
+  verification. Use when generating boilerplate, adapters, UI bindings, or
+  automated test suites.
 ---
 
-# SOLID & Categorical C# 14 Synthesizer (GitHub Copilot Agent Skill)
+# SOLID & Categorical Code Synthesizer (GitHub Copilot Agent Skill)
 
-Guides **GitHub Copilot** (IDE Agent Mode, Copilot CLI, Coding Agent, and Code Review) through GeoAssets' 5-stage SOLID & Categorical synthesis workflow for .NET 10 / C# 14 implementation and exhaustive xUnit QA.
+Guides **GitHub Copilot** (IDE Agent Mode, Copilot CLI, Coding Agent, and Code Review) through the 5-stage SOLID & Categorical synthesis workflow for mechanical scaffolding and exhaustive QA across any stack configured in [`.harness/harness.env`](../../../.harness/harness.env).
 
-## 1. Stage-by-Stage C# 14 Scaffolding & QA Rules
+## Stage-by-Stage Scaffolding & QA Rules
 
-### Stage 1 — SRP & Value Semantics (`readonly record struct` & `sealed record`)
-- Emit `readonly record struct` for small immutable value types, coordinate pairs, bounding boxes, and strongly-typed IDs (zero heap allocation).
-- Emit `sealed record` for immutable DTOs, commands, domain events, and REST payloads; prefer source-generated `JsonSerializerContext` (`[JsonSerializable(typeof(...))]`) on high-throughput GeoJSON/REST paths.
-- Keep GeoJSON coordinates strictly RFC 7946 `[longitude, latitude]` (SRID 4326) with coordinate arrays as the serialized source of truth.
-- Split every Blazor component into markup-only `.razor` + `.razor.cs` partial class (`[Parameter]` down, `EventCallback<T>` up; never add inline `@code {}`, except `apps/GeoAssets.MAUI/Pages/MauiLogin.razor`).
-
-### Stage 2 — ISP & Minimal Mocks (Role-Segregated Contracts)
-- Keep new interfaces narrow and role-specific (`<= 5` cohesive methods; separate `I*Reader` from `I*Writer`).
-- In xUnit tests, mock only the narrow segregated port via `NSubstitute` (`Substitute.For<IOrderReader>()`) rather than over-mocking large concrete graphs.
-- Never emit `throw new NotImplementedException()` stubs in production adapters.
-
-### Stage 3 — DIP & Deterministic Guardrails (`TimeProvider` & `CancellationToken`)
-- Validate reference inputs with `ArgumentNullException.ThrowIfNull(arg)` and strings with `ArgumentException.ThrowIfNullOrWhiteSpace(arg)` (`<Nullable>enable</Nullable>` — avoid null-forgiving `!`).
-- Never emit `DateTime.Now`, `DateTime.UtcNow`, `DateTime.Today`, `DateTimeOffset.Now`, or `DateTimeOffset.UtcNow` (`RS0030`). Always inject `System.TimeProvider` in production types and `FakeTimeProvider` in xUnit tests.
-- Never emit `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, or `Thread.Sleep(...)` (`AsyncFixer02`). Always `await` asynchronously and accept/forward `CancellationToken`.
-- Never emit `Microsoft.EntityFrameworkCore`, `Npgsql`, or `GeoAssets.Provider.*` references inside `core/` projects.
-
-### Stage 4 — OCP & LSP Behavioral Contract Test Suites (100% Branch Coverage)
-- **LSP Contract Suites**: When testing an implementation of a multi-backend port (e.g., `IServiceOrderRepository`, `IAssetProvider`), inherit or extend shared abstract contract suites (following `ServiceOrderRepositoryContractTests` in `GeoAssets.Workflow.TestKit`) so EF Core, PostgreSQL, In-Memory, and REST implementations prove identical behavioral and event-propagation semantics.
-- **OCP Strategy / Rule Matrices**: Use exhaustive C# 14 `switch` expressions in production and `[Theory]` + `[InlineData]` / `MemberData` matrices in xUnit to verify every rule/plugin permutation without duplicating test bodies.
-- **Exhaustive Branch Coverage**: Cover happy paths, null/whitespace guard clauses, boundary geometry/topology conditions, `FakeTimeProvider` clock advances, and cancelled `CancellationToken` paths using shared fluent builders (`DomainTestDataBuilders`).
-
-### Stage 5 — Boundary Error Parity & Deterministic Oracle Verification
-- Verify expected "not found" queries return `null` (`Task<T?>`) rather than throwing, while write invariant violations across REST boundaries test **both** server status/payload serialization (`400`/`409`/`404`) and client exception reconstruction (`Rest*Repository`).
-- Run both deterministic verifiers before completing any task (never add `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`):
+1. **Stage 1 — SRP & Value Semantics**:
+   - Emit immutable types for value objects, typed IDs, commands, events, and DTO payloads (`Readonly<T>`, `@dataclass(frozen=True)`, value `struct`, `readonly record struct` / `sealed record`, `data class`).
+   - Define immutable pagination and filter models (`PageRequest`, `PagedResult<T>`, strongly typed `FilterCriteria`) for collection/table queries; unbounded collection models and sensitive fields (passwords, tokens) in filter criteria are prohibited.
+   - Honor any `pairedFileRules` configured in [`harness.config.json`](../../../harness.config.json).
+2. **Stage 2 — ISP & Minimal Mocks**:
+   - Keep new interfaces/protocols/traits narrow and consumer-specific (`<= 5` cohesive methods; separate `Reader` from `Writer`).
+   - Any query port serving collections for UI tables or lists must require explicit typed filter parameters and pagination contracts (`PageRequest` or cursor) returning paginated envelopes.
+   - Mock only narrow segregated ports in unit tests — never emit `NotImplementedError`, `NotImplementedException`, `todo!()`, or `unimplemented!()` stubs in production adapters.
+3. **Stage 3 — DIP, Clock & Cancellation Guardrails**:
+   - Inject abstract ports and an abstract Clock / `TimeProvider` (using a deterministic fake clock in tests); never read raw system wall-clock directly.
+   - Propagate cancellation signals/contexts (`AbortSignal`, `context.Context`, `CancellationToken`) asynchronously without blocking waits or sleeps.
+   - Never import ORMs, database drivers, HTTP clients, or UI packages inside `src/core/` or `src/domain/`.
+4. **Stage 4 — OCP Matrices & LSP Behavioral Contract Suites (100% Branch Coverage)**:
+   - When testing multi-backend ports (SQL, In-Memory, REST/gRPC), build or extend a **Shared Behavioral Contract Test Suite** executed against every concrete adapter to prove Liskov Substitution.
+   - Contract test suites for table/collection queries must verify pagination invariants (first/middle/last page slicing, out-of-range empty lists, max page size clamping, and deterministic sorting).
+   - Use parameterized/table-driven tests and shared fluent `TestDataBuilders` to cover 100% of branches: happy paths, null/empty guards, boundary values, fake clock transitions, and cancellation aborts.
+5. **Stage 5 — Boundary Error Parity & Deterministic Oracle Gate**:
+   - Verify expected lookup misses return `null`/`None`/`Option::None`, while write invariant violations across network boundaries test **both** server error serialization and client error reconstruction. Validate pagination bounds (`page >= 1`, `1 <= pageSize <= 100`).
+   - Run both deterministic verifiers before finishing (never add `eslint-disable`, `@ts-ignore`, `# noqa`, `#[allow(`, `//nolint`, `#pragma warning disable`, or `<NoWarn>`):
 
 ```bash
 python3 scripts/verify-solid-contracts.py --target .
 ./scripts/verify-agent-worktree.sh .
 ```
 
-If Stage 1 of `verify-agent-worktree.sh` exits `10` (formatting drift), run `dotnet format style GeoAssets.sln` and re-verify until both scripts return `Exit 0`.
-
+If Stage 1 of `verify-agent-worktree.sh` exits `10`, run `FORMAT_FIX_CMD` from `.harness/harness.env` and re-verify until both return `Exit 0`.

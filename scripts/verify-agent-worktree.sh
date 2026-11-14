@@ -1,148 +1,139 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# GeoAssets — Deterministic Oracle & Worktree Gatekeeper
+# Multi-Agent Deterministic Oracle & Worktree Gatekeeper (Language-Agnostic)
 # ==============================================================================
-# Executes the three-stage verification gate inside an agent worktree:
-#   Stage 1: `dotnet format --verify-no-changes`
-#   Stage 2: `dotnet build --no-incremental /warnaserror`
-#            (Roslyn latest-all, AsyncFixer, Meziantou.Analyzer, BannedApiAnalyzers)
-#            On macOS, GeoAssets.MAUI's net10.0-ios/net10.0-maccatalyst TFMs are built separately
-#            at baseline (no /warnaserror) — an uncoded Apple MacDev SDK warning there can't be
-#            fixed or suppressed; real compile errors on those TFMs still fail this stage (XD01-293).
-#   Stage 3: `dotnet test --no-build` for architecture tests (NetArchTest)
+# Reads toolchain commands from `.harness/harness.env` and executes the
+# universal three-stage verification gate inside an agent worktree:
+#   Stage 1: FORMAT_CHECK_CMD      (Code formatting & style verification)
+#   Stage 2: BUILD_AND_LINT_CMD    (Strict compiler, typecheck & static analyzers)
+#            + optional STAGE2_POST_CHECK_CMD
+#   Stage 3: `scripts/verify-solid-contracts.py` polyglot SOLID check
+#            + ARCH_TEST_CMD       (Architecture boundary & domain invariant tests)
 #
 # Exit Codes:
 #   0  — All Oracle checks passed
-#   2  — Invalid arguments, missing solution, or forbidden `main` branch
-#   10 — Stage 1 failed (Code formatting / style drift)
-#   20 — Stage 2 failed (Compiler or static analyzer error under /warnaserror)
-#   30 — Stage 3 failed (Architecture / invariant test failure)
+#   2  — Invalid arguments, missing harness config, or protected branch (`main`)
+#   10 — Stage 1 failed (Formatting / style drift -> route to GitHub Copilot)
+#   20 — Stage 2 failed (Compiler / typecheck / linter / suppression violation -> route to Claude Code)
+#   30 — Stage 3 failed (Architecture / SOLID / invariant failure -> route to Claude Code)
 # ==============================================================================
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TARGET_DIR="${1:-$(pwd)}"
-SOLUTION_FILE="${GEOASSETS_SOLUTION:-GeoAssets.sln}"
-ARCH_TEST_FILTER="${GEOASSETS_ARCH_FILTER:-FullyQualifiedName~Architecture|Category=Architecture}"
 
 if [[ ! -d "${TARGET_DIR}" ]]; then
     printf "\033[1;31m[ORACLE:FATAL]\033[0m Target worktree directory does not exist: %s\n" "${TARGET_DIR}" >&2
     exit 2
 fi
 
+TARGET_DIR="$(cd "${TARGET_DIR}" && pwd)"
 cd "${TARGET_DIR}" || exit 2
 
-if [[ ! -f "${SOLUTION_FILE}" ]]; then
-    printf "\033[1;31m[ORACLE:FATAL]\033[0m Solution file '%s' not found in %s\n" "${SOLUTION_FILE}" "${TARGET_DIR}" >&2
+HARNESS_ENV=".harness/harness.env"
+if [[ ! -f "${HARNESS_ENV}" ]] && [[ -f "${DEFAULT_ROOT}/.harness/harness.env" ]]; then
+    HARNESS_ENV="${DEFAULT_ROOT}/.harness/harness.env"
+fi
+
+if [[ ! -f "${HARNESS_ENV}" ]]; then
+    printf "\033[1;31m[ORACLE:FATAL]\033[0m Missing '.harness/harness.env' in %s\n" "${TARGET_DIR}" >&2
     exit 2
 fi
 
+# shellcheck disable=SC1090
+source "${HARNESS_ENV}"
+
+read -r -a PROTECTED_ARRAY <<< "${PROTECTED_BRANCHES:-main master}"
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
-if [[ "${GITHUB_ACTIONS:-false}" != "true" ]] && [[ "${CURRENT_BRANCH}" == "main" || "${CURRENT_BRANCH}" == "master" ]]; then
-    printf "\033[1;31m[ORACLE:FATAL]\033[0m Refusing to run agent verification on protected branch '%s'. Switch to an isolated worktree branch.\n" "${CURRENT_BRANCH}" >&2
-    exit 2
+
+if [[ "${GITHUB_ACTIONS:-false}" != "true" ]]; then
+    for protected in "${PROTECTED_ARRAY[@]}"; do
+        if [[ "${CURRENT_BRANCH}" == "${protected}" ]]; then
+            printf "\033[1;31m[ORACLE:FATAL]\033[0m Refusing to run agent verification on protected branch '%s'. Switch to an isolated worktree branch.\n" "${CURRENT_BRANCH}" >&2
+            exit 2
+        fi
+    done
 fi
 
-LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/geoassets-oracle.XXXXXX")"
+LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/multiagent-oracle.XXXXXX")"
 trap 'rm -rf "${LOG_DIR}"' EXIT
 
 FORMAT_LOG="${LOG_DIR}/01-format.log"
-BUILD_LOG="${LOG_DIR}/02-build.log"
-APPLE_TFM_BUILD_LOG="${LOG_DIR}/02-build-apple-tfms.log"
-TEST_LOG="${LOG_DIR}/03-arch-test.log"
+BUILD_LOG="${LOG_DIR}/02-build-lint.log"
+POST_BUILD_LOG="${LOG_DIR}/02b-post-build.log"
+ARCH_LOG="${LOG_DIR}/03-arch-solid.log"
 
 print_header() {
     printf "\n\033[1;36m==============================================================================\033[0m\n"
-    printf "\033[1;36m[ORACLE] %s\033[0m\n" "$1"
+    printf "\033[1;36m[ORACLE]\033[0m %s\n" "$1"
     printf "\033[1;36m==============================================================================\033[0m\n"
 }
 
-parse_compiler_diagnostics() {
-    local logfile="$1"
-    printf "\n\033[1;33m--- Targeted Diagnostic Summary (Self-Healing Input) ---\033[0m\n"
-    # Match MSBuild/Roslyn diagnostic lines: path(line,col): error CODE: message [project]
-    grep -E "(: error [A-Z]+[0-9]+:)|(: warning [A-Z]+[0-9]+:)" "${logfile}" \
-        | sed -E 's/^[[:space:]]+//' \
-        | sort -u \
-        | head -n 50 || true
-
-    printf "\n\033[1;33m--- Analyzer Breakdown by Rule Family ---\033[0m\n"
-    grep -Eo "error (AsyncFixer[0-9]+|MA[0-9]+|RS[0-9]+|CA[0-9]+|CS[0-9]+|IDE[0-9]+)" "${logfile}" \
-        | awk '{print $2}' \
-        | sort \
-        | uniq -c \
-        | sort -nr || true
-}
-
-parse_test_failures() {
-    local logfile="$1"
-    printf "\n\033[1;33m--- Targeted Architecture / Test Failure Summary ---\033[0m\n"
-    grep -E "(Failed[[:space:]]+)|(Error Message:)|(Stack Trace:)|(Assert\.)" "${logfile}" -A 2 \
-        | head -n 60 || cat "${logfile}"
-}
-
-printf "\033[1;34m[ORACLE:START]\033[0m Worktree: %s | Branch: %s | Solution: %s\n" "${TARGET_DIR}" "${CURRENT_BRANCH}" "${SOLUTION_FILE}"
+printf "\033[1;34m[ORACLE:START]\033[0m Worktree: %s | Branch: %s | Stack: %s\n" \
+    "${TARGET_DIR}" "${CURRENT_BRANCH}" "${STACK_PROFILE:-generic}"
 
 # ------------------------------------------------------------------------------
 # Stage 1: Deterministic Formatting & Code Style Check
 # ------------------------------------------------------------------------------
-print_header "Stage 1/3: Running 'dotnet format style --verify-no-changes'"
-if ! dotnet format style "${SOLUTION_FILE}" --verify-no-changes --no-restore --verbosity diagnostic >"${FORMAT_LOG}" 2>&1; then
-    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 1 failed (Exit Code 10): Code style / formatting violations detected.\n" >&2
-    grep -E "(error WHITESPACE|error IDE|Formatted code file)" "${FORMAT_LOG}" | head -n 40 || tail -n 40 "${FORMAT_LOG}"
-    printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Run 'dotnet format style %s' in the worktree and re-verify.\n" "${SOLUTION_FILE}" >&2
+print_header "Stage 1/3: Formatting & Style Check (${FORMAT_CHECK_CMD})"
+if ! eval "${FORMAT_CHECK_CMD}" >"${FORMAT_LOG}" 2>&1; then
+    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 1 failed (Exit Code 10): Code style / formatting drift detected.\n" >&2
+    tail -n 50 "${FORMAT_LOG}" >&2
+    printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Run '%s' in the worktree and re-verify.\n" "${FORMAT_FIX_CMD:-FORMAT_FIX_CMD}" >&2
     exit 10
 fi
 printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 1 passed: Zero code style drift.\n"
 
 # ------------------------------------------------------------------------------
-# Stage 2: Strict Non-Incremental Build & Static Analyzers (/warnaserror)
+# Stage 2: Strict Build, Typecheck & Static Analysis (Zero Suppressions)
 # ------------------------------------------------------------------------------
-print_header "Stage 2/3: Running 'dotnet build --no-incremental /warnaserror' (net10.0-ios/net10.0-maccatalyst scoped out on macOS — XD01-293)"
-if ! dotnet build "${SOLUTION_FILE}" --no-incremental /warnaserror -p:GeoAssetsOracleSkipAppleTfms=true -consoleLoggerParameters:NoSummary >"${BUILD_LOG}" 2>&1; then
-    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 2 failed (Exit Code 20): Compiler or static analyzer violation.\n" >&2
-    parse_compiler_diagnostics "${BUILD_LOG}"
-    printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Fix all reported diagnostics in source. Do NOT suppress rules via #pragma or <NoWarn>.\n" >&2
+print_header "Stage 2/3: Build, Typecheck & Static Analyzers (${BUILD_AND_LINT_CMD})"
+if ! eval "${BUILD_AND_LINT_CMD}" >"${BUILD_LOG}" 2>&1; then
+    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 2 failed (Exit Code 20): Compiler, typecheck, or static analyzer violation.\n" >&2
+    printf "\n\033[1;33m--- Targeted Diagnostic Summary (Self-Healing Input) ---\033[0m\n" >&2
+    tail -n 60 "${BUILD_LOG}" >&2
+    printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Fix all reported diagnostics in source. Do NOT suppress linter or compiler rules.\n" >&2
     exit 20
 fi
-printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 2 passed: Clean build with zero Roslyn/AsyncFixer/Meziantou/BannedApi warnings.\n"
 
-# On macOS, confirm the Apple TFMs still compile for real (baseline, no /warnaserror) — this
-# still fails the gate on genuine compile errors, just not on the known uncoded MacDev SDK
-# warning that blocks /warnaserror for net10.0-ios/net10.0-maccatalyst (XD01-293).
-if [[ "$(uname)" == "Darwin" ]]; then
-    print_header "Stage 2/3 (macOS baseline): net10.0-ios / net10.0-maccatalyst compile check"
-    if ! dotnet build apps/GeoAssets.MAUI/GeoAssets.MAUI.csproj -f net10.0-ios --no-incremental -consoleLoggerParameters:NoSummary >"${APPLE_TFM_BUILD_LOG}" 2>&1 \
-        || ! dotnet build apps/GeoAssets.MAUI/GeoAssets.MAUI.csproj -f net10.0-maccatalyst --no-incremental -consoleLoggerParameters:NoSummary >>"${APPLE_TFM_BUILD_LOG}" 2>&1; then
-        printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 2 failed (Exit Code 20): net10.0-ios/net10.0-maccatalyst baseline compile error.\n" >&2
-        parse_compiler_diagnostics "${APPLE_TFM_BUILD_LOG}"
-        printf "\n\033[1;33m[SELF-HEAL HINT]\033[0m Fix all reported diagnostics in source. Do NOT suppress rules via #pragma or <NoWarn>.\n" >&2
+if [[ -n "${STAGE2_POST_CHECK_CMD:-}" ]]; then
+    printf "[ORACLE] Running Stage 2 post-check (${STAGE2_POST_CHECK_CMD})...\n"
+    if ! eval "${STAGE2_POST_CHECK_CMD}" >"${POST_BUILD_LOG}" 2>&1; then
+        printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 2 post-check failed (Exit Code 20).\n" >&2
+        tail -n 60 "${POST_BUILD_LOG}" >&2
         exit 20
     fi
-    printf "\033[1;32m[ORACLE:PASS]\033[0m Apple TFM baseline compile check passed.\n"
 fi
+printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 2 passed: Clean build/typecheck/lint with zero warnings or suppressions.\n"
 
 # ------------------------------------------------------------------------------
-# Stage 3: Architecture & Domain Invariant Tests (NetArchTest)
+# Stage 3: Polyglot SOLID Verifier & Architecture / Domain Invariant Tests
 # ------------------------------------------------------------------------------
-print_header "Stage 3/3: Running 'dotnet test --no-build' for Architecture Tests"
-shopt -s nullglob
-ARCH_PROJECTS=(tests/*Architecture*.Tests/*.csproj)
-shopt -u nullglob
-
-if [[ ${#ARCH_PROJECTS[@]} -gt 0 ]]; then
-    TEST_CMD=(dotnet test "${ARCH_PROJECTS[0]}" --no-build --nologo)
-else
-    TEST_CMD=(dotnet test "${SOLUTION_FILE}" --no-build --nologo --filter "${ARCH_TEST_FILTER}")
+print_header "Stage 3/3: Polyglot SOLID Contracts & Architecture Tests"
+SOLID_SCRIPT="${TARGET_DIR}/scripts/verify-solid-contracts.py"
+if [[ ! -f "${SOLID_SCRIPT}" ]] && [[ -f "${DEFAULT_ROOT}/scripts/verify-solid-contracts.py" ]]; then
+    SOLID_SCRIPT="${DEFAULT_ROOT}/scripts/verify-solid-contracts.py"
 fi
 
-if ! "${TEST_CMD[@]}" >"${TEST_LOG}" 2>&1; then
-    printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 3 failed (Exit Code 30): Architecture or invariant test failure.\n" >&2
-    parse_test_failures "${TEST_LOG}"
-    exit 30
+if [[ -f "${SOLID_SCRIPT}" ]]; then
+    python3 "${SOLID_SCRIPT}" --target "${TARGET_DIR}" >"${ARCH_LOG}" 2>&1
+    SOLID_RC=$?
+    cat "${ARCH_LOG}"
+    if [[ ${SOLID_RC} -ne 0 ]]; then
+        exit "${SOLID_RC}"
+    fi
 fi
-printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 3 passed: All architectural invariants verified.\n"
+
+if [[ -n "${ARCH_TEST_CMD:-}" ]]; then
+    if ! eval "${ARCH_TEST_CMD}" >"${ARCH_LOG}" 2>&1; then
+        printf "\033[1;31m[ORACLE:FAIL]\033[0m Stage 3 failed (Exit Code 30): Architecture or invariant test failure.\n" >&2
+        tail -n 60 "${ARCH_LOG}" >&2
+        exit 30
+    fi
+fi
+printf "\033[1;32m[ORACLE:PASS]\033[0m Stage 3 passed: All SOLID and architectural invariants verified.\n"
 
 printf "\n\033[1;32m[ORACLE:VERIFIED]\033[0m All 3 deterministic verification gates succeeded (Exit Code 0).\n"
 exit 0
-

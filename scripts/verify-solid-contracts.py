@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-GeoAssets — Deterministic SOLID, Categorical Scope & Structural Contract Verifier
-=================================================================================
-Complements `scripts/verify-agent-worktree.sh` with fast (<200ms) pre-flight and
-post-synthesis AST/structural verification grounded in GeoAssets' C# 14 / .NET 10
-Tri-Planar Dual-Loop architecture.
+Polyglot SOLID, Categorical Disjoint-Scope & Guardrail Contract Verifier
+========================================================================
+Language-agnostic static & structural verifier configured by `harness.config.json`.
+Supports Python, TypeScript/JavaScript, Go, Rust, C#, Java, and Kotlin projects.
 
 Exit Codes (aligned with `scripts/verify-agent-worktree.sh`):
-  0  — All SOLID, scope, and structural checks passed
+  0  — All SOLID, scope, and guardrail checks passed
   2  — Invalid CLI arguments or target directory missing
-  10 — DAG Scope / Disjoint File Ownership (2A ∩ 2B ≠ ∅) / .razor.cs split violation
-  20 — Static guardrail violation (Banned clock/blocking APIs or analyzer suppression)
-  30 — SOLID / Onion structural violation (core/ infra leak, DIP concrete adapter, LSP stub)
+  10 — DAG Scope / Disjoint File Ownership (2A ∩ 2B ≠ ∅) / Paired-file rule violation
+  20 — Static guardrail violation (Linter/typechecker suppression or banned API usage)
+  30 — SOLID / Clean-Hexagonal structural violation (Domain core infra leak, DIP adapter, LSP stub)
 """
 
 from __future__ import annotations
@@ -24,43 +23,33 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
-RAZOR_SINGLE_FILE_EXCEPTIONS = {
-    "apps/GeoAssets.MAUI/Pages/MauiLogin.razor",
-    # XD01-277: splitting this page into .razor + .razor.cs fails to build outright
-    # (CS0115: no suitable method found to override on OnInitializedAsync) rather than the
-    # false-unused-field warning MauiLogin.razor hit — confirmed empirically, same underlying
-    # GeoAssets.MAUI Razor-codegen degradation CLAUDE.md's MauiLogin paragraph (XD01-121)
-    # documents. User-approved exception.
-    "apps/GeoAssets.MAUI/Pages/FieldWorkChecklist.razor",
+DEFAULT_CONFIG: dict[str, Any] = {
+    "architecture": {
+        "domainCoreDirs": ["src/core", "src/domain", "core", "domain"],
+        "testDirs": ["tests", "test", "__tests__", "spec"],
+        "sourceExtensions": [".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".cs", ".java", ".kt"],
+        "forbiddenCoreImports": [],
+        "concreteAdapterInstantiationsInCore": [],
+        "bannedApiPatterns": [],
+        "suppressionPatterns": [],
+        "unimplementedStubPatterns": [],
+        "pairedFileRules": [],
+        "metrics": {
+            "maxInterfaceMethods": 5,
+            "maxPublicMethods": 10,
+            "maxLoc": 500,
+        },
+    }
 }
-
-RAZOR_COMPONENT_PREFIXES = (
-    "apps/GeoAssets.Shared/Components/",
-    "apps/GeoAssets.Shared/Pages/",
-    "apps/GeoAssets.Web/Components/",
-    "apps/GeoAssets.Web/Pages/",
-    "apps/GeoAssets.MAUI/Components/",
-    "apps/GeoAssets.MAUI/Pages/",
-)
-
-FORBIDDEN_CORE_IMPORTS = (
-    "Microsoft.EntityFrameworkCore",
-    "Npgsql",
-    "GeoAssets.Provider.",
-    "GeoAssets.Server",
-    "GeoAssets.Web",
-    "GeoAssets.MAUI",
-    "GeoAssets.Shared",
-)
 
 
 @dataclass(frozen=True)
 class Finding:
     code: int
     severity: str  # "ERROR" | "ADVISORY"
-    principle: str  # "SCOPE" | "RAZOR" | "GUARDRAIL" | "SRP" | "ISP" | "LSP" | "DIP"
+    principle: str  # "SCOPE" | "PAIRING" | "GUARDRAIL" | "SRP" | "ISP" | "LSP" | "DIP"
     file: str
     line: int
     message: str
@@ -89,23 +78,33 @@ class AuditReport:
         return 0
 
 
-def strip_csharp_comments_and_strings(source: str) -> str:
-    """
-    Replaces C# comments and string literals with spaces while preserving newlines
-    so line numbers remain 100% accurate and comments/strings never cause false positives.
-    """
-    pattern = re.compile(
-        r"//[^\n]*"
-        r"|/\*[\s\S]*?\*/"
-        r'|@"(?:""|[^"])*"'
-        r'|"(?:\\.|[^"\\])*"'
-        r"|'(?:\\.|[^'\\])*'",
-        re.MULTILINE,
-    )
+def load_config(target_dir: Path, config_override: str | None) -> dict[str, Any]:
+    cfg_path = Path(config_override) if config_override else (target_dir / "harness.config.json")
+    if not cfg_path.exists():
+        script_root_cfg = Path(__file__).resolve().parent.parent / "harness.config.json"
+        if script_root_cfg.exists():
+            cfg_path = script_root_cfg
+    if cfg_path.exists():
+        return json.loads(cfg_path.read_text(encoding="utf-8"))
+    return DEFAULT_CONFIG
+
+
+def strip_comments_preserve_lines(source: str, ext: str) -> str:
+    """Strips comments (keeping string literals blanked) while preserving exact line numbers."""
+    if ext == ".py":
+        pattern = re.compile(
+            r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|#[^\n]*',
+            re.MULTILINE,
+        )
+    else:
+        pattern = re.compile(
+            r"//[^\n]*|/\*[\s\S]*?\*/|`(?:\\.|[^`\\])*`|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'",
+            re.MULTILINE,
+        )
 
     def _blank(match: re.Match[str]) -> str:
         text = match.group(0)
-        if text.startswith(('"', '@"', "'")):
+        if text.startswith(('"', "'", "`")):
             return '""' + "".join("\n" for ch in text if ch == "\n")
         return "".join("\n" if ch == "\n" else " " for ch in text)
 
@@ -165,6 +164,17 @@ def matches_any_pattern(rel_path: str, patterns: Iterable[str]) -> bool:
     return False
 
 
+def is_test_file(norm_path: str, test_dirs: list[str]) -> bool:
+    if matches_any_pattern(norm_path, test_dirs):
+        return True
+    name = Path(norm_path).name
+    return (
+        name.startswith("test_")
+        or name.endswith(("_test.py", "_test.go", "_test.rs", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "Tests.cs"))
+        or ".Tests/" in norm_path
+    )
+
+
 def verify_scopes(
     changed_files: list[str],
     scope_a: list[str],
@@ -172,11 +182,8 @@ def verify_scopes(
     allowed_scope: list[str],
 ) -> list[Finding]:
     findings: list[Finding] = []
-
     if scope_a and scope_b:
-        # Check literal pattern overlap plus concrete file overlap (2A ∩ 2B = ∅)
-        exact_overlap = set(scope_a) & set(scope_b)
-        for item in sorted(exact_overlap):
+        for item in sorted(set(scope_a) & set(scope_b)):
             findings.append(
                 Finding(
                     code=10,
@@ -226,185 +233,129 @@ def verify_scopes(
                         message="SRP mutation scope violated: modified file lies outside agent's allowed bounded scope.",
                     )
                 )
-
     return findings
 
 
-def verify_razor_split(target_dir: Path, rel_path: str) -> list[Finding]:
+def verify_paired_files(target_dir: Path, rel_path: str, rules: list[dict[str, Any]]) -> list[Finding]:
     norm = rel_path.replace("\\", "/")
-    if not norm.endswith(".razor"):
-        return []
-    if norm in RAZOR_SINGLE_FILE_EXCEPTIONS or norm.endswith("_Imports.razor"):
-        return []
-    if not norm.startswith(RAZOR_COMPONENT_PREFIXES):
-        return []
-
-    code_behind = target_dir / f"{norm}.cs"
-    razor_file = target_dir / norm
     findings: list[Finding] = []
-    if not code_behind.exists():
-        findings.append(
-            Finding(
-                code=10,
-                severity="ERROR",
-                principle="RAZOR",
-                file=norm,
-                line=1,
-                message=f"Missing required code-behind partial class '{norm}.cs' (GeoAssets .razor + .razor.cs convention).",
-            )
-        )
-    if razor_file.exists():
-        text = razor_file.read_text(encoding="utf-8", errors="replace")
-        for idx, line in enumerate(text.splitlines(), start=1):
-            if re.search(r"^\s*@code\s*\{", line):
-                findings.append(
-                    Finding(
-                        code=10,
-                        severity="ERROR",
-                        principle="RAZOR",
-                        file=norm,
-                        line=idx,
-                        message="Inline '@code' block found in .razor markup; move C# logic into the '.razor.cs' partial class.",
-                    )
-                )
-    return findings
-
-
-def verify_msbuild_suppressions(target_dir: Path, rel_path: str) -> list[Finding]:
-    norm = rel_path.replace("\\", "/")
-    if not (norm.endswith(".csproj") or norm.endswith(".props") or norm.endswith(".targets")):
-        return []
-    full_path = target_dir / norm
-    if not full_path.exists():
-        return []
-    findings: list[Finding] = []
-    for idx, line in enumerate(full_path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
-        if "<NoWarn>" in line:
+    for rule in rules:
+        ext = rule.get("extension", "")
+        companion_suffix = rule.get("companionSuffix", "")
+        prefixes = rule.get("pathPrefixes", [])
+        exceptions = set(rule.get("exceptions", []))
+        if not ext or not companion_suffix or not norm.endswith(ext) or norm in exceptions:
+            continue
+        if prefixes and not any(norm.startswith(p) for p in prefixes):
+            continue
+        companion = target_dir / f"{norm}{companion_suffix}"
+        if not companion.exists():
             findings.append(
                 Finding(
-                    code=20,
+                    code=10,
                     severity="ERROR",
-                    principle="GUARDRAIL",
+                    principle="PAIRING",
                     file=norm,
-                    line=idx,
-                    message="Analyzer suppression '<NoWarn>' is prohibited by GeoAssets guardrails; resolve the underlying diagnostic.",
+                    line=1,
+                    message=f"Missing required companion file '{norm}{companion_suffix}'.",
                 )
             )
     return findings
 
 
-def extract_brace_block(lines: list[str], start_idx: int) -> tuple[int, list[tuple[int, str]]]:
-    """Extracts lines belonging to the first `{ ... }` block starting at or after `start_idx`."""
-    depth = 0
-    started = False
-    collected: list[tuple[int, str]] = []
-    for idx in range(start_idx, len(lines)):
-        line = lines[idx]
-        for ch in line:
-            if ch == "{":
-                depth += 1
-                started = True
-            elif ch == "}":
-                depth -= 1
-        if started:
-            collected.append((idx + 1, line))
-            if depth <= 0:
-                return idx, collected
-        elif ";" in line:
-            # Primary constructor / empty body declaration ending with `;`
-            return idx, collected
-    return len(lines) - 1, collected
+def rule_applies_to_ext(rule: dict[str, Any], ext: str) -> bool:
+    exts = rule.get("extensions")
+    return not exts or ext in exts
 
 
-def audit_csharp_file(
+def audit_file(
     target_dir: Path,
     rel_path: str,
+    arch_cfg: dict[str, Any],
     max_interface_methods: int,
     max_public_methods: int,
     max_loc: int,
     strict_metrics: bool,
 ) -> list[Finding]:
     norm = rel_path.replace("\\", "/")
-    if not norm.endswith(".cs"):
-        return []
     full_path = target_dir / norm
-    if not full_path.exists():
+    if not full_path.is_file():
         return []
 
+    ext = full_path.suffix
     raw_source = full_path.read_text(encoding="utf-8", errors="replace")
-    clean_source = strip_csharp_comments_and_strings(raw_source)
     raw_lines = raw_source.splitlines()
-    clean_lines = clean_source.splitlines()
-
-    is_core = norm.startswith("core/")
-    is_test = norm.startswith("tests/") or ".Tests/" in norm or ".TestKit/" in norm
 
     findings: list[Finding] = []
+
+    # 1. Suppression checks run against raw lines (since linter directives often sit inside comments!)
+    for rule in arch_cfg.get("suppressionPatterns", []):
+        if not rule_applies_to_ext(rule, ext):
+            continue
+        regex = re.compile(rule["pattern"])
+        for idx, rline in enumerate(raw_lines, start=1):
+            if regex.search(rline):
+                findings.append(
+                    Finding(
+                        code=20,
+                        severity="ERROR",
+                        principle="GUARDRAIL",
+                        file=norm,
+                        line=idx,
+                        message=rule.get("message", "Linter/compiler suppression directive is prohibited."),
+                    )
+                )
+
+    source_exts = set(arch_cfg.get("sourceExtensions", []))
+    if ext not in source_exts:
+        return findings
+
+    clean_source = strip_comments_preserve_lines(raw_source, ext)
+    clean_lines = clean_source.splitlines()
+    is_core = matches_any_pattern(norm, arch_cfg.get("domainCoreDirs", []))
+    is_test = is_test_file(norm, arch_cfg.get("testDirs", []))
     advisory_sev = "ERROR" if strict_metrics else "ADVISORY"
 
-    # 1. Line-level Guardrails, Onion Purity, LSP & DIP Checks
-    for idx, line in enumerate(clean_lines, start=1):
-        raw_line = raw_lines[idx - 1] if idx - 1 < len(raw_lines) else line
+    # 2. Banned APIs, Unimplemented Stubs (LSP), and Domain Core Purity (SRP/DIP)
+    for idx, rline in enumerate(raw_lines, start=1):
+        cline = clean_lines[idx - 1] if idx - 1 < len(clean_lines) else rline
 
-        # Analyzer suppressions (check raw_line for #pragma since preprocessor isn't a comment, clean_line for attributes)
-        if re.search(r"^\s*#\s*pragma\s+warning\s+disable\b", raw_line):
-            findings.append(
-                Finding(
-                    code=20,
-                    severity="ERROR",
-                    principle="GUARDRAIL",
-                    file=norm,
-                    line=idx,
-                    message="Prohibited '#pragma warning disable' directive; fix the underlying compiler/analyzer defect.",
+        for rule in arch_cfg.get("bannedApiPatterns", []):
+            if rule_applies_to_ext(rule, ext) and re.search(rule["pattern"], cline):
+                findings.append(
+                    Finding(
+                        code=20,
+                        severity="ERROR",
+                        principle="GUARDRAIL",
+                        file=norm,
+                        line=idx,
+                        message=rule.get("message", "Banned API detected."),
+                    )
                 )
-            )
-        if re.search(r"\[\s*(?:System\.Diagnostics\.CodeAnalysis\.)?SuppressMessage\b", line):
-            findings.append(
-                Finding(
-                    code=20,
-                    severity="ERROR",
-                    principle="GUARDRAIL",
-                    file=norm,
-                    line=idx,
-                    message="Prohibited '[SuppressMessage]' attribute; fix the underlying analyzer defect.",
-                )
-            )
 
-        # Banned system clock calls (RS0030)
-        clock_match = re.search(r"\b(DateTime(?:Offset)?\.(?:UtcNow|Now|Today))\b", line)
-        if clock_match:
-            findings.append(
-                Finding(
-                    code=20,
-                    severity="ERROR",
-                    principle="GUARDRAIL",
-                    file=norm,
-                    line=idx,
-                    message=f"Banned clock symbol '{clock_match.group(1)}' (RS0030); inject System.TimeProvider (or FakeTimeProvider in tests).",
-                )
-            )
+        if not is_test:
+            # Check raw line (excluding pure comments) for stubs whose message might be in string literals
+            code_part = rline.split("//", 1)[0].split("#", 1)[0] if ext != ".cs" else rline.split("//", 1)[0]
+            for stub_rule in arch_cfg.get("unimplementedStubPatterns", []):
+                if rule_applies_to_ext(stub_rule, ext) and re.search(stub_rule["pattern"], code_part):
+                    findings.append(
+                        Finding(
+                            code=30,
+                            severity="ERROR",
+                            principle="LSP",
+                            file=norm,
+                            line=idx,
+                            message="LSP / ISP violation: production code contains an unimplemented stub; implement contract or segregate interface.",
+                        )
+                    )
 
-        # Banned blocking / sync-over-async calls
-        blocking_match = re.search(
-            r"(\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(|\bTask\.Wait(?:All|Any)?\s*\(|\bThread\.Sleep\s*\()",
-            line,
-        )
-        if blocking_match:
-            findings.append(
-                Finding(
-                    code=20,
-                    severity="ERROR",
-                    principle="GUARDRAIL",
-                    file=norm,
-                    line=idx,
-                    message=f"Banned blocking call '{blocking_match.group(1).strip()}'; use non-blocking 'await' with CancellationToken.",
-                )
-            )
-
-        # SRP / Onion Purity in core/
-        if is_core:
-            for forbidden in FORBIDDEN_CORE_IMPORTS:
-                if re.search(rf"\busing\s+(?:static\s+)?{re.escape(forbidden)}", line):
+        if is_core and not is_test:
+            for forbidden in arch_cfg.get("forbiddenCoreImports", []):
+                # Match import/using/use/require statements referencing forbidden outer-layer modules
+                if re.search(
+                    rf"(?:\bimport\b.*?\b{re.escape(forbidden)}\b|\bfrom\s+{re.escape(forbidden)}\b|\busing\s+{re.escape(forbidden)}|\buse\s+{re.escape(forbidden)}|\"{re.escape(forbidden)})",
+                    rline,
+                ):
                     findings.append(
                         Finding(
                             code=30,
@@ -412,51 +363,23 @@ def audit_csharp_file(
                             principle="SRP",
                             file=norm,
                             line=idx,
-                            message=f"Onion Architecture / SRP violation: 'core/' file references forbidden outer-layer namespace '{forbidden}'.",
+                            message=f"Clean/Hexagonal Architecture violation: domain core file imports outer-layer package '{forbidden}'.",
                         )
                     )
-            dip_match = re.search(
-                r"\bnew\s+(HttpClient|[A-Z]\w*DbContext|NpgsqlConnection|SqlConnection|Postgres[A-Z]\w*|Rest[A-Z]\w*Repository)\s*\(",
-                line,
-            )
-            if dip_match:
-                findings.append(
-                    Finding(
-                        code=30,
-                        severity="ERROR",
-                        principle="DIP",
-                        file=norm,
-                        line=idx,
-                        message=f"DIP violation in 'core/': direct instantiation of concrete adapter '{dip_match.group(1)}'; inject an interface port.",
+            for dip_pat in arch_cfg.get("concreteAdapterInstantiationsInCore", []):
+                if re.search(dip_pat, cline):
+                    findings.append(
+                        Finding(
+                            code=30,
+                            severity="ERROR",
+                            principle="DIP",
+                            file=norm,
+                            line=idx,
+                            message="DIP violation in domain core: direct instantiation of concrete infrastructure adapter; inject an abstract port.",
+                        )
                     )
-                )
 
-        # LSP Stub Traps in production code
-        if not is_test:
-            if re.search(r"\bthrow\s+new\s+NotImplementedException\s*\(", line):
-                findings.append(
-                    Finding(
-                        code=30,
-                        severity="ERROR",
-                        principle="LSP",
-                        file=norm,
-                        line=idx,
-                        message="LSP / ISP violation: production code throws 'NotImplementedException'. Implement contract or segregate interface.",
-                    )
-                )
-            if re.search(r"\bthrow\s+new\s+NotSupportedException\s*\(", line):
-                findings.append(
-                    Finding(
-                        code=30,
-                        severity=advisory_sev,
-                        principle="LSP",
-                        file=norm,
-                        line=idx,
-                        message="Potential LSP violation: 'NotSupportedException' in production type; verify read/write interfaces are properly segregated (ISP).",
-                    )
-                )
-
-    # 2. Structural Metrics (ISP interface granularity & SRP class cohesion) on production files
+    # 3. Polyglot ISP & SRP Structural Metrics on production files
     if not is_test:
         if len(clean_lines) > max_loc:
             findings.append(
@@ -466,67 +389,134 @@ def audit_csharp_file(
                     principle="SRP",
                     file=norm,
                     line=1,
-                    message=f"File has {len(clean_lines)} LOC (> {max_loc}); check whether multiple responsibilities/axes of change were merged.",
+                    message=f"File has {len(clean_lines)} LOC (> {max_loc}); verify single responsibility and module cohesion.",
                 )
             )
+        findings.extend(scan_interface_granularity(norm, ext, clean_lines, max_interface_methods, advisory_sev))
+        findings.extend(scan_class_cohesion(norm, ext, clean_lines, max_public_methods, advisory_sev))
 
+    return findings
+
+
+def scan_interface_granularity(
+    norm: str,
+    ext: str,
+    clean_lines: list[str],
+    max_methods: int,
+    severity: str,
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if ext == ".py":
         for idx, line in enumerate(clean_lines):
-            iface_match = re.search(r"\binterface\s+(I[A-Za-z0-9_]+)\b", line)
-            if iface_match:
-                iface_name = iface_match.group(1)
-                _, block = extract_brace_block(clean_lines, idx)
-                # Count top-level method signatures inside interface body (depth == 1)
-                depth = 0
-                method_count = 0
-                for _, bline in block:
-                    if depth == 1 and re.search(r"\b[A-Za-z0-9_<>,?.\[\]]+\s+[A-Za-z0-9_]+\s*(?:<[^>]+>)?\s*\(", bline):
-                        method_count += 1
-                    depth += bline.count("{") - bline.count("}")
-                if method_count > max_interface_methods:
+            m = re.match(r"^(\s*)class\s+([A-Za-z0-9_]+)\s*\(([^)]*(?:Protocol|ABC)[^)]*)\)\s*:", line)
+            if m:
+                indent = len(m.group(1))
+                name = m.group(2)
+                methods = 0
+                for j in range(idx + 1, len(clean_lines)):
+                    sub = clean_lines[j]
+                    if not sub.strip():
+                        continue
+                    cur_indent = len(sub) - len(sub.lstrip())
+                    if cur_indent <= indent:
+                        break
+                    if re.match(r"^\s*def\s+(?!__)([A-Za-z0-9_]+)\s*\(", sub):
+                        methods += 1
+                if methods > max_methods:
                     findings.append(
                         Finding(
                             code=30,
-                            severity=advisory_sev,
+                            severity=severity,
                             principle="ISP",
                             file=norm,
                             line=idx + 1,
-                            message=(
-                                f"Interface '{iface_name}' declares {method_count} methods (> {max_interface_methods}); "
-                                "consider role-based segregation (e.g., I*Reader vs. I*Writer)."
-                            ),
+                            message=f"Protocol/ABC '{name}' declares {methods} methods (> {max_methods}); segregate into role-specific ports.",
                         )
                     )
+        return findings
 
-            class_match = re.search(r"\bclass\s+([A-Za-z0-9_]+)\b", line)
-            if class_match and "partial " not in line:
-                class_name = class_match.group(1)
-                _, block = extract_brace_block(clean_lines, idx)
-                depth = 0
+    iface_regexes = {
+        ".ts": r"\binterface\s+([A-Za-z0-9_]+)",
+        ".tsx": r"\binterface\s+([A-Za-z0-9_]+)",
+        ".cs": r"\binterface\s+(I[A-Za-z0-9_]+)",
+        ".java": r"\binterface\s+([A-Za-z0-9_]+)",
+        ".kt": r"\binterface\s+([A-Za-z0-9_]+)",
+        ".go": r"\btype\s+([A-Za-z0-9_]+)\s+interface\b",
+        ".rs": r"\btrait\s+([A-Za-z0-9_]+)",
+    }
+    rx = iface_regexes.get(ext)
+    if not rx:
+        return findings
+
+    for idx, line in enumerate(clean_lines):
+        m = re.search(rx, line)
+        if not m:
+            continue
+        name = m.group(1)
+        depth = 0
+        started = False
+        methods = 0
+        for j in range(idx, len(clean_lines)):
+            bline = clean_lines[j]
+            if started and depth == 1 and "(" in bline:
+                methods += 1
+            for ch in bline:
+                if ch == "{":
+                    depth += 1
+                    started = True
+                elif ch == "}":
+                    depth -= 1
+            if started and depth <= 0:
+                break
+        if methods > max_methods:
+            findings.append(
+                Finding(
+                    code=30,
+                    severity=severity,
+                    principle="ISP",
+                    file=norm,
+                    line=idx + 1,
+                    message=f"Interface/Trait '{name}' declares {methods} methods (> {max_methods}); consider role-based segregation (Reader vs. Writer).",
+                )
+            )
+    return findings
+
+
+def scan_class_cohesion(
+    norm: str,
+    ext: str,
+    clean_lines: list[str],
+    max_public_methods: int,
+    severity: str,
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if ext == ".py":
+        for idx, line in enumerate(clean_lines):
+            m = re.match(r"^(\s*)class\s+([A-Za-z0-9_]+)(?:\((?![^)]*(?:Protocol|ABC))[^)]*\))?\s*:", line)
+            if m:
+                indent = len(m.group(1))
+                name = m.group(2)
                 pub_methods = 0
-                for _, bline in block:
-                    if (
-                        depth == 1
-                        and re.search(r"\bpublic\b", bline)
-                        and "(" in bline
-                        and not re.search(rf"\bpublic\s+{re.escape(class_name)}\s*\(", bline)
-                    ):
+                for j in range(idx + 1, len(clean_lines)):
+                    sub = clean_lines[j]
+                    if not sub.strip():
+                        continue
+                    cur_indent = len(sub) - len(sub.lstrip())
+                    if cur_indent <= indent:
+                        break
+                    if re.match(r"^\s*def\s+(?!_)([A-Za-z0-9_]+)\s*\(", sub):
                         pub_methods += 1
-                    depth += bline.count("{") - bline.count("}")
                 if pub_methods > max_public_methods:
                     findings.append(
                         Finding(
                             code=30,
-                            severity=advisory_sev,
+                            severity=severity,
                             principle="SRP",
                             file=norm,
                             line=idx + 1,
-                            message=(
-                                f"Class '{class_name}' exposes {pub_methods} public methods (> {max_public_methods}); "
-                                "verify cohesion (LCOM) and single domain mutation axis."
-                            ),
+                            message=f"Class '{name}' exposes {pub_methods} public methods (> {max_public_methods}); verify single axis of change.",
                         )
                     )
-
     return findings
 
 
@@ -543,17 +533,18 @@ def parse_csv_patterns(raw_values: list[str] | None) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Verify SOLID, Onion Architecture, and Categorical DAG scope invariants on GeoAssets files."
+        description="Polyglot SOLID, Clean/Hexagonal Architecture, and Categorical DAG scope verifier."
     )
-    parser.add_argument("--target", default=".", help="Target repository or worktree root directory (default: current directory).")
+    parser.add_argument("--target", default=".", help="Target repository or worktree root directory.")
+    parser.add_argument("--config", default=None, help="Optional path to harness.config.json.")
     parser.add_argument("--files", nargs="*", help="Explicit relative file paths to audit (overrides git diff discovery).")
-    parser.add_argument("--base", default=None, help="Optional git base ref (e.g., origin/develop) to include committed branch diffs.")
+    parser.add_argument("--base", default=None, help="Optional git base ref (e.g., origin/develop) to include branch diffs.")
     parser.add_argument("--scope-a", action="append", help="Comma-separated path prefixes/globs owned by Branch 2A (Claude Code).")
     parser.add_argument("--scope-b", action="append", help="Comma-separated path prefixes/globs owned by Branch 2B (GitHub Copilot).")
     parser.add_argument("--allowed-scope", action="append", help="Comma-separated path prefixes/globs permitted for a single agent node.")
-    parser.add_argument("--max-interface-methods", type=int, default=5, help="ISP advisory threshold for methods per interface (default: 5).")
-    parser.add_argument("--max-public-methods", type=int, default=10, help="SRP advisory threshold for public methods per class (default: 10).")
-    parser.add_argument("--max-loc", type=int, default=500, help="SRP advisory threshold for lines of code per C# file (default: 500).")
+    parser.add_argument("--max-interface-methods", type=int, default=None, help="Override ISP advisory threshold for methods per interface.")
+    parser.add_argument("--max-public-methods", type=int, default=None, help="Override SRP advisory threshold for public methods per class.")
+    parser.add_argument("--max-loc", type=int, default=None, help="Override SRP advisory threshold for lines of code per file.")
     parser.add_argument("--strict-metrics", action="store_true", help="Promote ISP/SRP metric advisories to Exit Code 30 errors.")
     parser.add_argument("--json", action="store_true", help="Emit structured JSON report for Outer-Loop Error Monad consumption.")
     return parser
@@ -568,6 +559,14 @@ def main() -> int:
         print(f"[SOLID-ORACLE:FATAL] Target directory does not exist: {target_dir}", file=sys.stderr)
         return 2
 
+    cfg = load_config(target_dir, args.config)
+    arch_cfg = cfg.get("architecture", DEFAULT_CONFIG["architecture"])
+    metrics_cfg = arch_cfg.get("metrics", {})
+
+    max_iface = args.max_interface_methods or int(metrics_cfg.get("maxInterfaceMethods", 5))
+    max_pub = args.max_public_methods or int(metrics_cfg.get("maxPublicMethods", 10))
+    max_loc = args.max_loc or int(metrics_cfg.get("maxLoc", 500))
+
     if args.files is not None and len(args.files) > 0:
         checked_files = sorted({str(Path(f)).replace("\\", "/") for f in args.files})
     else:
@@ -580,16 +579,17 @@ def main() -> int:
     report = AuditReport(target=str(target_dir), checked_files=checked_files)
     report.findings.extend(verify_scopes(checked_files, scope_a, scope_b, allowed_scope))
 
+    paired_rules = arch_cfg.get("pairedFileRules", [])
     for rel in checked_files:
-        report.findings.extend(verify_razor_split(target_dir, rel))
-        report.findings.extend(verify_msbuild_suppressions(target_dir, rel))
+        report.findings.extend(verify_paired_files(target_dir, rel, paired_rules))
         report.findings.extend(
-            audit_csharp_file(
+            audit_file(
                 target_dir=target_dir,
                 rel_path=rel,
-                max_interface_methods=args.max_interface_methods,
-                max_public_methods=args.max_public_methods,
-                max_loc=args.max_loc,
+                arch_cfg=arch_cfg,
+                max_interface_methods=max_iface,
+                max_public_methods=max_pub,
+                max_loc=max_loc,
                 strict_metrics=args.strict_metrics,
             )
         )
@@ -618,9 +618,7 @@ def main() -> int:
         )
 
     if report.exit_code == 0:
-        print(
-            f"[SOLID-ORACLE:VERIFIED] Passed (0 errors, {len(report.advisories)} advisories)."
-        )
+        print(f"[SOLID-ORACLE:VERIFIED] Passed (0 errors, {len(report.advisories)} advisories).")
     else:
         print(
             f"[SOLID-ORACLE:HALT] Failed with Exit Code {report.exit_code} "
@@ -632,4 +630,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

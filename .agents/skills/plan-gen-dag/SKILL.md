@@ -1,155 +1,71 @@
 ---
 name: plan-gen-dag
 description: >-
-  Orchestrate GeoAssets' 5-phase Tri-Planar Outer-Loop read-only planning and architecture
-  verification DAG over Claude Code (architecture/domain reasoning) and GitHub Copilot
-  (C# 14 contracts/xUnit QA matrix) with zero code or working-tree changes. Activate when the
-  user invokes /plan-gen-dag or asks any agent — Google Antigravity, Claude Code, GitHub
-  Copilot, or a human operator — for a multi-agent implementation plan without modifying code.
+  Orchestrate the 5-phase Tri-Planar Outer-Loop read-only planning and
+  architecture verification DAG over Claude Code (architecture/domain reasoning)
+  and GitHub Copilot (type contracts/100%-branch QA matrix) with zero code or
+  working-tree changes. Activate when the user invokes /plan-gen-dag or asks
+  for a multi-agent implementation plan without modifying code.
 ---
 
-# GeoAssets Tri-Planar Read-Only Planning Orchestrator (`/plan-gen-dag`)
+# Tri-Planar Read-Only Planning Orchestrator (`/plan-gen-dag`)
 
-You are the **Outer-Loop Orchestrator** for GeoAssets' Tri-Planar Dual-Loop Architecture, running the **Read-Only Planning** variant of the protocol: you dispatch Claude Code (`2A` — architecture/domain reasoning) and GitHub Copilot (`2B` — C# 14 contracts/xUnit QA matrix) in parallel, audit their combined plan against four deterministic gates, and synthesize a verified implementation plan — with **zero** code or working-tree changes. This protocol is **agent-neutral** — any agent capable of dispatching two read-only reasoning passes can execute it directly from this skill, not only Google Antigravity:
+You are the **ControlPlane-OuterLoop Orchestrator (Read-Only Planning)** for this project's Tri-Planar Dual-Loop Architecture: the role that captures a baseline snapshot, dispatches the two inner-loop branches in parallel to produce a plan with zero working-tree mutations, audits the combined plan against four deterministic gates, runs bounded self-healing on the plan itself, and synthesizes a handoff artifact for `/code-gen-dag`.
 
-- Running inside **Google Antigravity**: its native **ControlPlane-OuterLoop (Read-Only Planning)** workflow spec at [`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json) / [`.antigravity/workflows/plan-gen-dag.md`](../../../.antigravity/workflows/plan-gen-dag.md) is Antigravity's concrete implementation of the phases below.
-- Running inside **Claude Code**: use [`.claude/skills/plan-gen-dag/SKILL.md`](../../../.claude/skills/plan-gen-dag/SKILL.md) (or the `/plan-gen-dag` command).
-- Running inside **GitHub Copilot**: use [`.github/skills/plan-gen-dag/SKILL.md`](../../../.github/skills/plan-gen-dag/SKILL.md).
+This protocol is **agent-neutral**: any agent capable of running read-only shell commands and dispatching parallel read-only workers/subagents — not only Google Antigravity — can execute it directly from this skill. Antigravity's own declarative blueprint ([`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json) / [`.md`](../../../.antigravity/workflows/plan-gen-dag.md)) is one concrete implementation of the phases below, not the only valid one. Each agent configured in this repo runs its own native adaptation of this same protocol:
+
+- **Google Antigravity**: [`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json) / [`.md`](../../../.antigravity/workflows/plan-gen-dag.md) — its own declarative DAG engine.
+- **Claude Code**: [`.claude/skills/plan-gen-dag/SKILL.md`](../../../.claude/skills/plan-gen-dag/SKILL.md) — dispatches read-only inner-loop branches via its own `Agent` tool (`isolation: "worktree"`, write tools disabled).
+- **GitHub Copilot**: [`.github/skills/plan-gen-dag/SKILL.md`](../../../.github/skills/plan-gen-dag/SKILL.md) — drives the phases from a read-only Copilot Chat/Agent Mode session.
 
 > **Non-Negotiable Invariant — Zero Repository Changes:**
-> Never create, edit, stage, or delete files in the repository workspace, and never create branches, worktrees, or commits during `/plan-gen-dag` (unless the user explicitly passes `--out <path>` for Phase 5 export). All inner-loop agents **must** run strictly with read-only permissions.
+> Never create, edit, stage, or delete files in the repository workspace, and never create branches, worktrees, or commits during `/plan-gen-dag` (unless `--out <path>` is explicitly passed). All inner-loop agents **must** run strictly read-only.
 
 ## Reference Contracts (Read on Demand)
 
-- **Planning DAG Blueprint**: [`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json)
-- **Downstream Execution DAG**: [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json)
-- **Categorical & SOLID Synthesis Contracts**: [`../outer-loop-dag-orchestrator/SKILL.md`](../outer-loop-dag-orchestrator/SKILL.md) and [`../solid-code-synthesizer/SKILL.md`](../solid-code-synthesizer/SKILL.md)
-- **Claude Code Contract & Personas (Branch 2A)**: [`CLAUDE.md`](../../../CLAUDE.md), [`.claude/agents/arch-designer.md`](../../../.claude/agents/arch-designer.md), [`.claude/agents/task-planner.md`](../../../.claude/agents/task-planner.md), and `.claude/skills/*/SKILL.md`
-- **GitHub Copilot Contract & Persona (Branch 2B)**: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) and [`.claude/agents/test-agent.md`](../../../.claude/agents/test-agent.md)
-- **Static Guardrails**: [`Directory.Build.props`](../../../Directory.Build.props) and [`BannedSymbols.txt`](../../../BannedSymbols.txt)
+- **Active Toolchain & Rules**: [`.harness/harness.env`](../../../.harness/harness.env) and [`harness.config.json`](../../../harness.config.json)
+- **Planning & Execution DAGs**: [`.antigravity/workflows/plan-gen-dag.json`](../../../.antigravity/workflows/plan-gen-dag.json) and [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json)
+- **Categorical & SOLID Contracts**: [`../outer-loop-dag-orchestrator/SKILL.md`](../outer-loop-dag-orchestrator/SKILL.md) and [`../solid-code-synthesizer/SKILL.md`](../solid-code-synthesizer/SKILL.md)
+- **Claude Code Personas (`2A`)**: [`CLAUDE.md`](../../../CLAUDE.md), [`.claude/agents/arch-designer.md`](../../../.claude/agents/arch-designer.md), [`.claude/agents/task-planner.md`](../../../.claude/agents/task-planner.md), and `.claude/skills/*/SKILL.md`
+- **GitHub Copilot Personas (`2B`)**: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), [`.github/skills/solid-code-synthesizer/SKILL.md`](../../../.github/skills/solid-code-synthesizer/SKILL.md), and [`.claude/agents/test-agent.md`](../../../.claude/agents/test-agent.md)
 
 ---
 
 ## Invocation & Parameters
 
-Expected invocation format:
-
 ```text
-/plan-gen-dag <taskId | description | Jira key> [--base origin/develop] [--retries 3] [--out <path>]
+/plan-gen-dag <taskId | description | ticket key> [--base origin/develop] [--retries 3] [--out <path>]
 ```
 
-1. **`taskId`**:
-   - If a ticket key or slug is given (e.g., `XD01-195-spatial-buffer-cache` or `XD01-195`), normalize to a valid slug (`^[a-zA-Z0-9._-]+$`) suitable for direct handoff to `/code-gen-dag`.
-   - If only a free-form feature request is given, derive a concise `<kebab-slug>` `taskId`.
-2. **`baseRef`** (default: `origin/develop`; `main`, `origin/main`, `master`, `origin/master` are forbidden as target integration baselines).
-3. **`maxSelfHealRetries`** (default: `3`, range: `1..5`).
-4. **`--out <path>`** (optional):
-   - By default, deliver the final plan strictly as an **Antigravity Conversation Artifact** in `<artifactDir>/plan-<taskId>.md` so the repository working tree stays untouched.
-   - Only write a Markdown file to `<path>` if `--out <path>` is explicitly passed.
+- Deliver the verified plan as an **Antigravity Conversation Artifact** in `<artifactDir>/plan-<taskId>.md` (`UserFacing: true`, `RequestFeedback: true`). Only export to `<path>` when `--out <path>` is explicitly passed.
 
 ---
 
 ## Execution Protocol
 
-Execute the 5 read-only planning phases strictly in order.
-
 ### Phase 1 — Read-Only Baseline Snapshot & Scope Grounding
+1. Capture `baselineGitStatus` (`git status --porcelain && git rev-parse --short HEAD`) to prove zero workspace mutations.
+2. Read `.harness/harness.env`, `harness.config.json`, `CLAUDE.md`, `.github/copilot-instructions.md`, and relevant `.claude/skills/*`. If a Jira key is provided, inspect full issue details (`Blocks` + prose `"Depends on"`) without transitioning ticket status.
+3. Locate real modules, interfaces, and test suites in the workspace to ground `architectureBrief` (`2A`) and `testAndScaffoldingBrief` (`2B`).
 
-1. **Capture Working-Tree Baseline**:
-   - Run a read-only inspection from the repository root:
-     ```bash
-     git status --porcelain && git rev-parse --short HEAD
-     ```
-   - Save `baselineGitStatus` so Phase 3 and Phase 5 can prove zero workspace files were mutated.
-2. **Ground Requirements & Codebase Context**:
-   - Read [`CLAUDE.md`](../../../CLAUDE.md), [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), [`BannedSymbols.txt`](../../../BannedSymbols.txt), and relevant `.claude/skills/<domain>/SKILL.md` files.
-   - If `taskId` references a Jira key and Jira MCP tools are available, read the full issue description (without transitioning status!) and check both formal `Blocks` links and prose `"Depends on <KEY>"` dependencies.
-   - Locate real projects, interfaces, and existing test suites in `GeoAssets.sln` to produce grounded `architectureBrief` (`2A`) and `testAndScaffoldingBrief` (`2B`) inputs.
-
----
-
-### Phase 2 — Parallel Read-Only Specialist Dispatch (`2A` + `2B`)
-
-1. **Probe Inner-Loop Runtimes**:
-   - Check CLI availability (`command -v claude`, `command -v copilot`).
-2. **Dispatch Branch 2A (`claude-code`) and Branch 2B (`github-copilot`) in Parallel (Strictly Read-Only)**:
-   - **Branch 2A (`claude-code` — Architecture & Domain Reasoning)**:
-     - *External CLI mode* (if `claude` is installed): Run strictly read-only:
-       `claude -p "<architectureBrief>" --allowedTools "Read,Glob,Grep"` (never grant `Edit`, `Write`, or mutating `Bash`).
-     - *Orchestrator-native subagent fallback* (if `claude` CLI is unavailable): Invoke the orchestrating agent's own read-only subagent mechanism — e.g. a read-only `research`/`Plan` subagent, or Antigravity's `define_subagent` with **`EnableWriteTools: false`** — loaded with [`CLAUDE.md`](../../../CLAUDE.md), [`.claude/agents/arch-designer.md`](../../../.claude/agents/arch-designer.md), [`.claude/agents/task-planner.md`](../../../.claude/agents/task-planner.md), and relevant `.claude/skills/*`.
-     - *Required Outputs*:
-       1. Architectural & Onion-layer design (`core/` isolation, provider/workflow ports & adapters, RFC 7946 `[lon, lat]` SRID 4326 coordinate-array source-of-truth).
-       2. `System.TimeProvider`, `CancellationToken`, and OpenTelemetry `ActivitySource` / UI token considerations.
-       3. Sequenced implementation tasks, risk/trade-off matrix, and proposed `coreLogicSpec` file list (`[NEW]` / `[MODIFY]`).
-   - **Branch 2B (`github-copilot` — Contracts, Manifest & xUnit QA Matrix)**:
-     - *External CLI mode* (if read-only non-mutating prompt flag is verified) or *orchestrator-native subagent mode* (a read-only subagent, or Antigravity's `define_subagent` with **`EnableWriteTools: false`**) loaded with [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) and [`.claude/agents/test-agent.md`](../../../.claude/agents/test-agent.md).
-     - *Required Outputs*:
-       1. Concrete C# 14 / .NET 10 type & interface signatures (`readonly record struct`, `sealed record`, `JsonSerializerContext`, `ArgumentNullException.ThrowIfNull`, `TimeProvider`, `CancellationToken`) as Markdown code blocks.
-       2. File-by-file touch manifest enforcing `.razor` + `.razor.cs` code-behind separation and proposed `testAndBoilerplateSpec` file list (`[NEW]` / `[MODIFY]`).
-       3. Exhaustive xUnit `[Fact]`/`[Theory]` test matrix (happy paths, guard clauses, boundary cases, `FakeTimeProvider`, cancellation) + `DomainTestDataBuilders` & `NSubstitute` mock design targeting 100% branch coverage.
-3. **Join Barrier**:
-   - Wait until **both** Branch `2A` and Branch `2B` return their structured planning outputs before entering Phase 3.
-
----
+### Phase 2 — Parallel Read-Only Specialist Dispatch (`2A ⊗ 2B`)
+1. **Branch 2A (`claude-code`, strictly read-only — e.g. Claude Code's `--allowedTools "Read,Glob,Grep"` or an `Agent` subagent with write tools disabled, or Google Antigravity's subagent `EnableWriteTools: false`)**:
+   - Design Clean/Hexagonal boundaries (`domainCoreDirs` free of ORM/DB/HTTP/UI dependencies), Clock & cancellation propagation, OpenTelemetry context propagation, sequenced tasks, risk matrix, and `coreLogicSpec` file list (`[NEW]` / `[MODIFY]`).
+2. **Branch 2B (`github-copilot`, strictly read-only — e.g. a Copilot Agent Mode session restricted to read/search tools, or Google Antigravity's subagent `EnableWriteTools: false`)**:
+   - Draft concrete target-language type & segregated interface contracts (`<= 5` cohesive methods per port), file touch manifest (`testAndBoilerplateSpec`), `TestDataBuilders`, narrow mocks, shared LSP contract test design, and 100%-branch-coverage unit test matrix.
+3. Wait at the join barrier until both branches complete.
 
 ### Phase 3 — Deterministic Plan Oracle Verification
+Audit the combined `2A` + `2B` plan against four gates:
+- **Gate 0 (`Code 2`)**: `git status --porcelain` matches `baselineGitStatus` identically.
+- **Gate 1 (`Code 10`)**: Every `[MODIFY]` file exists on disk; `pairedFileRules` in `harness.config.json` are honored; `2A ∩ 2B = ∅` (100% disjoint file ownership).
+- **Gate 2 (`Code 20`)**: Proposed code snippets contain zero `bannedApiPatterns` (raw wall-clock, blocking sync-over-async) and zero `suppressionPatterns` (`eslint-disable`, `@ts-ignore`, `# noqa`, `#[allow(`, `//nolint`, `#pragma warning disable`, `<NoWarn>`).
+- **Gate 3 (`Code 30`)**: Zero `forbiddenCoreImports` inside `domainCoreDirs`; ISP role segregation (`Reader` vs. `Writer`) and LSP boundary error parity respected; zero unimplemented stubs; every proposed branch and guard clause in `2A` has test coverage in `2B`; any tabular display or collection-returning query specifies mandatory pagination contracts (`page`, `pageSize`, `totalCount`, deterministic sort, and accessible UI pager controls).
 
-Audit the combined `2A` + `2B` plan deterministically against four gates:
-
-1. **Gate 0 — Zero-Mutation Check (`Code 2` on failure)**:
-   - Run `git status --porcelain` and verify it matches `baselineGitStatus` identically. If any file was modified or created, abort immediately and report the violation.
-2. **Gate 1 — Path Existence & Disjoint File Ownership (`Code 10` on failure)**:
-   - Verify every `[MODIFY]` file path and every referenced `.csproj` actually exists on disk.
-   - Verify any UI component change pairs `.razor` markup with a `.razor.cs` partial class.
-   - Verify `coreLogicSpec` (Branch `2A`) and `testAndBoilerplateSpec` (Branch `2B`) file lists have **zero intersection** (`2A ∩ 2B = ∅`) so `/code-gen-dag` can execute them in parallel without write races.
-3. **Gate 2 — Static Guardrail & Banned Symbol Audit (`Code 20` on failure)**:
-   - Audit every proposed C# signature and code snippet against [`BannedSymbols.txt`](../../../BannedSymbols.txt) and [`Directory.Build.props`](../../../Directory.Build.props):
-     - Zero `DateTime.Now`/`UtcNow`/`Today` or `DateTimeOffset.Now`/`UtcNow` (`RS0030` — must use `TimeProvider` / `FakeTimeProvider`).
-     - Zero `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, `Thread.Sleep`, or unguarded `Task.Run` (`AsyncFixer`).
-     - Every proposed async signature accepts `CancellationToken`.
-     - Zero `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`.
-4. **Gate 3 — Onion Architecture, SOLID & Branch Coverage Audit (`Code 30` on failure)**:
-   - Confirm zero `Npgsql`, `Microsoft.EntityFrameworkCore`, `GeoAssets.Provider.PostgreSQL`, or raw PostGIS references are planned inside `core/` projects.
-   - Confirm proposed interfaces respect ISP role segregation (`<= 5` cohesive methods per new port; split `I*Reader` vs. `I*Writer`), preserve LSP across providers/REST boundaries (`ServiceOrderRepositoryContractTests` / bidirectional HTTP exception translation), and introduce zero `NotImplementedException` stubs.
-   - Confirm geometry plans keep coordinate arrays as the serialized source of truth (RFC 7946 `[lon, lat]`, SRID 4326) rather than NTS objects.
-   - Confirm every proposed public method, branch, and guard clause in `2A` has corresponding xUnit test cases in `2B`'s test matrix.
-
-If all 4 gates pass (`Code 0`), proceed to **Phase 5**. On `Code 10`, `20`, or `30`, enter **Phase 4**.
-
----
-
-### Phase 4 — Bounded Plan Self-Healing Loop
-
-Track `planHealAttempt` from `1` up to `maxSelfHealRetries` (default `3`):
-
-- **`Code 10` (`PathExistenceOrDisjointOwnershipViolation`) → Route to `github-copilot` planner (read-only)**:
-  - Fix hallucinated `[MODIFY]` paths against real repo paths, add missing `.razor.cs` pairs, and re-partition any overlapping file paths cleanly between `2A` and `2B`, then re-run **Phase 3**.
-- **`Code 20` (`BannedSymbolOrSignatureViolation`) → Route to `claude-code` planner (read-only)**:
-  - Replace banned clock/async APIs with `System.TimeProvider` and `CancellationToken`-aware async signatures, sync updated contracts with `2B`, then re-run **Phase 3**.
-- **`Code 30` (`OnionArchitectureOrCoverageGap`) → Route to `claude-code` & `github-copilot` planners (read-only)**:
-  - Introduce clean domain ports in `core/` + infrastructure adapters in `providers/`/`workflow/`, add missing xUnit branch test cases to the QA matrix, then re-run **Phase 3**.
-
-If issues remain after `maxSelfHealRetries` attempts, stop iterating and highlight the unresolved architectural trade-offs in a dedicated `> [!WARNING]` block inside the Phase 5 artifact for human decision.
-
----
+### Phase 4 — Bounded Plan Self-Healing Loop (`1..maxSelfHealRetries`)
+- `Code 10` → Route to `2B` planner to fix paths and re-partition overlapping files.
+- `Code 20` → Route to `2A` planner to replace banned APIs/suppressions with injected Clock and cancellation-aware signatures, then sync with `2B`.
+- `Code 30` → Route to `2A` & `2B` planners to introduce clean domain ports and fill test coverage gaps.
 
 ### Phase 5 — Conversation Artifact Synthesis & `/code-gen-dag` Handoff
-
-1. **Create Interactive Conversation Artifact**:
-   - Write the verified plan to `<artifactDir>/plan-<taskId>.md` using `write_file` with `ArtifactMetadata: { UserFacing: true, RequestFeedback: true, Summary: "..." }`.
-   - Structure the artifact with:
-     1. **Executive Summary & Dependencies** (baseline commit SHA, `origin/develop` integration target, Jira `Blocks` / `"Depends on"` check)
-     2. **Architecture & Data Flow Diagram** (`mermaid` flowchart/sequence diagram showing Onion layers)
-     3. **Shared C# 14 Type & Interface Contract** (exact namespaces, records, interfaces, `TimeProvider` & `CancellationToken` signatures)
-     4. **Disjoint Execution Manifest**:
-        - **Branch 2A — `claude-code` (`coreLogicSpec`)**: Owned `[NEW]`/`[MODIFY]` production files + step-by-step domain logic rules
-        - **Branch 2B — `github-copilot` (`testAndBoilerplateSpec`)**: Owned `[NEW]`/`[MODIFY]` DTO/builder/test files
-     5. **Exhaustive xUnit Test & `DomainTestDataBuilders` Matrix** (table of test method names, inputs, `FakeTimeProvider` setup, expected assertions)
-     6. **Risks, Observability (`ActivitySource`) & Rollback Notes**
-     7. **One-Command Execution Handoff**:
-        ```text
-        /code-gen-dag <taskId> Implement verified plan from plan-<taskId>.md
-        ```
-2. **Optional Export (`--out <path>`) & Final Clean-Repo Proof**:
-   - If `--out <path>` was explicitly provided, also write the Markdown file to `<path>`.
-   - Otherwise, run `git status --porcelain` one final time to confirm zero files were modified in the repository, and point the user to the generated plan artifact for review.
+Write `<artifactDir>/plan-<taskId>.md` containing: (1) Executive Summary & Dependencies, (2) Clean/Hexagonal Mermaid Diagram, (3) Shared Type & Port Contract, (4) Disjoint `2A` vs. `2B` Manifest, (5) 100%-Branch Test & Contract Matrix, (6) Risks & Observability Notes, and (7) Ready-to-run `/code-gen-dag <taskId> ...` handoff command. Confirm `git status --porcelain` remains untouched.

@@ -1,27 +1,27 @@
 ---
 name: solid-code-synthesizer
 description: >-
-  Synthesize and verify C# 14 / .NET 10 code through a 5-stage SOLID and
-  Categorical invariant pipeline (SRP pure domain types, ISP segregated ports,
-  DIP Onion injection, OCP/LSP behavioral contract tests, and boundary error
-  semantics). Use when generating, refactoring, or auditing domain models,
-  services, repositories, or providers in GeoAssets.
+  Synthesize and verify source code in any programming language through a
+  5-stage SOLID and Categorical invariant pipeline (SRP pure domain types, ISP
+  segregated ports, DIP Clean/Hexagonal injection, OCP/LSP behavioral contract
+  suites, and boundary error semantics). Use when generating, refactoring, or
+  auditing domain models, services, repositories, or adapters.
 ---
 
-# SOLID & Categorical C# 14 Code Synthesizer
+# SOLID & Categorical Polyglot Code Synthesizer
 
-Enforces **SOLID structural principles**, **Onion Architecture**, and **Category Theory target-code invariants** across synthesized C# 14 / .NET 10 artifacts using a deterministic 5-stage synthesis and verification pipeline.
+Enforces **SOLID structural principles**, **Clean / Hexagonal / Onion Architecture**, and **Category Theory target-code invariants** across Python, TypeScript/JavaScript, Go, Rust, C#, Java, and Kotlin codebases.
 
-- Read [`references/csharp14-solid-categorical-matrix.md`](references/csharp14-solid-categorical-matrix.md) for the complete SOLID $\leftrightarrow$ Category Theory $\leftrightarrow$ Roslyn/xUnit verification mapping.
-- Respect [`.claude/skills/csharp-conventions/SKILL.md`](../../../.claude/skills/csharp-conventions/SKILL.md) as the authoritative source for GeoAssets C# idioms.
+- Read [`references/solid-categorical-polyglot-matrix.md`](references/solid-categorical-polyglot-matrix.md) for per-language idioms and verification mappings, and [`references/csharp14-solid-categorical-matrix.md`](references/csharp14-solid-categorical-matrix.md) for C# 14 / .NET 10 mappings.
+- Read [`harness.config.json`](../../../harness.config.json) and [`.harness/harness.env`](../../../.harness/harness.env) for active project boundaries and commands.
 
-## Verification Oracles
+## Deterministic Verification Oracles
 
-1. **Fast SOLID & Guardrail Verifier**:
+1. **Fast Polyglot SOLID & Guardrail Verifier**:
    ```bash
    python3 scripts/verify-solid-contracts.py --target <repo-or-worktree> [--files <paths...>]
    ```
-2. **Full Solution Gatekeeper**:
+2. **Full 3-Stage Toolchain Gatekeeper**:
    ```bash
    ./scripts/verify-agent-worktree.sh <repo-or-worktree>
    ```
@@ -30,40 +30,30 @@ Enforces **SOLID structural principles**, **Onion Architecture**, and **Category
 
 ## 5-Stage Progressive Code Synthesis Pipeline
 
-Execute or audit code synthesis across these five ordered stages so each stage's postconditions satisfy the next stage's preconditions ($g \circ f$):
-
 ### Stage 1 — SRP & Category Objects (Pure Domain Types)
-- **Synthesize**:
-  - `readonly record struct` for small immutable value objects, strongly-typed IDs, coordinates, and bounding boxes.
-  - `sealed record` for immutable commands, domain events, and REST DTOs.
-  - Focused `class` entities/services with a **single axis of mutation** (keep methods cohesive, cyclomatic complexity $< 10$).
-  - Preserve GeoAssets' geometry invariant: RFC 7946 `[longitude, latitude]` coordinate arrays (SRID 4326) are the serialized source of truth; `NtsGeometry` is lazily derived.
-- **Gate**: Zero `Microsoft.EntityFrameworkCore`, `Npgsql`, `HttpClient`, or `GeoAssets.Provider.*` references inside `core/`.
+- Model immutable value objects, typed IDs, commands, events, and DTOs using the language's value-type primitives (frozen `@dataclass`, `readonly` TS types, Go value structs, Rust `struct`/`enum`, C# `readonly record struct`/`sealed record`, Java/Kotlin `record`/`data class`).
+- Define explicit immutable pagination and filter models (`PageRequest`, `PagedResult<T>`, strongly typed `FilterCriteria`); unbounded collection models and sensitive fields (passwords, tokens) in filter contracts are prohibited.
+- Keep **one axis of domain mutation** per class/module (cyclomatic complexity $< 10$).
+- **Gate**: Zero ORM, database, HTTP, message-broker, or UI imports inside `domainCoreDirs` (`src/core/`, `src/domain/`).
 
 ### Stage 2 — ISP & Categorical Projections (Segregated Role Ports)
-- **Synthesize**:
-  - Fine-grained, consumer-specific interfaces (`<= 5` cohesive methods per new role port; split read queries from mutations, e.g., `IServiceOrderReader` vs. `IServiceOrderWriter`).
-  - Minimal DTO projections (`JsonSerializerContext` source generation where high-throughput) for REST/messaging boundaries.
-  - UI components split strictly into markup-only `.razor` + `.razor.cs` code-behind partial class (except `MauiLogin.razor`).
-- **Gate**: Zero fat "god interfaces" and zero dummy/no-op interface implementations.
+- Define narrow, consumer-specific interfaces/protocols/traits (`<= 5` cohesive methods; separate `Reader` queries from `Writer` mutations).
+- Query ports serving tabular data or collection feeds must require typed filter parameters and pagination contracts (`PageRequest` / cursor) returning paginated envelopes.
+- Project cross-service boundary contracts into minimal schema-validated DTOs (OpenAPI, Protobuf, JSON Schema, Zod, Pydantic).
+- **Gate**: Zero bloated "god interfaces" and zero dummy/no-op interface implementations.
 
-### Stage 3 — DIP & Natural Transformations (Inversion & DI Lifetimes)
-- **Synthesize**:
-  - Constructor injection exclusively over domain abstractions (`IAssetProvider`, `IGeoAuthorizationService`, `System.TimeProvider`).
-  - Forward `CancellationToken` across all async morphisms (`ConfigureAwait(false)` in non-UI libraries: `core/`, `providers/`, `workflow/`).
-  - Match DI lifetimes carefully (`Transient` stateless, `Scoped` per-request/`DbContext`, `Singleton` thread-safe only — never capture a `Scoped` service inside a `Singleton`).
-- **Gate**: Zero `new *DbContext(...)`, `new HttpClient(...)`, or `DateTime.Now`/`UtcNow` (`RS0030`) inside domain services.
+### Stage 3 — DIP & Natural Transformations (Inversion, Clock & Cancellation)
+- Inject collaborators exclusively via abstract ports + an abstract **Clock / TimeProvider** (never read raw system wall-clock directly inside domain logic).
+- Propagate structured cancellation/context (`context.Context`, `AbortSignal`, `CancellationToken`) across all async operations without blocking sync-over-async waits.
+- **Gate**: Zero direct instantiation of concrete infrastructure (`HttpClient`, DB pools/contexts, SDK clients) inside domain core modules.
 
-### Stage 4 — OCP & LSP (Extensible Strategies & Behavioral Contract Suites)
-- **Synthesize**:
-  - Extend behavior via open extension points (`IServiceOrderRule` chains, `IProviderPlugin`, `IExternalProviderFactory`, `[ExportGeoCommand]`, event-preserving decorators like `ActiveAssetProvider`) instead of modifying stable core dispatchers.
-  - Guarantee Liskov Substitution: every concrete adapter (`EF*`, `Postgres*`, `Rest*`, `Shapefile*`, `InMemory*`) must honor base preconditions/postconditions and event propagation (`FeatureAdded`/`Updated`/`Deleted`/`CollectionChanged`) with **zero `NotImplementedException` stubs**.
-  - Pair multi-backend interfaces with shared abstract contract test suites (following `ServiceOrderRepositoryContractTests` in `GeoAssets.Workflow.TestKit`).
-- **Gate**: Shared contract tests + 100% branch coverage xUnit `[Fact]`/`[Theory]` suites pass.
+### Stage 4 — OCP & LSP (Pluggable Strategies & Shared Contract Test Suites)
+- Extend behavior via open extension points (Strategy, Rule Chain, Decorator, Plugin Registry) rather than proliferating ad-hoc conditionals in core services.
+- Guarantee Liskov Substitution: every concrete adapter (SQL, In-Memory, REST/gRPC) must satisfy identical preconditions, postconditions, and event semantics with **zero unimplemented production stubs** (`NotImplementedError`, `NotImplementedException`, `todo!()`, `unimplemented!()`).
+- Pair multi-backend ports with a **Shared Behavioral Contract Test Suite** executed against every concrete implementation. Query contract suites must verify pagination invariants (first/middle/last page slicing, out-of-range empty lists, max page size clamping, deterministic sorting) and conjunctive multi-filter execution with sensitive field rejection.
 
 ### Stage 5 — Categorical Effect & Boundary Error Semantics
-- **Follow GeoAssets' Boundary Rule** ([`error-handling-and-result-pattern.md`](../../../.claude/skills/csharp-conventions/references/error-handling-and-result-pattern.md)):
-  - **Expected Absence / Inline Branching**: Return explicit nullable types (`T?` with `<Nullable>enable</Nullable>`), `Try*` methods, or narrow validation/rule `Result` objects — never throw exceptions for routine "not found" reads (`GetByIdAsync` $\to$ `null` / HTTP `404`).
-  - **Invariant Violations Across Process Boundaries**: Throw specific typed domain exceptions on invalid writes/transitions (`InvalidServiceOrderTransitionException`, `ServiceOrderConcurrencyException`, etc.) and implement **bidirectional HTTP translation** (`Map*Api` structured `400`/`409`/`404` $\leftrightarrow$ `Rest*Repository` exception reconstruction) so remote REST adapters remain Liskov-substitutable for in-process EF Core adapters.
-- **Gate**: Run `python3 scripts/verify-solid-contracts.py` (`Exit 0`) followed by `./scripts/verify-agent-worktree.sh` (`Exit 0`) with zero `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`.
-
+- **Expected Absence ($1 + A$)**: Use compiler-checked Option/Nullable types (`T | None`, `T | undefined | null`, `Option<T>`, `T?`) — never throw exceptions for routine "not found" lookups.
+- **Expected Inline Validation / Rule Outcomes**: Use explicit `Result<T, E>` / error-collector structures where callers branch inline on expected validation failures (or natively in Rust/Go). Validate pagination bounds (`page >= 1`, `1 <= pageSize <= 100`).
+- **Cross-Boundary Invariant Parity**: Maintain a documented **bidirectional translation** between domain errors and transport status codes/payloads (HTTP `400`/`404`/`409` or gRPC codes) so remote client adapters and local adapters remain Liskov-substitutable.
+- **Gate**: Achieve `Exit 0` on `verify-solid-contracts.py` and `verify-agent-worktree.sh` with **zero** linter, typechecker, or compiler suppression directives.

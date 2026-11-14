@@ -1,82 +1,59 @@
 ---
 name: outer-loop-dag-orchestrator
 description: >-
-  Orchestrate multi-agent, multi-bounded-context software synthesis DAGs using
-  categorical composition, monoidal parallelization, SOLID agent-coordination
-  invariants, and localized self-healing rollback. Use when decomposing complex
-  epics, multi-service/vertical features, or multi-worktree agent pipelines
-  across Antigravity, Claude Code, and GitHub Copilot.
+  Orchestrate multi-agent, multi-bounded-context software synthesis DAGs across
+  any programming language using categorical composition, monoidal
+  parallelization, SOLID agent-coordination invariants, and localized
+  self-healing rollback. Use when decomposing complex epics, multi-service
+  features, or multi-worktree agent pipelines across Antigravity, Claude Code,
+  and GitHub Copilot.
 ---
 
-# Outer-Loop Categorical & SOLID DAG Orchestrator
+# Outer-Loop Categorical & SOLID DAG Orchestrator (Language-Agnostic)
 
-Governs macro-level task decomposition, context projection, parallel dispatch, and localized self-healing across GeoAssets' **Tri-Planar Dual-Loop Architecture** (Antigravity Control Plane → Claude Code `2A` + GitHub Copilot `2B`).
+Governs macro-level task decomposition, minimal context projection, parallel dispatch, and localized self-healing across the **Tri-Planar Dual-Loop Architecture** (Antigravity Control Plane → Claude Code `2A` + GitHub Copilot `2B`).
 
-- For single-ticket 2-branch worktree execution, invoke [`code-gen-dag`](../code-gen-dag/SKILL.md).
-- For zero-mutation architectural planning, invoke [`plan-gen-dag`](../plan-gen-dag/SKILL.md).
-- For mathematical axioms (Monoidal Category $(\mathbf{Arch}, \otimes, I)$, Effect Monad $(T, \eta, \mu)$, Dual Rollback $f^{op}$), read [`references/categorical-dag-formalism.md`](references/categorical-dag-formalism.md) on demand.
+- Single-ticket 2-branch execution: [`code-gen-dag`](../code-gen-dag/SKILL.md).
+- Zero-mutation architectural planning: [`plan-gen-dag`](../plan-gen-dag/SKILL.md).
+- Mathematical foundations (Monoidal Category $(\mathbf{Arch}, \otimes, I)$, Effect Monad $(T, \eta, \mu)$, Dual Rollback $f^{op}$): read [`references/categorical-dag-formalism.md`](references/categorical-dag-formalism.md) on demand.
 
 ## Reference Tooling
 
+- **Active Toolchain & Rules**: [`.harness/harness.env`](../../../.harness/harness.env) & [`harness.config.json`](../../../harness.config.json)
 - **Worktree Sandbox Manager**: [`scripts/agent-sandbox.sh`](../../../scripts/agent-sandbox.sh)
-- **SOLID & Disjoint-Scope Pre-Flight Oracle**: [`scripts/verify-solid-contracts.py`](../../../scripts/verify-solid-contracts.py)
-- **3-Stage Build/Analyzer/Arch Oracle**: [`scripts/verify-agent-worktree.sh`](../../../scripts/verify-agent-worktree.sh)
+- **Polyglot SOLID & Disjoint-Scope Oracle**: [`scripts/verify-solid-contracts.py`](../../../scripts/verify-solid-contracts.py)
+- **3-Stage Build/Lint/Arch Oracle**: [`scripts/verify-agent-worktree.sh`](../../../scripts/verify-agent-worktree.sh)
 
 ---
 
 ## 1. SOLID Invariants for Multi-Agent Coordination
 
-Enforce SOLID as structural execution constraints across every node in the agent DAG:
-
 1. **Single Responsibility (SRP — Bounded Mutation Scope)**:
-   - Every agent node $N_i$ owns a strictly bounded file/directory mutation scope (`scope(N_i)`), aligned to a single Onion layer or Bounded Context (`core/`, `providers/`, `workflow/`, `ipbilling/`, `projects/`, `apps/`).
-   - Verify post-run via `python3 scripts/verify-solid-contracts.py --target <worktree> --allowed-scope "<globs>"`. Out-of-scope file mutations trigger `Exit 10`.
-2. **Open / Closed (OCP — Pluggable Subcategories)**:
-   - Extend orchestration to new providers, MEF command plugins (`GeoAssets.Plugin.*`), or messaging transports (`Kafka`, `ServiceBus`) by adding leaf DAG nodes conforming to existing port contracts without mutating core traversal gates.
+   - Every agent node $N_i$ owns a strictly bounded directory/file scope (`scope(N_i)`), aligned to a single architectural layer or Bounded Context.
+   - Verify post-run via `python3 scripts/verify-solid-contracts.py --target <worktree> --allowed-scope "<globs>"`. Out-of-scope edits trigger `Exit 10`.
+2. **Open / Closed (OCP — Pluggable Stack & Domain Subcategories)**:
+   - Adding a new language stack (`.harness/profiles/*.env`), adapter, plugin, or microservice adds a new subcategory/node without mutating the traversal engine or Oracle exit-code protocol (`0`, `2`, `10`, `20`, `30`).
 3. **Liskov Substitution (LSP — Runtime & Agent Equivalence)**:
-   - Substituting an external headless CLI (`claude`, `copilot`) with a native Antigravity subagent (`claude-code-specialist`, `github-copilot-worker`) is valid if and only if the substitute honors identical behavioral postconditions: zero analyzer suppressions, disjoint file scope, and `Exit 0` across both Oracles.
+   - Substituting an external headless CLI (`claude`, `copilot`) with a native subagent (`claude-code-specialist`, `github-copilot-worker`) is valid iff the substitute honors identical postconditions: zero linter/compiler suppressions, bounded scope, and `Exit 0` across both Oracles.
 4. **Interface Segregation (ISP — Minimal Context Projection $\pi_k$)**:
-   - Never dump unrelated global repository state into inner-loop prompts. Project workspace context down to:
-     1. Exact shared C# 14 type/interface signatures (`namespace`, types, `TimeProvider`, `CancellationToken`).
-     2. Owned target file paths (`[NEW]` / `[MODIFY]`).
-     3. Direct upstream port contracts and relevant `.claude/skills/<domain>/SKILL.md` references.
+   - Strip unrelated global repository state from inner-loop prompts. Pass only: (1) frozen Shared Type/Port Contract, (2) owned `[NEW]`/`[MODIFY]` file paths, and (3) direct upstream port contracts + relevant domain skill references.
 5. **Dependency Inversion (DIP — Contract-First Mediation)**:
-   - Parallel agents coordinate exclusively through an upfront **Shared C# Contract Specification** and worktree filesystem artifacts — never by coupling to another agent's internal prompt transcript.
+   - Parallel branches coordinate exclusively through an upfront Shared Type/Port Contract and verified Git worktree artifacts — never by coupling to sibling agent prompt transcripts.
+6. **Table & Query Pagination Invariant**:
+   - Every DAG task synthesizing, refactoring, or reviewing a UI table or collection-returning query MUST enforce pagination contracts across both inner-loop branches (`2A`: domain pagination types & bounded query ports; `2B`: UI pager controls, touch targets, and LSP pagination contract test suites). Unbounded table dumps are prohibited.
 
 ---
 
 ## 2. Categorical DAG Execution Protocol
 
-### Step 1 — Connected-Component Bounded Context Partitioning
-1. Build the task dependency graph (including Jira `Blocks` links and prose `"Depends on <KEY>"` references).
-2. Extract **Sequential Morphisms ($g \circ f$)**:
-   - Whenever node $g$ consumes types or ports authored by node $f$ (e.g., `core/GeoAssets.Workflow` domain contracts $\to$ `workflow/GeoAssets.Workflow.EFCore` & `Rest` adapters), execute $f$ first and verify its contract postconditions before dispatching $g$.
-3. Extract **Monoidal Parallel Branches ($A \otimes B$)**:
-   - Run nodes concurrently if and only if they have zero causal dependency and strictly disjoint mutation scopes (`scope(A) ∩ scope(B) = ∅`), such as:
-     - Disjoint Bounded Context verticals (e.g., `GeoAssets.Server` core GIS vs. `GeoAssets.IpBilling`, enforced by `ServerArchitectureTests`).
-     - Intra-worktree `Branch 2A` (production logic) $\otimes$ `Branch 2B` (DTOs, `DomainTestDataBuilders`, xUnit suites) sharing a frozen upfront C# interface contract.
-
-### Step 2 — Isolated Sandbox Provisioning ($\eta: A \to T(A)$)
-- Provision isolated Git worktrees forked strictly from `origin/develop` (`main` and `master` are permanently forbidden):
-  ```bash
-  ./scripts/agent-sandbox.sh create <task-id> origin/develop
-  ```
-
-### Step 3 — Dual-Oracle Verification Gate
-After parallel branches join, execute both deterministic verifiers in order:
-1. **Fast Structural & Scope Pre-Flight (< 1s)**:
-   ```bash
-   python3 scripts/verify-solid-contracts.py --target ../worktrees/<task-id> --base origin/develop --scope-a "<2A-globs>" --scope-b "<2B-globs>" --json
-   ```
-2. **Full Compiler, Analyzer & Architecture Oracle**:
-   ```bash
-   ./scripts/verify-agent-worktree.sh ../worktrees/<task-id>
-   ```
-
-### Step 4 — Localized Self-Healing & Dual Morphism Rewind ($f^{op}$)
-When a node fails verification (`Exit 10`, `20`, or `30`), execute up to `maxRetries` (default `3`) localized repair cycles:
-1. **Snapshot Before Retry**: Capture the worktree state (`git stash create` inside `../worktrees/<task-id>`) before dispatching a repair prompt.
-2. **Error Monad Injection**: Feed only the structured JSON/diagnostic lines (`verify-solid-contracts.py --json` or `verify-agent-worktree.sh` summary) to the specific responsible agent (`Exit 10` formatting/scope $\to$ Copilot/`2B`; `Exit 20`/`30` analyzer/SOLID/domain $\to$ Claude/`2A`).
-3. **Dual Rollback ($f^{op}$) on Regression**: If a retry introduces *more* diagnostics or corrupts previously passing tests, restore the pre-retry tree snapshot (`git checkout -- .` / `git reset --hard <snapshot-tree>` if uncommitted) rather than compounding broken edits, and refine or escalate.
-4. **Topological Merge Serialization**: Rebase verified worktrees onto `origin/develop` in topological order and re-run both Oracles post-rebase before merge preparation.
-
+1. **Connected-Component Partitioning**:
+   - **Sequential Composition ($g \circ f$)**: When node $g$ consumes types, schemas, or ports produced by node $f$ (including Jira `Blocks` and prose `"Depends on <KEY>"`), execute and verify $f$ before dispatching $g$.
+   - **Monoidal Parallelization ($A \otimes B$)**: Run branches concurrently iff they have zero causal dependency and strictly disjoint mutation scopes (`scope(A) ∩ scope(B) = ∅`).
+2. **Sandbox Lift ($\eta: A \to T(A)$)**:
+   - Provision isolated worktrees strictly from `origin/develop` (`./scripts/agent-sandbox.sh create <task-id> origin/develop`).
+3. **Dual-Oracle Gate**:
+   - Run `python3 scripts/verify-solid-contracts.py --target ../worktrees/<task-id> --base origin/develop --scope-a "<2A>" --scope-b "<2B>" --json`, followed by `./scripts/verify-agent-worktree.sh ../worktrees/<task-id>`.
+4. **Localized Self-Healing & Dual Rollback ($f^{op}$)**:
+   - Capture `git -C ../worktrees/<task-id> stash create` before each retry (`1..3`).
+   - Route `Exit 10` to Copilot (`FORMAT_FIX_CMD`) and `Exit 20`/`30` to Claude Code with structured diagnostic output.
+   - If a retry increases diagnostics or regresses passing tests, rewind to the pre-retry tree snapshot ($f^{op}$) rather than compounding broken edits.

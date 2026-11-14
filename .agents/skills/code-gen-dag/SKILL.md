@@ -1,153 +1,132 @@
 ---
 name: code-gen-dag
 description: >-
-  Orchestrate GeoAssets' 5-phase Tri-Planar Outer-Loop code generation and verification DAG over
-  Claude Code (deep reasoning/core domain) and GitHub Copilot (mechanical scaffolding/xUnit QA)
-  inside an isolated Git worktree. Activate when the user invokes /code-gen-dag or asks any agent
-  — Google Antigravity, Claude Code, GitHub Copilot, or a human operator — to orchestrate a task
-  across the Claude Code and GitHub Copilot inner loops.
+  Orchestrate the 5-phase Tri-Planar Outer-Loop code generation and verification
+  DAG over Claude Code (deep reasoning/domain core) and GitHub Copilot
+  (mechanical scaffolding/100%-branch QA) inside an isolated Git worktree for
+  any language stack. Activate when the user invokes /code-gen-dag or asks
+  the orchestrating agent to run a task across Claude Code and GitHub Copilot.
+  Optional --ship extends the pipeline through commit, push, PR, merge, and
+  local develop sync; optional --docker (implies --ship) further redeploys
+  the local Docker stack afterward.
 ---
 
-# GeoAssets Tri-Planar Outer-Loop Orchestrator (`/code-gen-dag`)
+# Tri-Planar Outer-Loop Code Synthesis Orchestrator (`/code-gen-dag`)
 
-You are the **Outer-Loop Orchestrator** for GeoAssets' Tri-Planar Dual-Loop Architecture: you decompose a task, provision an isolated Git worktree, dispatch Claude Code (`2A` — deep reasoning/core domain) and GitHub Copilot (`2B` — mechanical scaffolding/xUnit QA) in parallel inside it, run the deterministic Oracle gatekeeper, drive the bounded self-healing loop, and prepare the rebase/merge. This protocol is **agent-neutral** — any agent capable of running shell commands and dispatching two parallel workers can execute it directly from this skill, not only Google Antigravity:
+You are the **ControlPlane-OuterLoop Orchestrator** for this project's Tri-Planar Dual-Loop Architecture: the role that decomposes a task into a dependency-aware DAG, provisions an isolated Git worktree, dispatches the two inner-loop branches (`2A ⊗ 2B` — Claude Code on deep reasoning/domain core, GitHub Copilot on mechanical scaffolding/100%-branch QA) in parallel, runs the Deterministic Oracle Substrate, performs up to `maxSelfHealRetries` bounded self-healing iterations, and prepares the rebase/merge.
 
-- Running inside **Google Antigravity**: its native **ControlPlane-OuterLoop** workflow spec at [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json) / [`.antigravity/workflows/code-gen-dag.md`](../../../.antigravity/workflows/code-gen-dag.md) is Antigravity's concrete implementation of the phases below.
-- Running inside **Claude Code**: use [`.claude/skills/code-gen-dag/SKILL.md`](../../../.claude/skills/code-gen-dag/SKILL.md) (or the `/code-gen-dag` command), which dispatches `2A`/`2B` via the `Agent` tool with `isolation: "worktree"`.
-- Running inside **GitHub Copilot**: use [`.github/skills/code-gen-dag/SKILL.md`](../../../.github/skills/code-gen-dag/SKILL.md).
+This protocol is **agent-neutral**: any agent capable of running shell commands and dispatching parallel workers/subagents — not only Google Antigravity — can execute it directly from this skill. Antigravity's own declarative blueprint ([`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json) / [`.md`](../../../.antigravity/workflows/code-gen-dag.md)) is one concrete implementation of the phases below, not the only valid one. Each agent configured in this repo runs its own native adaptation of this same protocol:
+
+- **Google Antigravity**: [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json) / [`.md`](../../../.antigravity/workflows/code-gen-dag.md) — its own declarative DAG engine.
+- **Claude Code**: [`.claude/skills/code-gen-dag/SKILL.md`](../../../.claude/skills/code-gen-dag/SKILL.md) — dispatches inner-loop branches via its own `Agent` tool (`isolation: "worktree"`).
+- **GitHub Copilot**: [`.github/skills/code-gen-dag/SKILL.md`](../../../.github/skills/code-gen-dag/SKILL.md) — drives the phases from Copilot Chat/Agent Mode's own terminal and task tools.
 
 ## Reference Contracts (Read on Demand)
 
-- **DAG Blueprint**: [`.antigravity/workflows/code-gen-dag.json`](../../../.antigravity/workflows/code-gen-dag.json)
-- **Categorical & SOLID DAG Formalism**: [`../outer-loop-dag-orchestrator/SKILL.md`](../outer-loop-dag-orchestrator/SKILL.md) and [`../solid-code-synthesizer/SKILL.md`](../solid-code-synthesizer/SKILL.md)
+- **Active Toolchain Profile**: [`.harness/harness.env`](../../../.harness/harness.env) and [`harness.config.json`](../../../harness.config.json)
+- **Categorical & SOLID Formalism**: [`../outer-loop-dag-orchestrator/SKILL.md`](../outer-loop-dag-orchestrator/SKILL.md) and [`../solid-code-synthesizer/SKILL.md`](../solid-code-synthesizer/SKILL.md)
 - **Sandbox Manager**: [`scripts/agent-sandbox.sh`](../../../scripts/agent-sandbox.sh)
-- **SOLID & Disjoint-Scope Pre-Flight Oracle**: [`scripts/verify-solid-contracts.py`](../../../scripts/verify-solid-contracts.py)
-- **Deterministic Oracle**: [`scripts/verify-agent-worktree.sh`](../../../scripts/verify-agent-worktree.sh)
+- **Polyglot SOLID & Disjoint-Scope Verifier**: [`scripts/verify-solid-contracts.py`](../../../scripts/verify-solid-contracts.py)
+- **3-Stage Deterministic Oracle**: [`scripts/verify-agent-worktree.sh`](../../../scripts/verify-agent-worktree.sh)
 - **Claude Code Contract (Branch 2A)**: [`CLAUDE.md`](../../../CLAUDE.md) and `.claude/skills/*/SKILL.md`
-- **GitHub Copilot Contract (Branch 2B)**: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md)
-- **Static Guardrails**: [`Directory.Build.props`](../../../Directory.Build.props) and [`BannedSymbols.txt`](../../../BannedSymbols.txt)
+- **GitHub Copilot Contract (Branch 2B)**: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) and [`.github/skills/solid-code-synthesizer/SKILL.md`](../../../.github/skills/solid-code-synthesizer/SKILL.md)
 
 ---
 
 ## Invocation & Parameters
 
-Expected invocation format:
-
 ```text
-/code-gen-dag <taskId> [description | Jira key] [--base origin/develop] [--retries 3] [--ship]
+/code-gen-dag [taskId | "<prompt>"] [description | prompt] [--base origin/develop] [--retries 3] [--ship] [--docker] [--e2e[=scope]] [--e2e-retries 2]
 ```
 
-1. **`taskId`** (required, regex `^[a-zA-Z0-9._-]+$`):
-   - Examples: `XD01-195-spatial-buffer-cache`, `xd01-204-wfs-bbox-filter`.
-   - If the user only supplies a prose description or bare Jira key (e.g., `XD01-195`), derive a normalized `<TICKET-KEY>-<kebab-slug>` `taskId`.
-   - Hard-reject `main`, `master`, `develop`, or `origin/*` as a `taskId`.
-2. **`baseRef`** (default: `origin/develop`):
-   - **Non-negotiable branch policy**: `main`, `origin/main`, `master`, and `origin/master` are strictly forbidden at every phase.
+1. **`taskId` / Prompt Resolution (optional `taskId`)**:
+   - The user can invoke `/code-gen-dag` with an explicit `taskId`, or **run only with a natural language prompt** without specifying any `taskId` (e.g., `/code-gen-dag "Implement pagination for asset list"` or `/code-gen-dag XD01-123`).
+   - **Resolution Rules**:
+     - **Explicit `taskId`**: If the first argument matches `^[a-zA-Z0-9._-]+$` and is not a natural language sentence, use it directly (normalized to `<TICKET-KEY>-<kebab-slug>` if bare ticket key).
+     - **Prompt with Ticket Key**: If the prompt references a ticket key (e.g. `<TICKET_PREFIX>-\d+` such as `XD01-179`), derive `<TICKET-KEY>-<kebab-slug>` (e.g., `XD01-179-asset-pagination`).
+     - **Prompt-Only (No Ticket Key)**: Derive a 2-4 word kebab slug from the prompt plus a 6-character collision-free hex hash (e.g. `sha256(prompt + timestamp)[:6]`):
+       `task-<slug>-<short-hash>` (e.g., `task-member-pagination-a7f3b2`).
+     - **Bare Invocation (No Arguments)**: Default to `task-adhoc-<short-hash>`.
+     - **Permanent Safety Rejection**: Hard-reject `main`, `master`, `develop`, or `origin/*`.
+   - The orchestrator echos `[ORCHESTRATOR] Resolved taskId: <taskId>` at start of Phase 1.
+2. **`baseRef`** (default: `origin/develop`): `main`, `origin/main`, `master`, and `origin/master` are permanently forbidden.
 3. **`maxSelfHealRetries`** (default: `3`, range: `1..5`).
-4. **`--ship`** (optional flag, default: `false`):
-   - When omitted, stop after Phase 5 verification and leave changes in `../worktrees/<taskId>` ready for user review with proposed commit/PR metadata.
-   - When `--ship` is explicitly passed, stage, commit (ending with `(<TICKET-KEY>)`), push, and open a PR targeting `develop` (never `main`) only if 100% of build and test gates pass.
+4. **`--ship`** (default: `false`): When omitted, leave verified changes uncommitted in `../worktrees/<taskId>` for user review and stop after Phase 5. When passed, run the full cycle only after 100% of Oracle and `UNIT_TEST_CMD` checks pass: commit ending with `(<TICKET-KEY>)` (or `(<taskId>)` if no ticket key exists), push, open a PR targeting `develop`, merge it, and pull the merge into the repository root's local `develop` — see **Phase 6**.
+5. **`--docker`** (default: `false`; implies `--ship`): After **Phase 6** completes, redeploy the local Docker stack from the freshly-merged `develop` — see **Phase 7**. Deploys build from the repository root's checked-out `develop`, not the worktree, so passing `--docker` without `--ship` would have nothing new to deploy; it therefore enables `--ship` automatically.
+6. **`--e2e[=scope]`** (default: `false`; implies `--docker` and `--ship`): After **Phase 7** verifies `/healthz`, execute the autonomous Agentic QA loop (API stateful journey + Headless Web UI inspection) — see **Phase 8**. Scope can be `auto` (inferred from diff), `api`, `web`, or `all`.
+7. **`--e2e-retries`** (default: `2`, range: `1..3`): Maximum cycles of hot-rebuild self-healing if Phase 8 detects a regression.
 
 ---
 
 ## Execution Protocol
 
-Execute the 5 DAG phases strictly in order. Do not skip gates or suppress diagnostics.
-
 ### Phase 1 — Task Decomposition & Worktree Initialization
+1. Read [`.harness/harness.env`](../../../.harness/harness.env), [`harness.config.json`](../../../harness.config.json), [`CLAUDE.md`](../../../CLAUDE.md), and [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md). If `taskId` references a Jira issue and Jira MCP tools are available, check formal `Blocks` links and prose `"Depends on <KEY>"` dependencies.
+2. Define an upfront **Shared Type/Interface Contract** (exact module paths, types, port signatures, injected Clock/Time abstraction, and cancellation parameters) and partition files with **strictly disjoint ownership (`2A ∩ 2B = ∅`)**:
+   - **`coreLogicSpec` (Branch 2A — `claude-code`)**: Pure domain models, business invariants, algorithms, port definitions, and architectural wiring.
+   - **`testAndBoilerplateSpec` (Branch 2B — `github-copilot`)**: Disjoint DTO/adapter boilerplate, `TestDataBuilders`, narrow mocks, shared LSP contract suites, and unit tests targeting 100% branch coverage.
+3. Provision the isolated worktree from the repository root:
+   ```bash
+   ./scripts/agent-sandbox.sh create <taskId> <baseRef>
+   ```
 
-1. **Validate Dependencies & Context**:
-   - Read [`CLAUDE.md`](../../../CLAUDE.md) and [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), plus any relevant `.claude/skills/<domain>/SKILL.md` (`csharp-conventions`, `observability-conventions`, `jira-conventions`, `ui-ux-pro-max`).
-   - If `taskId` references a Jira issue and Jira MCP tools are available, fetch the full issue description and verify both formal `Blocks` links and prose `"Depends on <KEY>"` dependencies before proceeding.
-   - Inspect target files in the repository so interfaces and existing conventions are grounded in real code.
-2. **Decompose with Disjoint File Ownership**:
-   - Because Branch `2A` and Branch `2B` execute concurrently inside the same worktree (`../worktrees/<taskId>`), define an explicit **Shared Type/Interface Contract** upfront (exact namespaces, record/class names, method signatures, and `CancellationToken`/`TimeProvider` parameters) and assign **strictly disjoint file paths**:
-     - **`coreLogicSpec` (Branch 2A — `claude-code`)**: Core domain models, invariants, spatial/topology algorithms, workflow/provider logic, and architectural wiring.
-     - **`testAndBoilerplateSpec` (Branch 2B — `github-copilot`)**: DTOs/mappers (if disjoint), `DomainTestDataBuilders`, `NSubstitute`/`Moq` test doubles, `FakeTimeProvider` fixtures, and exhaustive xUnit `[Fact]`/`[Theory]` suites targeting 100% branch coverage.
-3. **Provision Isolated Worktree**:
-   - Run from the repository root:
-     ```bash
-     ./scripts/agent-sandbox.sh create <taskId> <baseRef>
-     ```
-   - *Note*: `../worktrees/<taskId>` sits outside the repository root directory. Attempt standard execution first; if blocked by workspace path sandboxing, retry that command outside the sandbox. Abort immediately on non-zero exit.
-
----
-
-### Phase 2 — Parallel Inner-Loop Dispatch (`2A` + `2B`)
-
-1. **Probe Inner-Loop Runtimes**:
-   - Check CLI availability once (`command -v claude`, `command -v copilot`).
-2. **Dispatch Branch 2A (`claude-code`) and Branch 2B (`github-copilot`) in Parallel** inside `../worktrees/<taskId>`:
-   - **Branch 2A (`claude-code` — Deep Reasoning)**:
-     - *External CLI mode* (if `claude` is installed and authenticated): Run headlessly in `../worktrees/<taskId>` (e.g., `claude -p "<coreLogicSpec + Shared Contract + disjoint file ownership>" --allowedTools "Read,Edit,Write,Glob,Grep,Bash"`).
-     - *Orchestrator-native subagent fallback* (if `claude` CLI is unavailable): Use the orchestrating agent's own parallel-dispatch mechanism — e.g. Antigravity's `define_subagent` (`EnableWriteTools: true`) + `invoke_subagent`, or Claude Code's `Agent` tool with `isolation: "worktree"` — to launch a `claude-code-specialist` subagent bound to [`CLAUDE.md`](../../../CLAUDE.md) and `.claude/skills/*`, restricted strictly to `../worktrees/<taskId>` and `2A`'s owned files.
-   - **Branch 2B (`github-copilot` — Mechanical & QA)**:
-     - *External CLI mode* (if standalone agentic `copilot` CLI is installed and authenticated): Run headlessly in `../worktrees/<taskId>` with `<testAndBoilerplateSpec + Shared Contract + disjoint file ownership>`.
-     - *Orchestrator-native subagent fallback* (if agentic `copilot` CLI is unavailable): Use the orchestrating agent's own parallel-dispatch mechanism to launch a `github-copilot-worker` subagent bound to [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), restricted strictly to `../worktrees/<taskId>` and `2B`'s owned files.
-3. **Mandatory Guardrails & ISP Context Projection Injected into Both Branches**:
-   - **ISP Minimal Context Projection ($\pi_k$)**: Strip unrelated global repository state; pass each branch only the frozen Shared Type/Interface Contract, its strictly assigned target files, and direct upstream port definitions.
-   - Inject `System.TimeProvider` (`FakeTimeProvider` in tests); never call `DateTime.Now`/`UtcNow` or `DateTimeOffset.Now`/`UtcNow` (`RS0030` / [`BannedSymbols.txt`](../../../BannedSymbols.txt)).
-   - Preserve strict Onion Architecture & SOLID invariants: zero `Npgsql`, `Microsoft.EntityFrameworkCore`, or PostGIS references inside `core/` projects; zero `NotImplementedException` production stubs; segregate new role ports (`<= 5` methods).
-   - Propagate `CancellationToken` across async methods; zero `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, or `Thread.Sleep`.
-   - Zero `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`.
-4. **Join Barrier**:
-   - Wait until **both** Branch `2A` and Branch `2B` complete before entering Phase 3.
-
----
+### Phase 2 — Parallel Inner-Loop Dispatch (`2A ⊗ 2B`)
+1. Probe inner-loop CLI availability (`command -v claude`, `command -v copilot`).
+2. Project minimal **ISP task context ($\pi_k$)** to each branch (only the frozen Shared Contract, its owned target paths, and direct upstream ports) and dispatch in parallel inside `../worktrees/<taskId>`, using the orchestrating agent's own parallel-dispatch mechanism (e.g. Claude Code's `Agent` tool with `isolation: "worktree"`, Google Antigravity's own subagent definition with `EnableWriteTools: true`, or two concurrent headless CLI/session invocations):
+   - **Branch 2A (`claude-code`)**: Run headless `claude -p ...`, or dispatch a write-enabled Claude Code worker, restricted to `../worktrees/<taskId>` and `2A` paths.
+   - **Branch 2B (`github-copilot`)**: Run headless `copilot` CLI, or dispatch a write-enabled GitHub Copilot worker (Agent Mode / Coding Agent session), restricted to `../worktrees/<taskId>` and `2B` paths.
+3. Inject mandatory guardrails into both branches: Clean/Hexagonal domain-core purity (`domainCoreDirs`), injected Clock abstraction, async cancellation propagation, mandatory pagination for any table or collection query, zero unimplemented production stubs, and zero linter/compiler suppressions.
+4. Wait at the join barrier until both `2A` and `2B` finish.
 
 ### Phase 3 — Deterministic Oracle Verification
-
-1. Run the fast SOLID & Disjoint-Scope Pre-Flight Oracle (< 1s) first to confirm monoidal scope disjointness (`2A ∩ 2B = ∅`), `.razor.cs` code-behind pairing, and C# 14 SOLID/guardrail invariants:
+1. Run the fast polyglot SOLID & Disjoint-Scope Pre-Flight (< 1s):
    ```bash
-   python3 scripts/verify-solid-contracts.py --target ../worktrees/<taskId> --base origin/develop --scope-a "<2A-paths>" --scope-b "<2B-paths>"
+   python3 scripts/verify-solid-contracts.py --target ../worktrees/<taskId> --base <baseRef> --scope-a "<2A-paths>" --scope-b "<2B-paths>"
    ```
-   If `verify-solid-contracts.py` returns `Exit 10`, `20`, or `30`, route directly to **Phase 4** before paying full MSBuild compilation cost.
-2. Run the 3-stage Oracle gatekeeper from the repository root:
+2. Run the 3-stage stack Oracle:
    ```bash
    ./scripts/verify-agent-worktree.sh ../worktrees/<taskId>
    ```
-3. Map the exit code strictly:
-   - **`Exit 0`**: Oracle passed (`dotnet format style --verify-no-changes`, `dotnet build --no-incremental /warnaserror`, and `NetArchTest` architecture invariants). Also execute the touched xUnit test project(s) in `../worktrees/<taskId>` (`dotnet test <test-csproj> --no-build --nologo`) to verify `2B`'s newly generated unit tests pass. If any unit test fails, treat as **`Exit 30`**. Otherwise advance to **Phase 5**.
-   - **`Exit 2`**: Fatal environment or protected-branch violation. **Abort immediately** and surface the error.
-   - **`Exit 10` / `Exit 20` / `Exit 30`**: Enter **Phase 4**.
-
----
+3. On `Exit 0`, also run `UNIT_TEST_CMD` from `.harness/harness.env` inside `../worktrees/<taskId>` (treat any test failure as `Exit 30`). Advance to **Phase 5** on green; abort on `Exit 2`; enter **Phase 4** on `Exit 10` / `20` / `30`.
 
 ### Phase 4 — Bounded Self-Healing Feedback Loop
+Track `healAttempt` (`1..maxSelfHealRetries`). Capture a local tree snapshot (`git -C ../worktrees/<taskId> stash create`) before each retry so non-convergent edits can be rewound cleanly ($f^{op}$):
+- **`Exit 10` (Formatting / Scope Drift) → `github-copilot`**: Run `FORMAT_FIX_CMD` from `.harness/harness.env` without altering domain logic, then return to **Phase 3**.
+- **`Exit 20` (Compiler / Typecheck / Linter / Suppression) → `claude-code`**: Fix reported diagnostics in source without suppression directives, then return to **Phase 3**.
+- **`Exit 30` (SOLID / Clean Architecture / Test Failure) → `claude-code`**: Refactor leaked infrastructure behind domain ports or repair broken invariants (updating test setup via `github-copilot` only if the test contradicted the spec), then return to **Phase 3**.
 
-Track `healAttempt` starting at `1` up to `maxSelfHealRetries` (default `3`). Before each retry iteration, capture a local tree snapshot (`git -C ../worktrees/<taskId> stash create`) so non-convergent edits can be rewound cleanly ($f^{op}$ dual rollback) instead of compounding regressions:
+If Phase 3 still fails after `maxSelfHealRetries`, halt immediately, preserve `../worktrees/<taskId>`, and report the remaining diagnostics.
 
-- **`Exit 10` (`FormattingDrift`) → Route to `github-copilot`**:
-  - Run `dotnet format style GeoAssets.sln` inside `../worktrees/<taskId>` without altering domain logic, then return to **Phase 3**.
-- **`Exit 20` (`CompilerOrAnalyzerViolation`) → Route to `claude-code`**:
-  - Feed the targeted Roslyn / `AsyncFixer` / `Meziantou.Analyzer` / `BannedApiAnalyzers` diagnostics emitted by `verify-agent-worktree.sh` to `claude-code` (or coordinate signature mismatches across `2A`/`2B`).
-  - Fix every diagnostic in source **without** `#pragma warning disable`, `[SuppressMessage]`, or `<NoWarn>`, then return to **Phase 3**.
-- **`Exit 30` (`ArchitectureOrInvariantFailure` / xUnit Test Failure) → Route to `claude-code`**:
-  - Feed the failed assertion / stack trace summary to `claude-code` to repair layer coupling or domain defects (and update test setup via `github-copilot` only if the test expectation itself contradicted the spec), then return to **Phase 3**.
+### Phase 5 — Rebase, Post-Rebase Re-Verification & Merge Preparation
+1. Inside `../worktrees/<taskId>`: `git fetch origin develop && git rebase origin/develop` (route mechanical conflicts to `claude-code`; abort & escalate semantic conflicts).
+2. Re-run `./scripts/verify-agent-worktree.sh ../worktrees/<taskId>` and `UNIT_TEST_CMD` post-rebase (hard stop on any failure).
+3. Without `--ship`, leave changes uncommitted and report worktree path, `2A` vs. `2B` diff summary, Oracle trace, ready-to-use commit message `<type>(<scope>): <summary> (<TICKET-KEY>)`, PR title `<TICKET-KEY>: <summary>`, and cleanup command `./scripts/agent-sandbox.sh destroy <taskId>`. With `--ship`, commit ending with `(<TICKET-KEY>)`, push the branch, open the PR targeting `develop`, and continue to **Phase 6**.
 
-**Hard Escalation Rule**: If Phase 3 still fails after `maxSelfHealRetries` attempts, **halt immediately**, keep `../worktrees/<taskId>` intact (`preserveWorktree: true`), and report the exact remaining diagnostics to the user.
+### Phase 6 — Ship: Merge & Local Sync (only with `--ship`)
+1. Merge the PR with `gh pr merge --merge` — never `--auto`, which blocks waiting for CI checks to report success; this repo has no branch-protection gate, and CI here can fail instantly and permanently on a pre-existing, unrelated account/billing issue rather than a real regression (see `.harness/harness.env` / project notes), so `--auto` can hang forever.
+2. After merging, read the run's annotations (`gh run view <id>`) rather than trusting the red/green badge blindly: treat a failure as a hard stop only if it names a real regression in files this task touched; otherwise proceed and note the known pre-existing failure in the final report.
+3. From the **repository root** (not the worktree): `git checkout develop && git pull origin develop`, so the main checkout reflects the merged change.
+4. Run `./scripts/agent-sandbox.sh destroy <taskId>` to remove the now-merged worktree.
+5. Without `--docker`, report the merge commit, PR URL, and that local `develop` is in sync, then stop. With `--docker`, continue to **Phase 7**.
 
----
+### Phase 7 — Docker Deployment (only with `--docker`)
+1. From the repository root, confirm the Docker daemon is reachable (`docker info`); if not, start it and poll until ready before proceeding — never report a deploy as successful without a live daemon.
+2. Rebuild and start the server stack (`docker compose -f deploy/server/docker-compose.yaml up -d --build`), and when this task touched `apps/GeoAssets.Web` or `apps/GeoAssets.Shared`, also rebuild and start the web stack (`docker compose -f deploy/web/docker-compose.yaml up -d --build`).
+3. If a change doesn't get picked up due to cached layers, force a clean build of the touched service (`docker compose -f deploy/<stack>/docker-compose.yaml build --no-cache <service>` then `up -d --no-build <service>`).
+4. Poll the health endpoint (`E2E_API_BASE_URL` / `http://localhost:8080/healthz`, and `http://localhost:8081` if web was deployed) and report final container status (`docker ps --filter name=geoasset`). On any failure, surface the deploy log and halt — do not roll back the Phase 6 merge to recover. Without `--e2e`, stop here. With `--e2e`, continue to **Phase 8**.
 
-### Phase 5 — Rebase, Post-Rebase Verification & Merge Preparation
-
-Execute only after Phase 3 achieves **`Exit 0`**:
-
-1. **Rebase onto `origin/develop`**:
-   - Inside `../worktrees/<taskId>`, run:
-     ```bash
-     git fetch origin develop && git rebase origin/develop
-     ```
-   - If a **mechanical** rebase conflict occurs, route conflict resolution to `claude-code` with full worktree context. If a **semantic** conflict is detected, run `git rebase --abort` and escalate to the user.
-2. **Post-Rebase Re-Verification (Never Trust Pre-Rebase Green)**:
-   - Re-run `./scripts/verify-agent-worktree.sh ../worktrees/<taskId>` (must return `Exit 0`) and run `dotnet test GeoAssets.sln --no-build --nologo` inside `../worktrees/<taskId>`. Any test failure here is a hard stop.
-3. **Prepare Merge Artifact (or Ship if `--ship`)**:
-   - Inspect `git status` and `git diff --stat` inside `../worktrees/<taskId>`.
-   - **Default Mode (No `--ship`)**: Do not commit or push. Report:
-     - Worktree path (`../worktrees/<taskId>`) & branch name
-     - Files modified by Branch `2A` (`claude-code`) vs. Branch `2B` (`github-copilot`)
-     - Oracle & test suite verification status + number of self-healing iterations used
-     - Ready-to-use commit message (`<type>(<scope>): <summary> (<TICKET-KEY>)`) and PR title (`<TICKET-KEY>: <summary>` targeting `develop`)
-     - Cleanup command for after merge: `./scripts/agent-sandbox.sh destroy <taskId>`
-   - **`--ship` Mode**: Commit using repo conventions ending with `(<TICKET-KEY>)`, push branch (`git push -u origin <branch>`), and open a PR targeting `develop` (**never** `main`) via `gh pr create`. Remind the user to run `./scripts/agent-sandbox.sh destroy <taskId>` once the PR is merged into `develop`.
-
+### Phase 8 — Autonomous Post-Deploy Agentic QA & Bounded Self-Healing (only with `--e2e`)
+1. Run the autonomous acceptance runner:
+   ```bash
+   python3 scripts/run-agentic-qa.py --scope <auto|api|web|all> --retries <e2eRetries>
+   ```
+2. **On Exit 0 (Green)**: Emit the QA acceptance certificate artifact, report verified state and complete task cleanly.
+3. **On Exit 40 (Regression Detected)**:
+   - Check remaining retries (`e2eAttempt <= maxE2eRetries`):
+     - **Transient / Flakiness**: Wait for service stabilization with backoff, re-verify `/healthz`, and re-run runner.
+     - **Code Defect**: Dispatch Claude Code to diagnose the failure using the incident logs/curl, apply hot fix directly on root `develop`, rebuild only the touched service container (`docker compose build <service> && docker compose up -d --no-build <service>`), poll `/healthz`, and re-test.
+     - If fixed: Commit `fix(e2e): repair runtime regression discovered in phase 8 (<TICKET-KEY>)` and push to `develop`.
+   - **On Retries Exhausted (Opción A — Alerta y Bloqueo)**:
+     - Halt immediately with Exit 40.
+     - Leave the local Docker stack up for developer inspection.
+     - Emit the incident report artifact (`.harness/qa-e2e-report.md`) with failing reproduction curl, browser state, and container logs.
