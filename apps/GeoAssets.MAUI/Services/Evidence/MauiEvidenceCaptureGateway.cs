@@ -12,7 +12,7 @@ namespace GeoAssets.MAUI.Services.Evidence;
 /// on a rejected fix), then hands the captured bytes to the portable, testable
 /// <see cref="IEvidenceCaptureService"/> (<c>GeoAssets.Shared</c>) for watermarking and signing.
 /// </summary>
-internal sealed class MauiEvidenceCaptureGateway(IEvidenceCaptureService captureService)
+internal sealed class MauiEvidenceCaptureGateway(IEvidenceCaptureService captureService, ITrustedTimestampProvider trustedTimestampProvider)
 {
     public async Task<EvidenceCaptureResult> CaptureAsync(EvidenceCaptureContext context, string tenantSecret, CancellationToken ct = default)
     {
@@ -27,7 +27,14 @@ internal sealed class MauiEvidenceCaptureGateway(IEvidenceCaptureService capture
         }
 
         var heading = await TryGetCompassHeadingAsync().ConfigureAwait(false);
-        var contextWithHeading = context with { CompassHeadingDegrees = heading };
+        var tilt = await TryGetTiltDegreesAsync().ConfigureAwait(false);
+        var trustedTimestamp = await trustedTimestampProvider.GetUtcNowAsync(ct).ConfigureAwait(false);
+        var contextWithCaptureMetadata = context with
+        {
+            CompassHeadingDegrees = heading,
+            TiltDegrees = tilt,
+            CapturedAtUtc = trustedTimestamp,
+        };
 
         var photo = await MediaPicker.Default.CapturePhotoAsync().ConfigureAwait(false)
             ?? throw new EvidenceCaptureRejectedException("Camera capture was cancelled.");
@@ -36,7 +43,7 @@ internal sealed class MauiEvidenceCaptureGateway(IEvidenceCaptureService capture
         using var buffer = new MemoryStream();
         await stream.CopyToAsync(buffer, ct).ConfigureAwait(false);
 
-        return captureService.Capture(buffer.ToArray(), fix, contextWithHeading, tenantSecret);
+        return captureService.Capture(buffer.ToArray(), fix, contextWithCaptureMetadata, tenantSecret);
     }
 
     private static async Task<GpsFix> GetGpsFixAsync(CancellationToken ct)
@@ -76,6 +83,48 @@ internal sealed class MauiEvidenceCaptureGateway(IEvidenceCaptureService capture
             Compass.Default.ReadingChanged -= OnReadingChanged;
             if (Compass.Default.IsMonitoring)
                 Compass.Default.Stop();
+        }
+    }
+
+    /// <summary>
+    /// Returns the device's inclination from horizontal (0 = flat, 90 = upright) derived from the
+    /// accelerometer's gravity vector, or null (no accelerometer or no reading within the timeout)
+    /// rather than blocking capture — XD01-235 gates on GPS, not tilt.
+    /// </summary>
+    private static async Task<double?> TryGetTiltDegreesAsync()
+    {
+        var readingReceived = new TaskCompletionSource<double?>();
+        void OnReadingChanged(object? sender, AccelerometerChangedEventArgs e)
+        {
+            var acceleration = e.Reading.Acceleration;
+            var magnitude = Math.Sqrt(acceleration.X * acceleration.X + acceleration.Y * acceleration.Y + acceleration.Z * acceleration.Z);
+            if (magnitude < 0.1)
+            {
+                readingReceived.TrySetResult(null);
+                return;
+            }
+
+            var angleFromVertical = Math.Acos(Math.Clamp(Math.Abs(acceleration.Z) / magnitude, -1.0, 1.0)) * (180.0 / Math.PI);
+            readingReceived.TrySetResult(90.0 - angleFromVertical);
+        }
+
+        try
+        {
+            Accelerometer.Default.ReadingChanged += OnReadingChanged;
+            Accelerometer.Default.Start(SensorSpeed.UI);
+
+            var completed = await Task.WhenAny(readingReceived.Task, Task.Delay(TimeSpan.FromSeconds(3))).ConfigureAwait(false);
+            return completed == readingReceived.Task ? await readingReceived.Task.ConfigureAwait(false) : null;
+        }
+        catch (FeatureNotSupportedException)
+        {
+            return null;
+        }
+        finally
+        {
+            Accelerometer.Default.ReadingChanged -= OnReadingChanged;
+            if (Accelerometer.Default.IsMonitoring)
+                Accelerometer.Default.Stop();
         }
     }
 }
