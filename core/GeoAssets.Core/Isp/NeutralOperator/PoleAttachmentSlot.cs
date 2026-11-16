@@ -27,6 +27,12 @@ public sealed class PoleAttachmentSlot
     /// <summary>Attached cable diameter, in millimeters.</summary>
     public decimal CableDiameterMm { get; set; }
 
+    /// <summary>The attaching operator's declared/rated mechanical load contribution of this
+    /// attachment, in daN (decanewtons) — inspector-recorded at census time (XD01-262), not a
+    /// value this codebase derives from <see cref="CableDiameterMm"/> via any physics formula.
+    /// Defaults to 0 for attachments recorded before this field existed.</summary>
+    public decimal CableLoadDaN { get; set; }
+
     /// <summary>The attached telecom-cable <c>GeoFeature.Id</c>, when this slot is physically occupied.</summary>
     public string? AttachedCableFeatureId { get; set; }
 }

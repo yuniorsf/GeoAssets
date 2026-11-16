@@ -1,3 +1,5 @@
+using System.Globalization;
+using GeoAssets.Core.Isp.NeutralOperator;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Workflow.Orders;
 
@@ -21,20 +23,36 @@ namespace GeoAssets.Workflow.Isp.NeutralOperator;
 /// ticket's own literal "updates slot occupancy in geo_entity" AC is actually true end-to-end
 /// rather than a value the caller computed and then dropped. A future
 /// <c>PoleAttachmentSlotMatrix</c> store can supersede this without changing the schema.
+///
+/// Also runs <see cref="PoleMechanicalOverloadCalculator"/> (XD01-262) against the pole's
+/// <c>CAP_TRC</c> daN rating (the raw BDGD field key from <c>BdgdAssetTypes.Ponnot</c> — ingested
+/// onto this same <c>CustomAttributes</c> dictionary by the BDGD ETL, XD01-257) and writes
+/// <see cref="PoleMechanicalOverloadCalculator.FlaggedAttributeKey"/>. A pole never run through
+/// that ETL (or whose <c>CAP_TRC</c> doesn't parse) has no known rated capacity, so the flag is
+/// left unset rather than asserted either way.
 /// </summary>
 public static class PoleCensusSlotOccupancyMutationFactory
 {
+    private const string RatedCapacityDaNAttributeKey = "CAP_TRC";
+
     public static AssetFeatureMutationItem BuildMutation(IServiceOrder order)
     {
         ArgumentNullException.ThrowIfNull(order);
 
-        PoleComplianceChecklistProjector.Project(order);
+        var matrix = PoleComplianceChecklistProjector.Project(order);
         var pole = order.Features[0];
 
         var customAttributes = new Dictionary<string, string>(pole.Properties.CustomAttributes, StringComparer.Ordinal)
         {
             [PoleSharingComplianceChecklistSchema.OccupantsKey] = order.Attributes[PoleSharingComplianceChecklistSchema.OccupantsKey],
         };
+
+        if (customAttributes.TryGetValue(RatedCapacityDaNAttributeKey, out var ratedCapacityRaw) &&
+            decimal.TryParse(ratedCapacityRaw, NumberStyles.Float, CultureInfo.InvariantCulture, out var ratedCapacityDaN))
+        {
+            var overload = PoleMechanicalOverloadCalculator.Evaluate(matrix, ratedCapacityDaN);
+            customAttributes[PoleMechanicalOverloadCalculator.FlaggedAttributeKey] = overload.IsOverloaded ? "true" : "false";
+        }
 
         return new AssetFeatureMutationItem(
             FeatureId: pole.Id,
