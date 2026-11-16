@@ -156,10 +156,14 @@ builder.Services.AddSingleton<PhotoGatingRuleRegistry>();
 builder.Services.AddScoped<GeofenceArrivalTransitionGuard>();
 builder.Services.AddScoped<SafetyChecklistTransitionGuard>();
 builder.Services.AddScoped<PhotoGatingTransitionGuard>();
+// TechnicianComplianceTransitionGuard (XD01-253) — fourth guard; its ITechnicianComplianceRepository
+// is registered with the Totvs Protheus sync below. Fails open for a technician never synced.
+builder.Services.AddScoped<TechnicianComplianceTransitionGuard>();
 builder.Services.AddScoped<IFieldWorkTransitionGuard>(sp => new CompositeFieldWorkTransitionGuard(
     sp.GetRequiredService<GeofenceArrivalTransitionGuard>(),
     sp.GetRequiredService<SafetyChecklistTransitionGuard>(),
-    sp.GetRequiredService<PhotoGatingTransitionGuard>()));
+    sp.GetRequiredService<PhotoGatingTransitionGuard>(),
+    sp.GetRequiredService<TechnicianComplianceTransitionGuard>()));
 
 // ── Mobile offline-sync (XD01-208) — same ServiceOrderDbContext registration above backs
 // IServiceOrderRepository too. Registered as EFServiceOrderRepository (now carrying the
@@ -280,8 +284,8 @@ builder.Services.AddHttpClient(HttpContractorGovernancePortalClient.HttpClientNa
 builder.Services.AddSingleton<IContractorGovernancePortalClient, HttpContractorGovernancePortalClient>();
 
 // Totvs Protheus nightly sync (XD01-253) — technician certification/equipment-calibration pull
-// (gates APR submission via TechnicianComplianceTransitionGuard once a host wires
-// CompositeFieldWorkTransitionGuard to a real transition endpoint — not this ticket's scope),
+// (gates APR submission via TechnicianComplianceTransitionGuard, composed into the
+// CompositeFieldWorkTransitionGuard registered above for the XD01-295 transition endpoint),
 // approved-US-postings payroll export push, and warehouse-stock shrinkage reconciliation. The
 // in-memory compliance repository is the same "no persistence ticket yet" shape as
 // InMemoryPoleAuditEvidenceRepository above; the nightly sync repopulates it from scratch every
