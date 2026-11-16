@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
+using GeoAssets.Workflow.Targets;
 using Xunit;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
@@ -137,6 +138,160 @@ public class EFOrderTypeRepositoryTests
         await repo.SaveChangesAsync();
 
         (await repo.GetByIdAsync("missing")).Should().BeNull();
+    }
+
+    // ── AttributesSchemaJson (XD01-304, finding B3) ───────────────────────────
+
+    private const string AttributesSchema =
+        """{"type":"object","required":["crewSize"],"properties":{"crewSize":{"type":"integer","minimum":1}}}""";
+
+    [Fact]
+    public async Task AddAsync_ThenGetById_RoundTripsAttributesSchemaJson()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+
+        await repo.AddAsync(new OrderType { Id = "inspection", DisplayName = "Inspection", AttributesSchemaJson = AttributesSchema });
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        var loaded = await new EFOrderTypeRepository(freshContext).GetByIdAsync("inspection");
+
+        loaded!.AttributesSchemaJson.Should().Be(AttributesSchema);
+    }
+
+    [Fact]
+    public async Task AddAsync_WithoutAttributesSchemaJson_LoadsNull()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+
+        await repo.AddAsync(FullOrderType());
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        var loaded = await new EFOrderTypeRepository(freshContext).GetByIdAsync("emergency-repair");
+
+        loaded!.AttributesSchemaJson.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ReplacesThenClearsAttributesSchemaJson()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        await repo.AddAsync(new OrderType { Id = "inspection", DisplayName = "Inspection" });
+        await repo.SaveChangesAsync();
+
+        await repo.UpdateAsync(new OrderType { Id = "inspection", DisplayName = "Inspection", AttributesSchemaJson = AttributesSchema });
+        await repo.SaveChangesAsync();
+        (await repo.GetByIdAsync("inspection"))!.AttributesSchemaJson.Should().Be(AttributesSchema);
+
+        await repo.UpdateAsync(new OrderType { Id = "inspection", DisplayName = "Inspection" });
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        (await new EFOrderTypeRepository(freshContext).GetByIdAsync("inspection"))!.AttributesSchemaJson.Should().BeNull();
+    }
+
+    // ── TargetPolicy (XD01-304) ───────────────────────────────────────────────
+
+    private static OrderTargetPolicy FullTargetPolicy() => new()
+    {
+        TargetAssetTypeIds = ["pole", "manhole"],
+        AliasAttributeKey = "tag",
+        SelectionLimit = 500,
+        Activities = [new("inspect", "Inspect"), new("replace", "Replace")],
+        Exclusivity = OrderTargetExclusivity.BlockOnOverlap,
+        FanOut = new OrderTargetFanOutPolicy("pole-inspection-notice", OrderTargetFanOutPartyKind.OccupantOrganization),
+    };
+
+    private static OrderType TypeWithPolicy(OrderTargetPolicy? policy) => new()
+    {
+        Id = "pole-inspection",
+        DisplayName = "Pole inspection",
+        TargetPolicy = policy,
+    };
+
+    [Fact]
+    public async Task AddAsync_ThenGetById_RoundTripsFullTargetPolicy()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+
+        await repo.AddAsync(TypeWithPolicy(FullTargetPolicy()));
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        var loaded = await new EFOrderTypeRepository(freshContext).GetByIdAsync("pole-inspection");
+
+        var policy = loaded!.TargetPolicy;
+        policy.Should().NotBeNull();
+        policy!.TargetAssetTypeIds.Should().Equal("pole", "manhole");
+        policy.AliasAttributeKey.Should().Be("tag");
+        policy.SelectionLimit.Should().Be(500);
+        policy.Activities.Should().Equal(new OrderTargetActivity("inspect", "Inspect"), new OrderTargetActivity("replace", "Replace"));
+        policy.Exclusivity.Should().Be(OrderTargetExclusivity.BlockOnOverlap);
+        policy.FanOut.Should().Be(new OrderTargetFanOutPolicy("pole-inspection-notice", OrderTargetFanOutPartyKind.OccupantOrganization));
+    }
+
+    [Fact]
+    public async Task GetAllAsync_ReturnsTargetPolicyAndAttributesSchemaJson()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        await repo.AddAsync(new OrderType
+        {
+            Id = "pole-inspection",
+            DisplayName = "Pole inspection",
+            AttributesSchemaJson = AttributesSchema,
+            TargetPolicy = FullTargetPolicy(),
+        });
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        var loaded = (await new EFOrderTypeRepository(freshContext).GetAllAsync()).Single();
+
+        loaded.AttributesSchemaJson.Should().Be(AttributesSchema);
+        loaded.TargetPolicy.Should().BeEquivalentTo(FullTargetPolicy());
+    }
+
+    [Fact]
+    public async Task AddAsync_NullTargetPolicy_StoresNullColumnAndLoadsNull()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+
+        await repo.AddAsync(TypeWithPolicy(policy: null));
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        freshContext.OrderTypes.Single().TargetPolicyJson.Should().BeNull();
+        (await new EFOrderTypeRepository(freshContext).GetByIdAsync("pole-inspection"))!.TargetPolicy.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AddsReplacesThenClearsTargetPolicy()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        await repo.AddAsync(TypeWithPolicy(policy: null));
+        await repo.SaveChangesAsync();
+
+        await repo.UpdateAsync(TypeWithPolicy(FullTargetPolicy()));
+        await repo.SaveChangesAsync();
+        (await repo.GetByIdAsync("pole-inspection"))!.TargetPolicy.Should().BeEquivalentTo(FullTargetPolicy());
+
+        var narrowed = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"], Exclusivity = OrderTargetExclusivity.WarnOnOverlap };
+        await repo.UpdateAsync(TypeWithPolicy(narrowed));
+        await repo.SaveChangesAsync();
+        (await repo.GetByIdAsync("pole-inspection"))!.TargetPolicy.Should().BeEquivalentTo(narrowed);
+
+        await repo.UpdateAsync(TypeWithPolicy(policy: null));
+        await repo.SaveChangesAsync();
+
+        using var freshContext = fixture.NewContext();
+        (await new EFOrderTypeRepository(freshContext).GetByIdAsync("pole-inspection"))!.TargetPolicy.Should().BeNull();
     }
 
     // ── DeleteAsync ───────────────────────────────────────────────────────────

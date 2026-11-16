@@ -52,6 +52,8 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
         existing.DisplayName     = orderType.DisplayName;
         existing.Description     = orderType.Description;
         existing.InitialStateKey = orderType.InitialStateKey;
+        existing.AttributesSchemaJson = orderType.AttributesSchemaJson;
+        existing.TargetPolicyJson = OrderTargetPolicyMapper.ToJson(orderType.TargetPolicy);
 
         // Replace child collections (simplest correct strategy for small sets)
         db.RemoveRange(existing.CreationPolicies);

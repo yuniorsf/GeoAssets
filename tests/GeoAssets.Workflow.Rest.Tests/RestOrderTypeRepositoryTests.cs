@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Targets;
 using Xunit;
 
 namespace GeoAssets.Workflow.Rest.Tests;
@@ -105,6 +106,100 @@ public class RestOrderTypeRepositoryTests
         var req = handler.Requests.Single();
         req.Method.Should().Be(HttpMethod.Delete);
         req.RequestUri!.AbsolutePath.Should().Be("/order-types/inspection");
+    }
+
+    // ── TargetPolicy / AttributesSchemaJson over the wire (XD01-304) ──────────
+
+    private static OrderType TypeWithFullPolicy() => new()
+    {
+        Id = "pole-inspection",
+        DisplayName = "Pole inspection",
+        AttributesSchemaJson = """{"type":"object"}""",
+        TargetPolicy = new OrderTargetPolicy
+        {
+            TargetAssetTypeIds = ["pole", "manhole"],
+            AliasAttributeKey = "tag",
+            SelectionLimit = 500,
+            Activities = [new("inspect", "Inspect"), new("replace", "Replace")],
+            Exclusivity = OrderTargetExclusivity.BlockOnOverlap,
+            FanOut = new OrderTargetFanOutPolicy("pole-inspection-notice", OrderTargetFanOutPartyKind.OccupantOrganization),
+        },
+    };
+
+    /// <summary>
+    /// Echo server: keeps whatever body the client last wrote and serves it back on reads, so a
+    /// write followed by a read exercises the client's own serialization in both directions.
+    /// </summary>
+    private static FakeHttpMessageHandler EchoHandler(bool wrapReadsInArray = false)
+    {
+        string? stored = null;
+        return new FakeHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Get)
+            {
+                var payload = wrapReadsInArray ? $"[{stored}]" : stored!;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json"),
+                };
+            }
+
+            using var reader = new StreamReader(request.Content!.ReadAsStream());
+            stored = reader.ReadToEnd();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+    }
+
+    [Fact]
+    public async Task AddAsync_ThenGetByIdAsync_RoundTripsTargetPolicyAndAttributesSchemaJson()
+    {
+        var sut = Sut(EchoHandler());
+
+        await sut.AddAsync(TypeWithFullPolicy());
+        var loaded = await sut.GetByIdAsync("pole-inspection");
+
+        loaded.Should().BeEquivalentTo(TypeWithFullPolicy());
+        loaded!.TargetPolicy!.Exclusivity.Should().Be(OrderTargetExclusivity.BlockOnOverlap);
+        loaded.TargetPolicy.FanOut.Should().Be(new OrderTargetFanOutPolicy("pole-inspection-notice"));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ThenGetAllAsync_RoundTripsTargetPolicy()
+    {
+        var sut = Sut(EchoHandler(wrapReadsInArray: true));
+
+        await sut.UpdateAsync(TypeWithFullPolicy());
+        var loaded = await sut.GetAllAsync();
+
+        loaded.Should().ContainSingle().Which.Should().BeEquivalentTo(TypeWithFullPolicy());
+    }
+
+    [Fact]
+    public async Task AddAsync_ThenGetByIdAsync_TypeWithoutPolicy_KeepsTargetPolicyNull()
+    {
+        var sut = Sut(EchoHandler());
+
+        await sut.AddAsync(Type());
+        var loaded = await sut.GetByIdAsync("inspection");
+
+        loaded.Should().BeEquivalentTo(Type());
+        loaded!.TargetPolicy.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_PayloadWithoutTargetPolicyProperty_LeavesTargetPolicyNull()
+    {
+        // The shape every server produced before XD01-304.
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"id":"inspection","displayName":"Inspección"}""", System.Text.Encoding.UTF8, "application/json"),
+        });
+
+        var loaded = await Sut(handler).GetByIdAsync("inspection");
+
+        loaded!.Id.Should().Be("inspection");
+        loaded.TargetPolicy.Should().BeNull();
+        loaded.AttributesSchemaJson.Should().BeNull();
     }
 
     [Fact]

@@ -15,7 +15,6 @@ namespace GeoAssets.Server.Migrations
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
-#pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
@@ -367,6 +366,9 @@ namespace GeoAssets.Server.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<string>("AttributesSchemaJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(1024)
@@ -380,6 +382,9 @@ namespace GeoAssets.Server.Migrations
                     b.Property<string>("InitialStateKey")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TargetPolicyJson")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -910,7 +915,6 @@ namespace GeoAssets.Server.Migrations
 
                     b.Navigation("Dispatches");
                 });
-#pragma warning restore 612, 618
         }
     }
 }
