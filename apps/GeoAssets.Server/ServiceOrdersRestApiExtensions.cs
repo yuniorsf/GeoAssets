@@ -30,6 +30,15 @@ namespace GeoAssets.Server;
 /// exactly which rule declined. Order Type CRUD is unchanged/ungated: that's configuration
 /// data, not a per-order action <c>ServiceOrderRules</c> governs.
 ///
+/// <b>Organization gate (XD01-332).</b> <see cref="ServiceOrderRules"/> refuses a caller
+/// outside the order's organization before any rule runs; every route here answers that
+/// refusal with the same 404 as an unknown order id (see <see cref="ServiceOrderRouteAccess"/>),
+/// and keeps 403 for a caller inside the gate whom the rules decline. The read routes, which
+/// evaluate no rule, apply the gate themselves: by id and parent through
+/// <see cref="ServiceOrderRouteAccess.FindReadableAsync"/>, lists through
+/// <see cref="ServiceOrderRouteAccess.KeepReadableAsync"/>. Create stamps the caller's own
+/// organization; update never changes it (<see cref="ServiceOrderOrganization"/>).
+///
 /// Reads additionally call <c>.RequireAuthorization("serviceorders:read")</c> (XD01-127) —
 /// a raw <c>AppPermission.Code</c> already seeded and granted to every built-in role
 /// (<c>GeoIdentitySeeder</c>), resolved the same way as the Identity endpoints' per-route
@@ -43,6 +52,8 @@ namespace GeoAssets.Server;
 public static class ServiceOrdersRestApiExtensions
 {
     private static readonly string[] EmptySchemaBodyError = ["Request body must contain a JSON Schema document."];
+
+    private const string ReadPolicy = "serviceorders:read";
 
     public static IEndpointRouteBuilder MapServiceOrdersApi(
         this IEndpointRouteBuilder routes,
@@ -61,45 +72,92 @@ public static class ServiceOrdersRestApiExtensions
 
     private static void MapServiceOrderReads(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
-        routes.MapGet($"{prefix}/service-orders", async (IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetAllAsync().ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+        MapServiceOrderLists(routes, prefix, opts);
+        MapServiceOrderFilteredLists(routes, prefix, opts);
+        MapServiceOrderById(routes, prefix, opts);
+    }
 
-        routes.MapGet($"{prefix}/service-orders/roots", async (IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetRootsAsync().ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+    /// <summary>
+    /// Every list is what the store returns for the caller's tenant, narrowed again to the
+    /// orders the caller passes the organization gate on (XD01-332, see
+    /// <see cref="ServiceOrderRouteAccess.KeepReadableAsync"/>).
+    /// </summary>
+    private static async Task<IResult> ListAsync(
+        Task<IReadOnlyList<IServiceOrder>> query, ServiceOrderRules rules,
+        ServerWorkflowPrincipalFactory principalFactory, JsonSerializerOptions opts, CancellationToken ct)
+    {
+        var orders = await query.ConfigureAwait(false);
+        return Results.Json(
+            await ServiceOrderRouteAccess.KeepReadableAsync(orders, rules, principalFactory, ct).ConfigureAwait(false), opts);
+    }
 
-        routes.MapGet($"{prefix}/service-orders/by-status/{{status}}", async (string status, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByStatusAsync(status).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+    private static void MapServiceOrderLists(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapGet($"{prefix}/service-orders", (
+            IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetAllAsync(ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
 
-        routes.MapGet($"{prefix}/service-orders/by-assignee/{{userId}}", async (string userId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByAssigneeAsync(userId).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+        routes.MapGet($"{prefix}/service-orders/roots", (
+            IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetRootsAsync(ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
 
-        routes.MapGet($"{prefix}/service-orders/by-creator/{{userId}}", async (string userId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByCreatorAsync(userId).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+        routes.MapGet($"{prefix}/service-orders/{{id}}/children", (
+            string id, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetChildrenAsync(id, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
+    }
 
-        routes.MapGet($"{prefix}/service-orders/by-order-type/{{orderTypeId}}", async (string orderTypeId, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByOrderTypeAsync(orderTypeId).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+    private static void MapServiceOrderFilteredLists(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapGet($"{prefix}/service-orders/by-status/{{status}}", (
+            string status, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetByStatusAsync(status, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
 
-        routes.MapGet($"{prefix}/service-orders/by-date-range", async (DateTime from, DateTime to, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetByDateRangeAsync(from, to).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+        routes.MapGet($"{prefix}/service-orders/by-assignee/{{userId}}", (
+            string userId, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetByAssigneeAsync(userId, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
 
-        routes.MapGet($"{prefix}/service-orders/dispatched-to/{{targetId}}",
-            async (string targetId, DispatchTargetType targetType, IServiceOrderRepository repo) =>
-                Results.Json(await repo.GetDispatchedToAsync(targetId, targetType).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
+        routes.MapGet($"{prefix}/service-orders/by-creator/{{userId}}", (
+            string userId, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetByCreatorAsync(userId, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
 
-        routes.MapGet($"{prefix}/service-orders/{{id}}", async (string id, IServiceOrderRepository repo) =>
+        routes.MapGet($"{prefix}/service-orders/by-order-type/{{orderTypeId}}", (
+            string orderTypeId, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetByOrderTypeAsync(orderTypeId, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
+
+        routes.MapGet($"{prefix}/service-orders/by-date-range", (
+            DateTime from, DateTime to, IServiceOrderRepository repo, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetByDateRangeAsync(from, to, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
+
+        routes.MapGet($"{prefix}/service-orders/dispatched-to/{{targetId}}", (
+            string targetId, DispatchTargetType targetType, IServiceOrderRepository repo, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(repo.GetDispatchedToAsync(targetId, targetType, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
+    }
+
+    /// <summary>
+    /// The two reads that fetch one order past the tenant filter. Both answer 404 for an order
+    /// the caller is outside the organization of, exactly as for one that does not exist.
+    /// </summary>
+    private static void MapServiceOrderById(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapGet($"{prefix}/service-orders/{{id}}", async (
+            string id, IServiceOrderRepository repo, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
         {
-            var order = await repo.GetByIdAsync(id).ConfigureAwait(false);
+            var order = await ServiceOrderRouteAccess.FindReadableAsync(id, repo, rules, principalFactory, ct).ConfigureAwait(false);
             return order is null ? Results.NotFound() : Results.Json(order, opts);
-        }).RequireAuthorization("serviceorders:read");
+        }).RequireAuthorization(ReadPolicy);
 
-        routes.MapGet($"{prefix}/service-orders/{{id}}/children", async (string id, IServiceOrderRepository repo) =>
-            Results.Json(await repo.GetChildrenAsync(id).ConfigureAwait(false), opts)).RequireAuthorization("serviceorders:read");
-
-        routes.MapGet($"{prefix}/service-orders/{{id}}/parent", async (string id, IServiceOrderRepository repo) =>
+        routes.MapGet($"{prefix}/service-orders/{{id}}/parent", async (
+            string id, IServiceOrderRepository repo, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
         {
-            var parent = await repo.GetParentAsync(id).ConfigureAwait(false);
+            var parent = await ServiceOrderRouteAccess
+                .KeepIfReadableAsync(await repo.GetParentAsync(id, ct).ConfigureAwait(false), rules, principalFactory, ct)
+                .ConfigureAwait(false);
             return parent is null ? Results.NotFound() : Results.Json(parent, opts);
-        }).RequireAuthorization("serviceorders:read");
+        }).RequireAuthorization(ReadPolicy);
     }
 
     // ── Service Orders — writes ─────────────────────────────────────────────
@@ -141,8 +199,15 @@ public static class ServiceOrdersRestApiExtensions
 
             try
             {
-                await repo.AddAsync(order).ConfigureAwait(false);
+                // XD01-332: an order is created under its creator's own organization — stamped
+                // with it when the body states none, refused when the body states another.
+                var owned = ServiceOrderOrganization.ForCreation(order, ServiceOrderRouteAccess.OrganizationOf(principal));
+                await repo.AddAsync(owned).ConfigureAwait(false);
                 return Results.Created(new Uri($"{prefix}/service-orders/{order.Id}", UriKind.Relative), null);
+            }
+            catch (ServiceOrderOrganizationException ex)
+            {
+                return Results.Json(new { reason = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
             }
             catch (ServiceOrderAttributeValidationException ex)
             {
@@ -166,13 +231,18 @@ public static class ServiceOrdersRestApiExtensions
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, OrderActionType.Annotate, existing);
-            if (!verdict.Allowed)
-                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
+            if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             try
             {
-                await repo.UpdateAsync(order).ConfigureAwait(false);
+                // XD01-332: the organization is fixed at creation. A body that states another
+                // one is refused here, whatever repository is registered behind the route.
+                await repo.UpdateAsync(ServiceOrderOrganization.ForUpdate(existing, order)).ConfigureAwait(false);
                 return Results.NoContent();
+            }
+            catch (ServiceOrderOrganizationException ex)
+            {
+                return Results.BadRequest(new { code = ServiceOrderOrganization.ChangeRefusedCode, reason = ex.Message });
             }
             catch (ServiceOrderAttributeValidationException ex)
             {
@@ -213,8 +283,7 @@ public static class ServiceOrdersRestApiExtensions
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, OrderActionType.Dispatch, order);
-            if (!verdict.Allowed)
-                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
+            if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             try
             {
@@ -239,8 +308,7 @@ public static class ServiceOrdersRestApiExtensions
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, entry.Action, order);
-            if (!verdict.Allowed)
-                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
+            if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             try
             {
@@ -269,8 +337,7 @@ public static class ServiceOrdersRestApiExtensions
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, OrderActionType.Cancel, order);
-            if (!verdict.Allowed)
-                return Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
+            if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             await repo.DeleteAsync(id).ConfigureAwait(false);
             return Results.NoContent();

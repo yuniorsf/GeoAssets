@@ -1,4 +1,3 @@
-using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.Rules;
@@ -6,7 +5,16 @@ namespace GeoAssets.Workflow.Rules;
 /// <summary>
 /// Central authorization engine for service order actions.
 ///
-/// Evaluates a chain of <see cref="IServiceOrderRule"/> instances using deny-overrides logic:
+/// <b>The organization gate comes first (XD01-332).</b> Before any rule is consulted,
+/// <see cref="Evaluate"/> checks that the principal may reach the order at all: it belongs to
+/// the order's organization, or its organization holds a cross-organization grant covering
+/// the order, or the order was dispatched to it (see <see cref="OrderOrganizationGate"/>). A
+/// principal that fails is denied with <see cref="RuleDenialCode.OutsideOrganization"/>
+/// whatever its role; one that passes is granted nothing by passing — the chain below decides.
+/// Creation has no order to gate; a host must only ever create an order under the creating
+/// principal's own organization.
+///
+/// Then it evaluates a chain of <see cref="IServiceOrderRule"/> instances using deny-overrides logic:
 ///   • Any explicit DENY wins over all ALLOWs.
 ///   • At least one explicit ALLOW with no DENYs → granted.
 ///   • All rules abstain → denied by default (fail-closed).
@@ -35,6 +43,8 @@ public sealed class ServiceOrderRules
 {
     private readonly List<IServiceOrderRule>   _rules;
     private readonly List<IOrderCreationRule>  _creationRules;
+    private readonly bool                      _allowOrdersWithoutOrganization;
+    private readonly TimeProvider              _timeProvider;
 
     /// <param name="orderTypeRegistry">
     /// Optional. When supplied, <see cref="Evaluate"/> also consults each order type's
@@ -58,12 +68,26 @@ public sealed class ServiceOrderRules
     /// orders actually dispatched to the principal. Omit to keep the default (none — a
     /// recipient without a configured role grant still only gets View/Annotate/Accept).
     /// </param>
+    /// <param name="allowOrdersWithoutOrganization">
+    /// What the organization gate does with an order that has no organization
+    /// (<see cref="Guid.Empty"/>) — see <see cref="ServiceOrderRulesOptions.AllowOrdersWithoutOrganization"/>.
+    /// True (the default) keeps such orders reachable as before the gate existed.
+    /// </param>
+    /// <param name="timeProvider">
+    /// Clock a cross-organization grant's <see cref="WorkflowOrgGrant.ExpiresAt"/> is compared
+    /// with; the system clock when omitted.
+    /// </param>
     public ServiceOrderRules(
         OrderTypeRegistry? orderTypeRegistry = null,
         IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null,
         IReadOnlySet<string>? unrestrictedRoles = null,
-        IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? recipientRoleGrants = null)
+        IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? recipientRoleGrants = null,
+        bool allowOrdersWithoutOrganization = true,
+        TimeProvider? timeProvider = null)
     {
+        _allowOrdersWithoutOrganization = allowOrdersWithoutOrganization;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+
         _rules =
         [
             new CreatorRule(orderTypeRegistry),
@@ -71,7 +95,7 @@ public sealed class ServiceOrderRules
             new DispatchRecipientRule(recipientRoleGrants),
             new OrderTypeActionPermissionRule(orderTypeRegistry),
             new RoleBasedActionRule(roleGrants, unrestrictedRoles),
-            new CrossOrgGrantRule(),
+            new CrossOrgGrantRule(_timeProvider),
         ];
 
         _creationRules =
@@ -135,7 +159,9 @@ public sealed class ServiceOrderRules
 
     /// <summary>
     /// Evaluates whether <paramref name="principal"/> may perform
-    /// <paramref name="action"/> on <paramref name="order"/>.
+    /// <paramref name="action"/> on <paramref name="order"/>: the organization gate first
+    /// (see the class summary), then the rule chain. <see cref="RuleEvaluationResult.Code"/>
+    /// tells the two kinds of refusal apart.
     /// </summary>
     public RuleEvaluationResult Evaluate(
         WorkflowPrincipal principal,
@@ -144,24 +170,70 @@ public sealed class ServiceOrderRules
     {
         ArgumentNullException.ThrowIfNull(principal);
         if (string.IsNullOrEmpty(principal.UserId))
-            return RuleEvaluationResult.Deny(action, "Anonymous users cannot act on orders.");
+            return Anonymous(action);
 
-        var relationship = ResolveRelationship(principal, order);
-        var context      = new RuleEvaluationContext(principal, order, relationship);
+        var context = new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order));
 
+        if (!OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, _timeProvider.GetUtcNow().UtcDateTime))
+        {
+            return RuleEvaluationResult.Deny(
+                action, "The order is outside the principal's organization.", RuleDenialCode.OutsideOrganization);
+        }
+
+        return EvaluateChain(action, context);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="principal"/> passes the organization gate on
+    /// <paramref name="order"/> — the first half of <see cref="Evaluate"/>, on its own. For a
+    /// route that evaluates no rule (a plain read) and still must not reveal another
+    /// organization's order. Passing grants nothing.
+    /// </summary>
+    public bool PassesOrganizationGate(WorkflowPrincipal principal, IServiceOrder order)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+        if (string.IsNullOrEmpty(principal.UserId)) return false;
+
+        var context = new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order));
+        return OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, _timeProvider.GetUtcNow().UtcDateTime);
+    }
+
+    /// <summary>
+    /// The rule chain alone, without the organization gate — exactly what <see cref="Evaluate"/>
+    /// did before the gate existed. Not an authorization entry point: it exists so a test can
+    /// prove the gate changes no outcome for a principal that passes it, and is internal so no
+    /// host or request can reach it.
+    /// </summary>
+    internal RuleEvaluationResult EvaluateRuleChainOnly(
+        WorkflowPrincipal principal,
+        OrderActionType   action,
+        IServiceOrder     order)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+        if (string.IsNullOrEmpty(principal.UserId))
+            return Anonymous(action);
+
+        return EvaluateChain(action, new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order)));
+    }
+
+    private static RuleEvaluationResult Anonymous(OrderActionType action) =>
+        RuleEvaluationResult.Deny(action, "Anonymous users cannot act on orders.", RuleDenialCode.Anonymous);
+
+    private RuleEvaluationResult EvaluateChain(OrderActionType action, RuleEvaluationContext context)
+    {
         bool anyAllow = false;
         foreach (var rule in _rules)
         {
             var verdict = rule.Evaluate(action, context);
             if (verdict == false)
-                return RuleEvaluationResult.Deny(action, $"Denied by rule '{rule.Name}'.");
+                return RuleEvaluationResult.Deny(action, $"Denied by rule '{rule.Name}'.", RuleDenialCode.DeniedByRule);
             if (verdict == true)
                 anyAllow = true;
         }
 
         return anyAllow
             ? RuleEvaluationResult.Allow(action, "Allowed by evaluation chain.")
-            : RuleEvaluationResult.Deny(action, "No rule granted this action.");
+            : RuleEvaluationResult.Deny(action, "No rule granted this action.", RuleDenialCode.NoRuleGranted);
     }
 
     // ── Relationship resolver ─────────────────────────────────────────────────
@@ -293,17 +365,12 @@ file sealed class DispatchRecipientRule(
 {
     public string Name => "DispatchRecipientRule";
 
-    private const OrderUserRelationship _recipientFlags =
-        OrderUserRelationship.DirectRecipient |
-        OrderUserRelationship.GroupMember     |
-        OrderUserRelationship.OrgMember;
-
     private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> _roleGrants =
         roleGrants ?? new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal);
 
     public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
     {
-        if ((ctx.Relationship & _recipientFlags) == OrderUserRelationship.None) return null;
+        if ((ctx.Relationship & OrderOrganizationGate.RecipientFlags) == OrderUserRelationship.None) return null;
 
         switch (action)
         {
@@ -372,46 +439,6 @@ file sealed class RoleBasedActionRule(
         }
 
         return null;
-    }
-}
-
-/// <summary>
-/// Allow-contributor for cross-organization access (XD01-22): grants the action when the
-/// principal's own organization holds an active <see cref="WorkflowOrgGrant"/> — pre-resolved
-/// onto <see cref="WorkflowPrincipal.OrgGrants"/> — covering the order's owning organization
-/// (<see cref="IServiceOrder.OrganizationId"/>). Matches on resource org, optional resource
-/// type (null = any), the action's permission code (<c>"serviceorders:{action}"</c>, lowercase
-/// — e.g. <c>"serviceorders:complete"</c>, matching the format decided when
-/// <c>OrganizationGrant</c> was designed), an optional required role, and — when the grant
-/// names one (XD01-250) — the order's own <see cref="IScopeableResource.ScopeId"/>, by exact,
-/// case-sensitive match per that interface's own contract. A grant with no
-/// <see cref="WorkflowOrgGrant.ScopeId"/> stays ungated within <c>ResourceType</c>, the
-/// original behavior; a grant that does name one never matches an order whose own ScopeId is
-/// null (there is no subset to match against) or implements no scoping at all.
-///
-/// Same pattern as every other built-in rule: abstains (returns <c>null</c>) rather than
-/// denying when no grant applies, so same-org access via the existing rules (Creator/
-/// Assignee/DispatchRecipient/RoleBased) is entirely unaffected — this only ever *adds* an
-/// allow path, never a new deny condition.
-/// </summary>
-file sealed class CrossOrgGrantRule : IServiceOrderRule
-{
-    public string Name => "CrossOrgGrantRule";
-
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
-    {
-        var actionCode = $"serviceorders:{action.ToString().ToLowerInvariant()}";
-        var resourceOrganizationId = ctx.Order.OrganizationId.ToString();
-        var orderScopeId = (ctx.Order as IScopeableResource)?.ScopeId;
-
-        var hasGrant = ctx.Principal.OrgGrants.Any(g =>
-            g.ResourceOrganizationId.Equals(resourceOrganizationId, StringComparison.OrdinalIgnoreCase) &&
-            (g.ResourceType is null || g.ResourceType.Equals(nameof(Orders.ServiceOrder), StringComparison.OrdinalIgnoreCase)) &&
-            g.AllowedActions.Contains(actionCode, StringComparer.OrdinalIgnoreCase) &&
-            (g.RequiredRole is null || ctx.Principal.HasRole(g.RequiredRole)) &&
-            (g.ScopeId is null || string.Equals(g.ScopeId, orderScopeId, StringComparison.Ordinal)));
-
-        return hasGrant ? true : null;
     }
 }
 

@@ -142,6 +142,16 @@ public sealed class OrderTargetSelectionEndToEndTests
         targetsOfA.GetProperty("items").EnumerateArray().Select(t => t.GetProperty("featureId").GetString())
             .Should().Equal("a-pole-1", "a-pole-2", "a-pole-3");
 
+        // XD01-332: an administrator of B no longer reaches A's order by role alone — the route
+        // answers it as for an unknown order. Holding a cross-organization grant is the
+        // legitimate way in, and is what the confinement below has to hold against.
+        var refused = await asB.PostAsJsonAsync(
+            new Uri("service-orders/ord-a/targets/selection/preview", UriKind.Relative), FenceBody());
+        refused.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+        var viewGrant = new OrganizationGrant { GranteeOrganizationId = OrgB, ResourceOrganizationId = OrgA, ResourceType = "ServiceOrder" };
+        viewGrant.AllowedActions.Add("serviceorders:view");
+        app.Grants.Add(viewGrant);
+
         // Organization B, on A's order: whatever the rules allow its administrator, the selection
         // is confined to the order's organization and to the caller's tenant, so nothing matches.
         var byBOnAsOrder = await PostAsync(asB, "service-orders/ord-a/targets/selection/preview", FenceBody());
@@ -212,6 +222,9 @@ public sealed class OrderTargetSelectionEndToEndTests
     /// <summary>The host under test over a freshly migrated database.</summary>
     private sealed class TestApp(IHost host, string connectionString) : IAsyncDisposable
     {
+        /// <summary>The cross-organization grants the principal factory resolves; empty unless a test adds one.</summary>
+        public List<OrganizationGrant> Grants => host.Services.GetRequiredService<NoGrantsRepository>().Active;
+
         public static async Task<TestApp> StartAsync()
         {
             var connectionString = new NpgsqlConnectionStringBuilder(await SecurityTestContainerFixture.EnsureStartedAsync())
@@ -288,7 +301,8 @@ public sealed class OrderTargetSelectionEndToEndTests
                 options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
             services.AddGeoAuthorizationPolicyBridge();
             services.AddSingleton<IGeoAuthorizationService, TokenAuthorizationService>();
-            services.AddSingleton<IOrganizationGrantRepository, NoGrantsRepository>();
+            services.AddSingleton<NoGrantsRepository>();
+            services.AddSingleton<IOrganizationGrantRepository>(sp => sp.GetRequiredService<NoGrantsRepository>());
         }
 
         public HttpClient ClientFor(string token)
@@ -434,10 +448,13 @@ public sealed class OrderTargetSelectionEndToEndTests
         }
     }
 
+    /// <summary>No grants, until a test adds one to <see cref="Active"/> (XD01-332).</summary>
     private sealed class NoGrantsRepository : IOrganizationGrantRepository
     {
+        public List<OrganizationGrant> Active { get; } = [];
+
         public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(Guid granteeOrganizationId, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<OrganizationGrant>>([]);
+            Task.FromResult<IReadOnlyList<OrganizationGrant>>([.. Active.Where(g => g.GranteeOrganizationId == granteeOrganizationId)]);
 
         public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();

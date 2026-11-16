@@ -10,7 +10,7 @@ namespace GeoAssets.FieldService.Server;
 /// the Inspected transition (XD01-228), so every entry in the period is, by construction,
 /// already "approved" — there's no separate pending/rejected ledger status to filter on here.
 /// The technician is resolved as the order's <see cref="IServiceOrder.AssignedTo"/>; an entry
-/// whose order can't be found, or has no assignee, maps to a null
+/// whose order can't be found, belongs to another organization than the entry, or has no assignee, maps to a null
 /// <see cref="ApprovedUsPosting.TechnicianId"/> (<c>TotvsPayrollExportMapper</c> skips it).
 /// </summary>
 internal sealed class LedgerBackedApprovedUsPostingSource(
@@ -28,8 +28,10 @@ internal sealed class LedgerBackedApprovedUsPostingSource(
             string? technicianId = null;
             if (!string.IsNullOrWhiteSpace(entry.ServiceOrderId))
             {
+                // XD01-332: GetByIdAsync ignores the tenant filter, and a ledger entry's order id is
+                // caller-supplied — only an order of the entry's own organization names a technician.
                 var order = await orderRepository.GetByIdAsync(entry.ServiceOrderId, ct).ConfigureAwait(false);
-                technicianId = order?.AssignedTo;
+                technicianId = order is not null && order.OrganizationId == entry.OrganizationId ? order.AssignedTo : null;
             }
 
             postings.Add(new ApprovedUsPosting(

@@ -54,6 +54,15 @@ internal static class WorkflowProblemResults
         Create(StatusCodes.Status403Forbidden, WorkflowProblemCodes.Denied, "The action is not allowed on this order.",
             null, ("reason", reason));
 
+    /// <summary>
+    /// The response for a verdict that did not allow the action (XD01-332): the same
+    /// <c>orders.not-found</c> as an unknown order for a caller the organization gate refused —
+    /// so a refusal never confirms another tenant's order id — and <see cref="Denied"/> for a
+    /// caller inside the gate whom the rules declined.
+    /// </summary>
+    public static IResult Refused(string orderId, RuleEvaluationResult verdict) =>
+        verdict.IsOutsideOrganization ? OrderNotFound(orderId) : Denied(verdict.Reason);
+
     public static IResult InvalidSelectionParameters(string detail, string? defect = null) =>
         Create(StatusCodes.Status400BadRequest, WorkflowProblemCodes.InvalidSelectionParameters,
             "The selection parameters are invalid.", detail, ("defect", defect));
@@ -72,7 +81,8 @@ internal static class WorkflowProblemResults
     /// </summary>
     public static IResult? FromException(Exception exception, string orderId) => exception switch
     {
-        OrderActionDeniedException denied => Denied(denied.Evaluation?.Reason ?? denied.Message),
+        OrderActionDeniedException { Evaluation: { } verdict } denied => Refused(denied.OrderId ?? orderId, verdict),
+        OrderActionDeniedException denied => Denied(denied.Message),
         SelectionLimitExceededException limit => Create(
             StatusCodes.Status422UnprocessableEntity, WorkflowProblemCodes.TargetLimitExceeded,
             "The selection exceeds the order type's selection limit.", limit.Message,

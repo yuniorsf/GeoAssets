@@ -174,11 +174,13 @@ internal static class ContractorUsLedgerRestApiExtensions
             string serviceOrderId,
             EspelhoDeMedicaoDossierRequest request,
             IServiceOrderRepository orderRepo,
+            ITenantContext tenantContext,
             IContractorUsPostingRepository postingRepo,
             IContractorUsLedgerRepository ledgerRepo,
             CancellationToken ct) =>
         {
-            var order = await orderRepo.GetByIdAsync(serviceOrderId, ct).ConfigureAwait(false);
+            // XD01-332: only an order of the caller's own tenant; another tenant's reads as not found.
+            var order = await FieldServiceOrderAccess.FindOwnAsync(orderRepo, tenantContext, serviceOrderId, ct).ConfigureAwait(false);
             if (order is null) return Results.NotFound();
 
             var postings = await postingRepo.GetByServiceOrderIdAsync(serviceOrderId, ct).ConfigureAwait(false);

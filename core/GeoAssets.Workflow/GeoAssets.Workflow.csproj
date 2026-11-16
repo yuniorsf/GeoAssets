@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- XD01-332: lets the rule tests compare the rule chain with and without the organization gate. -->
+    <InternalsVisibleTo Include="GeoAssets.Workflow.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
     <PackageReference Include="System.ComponentModel.Composition" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />

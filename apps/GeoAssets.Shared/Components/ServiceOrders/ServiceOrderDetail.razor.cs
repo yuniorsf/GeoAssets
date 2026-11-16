@@ -115,6 +115,8 @@ public partial class ServiceOrderDetail
             OrderTypeId   = order.OrderTypeId,
             Status        = order.Status,
             Priority      = order.Priority,
+            // XD01-332: the organization never changes; the snapshot states the stored one.
+            OrganizationId = order.OrganizationId,
             AssignedTo    = assignedTo ?? order.AssignedTo,
             UpdatedAt     = Clock.GetUtcNow().UtcDateTime,
             ScheduledAt   = order.ScheduledAt,

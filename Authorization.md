@@ -190,7 +190,9 @@ not everything the Distribuidora owns. Only resources implementing the new
 well-known key in their existing attribute dictionary, no schema change) can satisfy a
 scoped grant; a resource type that doesn't implement it can never match one. Null
 `ScopeId` (every grant predating this field) is ungated, exactly as before. **Known gap,
-deliberately out of scope for XD01-174**: `ServiceOrder` cross-org access in practice is
+deliberately out of scope for XD01-174 — since closed** (`CrossOrgGrantRule` has matched
+`ScopeId` since XD01-250, and the XD01-332 organization gate shares its matcher; the rest of
+this paragraph is kept as the record of the original state): `ServiceOrder` cross-org access in practice is
 enforced by a *separate* path — `CrossOrgGrantRule` in `ServiceOrderRules.cs`, consulting
 pre-resolved `WorkflowOrgGrant` records (see §4's second integration point below) — which
 does not carry or check `ScopeId` at all. A scoped grant is honored by
@@ -233,7 +235,26 @@ Index on `(GranteeOrganizationId, ResourceOrganizationId)` — the hot lookup pa
 | Resource | Mechanism |
 |---|---|
 | `GeoFeature` / `AssetType` | New `AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>`, wired alongside the subject-only checks on REST endpoints (**Implemented — XD01-21**) |
-| `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules (**Implemented — XD01-22**, server-side only; see `ServiceOrder.md` §5/§16) |
+| `ServiceOrder` | New `CrossOrgGrantRule` added to the existing `ServiceOrderRules` deny-overrides chain — an allow-contributor that abstains when no grant applies, same pattern as the other built-in rules (**Implemented — XD01-22**; see `ServiceOrder.md` §5/§16) — and, since **XD01-332**, a mandatory organization gate evaluated before that chain (below) |
+
+**5. The two mandatory gates, side by side** (XD01-332). `GeoFeature`/`AssetType` have
+had a same-organization-or-grant gate since XD01-21; `ServiceOrder` now has its
+counterpart inside `ServiceOrderRules` (`ServiceOrder.md` §5). They are the same idea
+with deliberate differences:
+
+| | `OrgResourceAuthorizationHandler` (`GeoFeature`, `AssetType`; XD01-21) | `ServiceOrderRules` organization gate (`ServiceOrder`; XD01-332) |
+|---|---|---|
+| Where | ASP.NET Core resource handler, called per endpoint | In the rule engine (`OrderOrganizationGate`), so every caller of `Evaluate` — server routes, the selection service, agent executors, the Blazor client — gets it |
+| Passes when | Same organization, or a grant listing **the action asked for** | Same organization, or a grant **covering the order** (any `serviceorders:` action), or **dispatch recipient** (user, group, organization) |
+| Passing means | Access granted | Nothing yet — the rule chain then decides the action |
+| Grant matching | Resource organization, type, `ScopeId`, `RequiredRole`, expiry, action | The same fields except the action (`CrossOrgGrantMatcher`, shared with `CrossOrgGrantRule`, which does check the action) |
+| No organization (`Guid.Empty`) | Always allowed (unowned-resource exception above) | Allowed by default; `ServiceOrderRulesOptions.AllowOrdersWithoutOrganization = false` restricts such orders to their dispatch recipients |
+| Refused caller gets | `403` | `404`, identical to an unknown order id, so the refusal does not confirm the id; `403` only for a caller inside the gate whom the rules decline |
+| Ownership after creation | — | `OrganizationId` cannot change (`ServiceOrderOrganization`) |
+
+A `ServiceOrder` passed through `OrgResourceAuthorizationHandler` directly (the ISP
+tenant portal's attachment-request and dispute routes do this) is still held to the
+left-hand column, including its `403`.
 
 ---
 

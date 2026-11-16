@@ -319,17 +319,19 @@ plain metadata updates that don't touch `Status`).
 
 ## 5. Authorization — the rules engine
 
-`ServiceOrderRules` is a **deny-overrides** evaluator over a chain of
-`IServiceOrderRule` instances (for actions on an existing order) and a parallel
-chain of `IOrderCreationRule` instances (for creating a new order, which has no
-`IServiceOrder` yet).
+`ServiceOrderRules` is a **mandatory organization gate** followed by a
+**deny-overrides** evaluator over a chain of `IServiceOrderRule` instances (for
+actions on an existing order), and a parallel chain of `IOrderCreationRule`
+instances (for creating a new order, which has no `IServiceOrder` yet).
 
 ```mermaid
 flowchart TD
     Start(["Evaluate(principal, action, order)"]) --> Anon{"principal anonymous?"}
-    Anon -->|yes| DenyAnon["Deny — anonymous"]
+    Anon -->|yes| DenyAnon["Deny — Anonymous"]
     Anon -->|no| Resolve["ResolveRelationship(principal, order)<br/>Creator · Assignee · Dispatcher · OrgMember · GroupMember · DirectRecipient"]
-    Resolve --> Loop["For each rule in chain (in order)"]
+    Resolve --> Gate{"organization gate (XD01-332):<br/>own organization · covering grant · dispatch recipient"}
+    Gate -->|fails| DenyOutside["Deny — OutsideOrganization<br/>no rule is consulted"]
+    Gate -->|passes, grants nothing| Loop["For each rule in chain (in order)"]
     Loop --> Verdict{"rule.Evaluate(...)"}
     Verdict -->|"false"| DenyRule["Deny — this rule wins,<br/>overrides every allow so far"]
     Verdict -->|"true"| MarkAllow["anyAllow = true"]
@@ -342,7 +344,63 @@ flowchart TD
     Final -->|no| DenyDefault["Deny — fail closed,<br/>no rule granted it"]
 ```
 
+### The organization gate (XD01-332)
+
+Before any rule runs, `Evaluate` checks that the principal may reach the order at
+all (`OrderOrganizationGate`). A principal passes when **at least one** holds:
+
+1. **Own organization** — its `OrganizationId` is the order's `OrganizationId`
+   (compared as GUIDs).
+2. **Covering grant** — its organization holds a cross-organization grant that
+   applies to the order: same matching as `CrossOrgGrantRule` below
+   (`CrossOrgGrantMatcher`, shared by both) — resource organization, resource type
+   (null or `ServiceOrder`), `ScopeId`, `RequiredRole`, not expired — and lists at
+   least one `serviceorders:` action. Which action is being asked for is not part
+   of the gate.
+3. **Dispatch recipient** — the order was dispatched to the principal's user id,
+   to a group it belongs to, or to its organization: the same recipient notion as
+   `DispatchRecipientRule`.
+
+**Passing grants nothing** — the chain below decides the action exactly as it did
+before the gate existed (`ServiceOrderOrganizationGateTests` proves the outcomes
+equal for every relation × action × role). **Failing denies whatever the role**: an
+Administrator or Supervisor of another organization no longer reaches an order by
+naming its id. `WorkflowPrincipal.Kind` plays no part — an agent or system principal
+is held to the same three conditions (§9).
+
+| What | Where |
+|---|---|
+| Result of a refusal | `RuleEvaluationResult.Code` (`RuleDenialCode`): `OutsideOrganization` for the gate, `DeniedByRule` / `NoRuleGranted` for the chain, `Anonymous`; `IsOutsideOrganization` is the shortcut a host switches on |
+| Gate alone, for a route that evaluates no rule | `ServiceOrderRules.PassesOrganizationGate(principal, order)` |
+| Orders with no organization (`Guid.Empty`, legacy) | `ServiceOrderRulesOptions.AllowOrdersWithoutOrganization` — `true` (default): every authenticated principal passes the gate on such an order, as before; `false`: only its dispatch recipients do |
+| Grant expiry | `WorkflowOrgGrant.ExpiresAt`, compared with the registered `TimeProvider`; a host only ever resolves active grants onto a principal |
+
+**`OrganizationId` is fixed at creation** (`ServiceOrderOrganization`). An order is
+created under its creator's own organization — stamped when the request states
+none, refused when it states another. An update that states a different
+organization than the stored one is refused with `ServiceOrderOrganizationException`
+by `ValidatingServiceOrderRepository` (every host's registration) and by the REST
+`PUT` (400); one that states none keeps the stored value; `EFServiceOrderRepository`
+never writes the column on update. A cross-organization grantee therefore cannot
+relabel a granted order as its own.
+
+**How a host answers a refusal.** A caller that fails the gate gets the response an
+unknown order id gets — `404` — on every `GeoAssets.Server` order and target route
+(`ServiceOrderRouteAccess`, `WorkflowProblemResults.Refused`), so a refusal never
+confirms another tenant's order id. A caller inside the gate whom the chain declines
+keeps the `403` with the engine's `reason`. List routes return only orders the
+caller passes the gate on, whatever the store returns.
+`GeoAssets.FieldService.Server` wires no rule engine and applies a narrower rule of
+its own — own tenant only, `404` otherwise (`FieldServiceOrderAccess`).
+
+**Client and server agree.** The Blazor client's `WorkflowPrincipalFactory` now
+carries its organization's active grants, read from the self-service
+`GET /api/identity/organization-grants/me` (the caller's own organization only), so
+the same engine gives the UI the verdict the server gives.
+
 ### Built-in `IServiceOrderRule` chain (registration order)
+
+Evaluated only for a principal that passed the gate above.
 
 | Rule | Grants | Notes |
 |---|---|---|
@@ -351,7 +409,7 @@ flowchart TD
 | `DispatchRecipientRule` | View, Annotate, Accept unconditionally to direct/group/org dispatch recipients; Assign/Dispatch/Execute/Reject/etc. when the recipient *also* holds a configured role | The role-gated grants (`recipientRoleGrants`) express "(is a recipient of **this** dispatch) AND (has role X)" — narrower than `RoleBasedActionRule` below, which would grant the action on every order in the system. `Accept` (`OrderActionType.Accept`) is the audited "I am claiming this order" verb, distinct from `Assign` (done *to* someone else) |
 | `OrderTypeActionPermissionRule` | Per-`OrderType.ActionPermissions` override | **Overrides** the role-based default below when the order's type defines an entry for the action being evaluated; abstains otherwise. An entry's optional `FromStateKey` (§4) scopes it to one state — e.g. "Approve requires role X, but only from `Pending`" — null (the default) applies regardless of state |
 | `RoleBasedActionRule` | Configurable role → action-set mapping (default: `Supervisor` → View/Approve/Reject/Assign/Dispatch/Cancel/Annotate; `Administrator` → everything) | Mapping is data, injected via `ServiceOrderRules`'s constructor or `AddServiceOrderRules` (see §12) — **this is exactly how an AI agent's role (e.g. `"AutomationAgent"`) is granted actions, with zero code change** |
-| `CrossOrgGrantRule` (XD01-22) | The action when the principal's organization holds an active cross-org grant covering the order's owning organization | Pure allow-contributor — never denies, only adds an extra allow path on top of the rules above. Grants are pre-resolved onto `WorkflowPrincipal.OrgGrants` (a `WorkflowOrgGrant` DTO, decoupled from `GeoAssets.Identity`'s `OrganizationGrant`) by `ServerWorkflowPrincipalFactory`, server-side only — see `Authorization.md` §4 |
+| `CrossOrgGrantRule` (XD01-22) | The action when the principal's organization holds an active cross-org grant covering the order's owning organization | Pure allow-contributor — never denies, only adds an extra allow path on top of the rules above. Grants are pre-resolved onto `WorkflowPrincipal.OrgGrants` (a `WorkflowOrgGrant` DTO, decoupled from `GeoAssets.Identity`'s `OrganizationGrant`) by `ServerWorkflowPrincipalFactory`, and by the client's `WorkflowPrincipalFactory` through `GET /api/identity/organization-grants/me` (XD01-332) — see `Authorization.md` §4 |
 
 ### Built-in `IOrderCreationRule` chain
 
@@ -377,6 +435,10 @@ identically, never branching on `Kind`.
 | Principal snapshot | `core/GeoAssets.Workflow/Rules/WorkflowPrincipal.cs` |
 | Relationship flags | `core/GeoAssets.Workflow/Rules/OrderUserRelationship.cs` |
 | DI options | `core/GeoAssets.Workflow/Rules/ServiceOrderRulesOptions.cs` |
+| Organization gate | `core/GeoAssets.Workflow/Rules/OrderOrganizationGate.cs` |
+| Grant matching (gate + rule) | `core/GeoAssets.Workflow/Rules/CrossOrgGrantMatcher.cs`, `CrossOrgGrantRule.cs` |
+| Refusal codes | `core/GeoAssets.Workflow/Rules/RuleDenialCode.cs` |
+| Organization fixed at creation | `core/GeoAssets.Workflow/Orders/ServiceOrderOrganization.cs` |
 
 ---
 
@@ -590,11 +652,19 @@ special-casing, because it is the same type.
 {
   "WorkflowAgents": {
     "Agents": {
-      "agent-hydro-01": { "RoleNames": [ "AutomationAgent" ] }
+      "agent-hydro-01": { "OrganizationId": "<the organization it works for>", "RoleNames": [ "AutomationAgent" ] }
     }
   }
 }
 ```
+
+**The organization gate applies to agents too (XD01-332, §5).** An agent has no way
+around it: `CreateServiceOrderExecutor` creates the order under the agent's own
+configured `OrganizationId`, and every later action goes through
+`ServiceOrderRules.Evaluate`, which refuses an order of another organization
+whatever role the agent holds. An agent configured with no `OrganizationId` creates
+orders with none and reaches only orders with none — and only while
+`AllowOrdersWithoutOrganization` stays on.
 
 ### Executors: the same domain calls, wired into a workflow graph
 
@@ -1113,8 +1183,15 @@ caller is actually logging). `PUT` (a whole-order replace) and `DELETE` (a hard
 delete) have no single corresponding action in the enum, so they reuse the
 closest existing verb — `Annotate` and `Cancel` respectively — rather than adding
 new ones speculatively; a denied request gets a 403 with a `reason` field naming
-the rule that declined. Order Type CRUD is unchanged: that's configuration data,
-not a per-order action this engine governs.
+the rule that declined — unless the caller is outside the order's organization
+(XD01-332, §5), in which case it gets the same 404 as for an unknown order. Order
+Type CRUD is unchanged: that's configuration data, not a per-order action this
+engine governs.
+
+The read routes evaluate no rule, so they apply the organization gate themselves:
+`GET /service-orders/{id}` and `/{id}/parent` (both fetch past the tenant query
+filter) return 404 for an order the caller is outside the organization of, and
+every list route keeps only the orders the caller passes the gate on.
 
 `tests/GeoAssets.Server.Tests/ServiceOrderRulesEndpointTests.cs` exercises the
 real `MapServiceOrdersApi()` endpoints end-to-end against a `FakeServiceOrderRepository`
@@ -1177,16 +1254,42 @@ documented:
   `RowVersion` detection itself was done ([XD01-7](https://xdicor.atlassian.net/browse/XD01-7));
   `IServiceOrder.RowVersion` now round-trips it through every reader and back through
   `UpdateAsync` (§7), closed by [XD01-26](https://xdicor.atlassian.net/browse/XD01-26).
+- **No same-organization gate existed for `ServiceOrder` access — role grants were
+  not organization-aware**, so an Administrator or Supervisor of organization B
+  passed the rule check on any order of organization A it could name by id, and
+  `GET /service-orders/{id}` returned any order to any holder of
+  `serviceorders:read`. `ServiceOrderRules` now applies a mandatory organization
+  gate before every rule (own organization, covering grant, or dispatch recipient —
+  §5), every `GeoAssets.Server` order and target route answers a caller outside the
+  gate with the 404 of an unknown order, list routes are narrowed by the gate, the
+  FieldService routes that fetched an order by id without a tenant check now check
+  it, `OrganizationId` can no longer be changed after creation, and the client
+  resolves its own organization's grants so it evaluates the same gate — the
+  service-order counterpart of `GeoFeature`/`AssetType`'s
+  `OrgResourceAuthorizationHandler` (XD01-21, `Authorization.md` §4), closed by
+  [XD01-332](https://xdicor.atlassian.net/browse/XD01-332).
 
 What's still genuinely open:
 
-- **No same-organization gate exists for `ServiceOrder` access — only an
-  additional cross-org allow path.** `CrossOrgGrantRule` (§5, XD01-22) is
-  deliberately an allow-contributor only, per its own design: a caller from a
-  *different* organization than an order's `OrganizationId`, with no matching
-  grant, is still not blocked by organization alone — Creator/Assignee/Role/
-  DispatchRecipient access is entirely organization-agnostic, same as before this
-  ticket. Contrast `GeoFeature`/`AssetType`'s `OrgResourceAuthorizationHandler`
-  (XD01-21, `Authorization.md` §4), which *does* enforce same-org-or-grant as a
-  mandatory gate. Whether `ServiceOrder` should gain an equivalent mandatory gate
-  is an open design question, not yet ticketed.
+- **The database policy on `ServiceOrders` still lets a grantee write under the
+  owner's organization.** The row-level-security `WITH CHECK` (migration
+  `AddServiceOrdersRowLevelSecurity`, and its FieldService counterpart) accepts a
+  row whose `OrganizationId` is the caller's own *or* one a grant covers. XD01-332
+  closed this in the application — creation is own-organization only and the
+  organization never changes — but did not tighten the policy, which would need a
+  new migration in both migration histories. A connection that bypasses the
+  application is held only to the looser policy.
+- **Orders with no organization are still created by some paths** and stay
+  reachable by default (`AllowOrdersWithoutOrganization`, §5): a caller, agent or
+  tenant with no organization configured; `GeoAssets.IpBilling.Server`'s
+  `POST /orders` (that host has no tenant or caller identity); and a SCADA
+  breaker-trip order when the tripped switch feature itself has no organization.
+- **A grantee organization's own roles still apply to a granted order.** The gate
+  asks whether a grant covers the order, not which action it lists; the rule chain
+  then decides as before, so an Administrator of a grantee organization is granted
+  every action on a granted order by `RoleBasedActionRule`, beyond the grant's own
+  `AllowedActions`. Narrowing role grants to the principal's own organization is a
+  separate design decision.
+- **List routes do not show a grantee or a dispatch recipient the orders of another
+  organization** — the store's tenant query filter narrows every list to the
+  caller's own organization first; those orders are reachable by id only.

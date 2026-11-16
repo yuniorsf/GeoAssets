@@ -14,6 +14,15 @@ public sealed class AuthorizationContext
     public required IReadOnlyList<UserClaim>  Claims      { get; init; }
     public required IReadOnlyList<string>     Permissions { get; init; }
 
+    /// <summary>
+    /// The active, unexpired cross-organization grants held by the user's own organization
+    /// (XD01-332). Filled by the REST-backed clients from
+    /// <c>GET /api/identity/organization-grants/me</c> so that client-side service-order rule
+    /// evaluation agrees with the server; empty wherever nothing resolves it — a server host
+    /// reads grants from <c>IOrganizationGrantRepository</c> instead.
+    /// </summary>
+    public IReadOnlyList<OrganizationGrant>   OrganizationGrants { get; init; } = [];
+
     /// <summary>Returns true if the user has the specified role (case-insensitive).</summary>
     public bool HasRole(string roleName)
         => Roles.Any(r => r.Equals(roleName, StringComparison.OrdinalIgnoreCase));

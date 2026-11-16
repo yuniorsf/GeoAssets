@@ -360,7 +360,13 @@ public sealed class OrderTargetSelectionServiceGuardTests
     {
         using var fixture = new SelectionServiceFixture(answer: Poles(2));
         await fixture.SeedOrderAsync();
-        var outsider = new WorkflowPrincipal("admin-of-b", OrgB.ToString(), ["Administrator"], [], []);
+        // XD01-332: an Administrator of organization B no longer reaches an order of A by role
+        // alone; this one does through a cross-organization grant, which is the legitimate
+        // case the forcing below protects against.
+        var outsider = new WorkflowPrincipal("admin-of-b", OrgB.ToString(), ["Administrator"], [], [])
+        {
+            OrgGrants = [new WorkflowOrgGrant(OrgA.ToString(), "ServiceOrder", ["serviceorders:view"], RequiredRole: null)],
+        };
         var parameters = Fence();
         parameters["organizationId"] = OrgB.ToString();
 

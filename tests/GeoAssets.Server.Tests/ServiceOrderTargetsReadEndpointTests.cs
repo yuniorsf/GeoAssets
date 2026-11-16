@@ -241,7 +241,7 @@ public sealed class ServiceOrderTargetsReadEndpointTests
 
     [Theory]
     [MemberData(nameof(OrderReadRoutes))]
-    public async Task ReadRoutes_CallerOfAnotherOrganizationWithNoGrant_Return403AuthDenied_EvenWithThePermission(string route)
+    public async Task ReadRoutes_CallerOfAnotherOrganizationWithNoGrant_Return404OrdersNotFound_EvenWithThePermission(string route)
     {
         ArgumentNullException.ThrowIfNull(route);
         await using var host = await OrderTargetsApiHost.StartAsync();
@@ -251,8 +251,11 @@ public sealed class ServiceOrderTargetsReadEndpointTests
 
         var response = await client.GetAsync(Path(string.Format(System.Globalization.CultureInfo.InvariantCulture, route, "ord-1")));
 
-        var problem = await response.ShouldBeProblemAsync(HttpStatusCode.Forbidden, WorkflowProblemCodes.Denied);
-        problem.GetProperty("reason").GetString().Should().NotBeNullOrWhiteSpace();
+        // XD01-332: refused as before, but with the response an unknown order gets (was 403
+        // auth.denied), so the refusal does not confirm the order exists.
+        var problem = await response.ShouldBeProblemAsync(HttpStatusCode.NotFound, WorkflowProblemCodes.OrderNotFound);
+        problem.GetProperty("orderId").GetString().Should().Be("ord-1");
+        problem.TryGetProperty("reason", out _).Should().BeFalse();
     }
 
     [Fact]
@@ -358,7 +361,7 @@ public sealed class ServiceOrderTargetsReadEndpointTests
     }
 
     [Fact]
-    public async Task Usages_ExcludedOrderOfAnotherOrganization_Returns403_SoItsOrganizationsUsagesAreNotDisclosed()
+    public async Task Usages_ExcludedOrderOfAnotherOrganization_IsTreatedAsUnknown_SoItsOrganizationsUsagesAreNotDisclosed()
     {
         await using var host = await OrderTargetsApiHost.StartAsync();
         await host.SeedOrderAsync();
@@ -369,7 +372,12 @@ public sealed class ServiceOrderTargetsReadEndpointTests
         var response = await client.PostJsonAsync(
             "service-orders/targets/usages", new { featureIds = new[] { "f-001" }, excludingOrderId = "ord-1" });
 
-        await response.ShouldBeProblemAsync(HttpStatusCode.Forbidden, WorkflowProblemCodes.Denied);
+        // XD01-332: was 403 auth.denied, which confirmed "ord-1" exists in another organization.
+        // Now answered exactly like an excluded order that does not exist: the caller's own
+        // organization is searched, so organization A's usage of f-001 stays undisclosed.
+        var body = await response.ReadJsonAsync();
+        body.GetProperty("items").GetArrayLength().Should().Be(0);
+        body.GetProperty("totalCount").GetInt32().Should().Be(0);
     }
 
     [Fact]

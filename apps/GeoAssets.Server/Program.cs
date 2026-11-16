@@ -228,6 +228,11 @@ app.MapIspTenantPortalApi();
 // see IdentityRestApiExtensions for the full endpoint list.
 app.MapIdentityApi();
 
+// The caller's own organization's active cross-organization grants, under the same
+// /api/identity prefix (XD01-332) — what lets a client evaluate the service-order
+// organization gate as this host does. See OwnOrganizationGrantsRestApiExtensions.
+app.MapOwnOrganizationGrantsApi();
+
 // Standalone OGC endpoints for external GIS clients (CORS not required
 // for server-to-server or native desktop tools).
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0

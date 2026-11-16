@@ -334,7 +334,8 @@ public sealed class ServiceOrderTargetSelectionEndpointTests
 
     [Theory]
     [InlineData("reader")]
-    [InlineData("outsider")]
+    // XD01-332: a caller of another organization no longer gets this 403 — it gets the same 404
+    // as an unknown order; see ServiceOrderTargetsOrganizationGateTests.
     public async Task Apply_CallerTheOrderRulesRefuse_Returns403AuthDenied_AndWritesNothing(string token)
     {
         ArgumentNullException.ThrowIfNull(token);
