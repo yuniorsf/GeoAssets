@@ -157,38 +157,121 @@ window.GeoAssets = (function () {
     }
 
     /**
-     * Ear-clipping triangulation for a simple polygon ring (no holes).
-     * Accepts an open or a closed ring (RFC 7946 repeats the first position as the last) in
-     * either winding order. Returns a Float32Array of flat triangle vertices
-     * [x0,y0, x1,y1, x2,y2, …].
+     * Ear-clipping triangulation for a polygon: an exterior ring and, optionally, the interior
+     * rings (holes) to leave unfilled. Each ring may be open or closed (RFC 7946 repeats the
+     * first position as the last) and wound either way. Returns a Float32Array of flat triangle
+     * vertices [x0,y0, x1,y1, x2,y2, …].
+     * A hole with nothing to cut (fewer than 3 distinct positions, no area) or that lies outside
+     * the exterior ring is ignored and the rest of the polygon is still filled. A hole that
+     * crosses the exterior ring or another hole is not cut exactly.
      */
-    function _earcut(ring) {
-        // Drop repeated positions — the closing one, and any consecutive run. A repeated position
-        // sits on a corner of every candidate ear next to it and would veto that ear.
+    function _earcut(ring, holes = []) {
         const xs = [], ys = [];
-        for (const [x, y] of ring) {
-            const k = xs.length - 1;
-            if (k < 0 || xs[k] !== x || ys[k] !== y) { xs.push(x); ys.push(y); }
-        }
-        while (xs.length > 1 && xs[0] === xs[xs.length - 1] && ys[0] === ys[ys.length - 1]) { xs.pop(); ys.pop(); }
-        const n = xs.length;
-        if (n < 3) return new Float32Array(0);
 
-        // Signed area gives the winding; a ring with no area has nothing to fill.
-        let area = 0;
-        for (let i = 0; i < n; i++) {
-            const j = (i + 1) % n;
-            area += xs[i] * ys[j] - xs[j] * ys[i];
+        // Appends a ring without its repeated positions — the closing one, and any consecutive
+        // run. A repeated position sits on a corner of every candidate ear next to it and would
+        // veto that ear.
+        function addRing(pts) {
+            const from = xs.length;
+            for (const [x, y] of pts) {
+                const k = xs.length - 1;
+                if (k < from || xs[k] !== x || ys[k] !== y) { xs.push(x); ys.push(y); }
+            }
+            while (xs.length > from + 1 && xs[from] === xs[xs.length - 1] && ys[from] === ys[ys.length - 1]) { xs.pop(); ys.pop(); }
+            const n = xs.length - from;
+
+            // Signed area gives the winding; a ring with no area has nothing to fill (or cut).
+            let area = 0;
+            for (let i = 0; i < n; i++) {
+                const p = from + i, q = from + (i + 1) % n;
+                area += xs[p] * ys[q] - xs[q] * ys[p];
+            }
+            return { from, n, area };
         }
-        if (area === 0) return new Float32Array(0);
+
+        const outer = addRing(ring);
+        if (outer.n < 3 || outer.area === 0) return new Float32Array(0);
+        const cuts = holes.map(addRing).filter(h => h.n >= 3 && h.area !== 0);
 
         // Linked ring of the vertices still to clip, always walked CCW whatever the input winding.
-        const prev = new Int32Array(n), next = new Int32Array(n);
-        for (let i = 0; i < n; i++) {
-            const before = (i + n - 1) % n, after = (i + 1) % n;
-            prev[i] = area > 0 ? before : after;
-            next[i] = area > 0 ? after : before;
+        // Each hole starts as a ring of its own, walked CW, and is spliced into the outer ring
+        // below, which adds up to 3 vertices per hole: the point of an edge the bridge lands on,
+        // and a second copy of each end of the bridge.
+        const prev = new Int32Array(xs.length + 3 * cuts.length), next = new Int32Array(prev.length);
+        for (const { from, n, area } of [outer, ...cuts]) {
+            const forward = (area > 0) === (from === 0);
+            for (let i = 0; i < n; i++) {
+                const before = from + (i + n - 1) % n, after = from + (i + 1) % n;
+                prev[from + i] = forward ? before : after;
+                next[from + i] = forward ? after : before;
+            }
         }
+
+        // > 0 when o → p → q turns left, which is the convex side of the CCW walk.
+        const cross = (o, p, q) => (xs[p] - xs[o]) * (ys[q] - ys[o]) - (ys[p] - ys[o]) * (xs[q] - xs[o]);
+        const link = (i, j) => { next[i] = j; prev[j] = i; };
+        const add = (x, y) => { xs.push(x); ys.push(y); return xs.length - 1; };
+        // True when vertex t lies in (or on the edge of) the ring's interior angle at vertex i.
+        function faces(i, t) {
+            const l = cross(i, next[i], t) >= 0, r = cross(i, t, prev[i]) >= 0;
+            return cross(prev[i], i, next[i]) > 0 ? l && r : l || r;
+        }
+
+        // Cut each hole out by bridging it into the ring: from the hole's leftmost vertex m go
+        // straight left to the nearest point of the ring, then walk ring → bridge → hole → bridge
+        // back → ring. Leftmost holes first, so a bridge never has to cross a hole not yet joined.
+        const SLACK = 1e-6;    // px a hole may poke through the ring and still count as touching it
+        for (const h of cuts) {
+            h.m = h.from;
+            for (let i = h.from; i < h.from + h.n; i++) if (xs[i] < xs[h.m]) h.m = i;
+        }
+        cuts.sort((p, q) => xs[p.m] - xs[q.m]);
+        let left = outer.n;
+        for (const { m, n } of cuts) {
+            const mx = xs[m], my = ys[m];
+            let at = -1, hitX = -Infinity, onEdge = false, inside = false;
+            for (let i = 0, k = 0; k < left; k++, i = next[i]) {
+                const j = next[i];
+                let x, edge = false, ok;
+                if (ys[i] === my) {
+                    // A vertex on the way. Several may share the position (an earlier bridge, a
+                    // touching hole): take the one whose interior angle the hole lies in.
+                    x = xs[i];
+                    ok = faces(i, x === mx ? next[m] : m);
+                } else if (ys[j] !== my && (ys[i] < my) !== (ys[j] < my)) {
+                    x = xs[i] + (my - ys[i]) * (xs[j] - xs[i]) / (ys[j] - ys[i]);
+                    edge = true;
+                    ok = ys[j] < ys[i];    // the edge has the interior on m's side
+                } else continue;
+                if (x > mx + SLACK || x < hitX || (x === hitX && !ok)) continue;
+                hitX = x; at = i; onEdge = edge; inside = ok;
+            }
+            // The nearest point faces away (or there is none): the hole is not inside. Skip it.
+            if (!inside) continue;
+
+            if (onEdge) {
+                const s = add(Math.min(hitX, mx), my);
+                link(s, next[at]);
+                link(at, s);
+                at = s;
+                left++;
+            }
+            if (xs[at] === mx && ys[at] === my) {
+                // The hole touches the ring here: no bridge, the ring just detours round the hole.
+                const after = next[at];
+                link(at, next[m]);
+                link(m, after);
+                left += n;
+            } else {
+                const at2 = add(xs[at], ys[at]), m2 = add(mx, my);
+                link(at2, next[at]);
+                link(prev[m], m2);
+                link(m2, at2);
+                link(at, m);
+                left += n + 2;
+            }
+        }
+        const bridged = left > outer.n;
 
         function ptInTri(ax, ay, bx, by, cx, cy, px, py) {
             const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
@@ -197,8 +280,13 @@ window.GeoAssets = (function () {
             return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
         }
 
+        // Once holes are spliced in, a vertex sitting on corner o of the ear (whose other corners
+        // are u then v, CCW) blocks it if the ring leaves that vertex into the ear: a hole or
+        // another part of the ring touches there. Bridge ends and plain repeats do not block.
+        const cutsInto = (o, u, v, p) => bridged && [prev[p], next[p]].some(q => cross(o, u, q) > 0 && cross(o, q, v) > 0);
+
         const verts = [];
-        let b = 0, left = n, misses = 0;
+        let b = 0, misses = 0;
 
         while (left >= 3) {
             const a = prev[b], c = next[b];
@@ -214,13 +302,19 @@ window.GeoAssets = (function () {
                 for (let p = next[c]; p !== a; p = next[p]) {
                     const px = xs[p], py = ys[p];
                     if (px < minX || px > maxX || py < minY || py > maxY) continue;
-                    // A vertex that coincides with a corner of the ear does not block it.
-                    if ((px === ax && py === ay) || (px === bx && py === by) || (px === cx && py === cy)) continue;
-                    if (ptInTri(ax, ay, bx, by, cx, cy, px, py)) { ear = false; break; }
+                    const blocks = px === ax && py === ay ? cutsInto(a, b, c, p)
+                                 // … or if a or c is the tip of a spike back to b: nothing to fill.
+                                 : px === bx && py === by ? bridged && (p === next[c] || p === prev[a] || cutsInto(b, c, a, p))
+                                 : px === cx && py === cy ? cutsInto(c, a, b, p)
+                                 : ptInTri(ax, ay, bx, by, cx, cy, px, py);
+                    if (blocks) { ear = false; break; }
                 }
             }
-            if (ear || turn === 0 || misses >= 2 * left) {
-                // A collinear vertex (turn === 0) spans no area: remove it without a triangle.
+            // A collinear vertex (turn === 0) spans no area: remove it without a triangle. With
+            // holes, one the ring runs straight through stays until a lap finds no ear (a hole may
+            // touch the ring exactly there); one it doubles back on (a spike, a repeat) still goes.
+            const flat = turn === 0 && (!bridged || misses >= left || (ax - bx) * (cx - bx) + (ay - by) * (cy - by) >= 0);
+            if (ear || flat || misses >= 2 * left) {
                 if (turn > 0) verts.push(ax, ay, bx, by, cx, cy);
                 next[a] = c;
                 prev[c] = a;
@@ -410,8 +504,9 @@ window.GeoAssets = (function () {
 
     function _wglPolygon(state, rings, hex, alpha, fillAlpha) {
         const { gl } = state.webgl;
-        // Filled triangulation of exterior ring
-        const fill = _earcut(_projectRingExact(state.map, rings[0]));
+        // Filled triangulation of the exterior ring with the holes cut out
+        const [outer, ...holes] = rings.map(r => _projectRingExact(state.map, r));
+        const fill = _earcut(outer, holes);
         if (fill.length > 0)
             _wglDraw(state, fill, gl.TRIANGLES, _hexToVec4(hex, fillAlpha));
 
