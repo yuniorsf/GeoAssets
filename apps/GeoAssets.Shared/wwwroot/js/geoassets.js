@@ -113,7 +113,8 @@ window.GeoAssets = (function () {
     const _FRAG_SRC = `
         precision mediump float;
         uniform vec4 u_color;
-        void main() { gl_FragColor = u_color; }`;
+        // Premultiplied output: the canvas is composited over the map as premultiplied alpha.
+        void main() { gl_FragColor = vec4(u_color.rgb * u_color.a, u_color.a); }`;
 
     // ─── WebGL helpers ────────────────────────────────────────────────────────
 
@@ -157,23 +158,38 @@ window.GeoAssets = (function () {
 
     /**
      * Ear-clipping triangulation for a simple polygon ring (no holes).
-     * Returns a Float32Array of flat triangle vertices [x0,y0, x1,y1, x2,y2, …].
+     * Accepts an open or a closed ring (RFC 7946 repeats the first position as the last) in
+     * either winding order. Returns a Float32Array of flat triangle vertices
+     * [x0,y0, x1,y1, x2,y2, …].
      */
     function _earcut(ring) {
-        const n = ring.length;
+        // Drop repeated positions — the closing one, and any consecutive run. A repeated position
+        // sits on a corner of every candidate ear next to it and would veto that ear.
+        const xs = [], ys = [];
+        for (const [x, y] of ring) {
+            const k = xs.length - 1;
+            if (k < 0 || xs[k] !== x || ys[k] !== y) { xs.push(x); ys.push(y); }
+        }
+        while (xs.length > 1 && xs[0] === xs[xs.length - 1] && ys[0] === ys[ys.length - 1]) { xs.pop(); ys.pop(); }
+        const n = xs.length;
         if (n < 3) return new Float32Array(0);
 
-        // Compute signed area; reverse ring if CW so we always work CCW
+        // Signed area gives the winding; a ring with no area has nothing to fill.
         let area = 0;
         for (let i = 0; i < n; i++) {
-            const [x1, y1] = ring[i], [x2, y2] = ring[(i + 1) % n];
-            area += x1 * y2 - x2 * y1;
+            const j = (i + 1) % n;
+            area += xs[i] * ys[j] - xs[j] * ys[i];
         }
-        const pts = area > 0 ? [...ring] : [...ring].reverse();
+        if (area === 0) return new Float32Array(0);
 
-        function cross(o, a, b) {
-            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+        // Linked ring of the vertices still to clip, always walked CCW whatever the input winding.
+        const prev = new Int32Array(n), next = new Int32Array(n);
+        for (let i = 0; i < n; i++) {
+            const before = (i + n - 1) % n, after = (i + 1) % n;
+            prev[i] = area > 0 ? before : after;
+            next[i] = area > 0 ? after : before;
         }
+
         function ptInTri(ax, ay, bx, by, cx, cy, px, py) {
             const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
             const d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
@@ -181,35 +197,39 @@ window.GeoAssets = (function () {
             return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
         }
 
-        const idx = Array.from({ length: pts.length }, (_, i) => i);
         const verts = [];
-        let i = 0, guard = 0;
+        let b = 0, left = n, misses = 0;
 
-        while (idx.length > 3 && guard < idx.length * 3) {
-            const len = idx.length;
-            const pi = (i - 1 + len) % len, ci = i, ni = (i + 1) % len;
-            const [ax, ay] = pts[idx[pi]], [bx, by] = pts[idx[ci]], [cx, cy] = pts[idx[ni]];
-            let ear = cross([ax, ay], [bx, by], [cx, cy]) > 0;
-            if (ear) {
-                for (let j = 0; j < len; j++) {
-                    if (j === pi || j === ci || j === ni) continue;
-                    const [px, py] = pts[idx[j]];
+        while (left >= 3) {
+            const a = prev[b], c = next[b];
+            const ax = xs[a], ay = ys[a], bx = xs[b], by = ys[b], cx = xs[c], cy = ys[c];
+            const turn = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+            // After a full lap without a clean ear (a ring that touches or crosses itself) clip
+            // the next convex corner regardless, and after a second lap any corner, so the loop
+            // always ends and the rest of the ring is still filled.
+            let ear = turn > 0;
+            if (ear && misses < left) {
+                const minX = Math.min(ax, bx, cx), maxX = Math.max(ax, bx, cx);
+                const minY = Math.min(ay, by, cy), maxY = Math.max(ay, by, cy);
+                for (let p = next[c]; p !== a; p = next[p]) {
+                    const px = xs[p], py = ys[p];
+                    if (px < minX || px > maxX || py < minY || py > maxY) continue;
+                    // A vertex that coincides with a corner of the ear does not block it.
+                    if ((px === ax && py === ay) || (px === bx && py === by) || (px === cx && py === cy)) continue;
                     if (ptInTri(ax, ay, bx, by, cx, cy, px, py)) { ear = false; break; }
                 }
             }
-            if (ear) {
-                verts.push(ax, ay, bx, by, cx, cy);
-                idx.splice(ci, 1);
-                if (i >= idx.length) i = 0;
-                guard = 0;
+            if (ear || turn === 0 || misses >= 2 * left) {
+                // A collinear vertex (turn === 0) spans no area: remove it without a triangle.
+                if (turn > 0) verts.push(ax, ay, bx, by, cx, cy);
+                next[a] = c;
+                prev[c] = a;
+                left--;
+                misses = 0;
             } else {
-                i = (i + 1) % idx.length;
-                guard++;
+                misses++;
             }
-        }
-        if (idx.length === 3) {
-            const [ax, ay] = pts[idx[0]], [bx, by] = pts[idx[1]], [cx, cy] = pts[idx[2]];
-            verts.push(ax, ay, bx, by, cx, cy);
+            b = c;
         }
         return new Float32Array(verts);
     }
@@ -217,6 +237,16 @@ window.GeoAssets = (function () {
     function _projectRing(map, coords) {
         return coords.map(([lng, lat]) => {
             const p = map.latLngToContainerPoint(L.latLng(lat, lng));
+            return [p.x, p.y];
+        });
+    }
+
+    /** Like _projectRing but without snapping to whole pixels: snapping can fold a simple ring
+     *  onto itself at low zoom, and ear clipping is only exact for a ring that stays simple. */
+    function _projectRingExact(map, coords) {
+        const origin = map.getPixelOrigin();
+        return coords.map(([lng, lat]) => {
+            const p = map.layerPointToContainerPoint(map.project(L.latLng(lat, lng)).subtract(origin));
             return [p.x, p.y];
         });
     }
@@ -253,7 +283,7 @@ window.GeoAssets = (function () {
         canvas.height = container.clientHeight;
         container.appendChild(canvas);
 
-        const gl = canvas.getContext('webgl', { alpha: true, antialias: true });
+        const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true });
         if (!gl) {
             console.error('GeoAssets: WebGL unavailable — falling back is not automatic; reload with a different RenderMode.');
             canvas.remove();
@@ -262,7 +292,9 @@ window.GeoAssets = (function () {
 
         gl.clearColor(0, 0, 0, 0);
         gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        // Source-over for premultiplied colour (see _FRAG_SRC). SRC_ALPHA here would square the
+        // alpha written to the buffer and let the page show through too strongly.
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         const prog = _createProgram(gl);
         if (!prog) { canvas.remove(); return; }
@@ -378,10 +410,8 @@ window.GeoAssets = (function () {
 
     function _wglPolygon(state, rings, hex, alpha, fillAlpha) {
         const { gl } = state.webgl;
-        const exterior = _projectRing(state.map, rings[0]);
-
         // Filled triangulation of exterior ring
-        const fill = _earcut(exterior);
+        const fill = _earcut(_projectRingExact(state.map, rings[0]));
         if (fill.length > 0)
             _wglDraw(state, fill, gl.TRIANGLES, _hexToVec4(hex, fillAlpha));
 
