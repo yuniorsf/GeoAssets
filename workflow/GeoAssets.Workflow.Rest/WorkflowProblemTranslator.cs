@@ -1,5 +1,7 @@
 using System.Text.Json;
+using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -87,6 +89,11 @@ internal static class WorkflowProblemTranslator
             problem.Int32("limit"), problem.Int32("current"), problem.Int32("requested")),
         WorkflowProblemCodes.Denied => new OrderActionDeniedException(
             orderId ?? string.Empty, RuleEvaluationResult.Deny(action, problem.String("reason") ?? problem.Detail)),
+        // Staged occupancy (XD01-315).
+        OccupancyProblemCodes.InvalidChange => new InvalidOccupancyChangeException(problem.Detail),
+        OccupancyProblemCodes.EntryNotFound => new OccupancyEntryNotFoundException(problem.Detail),
+        OccupancyProblemCodes.NotAPole => new TargetIsNotAPoleException(problem.Detail),
+        OccupancyProblemCodes.TargetReleased => new OccupancyTargetReleasedException(problem.Detail),
         _ => null,
     };
 

@@ -32,7 +32,9 @@ internal static class RawRowInsert
     /// <param name="columns">Every mapped property of <typeparamref name="TRecord"/>, with how to read its value.</param>
     /// <param name="skipOnConflict">
     /// Properties of a unique index: a row that collides on it is skipped instead of failing.
-    /// Null inserts unconditionally (a collision is the provider's exception).
+    /// Null inserts unconditionally (a collision is the provider's exception). An empty list
+    /// skips a row that collides on <b>any</b> unique index — the form a partial unique index
+    /// needs, which PostgreSQL cannot infer from a column list alone.
     /// </param>
     /// <param name="ct">Cancellation.</param>
     public static async Task<int> ExecuteAsync<TRecord>(
@@ -54,9 +56,12 @@ internal static class RawRowInsert
         string Column(IProperty property) => sql.DelimitIdentifier(property.GetColumnName(table)!);
 
         var head = $"INSERT INTO {sql.DelimitIdentifier(table.Name, table.Schema)} ({string.Join(", ", properties.Select(Column))}) VALUES ";
-        var tail = skipOnConflict is null
-            ? string.Empty
-            : $" ON CONFLICT ({string.Join(", ", skipOnConflict.Select(name => Column(entityType.GetProperty(name))))}) DO NOTHING";
+        var tail = skipOnConflict switch
+        {
+            null => string.Empty,
+            { Count: 0 } => " ON CONFLICT DO NOTHING",
+            _ => $" ON CONFLICT ({string.Join(", ", skipOnConflict.Select(name => Column(entityType.GetProperty(name))))}) DO NOTHING",
+        };
 
         // Only a factory for provider-typed parameters; it is never executed.
         var parameterFactory = db.Database.GetDbConnection().CreateCommand();

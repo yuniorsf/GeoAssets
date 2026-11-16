@@ -1,6 +1,8 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Providers;
 using GeoAssets.Workflow.Notifications;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Selection;
@@ -181,6 +183,40 @@ public static class WorkflowServiceExtensions
             sp.GetRequiredService<OrderTargetSelectionOptions>(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System));
         services.TryAddScoped<IOrderTargetSelectionService>(sp => sp.GetRequiredService<OrderTargetSelectionService>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IOrderOccupancyStagingService"/> (XD01-315): staging and discarding
+    /// proposed occupancy changes on an order's targets, and reading a target's pole with the
+    /// staged preview. Expects <see cref="OrderTypeRegistry"/>, <see cref="ServiceOrderRules"/>,
+    /// <see cref="IServiceOrderReader"/>, <see cref="IServiceOrderTargetReader"/>,
+    /// <see cref="IPoleOccupancyReader"/> and both change-set ports to be registered by the host.
+    /// <paramref name="configure"/> names the host's pole asset types
+    /// (<see cref="OrderOccupancyOptions.PoleAssetTypeIds"/>); without any, no target is a pole.
+    /// </summary>
+    public static IServiceCollection AddOrderOccupancyStaging(
+        this IServiceCollection services,
+        Action<OrderOccupancyOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        var options = new OrderOccupancyOptions();
+        configure?.Invoke(options);
+        services.TryAddSingleton(options);
+
+        services.TryAddScoped(sp => new OrderOccupancyStagingService(
+            sp.GetRequiredService<IServiceOrderReader>(),
+            sp.GetRequiredService<OrderTypeRegistry>(),
+            sp.GetRequiredService<ServiceOrderRules>(),
+            sp.GetRequiredService<IServiceOrderTargetReader>(),
+            sp.GetRequiredService<IPoleOccupancyReader>(),
+            sp.GetRequiredService<IOccupancyChangeSetReader>(),
+            sp.GetRequiredService<IOccupancyChangeSetWriter>(),
+            sp.GetRequiredService<OrderOccupancyOptions>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.TryAddScoped<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<OrderOccupancyStagingService>());
 
         return services;
     }

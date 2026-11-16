@@ -1,3 +1,4 @@
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,10 @@ public static class WorkflowRestServiceExtensions
         services.AddSingleton<IOrderTargetSelectionService>(sp => sp.GetRequiredService<RestOrderTargetSelectionService>());
 
         services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, baseUrl)));
+
+        // Staged occupancy changes (XD01-315) — same named client, same lifetime.
+        services.AddSingleton(sp => new RestOrderOccupancyStagingService(BuildClient(sp, baseUrl)));
+        services.AddSingleton<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<RestOrderOccupancyStagingService>());
 
         return services;
     }

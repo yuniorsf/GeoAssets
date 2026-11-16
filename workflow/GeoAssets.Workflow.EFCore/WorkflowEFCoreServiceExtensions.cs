@@ -79,6 +79,10 @@ public static class WorkflowEFCoreServiceExtensions
     /// <see cref="ServiceOrderDbContext"/> — and therefore its tenant and any transaction — with
     /// the order repository.
     ///
+    /// Also registers the store of staged occupancy changes (XD01-315) the same way:
+    /// <see cref="IOccupancyChangeSetReader"/> and <see cref="IOccupancyChangeSetWriter"/>
+    /// resolve to one scoped <see cref="EFOccupancyChangeSetRepository"/> on that same context.
+    ///
     /// Already called by <see cref="AddWorkflowPersistence"/>; a host that registers
     /// <see cref="ServiceOrderDbContext"/> itself calls this directly. <see cref="TimeProvider"/>
     /// is used when registered, the system clock otherwise.
@@ -92,6 +96,13 @@ public static class WorkflowEFCoreServiceExtensions
             sp.GetService<TimeProvider>()));
         services.TryAddScoped<IPoleOccupancyReader>(sp => sp.GetRequiredService<EFPoleOccupancyRepository>());
         services.TryAddScoped<IPoleOccupancyWriter>(sp => sp.GetRequiredService<EFPoleOccupancyRepository>());
+
+        // Staged occupancy changes (XD01-315): same scope, same context, same tenant.
+        services.TryAddScoped(sp => new EFOccupancyChangeSetRepository(
+            sp.GetRequiredService<ServiceOrderDbContext>(),
+            sp.GetService<TimeProvider>()));
+        services.TryAddScoped<IOccupancyChangeSetReader>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
+        services.TryAddScoped<IOccupancyChangeSetWriter>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
 
         return services;
     }

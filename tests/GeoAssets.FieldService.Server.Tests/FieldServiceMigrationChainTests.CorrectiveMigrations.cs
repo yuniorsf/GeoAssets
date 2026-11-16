@@ -157,7 +157,11 @@ public partial class FieldServiceMigrationChainTests
 
         await migrator.MigrateAsync(orderChildren);
         (await QueryAsync(db, CorrectedTablesRowLevelSecuritySql)).Should().Equal(CorrectedTables.Select(table => $"{table}:true:false:1"));
-        (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
+        // Nothing of this correction is left to apply: what is still pending is exactly what
+        // later tickets added to this history after it (none when it was written; XD01-315's
+        // staged-occupancy pair since) — applied by the final "up again" step below.
+        var chain = db.Database.GetMigrations().ToList();
+        (await db.Database.GetPendingMigrationsAsync()).Should().Equal(chain.Skip(chain.IndexOf(orderChildren) + 1));
 
         // Every row survived, and each tenant now reads its own only.
         (await QueryAsync(db, VisibleRowCountsSql)).Should().Equal(twoOfEach);
