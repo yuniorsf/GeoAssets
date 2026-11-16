@@ -215,7 +215,8 @@
         "exceptions": [
           "apps/GeoAssets.MAUI/Pages/MauiLogin.razor",
           "apps/GeoAssets.MAUI/Pages/FieldWorkChecklist.razor",
-          "apps/GeoAssets.MAUI/Pages/FieldWorkExecution.razor"
+          "apps/GeoAssets.MAUI/Pages/FieldWorkExecution.razor",
+          "apps/GeoAssets.MAUI/Pages/PoleCensusInspection.razor"
         ]
       }
     ],
