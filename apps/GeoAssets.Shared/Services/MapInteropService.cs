@@ -12,11 +12,14 @@ using System.Text.Json.Serialization;
 namespace GeoAssets.Shared.Services;
 
 /// <summary>
-/// Implements IMapInterop by delegating every call to window.GeoAssets.*
+/// Implements IMapInterop and IMapSelectionInterop by delegating every call to window.GeoAssets.*
 /// functions defined in geoassets.js.
 /// </summary>
-public sealed class MapInteropService : IMapInterop, IAsyncDisposable
+public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyncDisposable
 {
+    /// <summary>Maximum feature ids sent to <c>GeoAssets.setFeatureStates</c> in one JS call (XD01-309).</summary>
+    public const int FeatureStateBatchSize = 2000;
+
     private readonly IJSRuntime _js;
     private readonly IAssetProvider _repo;
     private readonly MapInteropOptions _options;
@@ -196,6 +199,19 @@ public sealed class MapInteropService : IMapInterop, IAsyncDisposable
 
     public Task ClearHighlightAsync(string divId, string featureId) =>
         _js.InvokeVoidAsync($"{Ns}.clearHighlight", divId, featureId).AsTask();
+
+    public async Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state)
+    {
+        ArgumentNullException.ThrowIfNull(featureIds);
+        if (featureIds.Count == 0) return;
+
+        var stateName = state.ToJsName();
+        foreach (var batch in featureIds.Chunk(FeatureStateBatchSize))
+            await _js.InvokeVoidAsync($"{Ns}.setFeatureStates", divId, batch, stateName);
+    }
+
+    public Task ClearFeatureStatesAsync(string divId) =>
+        _js.InvokeVoidAsync($"{Ns}.clearFeatureStates", divId).AsTask();
 
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) =>
         _js.InvokeVoidAsync($"{Ns}.registerHandlers", divId, handlerRef).AsTask();

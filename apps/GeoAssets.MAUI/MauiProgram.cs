@@ -198,10 +198,14 @@ public static class MauiProgram
         builder.Services.Configure<MapInteropOptions>(
             builder.Configuration.GetSection("MapInterop"));
         builder.Services.AddScoped<MapInteropService>();
-        builder.Services.AddScoped<IMapInterop>(sp => new ObservableMapInterop(
+        builder.Services.AddScoped(sp => new ObservableMapInterop(
             sp.GetRequiredService<MapInteropService>(),
+            sp.GetRequiredService<MapInteropService>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MapInteropOptions>>().Value.RenderMode,
             sp.GetRequiredService<ILogger<ObservableMapInterop>>(),
             sp.GetRequiredService<TimeProvider>()));
+        builder.Services.AddScoped<IMapInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
+        builder.Services.AddScoped<IMapSelectionInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
         builder.Services.AddScoped<AssetService>();
         builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
             sp.GetRequiredService<AssetService>(),
