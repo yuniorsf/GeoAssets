@@ -27,6 +27,9 @@ public partial class ServiceOrderDetail
                                     && Rules.Evaluate(Principal, OrderActionType.Cancel, Order).Allowed;
     private bool CanAnnotate    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Annotate, Order).Allowed;
 
+    /// <summary>Only orders whose type declares a target policy have targets, and so poles to edit the occupancy of (XD01-315).</summary>
+    private bool HasTargets     => Order is not null && OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy is not null;
+
     private void OpenDispatchDialog() => _dispatchDialogVisible = true;
 
     private async Task ConfirmDispatch((string TargetId, DispatchTargetType TargetType, string? Note) result)

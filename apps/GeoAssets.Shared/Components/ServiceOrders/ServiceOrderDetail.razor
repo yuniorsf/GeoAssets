@@ -67,6 +67,12 @@
             </div>
         }
 
+        @if (HasTargets)
+        {
+            <h6 class="order-section-title">@L["occupancy.targets.title"]</h6>
+            <OrderTargetOccupancyPanel Order="Order" Principal="Principal" CanEdit="CanAnnotate" />
+        }
+
         <h6 class="order-section-title">@L["orders.dispatchHistory"]</h6>
         @if (Order.Dispatches.Count == 0)
         {

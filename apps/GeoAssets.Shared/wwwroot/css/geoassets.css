@@ -1219,6 +1219,94 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     color: var(--text-secondary);
 }
 
+/* ─── Occupancy editor (XD01-315) ────────────────────────────────────────── */
+/* Theme tokens only: every colour below resolves in both Mocha and Latte. */
+
+.occupancy-targets { margin-bottom: 20px; }
+
+.occupancy-editor {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: var(--surface-tint-weak);
+}
+
+.occupancy-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.occupancy-editor-title { margin: 0; font-size: 0.95rem; color: var(--accent); }
+
+.occupancy-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.occupancy-summary dt {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+
+.occupancy-summary dd { margin: 2px 0 0; font-size: 0.87rem; }
+
+.occupancy-table { font-size: 0.82rem; color: var(--text-primary); }
+.occupancy-table caption { caption-side: top; padding-top: 0; font-size: 0.75rem; color: var(--text-secondary); }
+.occupancy-table th[scope="row"] { white-space: nowrap; font-weight: 600; }
+.occupancy-cell-empty { color: var(--text-secondary); font-style: italic; }
+.occupancy-row-removed td:not(:last-child):not(:nth-last-child(2)) { text-decoration: line-through; color: var(--text-secondary); }
+.occupancy-row-selected th[scope="row"] { color: var(--accent); }
+.occupancy-row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.occupancy-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.occupancy-badge-muted   { background: var(--surface-tint-strong); color: var(--text-primary); }
+.occupancy-badge-accent  { background: var(--accent); color: var(--on-accent); }
+.occupancy-badge-warning { background: var(--warning); color: var(--on-accent); }
+.occupancy-badge-danger  { background: var(--danger); color: var(--on-accent); }
+
+.occupancy-notice {
+    margin: 8px 0;
+    padding: 6px 10px;
+    border-left: 3px solid var(--warning);
+    background: var(--surface-tint);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.occupancy-notice-error { border-left-color: var(--danger); }
+
+.occupancy-form { margin-top: 12px; }
+
+.occupancy-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.occupancy-form .form-label { font-size: 0.78rem; margin-bottom: 2px; color: var(--text-secondary); }
+.occupancy-form .form-text { font-size: 0.72rem; color: var(--text-secondary); }
+.occupancy-form .invalid-feedback { color: var(--danger); font-size: 0.75rem; }
+.occupancy-form .is-invalid { border-color: var(--danger); }
+.occupancy-editor-actions { margin: 12px 0 0; }
+
 /* ─── Confirm Dialog ─────────────────────────────────────────────────────── */
 
 .dialog-backdrop {

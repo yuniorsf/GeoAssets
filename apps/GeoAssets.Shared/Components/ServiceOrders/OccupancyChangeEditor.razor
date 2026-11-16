@@ -1,0 +1,254 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Isp.NeutralOperator
+@using GeoAssets.Core.Isp.NeutralOperator.Occupancy
+@using GeoAssets.Shared.Services.Occupancy
+@using GeoAssets.Workflow.Occupancy
+@inject IOrderOccupancyStagingService Staging
+
+<section class="occupancy-editor" aria-labelledby="@Id("title")" aria-busy="@(_busy ? "true" : "false")">
+    <div class="occupancy-editor-header">
+        <h6 id="@Id("title")" class="occupancy-editor-title">@L.GetString("occupancy.editor.title", TargetLabel ?? _view?.PoleFeatureId ?? TargetId)</h6>
+        <button type="button" class="btn-icon" aria-label="@L["occupancy.editor.close"]" title="@L["occupancy.editor.close"]" @onclick="CloseAsync">✕</button>
+    </div>
+
+    @if (_loadErrorKey is not null)
+    {
+        <p class="occupancy-notice occupancy-notice-error" role="alert">@L[_loadErrorKey]</p>
+    }
+    else if (_view is null || _draft is null)
+    {
+        <p class="empty-state" role="status">@L["occupancy.editor.loading"]</p>
+    }
+    else
+    {
+        @foreach (var warning in _view.Warnings)
+        {
+            <p class="occupancy-notice" role="status">@L[OccupancyEditorMessages.WarningKey(warning)]</p>
+        }
+
+        <dl class="occupancy-summary">
+            <div>
+                <dt>@L["occupancy.summary.current"]</dt>
+                <dd>
+                    @L.GetString("occupancy.summary.occupied", _view.Current.OccupiedCount, PoleAttachmentSlotMatrix.MaxSlots)
+                    <span class="occupancy-badge occupancy-badge-muted">@L[OccupancyEditorMessages.ClassKey(_view.Current.Class)]</span>
+                </dd>
+            </div>
+            <div aria-live="polite">
+                <dt>@L["occupancy.summary.preview"]</dt>
+                <dd>
+                    @if (_preview is not null)
+                    {
+                        @L.GetString("occupancy.summary.occupied", _preview.OccupiedCount, PoleAttachmentSlotMatrix.MaxSlots)
+                        <span class="occupancy-badge occupancy-badge-muted">@L[OccupancyEditorMessages.ClassKey(_preview.Class)]</span>
+                        @if (_preview.IsOverCapacity)
+                        {
+                            <span class="occupancy-badge occupancy-badge-warning">@L["occupancy.badge.overCapacity"]</span>
+                        }
+                        @if (_preview.HasUnidentifiedOccupant)
+                        {
+                            <span class="occupancy-badge occupancy-badge-danger">@L["occupancy.badge.unidentified"]</span>
+                        }
+                    }
+                    else
+                    {
+                        <span id="@Id("preview-error")" class="occupancy-badge occupancy-badge-danger">@L[_previewErrorKey ?? "occupancy.error.invalid"]</span>
+                    }
+                </dd>
+            </div>
+        </dl>
+
+        @* Not paged: one pole — its six regulated slots plus its own entries beyond them. *@
+        <div class="table-responsive">
+            <table class="table table-sm align-middle occupancy-table">
+                <caption>@L["occupancy.table.caption"]</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">@L["occupancy.table.slot"]</th>
+                        <th scope="col">@L["occupancy.table.status"]</th>
+                        <th scope="col">@L["occupancy.table.occupant"]</th>
+                        <th scope="col">@L["occupancy.table.cnpj"]</th>
+                        <th scope="col">@L["occupancy.table.cable"]</th>
+                        <th scope="col">@L["occupancy.table.change"]</th>
+                        <th scope="col">@L["occupancy.table.actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        var shown = row.Change?.Kind == OccupancyChangeKind.Remove ? row.Current : row.Projected ?? row.Current;
+                        var label = RowLabel(row);
+                        <tr @key="row.Key" class="@(row.Change?.Kind == OccupancyChangeKind.Remove ? "occupancy-row-removed" : null)">
+                            <th scope="row">@label</th>
+                            @if (shown is null)
+                            {
+                                <td colspan="4" class="occupancy-cell-empty">@L[row.IsOrphan ? "occupancy.table.orphan" : "occupancy.table.free"]</td>
+                            }
+                            else
+                            {
+                                <td>@L[OccupancyEditorMessages.StatusKey(shown.Status)]</td>
+                                <td>
+                                    @if (shown.IsUnidentified)
+                                    {
+                                        <span class="occupancy-badge occupancy-badge-danger">@L["occupancy.badge.unidentified"]</span>
+                                    }
+                                    else
+                                    {
+                                        @(shown.OccupantOrganizationId?.ToString("D") ?? "—")
+                                    }
+                                </td>
+                                <td>@(shown.OperatorCnpj ?? "—")</td>
+                                <td>@L.GetString("occupancy.table.cableValue", shown.CableDiameterMm, shown.CableLoadDaN, shown.AttachedCableFeatureId ?? "—")</td>
+                            }
+                            <td>
+                                @if (row.Change is not null)
+                                {
+                                    <span class="occupancy-badge occupancy-badge-accent">@L[OccupancyEditorMessages.ChangeKindKey(row.Change.Kind)]</span>
+                                }
+                            </td>
+                            <td class="occupancy-row-actions">
+                                @if (CanEdit)
+                                {
+                                    @if (row.IsFree)
+                                    {
+                                        <button type="button" class="btn btn-outline btn-sm" disabled="@_busy"
+                                                aria-label="@L.GetString("occupancy.action.addOn", label)"
+                                                @onclick="() => BeginAdd(row)">@L["occupancy.action.add"]</button>
+                                    }
+                                    else if (row.Change is null)
+                                    {
+                                        <button type="button" class="btn btn-outline btn-sm" disabled="@_busy"
+                                                aria-label="@L.GetString("occupancy.action.modifyOn", label)"
+                                                @onclick="() => BeginEdit(row)">@L["occupancy.action.modify"]</button>
+                                        <button type="button" class="btn btn-outline btn-sm" disabled="@_busy"
+                                                aria-label="@L.GetString("occupancy.action.removeOn", label)"
+                                                @onclick="() => Remove(row)">@L["occupancy.action.remove"]</button>
+                                        <button type="button" class="btn btn-outline btn-sm" disabled="@_busy"
+                                                aria-label="@L.GetString("occupancy.action.markUnidentifiedOn", label)"
+                                                @onclick="() => MarkUnidentified(row)">@L["occupancy.action.markUnidentified"]</button>
+                                    }
+                                    else
+                                    {
+                                        @if (row.Change.Kind is OccupancyChangeKind.Add or OccupancyChangeKind.Modify)
+                                        {
+                                            <button type="button" class="btn btn-outline btn-sm" disabled="@_busy"
+                                                    aria-label="@L.GetString("occupancy.action.modifyOn", label)"
+                                                    @onclick="() => BeginEdit(row)">@L["occupancy.action.modify"]</button>
+                                        }
+                                        <button type="button" class="btn btn-outline btn-sm" disabled="@_busy"
+                                                aria-label="@L.GetString("occupancy.action.undoOn", label)"
+                                                @onclick="() => Undo(row)">@L["occupancy.action.undo"]</button>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (CanEdit && _form is null)
+        {
+            <button type="button" class="btn btn-outline btn-sm" disabled="@_busy" @onclick="BeginAddBeyondRegulatedSlots">
+                @L["occupancy.action.addBeyond"]
+            </button>
+        }
+
+        @if (_form is not null)
+        {
+            <form class="occupancy-form" aria-labelledby="@Id("form-title")" @onsubmit="ApplyForm" @onsubmit:preventDefault="true">
+                <h6 id="@Id("form-title")" class="order-section-title">@L.GetString("occupancy.form.title", _formLabel)</h6>
+                <div class="occupancy-form-grid">
+                    <div>
+                        <label class="form-label" for="@Id("status")">@L["occupancy.table.status"]</label>
+                        <select id="@Id("status")" class="form-select form-select-sm @Invalid(OccupancyEntryForm.StatusField)"
+                                aria-invalid="@AriaInvalid(OccupancyEntryForm.StatusField)"
+                                aria-describedby="@DescribedBy(OccupancyEntryForm.StatusField)" @bind="_form.Status">
+                            @foreach (var status in Enum.GetValues<PoleAttachmentOccupantStatus>())
+                            {
+                                <option value="@status">@L[OccupancyEditorMessages.StatusKey(status)]</option>
+                            }
+                        </select>
+                        @FieldError(OccupancyEntryForm.StatusField)
+                    </div>
+                    <div>
+                        <label class="form-label" for="@Id("organization")">@L["occupancy.form.organization"]</label>
+                        <input id="@Id("organization")" type="text" class="form-control form-control-sm @Invalid(OccupancyEntryForm.OrganizationField)"
+                               aria-invalid="@AriaInvalid(OccupancyEntryForm.OrganizationField)"
+                               aria-describedby="@DescribedBy(OccupancyEntryForm.OrganizationField, "organization-hint")"
+                               autocomplete="off" @bind="_form.OccupantOrganizationId" />
+                        <div id="@Id("organization-hint")" class="form-text">@L["occupancy.form.organizationHint"]</div>
+                        @FieldError(OccupancyEntryForm.OrganizationField)
+                    </div>
+                    <div>
+                        <label class="form-label" for="@Id("cnpj")">@L["occupancy.table.cnpj"]</label>
+                        <input id="@Id("cnpj")" type="text" class="form-control form-control-sm @Invalid(OccupancyEntryForm.CnpjField)"
+                               maxlength="@PoleOccupancyEntry.MaxOperatorCnpjLength"
+                               aria-invalid="@AriaInvalid(OccupancyEntryForm.CnpjField)"
+                               aria-describedby="@DescribedBy(OccupancyEntryForm.CnpjField)" autocomplete="off" @bind="_form.OperatorCnpj" />
+                        @FieldError(OccupancyEntryForm.CnpjField)
+                    </div>
+                    <div>
+                        <label class="form-label" for="@Id("license")">@L["occupancy.form.license"]</label>
+                        <input id="@Id("license")" type="text" class="form-control form-control-sm @Invalid(OccupancyEntryForm.LicenseField)"
+                               maxlength="@PoleOccupancyEntry.MaxAnatelLicenseNumberLength"
+                               aria-invalid="@AriaInvalid(OccupancyEntryForm.LicenseField)"
+                               aria-describedby="@DescribedBy(OccupancyEntryForm.LicenseField)" autocomplete="off" @bind="_form.AnatelLicenseNumber" />
+                        @FieldError(OccupancyEntryForm.LicenseField)
+                    </div>
+                    <div>
+                        <label class="form-label" for="@Id("diameter")">@L["occupancy.form.diameter"]</label>
+                        <input id="@Id("diameter")" type="text" inputmode="decimal" class="form-control form-control-sm @Invalid(OccupancyEntryForm.DiameterField)"
+                               aria-invalid="@AriaInvalid(OccupancyEntryForm.DiameterField)"
+                               aria-describedby="@DescribedBy(OccupancyEntryForm.DiameterField)" autocomplete="off" @bind="_form.CableDiameterMm" />
+                        @FieldError(OccupancyEntryForm.DiameterField)
+                    </div>
+                    <div>
+                        <label class="form-label" for="@Id("load")">@L["occupancy.form.load"]</label>
+                        <input id="@Id("load")" type="text" inputmode="decimal" class="form-control form-control-sm @Invalid(OccupancyEntryForm.LoadField)"
+                               aria-invalid="@AriaInvalid(OccupancyEntryForm.LoadField)"
+                               aria-describedby="@DescribedBy(OccupancyEntryForm.LoadField)" autocomplete="off" @bind="_form.CableLoadDaN" />
+                        @FieldError(OccupancyEntryForm.LoadField)
+                    </div>
+                    <div>
+                        <label class="form-label" for="@Id("cable")">@L["occupancy.form.cable"]</label>
+                        <input id="@Id("cable")" type="text" class="form-control form-control-sm @Invalid(OccupancyEntryForm.CableField)"
+                               maxlength="@PoleOccupancyEntry.MaxFeatureIdLength"
+                               aria-invalid="@AriaInvalid(OccupancyEntryForm.CableField)"
+                               aria-describedby="@DescribedBy(OccupancyEntryForm.CableField)" autocomplete="off" @bind="_form.AttachedCableFeatureId" />
+                        @FieldError(OccupancyEntryForm.CableField)
+                    </div>
+                </div>
+                <div class="order-actions">
+                    <button type="submit" class="btn btn-secondary btn-sm">@L["occupancy.form.apply"]</button>
+                    <button type="button" class="btn btn-outline btn-sm" @onclick="CancelForm">@L["assets.cancel"]</button>
+                </div>
+            </form>
+        }
+
+        @if (_actionErrorKey is not null)
+        {
+            <p class="occupancy-notice occupancy-notice-error" role="alert">@L[_actionErrorKey]</p>
+        }
+
+        @if (CanEdit)
+        {
+            <div class="order-actions occupancy-editor-actions">
+                <button type="button" class="btn btn-primary btn-sm" disabled="@(!CanSave)"
+                        aria-describedby="@(_preview is null ? Id("preview-error") : null)" @onclick="SaveAsync">
+                    @L[_busy ? "occupancy.action.saving" : "occupancy.action.save"]
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" disabled="@(_busy || !_draft.IsDirty)" @onclick="Reset">
+                    @L["occupancy.action.reset"]
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" disabled="@(_busy || _view.Staged is null)" @onclick="DiscardAsync">
+                    @L["occupancy.action.discard"]
+                </button>
+            </div>
+        }
+        else
+        {
+            <p class="empty-state">@L["occupancy.editor.readOnly"]</p>
+        }
+    }
+</section>

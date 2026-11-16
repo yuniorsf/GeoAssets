@@ -114,6 +114,11 @@ builder.Services.AddFeatureSelection();
 builder.Services.AddOrderTargets();
 builder.Services.AddObservableOrderTargetSelection();
 
+// Staged occupancy changes on an order's targets (XD01-315): the service over the target store,
+// the pole occupancy store and the change-set store AddWorkflowPersistence registered above.
+// Which asset types are poles is this host's to say — see OrderOccupancyHostExtensions.
+builder.Services.AddServerOrderOccupancyStaging(builder.Configuration);
+
 // IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
 // IServiceOrderRepository as every other order-driven workflow in this host.
 builder.Services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
@@ -214,6 +219,7 @@ app.MapServiceOrdersApi();
 // Service-order target + selection endpoints under /api/workflow (XD01-308) —
 // see ServiceOrderTargetsRestApiExtensions for the full endpoint list.
 app.MapServiceOrderTargetsApi();
+app.MapServiceOrderOccupancyApi();
 
 // Project REST endpoints under /api/projects (XD01-141) —
 // see ProjectsRestApiExtensions for the full endpoint list.

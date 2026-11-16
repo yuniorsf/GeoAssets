@@ -198,6 +198,69 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("field_manhole_audits", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OccupancyChangeSetRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BaselineVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChangesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PoleFeatureId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<DateTime>("StagedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StagedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("TargetId");
+
+                    b.HasIndex("ServiceOrderId", "Status");
+
+                    b.HasIndex(new[] { "TargetId" }, "IX_ServiceOrderOccupancyChangeSets_TargetId_Staged")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Staged'");
+
+                    b.ToTable("ServiceOrderOccupancyChangeSets", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderActionLogRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -977,6 +1040,15 @@ namespace GeoAssets.Server.Migrations
                         .WithMany()
                         .HasForeignKey("ServiceOrderId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OccupancyChangeSetRecord", b =>
+                {
+                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderTargetRecord", null)
+                        .WithMany()
+                        .HasForeignKey("TargetId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

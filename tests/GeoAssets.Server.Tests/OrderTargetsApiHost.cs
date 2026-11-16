@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Identity.Authorization.Models;
@@ -63,6 +64,8 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         OrderTypes = host.Services.GetRequiredService<OrderTypeRegistry>();
         Assets = host.Services.GetRequiredService<TestAssetProvider>();
         Grants = host.Services.GetRequiredService<TestOrganizationGrantRepository>();
+        Occupancy = host.Services.GetRequiredService<InMemoryPoleOccupancyStore>();
+        ChangeSets = host.Services.GetRequiredService<InMemoryOccupancyChangeSetStore>();
     }
 
     public TestServer Server { get; }
@@ -72,11 +75,21 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
     public TestAssetProvider Assets { get; }
     public TestOrganizationGrantRepository Grants { get; }
 
+    /// <summary>
+    /// The pole occupancy store behind the occupancy routes (XD01-315). Scoped by the request's
+    /// token like the real one; outside a request, use <c>ForOrganization</c> to seed or read.
+    /// </summary>
+    public InMemoryPoleOccupancyStore Occupancy { get; }
+
+    /// <summary>The store of staged occupancy changes behind the occupancy routes (XD01-315).</summary>
+    public InMemoryOccupancyChangeSetStore ChangeSets { get; }
+
     public static async Task<OrderTargetsApiHost> StartAsync(
         Action<OrderTargetSelectionOptions>? configure = null,
         IAssetSpatialQuery? spatialQuery = null,
         Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders = null,
-        bool mapOrderRoutes = false)
+        bool mapOrderRoutes = false,
+        bool mapOccupancyRoutes = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -103,6 +116,9 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
                         // XD01-332: on request, the order routes too, so the organization gate
                         // is tested on both route families with the same identities, grants and stores.
                         if (mapOrderRoutes) endpoints.MapServiceOrdersApi();
+                        // XD01-315: on request, the staged-occupancy routes, over the same
+                        // identities, orders and targets.
+                        if (mapOccupancyRoutes) endpoints.MapServiceOrderOccupancyApi();
                     });
                 });
             })
@@ -144,6 +160,22 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddScoped<ServerWorkflowPrincipalFactory>();
         services.AddFeatureSelection();
         services.AddOrderTargets(configure);
+
+        // Staged occupancy (XD01-315): the in-memory occupancy and change-set stores, scoped by
+        // the request's token as the EF stores are by the request's tenant, and the real service.
+        services.AddSingleton<IServiceOrderReader>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+        services.AddSingleton(sp => new InMemoryPoleOccupancyStore(
+            sp.GetRequiredService<ITenantContext>(), sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IPoleOccupancyReader>(sp => sp.GetRequiredService<InMemoryPoleOccupancyStore>());
+        services.AddSingleton(sp => new InMemoryOccupancyChangeSetStore(
+            sp.GetRequiredService<InMemoryServiceOrderTargetStore>(),
+            sp.GetRequiredService<FakeServiceOrderRepository>(),
+            sp.GetRequiredService<OrderTypeRegistry>(),
+            sp.GetRequiredService<ITenantContext>(),
+            sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IOccupancyChangeSetReader>(sp => sp.GetRequiredService<InMemoryOccupancyChangeSetStore>());
+        services.AddSingleton<IOccupancyChangeSetWriter>(sp => sp.GetRequiredService<InMemoryOccupancyChangeSetStore>());
+        services.AddOrderOccupancyStaging(options => options.PoleAssetTypeIds.Add("pole"));
 
         // The production pipeline: every endpoint needs an authenticated caller unless it says
         // otherwise (AddGeoAssetsAuthentication's fallback policy), and named policies resolve

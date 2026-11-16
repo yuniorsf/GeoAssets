@@ -93,6 +93,9 @@ internal static class SecurityTestContainerFixture
                 -- Pole occupancy (XD01-314): owner-only policies that read nothing but their own table.
                 GRANT SELECT, INSERT, UPDATE, DELETE ON field_pole_occupancies TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON field_pole_occupancy_entries TO {TenantScopedRole};
+                -- Staged occupancy changes (XD01-315): an owner-only policy whose WITH CHECK reads
+                -- the row's target in "ServiceOrderTargets" (granted above).
+                GRANT SELECT, INSERT, UPDATE, DELETE ON "ServiceOrderOccupancyChangeSets" TO {TenantScopedRole};
                 -- ServiceOrders' RLS policy's EXISTS clause reads "OrganizationGrants" (its
                 -- grant-aware exception) — Postgres checks SELECT privilege on every table a
                 -- policy references, even for rows that end up not matching.
