@@ -17,11 +17,21 @@ namespace GeoAssets.IpBilling.Fiscalizacao;
 /// real legacy GEOS_FAT_IP spreadsheet template (none is available in this repository/
 /// environment): row 1 is a header (skipped); column A = Código de Instalação, B = Grupo de
 /// Operação (the numeric <see cref="FiscalizacaoOperationGroup"/> value, 1-4, matching the
-/// legacy column order that enum's own doc comment describes), C = Quantidade. Confirm against
+/// legacy column order that enum's own doc comment describes), C = Quantidade, plus two
+/// OPTIONAL columns added by XD01-301: D = Tipo de Lâmpada (a <see cref="Models.LampTypeCode"/>
+/// name, e.g. <c>VS</c>, case-insensitive) and E = Potência (W) (a positive integer). D and E
+/// must be both filled or both blank on a row; a spreadsheet without them parses exactly as
+/// before. With D/E filled, C is the quantity of that lamp type/wattage. Confirm against
 /// the real legacy template before treating this as ground truth.
 /// </summary>
 public static class FiscalizacaoWorkbookRowParser
 {
+    /// <summary>Column D's name as reported in row errors.</summary>
+    public const string LampTypeColumn = "Tipo de Lâmpada";
+
+    /// <summary>Column E's name as reported in row errors.</summary>
+    public const string WattageColumn = "Potência (W)";
+
     public static FiscalizacaoWorkbookParseResult Parse(IReadOnlyList<IReadOnlyList<string?>> rawRows)
     {
         ArgumentNullException.ThrowIfNull(rawRows);
@@ -59,7 +69,79 @@ public static class FiscalizacaoWorkbookRowParser
             return;
         }
 
-        rows.Add(new FiscalizacaoWorkbookRow(codigo, operationGroup, quantity));
+        if (!TryParseLampColumns(raw, rowNumber, errors, out var lampCode, out var wattageW))
+        {
+            return;
+        }
+
+        rows.Add(new FiscalizacaoWorkbookRow(codigo, operationGroup, quantity, lampCode, wattageW));
+    }
+
+    /// <summary>
+    /// Reads the optional lamp columns D/E (XD01-301). Returns <c>true</c> with both outputs
+    /// <c>null</c> when both cells are blank or missing (the pre-XD01-301 layout), <c>true</c>
+    /// with both set when both are valid, and <c>false</c> — after recording one row error —
+    /// otherwise.
+    /// </summary>
+    private static bool TryParseLampColumns(
+        IReadOnlyList<string?> raw,
+        int rowNumber,
+        List<FiscalizacaoUploadRowError> errors,
+        out Models.LampTypeCode? lampCode,
+        out int? wattageW)
+    {
+        lampCode = null;
+        wattageW = null;
+
+        var rawLamp = Cell(raw, 3)?.Trim();
+        var rawWattage = Cell(raw, 4)?.Trim();
+        var hasLamp = !string.IsNullOrEmpty(rawLamp);
+        var hasWattage = !string.IsNullOrEmpty(rawWattage);
+
+        if (!hasLamp && !hasWattage)
+        {
+            return true;
+        }
+
+        if (!hasLamp)
+        {
+            errors.Add(new FiscalizacaoUploadRowError(rowNumber, LampTypeColumn, $"Required when {WattageColumn} is informed."));
+            return false;
+        }
+
+        if (!hasWattage)
+        {
+            errors.Add(new FiscalizacaoUploadRowError(rowNumber, WattageColumn, $"Required when {LampTypeColumn} is informed."));
+            return false;
+        }
+
+        if (!TryParseLampTypeCode(rawLamp!, out var parsedLamp))
+        {
+            errors.Add(new FiscalizacaoUploadRowError(
+                rowNumber,
+                LampTypeColumn,
+                $"'{rawLamp}' is not a recognized lamp type (expected one of {string.Join(", ", Enum.GetNames<Models.LampTypeCode>())})."));
+            return false;
+        }
+
+        if (!TryParsePositiveInt(rawWattage, out var parsedWattage))
+        {
+            errors.Add(new FiscalizacaoUploadRowError(rowNumber, WattageColumn, $"'{rawWattage}' is not a valid wattage."));
+            return false;
+        }
+
+        lampCode = parsedLamp;
+        wattageW = parsedWattage;
+        return true;
+    }
+
+    /// <summary>Accepts only a <see cref="Models.LampTypeCode"/> member name (case-insensitive) —
+    /// never its numeric value or a comma-separated list, both of which <c>Enum.TryParse</c>
+    /// alone would let through.</summary>
+    private static bool TryParseLampTypeCode(string raw, out Models.LampTypeCode code)
+    {
+        code = default;
+        return raw.All(char.IsAsciiLetter) && Enum.TryParse(raw, ignoreCase: true, out code);
     }
 
     private static string? Cell(IReadOnlyList<string?> row, int index) => index < row.Count ? row[index] : null;

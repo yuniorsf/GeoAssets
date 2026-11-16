@@ -17,6 +17,8 @@ internal sealed class MunicipioRecord
 
     public Guid? PrefeituraOrganizationId { get; set; }
 
+    public Guid? DistribuidoraId { get; set; }
+
     public OrigemWorkflow OrigemLevantamento   { get; set; }
     public OrigemWorkflow OrigemFiscalizacao   { get; set; }
     public OrigemWorkflow OrigemOficio         { get; set; }

@@ -305,7 +305,7 @@ public sealed class LevantamentoCalculationService(
             calculatedKwh,
             FaturamentoPostingMode.Set,
             now,
-            ct).ConfigureAwait(false);
+            ct: ct).ConfigureAwait(false);
         await faturamentoRepository.SaveChangesAsync(ct).ConfigureAwait(false);
 
         await levantamentoRepository.MarkValidatedAsync(serviceOrderId, ct).ConfigureAwait(false);

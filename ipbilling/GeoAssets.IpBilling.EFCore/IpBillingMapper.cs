@@ -41,6 +41,7 @@ internal static class IpBillingMapper
         Uf                          = r.Uf,
         DistribuidoraOrganizationId = r.DistribuidoraOrganizationId,
         PrefeituraOrganizationId    = r.PrefeituraOrganizationId,
+        DistribuidoraId             = r.DistribuidoraId,
         OrigemLevantamento          = r.OrigemLevantamento,
         OrigemFiscalizacao          = r.OrigemFiscalizacao,
         OrigemOficio                = r.OrigemOficio,
@@ -55,10 +56,45 @@ internal static class IpBillingMapper
         Uf                          = m.Uf,
         DistribuidoraOrganizationId = m.DistribuidoraOrganizationId,
         PrefeituraOrganizationId    = m.PrefeituraOrganizationId,
+        DistribuidoraId             = m.DistribuidoraId,
         OrigemLevantamento          = m.OrigemLevantamento,
         OrigemFiscalizacao          = m.OrigemFiscalizacao,
         OrigemOficio                = m.OrigemOficio,
         OrigemMemoriaCalculo        = m.OrigemMemoriaCalculo,
+    };
+
+    // ── Distribuidora / DistribuidoraLampWattage ─────────────────────────────
+
+    public static Distribuidora ToDomain(DistribuidoraRecord r) => new()
+    {
+        Id             = r.Id,
+        OrganizationId = r.OrganizationId,
+        Name           = r.Name,
+    };
+
+    public static DistribuidoraRecord ToRecord(Distribuidora d) => new()
+    {
+        Id             = d.Id,
+        OrganizationId = d.OrganizationId,
+        Name           = d.Name,
+    };
+
+    public static DistribuidoraLampWattage ToDomain(DistribuidoraLampWattageRecord r) => new()
+    {
+        Id              = r.Id,
+        DistribuidoraId = r.DistribuidoraId,
+        Code            = r.Code,
+        WattageW        = r.WattageW,
+        BallastLossW    = r.BallastLossW,
+    };
+
+    public static DistribuidoraLampWattageRecord ToRecord(DistribuidoraLampWattage w) => new()
+    {
+        Id              = w.Id,
+        DistribuidoraId = w.DistribuidoraId,
+        Code            = w.Code,
+        WattageW        = w.WattageW,
+        BallastLossW    = w.BallastLossW,
     };
 
     // ── UnidadeOrganizacional ────────────────────────────────────────────────
@@ -129,6 +165,7 @@ internal static class IpBillingMapper
         DeltaOrBaselineKwh = r.DeltaOrBaselineKwh,
         ResultingKwh       = r.ResultingKwh,
         PostedAt           = r.PostedAt,
+        IsProvisional      = r.IsProvisional,
     };
 
     // ── LevantamentoHeader ───────────────────────────────────────────────────
@@ -251,6 +288,7 @@ internal static class IpBillingMapper
         Agregado         = r.Agregado,
         Retroativo       = r.Retroativo,
         OperationGroups  = r.OperationGroups.Select(ToDomain).ToList(),
+        LampDetails      = r.LampDetails.Select(ToDomain).ToList(),
     };
 
     public static FiscalizacaoLineRecord ToRecord(FiscalizacaoLine l)
@@ -264,8 +302,29 @@ internal static class IpBillingMapper
             Retroativo       = l.Retroativo,
         };
         record.OperationGroups.AddRange(l.OperationGroups.Select(ToRecord));
+        record.LampDetails.AddRange(l.LampDetails.Select(ToRecord));
         return record;
     }
+
+    public static FiscalizacaoLampDetail ToDomain(FiscalizacaoLampDetailRecord r) => new()
+    {
+        Id             = r.Id,
+        LineId         = r.LineId,
+        OperationGroup = r.OperationGroup,
+        Code           = r.Code,
+        WattageW       = r.WattageW,
+        Quantity       = r.Quantity,
+    };
+
+    public static FiscalizacaoLampDetailRecord ToRecord(FiscalizacaoLampDetail d) => new()
+    {
+        Id             = d.Id,
+        LineId         = d.LineId,
+        OperationGroup = d.OperationGroup,
+        Code           = d.Code,
+        WattageW       = d.WattageW,
+        Quantity       = d.Quantity,
+    };
 
     public static FiscalizacaoOperationGroupDetail ToDomain(FiscalizacaoOperationGroupDetailRecord r) => new()
     {
@@ -315,6 +374,7 @@ internal static class IpBillingMapper
         Agregado         = r.Agregado,
         Retroativo       = r.Retroativo,
         OperationGroups  = r.OperationGroups.Select(ToDomain).ToList(),
+        LampDetails      = r.LampDetails.Select(ToDomain).ToList(),
     };
 
     public static OficioLineRecord ToRecord(OficioLine l)
@@ -328,8 +388,29 @@ internal static class IpBillingMapper
             Retroativo       = l.Retroativo,
         };
         record.OperationGroups.AddRange(l.OperationGroups.Select(ToRecord));
+        record.LampDetails.AddRange(l.LampDetails.Select(ToRecord));
         return record;
     }
+
+    public static OficioLampDetail ToDomain(OficioLampDetailRecord r) => new()
+    {
+        Id             = r.Id,
+        LineId         = r.LineId,
+        OperationGroup = r.OperationGroup,
+        Code           = r.Code,
+        WattageW       = r.WattageW,
+        Quantity       = r.Quantity,
+    };
+
+    public static OficioLampDetailRecord ToRecord(OficioLampDetail d) => new()
+    {
+        Id             = d.Id,
+        LineId         = d.LineId,
+        OperationGroup = d.OperationGroup,
+        Code           = d.Code,
+        WattageW       = d.WattageW,
+        Quantity       = d.Quantity,
+    };
 
     public static OficioOperationGroupDetail ToDomain(OficioOperationGroupDetailRecord r) => new()
     {

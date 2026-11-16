@@ -1,0 +1,15 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+<div class="assets-table-pager">
+    <span class="assets-table-pager-summary" aria-live="polite">@Summary()</span>
+    <nav aria-label="@AriaLabel">
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item @(CanGoPrevious ? "" : "disabled")">
+                <button type="button" class="page-link" @onclick="GoToPreviousAsync" disabled="@(!CanGoPrevious)">@L["assetsTable.previous"]</button>
+            </li>
+            <li class="page-item @(CanGoNext ? "" : "disabled")">
+                <button type="button" class="page-link" @onclick="GoToNextAsync" disabled="@(!CanGoNext)">@L["assetsTable.next"]</button>
+            </li>
+        </ul>
+    </nav>
+</div>

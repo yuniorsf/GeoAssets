@@ -1,0 +1,50 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Identity.Authorization.Repositories
+@using GeoAssets.IpBilling.Repositories
+@inject IDistribuidoraRepository Repository
+@inject IOrganizationRepository OrganizationRepository
+
+@if (_loading)
+{
+    <div class="empty-state"><p>@L["app.loading"]</p></div>
+}
+else
+{
+    <div>
+        <h5>@(IsNew ? L["admin.ipBilling.distribuidoras.newDistribuidora"] : L["admin.ipBilling.distribuidoras.editTitle"])</h5>
+
+        <EditForm Model="@_editModel" OnValidSubmit="HandleSaveAsync">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="distribuidora-name">@L["admin.ipBilling.distribuidoras.name"]</label>
+                <InputText id="distribuidora-name" class="form-control" @bind-Value="_editModel.Name" />
+            </div>
+
+            <div class="form-group">
+                <label for="distribuidora-organization">@L["admin.ipBilling.distribuidoras.organization"]</label>
+                <select id="distribuidora-organization" class="form-control" @onchange="OnOrganizationChanged">
+                    <option value="">@L["admin.ipBilling.municipios.selectOrganization"]</option>
+                    @foreach (var organization in _organizations)
+                    {
+                        <option value="@organization.Id" selected="@(_editModel.OrganizationId == organization.Id)">@organization.Name</option>
+                    }
+                </select>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="attribute-errors" role="alert">@_error</p>
+            }
+
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-secondary" type="button" @onclick="CancelAsync">@L["assets.cancel"]</button>
+                @if (!IsNew)
+                {
+                    <button class="btn btn-danger" type="button" @onclick="HandleDeleteAsync">@L["admin.ipBilling.distribuidoras.delete"]</button>
+                }
+            </div>
+        </EditForm>
+    </div>
+}

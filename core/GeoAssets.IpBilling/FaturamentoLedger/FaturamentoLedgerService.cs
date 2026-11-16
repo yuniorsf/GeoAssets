@@ -49,7 +49,7 @@ public sealed class FaturamentoLedgerService(IFaturamentoRepository faturamentoR
         DateTimeOffset postedAt,
         CancellationToken ct = default) =>
         faturamentoRepository.PostOrderCalculationAsync(
-            serviceOrderId, municipioId, competencia, totalKwh, FaturamentoPostingMode.Set, postedAt, ct);
+            serviceOrderId, municipioId, competencia, totalKwh, FaturamentoPostingMode.Set, postedAt, isProvisional: false, ct);
 
     public Task<Models.Faturamento> AccumulateInspectionDeltaAsync(
         string serviceOrderId,
@@ -57,9 +57,10 @@ public sealed class FaturamentoLedgerService(IFaturamentoRepository faturamentoR
         string competencia,
         decimal deltaKwh,
         DateTimeOffset postedAt,
+        bool isProvisional = false,
         CancellationToken ct = default) =>
         faturamentoRepository.PostOrderCalculationAsync(
-            serviceOrderId, municipioId, competencia, deltaKwh, FaturamentoPostingMode.Accumulate, postedAt, ct);
+            serviceOrderId, municipioId, competencia, deltaKwh, FaturamentoPostingMode.Accumulate, postedAt, isProvisional, ct);
 
     public Task<Models.Faturamento> OverwriteManualEntryAsync(
         Guid municipioId,

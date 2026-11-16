@@ -32,7 +32,7 @@ public class FaturamentoLedgerServiceTests
 
         public Task<GeoAssets.IpBilling.Models.Faturamento> PostOrderCalculationAsync(
             string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline,
-            FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default)
+            FaturamentoPostingMode mode, DateTimeOffset postedAt, bool isProvisional = false, CancellationToken ct = default)
         {
             var key = (serviceOrderId, competencia);
             if (_posted.Contains(key) && _ledger.TryGetValue((municipioId, competencia), out var existing))

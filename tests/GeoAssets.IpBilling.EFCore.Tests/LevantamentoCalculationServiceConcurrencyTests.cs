@@ -80,7 +80,7 @@ public class LevantamentoCalculationServiceConcurrencyTests
         public Task<Faturamento?> GetByMunicipioAndCompetenciaAsync(Guid municipioId, string competencia, CancellationToken ct = default) => Task.FromResult<Faturamento?>(null);
         public Task<IReadOnlyList<Faturamento>> GetByMunicipioAsync(Guid municipioId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Faturamento>>([]);
         public Task AddAsync(Faturamento faturamento, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<Faturamento> PostOrderCalculationAsync(string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline, FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default) =>
+        public Task<Faturamento> PostOrderCalculationAsync(string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline, FaturamentoPostingMode mode, DateTimeOffset postedAt, bool isProvisional = false, CancellationToken ct = default) =>
             Task.FromResult(new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhDeltaOrBaseline, CreatedAt = postedAt });
         public Task<Faturamento> OverwriteManualEntryAsync(Guid municipioId, string competencia, decimal kwhFaturado, string enteredByReference, DateTimeOffset postedAt, CancellationToken ct = default) =>
             Task.FromResult(new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhFaturado, CreatedAt = postedAt });

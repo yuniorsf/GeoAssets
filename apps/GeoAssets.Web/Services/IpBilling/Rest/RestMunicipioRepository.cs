@@ -27,7 +27,8 @@ internal sealed class RestMunicipioRepository(HttpClient http) : IMunicipioRepos
         OrigemWorkflow OrigemLevantamento,
         OrigemWorkflow OrigemFiscalizacao,
         OrigemWorkflow OrigemOficio,
-        OrigemWorkflow OrigemMemoriaCalculo);
+        OrigemWorkflow OrigemMemoriaCalculo,
+        Guid? DistribuidoraId);
 
     public async Task<Municipio?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -83,5 +84,6 @@ internal sealed class RestMunicipioRepository(HttpClient http) : IMunicipioRepos
         municipio.OrigemLevantamento,
         municipio.OrigemFiscalizacao,
         municipio.OrigemOficio,
-        municipio.OrigemMemoriaCalculo);
+        municipio.OrigemMemoriaCalculo,
+        municipio.DistribuidoraId);
 }

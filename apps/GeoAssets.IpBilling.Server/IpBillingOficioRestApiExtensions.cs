@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.Calculation;
 using GeoAssets.IpBilling.Oficio;
 using GeoAssets.Provider.Xlsx;
 using GeoAssets.Workflow.Orders;
@@ -127,6 +128,18 @@ internal static class IpBillingOficioRestApiExtensions
             catch (KeyNotFoundException ex)
             {
                 return Results.NotFound(new { message = ex.Message });
+            }
+            catch (InspectionLampNotInChartException ex)
+            {
+                // The request itself is well-formed; the município's lamp chart is what is
+                // incomplete — 422 so the UI can tell "fix the chart" apart from a bad request.
+                return Results.UnprocessableEntity(new InspectionConversionProblem(
+                    "lamp-not-in-chart", ex.Message, ex.Code.ToString(), ex.WattageW));
+            }
+            catch (InspectionStandardWattageUnavailableException ex)
+            {
+                return Results.UnprocessableEntity(new InspectionConversionProblem(
+                    "standard-wattage-unavailable", ex.Message, null, null));
             }
             catch (InvalidServiceOrderTransitionException ex)
             {

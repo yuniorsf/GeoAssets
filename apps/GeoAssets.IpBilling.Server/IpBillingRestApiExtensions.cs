@@ -51,7 +51,8 @@ internal static class IpBillingRestApiExtensions
         OrigemWorkflow OrigemLevantamento = OrigemWorkflow.Planilha,
         OrigemWorkflow OrigemFiscalizacao = OrigemWorkflow.Planilha,
         OrigemWorkflow OrigemOficio = OrigemWorkflow.Planilha,
-        OrigemWorkflow OrigemMemoriaCalculo = OrigemWorkflow.Planilha);
+        OrigemWorkflow OrigemMemoriaCalculo = OrigemWorkflow.Planilha,
+        Guid? DistribuidoraId = null);
 
     internal sealed record UnidadeOrganizacionalWriteRequest(Guid MunicipioId, string Name, string? Code);
 
@@ -69,6 +70,7 @@ internal static class IpBillingRestApiExtensions
         IpBillingFiscalizacaoRestApiExtensions.MapFiscalizacaoApi(group);
         IpBillingOficioRestApiExtensions.MapOficioApi(group);
         IpBillingFaturamentoRestApiExtensions.MapFaturamentoApi(group);
+        IpBillingDistribuidoraRestApiExtensions.MapDistribuidoraApi(group);
 
         return endpoints;
     }
@@ -181,6 +183,7 @@ internal static class IpBillingRestApiExtensions
         municipio.Uf = req.Uf;
         municipio.DistribuidoraOrganizationId = req.DistribuidoraOrganizationId;
         municipio.PrefeituraOrganizationId = req.PrefeituraOrganizationId;
+        municipio.DistribuidoraId = req.DistribuidoraId;
         municipio.OrigemLevantamento = req.OrigemLevantamento;
         municipio.OrigemFiscalizacao = req.OrigemFiscalizacao;
         municipio.OrigemOficio = req.OrigemOficio;

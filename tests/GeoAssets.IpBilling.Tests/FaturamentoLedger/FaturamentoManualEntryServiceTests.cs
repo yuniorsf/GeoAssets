@@ -30,7 +30,7 @@ public class FaturamentoManualEntryServiceTests
 
         public Task<Faturamento> PostOrderCalculationAsync(
             string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline,
-            FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default) =>
+            FaturamentoPostingMode mode, DateTimeOffset postedAt, bool isProvisional = false, CancellationToken ct = default) =>
             throw new NotSupportedException("Not exercised by manual-entry/batch-load/recarga tests.");
 
         public Task<Faturamento> OverwriteManualEntryAsync(

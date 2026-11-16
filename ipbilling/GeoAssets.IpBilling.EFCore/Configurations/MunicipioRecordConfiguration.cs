@@ -24,5 +24,13 @@ internal sealed class MunicipioRecordConfiguration : IEntityTypeConfiguration<Mu
         b.HasIndex(m => m.IbgeCode).IsUnique();
         b.HasIndex(m => m.DistribuidoraOrganizationId);
         b.HasIndex(m => m.PrefeituraOrganizationId);
+        b.HasIndex(m => m.DistribuidoraId);
+
+        // SetNull, not Cascade: deleting a Distribuidora must never delete the municípios it
+        // served — they fall back to the global lamp chart until re-assigned.
+        b.HasOne<DistribuidoraRecord>()
+         .WithMany()
+         .HasForeignKey(m => m.DistribuidoraId)
+         .OnDelete(DeleteBehavior.SetNull);
     }
 }

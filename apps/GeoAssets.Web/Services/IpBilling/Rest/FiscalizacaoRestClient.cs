@@ -91,7 +91,7 @@ internal sealed class FiscalizacaoRestClient(HttpClient http) : IFiscalizacaoRes
             new Uri($"fiscalizacao/{orderId}/validate", UriKind.Relative),
             new ValidateRequest(performedBy),
             ct);
-        response.EnsureSuccessStatusCode();
+        await RestErrors.EnsureSuccessAsync(response, ct);
 
         return await response.Content.ReadFromJsonAsync<FiscalizacaoValidationResult>(ct)
             ?? throw new InvalidOperationException("POST fiscalizacao/validate returned an empty response.");

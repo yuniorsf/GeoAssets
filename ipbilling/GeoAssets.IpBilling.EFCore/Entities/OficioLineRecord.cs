@@ -14,4 +14,6 @@ internal sealed class OficioLineRecord
     public int Retroativo { get; set; }
 
     public List<OficioOperationGroupDetailRecord> OperationGroups { get; init; } = [];
+
+    public List<OficioLampDetailRecord> LampDetails { get; init; } = [];
 }

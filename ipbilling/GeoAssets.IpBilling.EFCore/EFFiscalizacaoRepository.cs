@@ -32,6 +32,7 @@ public sealed class EFFiscalizacaoRepository(IpBillingDbContext db) : IFiscaliza
     {
         var records = await db.FiscalizacaoLines
             .Include(l => l.OperationGroups)
+            .Include(l => l.LampDetails)
             .Where(l => l.ServiceOrderId == serviceOrderId)
             .OrderBy(l => l.CodigoInstalacao)
             .ToListAsync(ct).ConfigureAwait(false);

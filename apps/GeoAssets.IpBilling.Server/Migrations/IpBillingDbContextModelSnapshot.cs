@@ -21,6 +21,58 @@ namespace GeoAssets.IpBilling.Server.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.DistribuidoraLampWattageRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BallastLossW")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<Guid>("DistribuidoraId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("WattageW")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DistribuidoraId", "Code", "WattageW")
+                        .IsUnique();
+
+                    b.ToTable("DistribuidoraLampWattages", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.DistribuidoraRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("Distribuidoras", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FaturamentoPostingRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -35,6 +87,11 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.Property<decimal>("DeltaOrBaselineKwh")
                         .HasPrecision(14, 4)
                         .HasColumnType("numeric(14,4)");
+
+                    b.Property<bool>("IsProvisional")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<int>("Mode")
                         .HasColumnType("integer");
@@ -55,6 +112,8 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .HasColumnType("character varying(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsProvisional");
 
                     b.HasIndex("MunicipioId");
 
@@ -115,6 +174,34 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.HasIndex("MunicipioId", "Competencia");
 
                     b.ToTable("FiscalizacaoHeaders", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLampDetailRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Code")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("OperationGroup")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WattageW")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LineId");
+
+                    b.ToTable("FiscalizacaoLampDetails", (string)null);
                 });
 
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLineRecord", b =>
@@ -374,6 +461,9 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("DistribuidoraId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("DistribuidoraOrganizationId")
                         .HasColumnType("uuid");
 
@@ -416,6 +506,8 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .HasColumnType("character varying(2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DistribuidoraId");
 
                     b.HasIndex("DistribuidoraOrganizationId");
 
@@ -465,6 +557,34 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .HasFilter("\"NumeroPrefeitura\" IS NOT NULL");
 
                     b.ToTable("OficioHeaders", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioLampDetailRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Code")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("OperationGroup")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WattageW")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LineId");
+
+                    b.ToTable("OficioLampDetails", (string)null);
                 });
 
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", b =>
@@ -544,6 +664,15 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.ToTable("UnidadesOrganizacionais", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.DistribuidoraLampWattageRecord", b =>
+                {
+                    b.HasOne("GeoAssets.IpBilling.Persistence.Entities.DistribuidoraRecord", null)
+                        .WithMany()
+                        .HasForeignKey("DistribuidoraId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FaturamentoPostingRecord", b =>
                 {
                     b.HasOne("GeoAssets.IpBilling.Persistence.Entities.MunicipioRecord", null)
@@ -559,6 +688,15 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .WithMany()
                         .HasForeignKey("MunicipioId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLampDetailRecord", b =>
+                {
+                    b.HasOne("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLineRecord", null)
+                        .WithMany("LampDetails")
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -591,6 +729,23 @@ namespace GeoAssets.IpBilling.Server.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.MunicipioRecord", b =>
+                {
+                    b.HasOne("GeoAssets.IpBilling.Persistence.Entities.DistribuidoraRecord", null)
+                        .WithMany()
+                        .HasForeignKey("DistribuidoraId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioLampDetailRecord", b =>
+                {
+                    b.HasOne("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", null)
+                        .WithMany("LampDetails")
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioOperationGroupDetailRecord", b =>
                 {
                     b.HasOne("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", null)
@@ -611,6 +766,8 @@ namespace GeoAssets.IpBilling.Server.Migrations
 
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.FiscalizacaoLineRecord", b =>
                 {
+                    b.Navigation("LampDetails");
+
                     b.Navigation("OperationGroups");
                 });
 
@@ -626,6 +783,8 @@ namespace GeoAssets.IpBilling.Server.Migrations
 
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.OficioLineRecord", b =>
                 {
+                    b.Navigation("LampDetails");
+
                     b.Navigation("OperationGroups");
                 });
         }

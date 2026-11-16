@@ -114,7 +114,7 @@ public sealed class IpBillingReferenceCrudRoutingTests
         public Task<Faturamento?> GetByMunicipioAndCompetenciaAsync(Guid municipioId, string competencia, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<Faturamento>> GetByMunicipioAsync(Guid municipioId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task AddAsync(Faturamento faturamento, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<Faturamento> PostOrderCalculationAsync(string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline, FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<Faturamento> PostOrderCalculationAsync(string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline, FaturamentoPostingMode mode, DateTimeOffset postedAt, bool isProvisional = false, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<Faturamento> OverwriteManualEntryAsync(Guid municipioId, string competencia, decimal kwhFaturado, string enteredByReference, DateTimeOffset postedAt, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<FaturamentoPosting>> GetPostingsByOrderAsync(string serviceOrderId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();

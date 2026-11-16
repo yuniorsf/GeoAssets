@@ -1,3 +1,4 @@
+using GeoAssets.IpBilling.Calculation;
 using GeoAssets.IpBilling.FaturamentoLedger;
 using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Levantamento;
@@ -43,6 +44,13 @@ public static class IpBillingEFCoreServiceExtensions
         // type's own doc comment for why "no coverage" is still correct there.
         services.AddScoped<IInterveningOperationLookup, NullInterveningOperationLookup>();
         services.AddScoped<ILevantamentoCalculationService, LevantamentoCalculationService>();
+
+        services.AddScoped<IDistribuidoraRepository, EFDistribuidoraRepository>();
+        services.AddScoped<IDistribuidoraReader>(sp => sp.GetRequiredService<IDistribuidoraRepository>());
+        services.AddScoped<IDistribuidoraLampWattageRepository, EFDistribuidoraLampWattageRepository>();
+        services.AddScoped<IDistribuidoraLampWattageReader>(
+            sp => sp.GetRequiredService<IDistribuidoraLampWattageRepository>());
+        services.AddScoped<IInspectionLedgerPoster, InspectionLedgerPoster>();
 
         services.AddScoped<IFiscalizacaoRepository, EFFiscalizacaoRepository>();
         services.AddScoped<IFiscalizacaoCalculationService, FiscalizacaoCalculationService>();

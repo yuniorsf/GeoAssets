@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The IP-billing REST clients are internal (XD01-178); their tests need to construct them. -->
+    <InternalsVisibleTo Include="GeoAssets.Web.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly"          Version="10.0.7" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.7" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Authentication.WebAssembly.Msal"            Version="10.0.7" />

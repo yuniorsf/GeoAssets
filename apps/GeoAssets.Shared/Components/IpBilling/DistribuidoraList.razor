@@ -1,0 +1,51 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Repositories
+@inject IDistribuidoraRepository Repository
+
+<div class="sidebar-section">
+    <div class="section-header-row">
+        <h6>@L["admin.ipBilling.distribuidoras.title"] (@_totalCount)</h6>
+        <button class="btn-icon"
+                type="button"
+                title="@L["admin.ipBilling.distribuidoras.newDistribuidora"]"
+                aria-label="@L["admin.ipBilling.distribuidoras.newDistribuidora"]"
+                @onclick="() => OnCreateRequested.InvokeAsync()">＋</button>
+    </div>
+</div>
+
+<div class="sidebar-scrollable">
+    @if (_loading)
+    {
+        <div class="empty-state"><p>@L["app.loading"]</p></div>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="attribute-errors">@_error</p>
+    }
+    else if (_totalCount == 0)
+    {
+        <div class="empty-state"><p>@L["admin.ipBilling.distribuidoras.empty"]</p></div>
+    }
+    else
+    {
+        <div class="asset-list">
+            @foreach (var distribuidora in _distribuidoras)
+            {
+                <div class="asset-list-item @(SelectedDistribuidoraId == distribuidora.Id ? "selected" : "")"
+                     role="button"
+                     tabindex="0"
+                     @onclick="() => SelectAsync(distribuidora)"
+                     @onkeydown="e => OnItemKeyDownAsync(e, distribuidora)">
+                    <span class="asset-name">@distribuidora.Name</span>
+                </div>
+            }
+        </div>
+
+        <IpBillingPager Page="@_page"
+                        PageSize="@PageSize"
+                        TotalCount="@_totalCount"
+                        ItemCount="@_distribuidoras.Count"
+                        AriaLabel="@L["admin.ipBilling.distribuidoras.title"]"
+                        OnPageChanged="GoToPageAsync" />
+    }
+</div>

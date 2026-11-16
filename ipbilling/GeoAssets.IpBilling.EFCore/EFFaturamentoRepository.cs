@@ -42,6 +42,7 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
         decimal kwhDeltaOrBaseline,
         FaturamentoPostingMode mode,
         DateTimeOffset postedAt,
+        bool isProvisional = false,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceOrderId);
@@ -89,6 +90,7 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
             DeltaOrBaselineKwh = roundedInput,
             ResultingKwh       = ledger.KwhFaturado,
             PostedAt           = postedAt,
+            IsProvisional      = isProvisional,
         }, ct).ConfigureAwait(false);
 
         return IpBillingMapper.ToDomain(ledger);
@@ -141,6 +143,7 @@ public sealed class EFFaturamentoRepository(IpBillingDbContext db) : IFaturament
             DeltaOrBaselineKwh = roundedInput,
             ResultingKwh       = ledger.KwhFaturado,
             PostedAt           = postedAt,
+            IsProvisional      = false,
         }, ct).ConfigureAwait(false);
 
         return IpBillingMapper.ToDomain(ledger);

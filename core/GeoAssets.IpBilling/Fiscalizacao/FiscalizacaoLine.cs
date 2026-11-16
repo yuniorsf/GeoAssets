@@ -5,11 +5,10 @@ namespace GeoAssets.IpBilling.Fiscalizacao;
 /// <see cref="OperationGroups"/> counts into the <see cref="Agregado"/>/<see cref="Retroativo"/>
 /// totals via <see cref="FiscalizacaoLineCalculator.Recalculate"/>. Unlike
 /// <c>Levantamento.LevantamentoTransformerLine</c>, this line is never resolved to a
-/// <c>GeoFeature</c> and carries no kWh — Fiscalização's unit of record is a point-count
-/// reconciliation, per this ticket's own description (XD01-182). Converting
-/// <see cref="Agregado"/>/<see cref="Retroativo"/> into a billable figure is explicitly
-/// deferred to the Faturamento auto-posting wiring (XD01-188) — see
-/// <c>Models.Faturamento</c>'s own doc comment.
+/// <c>GeoFeature</c> and persists no kWh — Fiscalização's unit of record is a point-count
+/// reconciliation, per this ticket's own description (XD01-182). The points are converted to a
+/// billable kWh delta only when the order is validated (XD01-301) — see
+/// <see cref="FiscalizacaoKwhEntryMapper"/> and <c>Calculation.InspectionKwhConverter</c>.
 /// </summary>
 public sealed class FiscalizacaoLine
 {
@@ -22,6 +21,12 @@ public sealed class FiscalizacaoLine
     public required string CodigoInstalacao { get; set; }
 
     public List<FiscalizacaoOperationGroupDetail> OperationGroups { get; init; } = [];
+
+    /// <summary>
+    /// Optional lamp breakdown of <see cref="OperationGroups"/>' counts (XD01-301). Empty for a
+    /// line uploaded without lamp columns — its points then convert to kWh provisionally.
+    /// </summary>
+    public List<FiscalizacaoLampDetail> LampDetails { get; init; } = [];
 
     /// <summary>
     /// <c>Agregado₁ − Agregado₂ + Agregado₃ − Agregado₄</c> — can legitimately be negative,

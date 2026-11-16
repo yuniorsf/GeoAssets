@@ -49,6 +49,7 @@ public sealed class EFOficioRepository(IpBillingDbContext db) : IOficioRepositor
     {
         var records = await db.OficioLines
             .Include(l => l.OperationGroups)
+            .Include(l => l.LampDetails)
             .Where(l => l.ServiceOrderId == serviceOrderId)
             .OrderBy(l => l.CodigoInstalacao)
             .ToListAsync(ct).ConfigureAwait(false);
