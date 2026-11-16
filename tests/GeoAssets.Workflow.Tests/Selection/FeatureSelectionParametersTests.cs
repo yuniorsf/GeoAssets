@@ -119,6 +119,121 @@ public class FeatureSelectionParametersTests
         => FluentActions.Invoking(() => FeatureSelectionParameters.ToStringList(42))
             .Should().Throw<InvalidCastException>();
 
+    [Fact]
+    public void ToStringList_JsonElementArrayWithNonStringElement_ThrowsInvalidCastException()
+        => FluentActions.Invoking(() => FeatureSelectionParameters.ToStringList(AsJsonElement(new[] { 1, 2 })))
+            .Should().Throw<InvalidCastException>();
+
+    // ── ToInt32 ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ToInt32_FreshClrValue_Converts()
+        => FeatureSelectionParameters.ToInt32(7).Should().Be(7);
+
+    [Fact]
+    public void ToInt32_JsonElement_Converts()
+        => FeatureSelectionParameters.ToInt32(AsJsonElement(7)).Should().Be(7);
+
+    // ── ToRings ──────────────────────────────────────────────────────────────
+
+    private static readonly double[][][] Rings = [[[0, 0], [1, 0], [1, 1], [0, 0]], [[0.2, 0.1], [0.4, 0.1], [0.4, 0.3], [0.2, 0.1]]];
+
+    [Fact]
+    public void ToRings_FreshArray_ReturnsAsIs()
+        => FeatureSelectionParameters.ToRings(Rings).Should().BeSameAs(Rings);
+
+    [Fact]
+    public void ToRings_NestedLists_Materializes()
+    {
+        var nested = Rings.Select(ring => ring.Select(position => position.ToList()).ToList()).ToList();
+
+        FeatureSelectionParameters.ToRings(nested).Should().BeEquivalentTo(Rings, o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void ToRings_NestedListsWithMissingRingOrPosition_CarriesTheNullsThrough()
+    {
+        var nested = new List<List<double[]>?> { new() { new[] { 0.0, 0.0 }, null! }, null };
+
+        var rings = FeatureSelectionParameters.ToRings(nested);
+
+        rings.Should().HaveCount(2);
+        rings[0].Should().HaveCount(2);
+        rings[0][1].Should().BeNull();
+        rings[1].Should().BeNull();
+    }
+
+    [Fact]
+    public void ToRings_JsonElement_Converts()
+        => FeatureSelectionParameters.ToRings(AsJsonElement(Rings))
+            .Should().BeEquivalentTo(Rings, o => o.WithStrictOrdering());
+
+    [Fact]
+    public void ToRings_JsonElementOfTheWrongShape_ThrowsInvalidCastException()
+        => FluentActions.Invoking(() => FeatureSelectionParameters.ToRings(AsJsonElement(new[] { "a" })))
+            .Should().Throw<InvalidCastException>().WithInnerException<JsonException>();
+
+    [Fact]
+    public void ToRings_UnsupportedType_Throws()
+        => FluentActions.Invoking(() => FeatureSelectionParameters.ToRings("rings"))
+            .Should().Throw<InvalidCastException>();
+
+    // ── Optional getters ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void OptionalGetters_AbsentKey_ReturnNull()
+    {
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal);
+
+        parameters.GetOptionalStringList("list").Should().BeNull();
+        parameters.GetOptionalInt32("count").Should().BeNull();
+    }
+
+    [Fact]
+    public void OptionalGetters_ClrNullOrJsonNull_ReturnNull()
+    {
+        var clrNull = new Dictionary<string, object>(StringComparer.Ordinal) { ["list"] = null!, ["count"] = null! };
+        var jsonNull = JsonSerializer.Deserialize<Dictionary<string, object>>("""{"list":null,"count":null}""")!;
+        var jsonNullElement = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["list"] = AsJsonElement<string[]?>(null),
+            ["count"] = AsJsonElement<int?>(null),
+        };
+
+        foreach (var parameters in new[] { clrNull, jsonNull, jsonNullElement })
+        {
+            parameters.GetOptionalStringList("list").Should().BeNull();
+            parameters.GetOptionalInt32("count").Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public void OptionalGetters_PresentValue_ConvertFreshAndReloadedValuesAlike()
+    {
+        var fresh = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["list"] = new List<string> { "x", "y" },
+            ["count"] = 3,
+        };
+        var reloaded = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(fresh))!;
+
+        foreach (var parameters in new[] { fresh, reloaded })
+        {
+            parameters.GetOptionalStringList("list").Should().Equal("x", "y");
+            parameters.GetOptionalInt32("count").Should().Be(3);
+        }
+    }
+
+    [Fact]
+    public void GetRings_MissingKey_ThrowsKeyNotFoundException()
+        => FluentActions.Invoking(() => new Dictionary<string, object>(StringComparer.Ordinal).GetRings("rings"))
+            .Should().Throw<KeyNotFoundException>();
+
+    [Fact]
+    public void GetRings_PresentKey_Converts()
+        => new Dictionary<string, object>(StringComparer.Ordinal) { ["rings"] = AsJsonElement(Rings) }
+            .GetRings("rings").Should().BeEquivalentTo(Rings, o => o.WithStrictOrdering());
+
     // ── Dictionary convenience wrappers ─────────────────────────────────────
 
     [Fact]

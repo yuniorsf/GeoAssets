@@ -497,7 +497,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
 
     // ── Mapping ────────────────────────────────────────────────────────────────
 
-    private static GeoFeature MapToFeature(GeoEntityRow row)
+    internal static GeoFeature MapToFeature(GeoEntityRow row)
     {
         var attrs = JsonSerializer.Deserialize<Dictionary<string, string>>(row.CustomAttributesJson, _json)
                     ?? [];

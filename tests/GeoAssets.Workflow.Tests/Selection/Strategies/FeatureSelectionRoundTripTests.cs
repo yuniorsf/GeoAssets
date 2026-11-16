@@ -152,4 +152,104 @@ public class FeatureSelectionRoundTripTests
             new FeatureSelectionContext { Repository = repo, Parameters = RoundTrip(spec.Parameters) });
         reloaded.Select(f => f.Id).Should().BeEquivalentTo(["f1", "f2"]);
     }
+
+    // ── polygon-fence ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task PolygonFence_SurvivesRoundTrip()
+    {
+        var repo = new TestAssetProvider();
+        repo.Add(new GeoFeature { Id = "inside", Geometry = new GeoPoint(5, 5), Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
+        repo.Add(new GeoFeature { Id = "on-edge", Geometry = new GeoPoint(10, 5), Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
+        repo.Add(new GeoFeature { Id = "other-type", Geometry = new GeoPoint(6, 6), Properties = new GeoFeatureProperties { AssetTypeId = "box" } });
+        repo.Add(new GeoFeature { Id = "outside", Geometry = new GeoPoint(50, 50), Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
+        repo.Add(new GeoFeature { Id = "zz-cut", Geometry = new GeoPoint(7, 7), Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
+
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["rings"] = new double[][][] { [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] },
+            ["assetTypeIds"] = new List<string> { "pole" },
+            ["maxResults"] = 2,
+        };
+
+        using var registry = NewRegistry();
+
+        var (fresh, spec) = await registry.SelectAsync("polygon-fence",
+            new FeatureSelectionContext { Repository = repo, Parameters = parameters });
+        fresh.Select(f => f.Id).Should().Equal("inside", "on-edge");
+
+        var reloadedParameters = RoundTrip(spec.Parameters);
+        reloadedParameters.Values.Should().AllBeOfType<JsonElement>();
+
+        var (reloaded, _) = await registry.SelectAsync("polygon-fence",
+            new FeatureSelectionContext { Repository = repo, Parameters = reloadedParameters });
+        reloaded.Select(f => f.Id).Should().Equal("inside", "on-edge");
+    }
+
+    // ── identifier-list ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task IdentifierList_SurvivesRoundTrip()
+    {
+        static GeoFeature Plated(string id, string plate, string assetTypeId) => new()
+        {
+            Id = id,
+            Properties = new GeoFeatureProperties
+            {
+                AssetTypeId = assetTypeId,
+                CustomAttributes = new Dictionary<string, string>(StringComparer.Ordinal) { ["plate"] = plate },
+            },
+        };
+
+        var repo = new TestAssetProvider();
+        repo.Add(Plated("p-1", "100", "pole"));
+        repo.Add(Plated("p-2", "200", "pole"));
+        repo.Add(Plated("b-1", "100", "box"));
+        repo.Add(Plated("p-3", "300", "pole"));
+
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["attributeKey"] = "plate",
+            ["values"] = new List<string> { " 100 ", "200", "200", "" },
+            ["assetTypeIds"] = new[] { "pole" },
+        };
+
+        using var registry = NewRegistry();
+
+        var (fresh, spec) = await registry.SelectAsync("identifier-list",
+            new FeatureSelectionContext { Repository = repo, Parameters = parameters });
+        fresh.Select(f => f.Id).Should().Equal("p-1", "p-2");
+
+        var reloadedParameters = RoundTrip(spec.Parameters);
+        reloadedParameters.Values.Should().AllBeOfType<JsonElement>();
+
+        var (reloaded, _) = await registry.SelectAsync("identifier-list",
+            new FeatureSelectionContext { Repository = repo, Parameters = reloadedParameters });
+        reloaded.Select(f => f.Id).Should().Equal("p-1", "p-2");
+    }
+
+    [Fact]
+    public async Task IdentifierList_ReservedIdKey_SurvivesRoundTrip()
+    {
+        var repo = new TestAssetProvider();
+        repo.Add(new GeoFeature { Id = "f1" });
+        repo.Add(new GeoFeature { Id = "f2" });
+        repo.Add(new GeoFeature { Id = "f3" });
+
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["attributeKey"] = "id",
+            ["values"] = new[] { "f3", "f1" },
+        };
+
+        using var registry = NewRegistry();
+
+        var (fresh, spec) = await registry.SelectAsync("identifier-list",
+            new FeatureSelectionContext { Repository = repo, Parameters = parameters });
+        fresh.Select(f => f.Id).Should().Equal("f1", "f3");
+
+        var (reloaded, _) = await registry.SelectAsync("identifier-list",
+            new FeatureSelectionContext { Repository = repo, Parameters = RoundTrip(spec.Parameters) });
+        reloaded.Select(f => f.Id).Should().Equal("f1", "f3");
+    }
 }
