@@ -15,4 +15,13 @@ internal sealed class OrderTypeRecord
     public List<OrderTypeTransitionRecord>  Transitions       { get; set; } = [];
 
     public string? InitialStateKey { get; set; }
+
+    /// <summary>OrderType.AttributesSchemaJson, stored verbatim. Null means unrestricted.</summary>
+    public string? AttributesSchemaJson { get; set; }
+
+    /// <summary>
+    /// OrderType.TargetPolicy serialized by <see cref="OrderTargetPolicyMapper"/>. Null means
+    /// the order type has no target policy.
+    /// </summary>
+    public string? TargetPolicyJson { get; set; }
 }

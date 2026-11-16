@@ -294,6 +294,7 @@ public static class ServiceOrdersRestApiExtensions
         {
             var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
             if (orderType is null) return Results.BadRequest("Invalid order type.");
+            if (TargetPolicyProblem(orderType) is { } problem) return problem;
             await repo.AddAsync(orderType).ConfigureAwait(false);
             await repo.SaveChangesAsync().ConfigureAwait(false);
             return Results.Created(new Uri($"{prefix}/order-types/{orderType.Id}", UriKind.Relative), null);
@@ -304,6 +305,7 @@ public static class ServiceOrdersRestApiExtensions
             var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
             if (orderType is null) return Results.BadRequest("Invalid order type.");
             if (!string.Equals(orderType.Id, id, StringComparison.Ordinal)) return Results.BadRequest("Route id does not match body id.");
+            if (TargetPolicyProblem(orderType) is { } problem) return problem;
             if (await repo.GetByIdAsync(id).ConfigureAwait(false) is null) return Results.NotFound();
 
             await repo.UpdateAsync(orderType).ConfigureAwait(false);
@@ -336,5 +338,24 @@ public static class ServiceOrdersRestApiExtensions
                 ? Results.Ok(new { valid = true })
                 : Results.BadRequest(new { valid = false, errors });
         });
+    }
+
+    /// <summary>
+    /// Rejects an order type whose <see cref="OrderType.TargetPolicy"/> breaks its own invariants
+    /// before it is stored: <see cref="OrderTypeRegistry"/> validates the same policy when it
+    /// loads order types at startup, so a stored invalid policy would stop the host from starting.
+    /// Returns null when there is no policy or the policy is valid.
+    /// </summary>
+    private static IResult? TargetPolicyProblem(OrderType orderType)
+    {
+        try
+        {
+            orderType.TargetPolicy?.Validate(orderType.Id);
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { orderTypeId = orderType.Id, errors = new[] { ex.Message } });
+        }
     }
 }

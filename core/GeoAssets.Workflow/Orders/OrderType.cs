@@ -1,3 +1,5 @@
+using GeoAssets.Workflow.Targets;
+
 namespace GeoAssets.Workflow.Orders;
 
 /// <summary>
@@ -66,4 +68,13 @@ public sealed class OrderType
     /// define a custom graph.
     /// </summary>
     public string? InitialStateKey { get; init; }
+
+    /// <summary>
+    /// Opts this order type into per-target work (which asset types its orders may target,
+    /// the selection limit, per-target activities, overlap handling, fan-out). Null means
+    /// "no target policy": orders of this type keep the flat
+    /// <see cref="ServiceOrder.FeatureIds"/> behaviour unchanged. Validated by
+    /// <see cref="OrderTypeRegistry"/> whenever the type enters the registry.
+    /// </summary>
+    public OrderTargetPolicy? TargetPolicy { get; init; }
 }

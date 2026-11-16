@@ -13,6 +13,8 @@ internal static class OrderTypeMapper
         DisplayName     = t.DisplayName,
         Description     = t.Description,
         InitialStateKey = t.InitialStateKey,
+        AttributesSchemaJson = t.AttributesSchemaJson,
+        TargetPolicyJson = OrderTargetPolicyMapper.ToJson(t.TargetPolicy),
         CreationPolicies = t.CreationPolicies
             .Select(p => new OrderCreationPolicyRecord
             {
@@ -55,6 +57,8 @@ internal static class OrderTypeMapper
         DisplayName     = r.DisplayName,
         Description     = r.Description,
         InitialStateKey = r.InitialStateKey,
+        AttributesSchemaJson = r.AttributesSchemaJson,
+        TargetPolicy = OrderTargetPolicyMapper.FromJson(r.TargetPolicyJson),
         CreationPolicies = r.CreationPolicies
             .Select(p => new OrderCreationPolicy((PolicyKind)p.Kind, p.Value))
             .ToList(),
