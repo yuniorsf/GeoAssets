@@ -89,4 +89,29 @@ public static class ServiceOrderTransitions
 
         return string.Equals(status, ServiceOrderStatus.Completed, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Returns true if an order of <paramref name="orderType"/> in <paramref name="status"/>
+    /// can make no further progress: <paramref name="status"/> is a success state (see
+    /// <see cref="IsSuccessState"/>), or a state of the graph with no transition leading to a
+    /// different state. For order types with a custom graph (non-empty
+    /// <see cref="OrderType.States"/>) that graph alone decides; otherwise the global default
+    /// graph does, where <see cref="ServiceOrderStatus.Completed"/> and
+    /// <see cref="ServiceOrderStatus.Cancelled"/> are terminal. A status that is not a state
+    /// of the graph consulted is never terminal — an unrecognized status says nothing about
+    /// the order being finished.
+    /// </summary>
+    public static bool IsTerminalState(OrderType? orderType, string status)
+    {
+        if (orderType is { States.Count: > 0 })
+        {
+            var state = orderType.States.FirstOrDefault(s => string.Equals(s.Key, status, StringComparison.Ordinal));
+            if (state is null) return false;
+
+            return state.IsSuccess
+                || !orderType.Transitions.Any(t => string.Equals(t.FromStateKey, status, StringComparison.Ordinal) && !string.Equals(t.ToStateKey, status, StringComparison.Ordinal));
+        }
+
+        return status is not null && _allowed.TryGetValue(status, out var next) && next.Length == 0;
+    }
 }

@@ -213,4 +213,109 @@ public class ServiceOrderTransitionsTests
         ServiceOrderTransitions.IsSuccessState(orderType, "Resolved").Should().BeTrue();
         ServiceOrderTransitions.IsSuccessState(orderType, ServiceOrderStatus.Cancelled).Should().BeFalse();
     }
+
+    // ── IsTerminalState ────────────────────────────────────────────────────────
+
+    private static OrderType CustomGraphType() => new()
+    {
+        Id = "custom",
+        DisplayName = "Custom",
+        States =
+        [
+            new WorkflowState("Open", "Open"),
+            new WorkflowState("Working", "Working"),
+            new WorkflowState("Approved", "Approved", IsSuccess: true),
+            new WorkflowState("Rejected", "Rejected"),
+            new WorkflowState("Parked", "Parked"),
+        ],
+        Transitions =
+        [
+            new WorkflowTransition("Open", "Working"),
+            new WorkflowTransition("Working", "Approved", OrderActionType.Approve),
+            new WorkflowTransition("Working", "Rejected"),
+            new WorkflowTransition("Approved", "Working"),
+            new WorkflowTransition("Parked", "Parked"),
+        ],
+    };
+
+    [Theory]
+    [InlineData(ServiceOrderStatus.Completed)]
+    [InlineData(ServiceOrderStatus.Cancelled)]
+    public void IsTerminalState_DefaultGraph_CompletedAndCancelled_AreTerminal(string status)
+    {
+        ServiceOrderTransitions.IsTerminalState(null, status).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(ServiceOrderStatus.Draft)]
+    [InlineData(ServiceOrderStatus.Pending)]
+    [InlineData(ServiceOrderStatus.InProgress)]
+    [InlineData(ServiceOrderStatus.OnHold)]
+    public void IsTerminalState_DefaultGraph_StateWithOutgoingTransitions_IsNotTerminal(string status)
+    {
+        ServiceOrderTransitions.IsTerminalState(null, status).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Approved")]
+    [InlineData("completed")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void IsTerminalState_DefaultGraph_UnknownStatus_IsNotTerminal(string? status)
+    {
+        ServiceOrderTransitions.IsTerminalState(null, status!).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsTerminalState_OrderTypeWithoutStates_FallsBackToDefaultGraph()
+    {
+        var orderType = new OrderType { Id = "t", DisplayName = "T" };
+
+        ServiceOrderTransitions.IsTerminalState(orderType, ServiceOrderStatus.Cancelled).Should().BeTrue();
+        ServiceOrderTransitions.IsTerminalState(orderType, ServiceOrderStatus.Completed).Should().BeTrue();
+        ServiceOrderTransitions.IsTerminalState(orderType, ServiceOrderStatus.InProgress).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsTerminalState_CustomGraph_SuccessState_IsTerminalEvenWithAnOutgoingTransition()
+    {
+        ServiceOrderTransitions.IsTerminalState(CustomGraphType(), "Approved").Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsTerminalState_CustomGraph_DeadEndState_IsTerminal()
+    {
+        ServiceOrderTransitions.IsTerminalState(CustomGraphType(), "Rejected").Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsTerminalState_CustomGraph_StateWhoseOnlyTransitionIsASelfLoop_IsTerminal()
+    {
+        ServiceOrderTransitions.IsTerminalState(CustomGraphType(), "Parked").Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Open")]
+    [InlineData("Working")]
+    public void IsTerminalState_CustomGraph_StateWithOutgoingTransitions_IsNotTerminal(string status)
+    {
+        ServiceOrderTransitions.IsTerminalState(CustomGraphType(), status).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Nowhere")]
+    [InlineData("approved")]
+    [InlineData(null)]
+    public void IsTerminalState_CustomGraph_UnknownStatus_IsNotTerminal(string? status)
+    {
+        ServiceOrderTransitions.IsTerminalState(CustomGraphType(), status!).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(ServiceOrderStatus.Completed)]
+    [InlineData(ServiceOrderStatus.Cancelled)]
+    public void IsTerminalState_CustomGraph_DefaultGraphTerminalStatusNotInOwnGraph_IsNotTerminal(string status)
+    {
+        ServiceOrderTransitions.IsTerminalState(CustomGraphType(), status).Should().BeFalse();
+    }
 }
