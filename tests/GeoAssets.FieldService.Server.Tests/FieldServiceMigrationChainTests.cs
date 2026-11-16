@@ -26,7 +26,7 @@ namespace GeoAssets.FieldService.Server.Tests;
 /// as <c>IpBillingMigrationChainTests</c>: one lazily-started Postgres shared by the facts, each migrating its own freshly-named database;
 /// the container is torn down with the test process.
 /// </summary>
-public class FieldServiceMigrationChainTests
+public partial class FieldServiceMigrationChainTests
 {
     private const string MigrationsAssemblyName = "GeoAssets.FieldService.Server";
     private const string MigrationName = "AddOrderTypeTargetPolicyAndAttributesSchema";

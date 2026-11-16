@@ -191,6 +191,10 @@ builder.Services.AddScoped<IServiceOrderRepository>(sp =>
 // which is what lets an order's closing transition release its targets in one SaveChanges.
 builder.Services.AddServiceOrderTargetPersistence();
 
+// Pole occupancy (XD01-314): also on that scoped ServiceOrderDbContext, so a later commit of
+// occupancy can share one transaction with the order transition.
+builder.Services.AddPoleOccupancyPersistence();
+
 // ── Transactional outbox + relay dispatcher (XD01-228/XD01-229) — AddWorkflowOutbox wires
 // IOutboxWriter, IOutboxDispatcherStore, IIdempotentInbox, and the background
 // OutboxRelayProcessor hosted service (claim → publish → mark dispatched/failed with
