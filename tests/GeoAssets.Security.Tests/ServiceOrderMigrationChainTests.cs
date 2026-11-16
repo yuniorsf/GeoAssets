@@ -23,7 +23,7 @@ namespace GeoAssets.Security.Tests;
 /// inside <see cref="SecurityTestContainerFixture"/>'s container, so rolling a migration back here
 /// can never disturb the schema the row-level-security facts share.
 /// </summary>
-public class ServiceOrderMigrationChainTests
+public partial class ServiceOrderMigrationChainTests
 {
     private const string MigrationName = "AddOrderTypeTargetPolicyAndAttributesSchema";
 

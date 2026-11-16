@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
@@ -66,6 +67,31 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
         services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
         services.AddServiceOrderTargetPersistence();
+        services.AddPoleOccupancyPersistence();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the EF Core store of pole occupancy (XD01-314) for both of its ports:
+    /// <see cref="IPoleOccupancyReader"/> and <see cref="IPoleOccupancyWriter"/> resolve to the
+    /// same scoped <see cref="EFPoleOccupancyRepository"/>, which shares the scope's
+    /// <see cref="ServiceOrderDbContext"/> — and therefore its tenant and any transaction — with
+    /// the order repository.
+    ///
+    /// Already called by <see cref="AddWorkflowPersistence"/>; a host that registers
+    /// <see cref="ServiceOrderDbContext"/> itself calls this directly. <see cref="TimeProvider"/>
+    /// is used when registered, the system clock otherwise.
+    /// </summary>
+    public static IServiceCollection AddPoleOccupancyPersistence(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped(sp => new EFPoleOccupancyRepository(
+            sp.GetRequiredService<ServiceOrderDbContext>(),
+            sp.GetService<TimeProvider>()));
+        services.TryAddScoped<IPoleOccupancyReader>(sp => sp.GetRequiredService<EFPoleOccupancyRepository>());
+        services.TryAddScoped<IPoleOccupancyWriter>(sp => sp.GetRequiredService<EFPoleOccupancyRepository>());
 
         return services;
     }

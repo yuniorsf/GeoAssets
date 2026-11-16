@@ -651,6 +651,96 @@ namespace GeoAssets.FieldService.Server.Migrations
                     b.ToTable("field_icerp_paving_measurements", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PoleOccupancyEntryRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnatelLicenseNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("AttachedCableFeatureId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<decimal>("CableDiameterMm")
+                        .HasPrecision(8, 3)
+                        .HasColumnType("numeric(8,3)");
+
+                    b.Property<decimal>("CableLoadDaN")
+                        .HasPrecision(12, 3)
+                        .HasColumnType("numeric(12,3)");
+
+                    b.Property<Guid?>("OccupantOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OperatorCnpj")
+                        .HasMaxLength(18)
+                        .HasColumnType("character varying(18)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PoleOccupancyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("SlotIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccupantOrganizationId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("PoleOccupancyId", "OrganizationId");
+
+                    b.HasIndex("PoleOccupancyId", "SlotIndex")
+                        .IsUnique()
+                        .HasFilter("\"SlotIndex\" IS NOT NULL");
+
+                    b.ToTable("field_pole_occupancy_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_field_pole_occupancy_entries_SlotIndex", "\"SlotIndex\" IS NULL OR \"SlotIndex\" BETWEEN 1 AND 6");
+                        });
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PoleOccupancyRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PoleFeatureId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PoleFeatureId");
+
+                    b.HasIndex("OrganizationId", "PoleFeatureId")
+                        .IsUnique();
+
+                    b.ToTable("field_pole_occupancies", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>
                 {
                     b.Property<string>("Id")
@@ -971,6 +1061,17 @@ namespace GeoAssets.FieldService.Server.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("FK_field_icerp_paving_measurements_ServiceOrders_Parent");
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PoleOccupancyEntryRecord", b =>
+                {
+                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.PoleOccupancyRecord", null)
+                        .WithMany()
+                        .HasForeignKey("PoleOccupancyId", "OrganizationId")
+                        .HasPrincipalKey("Id", "OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_field_pole_occupancy_entries_field_pole_occupancies");
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>

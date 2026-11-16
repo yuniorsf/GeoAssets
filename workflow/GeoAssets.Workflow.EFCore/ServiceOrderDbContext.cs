@@ -56,6 +56,11 @@ public class ServiceOrderDbContext(
     internal DbSet<OrganizationGrantMirrorRecord> OrganizationGrantMirror => Set<OrganizationGrantMirrorRecord>();
     internal DbSet<OrganizationGrantSyncCursorRecord> OrganizationGrantSyncCursor => Set<OrganizationGrantSyncCursorRecord>();
     internal DbSet<ServiceOrderTargetRecord> ServiceOrderTargets => Set<ServiceOrderTargetRecord>();
+    internal DbSet<PoleOccupancyRecord> PoleOccupancies => Set<PoleOccupancyRecord>();
+    internal DbSet<PoleOccupancyEntryRecord> PoleOccupancyEntries => Set<PoleOccupancyEntryRecord>();
+
+    /// <summary>The organization this context is scoped to — the one its tenant query filters compare against.</summary>
+    internal Guid CurrentOrganizationId => _tenantContext.CurrentOrganizationId;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -110,6 +115,25 @@ public class ServiceOrderDbContext(
             .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
 
         ConfigureServiceOrderTargets(modelBuilder);
+        ConfigurePoleOccupancy(modelBuilder);
+    }
+
+    private void ConfigurePoleOccupancy(ModelBuilder modelBuilder)
+    {
+        // PoleOccupancyRecord and PoleOccupancyEntryRecord (XD01-314) — uniform-filter treatment,
+        // like ManholeAuditRecord: occupancy belongs to the pole owner and has no cross-organization
+        // delegation (an occupant never reads it, not even the entries that name it), so
+        // EFPoleOccupancyRepository never calls IgnoreQueryFilters(). The database-layer half is
+        // the AddPoleOccupanciesRowLevelSecurity migration.
+        modelBuilder.Entity<PoleOccupancyRecord>()
+            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
+        modelBuilder.Entity<PoleOccupancyEntryRecord>()
+            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        // Provider-specific, keyed on the provider's name for the same reason as
+        // ConfigureServiceOrderTargets: see PoleOccupancyRecordConfiguration.UseOrdinalTextOrder.
+        if (string.Equals(Database.ProviderName, PostgreSqlProviderName, StringComparison.Ordinal))
+            PoleOccupancyRecordConfiguration.UseOrdinalTextOrder(modelBuilder.Entity<PoleOccupancyRecord>());
     }
 
     private void ConfigureServiceOrderTargets(ModelBuilder modelBuilder)
