@@ -21,8 +21,9 @@ public enum MapRenderMode
     /// positioned over the map; click / context-menu events are captured by thin,
     /// invisible Leaflet SVG layers.  Highest throughput for very large datasets.
     /// <para>
-    /// Limitations: polygon fill uses ear-clipping triangulation of the exterior ring only
-    /// (holes are outlined but not cut out).
+    /// Polygon fill uses ear-clipping triangulation; interior rings (holes) are cut out of the
+    /// fill, as in the other modes.  A hole that lies outside its exterior ring is ignored, and
+    /// one that crosses it (invalid geometry) is not cut exactly.
     /// </para>
     /// </summary>
     WebGL
