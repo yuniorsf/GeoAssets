@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -20,11 +21,17 @@ namespace GeoAssets.Workflow.EFCore.Tests;
 internal sealed class SqliteFixture : IDisposable
 {
     private readonly SqliteConnection _connection;
+    private readonly ITenantContext? _tenantContext;
 
     public ServiceOrderDbContext Context { get; }
 
-    public SqliteFixture()
+    /// <param name="tenantContext">
+    /// The organization every context of this fixture is scoped to; omitted, they resolve to
+    /// <see cref="Guid.Empty"/> like a host with no tenant registered.
+    /// </param>
+    public SqliteFixture(ITenantContext? tenantContext = null)
     {
+        _tenantContext = tenantContext;
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
 
@@ -50,12 +57,15 @@ internal sealed class SqliteFixture : IDisposable
     /// its own change tracker is independent of <see cref="Context"/>'s, so entities
     /// loaded through it hold their own "original values" snapshot for concurrency checks.
     /// </summary>
-    public ServiceOrderDbContext NewContext()
+    public ServiceOrderDbContext NewContext() => NewContext(_tenantContext);
+
+    /// <summary>Same as <see cref="NewContext()"/>, but scoped to <paramref name="tenantContext"/> instead of the fixture's own tenant.</summary>
+    public ServiceOrderDbContext NewContext(ITenantContext? tenantContext)
     {
         var options = new DbContextOptionsBuilder<ServiceOrderDbContext>()
             .UseSqlite(_connection)
             .Options;
-        return new SqliteTestDbContext(options);
+        return new SqliteTestDbContext(options, tenantContext);
     }
 
     public void Dispose()

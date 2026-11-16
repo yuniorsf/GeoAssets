@@ -6,6 +6,7 @@ using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
+using GeoAssets.Workflow.Targets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -46,7 +47,8 @@ public static class WorkflowEFCoreServiceExtensions
             new EFServiceOrderRepository(
                 sp.GetRequiredService<ServiceOrderDbContext>(),
                 sp.GetService<IAssetProvider>(),
-                sp.GetService<OrderTypeRegistry>()));
+                sp.GetService<OrderTypeRegistry>(),
+                sp.GetService<TimeProvider>()));
         services.AddScoped<IServiceOrderRepository>(sp =>
             new ObservableServiceOrderRepository(
                 new ValidatingServiceOrderRepository(
@@ -63,6 +65,32 @@ public static class WorkflowEFCoreServiceExtensions
 
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
         services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
+        services.AddServiceOrderTargetPersistence();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the EF Core store of service order targets (XD01-306) for both of its ports:
+    /// <see cref="IServiceOrderTargetReader"/> and <see cref="IServiceOrderTargetWriter"/> resolve
+    /// to the same scoped <see cref="EFServiceOrderTargetRepository"/>, which shares the scope's
+    /// <see cref="ServiceOrderDbContext"/> with the order repository.
+    ///
+    /// Already called by <see cref="AddWorkflowPersistence"/>; a host that registers
+    /// <see cref="ServiceOrderDbContext"/> itself calls this directly. <see cref="OrderTypeRegistry"/>
+    /// and <see cref="TimeProvider"/> are used when registered (see the repository's constructor
+    /// for what each absence means).
+    /// </summary>
+    public static IServiceCollection AddServiceOrderTargetPersistence(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped(sp => new EFServiceOrderTargetRepository(
+            sp.GetRequiredService<ServiceOrderDbContext>(),
+            sp.GetService<OrderTypeRegistry>(),
+            sp.GetService<TimeProvider>()));
+        services.TryAddScoped<IServiceOrderTargetReader>(sp => sp.GetRequiredService<EFServiceOrderTargetRepository>());
+        services.TryAddScoped<IServiceOrderTargetWriter>(sp => sp.GetRequiredService<EFServiceOrderTargetRepository>());
 
         return services;
     }

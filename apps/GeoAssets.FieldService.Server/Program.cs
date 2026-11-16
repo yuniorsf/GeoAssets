@@ -181,8 +181,15 @@ builder.Services.AddScoped<IFieldWorkTransitionGuard>(sp => new CompositeFieldWo
 // order-type-aware creation rules (see FieldServiceSyncRestApiExtensions' own doc comment). ─────
 builder.Services.AddScoped<IServiceOrderRepository>(sp =>
     new ValidatingServiceOrderRepository(
-        new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>(), orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>()),
+        new EFServiceOrderRepository(
+            sp.GetRequiredService<ServiceOrderDbContext>(),
+            orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>(),
+            timeProvider: sp.GetRequiredService<TimeProvider>()),
         sp.GetRequiredService<OrderTypeRegistry>()));
+
+// Service order targets (XD01-306): same scoped ServiceOrderDbContext as the repository above,
+// which is what lets an order's closing transition release its targets in one SaveChanges.
+builder.Services.AddServiceOrderTargetPersistence();
 
 // ── Transactional outbox + relay dispatcher (XD01-228/XD01-229) — AddWorkflowOutbox wires
 // IOutboxWriter, IOutboxDispatcherStore, IIdempotentInbox, and the background

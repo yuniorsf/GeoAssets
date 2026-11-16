@@ -745,6 +745,89 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("ServiceOrders", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderTargetRecord", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ActivityIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AddedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Alias")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
+
+                    b.Property<string>("AssetTypeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ConflictLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FeatureId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeatureId")
+                        .HasFilter("\"ReleasedAt\" IS NULL");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ServiceOrderId", "FeatureId")
+                        .IsUnique();
+
+                    b.HasIndex("ServiceOrderId", "Status");
+
+                    b.ToTable("ServiceOrderTargets", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.UsCatalogItemRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -896,6 +979,15 @@ namespace GeoAssets.Server.Migrations
                         .WithMany()
                         .HasForeignKey("ParentOrderId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderTargetRecord", b =>
+                {
+                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderTypeRecord", b =>

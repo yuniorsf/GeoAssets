@@ -31,8 +31,15 @@ public interface IServiceOrderTargetWriter
     /// call is inserted.
     /// </description></item>
     /// <item><description>
+    /// A target whose <see cref="ServiceOrderTarget.OrganizationId"/> is not the order's
+    /// organization throws <see cref="ArgumentException"/> likewise, and an order that does not
+    /// exist throws <see cref="KeyNotFoundException"/>; nothing is inserted in either case.
+    /// </description></item>
+    /// <item><description>
     /// Inserted targets are stored as given, including <see cref="ServiceOrderTarget.Id"/> and
-    /// <see cref="ServiceOrderTarget.Version"/> (0 for a new target).
+    /// <see cref="ServiceOrderTarget.Version"/> (0 for a new target). A target added to an order
+    /// that is already in a terminal state is released from the start: it never appears in
+    /// <see cref="IServiceOrderTargetReader.FindOpenUsagesAsync"/>.
     /// </description></item>
     /// </list>
     /// </summary>

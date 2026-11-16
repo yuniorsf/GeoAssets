@@ -18,15 +18,22 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     private readonly ServiceOrderDbContext _db;
     private readonly IAssetProvider? _assets;
     private readonly OrderTypeRegistry? _orderTypeRegistry;
+    private readonly TimeProvider _timeProvider;
 
+    /// <param name="timeProvider">
+    /// Clock for the release stamp an order's targets get when the order reaches a terminal
+    /// state (see <see cref="ServiceOrderTargetRelease"/>); the system clock when omitted.
+    /// </param>
     public EFServiceOrderRepository(
         ServiceOrderDbContext db,
         IAssetProvider? assets = null,
-        OrderTypeRegistry? orderTypeRegistry = null)
+        OrderTypeRegistry? orderTypeRegistry = null,
+        TimeProvider? timeProvider = null)
     {
         _db = db;
         _assets = assets;
         _orderTypeRegistry = orderTypeRegistry;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
@@ -152,13 +159,23 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         if (so.RowVersion.Length > 0)
             _db.Entry(existing).Property(e => e.RowVersion).OriginalValue = so.RowVersion;
 
+        // Same SaveChanges as the status change itself (XD01-306).
+        var releasedTargets = await ServiceOrderTargetRelease
+            .StampIfClosingAsync(_db, order.Id, orderType, previous, so.Status, _timeProvider, ct).ConfigureAwait(false);
+
         try
         {
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
         {
+            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
             throw new ServiceOrderConcurrencyException(order.Id);
+        }
+        catch
+        {
+            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
+            throw;
         }
 
         OrderUpdated?.Invoke(this, order);
@@ -226,7 +243,20 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             record.UpdatedAt = entry.PerformedAt;
         }
 
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        // Same SaveChanges as the status change itself (XD01-306); an entry without a
+        // ResultingStatus keeps the status and so releases nothing.
+        var releasedTargets = await ServiceOrderTargetRelease
+            .StampIfClosingAsync(_db, orderId, orderType, previous, entry.ResultingStatus ?? previous, _timeProvider, ct).ConfigureAwait(false);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
+            throw;
+        }
 
         var updated = await GetByIdAsync(orderId, ct).ConfigureAwait(false);
         OrderUpdated?.Invoke(this, updated!);
