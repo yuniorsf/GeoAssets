@@ -2365,6 +2365,10 @@ public class IdentityRestApiExtensionsTests
         public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<OrganizationGrantSyncEntry>> GetSyncBatchAsync(
+            long afterSequence, int take, CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 
     [Fact]

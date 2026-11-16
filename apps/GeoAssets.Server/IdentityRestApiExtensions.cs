@@ -46,6 +46,7 @@ public static class IdentityRestApiExtensions
         MapInvitationsApi(routes, prefix);
         MapUserClaimsApi(routes, prefix);
         MapMunicipioGrantsApi(routes, prefix);
+        MapOrganizationGrantSyncApi(routes, prefix);
 
         return routes;
     }
@@ -683,6 +684,32 @@ public static class IdentityRestApiExtensions
                 req.IbgeCode, req.DistribuidoraOrganizationId, req.PrefeituraOrganizationId, ct).ConfigureAwait(false);
             return Results.NoContent();
         }).RequireAuthorization("ip-billing:reference-manage");
+    }
+
+    /// <summary>
+    /// Pull-based <see cref="OrganizationGrant"/> change feed (XD01-290) for vertical
+    /// microservices whose own database is isolated from this host's shared database and can no
+    /// longer reference <c>OrganizationGrants</c> directly from a Row-Level-Security policy — see
+    /// <c>OrganizationGrantSyncWorker</c>/<c>HttpOrganizationGrantSyncClient</c> in
+    /// <c>GeoAssets.Workflow.EFCore</c>/<c>GeoAssets.FieldService.Server</c> for the consumer.
+    ///
+    /// Authorized the same way <c>mutation-batches</c> is — a real permission code standing in
+    /// for genuine service-to-service authentication, which this host doesn't have yet (tracked
+    /// separately, XD01-299); not this ticket's gap to close.
+    /// </summary>
+    private static void MapOrganizationGrantSyncApi(IEndpointRouteBuilder routes, string prefix)
+    {
+        routes.MapGet($"{prefix}/organization-grants/sync", async (
+            long after,
+            int take,
+            IOrganizationGrantRepository grantRepo,
+            CancellationToken ct) =>
+        {
+            var batch = await grantRepo
+                .GetSyncBatchAsync(after, Math.Clamp(take <= 0 ? 500 : take, 1, 1000), ct)
+                .ConfigureAwait(false);
+            return Results.Json(batch, _opts);
+        }).RequireAuthorization("organizations:read");
     }
 
     private static UserSummaryDto ToSummaryDto(AppUser u) =>

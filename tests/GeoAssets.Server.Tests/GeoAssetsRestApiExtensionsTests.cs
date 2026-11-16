@@ -53,6 +53,7 @@ public class GeoAssetsRestApiExtensionsTests
         public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<OrganizationGrantSyncEntry>> GetSyncBatchAsync(long afterSequence, int take, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private static GeoFeature PointFeature(double lon, double lat) => new()

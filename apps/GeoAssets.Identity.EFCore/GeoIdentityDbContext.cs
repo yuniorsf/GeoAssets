@@ -1,3 +1,4 @@
+using GeoAssets.Identity.Authorization.EFCore.Entities;
 using GeoAssets.Identity.Authorization.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +39,7 @@ public class GeoIdentityDbContext(DbContextOptions<GeoIdentityDbContext> options
     public DbSet<PolicyRequirement> PolicyRequirements => Set<PolicyRequirement>();
     public DbSet<OrganizationGrant> OrganizationGrants => Set<OrganizationGrant>();
     public DbSet<PendingInvitation> PendingInvitations => Set<PendingInvitation>();
+    internal DbSet<OrganizationGrantSyncOutboxRecord> OrganizationGrantSyncOutbox => Set<OrganizationGrantSyncOutboxRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
