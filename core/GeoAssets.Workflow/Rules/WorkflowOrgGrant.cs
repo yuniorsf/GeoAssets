@@ -18,4 +18,13 @@ public sealed record WorkflowOrgGrant(
     IReadOnlyList<string> AllowedActions,
     string?               RequiredRole,
     string?               ScopeId = null
-);
+)
+{
+    /// <summary>
+    /// When the grant stops applying (UTC); null means it never expires. A host resolves only
+    /// grants that are active and unexpired when it builds the principal — this lets the rule
+    /// engine also refuse one that has expired since, which matters for a principal that lives
+    /// as long as a client session (XD01-332).
+    /// </summary>
+    public DateTime? ExpiresAt { get; init; }
+}

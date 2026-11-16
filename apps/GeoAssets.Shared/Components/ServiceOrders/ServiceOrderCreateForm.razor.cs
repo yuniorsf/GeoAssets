@@ -31,6 +31,9 @@ public partial class ServiceOrderCreateForm
             Priority    = _model.Priority,
             CreatedBy   = Principal.UserId,
             CreatedAt   = Clock.GetUtcNow().UtcDateTime,
+            // XD01-332: an order belongs to its creator's organization. The server stamps the
+            // same value on a body that omits it and refuses any other.
+            OrganizationId = Guid.TryParse(Principal.OrganizationId, out var organizationId) ? organizationId : Guid.Empty,
         };
 
         await Repository.AddAsync(order);

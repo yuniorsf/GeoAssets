@@ -14,10 +14,10 @@ namespace GeoAssets.Server;
 /// <c>GeoIdentitySeeder</c>'s duplication from the WASM <c>IdentitySeeder</c> (XD01-14).
 ///
 /// Also resolves <see cref="WorkflowPrincipal.OrgGrants"/> (XD01-22) from
-/// <see cref="IOrganizationGrantRepository"/> — the Blazor client's own
-/// <c>WorkflowPrincipalFactory</c> does not (no REST endpoint exposes a caller's grants yet),
-/// so cross-org <c>ServiceOrder</c> access via <c>CrossOrgGrantRule</c> is server-enforced only
-/// for now, same scope boundary as XD01-16 itself.
+/// <see cref="IOrganizationGrantRepository"/> — the active, unexpired grants held by the
+/// caller's own organization. The Blazor client's <c>WorkflowPrincipalFactory</c> resolves the
+/// same grants through <c>GET /api/identity/organization-grants/me</c> (XD01-332), so the
+/// organization gate and <c>CrossOrgGrantRule</c> decide the same on both sides.
 /// </summary>
 public sealed class ServerWorkflowPrincipalFactory(
     IGeoAuthorizationService authorizationService,
@@ -48,7 +48,10 @@ public sealed class ServerWorkflowPrincipalFactory(
                 ResourceType: g.ResourceType,
                 AllowedActions: g.AllowedActions,
                 RequiredRole: g.RequiredRole,
-                ScopeId: g.ScopeId))],
+                ScopeId: g.ScopeId)
+            {
+                ExpiresAt = g.ExpiresAt,
+            })],
         };
     }
 }

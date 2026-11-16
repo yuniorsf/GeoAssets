@@ -197,6 +197,15 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
 
                     if (body.TryGetProperty("from", out var fromEl) && body.TryGetProperty("to", out var toEl))
                         throw new InvalidServiceOrderTransitionException(fromEl.GetString() ?? "", toEl.GetString() ?? "");
+
+                    // XD01-332: an update that stated another organization than the order's own.
+                    if (body.TryGetProperty("code", out var codeEl)
+                        && string.Equals(codeEl.GetString(), ServiceOrderOrganization.ChangeRefusedCode, StringComparison.Ordinal))
+                    {
+                        throw new ServiceOrderOrganizationException(
+                            orderId,
+                            body.TryGetProperty("reason", out var reasonEl) ? reasonEl.GetString() ?? "" : "");
+                    }
                 }
                 else if (body.ValueKind == JsonValueKind.String)
                 {

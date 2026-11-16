@@ -80,8 +80,26 @@ public sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthoriza
             },
             Roles       = dto.Roles,
             Claims      = dto.Claims.Select(c => new UserClaim { Type = c.Type, Value = c.Value }).ToList(),
-            Permissions = dto.Permissions
+            Permissions = dto.Permissions,
+            OrganizationGrants = await FetchOwnOrganizationGrantsAsync(dto.OrganizationId, ct)
         };
+    }
+
+    /// <summary>
+    /// The caller's own organization's active grants (XD01-332), so the service-order
+    /// organization gate evaluates client-side as it does on the server. A caller with no
+    /// organization holds none. A server that does not answer the route yields none as well:
+    /// the client then offers a grantee less than the server would allow, never more.
+    /// </summary>
+    private async Task<IReadOnlyList<OrganizationGrant>> FetchOwnOrganizationGrantsAsync(Guid? organizationId, CancellationToken ct)
+    {
+        if (organizationId is not { } granteeOrganizationId) return [];
+
+        using var response = await http.GetAsync(new Uri("organization-grants/me", UriKind.Relative), ct);
+        if (!response.IsSuccessStatusCode) return [];
+
+        var dtos = await response.Content.ReadFromJsonAsync<List<OwnOrganizationGrantDto>>(ct) ?? [];
+        return [.. dtos.Select(g => g.ToModel(granteeOrganizationId))];
     }
 
     private Task<IReadOnlyList<AppPolicy>> GetPoliciesAsync(CancellationToken ct)

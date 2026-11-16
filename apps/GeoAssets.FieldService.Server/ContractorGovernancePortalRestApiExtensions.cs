@@ -34,12 +34,14 @@ internal static class ContractorGovernancePortalRestApiExtensions
             string serviceOrderId,
             PushMeasurementSheetRequest request,
             IServiceOrderRepository orderRepo,
+            ITenantContext tenantContext,
             IContractorUsPostingRepository postingRepo,
             IContractorUsLedgerRepository ledgerRepo,
             IContractorGovernancePortalClient portalClient,
             CancellationToken ct) =>
         {
-            var order = await orderRepo.GetByIdAsync(serviceOrderId, ct).ConfigureAwait(false);
+            // XD01-332: only an order of the caller's own tenant; another tenant's reads as not found.
+            var order = await FieldServiceOrderAccess.FindOwnAsync(orderRepo, tenantContext, serviceOrderId, ct).ConfigureAwait(false);
             if (order is null) return Results.NotFound();
 
             if (!string.Equals(order.Status, FieldWorkStatus.Inspected, StringComparison.Ordinal))

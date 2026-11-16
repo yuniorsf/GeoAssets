@@ -867,10 +867,13 @@ public class ServiceOrderRulesTests
     {
         // The rule only ever adds an allow path; it must never interfere with the
         // pre-existing Creator/Assignee/Role rules that don't care about organization.
-        var order = Order(createdBy: "u1", organizationId: Guid.NewGuid());
+        // XD01-332: "same-org" is now part of the setup, not only of the name — the creator
+        // belongs to the order's organization, as the organization gate requires.
+        var organizationId = Guid.NewGuid();
+        var order = Order(createdBy: "u1", organizationId: organizationId);
         var rules = new ServiceOrderRules();
 
-        rules.Evaluate(Principal(), OrderActionType.View, order).Allowed.Should().BeTrue();
+        rules.Evaluate(Principal(orgId: organizationId.ToString()), OrderActionType.View, order).Allowed.Should().BeTrue();
     }
 
     // ── ResolveRelationship ────────────────────────────────────────────────────

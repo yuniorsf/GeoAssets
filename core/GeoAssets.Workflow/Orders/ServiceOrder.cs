@@ -29,7 +29,10 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
     public string CreatedBy { get; init; } = string.Empty;
     public string? AssignedTo { get; set; }
 
-    /// <summary>See <see cref="IOrgOwnedResource"/>. Set-once at creation, like <see cref="CreatedBy"/>.</summary>
+    /// <summary>
+    /// See <see cref="IOrgOwnedResource"/>. Set-once at creation, like <see cref="CreatedBy"/>,
+    /// and never changed afterwards by any store — see <see cref="ServiceOrderOrganization"/> (XD01-332).
+    /// </summary>
     public Guid OrganizationId { get; init; } = Guid.Empty;
 
     /// <summary>
@@ -177,6 +180,39 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
             UpdatedAt = now;
         return this;
     }
+
+    /// <summary>
+    /// A copy of this order that differs only in <see cref="OrganizationId"/>. The collections
+    /// are shared with this instance, not cloned. An in-memory operation only: it is how
+    /// <see cref="ServiceOrderOrganization"/> stamps a new order with its creator's organization
+    /// and keeps the stored organization on an update that states none — no store accepts a
+    /// changed organization for an order it already holds.
+    /// </summary>
+    public ServiceOrder CopyWithOrganization(Guid organizationId) => new()
+    {
+        Id = Id,
+        Title = Title,
+        Description = Description,
+        OrderTypeId = OrderTypeId,
+        RowVersion = RowVersion,
+        Status = Status,
+        Priority = Priority,
+        CreatedBy = CreatedBy,
+        AssignedTo = AssignedTo,
+        OrganizationId = organizationId,
+        CreatedAt = CreatedAt,
+        UpdatedAt = UpdatedAt,
+        ScheduledAt = ScheduledAt,
+        CompletedAt = CompletedAt,
+        Attributes = Attributes,
+        Features = Features,
+        SelectionSpec = SelectionSpec,
+        FeatureIds = FeatureIds,
+        ParentOrderId = ParentOrderId,
+        ChildOrderIds = ChildOrderIds,
+        Dispatches = Dispatches,
+        ActionLog = ActionLog,
+    };
 
     /// <summary>Replaces the feature set and records the spec used to build it.</summary>
     public ServiceOrder WithFeatures(IEnumerable<GeoFeature> features, TimeProvider timeProvider, FeatureSelectionSpec? spec = null)

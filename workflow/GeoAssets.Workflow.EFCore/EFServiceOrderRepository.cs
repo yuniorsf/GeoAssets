@@ -318,7 +318,9 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     /// Updates the scalar fields of an existing tracked <paramref name="target"/>
     /// record in-place from the domain <paramref name="source"/>.
     /// Does not touch Dispatches or ActionLog — see <see cref="AppendDispatchAsync"/>
-    /// and <see cref="AppendActionAsync"/>.
+    /// and <see cref="AppendActionAsync"/>. Does not touch <c>OrganizationId</c> (nor
+    /// <c>CreatedBy</c>/<c>CreatedAt</c>) either: an order's organization is fixed when it is
+    /// created (XD01-332), so whatever <paramref name="source"/> states, the stored value stays.
     /// </summary>
     private static void UpdateRecord(ServiceOrderRecord target, ServiceOrder source)
     {

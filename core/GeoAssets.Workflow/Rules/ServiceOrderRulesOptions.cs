@@ -30,4 +30,18 @@ public sealed class ServiceOrderRulesOptions
     /// View/Annotate/Accept).
     /// </summary>
     public Dictionary<string, IReadOnlySet<OrderActionType>> RecipientRoleGrants { get; } = [];
+
+    /// <summary>
+    /// What the organization gate (XD01-332) does with an order that has no organization
+    /// (<see cref="Guid.Empty"/>) — one created before orders were stamped with their creator's
+    /// organization, or by a host that has no organization to stamp.
+    /// <para><c>true</c> (the default): every authenticated principal passes the gate on such an
+    /// order and the rule chain decides, exactly as before the gate existed. Right for a
+    /// single-organization deployment, and for a multi-organization one that still holds
+    /// legacy orders.</para>
+    /// <para><c>false</c>: an order with no organization is reachable only by its dispatch
+    /// recipients; everyone else is refused as for another organization's order. Turn it off
+    /// once every order carries an organization.</para>
+    /// </summary>
+    public bool AllowOrdersWithoutOrganization { get; set; } = true;
 }

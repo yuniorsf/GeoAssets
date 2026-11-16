@@ -75,7 +75,8 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
     public static async Task<OrderTargetsApiHost> StartAsync(
         Action<OrderTargetSelectionOptions>? configure = null,
         IAssetSpatialQuery? spatialQuery = null,
-        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders = null)
+        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders = null,
+        bool mapOrderRoutes = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -96,7 +97,13 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
                     });
                     app.UseRouting();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapServiceOrderTargetsApi());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapServiceOrderTargetsApi();
+                        // XD01-332: on request, the order routes too, so the organization gate
+                        // is tested on both route families with the same identities, grants and stores.
+                        if (mapOrderRoutes) endpoints.MapServiceOrdersApi();
+                    });
                 });
             })
             .StartAsync();
@@ -115,6 +122,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
 
         services.AddOrderTypeRegistry(RegisterOrderTypes);
+        services.AddSingleton<IOrderTypeRepository, FakeOrderTypeRepository>();
         services.AddSingleton<FakeServiceOrderRepository>();
         services.AddSingleton<IServiceOrderRepository>(sp =>
         {

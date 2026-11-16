@@ -86,7 +86,9 @@ public static class WorkflowServiceExtensions
             orderTypeRegistry: sp.GetService<OrderTypeRegistry>(),
             roleGrants: options.RoleGrants.Count > 0 ? options.RoleGrants : null,
             unrestrictedRoles: options.UnrestrictedRoles.Count > 0 ? options.UnrestrictedRoles : null,
-            recipientRoleGrants: options.RecipientRoleGrants.Count > 0 ? options.RecipientRoleGrants : null));
+            recipientRoleGrants: options.RecipientRoleGrants.Count > 0 ? options.RecipientRoleGrants : null,
+            allowOrdersWithoutOrganization: options.AllowOrdersWithoutOrganization,
+            timeProvider: sp.GetService<TimeProvider>()));
 
         return services;
     }

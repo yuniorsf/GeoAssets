@@ -5,6 +5,9 @@ namespace GeoAssets.Workflow.Orders;
 /// <see cref="ServiceOrderTransitions"/> enforcement on every status-changing write
 /// (<see cref="UpdateAsync"/>, <see cref="AppendActionAsync"/>), so a new implementation
 /// gets this guarantee automatically instead of having to reimplement the check itself.
+/// <see cref="UpdateAsync"/> also keeps an order's organization fixed (XD01-332, see
+/// <see cref="ServiceOrderOrganization.ForUpdate"/>): it throws
+/// <see cref="ServiceOrderOrganizationException"/> for an update that states a different one.
 ///
 /// <c>EFServiceOrderRepository</c> already validates directly and remains perfectly safe to
 /// use unwrapped — this decorator adds the same guarantee for any repository that doesn't,
@@ -74,7 +77,9 @@ public sealed class ValidatingServiceOrderRepository(
         if (!ServiceOrderTransitions.IsValid(orderType, existing.Status, order.Status))
             throw new InvalidServiceOrderTransitionException(existing.Status, order.Status);
 
-        await inner.UpdateAsync(order, ct).ConfigureAwait(false);
+        // XD01-332: the organization is fixed at creation — a stated change is refused, and an
+        // update that states none is stored with the organization the order already has.
+        await inner.UpdateAsync(ServiceOrderOrganization.ForUpdate(existing, order), ct).ConfigureAwait(false);
     }
 
     /// <summary>

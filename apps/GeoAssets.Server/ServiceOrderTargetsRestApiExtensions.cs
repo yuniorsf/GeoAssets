@@ -179,14 +179,10 @@ public static partial class ServiceOrderTargetsRestApiExtensions
             // The lookup searches the organization that owns the excluded order, so the caller
             // must be allowed on that order. An order that does not exist yet is fine: the store
             // then searches the caller's own organization only.
-            if (await orders.GetByIdAsync(body.ExcludingOrderId, ct).ConfigureAwait(false) is not null)
-            {
-                var access = await OrderTargetEndpointSupport
-                    .ForReadAsync(body.ExcludingOrderId, orders, rules, principalFactory, ct).ConfigureAwait(false);
-                if (access.Problem is not null) return access.Problem;
-            }
+            var excludingOrderId = await UsagesScopeAsync(body.ExcludingOrderId, orders, rules, principalFactory, ct).ConfigureAwait(false);
+            if (excludingOrderId.Problem is not null) return excludingOrderId.Problem;
 
-            var usages = await targets.FindOpenUsagesAsync(body.FeatureIds!, body.ExcludingOrderId, ct).ConfigureAwait(false);
+            var usages = await targets.FindOpenUsagesAsync(body.FeatureIds!, excludingOrderId.OrderId!, ct).ConfigureAwait(false);
             var ordered = usages
                 .OrderBy(u => u.FeatureId, StringComparer.Ordinal)
                 .ThenBy(u => u.OrderId, StringComparer.Ordinal)
@@ -195,5 +191,27 @@ public static partial class ServiceOrderTargetsRestApiExtensions
 
             return Results.Json(new PagedResponse<OrderTargetUsage>(items, body.Page, body.PageSize, ordered.Count), opts);
         }).RequireAuthorization(ReadPolicy);
+    }
+
+    /// <summary>
+    /// The order id to scope a usages lookup by. An excluded order the caller is outside the
+    /// organization of (XD01-332) is treated exactly like one that does not exist: the lookup
+    /// then runs under an id no order has, so the store searches the caller's own organization
+    /// only and the response neither reads the other organization's targets nor confirms that
+    /// the id names an order there. A caller inside the gate whom the rules decline keeps its 403.
+    /// </summary>
+    private static async Task<(string? OrderId, IResult? Problem)> UsagesScopeAsync(
+        string excludingOrderId, IServiceOrderRepository orders, ServiceOrderRules rules,
+        ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct)
+    {
+        var order = await orders.GetByIdAsync(excludingOrderId, ct).ConfigureAwait(false);
+        if (order is null) return (excludingOrderId, null);
+
+        var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
+        if (!rules.PassesOrganizationGate(principal, order))
+            return (Guid.NewGuid().ToString(), null);
+
+        var access = await OrderTargetEndpointSupport.ForReadAsync(excludingOrderId, orders, rules, principalFactory, ct).ConfigureAwait(false);
+        return access.Problem is null ? (excludingOrderId, null) : (null, access.Problem);
     }
 }

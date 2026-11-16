@@ -29,7 +29,10 @@ namespace GeoAssets.FieldService.Server;
 /// evaluate — so it checks <see cref="IOrgOwnedResource.OrganizationId"/> against the caller's own
 /// <see cref="ITenantContext.CurrentOrganizationId"/> itself before allowing a write, treating a
 /// mismatch identically to "order not found" rather than a distinguishable 403 (same reasoning as
-/// <c>ContractorUsLedgerRestApiExtensions</c>, XD01-207).
+/// <c>ContractorUsLedgerRestApiExtensions</c>, XD01-207). <see cref="FieldServiceOrderAccess"/>
+/// states the rule for the whole host (XD01-332). A push never moves an order to another
+/// organization, and the one order this surface creates (a pole census) is created under the
+/// caller's own tenant only — see <see cref="ServiceOrderOrganization"/>.
 /// </summary>
 internal static class FieldServiceSyncRestApiExtensions
 {
@@ -113,7 +116,7 @@ internal static class FieldServiceSyncRestApiExtensions
         // census submission has none of, so this applies the mutation inline, best-effort, on
         // the sync path itself rather than reusing that unrelated pipeline.
         if (existing is null && string.Equals(order.OrderTypeId, PoleCensusOrderTypes.PoleCensusInspectionId, StringComparison.Ordinal))
-            return await PushNewPoleCensusAsync(order, repo, geoCoreClient, timeProvider, ct).ConfigureAwait(false);
+            return await PushNewPoleCensusAsync(order, repo, tenantContext, geoCoreClient, timeProvider, ct).ConfigureAwait(false);
 
         if (existing is null)
             return new PushServiceOrderResult(order.Id, Success: false, Error: "ServiceOrder not found.");
@@ -147,6 +150,11 @@ internal static class FieldServiceSyncRestApiExtensions
         {
             return new PushServiceOrderResult(order.Id, Success: false, Error: ex.Message);
         }
+        catch (ServiceOrderOrganizationException ex)
+        {
+            // XD01-332: the pushed copy states another organization than the stored order's.
+            return new PushServiceOrderResult(order.Id, Success: false, Error: ex.Message);
+        }
     }
 
     /// <summary>
@@ -158,8 +166,22 @@ internal static class FieldServiceSyncRestApiExtensions
     /// retry just the projection without re-submitting the whole form).
     /// </summary>
     private static async Task<PushServiceOrderResult> PushNewPoleCensusAsync(
-        ServiceOrder order, IServiceOrderRepository repo, IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct)
+        ServiceOrder pushed, IServiceOrderRepository repo, ITenantContext tenantContext,
+        IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct)
     {
+        // XD01-332: a census is recorded under the caller's own tenant and no other — stamped
+        // with it when the pushed order states no organization, refused when it states another
+        // (and nothing is stored, nor any mutation sent to Core, under that other organization).
+        ServiceOrder order;
+        try
+        {
+            order = ServiceOrderOrganization.ForCreation(pushed, tenantContext.CurrentOrganizationId);
+        }
+        catch (ServiceOrderOrganizationException ex)
+        {
+            return new PushServiceOrderResult(pushed.Id, Success: false, Error: ex.Message);
+        }
+
         await repo.AddAsync(order, ct).ConfigureAwait(false);
 
         AssetFeatureMutationItem mutation;

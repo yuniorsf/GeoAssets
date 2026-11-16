@@ -24,7 +24,9 @@ internal static class OrderTargetEndpointSupport
     /// Loads the order and checks the caller may read it: a member of the order's own
     /// organization (what the tenant filter of the order list already shows them), or anyone
     /// the order rules grant <see cref="OrderActionType.View"/> — which is how a
-    /// cross-organization grantee gets in. The target store itself checks nothing.
+    /// cross-organization grantee or a dispatch recipient gets in. The target store itself
+    /// checks nothing. A caller the organization gate refuses (XD01-332) gets the same
+    /// <c>orders.not-found</c> as for an order that does not exist.
     /// </summary>
     public static async Task<OrderAccess> ForReadAsync(
         string orderId, IServiceOrderRepository orders, ServiceOrderRules rules,
@@ -34,15 +36,19 @@ internal static class OrderTargetEndpointSupport
         if (order is null) return new OrderAccess(null, null, WorkflowProblemResults.OrderNotFound(orderId));
 
         var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
-        if (IsMemberOfOwningOrganization(principal, order)) return new OrderAccess(order, principal, null);
+        if (IsMemberOfOwningOrganization(principal, order) && rules.PassesOrganizationGate(principal, order))
+            return new OrderAccess(order, principal, null);
 
         var verdict = rules.Evaluate(principal, OrderActionType.View, order);
         return verdict.Allowed
             ? new OrderAccess(order, principal, null)
-            : new OrderAccess(null, null, WorkflowProblemResults.Denied(verdict.Reason));
+            : new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
     }
 
-    /// <summary>Loads the order and checks the order rules grant the caller <see cref="OrderActionType.Annotate"/>.</summary>
+    /// <summary>
+    /// Loads the order and checks the order rules grant the caller <see cref="OrderActionType.Annotate"/>;
+    /// refused as <see cref="ForReadAsync"/> refuses.
+    /// </summary>
     public static async Task<OrderAccess> ForEditAsync(
         string orderId, IServiceOrderRepository orders, ServiceOrderRules rules,
         ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct)
@@ -54,7 +60,7 @@ internal static class OrderTargetEndpointSupport
         var verdict = rules.Evaluate(principal, OrderActionType.Annotate, order);
         return verdict.Allowed
             ? new OrderAccess(order, principal, null)
-            : new OrderAccess(null, null, WorkflowProblemResults.Denied(verdict.Reason));
+            : new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
     }
 
     /// <summary>The caller's organization, <see cref="Guid.Empty"/> when the token carries none — as <see cref="HttpTenantContext"/> reads it.</summary>

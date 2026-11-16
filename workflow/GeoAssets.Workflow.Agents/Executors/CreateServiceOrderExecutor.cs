@@ -55,6 +55,11 @@ public sealed partial class CreateServiceOrderExecutor(
                 Title       = message.Title,
                 OrderTypeId = message.OrderTypeId,
                 CreatedBy   = message.AgentId,
+                // XD01-332: the order belongs to the agent's own configured organization, so the
+                // organization gate lets the same agent act on it afterwards. An agent configured
+                // with none creates an order with none — reachable only while
+                // ServiceOrderRulesOptions.AllowOrdersWithoutOrganization stays on.
+                OrganizationId = Guid.TryParse(principal.OrganizationId, out var organizationId) ? organizationId : Guid.Empty,
                 CreatedAt   = timeProvider.GetUtcNow().UtcDateTime,
                 Status      = orderType.InitialStateKey ?? ServiceOrderStatus.Draft,
             };
