@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -16,8 +17,8 @@ namespace GeoAssets.Workflow.EFCore.Tests;
 /// the column also changes on every UPDATE, exercising the same optimistic-concurrency
 /// path (<c>ServiceOrderConcurrencyException</c>) a real SQL Server host would hit.
 /// </summary>
-internal sealed class SqliteTestDbContext(DbContextOptions<ServiceOrderDbContext> options)
-    : ServiceOrderDbContext(options)
+internal sealed class SqliteTestDbContext(DbContextOptions<ServiceOrderDbContext> options, ITenantContext? tenantContext = null)
+    : ServiceOrderDbContext(options, tenantContext)
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

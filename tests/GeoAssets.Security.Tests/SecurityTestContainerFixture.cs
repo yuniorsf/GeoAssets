@@ -84,6 +84,9 @@ internal static class SecurityTestContainerFixture
                 GRANT SELECT, INSERT, UPDATE, DELETE ON applied_mutation_batches TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON field_icerp_paving_measurements TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON "UsCatalogItems" TO {TenantScopedRole};
+                -- "ServiceOrderTargets"' policy reads the parent row in "ServiceOrders" (already
+                -- granted above), which is how a target inherits its order's visibility.
+                GRANT SELECT, INSERT, UPDATE, DELETE ON "ServiceOrderTargets" TO {TenantScopedRole};
                 -- ServiceOrders' RLS policy's EXISTS clause reads "OrganizationGrants" (its
                 -- grant-aware exception) — Postgres checks SELECT privilege on every table a
                 -- policy references, even for rows that end up not matching.

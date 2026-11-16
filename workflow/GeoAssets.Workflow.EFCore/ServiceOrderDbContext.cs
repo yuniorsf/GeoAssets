@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Persistence.Configurations;
 using GeoAssets.Workflow.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,6 +34,8 @@ public class ServiceOrderDbContext(
     DbContextOptions<ServiceOrderDbContext> options,
     ITenantContext? tenantContext = null) : DbContext(options)
 {
+    private const string PostgreSqlProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
+
     private readonly ITenantContext _tenantContext = tenantContext ?? NullTenantContext.Instance;
 
     internal DbSet<ServiceOrderRecord> ServiceOrders => Set<ServiceOrderRecord>();
@@ -52,6 +55,7 @@ public class ServiceOrderDbContext(
     internal DbSet<ManholeAuditRecord> ManholeAudits => Set<ManholeAuditRecord>();
     internal DbSet<OrganizationGrantMirrorRecord> OrganizationGrantMirror => Set<OrganizationGrantMirrorRecord>();
     internal DbSet<OrganizationGrantSyncCursorRecord> OrganizationGrantSyncCursor => Set<OrganizationGrantSyncCursorRecord>();
+    internal DbSet<ServiceOrderTargetRecord> ServiceOrderTargets => Set<ServiceOrderTargetRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -104,5 +108,25 @@ public class ServiceOrderDbContext(
         // never calls IgnoreQueryFilters() either.
         modelBuilder.Entity<ManholeAuditRecord>()
             .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        ConfigureServiceOrderTargets(modelBuilder);
+    }
+
+    private void ConfigureServiceOrderTargets(ModelBuilder modelBuilder)
+    {
+        // ServiceOrderTargetRecord (XD01-306) follows its parent ServiceOrderRecord, not the
+        // uniform-filter tables above: the filter applies to the one cross-order search
+        // (EFServiceOrderTargetRepository.FindOpenUsagesAsync, when it has no order to scope by),
+        // while every operation addressed to a single order calls IgnoreQueryFilters() — a
+        // cross-org grantee authorized on the order by CrossOrgGrantRule must reach its targets
+        // too. The database-layer half is the AddServiceOrderTargetsRowLevelSecurity migration.
+        modelBuilder.Entity<ServiceOrderTargetRecord>()
+            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        // This project references no database provider, so the one provider-specific piece of
+        // the model is keyed on the provider's name: see UseOrdinalTextOrder for why PostgreSQL
+        // (and only PostgreSQL) needs it.
+        if (string.Equals(Database.ProviderName, PostgreSqlProviderName, StringComparison.Ordinal))
+            ServiceOrderTargetRecordConfiguration.UseOrdinalTextOrder(modelBuilder.Entity<ServiceOrderTargetRecord>());
     }
 }

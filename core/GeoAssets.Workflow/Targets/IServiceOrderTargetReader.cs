@@ -11,8 +11,14 @@ namespace GeoAssets.Workflow.Targets;
 /// (a database store, a REST client, an in-memory fake). Rules common to all members:
 /// a null argument throws <see cref="ArgumentNullException"/>; a blank order id throws
 /// <see cref="ArgumentException"/>; an order that does not exist, or has no targets, is not an
-/// error — it reads as empty; only data visible to the caller's tenant is ever returned;
-/// a cancelled <see cref="CancellationToken"/> surfaces as <see cref="OperationCanceledException"/>.
+/// error — it reads as empty; a cancelled <see cref="CancellationToken"/> surfaces as
+/// <see cref="OperationCanceledException"/>.
+///
+/// Tenancy: a member addressed to one order returns that order's targets and leaves deciding
+/// whether the caller may see the order to the caller — as
+/// <see cref="Orders.IServiceOrderReader.GetByIdAsync"/> does, so that an organization granted
+/// access to another organization's order reaches its targets too. The one search across
+/// orders, <see cref="FindOpenUsagesAsync"/>, never leaves a single organization (see there).
 /// </summary>
 public interface IServiceOrderTargetReader
 {
@@ -68,6 +74,11 @@ public interface IServiceOrderTargetReader
     /// <item><description>
     /// Same-family orders (parent, children, siblings) ARE returned; ignoring them is
     /// <see cref="TargetConflictEvaluator"/>'s job.
+    /// </description></item>
+    /// <item><description>
+    /// Only orders of one organization are searched: the organization that owns
+    /// <paramref name="excludingOrderId"/> (the order the caller is working on, and has been
+    /// authorized for), or the caller's own organization when that order does not exist yet.
     /// </description></item>
     /// <item><description>
     /// Empty <paramref name="featureIds"/> returns an empty list without querying the store.

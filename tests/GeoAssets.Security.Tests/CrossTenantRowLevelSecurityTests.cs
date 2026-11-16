@@ -810,6 +810,310 @@ public sealed class CrossTenantRowLevelSecurityTests
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
+    // ── ServiceOrderTargets (XD01-306) ────────────────────────────────────────
+    //
+    // A target follows its parent order: the policy's USING clause is "own organization, or the
+    // parent order is visible", where "visible" is whatever "ServiceOrders"' own policy grants
+    // the querying role. These facts use their own three organizations and their own order ids,
+    // and never truncate "ServiceOrders", so they neither disturb nor depend on the facts above.
+
+    private static readonly Guid TargetOwner = Guid.Parse("c1c1c1c1-0000-0000-0000-000000000001");
+    private static readonly Guid TargetGrantee = Guid.Parse("c2c2c2c2-0000-0000-0000-000000000002");
+    private static readonly Guid TargetStranger = Guid.Parse("c3c3c3c3-0000-0000-0000-000000000003");
+
+    private const string InsertTargetSql = """
+        INSERT INTO "ServiceOrderTargets"
+            ("Id", "ServiceOrderId", "FeatureId", "AssetTypeId", "ActivityIdsJson", "Status", "ConflictLevel", "AddedAt", "AddedBy", "OrganizationId", "Version")
+        VALUES (@id, @orderId, @featureId, 'pole', '[]', 'Pending', 0, now(), 'tester', @orgId, 0)
+        """;
+
+    [Fact]
+    public async Task ServiceOrderTargets_SelectAcrossTenants_OnlyReturnsTargetsOfOrdersTheTenantCanSee()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+            await SeedServiceOrderAsync(owner, "tgt-order-stranger", TargetStranger);
+            await SeedTargetAsync(owner, "tgt-owner-1", "tgt-order-owner", TargetOwner);
+            await SeedTargetAsync(owner, "tgt-owner-2", "tgt-order-owner", TargetOwner, featureId: "feat-2");
+            await SeedTargetAsync(owner, "tgt-stranger-1", "tgt-order-stranger", TargetStranger);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+
+        // If the policy's sub-select on "ServiceOrders" were NOT itself filtered by that table's
+        // policy for this non-owner role, every parent order would "exist" and each tenant would
+        // read every target here.
+        (await TargetIdsVisibleToAsync(connection, TargetOwner)).Should().Equal("tgt-owner-1", "tgt-owner-2");
+        (await TargetIdsVisibleToAsync(connection, TargetStranger)).Should().Equal("tgt-stranger-1");
+        (await TargetIdsVisibleToAsync(connection, TargetGrantee)).Should().BeEmpty("it owns no order and holds no grant");
+    }
+
+    [Fact]
+    public async Task ServiceOrderTargets_InsertUnderAnOrderTheTenantCannotSee_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TargetStranger);
+
+        // Claiming the order's organization, and claiming its own: neither gets a row in.
+        var asTheOwner = async () => await InsertTargetAsync(connection, "tgt-forged-1", "tgt-order-owner", TargetOwner);
+        var asItself = async () => await InsertTargetAsync(connection, "tgt-forged-2", "tgt-order-owner", TargetStranger);
+
+        await asTheOwner.Should().ThrowAsync<PostgresException>().Where(e => e.SqlState == "42501");
+        await asItself.Should().ThrowAsync<PostgresException>().Where(e => e.SqlState == "42501");
+    }
+
+    [Fact]
+    public async Task ServiceOrderTargets_InsertCarryingAnotherOrganizationThanItsOrder_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TargetOwner);
+
+        var mislabelled = async () => await InsertTargetAsync(connection, "tgt-mislabelled", "tgt-order-owner", TargetStranger);
+        var correct = async () => await InsertTargetAsync(connection, "tgt-correct", "tgt-order-owner", TargetOwner);
+
+        await mislabelled.Should().ThrowAsync<PostgresException>().Where(e => e.SqlState == "42501");
+        await correct.Should().NotThrowAsync("the owner adding a target to its own order is the normal case");
+    }
+
+    [Fact]
+    public async Task ServiceOrderTargets_UpdateAndDeleteAcrossTenants_AffectNoRows()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+            await SeedTargetAsync(owner, "tgt-owner-1", "tgt-order-owner", TargetOwner);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TargetStranger);
+
+        var updated = await ReleaseTargetsOfOrderAsync(connection, "tgt-order-owner");
+        var deleted = await DeleteTargetAsync(connection, "tgt-owner-1");
+
+        updated.Should().Be(0, "another tenant's raw-SQL UPDATE must silently affect zero rows");
+        deleted.Should().Be(0, "another tenant's raw-SQL DELETE must silently affect zero rows");
+        (await TargetIdsVisibleToAsync(connection, TargetOwner)).Should().Equal("tgt-owner-1");
+    }
+
+    [Fact]
+    public async Task ServiceOrderTargets_UpdateMovingATargetToAnotherOrganization_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+            await SeedTargetAsync(owner, "tgt-owner-1", "tgt-order-owner", TargetOwner);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TargetOwner);
+
+        var act = async () =>
+        {
+            await using var update = connection.CreateCommand();
+            update.CommandText = """UPDATE "ServiceOrderTargets" SET "OrganizationId" = @orgId WHERE "Id" = 'tgt-owner-1'""";
+            update.Parameters.Add(new NpgsqlParameter("orgId", TargetStranger));
+            await update.ExecuteNonQueryAsync();
+        };
+
+        await act.Should().ThrowAsync<PostgresException>().Where(e => e.SqlState == "42501");
+    }
+
+    /// <summary>
+    /// The grant-based half, proving the visibility is inherited from the parent order rather
+    /// than re-implemented: each case changes only the <c>"OrganizationGrants"</c> row (and the
+    /// order's scope), and the targets appear exactly when <c>"ServiceOrders"</c>' own policy
+    /// would show the order.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false, null, null, true)]
+    [InlineData(false, false, null, null, false)]
+    [InlineData(true, true, null, null, false)]
+    [InlineData(true, false, "AssetLayer", null, false)]
+    [InlineData(true, false, "ServiceOrder", null, true)]
+    [InlineData(true, false, null, "district-7", true)]
+    [InlineData(true, false, null, "district-9", false)]
+    public async Task ServiceOrderTargets_Grantee_SeesTheTargetsOfAnOrderExactlyWhenItsGrantShowsItThatOrder(
+        bool grantIsActive, bool grantIsExpired, string? grantResourceType, string? grantScopeId, bool expectVisible)
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            // The granted order lives in scope "district-7"; the stranger's order is never granted.
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+            await SetOrderScopeAsync(owner, "tgt-order-owner", "district-7");
+            await SeedServiceOrderAsync(owner, "tgt-order-stranger", TargetStranger);
+            await SeedTargetAsync(owner, "tgt-owner-1", "tgt-order-owner", TargetOwner);
+            await SeedTargetAsync(owner, "tgt-stranger-1", "tgt-order-stranger", TargetStranger);
+            await SeedGrantAsync(owner, TargetGrantee, TargetOwner, grantIsActive, grantIsExpired, grantResourceType, grantScopeId);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+
+        var visible = await TargetIdsVisibleToAsync(connection, TargetGrantee);
+
+        if (expectVisible)
+            visible.Should().Equal(["tgt-owner-1"], "the grant shows the grantee that order, so it shows its targets — and only that order's");
+        else
+            visible.Should().BeEmpty("without a grant that shows it the order, the grantee has no way to its targets");
+    }
+
+    [Fact]
+    public async Task ServiceOrderTargets_Grantee_CanAddEditAndReleaseTargetsOfTheGrantedOrder_ButOnlyUnderTheOrdersOrganization()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+            await SeedTargetAsync(owner, "tgt-owner-1", "tgt-order-owner", TargetOwner);
+            await SeedGrantAsync(owner, TargetGrantee, TargetOwner, isActive: true, isExpired: false, resourceType: null, scopeId: null);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TargetGrantee);
+
+        var underItsOwnOrganization = async () => await InsertTargetAsync(connection, "tgt-grantee-own", "tgt-order-owner", TargetGrantee, featureId: "feat-2");
+        await underItsOwnOrganization.Should().ThrowAsync<PostgresException>().Where(e => e.SqlState == "42501");
+
+        await InsertTargetAsync(connection, "tgt-grantee-added", "tgt-order-owner", TargetOwner, featureId: "feat-3");
+        var released = await ReleaseTargetsOfOrderAsync(connection, "tgt-order-owner");
+        var deleted = await DeleteTargetAsync(connection, "tgt-grantee-added");
+
+        released.Should().Be(2, "whoever may close the granted order must be able to release every one of its targets");
+        deleted.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ServiceOrderTargets_SessionThatNeverSetAnOrganization_SeesNoRows()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await ResetTargetFixtureAsync(owner);
+            await SeedServiceOrderAsync(owner, "tgt-order-owner", TargetOwner);
+            await SeedTargetAsync(owner, "tgt-owner-1", "tgt-order-owner", TargetOwner);
+        }
+
+        // Unpooled, so this is a physical session that has never had app.current_organization_id
+        // set (a pooled one may carry the empty-string remnant of an earlier, reset setting).
+        var unpooled = new NpgsqlConnectionStringBuilder(await SecurityTestContainerFixture.EnsureStartedAsync())
+        {
+            Username = SecurityTestContainerFixture.TenantScopedRole,
+            Password = SecurityTestContainerFixture.TenantScopedRolePassword,
+            Pooling = false,
+        };
+        await using var connection = new NpgsqlConnection(unpooled.ConnectionString);
+        await connection.OpenAsync();
+
+        (await TargetIdsAsync(connection)).Should().BeEmpty("with no organization the policy matches nothing — it fails closed");
+    }
+
+    /// <summary>Removes what the ServiceOrderTargets facts create — their own orders (targets cascade) and grants — and nothing else.</summary>
+    private static async Task ResetTargetFixtureAsync(NpgsqlConnection owner)
+    {
+        await using var reset = owner.CreateCommand();
+        reset.CommandText = """
+            DELETE FROM "ServiceOrders" WHERE "Id" IN ('tgt-order-owner', 'tgt-order-stranger');
+            DELETE FROM "OrganizationGrants" WHERE "GranteeOrganizationId" = @grantee;
+            """;
+        reset.Parameters.Add(new NpgsqlParameter("grantee", TargetGrantee));
+        await reset.ExecuteNonQueryAsync();
+    }
+
+    private static Task SeedTargetAsync(NpgsqlConnection owner, string id, string orderId, Guid organizationId, string featureId = "feat-1") =>
+        InsertTargetAsync(owner, id, orderId, organizationId, featureId);
+
+    private static async Task InsertTargetAsync(NpgsqlConnection connection, string id, string orderId, Guid organizationId, string featureId = "feat-1")
+    {
+        await using var insert = connection.CreateCommand();
+        insert.CommandText = InsertTargetSql;
+        insert.Parameters.Add(new NpgsqlParameter("id", id));
+        insert.Parameters.Add(new NpgsqlParameter("orderId", orderId));
+        insert.Parameters.Add(new NpgsqlParameter("featureId", featureId));
+        insert.Parameters.Add(new NpgsqlParameter("orgId", organizationId));
+        await insert.ExecuteNonQueryAsync();
+    }
+
+    private static async Task SeedGrantAsync(
+        NpgsqlConnection owner, Guid grantee, Guid resourceOrganization, bool isActive, bool isExpired, string? resourceType, string? scopeId)
+    {
+        await using var insert = owner.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO "OrganizationGrants"
+                ("Id", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId", "AllowedActions", "GrantedBy", "GrantedAt", "IsActive", "ExpiresAt")
+            VALUES (@id, @grantee, @resource, @resourceType, @scopeId, '', 'tester', now(), @isActive, @expiresAt)
+            """;
+        insert.Parameters.Add(new NpgsqlParameter("id", Guid.NewGuid()));
+        insert.Parameters.Add(new NpgsqlParameter("grantee", grantee));
+        insert.Parameters.Add(new NpgsqlParameter("resource", resourceOrganization));
+        insert.Parameters.Add(new NpgsqlParameter("resourceType", NpgsqlTypes.NpgsqlDbType.Varchar) { Value = (object?)resourceType ?? DBNull.Value });
+        insert.Parameters.Add(new NpgsqlParameter("scopeId", NpgsqlTypes.NpgsqlDbType.Varchar) { Value = (object?)scopeId ?? DBNull.Value });
+        insert.Parameters.Add(new NpgsqlParameter("isActive", isActive));
+        insert.Parameters.Add(new NpgsqlParameter("expiresAt", NpgsqlTypes.NpgsqlDbType.TimestampTz)
+        {
+            Value = isExpired ? new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) : DBNull.Value,
+        });
+        await insert.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<List<string>> TargetIdsVisibleToAsync(NpgsqlConnection connection, Guid organizationId)
+    {
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, organizationId);
+        return await TargetIdsAsync(connection);
+    }
+
+    private static async Task<List<string>> TargetIdsAsync(NpgsqlConnection connection)
+    {
+        await using var select = connection.CreateCommand();
+        select.CommandText = """SELECT "Id" FROM "ServiceOrderTargets" WHERE "Id" LIKE 'tgt-%' ORDER BY "Id" """;
+        var ids = new List<string>();
+        await using var reader = await select.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            ids.Add(reader.GetString(0));
+        return ids;
+    }
+
+    /// <summary>What closing an order does to its targets, as raw SQL; returns the rows the role was allowed to change.</summary>
+    private static async Task<int> ReleaseTargetsOfOrderAsync(NpgsqlConnection connection, string orderId)
+    {
+        await using var update = connection.CreateCommand();
+        update.CommandText = """UPDATE "ServiceOrderTargets" SET "ReleasedAt" = now() WHERE "ServiceOrderId" = @orderId""";
+        update.Parameters.Add(new NpgsqlParameter("orderId", orderId));
+        return await update.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int> DeleteTargetAsync(NpgsqlConnection connection, string id)
+    {
+        await using var delete = connection.CreateCommand();
+        delete.CommandText = """DELETE FROM "ServiceOrderTargets" WHERE "Id" = @id""";
+        delete.Parameters.Add(new NpgsqlParameter("id", id));
+        return await delete.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>Puts an order in a scope, the way <c>IScopeableResource.ScopeId</c> is persisted for a service order.</summary>
+    private static async Task SetOrderScopeAsync(NpgsqlConnection owner, string orderId, string scopeId)
+    {
+        await using var update = owner.CreateCommand();
+        update.CommandText = """UPDATE "ServiceOrders" SET "AttributesJson" = json_build_object('scopeId', @scopeId::text)::text WHERE "Id" = @orderId""";
+        update.Parameters.Add(new NpgsqlParameter("scopeId", scopeId));
+        update.Parameters.Add(new NpgsqlParameter("orderId", orderId));
+        await update.ExecuteNonQueryAsync();
+    }
+
     // ── Generic discovery: every org-scoped table must be RLS-protected ──────
 
     /// <summary>
