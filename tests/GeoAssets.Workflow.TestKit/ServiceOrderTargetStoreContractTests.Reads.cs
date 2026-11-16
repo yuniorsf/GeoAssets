@@ -12,7 +12,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── GetPageAsync ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPageAsync_OrderWithoutTargetsOrUnknownOrder_ReturnsAnEmptyPageNotAnError()
+    public virtual async Task GetPageAsync_OrderWithoutTargetsOrUnknownOrder_ReturnsAnEmptyPageNotAnError()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -27,7 +27,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetPageAsync_ListsOnlyTheTargetsOfTheOrderAsked()
+    public virtual async Task GetPageAsync_ListsOnlyTheTargetsOfTheOrderAsked()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -42,7 +42,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetPageAsync_PagesThroughEveryTargetOnce_AndAPagePastTheEndIsEmptyWithTheTrueTotal()
+    public virtual async Task GetPageAsync_PagesThroughEveryTargetOnce_AndAPagePastTheEndIsEmptyWithTheTrueTotal()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -67,7 +67,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [InlineData("featureId")]
     [InlineData("no-such-key")]
     [InlineData("Alias")]
-    public async Task GetPageAsync_NoOrUnrecognizedSortKey_SortsByFeatureId(string? sortBy)
+    public virtual async Task GetPageAsync_NoOrUnrecognizedSortKey_SortsByFeatureId(string? sortBy)
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -96,7 +96,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [InlineData(OrderTargetSortKeys.ConflictLevel, "t1,t5,t3,t2,t4", "t2,t4,t3,t1,t5")]
     [InlineData(OrderTargetSortKeys.AddedAt, "t3,t4,t1,t2,t5", "t5,t1,t2,t3,t4")]
     [InlineData(OrderTargetSortKeys.Alias, "t2,t5,t1,t3,t4", "t3,t4,t1,t2,t5")]
-    public async Task GetPageAsync_EachSortKey_OrdersByItInTheAskedDirectionThenByIdAscending(string sortBy, string ascendingIds, string descendingIds)
+    public virtual async Task GetPageAsync_EachSortKey_OrdersByItInTheAskedDirectionThenByIdAscending(string sortBy, string ascendingIds, string descendingIds)
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -120,7 +120,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetPageAsync_SortedPagesOfTiedKeys_NeverOverlapOrSkip()
+    public virtual async Task GetPageAsync_SortedPagesOfTiedKeys_NeverOverlapOrSkip()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -143,7 +143,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetPageAsync_TextKeysAndTheIdTiebreak_CompareOrdinally_UppercaseBeforeLowercase()
+    public virtual async Task GetPageAsync_TextKeysAndTheIdTiebreak_CompareOrdinally_UppercaseBeforeLowercase()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -165,7 +165,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetPageAsync_StatusAndConflictLevelFilters_ApplyAloneAndTogether_AndTotalCountCountsTheMatches()
+    public virtual async Task GetPageAsync_StatusAndConflictLevelFilters_ApplyAloneAndTogether_AndTotalCountCountsTheMatches()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -199,7 +199,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetPageAsync_NullQuery_ThrowsArgumentNullException()
+    public virtual async Task GetPageAsync_NullQuery_ThrowsArgumentNullException()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -208,10 +208,59 @@ public abstract partial class ServiceOrderTargetStoreContractTests
         await act.Should().ThrowAsync<ArgumentNullException>();
     }
 
+    // ── GetByIdAsync ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public virtual async Task GetByIdAsync_TargetOfTheOrder_ReturnsItAsStored()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedOrderAsync(harness, "ord-1");
+        var stored = Target(harness, "ord-1", "feat-1")
+            .WithId("tgt-1")
+            .WithAlias("P-0001")
+            .WithNote("north side")
+            .WithPosition(-38.5, -12.9)
+            .Build();
+        await harness.Writer.AddRangeAsync(
+            "ord-1", [stored, Target(harness, "ord-1", "feat-2").WithId("tgt-2").Build()], CancellationToken.None);
+
+        var found = await harness.Reader.GetByIdAsync("ord-1", "tgt-1", CancellationToken.None);
+
+        found.Should().BeEquivalentTo(stored);
+    }
+
+    [Fact]
+    public virtual async Task GetByIdAsync_UnknownTargetUnknownOrderOrAnotherOrdersTarget_ReturnsNull()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedOrderAsync(harness, "ord-1");
+        await SeedOrderAsync(harness, "ord-2");
+        await harness.Writer.AddRangeAsync(
+            "ord-2", [Target(harness, "ord-2", "feat-1").WithId("tgt-of-ord-2").Build()], CancellationToken.None);
+
+        (await harness.Reader.GetByIdAsync("ord-1", "tgt-missing", CancellationToken.None)).Should().BeNull();
+        (await harness.Reader.GetByIdAsync("ord-missing", "tgt-of-ord-2", CancellationToken.None)).Should().BeNull();
+        (await harness.Reader.GetByIdAsync("ord-1", "tgt-of-ord-2", CancellationToken.None)).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("", "tgt-1")]
+    [InlineData("   ", "tgt-1")]
+    [InlineData("ord-1", "")]
+    [InlineData("ord-1", "   ")]
+    public virtual async Task GetByIdAsync_BlankOrderIdOrTargetId_ThrowsArgumentException(string orderId, string targetId)
+    {
+        await using var harness = await CreateHarnessAsync();
+
+        var act = () => harness.Reader.GetByIdAsync(orderId, targetId, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
     // ── CountAsync ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task CountAsync_CountsTargetsInAnyStatus_IncludingReleasedOnes_AndZeroForAnUnknownOrder()
+    public virtual async Task CountAsync_CountsTargetsInAnyStatus_IncludingReleasedOnes_AndZeroForAnUnknownOrder()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -238,7 +287,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task CountAsync_BlankOrderId_ThrowsArgumentException(string orderId)
+    public virtual async Task CountAsync_BlankOrderId_ThrowsArgumentException(string orderId)
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -250,7 +299,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── FindOpenUsagesAsync ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task FindOpenUsagesAsync_ReturnsOneUsagePerFeatureAndHoldingOrder_WithThatOrdersTypeStatusParentAndExclusivity()
+    public virtual async Task FindOpenUsagesAsync_ReturnsOneUsagePerFeatureAndHoldingOrder_WithThatOrdersTypeStatusParentAndExclusivity()
     {
         await using var harness = await CreateHarnessAsync();
         harness.OrderTypes.Register(TypeWithExclusivity("survey", OrderTargetExclusivity.WarnOnOverlap));
@@ -274,7 +323,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_SameFamilyOrders_AreReturned_FilteringThemIsTheEvaluatorsJob()
+    public virtual async Task FindOpenUsagesAsync_SameFamilyOrders_AreReturned_FilteringThemIsTheEvaluatorsJob()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-parent");
@@ -291,7 +340,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_OrderTypeUnknownOrWithoutTargetPolicy_ReportsExclusivityNone()
+    public virtual async Task FindOpenUsagesAsync_OrderTypeUnknownOrWithoutTargetPolicy_ReportsExclusivityNone()
     {
         await using var harness = await CreateHarnessAsync();
         harness.OrderTypes.Register(new OrderType { Id = "plain", DisplayName = "Plain" });
@@ -309,7 +358,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [Theory]
     [InlineData(ServiceOrderStatus.Cancelled)]
     [InlineData(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed)]
-    public async Task FindOpenUsagesAsync_TargetsOfAnOrderThatReachedATerminalState_AreReleasedAndNotReturned(params string[] pathToTerminalState)
+    public virtual async Task FindOpenUsagesAsync_TargetsOfAnOrderThatReachedATerminalState_AreReleasedAndNotReturned(params string[] pathToTerminalState)
     {
         ArgumentNullException.ThrowIfNull(pathToTerminalState);
         await using var harness = await CreateHarnessAsync();
@@ -328,7 +377,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_OrderMovedToANonTerminalState_StillHoldsItsTargets()
+    public virtual async Task FindOpenUsagesAsync_OrderMovedToANonTerminalState_StillHoldsItsTargets()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-mine");
@@ -342,7 +391,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_TerminalStateOfACustomOrderTypeGraph_ReleasesToo()
+    public virtual async Task FindOpenUsagesAsync_TerminalStateOfACustomOrderTypeGraph_ReleasesToo()
     {
         await using var harness = await CreateHarnessAsync();
         harness.OrderTypes.Register(new OrderType
@@ -365,7 +414,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_TargetAddedToAnOrderThatIsAlreadyClosed_IsNeverAnOpenUsage()
+    public virtual async Task FindOpenUsagesAsync_TargetAddedToAnOrderThatIsAlreadyClosed_IsNeverAnOpenUsage()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-mine");
@@ -379,7 +428,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_ThePerTargetStatus_PlaysNoPart()
+    public virtual async Task FindOpenUsagesAsync_ThePerTargetStatus_PlaysNoPart()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-mine");
@@ -396,7 +445,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_EmptyFeatureIds_ReturnsEmpty_AndRepeatedIdsCountOnce()
+    public virtual async Task FindOpenUsagesAsync_EmptyFeatureIds_ReturnsEmpty_AndRepeatedIdsCountOnce()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-mine");
@@ -411,7 +460,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_ThousandsOfFeatureIds_FindsUsagesWhereverTheyFallInTheList()
+    public virtual async Task FindOpenUsagesAsync_ThousandsOfFeatureIds_FindsUsagesWhereverTheyFallInTheList()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-mine");
@@ -427,7 +476,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_OrdersOfAnotherOrganization_AreNeverReturned()
+    public virtual async Task FindOpenUsagesAsync_OrdersOfAnotherOrganization_AreNeverReturned()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-mine");
@@ -445,7 +494,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task FindOpenUsagesAsync_NullFeatureIds_ThrowsArgumentNullException()
+    public virtual async Task FindOpenUsagesAsync_NullFeatureIds_ThrowsArgumentNullException()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -457,7 +506,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task FindOpenUsagesAsync_BlankExcludingOrderId_ThrowsArgumentException(string excludingOrderId)
+    public virtual async Task FindOpenUsagesAsync_BlankExcludingOrderId_ThrowsArgumentException(string excludingOrderId)
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -469,7 +518,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── GetExtentAsync ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetExtentAsync_NoPositionedTarget_ReturnsNull()
+    public virtual async Task GetExtentAsync_NoPositionedTarget_ReturnsNull()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-empty");
@@ -483,7 +532,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetExtentAsync_OnePositionedTarget_ReturnsADegenerateBox()
+    public virtual async Task GetExtentAsync_OnePositionedTarget_ReturnsADegenerateBox()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -495,7 +544,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task GetExtentAsync_ManyTargets_ReturnsMinAndMaxOverThePositionedOnesOfThatOrderOnly()
+    public virtual async Task GetExtentAsync_ManyTargets_ReturnsMinAndMaxOverThePositionedOnesOfThatOrderOnly()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -522,7 +571,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task GetExtentAsync_BlankOrderId_ThrowsArgumentException(string orderId)
+    public virtual async Task GetExtentAsync_BlankOrderId_ThrowsArgumentException(string orderId)
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -534,7 +583,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── Cancellation ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task EveryMember_WithAnAlreadyCancelledToken_ThrowsOperationCanceledExceptionAndChangesNothing()
+    public virtual async Task EveryMember_WithAnAlreadyCancelledToken_ThrowsOperationCanceledExceptionAndChangesNothing()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -547,6 +596,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
         Func<Task>[] calls =
         [
             () => harness.Reader.GetPageAsync(new OrderTargetQuery("ord-1"), cancelled),
+            () => harness.Reader.GetByIdAsync("ord-1", "tgt-1", cancelled),
             () => harness.Reader.CountAsync("ord-1", cancelled),
             () => harness.Reader.FindOpenUsagesAsync(["feat-1"], "ord-2", cancelled),
             () => harness.Reader.GetExtentAsync("ord-1", cancelled),

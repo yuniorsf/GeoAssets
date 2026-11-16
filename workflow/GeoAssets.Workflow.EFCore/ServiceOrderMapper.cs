@@ -20,11 +20,22 @@ internal static class ServiceOrderMapper
     private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy        = JsonNamingPolicy.CamelCase,
+        // Reads tolerate the PascalCase members EFServiceOrderRepository.UpdateAsync used to
+        // write for SelectionSpecJson (XD01-308): such a row made every later read of its
+        // order throw, because FeatureSelectionSpec.ExecutedAt is required.
+        PropertyNameCaseInsensitive = true,
         WriteIndented               = false,
         DefaultIgnoreCondition      = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
     // ── Domain → EF ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The stored form of a selection spec — the one form <see cref="ToDomain"/> reads back.
+    /// Every writer of <see cref="ServiceOrderRecord.SelectionSpecJson"/> goes through here.
+    /// </summary>
+    public static string? ToSelectionSpecJson(FeatureSelectionSpec? spec) =>
+        spec is null ? null : JsonSerializer.Serialize(spec, _json);
 
     public static ServiceOrderRecord ToRecord(ServiceOrder order)
     {
@@ -48,9 +59,7 @@ internal static class ServiceOrderMapper
             ParentOrderId   = order.ParentOrderId,
             AttributesJson  = JsonSerializer.Serialize(order.Attributes, _json),
             FeatureIdsJson  = JsonSerializer.Serialize(featureIds, _json),
-            SelectionSpecJson = order.SelectionSpec is null
-                                ? null
-                                : JsonSerializer.Serialize(order.SelectionSpec, _json),
+            SelectionSpecJson = ToSelectionSpecJson(order.SelectionSpec),
             Dispatches = order.Dispatches.Select(ToDispatchRecord).ToList(),
             ActionLog  = order.ActionLog.Select(ToActionLogRecord).ToList(),
         };

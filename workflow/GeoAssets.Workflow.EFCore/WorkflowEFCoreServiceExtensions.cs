@@ -96,6 +96,28 @@ public static class WorkflowEFCoreServiceExtensions
     }
 
     /// <summary>
+    /// Wraps the registered <see cref="IOrderTargetSelectionService"/> in
+    /// <see cref="ObservableOrderTargetSelectionService"/> (spans and metrics, XD01-308). Call it
+    /// after <c>AddOrderTargets()</c> and <c>AddFeatureSelection()</c>: it replaces the interface
+    /// registration and resolves the concrete <see cref="OrderTargetSelectionService"/> those
+    /// registered as the decorated instance.
+    /// </summary>
+    public static IServiceCollection AddObservableOrderTargetSelection(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.Replace(ServiceDescriptor.Scoped<IOrderTargetSelectionService>(sp =>
+            new ObservableOrderTargetSelectionService(
+                sp.GetRequiredService<OrderTargetSelectionService>(),
+                sp.GetRequiredService<Selection.FeatureSelectionRegistry>(),
+                sp.GetRequiredService<GeoAssetsActivitySource>(),
+                sp.GetRequiredService<GeoAssetsMeter>(),
+                sp.GetService<TimeProvider>())));
+
+        return services;
+    }
+
+    /// <summary>
     /// Registers the EF Core transactional outbox (<see cref="IOutboxWriter"/>,
     /// <see cref="IOutboxDispatcherStore"/>), idempotent inbox (<see cref="IIdempotentInbox"/>),
     /// and background <see cref="OutboxRelayProcessor"/> hosted service.

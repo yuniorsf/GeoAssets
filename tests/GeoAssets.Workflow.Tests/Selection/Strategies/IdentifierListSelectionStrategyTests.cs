@@ -312,4 +312,50 @@ public class IdentifierListSelectionStrategyTests
 
         result.Should().NotBeNull().And.BeEmpty();
     }
+
+    // ── maxResults (XD01-308): optional, mirrors polygon-fence ───────────────────
+
+    [Fact]
+    public async Task IDL_B6_MaxResultsAbsent_MeansUnbounded_AsBeforeTheParameterExisted()
+    {
+        var spy = new RecordingSpatialQuery();
+
+        await Sut.SelectAsync(SpyContext(spy, Parameters("plate", new[] { "P-1" })));
+
+        IdentifierListSelectionStrategy.MaxResultsParameter.Should().Be("maxResults");
+        spy.Filter!.MaxResults.Should().Be(int.MaxValue);
+    }
+
+    [Fact]
+    public async Task IDL_B6_MaxResultsPresent_IsForwarded_FreshAndAfterJsonReload()
+    {
+        var spy = new RecordingSpatialQuery();
+        var fresh = Parameters("plate", new[] { "P-1" });
+        fresh["maxResults"] = 25;
+        var reloaded = Parameters("plate", new[] { "P-1" });
+        reloaded["maxResults"] = JsonSerializer.SerializeToElement(40);
+
+        await Sut.SelectAsync(SpyContext(spy, fresh));
+        var forFresh = spy.Filter!.MaxResults;
+        await Sut.SelectAsync(SpyContext(spy, reloaded));
+        var forReloaded = spy.Filter!.MaxResults;
+
+        forFresh.Should().Be(25);
+        forReloaded.Should().Be(40);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task IDL_B6_MaxResultsZeroOrLess_ThrowsArgumentOutOfRangeException(int maxResults)
+    {
+        var spy = new RecordingSpatialQuery();
+        var parameters = Parameters("plate", new[] { "P-1" });
+        parameters["maxResults"] = maxResults;
+
+        var act = () => Sut.SelectAsync(SpyContext(spy, parameters));
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+        spy.Calls.Should().Be(0);
+    }
 }

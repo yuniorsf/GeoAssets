@@ -117,6 +117,18 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
         };
     }
 
+    public async Task<ServiceOrderTarget?> GetByIdAsync(string orderId, string targetId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
+        ct.ThrowIfCancellationRequested();
+
+        var record = await TargetsOf(orderId)
+            .FirstOrDefaultAsync(t => t.Id == targetId, ct).ConfigureAwait(false);
+
+        return record is null ? null : ServiceOrderTargetMapper.ToDomain(record);
+    }
+
     public Task<int> CountAsync(string orderId, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
