@@ -1,3 +1,4 @@
+using GeoAssets.Core.Erp.Maximo;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
@@ -15,12 +16,18 @@ namespace GeoAssets.FieldService.Server;
 /// call itself as "the publish": the retry/backoff/at-least-once semantics
 /// <see cref="IIntegrationEventPublisher"/>'s contract promises come entirely from
 /// <c>OutboxRelayProcessor</c>'s own claim/lease loop, not from a broker.
+///
+/// After the Core GIS mutation succeeds, also offers the same batch to
+/// <see cref="MaximoAssetLifecycleSyncService"/> (XD01-232) — a no-op for every batch except an
+/// asset swap's. <paramref name="maximoSync"/> defaults to <c>null</c> so existing 2-arg
+/// construction (tests, before XD01-232) keeps compiling; the host wires the real instance via DI.
 /// </summary>
 internal sealed class GeoCoreBridgeEventPublisher(
     IGeoCoreClientResolver clientResolver,
-    IIntegrationMessageSerializer serializer) : IIntegrationEventPublisher
+    IIntegrationMessageSerializer serializer,
+    MaximoAssetLifecycleSyncService? maximoSync = null) : IIntegrationEventPublisher
 {
-    public Task PublishAsync(IntegrationEnvelope envelope, CancellationToken ct = default)
+    public async Task PublishAsync(IntegrationEnvelope envelope, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(envelope);
 
@@ -32,7 +39,12 @@ internal sealed class GeoCoreBridgeEventPublisher(
 
         var batch = serializer.Deserialize<AssetMutationBatchRequestedEvent>(envelope.Payload);
         var client = clientResolver.Resolve(batch.CatalogInstanceId, batch.OrganizationId);
-        return client.ExecuteAssetDeltaBatchAsync(batch, ct);
+        await client.ExecuteAssetDeltaBatchAsync(batch, ct).ConfigureAwait(false);
+
+        if (maximoSync is not null)
+        {
+            await maximoSync.SyncIfSwapAsync(batch, ct).ConfigureAwait(false);
+        }
     }
 
     public async Task PublishBatchAsync(IReadOnlyList<IntegrationEnvelope> envelopes, CancellationToken ct = default)
