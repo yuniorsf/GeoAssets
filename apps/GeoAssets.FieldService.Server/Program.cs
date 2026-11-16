@@ -22,6 +22,7 @@ using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
+using GeoAssets.Workflow.Scada;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -97,6 +98,11 @@ var fieldServiceConnectionString = builder.Configuration.GetConnectionString("Fi
         "Set it in appsettings.json or via the ConnectionStrings__FieldService environment variable.");
 
 builder.Services.AddSingleton(TimeProvider.System);
+
+// ── Topology-driven SCADA/OMS emergency dispatch (XD01-239) — reuses the pre-warmed
+// IAssetProvider singleton registered above (XD01-295). ─────────────────────────────────────
+builder.Services.AddScoped<IFeederOutageDispatchService, FeederOutageDispatchService>();
+
 builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
     .UseNpgsql(fieldServiceConnectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.FieldService.Server"))
     .AddInterceptors(
@@ -268,6 +274,10 @@ app.MapFieldWorkTransitionApi();
 // Evidence HMAC re-verification endpoint under /api/field-service/evidence (XD01-278) — see
 // EvidenceVerificationRestApiExtensions for the full endpoint list.
 app.MapEvidenceVerificationApi();
+
+// SCADA/OMS breaker-trip ingest under /api/geoassets/topology/traverse (XD01-239) — see
+// ScadaTopologyTraverseRestApiExtensions.
+app.MapScadaTopologyTraverseApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
