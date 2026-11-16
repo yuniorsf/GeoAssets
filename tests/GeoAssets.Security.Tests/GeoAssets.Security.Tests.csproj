@@ -30,6 +30,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- XD01-323: the "ServiceOrders"."RowVersion" contract is one source file, compiled into
+         this suite (GeoAssets.Server's shared-database history) and into
+         GeoAssets.FieldService.Server.Tests (the isolated FieldService history), so both
+         histories are held to the same assertions. A link, not a project reference: neither
+         suite can reference the other's host without loading two Program classes. -->
+    <Compile Include="..\GeoAssets.FieldService.Server.Tests\ServiceOrderRowVersionContract.cs" Link="ServiceOrderRowVersionContract.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- GeoAssetsDbContext (geo_entity) — its real migrations, including
          AddGeoEntityRowLevelSecurity/ForceGeoEntityRowLevelSecurity, live in this project. -->
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />

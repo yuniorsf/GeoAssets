@@ -148,8 +148,8 @@ public partial class FieldServiceMigrationChainTests
     private const string TargetsTableExistsSql =
         """SELECT (to_regclass('public."ServiceOrderTargets"') IS NOT NULL)::text AS "Value" """;
 
-    // This history has no trigger filling "ServiceOrders"."RowVersion" (the shared database's
-    // comes from a raw-SQL migration this history does not carry), so a raw insert supplies it.
+    // Supplies "ServiceOrders"."RowVersion" explicitly so the insert also works at migration
+    // points before AddServiceOrderRowVersionTrigger (XD01-323), where nothing fills it.
     private const string InsertOrderSql =
         """
         INSERT INTO "ServiceOrders" ("Id", "Title", "Description", "OrderTypeId", "Status", "Priority", "CreatedBy", "OrganizationId", "CreatedAt", "AttributesJson", "FeatureIdsJson", "RowVersion")
