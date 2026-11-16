@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WorkflowProblemTranslator and the wire envelopes are internal; their mapping is tested directly. -->
+    <InternalsVisibleTo Include="GeoAssets.Workflow.Rest.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
   </ItemGroup>

@@ -106,6 +106,14 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
 
+// Service-order targets from a selection (XD01-308): the strategy registry (registered in no
+// host before this), the selection service over the target store AddWorkflowPersistence
+// registered above and the IAssetSpatialQuery registered with the Postgres provider, and its
+// span/metric decorator.
+builder.Services.AddFeatureSelection();
+builder.Services.AddOrderTargets();
+builder.Services.AddObservableOrderTargetSelection();
+
 // IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
 // IServiceOrderRepository as every other order-driven workflow in this host.
 builder.Services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
@@ -202,6 +210,10 @@ app.MapGeoAssetsApi(wmsRequireAuthentication: wmsRequireAuthentication);
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
 app.MapServiceOrdersApi();
+
+// Service-order target + selection endpoints under /api/workflow (XD01-308) —
+// see ServiceOrderTargetsRestApiExtensions for the full endpoint list.
+app.MapServiceOrderTargetsApi();
 
 // Project REST endpoints under /api/projects (XD01-141) —
 // see ProjectsRestApiExtensions for the full endpoint list.

@@ -56,6 +56,31 @@ public sealed class GeoAssetsActivitySource : IDisposable
                 .AddTag("agent.id", agentId)
                 .AddTag("agent.invocation_id", agentInvocationId);
 
+    /// <summary>
+    /// Starts the span of one target-selection run (XD01-308):
+    /// <c>ServiceOrder.TargetSelection.Preview</c> or <c>ServiceOrder.TargetSelection.Apply</c>,
+    /// per <paramref name="mode"/>. The organization id belongs on the span (never on a metric);
+    /// the selection's own values — fence coordinates, identifiers — are never tagged.
+    /// </summary>
+    public Activity? StartTargetSelectionActivity(string mode, string orderId, string strategy, string? organizationId) =>
+        _source.StartActivity($"ServiceOrder.TargetSelection.{mode}")
+               ?.AddTag("order.id", orderId)
+                .AddTag("selection.strategy", strategy)
+                .AddTag("organization.id", organizationId);
+
+    /// <summary>Tags a target-selection span with the outcome counts of a run that completed.</summary>
+    public static void SetTargetSelectionCounts(Activity? activity, string orderTypeId, TargetSelectionCounts counts)
+    {
+        ArgumentNullException.ThrowIfNull(counts);
+        activity?.AddTag("order.type", orderTypeId)
+                 .AddTag("selection.matched", counts.Matched)
+                 .AddTag("selection.eligible", counts.Eligible)
+                 .AddTag("selection.already_in_order", counts.AlreadyInOrder)
+                 .AddTag("selection.truncated", counts.Truncated)
+                 .AddTag("selection.conflicts.warning", counts.Warnings)
+                 .AddTag("selection.conflicts.blocked", counts.Blocked);
+    }
+
     // ── Integration Messaging ─────────────────────────────────────────────────
 
     public Activity? StartIntegrationPublishActivity(

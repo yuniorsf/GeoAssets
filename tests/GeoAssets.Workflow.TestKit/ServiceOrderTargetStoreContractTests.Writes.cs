@@ -11,7 +11,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── UpdateAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task UpdateAsync_WritesActivitiesStatusConflictLevelAndNote_AndNothingElse()
+    public virtual async Task UpdateAsync_WritesActivitiesStatusConflictLevelAndNote_AndNothingElse()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -56,7 +56,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_NullNoteAndNoActivities_ClearsBoth()
+    public virtual async Task UpdateAsync_NullNoteAndNoActivities_ClearsBoth()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -71,7 +71,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_OnSuccess_StoresTheGivenVersionPlusOne_SoTheCallerCanContinueFromIt()
+    public virtual async Task UpdateAsync_OnSuccess_StoresTheGivenVersionPlusOne_SoTheCallerCanContinueFromIt()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -87,7 +87,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_StaleVersion_ThrowsServiceOrderConcurrencyExceptionAndWritesNothing()
+    public virtual async Task UpdateAsync_StaleVersion_ThrowsServiceOrderConcurrencyExceptionAndWritesNothing()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -106,7 +106,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_VersionAheadOfTheStoredOne_IsAlsoAConcurrencyConflict()
+    public virtual async Task UpdateAsync_VersionAheadOfTheStoredOne_IsAlsoAConcurrencyConflict()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -120,7 +120,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_TargetThatDoesNotExist_ThrowsKeyNotFoundException()
+    public virtual async Task UpdateAsync_TargetThatDoesNotExist_ThrowsKeyNotFoundException()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -131,7 +131,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_TargetIdThatBelongsToAnotherOrder_ThrowsKeyNotFoundExceptionAndLeavesThatTargetAlone()
+    public virtual async Task UpdateAsync_TargetIdThatBelongsToAnotherOrder_ThrowsKeyNotFoundExceptionAndLeavesThatTargetAlone()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -146,7 +146,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_NullTarget_ThrowsArgumentNullException()
+    public virtual async Task UpdateAsync_NullTarget_ThrowsArgumentNullException()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -156,7 +156,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task UpdateAsync_DoesNotRecheckStatusMoves()
+    public virtual async Task UpdateAsync_DoesNotRecheckStatusMoves()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -172,7 +172,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── RemoveAsync ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task RemoveAsync_RemovesTheListedTargets_IgnoresUnknownIds_AndReturnsHowManyItRemoved()
+    public virtual async Task RemoveAsync_RemovesTheListedTargets_IgnoresUnknownIds_AndReturnsHowManyItRemoved()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -194,7 +194,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task RemoveAsync_IdsOfAnotherOrdersTargets_AreIgnored()
+    public virtual async Task RemoveAsync_IdsOfAnotherOrdersTargets_AreIgnored()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -210,7 +210,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task RemoveAsync_DoesNotCheckTheVersion()
+    public virtual async Task RemoveAsync_DoesNotCheckTheVersion()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -224,7 +224,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task RemoveAsync_EmptyIds_ReturnsZero()
+    public virtual async Task RemoveAsync_EmptyIds_ReturnsZero()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -232,7 +232,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task RemoveAsync_OrderThatDoesNotExist_ReturnsZero()
+    public virtual async Task RemoveAsync_OrderThatDoesNotExist_ReturnsZero()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -240,7 +240,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task RemoveAsync_NullIds_ThrowsArgumentNullException()
+    public virtual async Task RemoveAsync_NullIds_ThrowsArgumentNullException()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -252,7 +252,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task RemoveAsync_BlankOrderId_ThrowsArgumentException(string orderId)
+    public virtual async Task RemoveAsync_BlankOrderId_ThrowsArgumentException(string orderId)
     {
         await using var harness = await CreateHarnessAsync();
 

@@ -58,9 +58,14 @@ public sealed class GeoAssetsMeter : IDisposable
     /// <summary>ISP rollout KPI #5: CTO splitter-port occupancy discrepancy magnitude (XD01-287).</summary>
     private readonly Histogram<double> _ctoOccupancyDiscrepancy;
 
+    /// <summary>The <c>geoassets.orders.targets.*</c> instruments (XD01-308).</summary>
+    private readonly TargetSelectionInstruments _targetSelection;
+
     public GeoAssetsMeter(string version)
     {
         _meter = new Meter(MeterName, version);
+
+        _targetSelection = new TargetSelectionInstruments(_meter);
 
         _orderTransitions = _meter.CreateCounter<long>(
             "geoassets.orders.transitions",
@@ -133,6 +138,34 @@ public sealed class GeoAssetsMeter : IDisposable
 
     public void RecordCtoOccupancyDiscrepancy(int difference) =>
         _ctoOccupancyDiscrepancy.Record(Math.Abs(difference));
+
+    /// <summary>
+    /// Records one target-selection run. Tags are low-cardinality by construction: callers pass
+    /// a registered strategy id (or a fixed placeholder), never a client-supplied string, and
+    /// never an organization, order or feature id.
+    /// </summary>
+    public void RecordTargetSelectionDuration(double milliseconds, string strategy, string mode, string outcome) =>
+        _targetSelection.DurationMs.Record(milliseconds,
+            new KeyValuePair<string, object?>("strategy", strategy),
+            new KeyValuePair<string, object?>("mode", mode),
+            new KeyValuePair<string, object?>("outcome", outcome));
+
+    public void RecordTargetSelectionMatched(int matched, string strategy) =>
+        _targetSelection.Matched.Record(matched,
+            new KeyValuePair<string, object?>("strategy", strategy));
+
+    public void RecordTargetSelectionTruncated(string strategy) =>
+        _targetSelection.Truncated.Add(1,
+            new KeyValuePair<string, object?>("strategy", strategy));
+
+    public void RecordTargetConflicts(int targets, string level, string orderTypeId)
+    {
+        if (targets <= 0) return;
+
+        _targetSelection.Conflicts.Add(targets,
+            new KeyValuePair<string, object?>("level", level),
+            new KeyValuePair<string, object?>("order.type", orderTypeId));
+    }
 
     public void Dispose() => _meter.Dispose();
 }

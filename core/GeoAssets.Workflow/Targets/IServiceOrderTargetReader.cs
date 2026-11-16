@@ -53,6 +53,14 @@ public interface IServiceOrderTargetReader
     Task<PagedResult<ServiceOrderTarget>> GetPageAsync(OrderTargetQuery query, CancellationToken ct);
 
     /// <summary>
+    /// Returns the target <paramref name="targetId"/> of <paramref name="orderId"/>, or null when
+    /// that order holds no target with that id — including an unknown order, and a target id that
+    /// exists but belongs to another order. A blank <paramref name="targetId"/> throws
+    /// <see cref="ArgumentException"/>, like a blank order id. Ids compare ordinally.
+    /// </summary>
+    Task<ServiceOrderTarget?> GetByIdAsync(string orderId, string targetId, CancellationToken ct);
+
+    /// <summary>
     /// Returns how many targets <paramref name="orderId"/> has, in any status and whether or
     /// not they are released; 0 for an order with no targets or an unknown order.
     /// </summary>

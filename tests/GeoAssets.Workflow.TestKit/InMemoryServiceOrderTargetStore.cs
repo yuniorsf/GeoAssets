@@ -63,6 +63,21 @@ public sealed class InMemoryServiceOrderTargetStore(
         });
     }
 
+    public Task<ServiceOrderTarget?> GetByIdAsync(string orderId, string targetId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
+        ct.ThrowIfCancellationRequested();
+
+        lock (_gate)
+        {
+            return Task.FromResult(
+                _targets.TryGetValue(targetId, out var stored) && string.Equals(stored.OrderId, orderId, StringComparison.Ordinal)
+                    ? stored
+                    : null);
+        }
+    }
+
     public Task<int> CountAsync(string orderId, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);

@@ -17,6 +17,10 @@ namespace GeoAssets.Workflow.TestKit;
 ///
 /// The facts are split over three files: adding (here), updating and removing
 /// (<c>.Writes.cs</c>), and reading (<c>.Reads.cs</c>).
+///
+/// Every fact is <c>virtual</c> so that an adapter for which one sentence of the contract cannot
+/// hold by design (a remote client, whose host re-validates what a store takes on trust) can
+/// override exactly that fact with a skipped one stating why — never by weakening it here.
 /// </summary>
 public abstract partial class ServiceOrderTargetStoreContractTests
 {
@@ -77,7 +81,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     // ── AddRangeAsync ─────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task AddRangeAsync_NewTargets_ReturnsHowManyWereInsertedAndStoresThemAsGiven()
+    public virtual async Task AddRangeAsync_NewTargets_ReturnsHowManyWereInsertedAndStoresThemAsGiven()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -107,7 +111,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_FeatureTheOrderAlreadyHolds_IsSkippedAndTheStoredTargetIsNotChanged()
+    public virtual async Task AddRangeAsync_FeatureTheOrderAlreadyHolds_IsSkippedAndTheStoredTargetIsNotChanged()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -122,7 +126,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_RepeatingTheSameCall_ReturnsZeroTheSecondTime()
+    public virtual async Task AddRangeAsync_RepeatingTheSameCall_ReturnsZeroTheSecondTime()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -137,7 +141,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_BatchMixingHeldAndNewFeatures_InsertsOnlyTheNewOnes()
+    public virtual async Task AddRangeAsync_BatchMixingHeldAndNewFeatures_InsertsOnlyTheNewOnes()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -157,7 +161,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_SameFeatureTwiceInOneCall_StoresTheFirstOnly()
+    public virtual async Task AddRangeAsync_SameFeatureTwiceInOneCall_StoresTheFirstOnly()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -171,7 +175,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_SameFeatureInTwoOrders_IsStoredForBoth()
+    public virtual async Task AddRangeAsync_SameFeatureInTwoOrders_IsStoredForBoth()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -187,7 +191,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_MoreTargetsThanOneInsertStatementCarries_InsertsThemAll()
+    public virtual async Task AddRangeAsync_MoreTargetsThanOneInsertStatementCarries_InsertsThemAll()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -204,7 +208,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_EmptyTargets_ReturnsZeroEvenForAnOrderThatDoesNotExist()
+    public virtual async Task AddRangeAsync_EmptyTargets_ReturnsZeroEvenForAnOrderThatDoesNotExist()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -214,7 +218,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_BatchContainingAnotherOrdersTarget_ThrowsArgumentExceptionAndInsertsNothing()
+    public virtual async Task AddRangeAsync_BatchContainingAnotherOrdersTarget_ThrowsArgumentExceptionAndInsertsNothing()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -231,7 +235,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_OrderThatDoesNotExist_ThrowsKeyNotFoundExceptionAndInsertsNothing()
+    public virtual async Task AddRangeAsync_OrderThatDoesNotExist_ThrowsKeyNotFoundExceptionAndInsertsNothing()
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -243,7 +247,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_TargetCarryingAnotherOrganizationThanItsOrder_ThrowsArgumentExceptionAndInsertsNothing()
+    public virtual async Task AddRangeAsync_TargetCarryingAnotherOrganizationThanItsOrder_ThrowsArgumentExceptionAndInsertsNothing()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -261,7 +265,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_NullTargets_ThrowsArgumentNullException()
+    public virtual async Task AddRangeAsync_NullTargets_ThrowsArgumentNullException()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");
@@ -274,7 +278,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task AddRangeAsync_BlankOrderId_ThrowsArgumentException(string orderId)
+    public virtual async Task AddRangeAsync_BlankOrderId_ThrowsArgumentException(string orderId)
     {
         await using var harness = await CreateHarnessAsync();
 
@@ -284,7 +288,7 @@ public abstract partial class ServiceOrderTargetStoreContractTests
     }
 
     [Fact]
-    public async Task AddRangeAsync_AfterRemovingTheTarget_TheFeatureCanBeAddedAgain()
+    public virtual async Task AddRangeAsync_AfterRemovingTheTarget_TheFeatureCanBeAddedAgain()
     {
         await using var harness = await CreateHarnessAsync();
         await SeedOrderAsync(harness, "ord-1");

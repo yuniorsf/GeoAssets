@@ -1,4 +1,5 @@
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoAssets.Workflow.Rest;
@@ -29,6 +30,16 @@ public static class WorkflowRestServiceExtensions
 
         services.AddSingleton(sp => new RestOrderTypeRepository(BuildClient(sp, baseUrl)));
         services.AddSingleton<IOrderTypeRepository>(sp => sp.GetRequiredService<RestOrderTypeRepository>());
+
+        // Service-order targets and selection (XD01-308) — same named client, same lifetime.
+        services.AddSingleton(sp => new RestServiceOrderTargetRepository(BuildClient(sp, baseUrl)));
+        services.AddSingleton<IServiceOrderTargetReader>(sp => sp.GetRequiredService<RestServiceOrderTargetRepository>());
+        services.AddSingleton<IServiceOrderTargetWriter>(sp => sp.GetRequiredService<RestServiceOrderTargetRepository>());
+
+        services.AddSingleton(sp => new RestOrderTargetSelectionService(BuildClient(sp, baseUrl)));
+        services.AddSingleton<IOrderTargetSelectionService>(sp => sp.GetRequiredService<RestOrderTargetSelectionService>());
+
+        services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, baseUrl)));
 
         return services;
     }

@@ -77,6 +77,9 @@ internal static class SecurityTestContainerFixture
                 END $$;
 
                 GRANT SELECT, INSERT, UPDATE, DELETE ON geo_entity TO {TenantScopedRole};
+                -- geo_entity_attribute's policy reads the parent row in geo_entity (granted
+                -- above), which is how an attribute inherits its feature's visibility (XD01-308).
+                GRANT SELECT, INSERT, UPDATE, DELETE ON geo_entity_attribute TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON "ServiceOrders" TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON "ContractorUsLedgerEntries" TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON asset_type TO {TenantScopedRole};

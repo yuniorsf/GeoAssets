@@ -337,8 +337,6 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
                                      source.Features.Count > 0
                                          ? source.Features.Select(f => f.Id).ToArray()
                                          : source.FeatureIds);
-        target.SelectionSpecJson = source.SelectionSpec is null
-            ? null
-            : System.Text.Json.JsonSerializer.Serialize(source.SelectionSpec);
+        target.SelectionSpecJson = ServiceOrderMapper.ToSelectionSpecJson(source.SelectionSpec);
     }
 }

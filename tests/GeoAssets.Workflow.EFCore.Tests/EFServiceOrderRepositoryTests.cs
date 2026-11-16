@@ -197,6 +197,53 @@ public class EFServiceOrderRepositoryTests
     }
 
     [Fact]
+    public async Task UpdateAsync_StampingASelectionSpec_RoundTripsIt_AndTheOrderStaysReadable()
+    {
+        // XD01-308: UpdateAsync used to store the spec with PascalCase members, which the
+        // reader (camelCase, ExecutedAt required) then rejected — every later read of the
+        // order threw JsonException.
+        using var fixture = new SqliteFixture();
+        var executedAt = new DateTime(2026, 11, 16, 9, 30, 0, DateTimeKind.Utc);
+        await new EFServiceOrderRepository(fixture.Context).AddAsync(Order("a"));
+
+        await using (var writeContext = fixture.NewContext())
+        {
+            var repo = new EFServiceOrderRepository(writeContext);
+            var order = (ServiceOrder)(await repo.GetByIdAsync("a"))!;
+            order.SelectionSpec = new FeatureSelectionSpec
+            {
+                StrategyId = "polygon-fence",
+                Parameters = new Dictionary<string, object>(StringComparer.Ordinal) { ["maxResults"] = 5 },
+                ExecutedAt = executedAt,
+            };
+            await repo.UpdateAsync(order);
+        }
+
+        await using var readContext = fixture.NewContext();
+        var loaded = await new EFServiceOrderRepository(readContext).GetByIdAsync("a");
+
+        loaded!.SelectionSpec!.StrategyId.Should().Be("polygon-fence");
+        loaded.SelectionSpec.ExecutedAt.Should().Be(executedAt);
+        loaded.SelectionSpec.Parameters.Should().ContainKey("maxResults");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_SelectionSpecStoredWithPascalCaseMembers_IsStillRead()
+    {
+        // A row written by UpdateAsync before XD01-308 fixed its serialization.
+        using var fixture = new SqliteFixture();
+        await new EFServiceOrderRepository(fixture.Context).AddAsync(Order("a"));
+        await fixture.Context.Database.ExecuteSqlRawAsync(
+            """UPDATE ServiceOrders SET SelectionSpecJson = '{{"StrategyId":"bounding-box","Parameters":{{}},"ExecutedAt":"2026-05-01T08:00:00Z","Note":"legacy"}}' WHERE Id = 'a'""");
+
+        await using var readContext = fixture.NewContext();
+        var loaded = await new EFServiceOrderRepository(readContext).GetByIdAsync("a");
+
+        loaded!.SelectionSpec.Should().BeEquivalentTo(
+            new { StrategyId = "bounding-box", Note = "legacy", ExecutedAt = new DateTime(2026, 5, 1, 8, 0, 0, DateTimeKind.Utc) });
+    }
+
+    [Fact]
     public async Task AddAsync_WithAttributes_RoundTrips()
     {
         using var fixture = new SqliteFixture();
