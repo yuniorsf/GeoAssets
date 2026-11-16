@@ -19,7 +19,7 @@ namespace GeoAssets.Core.Services;
 /// </summary>
 public static class SirgasUtmReprojector
 {
-    private static readonly Dictionary<int, MathTransform> TransformsByZone = [];
+    private static readonly Dictionary<int, (MathTransform Forward, MathTransform Inverse)> TransformsByZone = [];
     private static readonly System.Threading.Lock BuildLock = new();
 
     /// <summary>The point's easting/northing (meters) in its own SIRGAS 2000 UTM zone, plus that zone's EPSG code.</summary>
@@ -29,7 +29,7 @@ public static class SirgasUtmReprojector
 
         var zone = SirgasUtmZoneResolver.ZoneFor(point.Longitude);
         var epsgCode = SirgasUtmZoneResolver.EpsgCodeFor(point.Longitude);
-        var transform = GetOrBuildTransform(zone);
+        var transform = GetOrBuildTransforms(zone).Forward;
 
         var (easting, northing) = transform.Transform(point.Longitude, point.Latitude);
         return (easting, northing, epsgCode);
@@ -38,12 +38,28 @@ public static class SirgasUtmReprojector
     /// <summary>The inverse of <see cref="ToSirgasUtm"/> — mainly for round-trip accuracy testing.</summary>
     public static GeoPoint FromSirgasUtm(double easting, double northing, int zone)
     {
-        var inverse = GetOrBuildTransform(zone).Inverse();
+        var inverse = GetOrBuildTransforms(zone).Inverse;
         var (longitude, latitude) = inverse.Transform(easting, northing);
         return new GeoPoint(longitude, latitude);
     }
 
-    private static MathTransform GetOrBuildTransform(int zone)
+    /// <summary>
+    /// The same WGS84 → SIRGAS 2000 UTM transform <see cref="ToSirgasUtm"/> applies to a
+    /// <see cref="GeoPoint"/>, exposed for a raw longitude/latitude pair — for reprojecting every
+    /// vertex of a non-point geometry (e.g. a BDGD SEGCON <see cref="GeoLineString"/>, XD01-225)
+    /// into the same zone, one coordinate at a time.
+    /// </summary>
+    public static (double Easting, double Northing) TransformCoordinate(double longitude, double latitude, int zone)
+    {
+        var transform = GetOrBuildTransforms(zone).Forward;
+        return transform.Transform(longitude, latitude);
+    }
+
+    // ProjNet builds a transform's inverse lazily and without synchronization, so calling
+    // Inverse() on a shared cached transform from concurrent callers can observe a half-built
+    // inverse and return garbage coordinates. Both directions are therefore built once, here,
+    // under the lock, and only the finished pair is ever shared.
+    private static (MathTransform Forward, MathTransform Inverse) GetOrBuildTransforms(int zone)
     {
         lock (BuildLock)
         {
@@ -55,8 +71,9 @@ public static class SirgasUtmReprojector
                 .CreateFromCoordinateSystems(GeographicCoordinateSystem.WGS84, targetCs)
                 .MathTransform;
 
-            TransformsByZone[zone] = transform;
-            return transform;
+            var pair = (Forward: transform, Inverse: transform.Inverse());
+            TransformsByZone[zone] = pair;
+            return pair;
         }
     }
 

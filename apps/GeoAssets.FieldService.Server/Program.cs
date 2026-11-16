@@ -1,3 +1,4 @@
+using GeoAssets.Core.Bdgd;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Isp.Compliance;
 using GeoAssets.Core.Isp.Compliance.PoleAudit;
@@ -6,6 +7,7 @@ using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Provider.FileGeodatabase;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Interceptors;
@@ -157,6 +159,11 @@ builder.Services.AddGeoAssetsShapefile();
 builder.Services.AddSingleton<IDossierExporter, DisNor056Exporter>();
 builder.Services.AddSingleton<IDossierExporter, JoinAsExporter>();
 builder.Services.AddSingleton<DossierExporterRegistry>();
+
+// ANEEL BDGD File Geodatabase export (XD01-225) — GDAL-backed, so server-side only (same
+// native/host constraint as the PostgreSQL provider, never registered for Blazor WASM).
+builder.Services.AddGeoAssetsFileGeodatabaseExport();
+builder.Services.AddSingleton<BdgdFileGeodatabaseExporter>();
 
 // Pole-sharing audit & yellow-tag legal defense evidence repository (XD01-285) — in-memory
 // stateful singleton, same shape as NeutralPoleRegistry; no persistence-layer ticket exists yet.

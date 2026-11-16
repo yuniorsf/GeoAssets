@@ -157,6 +157,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Gateway", "apps\G
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Gateway.Tests", "tests\GeoAssets.Gateway.Tests\GeoAssets.Gateway.Tests.csproj", "{D0EFCE2A-6F04-4FAB-A794-BB81B71F0593}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.FileGeodatabase", "providers\GeoAssets.Provider.FileGeodatabase\GeoAssets.Provider.FileGeodatabase.csproj", "{C7C71069-8C9A-426A-8D30-F628ACB36573}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.FileGeodatabase.Tests", "tests\GeoAssets.Provider.FileGeodatabase.Tests\GeoAssets.Provider.FileGeodatabase.Tests.csproj", "{3F7B8592-AD41-4335-B238-93297DD4EED5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -947,6 +951,30 @@ Global
 		{D0EFCE2A-6F04-4FAB-A794-BB81B71F0593}.Release|x64.Build.0 = Release|Any CPU
 		{D0EFCE2A-6F04-4FAB-A794-BB81B71F0593}.Release|x86.ActiveCfg = Release|Any CPU
 		{D0EFCE2A-6F04-4FAB-A794-BB81B71F0593}.Release|x86.Build.0 = Release|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Debug|x64.Build.0 = Debug|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Debug|x86.Build.0 = Debug|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Release|x64.ActiveCfg = Release|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Release|x64.Build.0 = Release|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Release|x86.ActiveCfg = Release|Any CPU
+		{C7C71069-8C9A-426A-8D30-F628ACB36573}.Release|x86.Build.0 = Release|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Debug|x64.Build.0 = Debug|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Debug|x86.Build.0 = Debug|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Release|x64.ActiveCfg = Release|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Release|x64.Build.0 = Release|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Release|x86.ActiveCfg = Release|Any CPU
+		{3F7B8592-AD41-4335-B238-93297DD4EED5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1019,5 +1047,7 @@ Global
 		{7AEC35C9-0938-4E29-ADC3-6DF8CE0E2088} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{79515FC1-8ED6-4954-A200-7FD9A9304232} = {5A6B7C8D-9E0F-4321-ABCD-EF0123456789}
 		{D0EFCE2A-6F04-4FAB-A794-BB81B71F0593} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{C7C71069-8C9A-426A-8D30-F628ACB36573} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
+		{3F7B8592-AD41-4335-B238-93297DD4EED5} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 	EndGlobalSection
 EndGlobal
