@@ -49,6 +49,10 @@ builder.Services.AddGeoAssetsPostgres();
 // comment for why this needs an interim service provider.
 await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
 
+// IAssetSpatialQuery (XD01-307) — area/attribute selection is pushed down to PostGIS and scoped
+// to the request's ITenantContext, instead of scanning the tenant-less IAssetProvider cache above.
+builder.Services.AddPostgresAssetSpatialQuery(connectionString);
+
 // IDbContextFactory<GeoAssetsDbContext> — used by WmsPostGisRenderer so each
 // tile request opens its own short-lived, thread-safe DbContext without touching
 // the shared IAssetProvider in-memory cache.

@@ -18,6 +18,30 @@ public class FeatureSelectionRegistryTests
         return repo;
     }
 
+    // ── Discovery ─────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("polygon-fence", "Spatial", "Polygon Fence", typeof(PolygonFenceSelectionStrategy))]
+    [InlineData("identifier-list", "Filter", "Identifier List", typeof(IdentifierListSelectionStrategy))]
+    public void Registry_DiscoversTheSpatialQueryStrategies(
+        string strategyId, string category, string displayName, Type strategyType)
+    {
+        using var registry = new FeatureSelectionRegistry(
+            TimeProvider.System, "no-such-plugins-dir", typeof(InheritFromParentOrderStrategy).Assembly);
+
+        var metadata = registry.GetAvailableStrategies()
+            .Should().ContainSingle(m => string.Equals(m.StrategyId, strategyId, StringComparison.Ordinal)).Subject;
+        metadata.Category.Should().Be(category);
+        metadata.DisplayName.Should().Be(displayName);
+        metadata.Description.Should().NotBeNullOrWhiteSpace();
+
+        var export = registry.Strategies.Single(s => string.Equals(s.Metadata.StrategyId, strategyId, StringComparison.Ordinal));
+        export.Value.Should().BeOfType(strategyType);
+        export.Value.StrategyId.Should().Be(strategyId);
+        export.Value.DisplayName.Should().Be(displayName);
+        export.Value.Description.Should().Be(metadata.Description);
+    }
+
     // ── SelectAsync parameter validation ──────────────────────────────────────
 
     [Fact]
