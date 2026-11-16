@@ -102,22 +102,18 @@ namespace GeoAssets.IpBilling.Server.Migrations
                 columns: new[] { "ServiceOrderId", "CodigoInstalacao" },
                 unique: true);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_FaturamentoPostings_Municipios_MunicipioId",
-                table: "FaturamentoPostings",
-                column: "MunicipioId",
-                principalTable: "Municipios",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
+            // XD01-319: the scaffolder also emitted AddForeignKey(
+            // "FK_FaturamentoPostings_Municipios_MunicipioId") here (and the mirrored
+            // DropForeignKey in Down), because IpBillingInitialCreate's CreateTable for
+            // "FaturamentoPostings" — which already declares that constraint — was added by hand
+            // without the matching relationship in its Designer model. Re-adding it failed with
+            // PostgreSQL 42710 on every database, so it is removed rather than guarded; the
+            // constraint is owned by IpBillingInitialCreate alone.
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_FaturamentoPostings_Municipios_MunicipioId",
-                table: "FaturamentoPostings");
-
             migrationBuilder.DropTable(
                 name: "Levantamento24hLines");
 
