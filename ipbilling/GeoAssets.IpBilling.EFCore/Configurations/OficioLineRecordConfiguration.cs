@@ -22,5 +22,10 @@ internal sealed class OficioLineRecordConfiguration : IEntityTypeConfiguration<O
             .WithOne()
             .HasForeignKey(d => d.LineId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasMany(l => l.LampDetails)
+            .WithOne()
+            .HasForeignKey(d => d.LineId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

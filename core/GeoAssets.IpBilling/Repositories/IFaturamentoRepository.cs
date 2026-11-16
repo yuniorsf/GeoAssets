@@ -23,7 +23,9 @@ public interface IFaturamentoRepository
     /// <paramref name="municipioId"/> and <paramref name="competencia"/> using either
     /// <see cref="FaturamentoPostingMode.Set"/> (Levantamento baseline) or
     /// <see cref="FaturamentoPostingMode.Accumulate"/> (Fiscalização/Ofício delta).
-    /// Idempotent per <c>(serviceOrderId, competencia)</c>.
+    /// Idempotent per <c>(serviceOrderId, competencia)</c>. <paramref name="isProvisional"/> is
+    /// stored on the new <see cref="FaturamentoPosting.IsProvisional"/> (XD01-301); a deduplicated
+    /// retry leaves the already-stored posting — including its marker — untouched.
     /// </summary>
     Task<Faturamento> PostOrderCalculationAsync(
         string serviceOrderId,
@@ -32,6 +34,7 @@ public interface IFaturamentoRepository
         decimal kwhDeltaOrBaseline,
         FaturamentoPostingMode mode,
         DateTimeOffset postedAt,
+        bool isProvisional = false,
         CancellationToken ct = default);
 
     /// <summary>

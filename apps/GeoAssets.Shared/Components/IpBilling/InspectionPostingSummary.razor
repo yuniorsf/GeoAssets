@@ -1,0 +1,29 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+<div class="sidebar-section" style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center" role="status">
+    @if (HasPosting)
+    {
+        <div><strong>@L["admin.ipBilling.inspectionPosting.postedKwh"]:</strong> @FormatKwh(DeltaKwh) kWh</div>
+        @if (LedgerKwh is { } ledgerKwh)
+        {
+            <div><strong>@L["admin.ipBilling.inspectionPosting.ledgerKwh"]:</strong> @FormatKwh(ledgerKwh) kWh</div>
+        }
+        @if (IsProvisional)
+        {
+            <span class="badge fs-6"
+                  style="background-color:var(--warning);color:var(--on-accent)"
+                  title="@L.GetString("admin.ipBilling.inspectionPosting.provisionalHint", ProvisionalPoints)">
+                ⚠ @L["admin.ipBilling.inspectionPosting.provisionalBadge"]
+            </span>
+            <span style="color:var(--text-secondary)">@L.GetString("admin.ipBilling.inspectionPosting.provisionalHint", ProvisionalPoints)</span>
+        }
+        else
+        {
+            <span style="color:var(--text-secondary)">@L.GetString("admin.ipBilling.inspectionPosting.exactHint", ExactPoints)</span>
+        }
+    }
+    else
+    {
+        <span style="color:var(--text-secondary)">@L["admin.ipBilling.inspectionPosting.none"]</span>
+    }
+</div>

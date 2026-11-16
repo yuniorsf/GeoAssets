@@ -113,7 +113,7 @@ internal sealed class OficioRestClient(HttpClient http) : IOficioRestClient
             new Uri($"oficio/{orderId}/validate", UriKind.Relative),
             new ValidateRequest(performedBy),
             ct);
-        response.EnsureSuccessStatusCode();
+        await RestErrors.EnsureSuccessAsync(response, ct);
 
         return await response.Content.ReadFromJsonAsync<OficioValidationResult>(ct)
             ?? throw new InvalidOperationException("POST oficio/validate returned an empty response.");

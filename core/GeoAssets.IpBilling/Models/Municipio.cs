@@ -32,6 +32,14 @@ public sealed class Municipio
     /// the Prefeitura side has been onboarded as its own tenant.</summary>
     public Guid? PrefeituraOrganizationId { get; set; }
 
+    /// <summary>
+    /// The <see cref="Distribuidora"/> whose lamp wattage chart
+    /// (<see cref="DistribuidoraLampWattage"/>) converts this município's Fiscalização/Ofício
+    /// point counts into kWh (XD01-301). Null until assigned — the conversion then uses the
+    /// global standard chart (<see cref="LampType"/>/<see cref="LampWattageOption"/>) alone.
+    /// </summary>
+    public Guid? DistribuidoraId { get; set; }
+
     /// <summary>Whether Levantamento (full-census survey) data currently arrives via
     /// spreadsheet upload or a dispatched service order.</summary>
     public OrigemWorkflow OrigemLevantamento { get; set; } = OrigemWorkflow.Planilha;

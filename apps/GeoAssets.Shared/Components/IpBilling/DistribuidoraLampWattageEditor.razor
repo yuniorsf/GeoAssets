@@ -1,0 +1,100 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.IpBilling.Models
+@using GeoAssets.IpBilling.Repositories
+@inject IDistribuidoraLampWattageRepository Repository
+
+<section class="sidebar-section" aria-labelledby="distribuidora-chart-title">
+    <div class="section-header-row">
+        <h5 id="distribuidora-chart-title">@L["admin.ipBilling.distribuidoras.chartTitle"]</h5>
+        <div>
+            <label class="visually-hidden" for="distribuidora-chart-page-size">@L["admin.ipBilling.distribuidoras.pageSize"]</label>
+            <select id="distribuidora-chart-page-size" class="form-select form-select-sm assets-table-page-size" @onchange="OnPageSizeChangedAsync">
+                @foreach (var size in PageSizeOptions)
+                {
+                    <option value="@size" selected="@(size == _pageSize)">@size</option>
+                }
+            </select>
+        </div>
+    </div>
+    <p style="color:var(--text-secondary)">@L["admin.ipBilling.distribuidoras.chartHint"]</p>
+
+    <form class="row g-2 align-items-end" @onsubmit="HandleUpsertAsync" @onsubmit:preventDefault="true">
+        <div class="col-sm-3">
+            <label class="form-label" for="distribuidora-chart-code">@L["admin.ipBilling.distribuidoras.lampType"]</label>
+            <select id="distribuidora-chart-code" class="form-select form-select-sm" @bind="_code">
+                @foreach (var lampCode in Enum.GetValues<LampTypeCode>())
+                {
+                    <option value="@lampCode">@lampCode</option>
+                }
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label class="form-label" for="distribuidora-chart-wattage">@L["admin.ipBilling.distribuidoras.wattage"]</label>
+            <input id="distribuidora-chart-wattage" class="form-control form-control-sm" type="number" min="1" step="1" @bind="_wattageW" />
+        </div>
+        <div class="col-sm-3">
+            <label class="form-label" for="distribuidora-chart-ballast">@L["admin.ipBilling.distribuidoras.ballastLoss"]</label>
+            <input id="distribuidora-chart-ballast" class="form-control form-control-sm" type="number" min="0" step="0.01" @bind="_ballastLossW" />
+        </div>
+        <div class="col-sm-3">
+            <button class="btn btn-primary btn-sm" type="submit" disabled="@_busy">@L["admin.ipBilling.distribuidoras.saveRow"]</button>
+        </div>
+    </form>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="attribute-errors" role="alert">@_error</p>
+    }
+
+    @if (_loading && _rows.Count == 0)
+    {
+        <div class="empty-state">@L["app.loading"]</div>
+    }
+    else if (_totalCount == 0)
+    {
+        <p class="empty-state">@L["admin.ipBilling.distribuidoras.chartEmpty"]</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <caption class="visually-hidden">@L["admin.ipBilling.distribuidoras.chartTitle"]</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">@L["admin.ipBilling.distribuidoras.lampType"]</th>
+                        <th scope="col">@L["admin.ipBilling.distribuidoras.wattage"]</th>
+                        <th scope="col">@L["admin.ipBilling.distribuidoras.ballastLoss"]</th>
+                        <th scope="col">@L["admin.ipBilling.distribuidoras.totalBilled"]</th>
+                        <th scope="col"><span class="visually-hidden">@L["admin.ipBilling.distribuidoras.actions"]</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.Code</td>
+                            <td>@row.WattageW W</td>
+                            <td>@row.BallastLossW W</td>
+                            <td>@row.TotalBilledW W</td>
+                            <td class="text-end">
+                                <button class="btn btn-secondary btn-sm" type="button" disabled="@_busy" @onclick="() => EditRow(row)">
+                                    @L["admin.ipBilling.distribuidoras.editRow"]
+                                </button>
+                                <button class="btn btn-danger btn-sm" type="button" disabled="@_busy" @onclick="() => HandleDeleteAsync(row)">
+                                    @L["admin.ipBilling.distribuidoras.deleteRow"]
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <IpBillingPager Page="@_page"
+                        PageSize="@_pageSize"
+                        TotalCount="@_totalCount"
+                        ItemCount="@_rows.Count"
+                        AriaLabel="@L["admin.ipBilling.distribuidoras.chartTitle"]"
+                        OnPageChanged="GoToPageAsync" />
+    }
+</section>

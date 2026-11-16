@@ -4,6 +4,7 @@
 @using GeoAssets.IpBilling.Repositories
 @inject IMunicipioRepository Repository
 @inject IOrganizationRepository OrganizationRepository
+@inject IDistribuidoraRepository DistribuidoraRepository
 
 @if (_loading)
 {
@@ -41,6 +42,18 @@ else
                         <option value="@organization.Id" selected="@(_editModel.DistribuidoraOrganizationId == organization.Id)">@organization.Name</option>
                     }
                 </select>
+            </div>
+
+            <div class="form-group">
+                <label for="municipio-distribuidora-chart">@L["admin.ipBilling.municipios.distribuidoraChart"]</label>
+                <select id="municipio-distribuidora-chart" class="form-control" @onchange="OnDistribuidoraChartChanged">
+                    <option value="" selected="@(_editModel.DistribuidoraId is null)">@L["admin.ipBilling.municipios.distribuidoraChartNone"]</option>
+                    @foreach (var distribuidora in _distribuidoras)
+                    {
+                        <option value="@distribuidora.Id" selected="@(_editModel.DistribuidoraId == distribuidora.Id)">@distribuidora.Name</option>
+                    }
+                </select>
+                <small style="color:var(--text-secondary)">@L["admin.ipBilling.municipios.distribuidoraChartHint"]</small>
             </div>
 
             <div class="form-group">

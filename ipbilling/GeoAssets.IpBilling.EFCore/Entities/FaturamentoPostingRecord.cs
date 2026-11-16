@@ -20,4 +20,6 @@ internal sealed class FaturamentoPostingRecord
     public decimal ResultingKwh { get; set; }
 
     public DateTimeOffset PostedAt { get; set; }
+
+    public bool IsProvisional { get; set; }
 }

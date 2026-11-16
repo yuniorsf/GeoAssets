@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.IpBilling.Models;
+using GeoAssets.IpBilling.Repositories;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 
@@ -21,6 +22,7 @@ public partial class MunicipioForm
         [Required] public string Uf { get; set; } = string.Empty;
         public Guid DistribuidoraOrganizationId { get; set; }
         public Guid? PrefeituraOrganizationId { get; set; }
+        public Guid? DistribuidoraId { get; set; }
         public OrigemWorkflow OrigemLevantamento { get; set; } = OrigemWorkflow.Planilha;
         public OrigemWorkflow OrigemFiscalizacao { get; set; } = OrigemWorkflow.Planilha;
         public OrigemWorkflow OrigemOficio { get; set; } = OrigemWorkflow.Planilha;
@@ -30,6 +32,7 @@ public partial class MunicipioForm
     private MunicipioEditModel _editModel = new();
     private Municipio? _municipio;
     private List<Organization> _organizations = [];
+    private List<Distribuidora> _distribuidoras = [];
     private bool _loading = true;
     private string? _error;
     private Guid? _loadedMunicipioId;
@@ -37,6 +40,29 @@ public partial class MunicipioForm
     protected override async Task OnInitializedAsync()
     {
         _organizations = [.. await OrganizationRepository.GetAllAsync()];
+        _distribuidoras = await LoadAllDistribuidorasAsync(DistribuidoraRepository);
+    }
+
+    /// <summary>Page size used to walk the paged Distribuidora list for the picker.</summary>
+    public const int DistribuidoraPickerPageSize = 100;
+
+    /// <summary>
+    /// Every Distribuidora, for the picker. The list endpoint is paged, so this walks it page
+    /// by page (a Distribuidora is a power utility — there are a handful per deployment)
+    /// until a page comes back short or the reported total is reached.
+    /// </summary>
+    public static async Task<List<Distribuidora>> LoadAllDistribuidorasAsync(
+        IDistribuidoraReader reader, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        var all = new List<Distribuidora>();
+        for (var page = 1; ; page++)
+        {
+            var result = await reader.GetPageAsync(page, DistribuidoraPickerPageSize, ct);
+            all.AddRange(result.Items);
+            if (result.Items.Count == 0 || all.Count >= result.TotalCount) return all;
+        }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -66,6 +92,7 @@ public partial class MunicipioForm
                 Uf = _municipio.Uf,
                 DistribuidoraOrganizationId = _municipio.DistribuidoraOrganizationId,
                 PrefeituraOrganizationId = _municipio.PrefeituraOrganizationId,
+                DistribuidoraId = _municipio.DistribuidoraId,
                 OrigemLevantamento = _municipio.OrigemLevantamento,
                 OrigemFiscalizacao = _municipio.OrigemFiscalizacao,
                 OrigemOficio = _municipio.OrigemOficio,
@@ -81,6 +108,9 @@ public partial class MunicipioForm
         if (!string.IsNullOrEmpty(value) && Guid.TryParse(value, out var id))
             _editModel.DistribuidoraOrganizationId = id;
     }
+
+    private void OnDistribuidoraChartChanged(ChangeEventArgs e) =>
+        _editModel.DistribuidoraId = Guid.TryParse(e.Value as string, out var id) ? id : null;
 
     private void OnPrefeituraChanged(ChangeEventArgs e)
     {
@@ -129,6 +159,7 @@ public partial class MunicipioForm
         municipio.Uf = _editModel.Uf;
         municipio.DistribuidoraOrganizationId = _editModel.DistribuidoraOrganizationId;
         municipio.PrefeituraOrganizationId = _editModel.PrefeituraOrganizationId;
+        municipio.DistribuidoraId = _editModel.DistribuidoraId;
         municipio.OrigemLevantamento = _editModel.OrigemLevantamento;
         municipio.OrigemFiscalizacao = _editModel.OrigemFiscalizacao;
         municipio.OrigemOficio = _editModel.OrigemOficio;

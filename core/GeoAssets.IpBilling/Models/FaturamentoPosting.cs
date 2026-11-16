@@ -23,4 +23,14 @@ public sealed class FaturamentoPosting
     public decimal ResultingKwh { get; set; }
 
     public DateTimeOffset PostedAt { get; set; }
+
+    /// <summary>
+    /// <c>true</c> when <see cref="DeltaOrBaselineKwh"/> came from a provisional Fiscalização/
+    /// Ofício conversion — at least one point had no lamp detail and was converted with the
+    /// applicable chart's mean watts-per-point instead of its real lamp wattage (XD01-301) — so
+    /// the posting can be found and recalculated later. Always <c>false</c> for Levantamento
+    /// (<see cref="FaturamentoPostingMode.Set"/>) and manual (<see cref="FaturamentoPostingMode.Overwrite"/>)
+    /// postings.
+    /// </summary>
+    public bool IsProvisional { get; set; }
 }

@@ -4,7 +4,9 @@ namespace GeoAssets.IpBilling.Oficio;
 /// One "código de instalação" row of an Ofício, aggregating its <see cref="OperationGroups"/>
 /// counts into the <see cref="Agregado"/>/<see cref="Retroativo"/> totals via
 /// <see cref="OficioLineCalculator.Recalculate"/>. Point-count reconciliation, same unit of
-/// record as <c>Fiscalizacao.FiscalizacaoLine</c> — no kWh, no <c>GeoFeature</c> resolution.
+/// record as <c>Fiscalizacao.FiscalizacaoLine</c> — no persisted kWh, no <c>GeoFeature</c>
+/// resolution. The points are converted to a billable kWh delta only when the order is validated
+/// (XD01-301) — see <see cref="OficioKwhEntryMapper"/>.
 /// </summary>
 public sealed class OficioLine
 {
@@ -17,6 +19,12 @@ public sealed class OficioLine
     public required string CodigoInstalacao { get; set; }
 
     public List<OficioOperationGroupDetail> OperationGroups { get; init; } = [];
+
+    /// <summary>
+    /// Optional lamp breakdown of <see cref="OperationGroups"/>' counts (XD01-301). Empty for a
+    /// line uploaded without lamp columns — its points then convert to kWh provisionally.
+    /// </summary>
+    public List<OficioLampDetail> LampDetails { get; init; } = [];
 
     /// <summary>
     /// <c>Agregado₁ − Agregado₂ + Agregado₃ − Agregado₄</c> — can legitimately be negative,

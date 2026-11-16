@@ -13,6 +13,7 @@ public sealed class OficioCalculationService(
     IServiceOrderRepository orderRepository,
     IMunicipioRepository municipioRepository,
     IOficioRepository oficioRepository,
+    IInspectionLedgerPoster ledgerPoster,
     TimeProvider timeProvider) : IOficioCalculationService
 {
     public const string AttrAgregado = "oficioAgregado";
@@ -55,10 +56,7 @@ public sealed class OficioCalculationService(
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceOrderId);
 
         var storedLines = await oficioRepository.GetLinesAsync(serviceOrderId, ct).ConfigureAwait(false);
-        var rows = storedLines
-            .SelectMany(line => line.OperationGroups.Select(detail =>
-                new OficioWorkbookRow(line.CodigoInstalacao, detail.OperationGroup, detail.Count)))
-            .ToList();
+        var rows = OficioWorkbookMapper.ToRows(storedLines);
 
         return await CalculateAsync(serviceOrderId, rows, performedBy, ct).ConfigureAwait(false);
     }
@@ -106,13 +104,23 @@ public sealed class OficioCalculationService(
     }
 
     /// <summary>
-    /// Validates an Ofício order. <b>Does not post to the <c>Faturamento</c> ledger</b> — same
-    /// blocker as <c>FiscalizacaoCalculationService.ValidateAsync</c>, investigated as part of
-    /// XD01-188: <see cref="AttrAgregado"/>/<see cref="AttrRetroativo"/> are point-count deltas
-    /// with no wattage/lamp-type data to derive a real kWh figure from, and the ledger is
-    /// kWh-denominated. See that method's doc comment for the full reasoning — it applies here
-    /// identically. <see cref="IFaturamentoLedgerService.AccumulateInspectionDeltaAsync"/> is
-    /// ready to be called here once a real business-owned point-to-kWh rule is confirmed.
+    /// Validates an Ofício order and ACCUMULATEs its kWh delta onto the <c>Faturamento</c>
+    /// ledger (XD01-301, unblocking what XD01-188 had to leave unwired). The order's persisted
+    /// lines are normalized by <see cref="OficioKwhEntryMapper"/> and converted by
+    /// <see cref="InspectionKwhConverter"/> through <see cref="IInspectionLedgerPoster"/>: points
+    /// with lamp detail convert exactly, points known only as a count convert provisionally with
+    /// the applicable chart's mean watts-per-point, and a posting containing any provisional
+    /// point is marked <c>FaturamentoPosting.IsProvisional</c> for later recalculation.
+    ///
+    /// <para>Ordering mirrors <c>LevantamentoCalculationService.ValidateAsync</c> (XD01-188): the
+    /// ledger write commits FIRST, then the header is marked validated, then the order
+    /// transitions. A crash after the ledger write leaves the order <c>Calculado</c>; retrying is
+    /// safe because the posting is idempotent per <c>(serviceOrderId, competencia)</c> and the
+    /// retry completes the transition without posting again. Re-validating an order that is
+    /// already <c>Validado</c> never posts: it only reports the posting it made, if any (an
+    /// order validated before XD01-301 has none, and <c>Faturamento</c> is then <c>null</c> on
+    /// the result). Any conversion failure (e.g.
+    /// <see cref="InspectionLampNotInChartException"/>) throws before anything is written.</para>
     /// </summary>
     public async Task<OficioValidationResult> ValidateAsync(
         string serviceOrderId,
@@ -128,16 +136,23 @@ public sealed class OficioCalculationService(
             throw new InvalidServiceOrderTransitionException(order.Status, IpBillingWorkflowGraph.Validado);
         }
 
-        if (!order.Attributes.TryGetValue(AttrAgregado, out var rawAgregado) ||
-            !int.TryParse(rawAgregado, NumberStyles.Integer, CultureInfo.InvariantCulture, out var totalAgregado) ||
-            !order.Attributes.TryGetValue(AttrRetroativo, out var rawRetroativo) ||
-            !int.TryParse(rawRetroativo, NumberStyles.Integer, CultureInfo.InvariantCulture, out var totalRetroativo))
-        {
-            throw new InvalidOperationException(
-                $"Order '{serviceOrderId}' is missing a calculated '{AttrAgregado}'/'{AttrRetroativo}' attribute.");
-        }
+        var (totalAgregado, totalRetroativo) = ReadCalculatedTotals(order);
+        var (ibgeCode, competencia) = ReadOrderBillingMetadata(order);
+        var municipio = await municipioRepository.GetByIbgeCodeAsync(ibgeCode, ct).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"Município with IBGE code '{ibgeCode}' not found.");
+
+        var lines = await oficioRepository.GetLinesAsync(serviceOrderId, ct).ConfigureAwait(false);
+        var entries = OficioKwhEntryMapper.ToEntries(lines);
 
         var now = timeProvider.GetUtcNow();
+
+        var request = new InspectionLedgerPostingRequest(serviceOrderId, municipio, competencia, entries, now);
+
+        // Ledger first, order transition last — see this method's doc comment. An order that is
+        // already Validado only reports what it posted; it never posts anew.
+        var posting = string.Equals(order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal)
+            ? await ledgerPoster.PostAsync(request, ct).ConfigureAwait(false)
+            : await ledgerPoster.FindExistingAsync(request, ct).ConfigureAwait(false);
 
         await oficioRepository.MarkValidatedAsync(serviceOrderId, ct).ConfigureAwait(false);
         await oficioRepository.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -150,12 +165,49 @@ public sealed class OficioCalculationService(
                     OrderActionType.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
-                    $"Validated Ofício (Agregado={totalAgregado}, Retroativo={totalRetroativo}); Faturamento accumulate-posting blocked — no point-to-kWh conversion rule exists (see XD01-188)",
+                    $"Validated Ofício (Agregado={totalAgregado}, Retroativo={totalRetroativo}); {DescribePosting(posting, competencia)}",
                     IpBillingWorkflowGraph.Validado),
                 ct).ConfigureAwait(false);
         }
 
-        return new OficioValidationResult(serviceOrderId, IpBillingWorkflowGraph.Validado, totalAgregado, totalRetroativo);
+        return new OficioValidationResult(
+            serviceOrderId,
+            IpBillingWorkflowGraph.Validado,
+            totalAgregado,
+            totalRetroativo,
+            posting?.Faturamento,
+            posting?.DeltaKwh ?? 0m,
+            posting?.IsProvisional ?? false,
+            posting?.ExactPoints ?? 0,
+            posting?.ProvisionalPoints ?? 0);
+    }
+
+    private static (int TotalAgregado, int TotalRetroativo) ReadCalculatedTotals(ServiceOrder order)
+    {
+        if (!order.Attributes.TryGetValue(AttrAgregado, out var rawAgregado) ||
+            !int.TryParse(rawAgregado, NumberStyles.Integer, CultureInfo.InvariantCulture, out var totalAgregado) ||
+            !order.Attributes.TryGetValue(AttrRetroativo, out var rawRetroativo) ||
+            !int.TryParse(rawRetroativo, NumberStyles.Integer, CultureInfo.InvariantCulture, out var totalRetroativo))
+        {
+            throw new InvalidOperationException(
+                $"Order '{order.Id}' is missing a calculated '{AttrAgregado}'/'{AttrRetroativo}' attribute.");
+        }
+
+        return (totalAgregado, totalRetroativo);
+    }
+
+    private static string DescribePosting(InspectionLedgerPosting? posting, string competencia)
+    {
+        if (posting is null)
+        {
+            return "no Faturamento posting";
+        }
+
+        var kwh = posting.DeltaKwh.ToString("F4", CultureInfo.InvariantCulture);
+        var kind = posting.IsProvisional
+            ? $"PROVISIONAL conversion — {posting.ProvisionalPoints} point(s) without lamp detail used the chart's mean watts-per-point, pending recalculation"
+            : "exact conversion from lamp detail";
+        return $"posted (Accumulate) {kwh} kWh to Faturamento {competencia} — {kind}";
     }
 
     public async Task SupersedeAsync(

@@ -31,13 +31,19 @@ public interface IFaturamentoLedgerService
         DateTimeOffset postedAt,
         CancellationToken ct = default);
 
-    /// <summary>ACCUMULATE: a validated Fiscalização/Ofício adds a delta to the running total.</summary>
+    /// <summary>
+    /// ACCUMULATE: a validated Fiscalização/Ofício adds a delta to the running total.
+    /// <paramref name="isProvisional"/> marks the posting
+    /// (<see cref="FaturamentoPosting.IsProvisional"/>) as derived from a provisional
+    /// point-to-kWh conversion so it can be recalculated later (XD01-301).
+    /// </summary>
     Task<Models.Faturamento> AccumulateInspectionDeltaAsync(
         string serviceOrderId,
         Guid municipioId,
         string competencia,
         decimal deltaKwh,
         DateTimeOffset postedAt,
+        bool isProvisional = false,
         CancellationToken ct = default);
 
     /// <summary>OVERWRITE: manual entry/batch load/recarga posts an external ground-truth figure.</summary>

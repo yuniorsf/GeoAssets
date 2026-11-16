@@ -36,6 +36,15 @@ public static class IpEnergyMath
         => Math.Round(value, RoundingDecimals, MidpointRounding.AwayFromZero);
 
     /// <summary>
+    /// The regular standard energy calculation, unrounded:
+    /// <c>kWh = quantity × totalBilledW × dailyBurnHours × days ÷ 1000</c>, where
+    /// <paramref name="totalBilledW"/> is lamp wattage plus ballast loss. Callers round the
+    /// aggregate with <see cref="Round"/>.
+    /// </summary>
+    public static decimal Kwh(int quantity, decimal totalBilledW, decimal dailyBurnHours, int days)
+        => quantity * totalBilledW * dailyBurnHours * days / 1000m;
+
+    /// <summary>
     /// Whether <paramref name="eventDate"/> still falls within the <see cref="RetroactiveCapDays"/>-day
     /// retroactive window measured back from <paramref name="asOf"/> — inclusive of the boundary
     /// itself (exactly <see cref="RetroactiveCapDays"/> days back is still within the cap; one day

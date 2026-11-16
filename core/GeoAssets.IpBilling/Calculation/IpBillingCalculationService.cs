@@ -119,7 +119,7 @@ public sealed class IpBillingCalculationService(
             calculatedKwh,
             mode,
             now,
-            ct).ConfigureAwait(false);
+            ct: ct).ConfigureAwait(false);
         await faturamentoRepository.SaveChangesAsync(ct).ConfigureAwait(false);
 
         if (string.Equals(order.Status, IpBillingWorkflowGraph.Calculado, StringComparison.Ordinal))

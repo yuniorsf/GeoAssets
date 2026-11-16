@@ -40,6 +40,16 @@
         </div>
     }
 
+    @if (_posting is not null)
+    {
+        <InspectionPostingSummary HasPosting="@(_posting.Faturamento is not null)"
+                                  DeltaKwh="@_posting.DeltaKwh"
+                                  LedgerKwh="@_posting.Faturamento?.KwhFaturado"
+                                  IsProvisional="@_posting.IsProvisional"
+                                  ExactPoints="@_posting.ExactPoints"
+                                  ProvisionalPoints="@_posting.ProvisionalPoints" />
+    }
+
     @if (_totalAgregado is not null)
     {
         <div class="sidebar-section" style="display:flex;gap:1.5rem;flex-wrap:wrap">

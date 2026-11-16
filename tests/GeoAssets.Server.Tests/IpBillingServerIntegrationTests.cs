@@ -273,10 +273,9 @@ public sealed class IpBillingServerIntegrationTests
     }
 
     [Fact]
-    // Renamed from "...AccumulatesIntoLedger" during XD01-188's investigation: this test never
-    // actually asserted anything about the Faturamento ledger, and per that ticket's findings,
-    // Fiscalização validation does NOT post to the ledger (no point-to-kWh conversion rule
-    // exists) — the old name was aspirational/inaccurate, not a description of real behavior.
+    // XD01-188 found that Fiscalização validation did not post to the ledger (no point-to-kWh
+    // conversion rule existed). XD01-301 added that rule, so this legacy 3-column sheet — no
+    // lamp columns — now also posts, provisionally, at the chart's mean watts-per-point.
     public async Task FiscalizacaoUploadCalculateValidate_HappyPath_ComputesAgregadoAndRetroativo()
     {
         using var coreServer = await BuildCoreServerAsync(new TestAssetProvider());
@@ -327,6 +326,8 @@ public sealed class IpBillingServerIntegrationTests
         valResult!.Status.Should().Be(IpBillingWorkflowGraph.Validado);
         valResult.TotalAgregado.Should().Be(8);
         valResult.TotalRetroativo.Should().Be(7);
+        AssertLegacySheetPostedProvisionally(
+            valResult.Faturamento, valResult.DeltaKwh, valResult.IsProvisional, valResult.ExactPoints, valResult.ProvisionalPoints);
     }
 
     [Fact]
@@ -417,6 +418,8 @@ public sealed class IpBillingServerIntegrationTests
         valResult!.Status.Should().Be(IpBillingWorkflowGraph.Validado);
         valResult.TotalAgregado.Should().Be(8);
         valResult.TotalRetroativo.Should().Be(8);
+        AssertLegacySheetPostedProvisionally(
+            valResult.Faturamento, valResult.DeltaKwh, valResult.IsProvisional, valResult.ExactPoints, valResult.ProvisionalPoints);
     }
 
     [Fact]
@@ -645,6 +648,387 @@ public sealed class IpBillingServerIntegrationTests
         queried.Should().ContainSingle(f => f.KwhFaturado == 777m);
     }
 
+    // ── XD01-301: Fiscalização/Ofício validation posts points→kWh to the Faturamento ledger ──
+
+    private sealed record InspectionFlow(string Route, string OrderTypeId, string UploadQuery);
+
+    private static readonly InspectionFlow FiscalizacaoFlow = new("fiscalizacao", IpBillingOrderTypes.FiscalizacaoId, string.Empty);
+    private static readonly InspectionFlow OficioFlow = new("oficio", IpBillingOrderTypes.OficioId, "?numeroPrefeitura=OF-2026-301");
+
+    private static InspectionFlow FlowOf(string route) =>
+        string.Equals(route, "oficio", StringComparison.Ordinal) ? OficioFlow : FiscalizacaoFlow;
+
+    /// <summary>The fields both flows' validation results share, as the REST body carries them.</summary>
+    private sealed record InspectionValidationBody(
+        string Status, Faturamento? Faturamento, decimal DeltaKwh, bool IsProvisional, int ExactPoints, int ProvisionalPoints);
+
+    private sealed record ConversionProblemBody(string Code, string Message, string? LampCode, int? WattageW);
+
+    private static readonly string?[] LampSheetHeader =
+        ["Código de Instalação", "Grupo de Operação", "Quantidade", "Tipo de Lâmpada", "Potência (W)"];
+
+    // The stub chart bills VS 100 W at 110 W; 2026-03 has 31 days.
+    // 10 × 110 × 11.8667 × 31 ÷ 1000 = 404.65447 → 404.6545.
+    private const decimal TenVs100PointsMarchKwh = 404.6545m;
+
+    /// <summary>
+    /// The legacy sheet of the two happy-path tests (groups 1..4 = 10, 3, 2, 1, no lamp
+    /// columns) converts at the stub chart's mean of 80 W per point (LD 50 W and VS 110 W):
+    /// (10 − 3) × 80 × 11.8667 × 31 ÷ 1000 + (2 − 1) × 80 × 12.1333 × 31 ÷ 1000 = 236.0965.
+    /// </summary>
+    private static void AssertLegacySheetPostedProvisionally(
+        Faturamento? faturamento, decimal deltaKwh, bool isProvisional, int exactPoints, int provisionalPoints)
+    {
+        deltaKwh.Should().Be(236.0965m);
+        isProvisional.Should().BeTrue("no row carried lamp detail");
+        exactPoints.Should().Be(0);
+        provisionalPoints.Should().Be(16);
+        faturamento.Should().NotBeNull();
+        faturamento!.KwhFaturado.Should().Be(236.0965m);
+        faturamento.Competencia.Should().Be("2026-03");
+    }
+
+    private static Task<TestServer> BuildInspectionServerAsync(
+        IReadOnlyList<IReadOnlyList<string?>>? rawRows,
+        InspectionFakes inspection,
+        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrderRepository = null)
+    {
+        // The Core server is never reached by these flows; an unrouted client keeps the host's
+        // IGeoCoreClient registration satisfiable.
+        var coreHttpClient = new HttpClient { BaseAddress = new Uri("http://core.invalid/api/geoassets/") };
+        return BuildIpBillingServerAsync(
+            coreHttpClient,
+            new StubTransformerResolver(new Dictionary<(string, string), Guid>()),
+            rawRows is null ? null : new StubWorkbookReader(rawRows),
+            decorateOrderRepository,
+            inspection);
+    }
+
+    private static async Task<ServiceOrder> CreateInspectionOrderAsync(HttpClient client, InspectionFlow flow)
+    {
+        var createResp = await client.PostAsJsonAsync(
+            new Uri("/api/ip-billing/orders", UriKind.Relative),
+            new IpBillingRestApiExtensions.CreateOrderRequest(flow.OrderTypeId, flow.Route, "3550308", "2026-03", null, "tester"));
+        createResp.StatusCode.Should().Be(HttpStatusCode.Created);
+        return (await createResp.Content.ReadFromJsonAsync<ServiceOrder>())!;
+    }
+
+    private static async Task<HttpResponseMessage> UploadInspectionAsync(
+        HttpClient client, InspectionFlow flow, string orderId, byte[]? workbook = null)
+    {
+        using var uploadContent = new MultipartFormDataContent();
+        uploadContent.Add(new ByteArrayContent(workbook ?? [0x01, 0x02]), "file", $"{flow.Route}.xlsx");
+        return await client.PostAsync(
+            new Uri($"/api/ip-billing/{flow.Route}/{orderId}/upload{flow.UploadQuery}", UriKind.Relative), uploadContent);
+    }
+
+    private static async Task<ServiceOrder> CreateUploadCalculateAsync(HttpClient client, InspectionFlow flow)
+    {
+        var order = await CreateInspectionOrderAsync(client, flow);
+        (await UploadInspectionAsync(client, flow, order.Id)).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/{flow.Route}/{order.Id}/calculate", UriKind.Relative), new { performedBy = "tester" }))
+            .EnsureSuccessStatusCode();
+        return order;
+    }
+
+    private static Task<HttpResponseMessage> PostValidateAsync(HttpClient client, InspectionFlow flow, string orderId) =>
+        client.PostAsJsonAsync(
+            new Uri($"/api/ip-billing/{flow.Route}/{orderId}/validate", UriKind.Relative), new { performedBy = "auditor" });
+
+    private static async Task<string> GetOrderStatusAsync(HttpClient client, string orderId)
+    {
+        var order = await client.GetFromJsonAsync<ServiceOrder>(new Uri($"/api/ip-billing/orders/{orderId}", UriKind.Relative));
+        return order!.Status;
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="LevantamentoValidate_CrashAfterLedgerWriteBeforeOrderTransition_IsSafeToRetry"/>
+    /// for the two inspection flows (VAL-B3): the kWh delta is posted, the order-transition call
+    /// then fails, and the retried validate neither double-posts nor reconverts.
+    /// </summary>
+    private static async Task AssertValidateCrashIsSafeToRetryAsync(InspectionFlow flow)
+    {
+        var inspection = new InspectionFakes();
+        FaultInjectingOrderRepository? faultRepo = null;
+        // The lamp columns D/E of the sheet reach the parser: the conversion below is exact.
+        using var server = await BuildInspectionServerAsync(
+            [LampSheetHeader, new string?[] { "INST-001", "1", "10", "VS", "100" }],
+            inspection,
+            real =>
+            {
+                faultRepo = new FaultInjectingOrderRepository(real);
+                return faultRepo;
+            });
+        using var client = server.CreateClient();
+        var order = await CreateUploadCalculateAsync(client, flow);
+
+        // Arm the fault, then validate: the ledger write commits, then the order transition throws.
+        faultRepo!.FaultArmed = true;
+        var failed = await PostValidateAsync(client, flow, order.Id);
+        failed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // The real, non-rolled-back state: posted, yet still Calculado.
+        (await GetOrderStatusAsync(client, order.Id)).Should().Be(IpBillingWorkflowGraph.Calculado);
+        var posting = inspection.Faturamentos.Postings.Should().ContainSingle().Which;
+        posting.ServiceOrderId.Should().Be(order.Id);
+        posting.Mode.Should().Be(FaturamentoPostingMode.Accumulate);
+        posting.DeltaOrBaselineKwh.Should().Be(TenVs100PointsMarchKwh);
+        posting.IsProvisional.Should().BeFalse();
+
+        // Disarm and retry the identical call: no double-post, and the transition completes.
+        faultRepo.FaultArmed = false;
+        var retry = await PostValidateAsync(client, flow, order.Id);
+        retry.EnsureSuccessStatusCode();
+        var retryResult = (await retry.Content.ReadFromJsonAsync<InspectionValidationBody>())!;
+        retryResult.Status.Should().Be(IpBillingWorkflowGraph.Validado);
+        retryResult.DeltaKwh.Should().Be(TenVs100PointsMarchKwh);
+        retryResult.IsProvisional.Should().BeFalse();
+        retryResult.ExactPoints.Should().Be(10);
+        retryResult.Faturamento!.KwhFaturado.Should().Be(TenVs100PointsMarchKwh,
+            "the retry must not accumulate the already-committed delta a second time");
+        inspection.Faturamentos.Postings.Should().ContainSingle();
+        (await GetOrderStatusAsync(client, order.Id)).Should().Be(IpBillingWorkflowGraph.Validado);
+
+        // Validating an already-Validado order is a pure report (VAL-B4).
+        var again = await PostValidateAsync(client, flow, order.Id);
+        again.EnsureSuccessStatusCode();
+        (await again.Content.ReadFromJsonAsync<InspectionValidationBody>()).Should().BeEquivalentTo(retryResult);
+        inspection.Faturamentos.Postings.Should().ContainSingle();
+    }
+
+    [Fact]
+    public Task FiscalizacaoValidate_CrashAfterLedgerWriteBeforeOrderTransition_IsSafeToRetry() =>
+        AssertValidateCrashIsSafeToRetryAsync(FiscalizacaoFlow);
+
+    [Fact]
+    public Task OficioValidate_CrashAfterLedgerWriteBeforeOrderTransition_IsSafeToRetry() =>
+        AssertValidateCrashIsSafeToRetryAsync(OficioFlow);
+
+    [Theory]
+    [InlineData("fiscalizacao")]
+    [InlineData("oficio")]
+    public async Task InspectionValidate_MunicipioWithDistribuidoraChart_ConvertsWithThatChart_EndToEndOverRest(string route)
+    {
+        var flow = FlowOf(route);
+        var inspection = new InspectionFakes();
+        using var server = await BuildInspectionServerAsync(
+            [LampSheetHeader, new string?[] { "INST-001", "1", "10", "VS", "100" }, new string?[] { "INST-001", "1", "2" }],
+            inspection);
+        using var client = server.CreateClient();
+
+        // Reference data through the new REST routes: a Distribuidora whose chart bills VS 100 W at 130 W.
+        var created = await client.PostAsJsonAsync(
+            new Uri("/api/ip-billing/distribuidoras", UriKind.Relative), new { organizationId = Guid.NewGuid(), name = "Enel SP" });
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        var distribuidora = (await created.Content.ReadFromJsonAsync<Distribuidora>())!;
+        (await client.PutAsJsonAsync(
+            new Uri($"/api/ip-billing/distribuidoras/{distribuidora.Id}/lamp-wattages", UriKind.Relative),
+            new { code = LampTypeCode.VS, wattageW = 100, ballastLossW = 30m })).EnsureSuccessStatusCode();
+        inspection.Municipios.SaoPaulo.DistribuidoraId = distribuidora.Id;
+
+        var order = await CreateUploadCalculateAsync(client, flow);
+        var response = await PostValidateAsync(client, flow, order.Id);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = (await response.Content.ReadFromJsonAsync<InspectionValidationBody>())!;
+        // 10 exact points at 130 W + 2 lamp-less points at the Distribuidora chart's mean (its only row, 130 W):
+        // 12 × 130 × 11.8667 × 31 ÷ 1000 = 573.8736.
+        result.DeltaKwh.Should().Be(573.8736m);
+        result.ExactPoints.Should().Be(10);
+        result.ProvisionalPoints.Should().Be(2);
+        result.IsProvisional.Should().BeTrue();
+        result.Faturamento!.MunicipioId.Should().Be(inspection.Municipios.SaoPaulo.Id);
+        result.Faturamento.KwhFaturado.Should().Be(573.8736m);
+        inspection.Faturamentos.Postings.Should().ContainSingle().Which.IsProvisional.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("fiscalizacao")]
+    [InlineData("oficio")]
+    public async Task InspectionValidate_LampNotInAnyChart_Returns422_WithAClearMessage_AndPostsNothing(string route)
+    {
+        var flow = FlowOf(route);
+        var inspection = new InspectionFakes();
+        using var server = await BuildInspectionServerAsync(
+            [LampSheetHeader, new string?[] { "INST-001", "1", "10", "MV", "400" }], inspection);
+        using var client = server.CreateClient();
+        var order = await CreateUploadCalculateAsync(client, flow);
+
+        var response = await PostValidateAsync(client, flow, order.Id);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        var problem = (await response.Content.ReadFromJsonAsync<ConversionProblemBody>())!;
+        problem.Code.Should().Be("lamp-not-in-chart");
+        problem.LampCode.Should().Be("MV");
+        problem.WattageW.Should().Be(400);
+        problem.Message.Should().Contain("MV").And.Contain("400").And.Contain("chart");
+        inspection.Faturamentos.Postings.Should().BeEmpty();
+        (await GetOrderStatusAsync(client, order.Id)).Should().Be(IpBillingWorkflowGraph.Calculado);
+    }
+
+    [Theory]
+    [InlineData("fiscalizacao")]
+    [InlineData("oficio")]
+    public async Task InspectionValidate_NoChartToAverage_Returns422_WithAClearMessage_AndPostsNothing(string route)
+    {
+        var flow = FlowOf(route);
+        var inspection = new InspectionFakes { LampTypes = new EmptyLampTypeRepository() };
+        using var server = await BuildInspectionServerAsync(
+            [LampSheetHeader, new string?[] { "INST-001", "1", "10" }], inspection);
+        using var client = server.CreateClient();
+        var order = await CreateUploadCalculateAsync(client, flow);
+
+        var response = await PostValidateAsync(client, flow, order.Id);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        var problem = (await response.Content.ReadFromJsonAsync<ConversionProblemBody>())!;
+        problem.Code.Should().Be("standard-wattage-unavailable");
+        problem.Message.Should().NotBeNullOrWhiteSpace();
+        problem.LampCode.Should().BeNull();
+        inspection.Faturamentos.Postings.Should().BeEmpty();
+        (await GetOrderStatusAsync(client, order.Id)).Should().Be(IpBillingWorkflowGraph.Calculado);
+    }
+
+    [Fact]
+    public async Task FiscalizacaoValidate_InconsistentStoredLine_Returns400_WithAClearMessage_AndPostsNothing()
+    {
+        var inspection = new InspectionFakes();
+        using var server = await BuildInspectionServerAsync(
+            [LampSheetHeader, new string?[] { "INST-001", "1", "10", "VS", "100" }], inspection);
+        using var client = server.CreateClient();
+        var order = await CreateUploadCalculateAsync(client, FiscalizacaoFlow);
+        (await inspection.Fiscalizacoes.GetLinesAsync(order.Id)).Single().LampDetails[0].Quantity = 11;
+
+        var response = await PostValidateAsync(client, FiscalizacaoFlow, order.Id);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("INST-001").And.Contain("lamp detail");
+        inspection.Faturamentos.Postings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OficioValidate_InconsistentStoredLine_Returns400_WithAClearMessage_AndPostsNothing()
+    {
+        var inspection = new InspectionFakes();
+        using var server = await BuildInspectionServerAsync(
+            [LampSheetHeader, new string?[] { "INST-001", "1", "10", "VS", "100" }], inspection);
+        using var client = server.CreateClient();
+        var order = await CreateUploadCalculateAsync(client, OficioFlow);
+        (await inspection.Oficios.GetLinesAsync(order.Id)).Single().LampDetails[0].Quantity = 11;
+
+        var response = await PostValidateAsync(client, OficioFlow, order.Id);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("INST-001").And.Contain("lamp detail");
+        inspection.Faturamentos.Postings.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("fiscalizacao")]
+    [InlineData("oficio")]
+    public async Task InspectionUpload_BadLampColumns_RejectedWithStructuredRowErrors(string route)
+    {
+        var flow = FlowOf(route);
+        using var server = await BuildInspectionServerAsync(
+            [
+                LampSheetHeader,
+                new string?[] { "INST-001", "1", "10", "XX", "100" },
+                new string?[] { "INST-002", "1", "10", "VS", null },
+                new string?[] { "INST-003", "1", "10", null, "70" },
+                new string?[] { "INST-004", "1", "10", "VS", "70.5" },
+            ],
+            new InspectionFakes());
+        using var client = server.CreateClient();
+        var order = await CreateInspectionOrderAsync(client, flow);
+
+        var response = await UploadInspectionAsync(client, flow, order.Id);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var errors = doc.RootElement.GetProperty("errors").EnumerateArray()
+            .Select(e => (Row: e.GetProperty("rowNumber").GetInt32(), Column: e.GetProperty("column").GetString()))
+            .ToList();
+        errors.Should().Equal(
+            (2, "Tipo de Lâmpada"), (3, "Potência (W)"), (4, "Tipo de Lâmpada"), (5, "Potência (W)"));
+    }
+
+    private static byte[] BuildWorkbook(params string?[][] rows)
+    {
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        var sheet = workbook.AddWorksheet("Planilha1");
+        for (var r = 0; r < rows.Length; r++)
+        {
+            for (var c = 0; c < rows[r].Length; c++)
+            {
+                if (rows[r][c] is { } value) sheet.Cell(r + 1, c + 1).Value = value;
+            }
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Real .xlsx bytes through the real ClosedXML reader (no stub): columns D and E of the
+    /// uploaded workbook reach the row parser and come back as the line's lamp detail.
+    /// </summary>
+    [Theory]
+    [InlineData("fiscalizacao")]
+    [InlineData("oficio")]
+    public async Task InspectionUpload_RealWorkbook_PassesLampColumnsDAndEThroughToTheParser(string route)
+    {
+        var flow = FlowOf(route);
+        var inspection = new InspectionFakes();
+        using var server = await BuildInspectionServerAsync(rawRows: null, inspection);
+        using var client = server.CreateClient();
+        var order = await CreateInspectionOrderAsync(client, flow);
+        var workbook = BuildWorkbook(
+            ["Código de Instalação", "Grupo de Operação", "Quantidade", "Tipo de Lâmpada", "Potência (W)"],
+            ["INST-001", "1", "6", "vs", "100"],
+            ["INST-001", "1", "4", null, null],
+            ["INST-002", "2", "3", "LD", "50"]);
+
+        var upload = await UploadInspectionAsync(client, flow, order.Id, workbook);
+
+        upload.StatusCode.Should().Be(HttpStatusCode.OK, await upload.Content.ReadAsStringAsync());
+        var lampDetails = string.Equals(route, "oficio", StringComparison.Ordinal)
+            ? (await inspection.Oficios.GetLinesAsync(order.Id))
+                .SelectMany(l => l.LampDetails.Select(d => (l.CodigoInstalacao, (int)d.OperationGroup, d.Code, d.WattageW, d.Quantity))).ToList()
+            : (await inspection.Fiscalizacoes.GetLinesAsync(order.Id))
+                .SelectMany(l => l.LampDetails.Select(d => (l.CodigoInstalacao, (int)d.OperationGroup, d.Code, d.WattageW, d.Quantity))).ToList();
+        lampDetails.Should().BeEquivalentTo(
+        [
+            ("INST-001", 1, LampTypeCode.VS, 100, 6),
+            ("INST-002", 2, LampTypeCode.LD, 50, 3),
+        ]);
+    }
+
+    [Theory]
+    [InlineData("fiscalizacao")]
+    [InlineData("oficio")]
+    public async Task InspectionUpload_RealLegacyThreeColumnWorkbook_StillUploadsWithoutLampDetail(string route)
+    {
+        var flow = FlowOf(route);
+        var inspection = new InspectionFakes();
+        using var server = await BuildInspectionServerAsync(rawRows: null, inspection);
+        using var client = server.CreateClient();
+        var order = await CreateInspectionOrderAsync(client, flow);
+        var workbook = BuildWorkbook(
+            ["Código de Instalação", "Grupo de Operação", "Quantidade"],
+            ["INST-001", "1", "10"],
+            ["INST-001", "2", "3"]);
+
+        var upload = await UploadInspectionAsync(client, flow, order.Id, workbook);
+
+        upload.StatusCode.Should().Be(HttpStatusCode.OK, await upload.Content.ReadAsStringAsync());
+        var lampDetailCount = string.Equals(route, "oficio", StringComparison.Ordinal)
+            ? (await inspection.Oficios.GetLinesAsync(order.Id)).Sum(l => l.LampDetails.Count)
+            : (await inspection.Fiscalizacoes.GetLinesAsync(order.Id)).Sum(l => l.LampDetails.Count);
+        lampDetailCount.Should().Be(0);
+    }
+
     private static async Task<IpBillingValidationResult> RunOrderCalculationAndValidationAsync(
         HttpClient ipBillingClient,
         string orderTypeId,
@@ -783,8 +1167,11 @@ public sealed class IpBillingServerIntegrationTests
         HttpClient coreHttpClient,
         ITransformerResolver transformerResolver,
         IWorkbookReader? workbookReader = null,
-        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrderRepository = null)
+        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrderRepository = null,
+        InspectionFakes? inspection = null)
     {
+        inspection ??= new InspectionFakes();
+
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
             {
@@ -801,9 +1188,13 @@ public sealed class IpBillingServerIntegrationTests
                             sp.GetRequiredService<OrderTypeRegistry>());
                         return decorateOrderRepository?.Invoke(repo) ?? repo;
                     });
-                    services.AddSingleton<IMunicipioRepository>(new InMemoryMunicipioRepository());
-                    services.AddSingleton<ILampTypeRepository>(new InMemoryLampTypeRepository());
-                    services.AddSingleton<IFaturamentoRepository>(new InMemoryFaturamentoRepository());
+                    services.AddSingleton<IMunicipioRepository>(inspection.Municipios);
+                    services.AddSingleton(inspection.LampTypes);
+                    services.AddSingleton<IFaturamentoRepository>(inspection.Faturamentos);
+                    services.AddSingleton<IDistribuidoraRepository>(inspection.Distribuidoras);
+                    services.AddSingleton<IDistribuidoraLampWattageRepository>(inspection.Chart);
+                    services.AddSingleton<IDistribuidoraLampWattageReader>(inspection.Chart);
+                    services.AddScoped<IInspectionLedgerPoster, InspectionLedgerPoster>();
                     services.AddSingleton<IFaturamentoLedgerService, FaturamentoLedgerService>();
                     services.AddSingleton<IFaturamentoManualEntryService, FaturamentoManualEntryService>();
                     services.AddSingleton<IGeoCoreClient>(new RestGeoCoreClient(coreHttpClient));
@@ -813,9 +1204,9 @@ public sealed class IpBillingServerIntegrationTests
                     services.AddSingleton<ILevantamentoRepository>(new InMemoryLevantamentoRepository());
                     services.AddSingleton<IInterveningOperationLookup, NullInterveningOperationLookup>();
                     services.AddScoped<ILevantamentoCalculationService, LevantamentoCalculationService>();
-                    services.AddSingleton<IFiscalizacaoRepository>(new InMemoryFiscalizacaoRepository());
+                    services.AddSingleton<IFiscalizacaoRepository>(inspection.Fiscalizacoes);
                     services.AddScoped<IFiscalizacaoCalculationService, FiscalizacaoCalculationService>();
-                    services.AddSingleton<IOficioRepository>(new InMemoryOficioRepository());
+                    services.AddSingleton<IOficioRepository>(inspection.Oficios);
                     services.AddScoped<IOficioCalculationService, OficioCalculationService>();
                     if (workbookReader is not null) services.AddSingleton(workbookReader);
                     else services.AddGeoAssetsXlsx();
@@ -854,8 +1245,32 @@ public sealed class IpBillingServerIntegrationTests
                     : null);
     }
 
+    /// <summary>
+    /// The in-memory collaborators the XD01-301 points→kWh tests need to reach into (to seed a
+    /// chart, point the município at a Distribuidora, corrupt a stored line, or count postings).
+    /// A test that does not care simply lets <see cref="BuildIpBillingServerAsync"/> create one.
+    /// </summary>
+    private sealed class InspectionFakes
+    {
+        public InMemoryMunicipioRepository Municipios { get; } = new();
+        public ILampTypeRepository LampTypes { get; init; } = new InMemoryLampTypeRepository();
+        public InMemoryFaturamentoRepository Faturamentos { get; } = new();
+        public InMemoryDistribuidoraRepository Distribuidoras { get; } = new();
+        public InMemoryDistribuidoraLampWattageRepository Chart { get; } = new();
+        public InMemoryFiscalizacaoRepository Fiscalizacoes { get; } = new();
+        public InMemoryOficioRepository Oficios { get; } = new();
+    }
+
+    private sealed class EmptyLampTypeRepository : ILampTypeRepository
+    {
+        public Task<LampType?> GetByCodeAsync(LampTypeCode code, CancellationToken ct = default) => Task.FromResult<LampType?>(null);
+        public Task<IReadOnlyList<LampType>> GetAllAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<LampType>>([]);
+    }
+
     private sealed class InMemoryMunicipioRepository : IMunicipioRepository
     {
+        public Municipio SaoPaulo => _sp;
+
         private readonly Municipio _sp = new()
         {
             Id                          = Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -906,6 +1321,8 @@ public sealed class IpBillingServerIntegrationTests
         private readonly Dictionary<(Guid MunicipioId, string Competencia), Faturamento> _ledger = [];
         private readonly List<FaturamentoPosting> _postings = [];
 
+        public IReadOnlyList<FaturamentoPosting> Postings => _postings;
+
         public Task<Faturamento?> GetByMunicipioAndCompetenciaAsync(Guid municipioId, string competencia, CancellationToken ct = default) =>
             Task.FromResult(_ledger.TryGetValue((municipioId, competencia), out var f) ? f : null);
 
@@ -925,6 +1342,7 @@ public sealed class IpBillingServerIntegrationTests
             decimal kwhDeltaOrBaseline,
             FaturamentoPostingMode mode,
             DateTimeOffset postedAt,
+            bool isProvisional = false,
             CancellationToken ct = default)
         {
             if (_postings.Any(p => string.Equals(p.ServiceOrderId, serviceOrderId, StringComparison.Ordinal) &&
@@ -962,6 +1380,7 @@ public sealed class IpBillingServerIntegrationTests
                 DeltaOrBaselineKwh = rounded,
                 ResultingKwh       = faturamento.KwhFaturado,
                 PostedAt           = postedAt,
+                IsProvisional      = isProvisional,
             });
 
             return Task.FromResult(faturamento);

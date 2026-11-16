@@ -18,6 +18,7 @@ internal sealed class FaturamentoPostingRecordConfiguration
         b.Property(p => p.DeltaOrBaselineKwh).IsRequired().HasPrecision(14, 4);
         b.Property(p => p.ResultingKwh).IsRequired().HasPrecision(14, 4);
         b.Property(p => p.PostedAt).IsRequired();
+        b.Property(p => p.IsProvisional).IsRequired().HasDefaultValue(false);
 
         b.HasOne<MunicipioRecord>()
          .WithMany()
@@ -25,5 +26,6 @@ internal sealed class FaturamentoPostingRecordConfiguration
          .OnDelete(DeleteBehavior.Restrict);
 
         b.HasIndex(p => new { p.ServiceOrderId, p.Competencia }).IsUnique();
+        b.HasIndex(p => p.IsProvisional);
     }
 }

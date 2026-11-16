@@ -1,4 +1,5 @@
 using GeoAssets.IpBilling.Fiscalizacao;
+using GeoAssets.IpBilling.Workflow;
 using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Components;
 
@@ -25,6 +26,7 @@ public partial class FiscalizacaoDetail
     private int? _totalAgregado;
     private int? _totalRetroativo;
     private List<FiscalizacaoLine> _lines = [];
+    private FiscalizacaoValidationResult? _posting;
     private bool _busy;
     private string? _error;
     private string? _loadedForOrderId;
@@ -36,7 +38,33 @@ public partial class FiscalizacaoDetail
         _totalAgregado = null;
         _totalRetroativo = null;
         _lines = [];
-        return Task.CompletedTask;
+        _posting = null;
+        _error = null;
+
+        return string.Equals(Order.Status, IpBillingWorkflowGraph.Validado, StringComparison.Ordinal)
+            ? LoadPostingAsync()
+            : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Re-reads what an already-<c>Validado</c> order posted (XD01-301). Validating a validated
+    /// order is a pure report on the server — it never posts again and appends no action — so
+    /// this is how the posted kWh and the provisional badge survive a page reload without a
+    /// dedicated read endpoint.
+    /// </summary>
+    private async Task LoadPostingAsync()
+    {
+        try
+        {
+            var result = await Client.ValidateAsync(Order.Id, performedBy: null);
+            _posting = result;
+            _totalAgregado = result.TotalAgregado;
+            _totalRetroativo = result.TotalRetroativo;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
     }
 
     private Task HandleUploaded() => OnChanged.InvokeAsync();
@@ -75,6 +103,7 @@ public partial class FiscalizacaoDetail
         try
         {
             var result = await Client.ValidateAsync(Order.Id, performedBy: null);
+            _posting = result;
             _totalAgregado = result.TotalAgregado;
             _totalRetroativo = result.TotalRetroativo;
             await OnChanged.InvokeAsync();

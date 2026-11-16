@@ -189,4 +189,86 @@ public class EFFaturamentoRepositoryTests
         var postings = await repo.GetPostingsByOrderAsync("manual-correction-ref-1");
         postings.Should().ContainSingle().Which.Mode.Should().Be(FaturamentoPostingMode.Overwrite);
     }
+
+    // ── XD01-301: provisional marker ─────────────────────────────────────────
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PostOrderCalculationAsync_PersistsIsProvisional(bool isProvisional)
+    {
+        using var fixture = new SqliteFixture();
+        var municipio = await SeedMunicipioAsync(fixture.Context);
+        var repo = new EFFaturamentoRepository(fixture.Context);
+        var now = new DateTimeOffset(2027, 2, 3, 10, 0, 0, TimeSpan.Zero);
+
+        await repo.PostOrderCalculationAsync(
+            "order-fisc-1", municipio.Id, "2027-01", 250.5m, FaturamentoPostingMode.Accumulate, now, isProvisional);
+        await repo.SaveChangesAsync();
+
+        var postings = await new EFFaturamentoRepository(fixture.NewContext()).GetPostingsByOrderAsync("order-fisc-1");
+        postings.Should().ContainSingle().Which.IsProvisional.Should().Be(isProvisional);
+    }
+
+    [Fact]
+    public async Task PostOrderCalculationAsync_IsProvisionalDefaultsToFalse()
+    {
+        using var fixture = new SqliteFixture();
+        var municipio = await SeedMunicipioAsync(fixture.Context);
+        var repo = new EFFaturamentoRepository(fixture.Context);
+
+        await repo.PostOrderCalculationAsync(
+            "order-lev-1", municipio.Id, "2027-01", 1000m, FaturamentoPostingMode.Set, new DateTimeOffset(2027, 2, 3, 10, 0, 0, TimeSpan.Zero));
+        await repo.SaveChangesAsync();
+
+        (await repo.GetPostingsByOrderAsync("order-lev-1")).Single().IsProvisional.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task PostOrderCalculationAsync_DeduplicatedRetry_LeavesTheStoredPostingAndItsMarkerUntouched(
+        bool storedMarker, bool retryMarker)
+    {
+        using var fixture = new SqliteFixture();
+        var municipio = await SeedMunicipioAsync(fixture.Context);
+        var repo = new EFFaturamentoRepository(fixture.Context);
+        var now = new DateTimeOffset(2027, 2, 3, 10, 0, 0, TimeSpan.Zero);
+        await repo.PostOrderCalculationAsync(
+            "order-fisc-1", municipio.Id, "2027-01", 250.5m, FaturamentoPostingMode.Accumulate, now, storedMarker);
+        await repo.SaveChangesAsync();
+
+        // The retry carries a different delta, timestamp and marker — none of them may land.
+        var retryRepo = new EFFaturamentoRepository(fixture.NewContext());
+        var ledger = await retryRepo.PostOrderCalculationAsync(
+            "order-fisc-1", municipio.Id, "2027-01", 999m, FaturamentoPostingMode.Accumulate, now.AddHours(1), retryMarker);
+        await retryRepo.SaveChangesAsync();
+
+        ledger.KwhFaturado.Should().Be(250.5m);
+        var posting = (await new EFFaturamentoRepository(fixture.NewContext()).GetPostingsByOrderAsync("order-fisc-1"))
+            .Should().ContainSingle().Which;
+        posting.IsProvisional.Should().Be(storedMarker);
+        posting.DeltaOrBaselineKwh.Should().Be(250.5m);
+        posting.PostedAt.Should().Be(now);
+    }
+
+    [Fact]
+    public async Task OverwriteManualEntryAsync_IsNeverProvisional()
+    {
+        using var fixture = new SqliteFixture();
+        var municipio = await SeedMunicipioAsync(fixture.Context);
+        var repo = new EFFaturamentoRepository(fixture.Context);
+        var now = new DateTimeOffset(2027, 2, 3, 10, 0, 0, TimeSpan.Zero);
+        await repo.PostOrderCalculationAsync(
+            "order-fisc-1", municipio.Id, "2027-01", 250.5m, FaturamentoPostingMode.Accumulate, now, isProvisional: true);
+        await repo.SaveChangesAsync();
+
+        await repo.OverwriteManualEntryAsync(municipio.Id, "2027-01", 42.5m, "manual-ref-1", now.AddDays(1));
+        await repo.SaveChangesAsync();
+
+        var fresh = new EFFaturamentoRepository(fixture.NewContext());
+        (await fresh.GetPostingsByOrderAsync("manual-ref-1")).Single().IsProvisional.Should().BeFalse();
+        (await fresh.GetPostingsByOrderAsync("order-fisc-1")).Single().IsProvisional.Should().BeTrue(
+            "a manual overwrite adds its own posting; it does not rewrite the inspection's marker");
+    }
 }

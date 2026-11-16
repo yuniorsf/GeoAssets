@@ -1,6 +1,8 @@
 using FluentAssertions;
 using GeoAssets.IpBilling.Fiscalizacao;
+using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace GeoAssets.IpBilling.EFCore.Tests;
@@ -115,5 +117,76 @@ public class EFFiscalizacaoRepositoryTests
         var lines = await repo.GetLinesAsync("order-missing");
 
         lines.Should().BeEmpty();
+    }
+
+    // ── XD01-301: lamp details ───────────────────────────────────────────────
+
+    private static FiscalizacaoLine LineWithLampDetails(string orderId, string codigo)
+    {
+        var line = Line(orderId, codigo);
+        line.LampDetails.Add(new FiscalizacaoLampDetail
+        {
+            LineId = line.Id,
+            OperationGroup = FiscalizacaoOperationGroup.Fiscalizacao,
+            Code = LampTypeCode.VS,
+            WattageW = 100,
+            Quantity = 6,
+        });
+        line.LampDetails.Add(new FiscalizacaoLampDetail
+        {
+            LineId = line.Id,
+            OperationGroup = FiscalizacaoOperationGroup.UltimoLevantamento,
+            Code = LampTypeCode.LD,
+            WattageW = 60,
+            Quantity = 8,
+        });
+        return line;
+    }
+
+    [Fact]
+    public async Task ReplaceLinesAsync_RoundTripsLampDetails()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFFiscalizacaoRepository(fixture.Context);
+        var original = LineWithLampDetails("order-1", "INST-001");
+
+        await repo.ReplaceLinesAsync("order-1", [original, Line("order-1", "INST-002")]);
+        await repo.SaveChangesAsync();
+
+        var lines = await new EFFiscalizacaoRepository(fixture.NewContext()).GetLinesAsync("order-1");
+        lines.Should().HaveCount(2);
+        var loaded = lines.Single(l => string.Equals(l.CodigoInstalacao, "INST-001", StringComparison.Ordinal));
+        loaded.LampDetails.Should().BeEquivalentTo(original.LampDetails);
+        loaded.LampDetails.Should().OnlyContain(d => d.LineId == loaded.Id);
+        loaded.OperationGroups.Should().HaveCount(2, "lamp details do not disturb the operation groups");
+        lines.Single(l => string.Equals(l.CodigoInstalacao, "INST-002", StringComparison.Ordinal)).LampDetails.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ReplaceLinesAsync_CalledAgain_ReplacesLampDetailsAndLeavesNoOrphans()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFFiscalizacaoRepository(fixture.Context);
+        await repo.ReplaceLinesAsync("order-1", [LineWithLampDetails("order-1", "INST-001")]);
+        await repo.SaveChangesAsync();
+
+        var replacement = Line("order-1", "INST-001");
+        replacement.LampDetails.Add(new FiscalizacaoLampDetail
+        {
+            LineId = replacement.Id,
+            OperationGroup = FiscalizacaoOperationGroup.Fiscalizacao,
+            Code = LampTypeCode.MV,
+            WattageW = 400,
+            Quantity = 1,
+        });
+        var replacer = new EFFiscalizacaoRepository(fixture.NewContext());
+        await replacer.ReplaceLinesAsync("order-1", [replacement]);
+        await replacer.SaveChangesAsync();
+
+        var fresh = fixture.NewContext();
+        var loaded = (await new EFFiscalizacaoRepository(fresh).GetLinesAsync("order-1")).Single();
+        loaded.LampDetails.Should().ContainSingle().Which.Code.Should().Be(LampTypeCode.MV);
+        (await fresh.Database.SqlQuery<int>($"""SELECT COUNT(*) AS "Value" FROM "FiscalizacaoLampDetails" """).SingleAsync())
+            .Should().Be(1, "the replaced line's lamp details were deleted with it");
     }
 }

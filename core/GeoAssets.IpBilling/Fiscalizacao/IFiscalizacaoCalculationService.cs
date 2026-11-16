@@ -42,9 +42,9 @@ public interface IFiscalizacaoCalculationService
         CancellationToken ct = default);
 
     /// <summary>
-    /// <c>Calculado -&gt; Validado</c>: marks this Fiscalização as validated. Deliberately does
-    /// <em>not</em> post to the Faturamento ledger — accumulate-mode auto-posting from a
-    /// validated Fiscalização is XD01-188's deliverable, not this ticket's.
+    /// <c>Calculado -&gt; Validado</c>: converts this Fiscalização's points to kWh, ACCUMULATEs
+    /// the delta onto the Faturamento ledger (marked provisional when any point lacks lamp
+    /// detail), then marks it validated (XD01-301). Safe to retry.
     /// </summary>
     Task<FiscalizacaoValidationResult> ValidateAsync(
         string serviceOrderId,

@@ -199,7 +199,7 @@ public class LevantamentoCalculationServiceTests
 
         public Task<Faturamento> PostOrderCalculationAsync(
             string serviceOrderId, Guid municipioId, string competencia, decimal kwhDeltaOrBaseline,
-            FaturamentoPostingMode mode, DateTimeOffset postedAt, CancellationToken ct = default)
+            FaturamentoPostingMode mode, DateTimeOffset postedAt, bool isProvisional = false, CancellationToken ct = default)
         {
             var faturamento = new Faturamento { MunicipioId = municipioId, Competencia = competencia, KwhFaturado = kwhDeltaOrBaseline, CreatedAt = postedAt };
             Posted.Add(faturamento);

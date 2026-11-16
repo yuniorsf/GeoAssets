@@ -42,6 +42,7 @@ public sealed class EFMunicipioRepository(IpBillingDbContext db) : IMunicipioRep
         existing.Uf                          = municipio.Uf;
         existing.DistribuidoraOrganizationId = municipio.DistribuidoraOrganizationId;
         existing.PrefeituraOrganizationId    = municipio.PrefeituraOrganizationId;
+        existing.DistribuidoraId             = municipio.DistribuidoraId;
         existing.OrigemLevantamento          = municipio.OrigemLevantamento;
         existing.OrigemFiscalizacao          = municipio.OrigemFiscalizacao;
         existing.OrigemOficio                = municipio.OrigemOficio;

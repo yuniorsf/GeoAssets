@@ -22,6 +22,9 @@ namespace GeoAssets.Web.Extensions;
 /// consume. <c>IUnidadeOrganizacionalRepository</c> has no admin page yet (out of scope for
 /// this ticket) and is intentionally not registered here.
 ///
+/// <see cref="IDistribuidoraRepository"/> and <see cref="IDistribuidoraLampWattageRepository"/>
+/// (XD01-301) back the Distribuidoras admin page and the Município form's Distribuidora picker.
+///
 /// Also registers <see cref="ILevantamentoRestClient"/> (XD01-181) — the Levantamento upload/
 /// calculate/validate/memória-de-cálculo pages' gateway to XD01-180's REST API, on this same
 /// named HttpClient — and <see cref="IFiscalizacaoRestClient"/> (XD01-184), the equivalent
@@ -39,6 +42,12 @@ internal static class IpBillingRestExtensions
 
         services.AddScoped<ILampTypeRepository>(sp =>
             new RestLampTypeRepository(CreateIpBillingClient(sp)));
+
+        services.AddScoped<IDistribuidoraRepository>(sp =>
+            new RestDistribuidoraRepository(CreateIpBillingClient(sp)));
+
+        services.AddScoped<IDistribuidoraLampWattageRepository>(sp =>
+            new RestDistribuidoraLampWattageRepository(CreateIpBillingClient(sp)));
 
         services.AddScoped<ILevantamentoRestClient>(sp =>
             new LevantamentoRestClient(CreateIpBillingClient(sp)));

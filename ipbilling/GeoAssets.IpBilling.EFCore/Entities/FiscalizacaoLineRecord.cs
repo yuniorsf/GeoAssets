@@ -14,4 +14,6 @@ internal sealed class FiscalizacaoLineRecord
     public int Retroativo { get; set; }
 
     public List<FiscalizacaoOperationGroupDetailRecord> OperationGroups { get; init; } = [];
+
+    public List<FiscalizacaoLampDetailRecord> LampDetails { get; init; } = [];
 }
