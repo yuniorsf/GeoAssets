@@ -24,6 +24,7 @@ public class CompositeFieldWorkTransitionGuardTests
         var composite = new CompositeFieldWorkTransitionGuard(
             new FakeGuard(canArrive: arrivalGuardResult),
             new FakeGuard(canArrive: safetyGuardArrivalResultThatMustBeIgnored),
+            new FakeGuard(),
             new FakeGuard());
 
         (await composite.CanArriveAsync(new ServiceOrder(), new GeoPoint(0, 0))).Should().Be(arrivalGuardResult);
@@ -39,7 +40,23 @@ public class CompositeFieldWorkTransitionGuardTests
         var composite = new CompositeFieldWorkTransitionGuard(
             new FakeGuard(canStartWork: true), // arrival guard's CanStartWorkAsync must be ignored
             new FakeGuard(canStartWork: safetyResult),
-            new FakeGuard(canStartWork: photoGatingResult));
+            new FakeGuard(canStartWork: photoGatingResult),
+            new FakeGuard(canStartWork: true));
+
+        (await composite.CanStartWorkAsync(new ServiceOrder())).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    public async Task CanStartWorkAsync_AlsoRequiresTheComplianceGuard(bool safetyAndPhotoGatingResult, bool complianceResult, bool expected)
+    {
+        var composite = new CompositeFieldWorkTransitionGuard(
+            new FakeGuard(canStartWork: true), // arrival guard's CanStartWorkAsync must be ignored
+            new FakeGuard(canStartWork: safetyAndPhotoGatingResult),
+            new FakeGuard(canStartWork: safetyAndPhotoGatingResult),
+            new FakeGuard(canStartWork: complianceResult));
 
         (await composite.CanStartWorkAsync(new ServiceOrder())).Should().Be(expected);
     }
@@ -52,7 +69,8 @@ public class CompositeFieldWorkTransitionGuardTests
         var composite = new CompositeFieldWorkTransitionGuard(
             new FakeGuard(canComplete: othersResultThatMustBeIgnored),
             new FakeGuard(canComplete: othersResultThatMustBeIgnored),
-            new FakeGuard(canComplete: photoGatingResult));
+            new FakeGuard(canComplete: photoGatingResult),
+            new FakeGuard(canComplete: othersResultThatMustBeIgnored));
 
         (await composite.CanCompleteAsync(new ServiceOrder())).Should().Be(photoGatingResult);
     }

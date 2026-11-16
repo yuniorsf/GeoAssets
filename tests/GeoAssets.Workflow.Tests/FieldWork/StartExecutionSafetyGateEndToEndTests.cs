@@ -41,6 +41,7 @@ public class StartExecutionSafetyGateEndToEndTests
         return new CompositeFieldWorkTransitionGuard(
             NullFieldWorkTransitionGuard.Instance,
             new SafetyChecklistTransitionGuard(registry),
+            NullFieldWorkTransitionGuard.Instance,
             NullFieldWorkTransitionGuard.Instance);
     }
 

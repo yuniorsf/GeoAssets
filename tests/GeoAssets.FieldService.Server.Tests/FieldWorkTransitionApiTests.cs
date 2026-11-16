@@ -10,6 +10,7 @@ using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Erp.Totvs;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -106,10 +107,13 @@ public sealed class FieldWorkTransitionApiTests : IAsyncLifetime, IDisposable
                     services.AddScoped<GeofenceArrivalTransitionGuard>();
                     services.AddScoped<SafetyChecklistTransitionGuard>();
                     services.AddScoped<PhotoGatingTransitionGuard>();
+                    services.AddSingleton<ITechnicianComplianceRepository, InMemoryTechnicianComplianceRepository>();
+                    services.AddScoped<TechnicianComplianceTransitionGuard>();
                     services.AddScoped<IFieldWorkTransitionGuard>(sp => new CompositeFieldWorkTransitionGuard(
                         sp.GetRequiredService<GeofenceArrivalTransitionGuard>(),
                         sp.GetRequiredService<SafetyChecklistTransitionGuard>(),
-                        sp.GetRequiredService<PhotoGatingTransitionGuard>()));
+                        sp.GetRequiredService<PhotoGatingTransitionGuard>(),
+                        sp.GetRequiredService<TechnicianComplianceTransitionGuard>()));
                 });
                 webHost.Configure(app =>
                 {
