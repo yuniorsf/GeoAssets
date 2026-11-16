@@ -19,6 +19,7 @@ using GeoAssets.Workflow;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Contractors.Governance;
 using GeoAssets.Workflow.Erp.Totvs;
+using GeoAssets.Workflow.Erp.Sienge;
 using GeoAssets.Workflow.FieldWork;
 using GeoAssets.Workflow.Erp.Sap;
 using GeoAssets.Workflow.Isp.Bss;
@@ -298,6 +299,20 @@ builder.Services.AddScoped<IApprovedUsPostingSource, LedgerBackedApprovedUsPosti
 builder.Services.AddScoped<IFieldMaterialConsumptionSource, LedgerBackedFieldMaterialConsumptionSource>();
 builder.Services.AddScoped<TotvsNightlySyncOrchestrator>();
 
+// Sienge nightly sync (XD01-254) — machine-hour/hauling-ticket cost-center posting push and
+// purchase-order reconciliation for civil & water contractors. UsCodeClassification is
+// configuration-driven (see SiengeUsCodeClassification's doc comment) rather than this
+// connector guessing which US billing codes mean "equipment hour" vs "hauling ticket" vs
+// "material consumed".
+builder.Services.AddSingleton(builder.Configuration.GetSection(SiengeUsCodeClassification.SectionName).Get<SiengeUsCodeClassification>() ?? new SiengeUsCodeClassification());
+builder.Services.AddSingleton(builder.Configuration.GetSection(SiengeSyncRetryOptions.SectionName).Get<SiengeSyncRetryOptions>() ?? new SiengeSyncRetryOptions());
+builder.Services.AddHttpClient(HttpSiengeSyncClient.HttpClientName);
+builder.Services.AddScoped<ISiengeSyncClient, HttpSiengeSyncClient>();
+builder.Services.AddScoped<IMachineHourSource, LedgerBackedMachineHourSource>();
+builder.Services.AddScoped<IHaulingTicketSource, LedgerBackedHaulingTicketSource>();
+builder.Services.AddScoped<IFieldConsumptionSource, LedgerBackedFieldConsumptionSource>();
+builder.Services.AddScoped<SiengeNightlySyncOrchestrator>();
+
 // ── OpenAPI contract (XD01-207 AC) ───────────────────────────────────────────────────────────
 builder.Services.AddOpenApi();
 
@@ -348,6 +363,11 @@ if (app.Configuration.GetValue("Modules:SapPm:Enabled", defaultValue: true))
 // TotvsProtheusSyncApiExtensions for the full endpoint list.
 if (app.Configuration.GetValue("Modules:Totvs:Enabled", defaultValue: true))
     app.MapTotvsProtheusSyncApi();
+
+// Sienge nightly-sync trigger under /api/fieldservice/erp/sienge/sync (XD01-254) — see
+// SiengeSyncApiExtensions for the full endpoint list.
+if (app.Configuration.GetValue("Modules:Sienge:Enabled", defaultValue: true))
+    app.MapSiengeSyncApi();
 
 // Archetype domain modules (XD01-212) — independently toggled, independently mapped. A module
 // left disabled (or one whose own registration fails) never prevents another from mapping: each
