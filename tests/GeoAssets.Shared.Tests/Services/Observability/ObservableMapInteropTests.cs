@@ -5,6 +5,7 @@ using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.JSInterop;
@@ -15,7 +16,7 @@ namespace GeoAssets.Shared.Tests.Services.Observability;
 public class ObservableMapInteropTests
 {
     /// <summary>Records every call it receives so pass-through tests can assert forwarding without a mocking library.</summary>
-    private sealed class FakeMapInterop : IMapInterop
+    private sealed class FakeMapInterop : IMapInterop, IMapSelectionInterop
     {
         public List<(string Method, object?[] Args)> Calls { get; } = [];
 
@@ -52,23 +53,41 @@ public class ObservableMapInteropTests
         public Task HighlightFeatureAsync(string divId, string featureId) => Record(nameof(HighlightFeatureAsync), divId, featureId);
         public Task ClearHighlightAsync(string divId, string featureId) => Record(nameof(ClearHighlightAsync), divId, featureId);
         public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) => Record(nameof(RegisterEventHandlersAsync), divId, handlerRef);
+        public Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state) => Record(nameof(SetFeatureStatesAsync), divId, featureIds, state);
+        public Task ClearFeatureStatesAsync(string divId) => Record(nameof(ClearFeatureStatesAsync), divId);
     }
 
-    private static ObservableMapInterop Sut(FakeMapInterop inner) =>
-        new(inner, NullLogger<ObservableMapInterop>.Instance, TimeProvider.System);
+    private static ObservableMapInterop Sut(FakeMapInterop inner, MapRenderMode renderMode = MapRenderMode.Leaflet) =>
+        new(inner, inner, renderMode, NullLogger<ObservableMapInterop>.Instance, TimeProvider.System);
 
-    private static Activity? CaptureSpan(Action act)
+    /// <summary>
+    /// An <see cref="ActivityListener"/> is process-wide, so it also sees spans that tests running
+    /// in parallel emit on the same source. Each capture therefore runs under its own root
+    /// activity and keeps only spans belonging to that trace.
+    /// </summary>
+    private static ActivityListener ListenForTrace(ActivityTraceId traceId, List<Activity> captured)
     {
-        Activity? captured = null;
-        using var listener = new ActivityListener
+        var listener = new ActivityListener
         {
             ShouldListenTo = source => string.Equals(source.Name, ImportDiagnostics.ActivitySourceName, StringComparison.Ordinal),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-            ActivityStopped = activity => captured = activity
+            ActivityStopped = activity =>
+            {
+                if (activity.TraceId == traceId)
+                    lock (captured) captured.Add(activity);
+            }
         };
         ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
 
-        act();
+    private static async Task<IReadOnlyList<Activity>> CaptureSpansAsync(Func<Task> act)
+    {
+        using var root = new Activity("test-root").Start();
+        var captured = new List<Activity>();
+        using var listener = ListenForTrace(root.TraceId, captured);
+
+        await act();
 
         return captured;
     }
@@ -76,13 +95,13 @@ public class ObservableMapInteropTests
     // ── Instrumented ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void RenderAllFeaturesAsync_EmitsSpanWithFeatureCountTag()
+    public async Task RenderAllFeaturesAsync_EmitsSpanWithFeatureCountTag()
     {
         var inner = new FakeMapInterop();
         var sut = Sut(inner);
         var features = new List<GeoFeature> { new() { Id = "a" } };
 
-        var captured = CaptureSpan(() => sut.RenderAllFeaturesAsync("map1", features).GetAwaiter().GetResult());
+        var captured = (await CaptureSpansAsync(() => sut.RenderAllFeaturesAsync("map1", features))).SingleOrDefault();
 
         inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.RenderAllFeaturesAsync));
         captured.Should().NotBeNull();
@@ -92,13 +111,13 @@ public class ObservableMapInteropTests
     }
 
     [Fact]
-    public void RenderFeatureAsync_EmitsSpanWithFeatureIdTag()
+    public async Task RenderFeatureAsync_EmitsSpanWithFeatureIdTag()
     {
         var inner = new FakeMapInterop();
         var sut = Sut(inner);
         var feature = new GeoFeature { Id = "pole-1" };
 
-        var captured = CaptureSpan(() => sut.RenderFeatureAsync("map1", feature).GetAwaiter().GetResult());
+        var captured = (await CaptureSpansAsync(() => sut.RenderFeatureAsync("map1", feature))).SingleOrDefault();
 
         inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.RenderFeatureAsync));
         captured.Should().NotBeNull();
@@ -108,13 +127,13 @@ public class ObservableMapInteropTests
     }
 
     [Fact]
-    public void RenderAllFeaturesRawJsonAsync_EmitsSpanWithPayloadBytesTag()
+    public async Task RenderAllFeaturesRawJsonAsync_EmitsSpanWithPayloadBytesTag()
     {
         var inner = new FakeMapInterop();
         var sut = Sut(inner);
         const string rawJson = """[{"id":"a"}]""";
 
-        var captured = CaptureSpan(() => sut.RenderAllFeaturesRawJsonAsync("map1", rawJson).GetAwaiter().GetResult());
+        var captured = (await CaptureSpansAsync(() => sut.RenderAllFeaturesRawJsonAsync("map1", rawJson))).SingleOrDefault();
 
         inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.RenderAllFeaturesRawJsonAsync));
         captured.Should().NotBeNull();
@@ -123,7 +142,102 @@ public class ObservableMapInteropTests
         captured.GetTagItem("map.div_id").Should().Be("map1");
     }
 
+    [Theory]
+    [InlineData(MapFeatureState.Selected, MapRenderMode.Leaflet, "selected", "leaflet")]
+    [InlineData(MapFeatureState.Conflict, MapRenderMode.Canvas, "conflict", "canvas")]
+    [InlineData(MapFeatureState.Default, MapRenderMode.WebGL, "default", "webgl")]
+    public async Task SetFeatureStatesAsync_EmitsSpanWithCountStateAndRenderModeTags(
+        MapFeatureState state, MapRenderMode renderMode, string expectedState, string expectedMode)
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner, renderMode);
+        string[] ids = ["pole-1", "pole-2", "pole-3"];
+
+        var spans = await CaptureSpansAsync(() => sut.SetFeatureStatesAsync("map1", ids, state));
+
+        var call = inner.Calls.Should().ContainSingle().Subject;
+        call.Method.Should().Be(nameof(IMapSelectionInterop.SetFeatureStatesAsync));
+        call.Args.Should().Equal("map1", ids, state);
+        var span = spans.Should().ContainSingle().Subject;
+        span.OperationName.Should().Be("Map.SetFeatureStates");
+        span.GetTagItem("map.feature_count").Should().Be(3);
+        span.GetTagItem("map.feature_state").Should().Be(expectedState);
+        span.GetTagItem("map.render_mode").Should().Be(expectedMode);
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_NeverTagsFeatureIds()
+    {
+        var sut = Sut(new FakeMapInterop());
+
+        var spans = await CaptureSpansAsync(() => sut.SetFeatureStatesAsync("map1", ["pole-secret-1"], MapFeatureState.Selected));
+
+        spans.Should().ContainSingle().Which.TagObjects
+            .Should().NotContain(tag => (tag.Value as string ?? string.Empty).Contains("pole-secret-1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_NullIds_ThrowsWithoutCallingInnerOrEmittingSpan()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.SetFeatureStatesAsync("map1", null!, MapFeatureState.Selected)));
+
+        thrown.Should().BeOfType<ArgumentNullException>();
+        inner.Calls.Should().BeEmpty();
+        spans.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_EmptyIds_ForwardsWithoutEmittingSpan()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+
+        var spans = await CaptureSpansAsync(() => sut.SetFeatureStatesAsync("map1", [], MapFeatureState.Selected));
+
+        inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapSelectionInterop.SetFeatureStatesAsync));
+        spans.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_InnerFailure_MarksSpanAsErrorAndRethrows()
+    {
+        var sut = new ObservableMapInterop(
+            new FakeMapInterop(), new ThrowingSelectionInterop(), MapRenderMode.Leaflet,
+            NullLogger<ObservableMapInterop>.Instance, TimeProvider.System);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.SetFeatureStatesAsync("map1", ["a"], MapFeatureState.Selected)));
+
+        thrown.Should().BeOfType<JSException>();
+        spans.Should().ContainSingle().Which.Status.Should().Be(ActivityStatusCode.Error);
+    }
+
+    private sealed class ThrowingSelectionInterop : IMapSelectionInterop
+    {
+        public Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state) =>
+            Task.FromException(new JSException("boom"));
+        public Task ClearFeatureStatesAsync(string divId) => Task.CompletedTask;
+    }
+
     // ── Pass-through ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ClearFeatureStatesAsync_DelegatesToInner()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+
+        await sut.ClearFeatureStatesAsync("map1");
+
+        inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapSelectionInterop.ClearFeatureStatesAsync))
+            .Which.Args.Should().Equal("map1");
+    }
 
     [Fact]
     public async Task InitializeMapAsync_DelegatesToInner()

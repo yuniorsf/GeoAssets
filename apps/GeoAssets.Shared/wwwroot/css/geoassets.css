@@ -24,6 +24,14 @@
     --surface-tint-weak:   rgba(255,255,255,0.04);
     --surface-tint:        rgba(255,255,255,0.05);
     --surface-tint-strong: rgba(255,255,255,0.08);
+
+    /* Per-feature map states (XD01-309) — read by geoassets.js for vector/WebGL colours and
+       used by the .geoassets-state-* marker classes below. Aliases of the theme tokens, so
+       they follow Mocha/Latte without a second definition; keep them plain hex colours. */
+    --map-state-selected:    var(--accent);
+    --map-state-highlighted: var(--warning);
+    --map-state-conflict:    var(--danger);
+    --map-state-disabled:    var(--text-secondary);
 }
 
 /* ─── Bootstrap 5 token bridge (Catppuccin Mocha / Latte) ───────────────────
@@ -385,6 +393,24 @@ html, body {
     flex: 1;
     width: 100%;
     min-height: 0;
+}
+
+/* Per-feature states on icon markers (XD01-309). Vector features are restyled from JS with the
+   same --map-state-* tokens; an <img> marker has no stroke to recolour, so it gets a ring. */
+.leaflet-marker-icon.geoassets-state-selected,
+.leaflet-marker-icon.geoassets-state-highlighted,
+.leaflet-marker-icon.geoassets-state-conflict {
+    border-radius: 50%;
+    outline: 3px solid var(--map-state-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--panel-bg);
+}
+.leaflet-marker-icon.geoassets-state-selected    { --map-state-color: var(--map-state-selected); }
+.leaflet-marker-icon.geoassets-state-highlighted { --map-state-color: var(--map-state-highlighted); }
+.leaflet-marker-icon.geoassets-state-conflict    { --map-state-color: var(--map-state-conflict); }
+.leaflet-marker-icon.geoassets-state-disabled {
+    opacity: 0.35;
+    filter: grayscale(1);
 }
 
 /* ─── Draw Toolbar ───────────────────────────────────────────────────────── */

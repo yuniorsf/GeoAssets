@@ -1,8 +1,11 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Tests;
 using GeoAssets.Shared.Services;
+using Microsoft.Extensions.Options;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services;
@@ -174,5 +177,118 @@ public class MapInteropServiceTests
 
         map.Should().ContainKey("resolved");
         map.Should().NotContainKey("unresolved"); // geoassets.js falls back to colorMap/default for this one
+    }
+
+    // ── Feature states (XD01-309) ─────────────────────────────────────────────
+
+    /// <summary>Records every JS call so the interop call shape can be asserted without a browser.</summary>
+    private sealed class RecordingJsRuntime : IJSRuntime
+    {
+        public List<(string Identifier, object?[] Args)> Calls { get; } = [];
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            Calls.Add((identifier, args ?? []));
+            return ValueTask.FromResult<TValue>(default!);
+        }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) =>
+            InvokeAsync<TValue>(identifier, args);
+    }
+
+    private static MapInteropService Sut(RecordingJsRuntime js) =>
+        new(js, new TestAssetProvider(), Options.Create(new MapInteropOptions()));
+
+    private static string[] Ids(int count) => [.. Enumerable.Range(0, count).Select(i => $"f{i}")];
+
+    [Theory]
+    [InlineData(MapFeatureState.Default, "default")]
+    [InlineData(MapFeatureState.Selected, "selected")]
+    [InlineData(MapFeatureState.Highlighted, "highlighted")]
+    [InlineData(MapFeatureState.Disabled, "disabled")]
+    [InlineData(MapFeatureState.Conflict, "conflict")]
+    public async Task SetFeatureStatesAsync_CallsSetFeatureStatesWithDivIdIdsAndJsStateName(MapFeatureState state, string expectedName)
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).SetFeatureStatesAsync("map1", ["a", "b"], state);
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.setFeatureStates");
+        call.Args.Should().HaveCount(3);
+        call.Args[0].Should().Be("map1");
+        call.Args[1].Should().BeAssignableTo<IEnumerable<string>>().Which.Should().Equal("a", "b");
+        call.Args[2].Should().Be(expectedName);
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_NullIds_ThrowsAndMakesNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+
+        var act = () => Sut(js).SetFeatureStatesAsync("map1", null!, MapFeatureState.Selected);
+
+        await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("featureIds");
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_EmptyIds_MakesNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).SetFeatureStatesAsync("map1", [], MapFeatureState.Selected);
+
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SetFeatureStatesAsync_UndefinedState_ThrowsAndMakesNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+
+        var act = () => Sut(js).SetFeatureStatesAsync("map1", ["a"], (MapFeatureState)999);
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1, new[] { 1 })]
+    [InlineData(2000, new[] { 2000 })]
+    [InlineData(2001, new[] { 2000, 1 })]
+    [InlineData(4500, new[] { 2000, 2000, 500 })]
+    public async Task SetFeatureStatesAsync_BatchesTwoThousandIdsPerJsCallInOrder(int idCount, int[] expectedBatchSizes)
+    {
+        var js = new RecordingJsRuntime();
+        var ids = Ids(idCount);
+
+        await Sut(js).SetFeatureStatesAsync("map1", ids, MapFeatureState.Selected);
+
+        MapInteropService.FeatureStateBatchSize.Should().Be(2000);
+        js.Calls.Should().OnlyContain(c => c.Identifier == "GeoAssets.setFeatureStates" && (string?)c.Args[2] == "selected");
+        var batches = js.Calls.Select(c => (string[])c.Args[1]!).ToList();
+        batches.Select(b => b.Length).Should().Equal(expectedBatchSizes);
+        batches.SelectMany(b => b).Should().Equal(ids);
+    }
+
+    [Fact]
+    public async Task ClearFeatureStatesAsync_CallsClearFeatureStatesWithDivId()
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).ClearFeatureStatesAsync("map1");
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.clearFeatureStates");
+        call.Args.Should().Equal("map1");
+    }
+
+    [Fact]
+    public void ToJsName_UndefinedState_Throws()
+    {
+        var act = () => ((MapFeatureState)999).ToJsName();
+
+        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("state");
     }
 }

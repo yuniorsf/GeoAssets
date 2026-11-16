@@ -13,8 +13,90 @@ window.GeoAssets = (function () {
 
     // ─── State registry ──────────────────────────────────────────────────────
     // divId → { map, featureLayers, layerGroups, tileLayers, dotNetRef,
-    //           renderMode, canvasRenderer?, webgl? }
+    //           renderMode, canvasRenderer?, webgl?, featureStates, highlights }
     const _maps = {};
+
+    // ─── Per-feature visual states (XD01-309) ────────────────────────────────
+    // One table drives every render mode. `token` is a CSS custom property (geoassets.css,
+    // themed for Mocha and Latte) with `fallback` used when it is missing or not a hex colour.
+    // Leaflet/Canvas: color + fillColor, weight (null = keep the feature's own), opacity = alpha,
+    // fillOpacity = fillAlpha. WebGL: colour and alpha ONLY — that renderer has no per-feature
+    // weight, point size, dash or icon, so `weight` is ignored there.
+    const _STATE_STYLES = {
+        selected:    { token: '--map-state-selected',    fallback: '#89b4fa', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
+        highlighted: { token: '--map-state-highlighted', fallback: '#f9e2af', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
+        conflict:    { token: '--map-state-conflict',    fallback: '#f38ba8', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
+        disabled:    { token: '--map-state-disabled',    fallback: '#6c7086', weight: null, alpha: 0.25, fillAlpha: 0.1 }
+    };
+    const _STATE_CLASS_PREFIX = 'geoassets-state-';
+    const _HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+    // Token colours are read from the document once per theme (data-bs-theme on <html>), not per
+    // feature. Features already styled keep the colour they were given until they are next
+    // re-styled or re-rendered.
+    let _stateColors = { theme: null, byState: {} };
+
+    function _stateColor(name) {
+        const theme = document.documentElement.getAttribute('data-bs-theme') || '';
+        if (_stateColors.theme !== theme) _stateColors = { theme, byState: {} };
+        let color = _stateColors.byState[name];
+        if (!color) {
+            const def = _STATE_STYLES[name];
+            const css = getComputedStyle(document.documentElement).getPropertyValue(def.token).trim();
+            color = _HEX_COLOR.test(css) ? css : def.fallback;
+            _stateColors.byState[name] = color;
+        }
+        return color;
+    }
+
+    /** The state a feature is drawn with: the transient highlight overlay wins over the
+     *  persistent registry entry; undefined means "the feature's own style". */
+    function _effectiveState(state, id) {
+        return state.highlights.has(id) ? 'highlighted' : state.featureStates.get(id);
+    }
+
+    /** Styles one Leaflet primitive for `name` (undefined = restore its own style). Vector paths
+     *  (including circle markers) are restyled; icon markers, which have no style, get the
+     *  geoassets-state-{name} class instead. */
+    function _styleSubLayer(sub, name) {
+        if (sub.setStyle) {
+            if (!sub._geoAssetsBaseStyle) {
+                if (!name) return; // never styled — nothing to restore
+                const o = sub.options;
+                sub._geoAssetsBaseStyle = {
+                    color: o.color, fillColor: o.fillColor, weight: o.weight,
+                    opacity: o.opacity, fillOpacity: o.fillOpacity
+                };
+            }
+            const base = sub._geoAssetsBaseStyle;
+            if (!name) { sub.setStyle(base); return; }
+            const def = _STATE_STYLES[name], color = _stateColor(name);
+            sub.setStyle({
+                color, fillColor: color, weight: def.weight ?? base.weight,
+                opacity: def.alpha, fillOpacity: def.fillAlpha
+            });
+        } else if (sub.options?.icon) {
+            const cls = name ? _STATE_CLASS_PREFIX + name : '';
+            // Leaflet rebuilds the <img> (and its class list) from the icon options whenever the
+            // marker is re-added to the map, e.g. after a layer-visibility toggle.
+            sub.options.icon.options.className = cls;
+            const el = sub._icon;
+            if (!el) return;
+            [...el.classList].filter(c => c.startsWith(_STATE_CLASS_PREFIX)).forEach(c => el.classList.remove(c));
+            if (cls) el.classList.add(cls);
+        }
+    }
+
+    /** Re-applies the effective state of one feature to its Leaflet layer. A no-op for a feature
+     *  that is not rendered (the registry keeps its state for later) and in WebGL mode, where
+     *  featureLayers only holds invisible event layers and state is resolved in _webglRedraw. */
+    function _refreshFeatureStyle(state, id) {
+        if (state.renderMode === 'webgl') return;
+        const layer = state.featureLayers.get(id);
+        if (!layer) return;
+        const name = _effectiveState(state, id);
+        _forEachSnapCandidate(layer, sub => _styleSubLayer(sub, name));
+    }
 
     // ─── WebGL shader sources ────────────────────────────────────────────────
 
@@ -241,24 +323,34 @@ window.GeoAssets = (function () {
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(prog);
         gl.uniform2f(locs.res, canvas.width, canvas.height);
-        features.forEach(({ feature, colorHex, assetTypeId }) => {
-            if (!hiddenTypes.has(assetTypeId))
-                _webglDrawGeoFeature(state, feature, colorHex);
+        // Two passes so stateful features (selected, conflict, highlight overlay, …) are never
+        // hidden under their unstyled neighbours. State is colour/alpha only in this renderer.
+        const stateful = [];
+        features.forEach(({ feature, colorHex, assetTypeId }, id) => {
+            if (hiddenTypes.has(assetTypeId)) return;
+            const name = _effectiveState(state, id);
+            if (name) stateful.push([feature, name]);
+            else _webglDrawGeoFeature(state, feature, colorHex);
+        });
+        stateful.forEach(([feature, name]) => {
+            const def = _STATE_STYLES[name];
+            _webglDrawGeoFeature(state, feature, _stateColor(name), def.alpha, def.fillAlpha);
         });
         // Record the anchor for the pan-offset optimisation
         wgl.anchorLatLng = state.map.getCenter();
         wgl.anchorPx     = state.map.latLngToContainerPoint(wgl.anchorLatLng);
     }
 
-    function _webglDrawGeoFeature(state, feature, hex) {
+    /** `alpha` applies to points, lines and outlines; `fillAlpha` to polygon interiors. */
+    function _webglDrawGeoFeature(state, feature, hex, alpha = 0.9, fillAlpha = 0.35) {
         const { type, coordinates: c } = feature.geometry || {};
         if (!type) return;
-        if      (type === 'Point')           _wglPoint(state, c, hex);
-        else if (type === 'MultiPoint')      c.forEach(p  => _wglPoint(state, p, hex));
-        else if (type === 'LineString')      _wglLine(state, c, hex);
-        else if (type === 'MultiLineString') c.forEach(l  => _wglLine(state, l, hex));
-        else if (type === 'Polygon')         _wglPolygon(state, c, hex);
-        else if (type === 'MultiPolygon')    c.forEach(r  => _wglPolygon(state, r, hex));
+        if      (type === 'Point')           _wglPoint(state, c, hex, alpha);
+        else if (type === 'MultiPoint')      c.forEach(p  => _wglPoint(state, p, hex, alpha));
+        else if (type === 'LineString')      _wglLine(state, c, hex, alpha);
+        else if (type === 'MultiLineString') c.forEach(l  => _wglLine(state, l, hex, alpha));
+        else if (type === 'Polygon')         _wglPolygon(state, c, hex, alpha, fillAlpha);
+        else if (type === 'MultiPolygon')    c.forEach(r  => _wglPolygon(state, r, hex, alpha, fillAlpha));
     }
 
     function _wglDraw(state, data, mode, rgba) {
@@ -271,33 +363,33 @@ window.GeoAssets = (function () {
         gl.drawArrays(mode, 0, data.length / 2);
     }
 
-    function _wglPoint(state, coord, hex) {
+    function _wglPoint(state, coord, hex, alpha) {
         const { gl, locs } = state.webgl;
         const p = state.map.latLngToContainerPoint(L.latLng(coord[1], coord[0]));
         gl.uniform1f(locs.ptSize, 10);
-        _wglDraw(state, new Float32Array([p.x, p.y]), gl.POINTS, _hexToVec4(hex, 0.9));
+        _wglDraw(state, new Float32Array([p.x, p.y]), gl.POINTS, _hexToVec4(hex, alpha));
     }
 
-    function _wglLine(state, coords, hex) {
+    function _wglLine(state, coords, hex, alpha) {
         const { gl } = state.webgl;
         const flat = _projectRing(state.map, coords).flat();
-        _wglDraw(state, new Float32Array(flat), gl.LINE_STRIP, _hexToVec4(hex, 0.9));
+        _wglDraw(state, new Float32Array(flat), gl.LINE_STRIP, _hexToVec4(hex, alpha));
     }
 
-    function _wglPolygon(state, rings, hex) {
+    function _wglPolygon(state, rings, hex, alpha, fillAlpha) {
         const { gl } = state.webgl;
         const exterior = _projectRing(state.map, rings[0]);
 
         // Filled triangulation of exterior ring
         const fill = _earcut(exterior);
         if (fill.length > 0)
-            _wglDraw(state, fill, gl.TRIANGLES, _hexToVec4(hex, 0.35));
+            _wglDraw(state, fill, gl.TRIANGLES, _hexToVec4(hex, fillAlpha));
 
         // Outline for all rings (including holes)
         for (const ring of rings) {
             const proj  = _projectRing(state.map, ring);
             const close = [...proj.flat(), proj[0][0], proj[0][1]];
-            _wglDraw(state, new Float32Array(close), gl.LINE_STRIP, _hexToVec4(hex, 0.9));
+            _wglDraw(state, new Float32Array(close), gl.LINE_STRIP, _hexToVec4(hex, alpha));
         }
     }
 
@@ -323,7 +415,9 @@ window.GeoAssets = (function () {
             renderMode:     mode,
             canvasRenderer: mode === 'canvas' ? L.canvas({ padding: 0.5 }) : null,
             webgl:          null,
-            snapScope:      null        // Set<assetTypeId> | null — null means unscoped/global (XD01-119)
+            snapScope:      null,       // Set<assetTypeId> | null — null means unscoped/global (XD01-119)
+            featureStates:  new Map(),  // featureId → persistent state name; sticky across re-renders (XD01-309)
+            highlights:     new Set()   // featureIds with the transient highlight overlay
         };
 
         if (mode === 'webgl') _initWebGL(divId);
@@ -347,6 +441,8 @@ window.GeoAssets = (function () {
                 state.webgl.canvas.remove();
             }
             state.map.remove();
+            state.featureStates.clear();
+            state.highlights.clear();
             delete _maps[divId];
         }
     }
@@ -530,6 +626,10 @@ window.GeoAssets = (function () {
         layer.addTo(group);
         state.featureLayers.set(id, layer);
 
+        // Viewport chunking re-creates layers constantly — a state set before this render (or
+        // before the feature was ever in view) must be applied to the fresh layer.
+        if (_effectiveState(state, id)) _refreshFeatureStyle(state, id);
+
         // A snap scope may already be active (a type-first draw session started before this
         // feature was rendered/re-rendered) — stamp it onto the new layer so it doesn't fall
         // back to "always snappable" until the next full _applySnapScope pass.
@@ -542,6 +642,8 @@ window.GeoAssets = (function () {
     /**
      * Stores feature data for WebGL rendering and registers an invisible SVG event layer.
      * Does NOT trigger a redraw — call _webglRedraw(divId) when ready.
+     * Nothing to re-apply here for per-feature states: _webglRedraw resolves each feature's state
+     * from the registry on every draw, so a re-added feature picks its state up automatically.
      */
     function _addWebGLFeature(_divId, state, feature, color) {
         const id          = feature.id;
@@ -642,6 +744,9 @@ window.GeoAssets = (function () {
         });
     }
 
+    // Neither removeFeature nor clearAllFeatures touches state.featureStates / state.highlights:
+    // both run as part of normal viewport refreshes and the features come straight back.
+    // Only clearFeatureStates and destroyMap empty the registry.
     function removeFeature(divId, featureId) {
         const state = _maps[divId];
         if (!state) return;
@@ -782,38 +887,59 @@ window.GeoAssets = (function () {
         }
     }
 
-    // ─── Candidate highlight (XD01-152 "Connect to…" picker) ─────────────────
-    // A no-op in WebGL mode — that renderer draws features to a canvas from
-    // state.webgl.features and has no per-feature Leaflet layer to restyle.
+    // ─── Per-feature states: public API (XD01-309) ───────────────────────────
 
-    const HIGHLIGHT_STYLE = { color: '#f9e2af', weight: 5 };
-
-    function _firstSubLayer(layer) {
-        let first = null;
-        layer.eachLayer && layer.eachLayer(l => { if (!first) first = l; });
-        return first;
+    /**
+     * Sets the persistent state of `featureIds` to `stateName` — 'default' | 'selected' |
+     * 'highlighted' | 'disabled' | 'conflict' (case-insensitive). 'default' removes the entry and
+     * restores the feature's own style. Ids that are not rendered right now are still recorded
+     * and styled when they next render. WebGL mode shows state as colour/alpha only.
+     */
+    function setFeatureStates(divId, featureIds, stateName) {
+        const state = _maps[divId];
+        if (!state) return;
+        const name = String(stateName || '').toLowerCase();
+        if (name !== 'default' && !_STATE_STYLES[name]) {
+            console.warn(`GeoAssets: unknown feature state '${stateName}' ignored.`);
+            return;
+        }
+        (featureIds || []).forEach(id => {
+            if (name === 'default') state.featureStates.delete(id);
+            else state.featureStates.set(id, name);
+            _refreshFeatureStyle(state, id);
+        });
+        _scheduleRedraw(divId); // WebGL only (no-op otherwise); one redraw for the whole call
     }
+
+    /** Empties the persistent registry and restores every feature that had a state. The
+     *  transient highlight overlay is owned by its caller and is left in place. */
+    function clearFeatureStates(divId) {
+        const state = _maps[divId];
+        if (!state) return;
+        const ids = [...state.featureStates.keys()];
+        state.featureStates.clear();
+        ids.forEach(id => _refreshFeatureStyle(state, id));
+        _scheduleRedraw(divId);
+    }
+
+    // ─── Candidate highlight (XD01-152 "Connect to…" picker) ─────────────────
+    // A transient overlay drawn on top of whatever persistent state the feature has; clearing it
+    // falls back to that persistent state (or the feature's own style). Works in every render
+    // mode, WebGL included, because it goes through the same state mechanism.
 
     function highlightFeature(divId, featureId) {
         const state = _maps[divId];
-        if (!state || state.renderMode === 'webgl') return;
-        const layer = state.featureLayers.get(featureId);
-        const sub = layer && _firstSubLayer(layer);
-        if (!sub || !sub.setStyle) return;
-        if (!sub._geoAssetsOriginalStyle) {
-            sub._geoAssetsOriginalStyle = { color: sub.options.color, weight: sub.options.weight };
-        }
-        sub.setStyle(HIGHLIGHT_STYLE);
+        if (!state) return;
+        state.highlights.add(featureId);
+        _refreshFeatureStyle(state, featureId);
+        _scheduleRedraw(divId);
     }
 
     function clearHighlight(divId, featureId) {
         const state = _maps[divId];
-        if (!state || state.renderMode === 'webgl') return;
-        const layer = state.featureLayers.get(featureId);
-        const sub = layer && _firstSubLayer(layer);
-        if (!sub || !sub.setStyle || !sub._geoAssetsOriginalStyle) return;
-        sub.setStyle(sub._geoAssetsOriginalStyle);
-        delete sub._geoAssetsOriginalStyle;
+        if (!state || !state.highlights.delete(featureId)) return;
+        _refreshFeatureStyle(state, featureId);
+        _scheduleRedraw(divId);
     }
 
     // ─── Browser Storage (Web only) ──────────────────────────────────────────
@@ -911,6 +1037,8 @@ window.GeoAssets = (function () {
         setLayerVisibility,
         fitBounds,
         panToFeature,
+        setFeatureStates,
+        clearFeatureStates,
         highlightFeature,
         clearHighlight,
         localStorageSave,

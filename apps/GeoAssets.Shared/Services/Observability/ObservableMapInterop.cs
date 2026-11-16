@@ -9,17 +9,29 @@ using Microsoft.JSInterop;
 namespace GeoAssets.Shared.Services.Observability;
 
 /// <summary>
-/// Observable decorator for <see cref="IMapInterop"/>.
+/// Observable decorator for <see cref="IMapInterop"/> and <see cref="IMapSelectionInterop"/>.
 /// Instruments <see cref="RenderAllFeaturesAsync"/> with an OpenTelemetry span,
-/// a duration metric, and structured logging; all other calls are
-/// forwarded to the inner service without overhead.
+/// a duration metric, and structured logging, and <see cref="SetFeatureStatesAsync"/> with a
+/// span; all other calls are forwarded to the inner service without overhead.
 /// </summary>
 public sealed class ObservableMapInterop(
     IMapInterop inner,
+    IMapSelectionInterop selectionInner,
+    MapRenderMode renderMode,
     ILogger<ObservableMapInterop> logger,
     TimeProvider timeProvider)
-    : ObservableDecoratorBase<ObservableMapInterop>(logger, timeProvider), IMapInterop
+    : ObservableDecoratorBase<ObservableMapInterop>(logger, timeProvider), IMapInterop, IMapSelectionInterop
 {
+    /// <summary>Span emitted by <see cref="SetFeatureStatesAsync"/> (XD01-309).</summary>
+    public const string SetFeatureStatesSpanName = "Map.SetFeatureStates";
+
+    private readonly string _renderModeTag = renderMode switch
+    {
+        MapRenderMode.Canvas => "canvas",
+        MapRenderMode.WebGL => "webgl",
+        _ => "leaflet"
+    };
+
     // ── Instrumented ─────────────────────────────────────────────────────────
 
     public Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features)
@@ -70,8 +82,23 @@ public sealed class ObservableMapInterop(
                     rawFeaturesJson.Length, elapsedMs);
             });
 
+    /// <remarks>Tags carry counts and the state only — never feature ids (unbounded cardinality).</remarks>
+    public Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state)
+    {
+        ArgumentNullException.ThrowIfNull(featureIds);
+        if (featureIds.Count == 0) return selectionInner.SetFeatureStatesAsync(divId, featureIds, state);
+
+        return TrackAsync(
+            SetFeatureStatesSpanName,
+            () => selectionInner.SetFeatureStatesAsync(divId, featureIds, state),
+            before: span => span?.SetTag("map.feature_count", featureIds.Count)
+                                  .SetTag("map.feature_state", state.ToJsName())
+                                  .SetTag("map.render_mode",   _renderModeTag));
+    }
+
     // ── Pass-through ─────────────────────────────────────────────────────────
 
+    public Task ClearFeatureStatesAsync(string divId)                                       => selectionInner.ClearFeatureStatesAsync(divId);
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom)           => inner.InitializeMapAsync(divId, lat, lon, zoom);
     public Task DestroyMapAsync(string divId)                                               => inner.DestroyMapAsync(divId);
     public Task InvalidateSizeAsync(string divId)                                            => inner.InvalidateSizeAsync(divId);
