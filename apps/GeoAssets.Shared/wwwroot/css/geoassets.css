@@ -448,6 +448,96 @@ html, body {
 .draw-btn.active { background: rgba(137, 180, 250, 0.2); border-color: var(--accent); color: var(--accent); }
 .draw-btn.cancel  { color: var(--danger); border-color: var(--danger); }
 
+/* ─── Selection Toolbar (XD01-310) ───────────────────────────────────────── */
+/* Bottom-centre, so it never collides with the draw toolbar (top-centre), Leaflet's zoom
+   control (top-left) or the properties panel (right). Colours come from the theme tokens only,
+   so it reads the same in Mocha and Latte. */
+
+.selection-toolbar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: calc(100% - 20px);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+.selection-toolbar-label { font-size: 0.8rem; color: var(--text-secondary); }
+
+/* Bootstrap hardcodes its per-button vars, so the toggle buttons map them to the tokens here.
+   The border and hover rules are restated because this file's own generic .btn rule (further
+   down) resets the border to transparent and dims on hover. */
+.selection-toolbar .selection-btn {
+    --bs-btn-color: var(--text-primary);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: var(--panel-border);
+    --bs-btn-hover-color: var(--text-primary);
+    --bs-btn-hover-bg: var(--surface-tint-strong);
+    --bs-btn-hover-border-color: var(--accent);
+    --bs-btn-active-color: var(--on-accent);
+    --bs-btn-active-bg: var(--accent);
+    --bs-btn-active-border-color: var(--accent);
+    --bs-btn-disabled-color: var(--text-secondary);
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: var(--panel-border);
+    --bs-btn-disabled-opacity: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    font-size: 0.82rem;
+    border-color: var(--bs-btn-border-color);
+}
+
+.selection-toolbar .selection-btn:hover    { opacity: 1; border-color: var(--bs-btn-hover-border-color); }
+.selection-toolbar .selection-btn.active   { border-color: var(--bs-btn-active-border-color); }
+.selection-toolbar .selection-btn:disabled { border-color: var(--bs-btn-disabled-border-color); }
+
+.selection-btn:focus-visible,
+.selection-notice .btn-close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    box-shadow: none;
+    z-index: 2;
+}
+
+.selection-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 7.5em;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.selection-notice {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--selection-notice-color);
+    border-left-width: 4px;
+    border-radius: 6px;
+    background: var(--surface-tint);
+    color: var(--text-primary);
+}
+
+.selection-notice-error   { --selection-notice-color: var(--danger); }
+.selection-notice-warning { --selection-notice-color: var(--warning); }
+
 /* ─── Draw Toolbar: AssetType palette (XD01-117) ────────────────────────── */
 
 .draw-type-picker { position: relative; }

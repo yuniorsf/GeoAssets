@@ -542,7 +542,11 @@ window.GeoAssets = (function () {
             webgl:          null,
             snapScope:      null,       // Set<assetTypeId> | null — null means unscoped/global (XD01-119)
             featureStates:  new Map(),  // featureId → persistent state name; sticky across re-renders (XD01-309)
-            highlights:     new Set()   // featureIds with the transient highlight overlay
+            highlights:     new Set(),  // featureIds with the transient highlight overlay
+            selectionTool:  'none',     // 'none' | 'click' | 'box' | 'fence' — the armed selection tool (XD01-310)
+            selectionSaved: null,       // snapping / box-zoom settings to restore once an area tool is disarmed
+            selectionInput: null,       // DOM listeners added by _bindSelectionInput, removed in destroyMap
+            additive:       false       // was Shift held on the most recent pointer press on the map?
         };
 
         if (mode === 'webgl') _initWebGL(divId);
@@ -565,6 +569,7 @@ window.GeoAssets = (function () {
                 if (state.webgl.rafHandle !== null) cancelAnimationFrame(state.webgl.rafHandle);
                 state.webgl.canvas.remove();
             }
+            _unbindSelectionInput(state);
             state.map.remove();
             state.featureStates.clear();
             state.highlights.clear();
@@ -589,10 +594,27 @@ window.GeoAssets = (function () {
         map.pm.setGlobalOptions({ snappable: true, snapDistance: 15 });
 
         map.on('pm:create', ({ layer }) => {
+            // A shape drawn with a selection tool only describes an area: it never becomes a
+            // feature, so it goes to its own callback and the tool stays armed (XD01-310).
+            if (_isAreaTool(state.selectionTool)) {
+                const tool  = state.selectionTool;
+                const rings = JSON.stringify(layer.toGeoJSON().geometry.coordinates);
+                layer.remove();
+                dotNetRef.invokeMethodAsync('OnSelectionGeometryFromJs', tool, rings, state.additive);
+                // Geoman disables the draw right after this event, so re-arm on the next tick.
+                setTimeout(() => {
+                    if (_maps[divId] === state && state.selectionTool === tool && !map.pm.globalDrawModeEnabled())
+                        _armAreaDraw(state);
+                }, 0);
+                return;
+            }
+
             const geoJson = JSON.stringify(layer.toGeoJSON());
             layer.remove(); // .NET will re-render via renderFeature
             dotNetRef.invokeMethodAsync('OnFeatureDrawnFromJs', geoJson);
         });
+
+        _bindSelectionInput(state);
 
         // Viewport change events — fire after pan/zoom settles
         function emitViewport() {
@@ -619,14 +641,119 @@ window.GeoAssets = (function () {
         if (!state || !state.map.pm) return;
         const modes = { Point: 'Marker', LineString: 'Line', Polygon: 'Polygon' };
         const mode = modes[geometryType];
-        if (mode) state.map.pm.enableDraw(mode);
+        if (!mode) return;
+        // Feature drawing and the selection tools are mutually exclusive (XD01-310): starting a
+        // draw drops the armed selection tool and puts snapping back first.
+        _dropSelectionTool(state);
+        state.map.pm.enableDraw(mode);
     }
 
     function disableDraw(divId) {
         const state = _maps[divId];
         if (!state || !state.map.pm) return;
+        // While a box/fence tool is armed the active Geoman draw is the selection gesture, which
+        // only setSelectionTool may end (Geoman's disableGlobalEditMode ends a draw too).
+        if (_isAreaTool(state.selectionTool)) return;
         state.map.pm.disableDraw();
         state.map.pm.disableGlobalEditMode();
+    }
+
+    // ─── Selection Tools (XD01-310) ──────────────────────────────────────────
+    // Box and fence reuse Geoman's Rectangle / Polygon draw behind state.selectionTool, so
+    // pm:create can tell a selection gesture from a feature being drawn. 'click' needs no draw
+    // mode: _bindEvents routes feature clicks to the selection callback while it is armed.
+
+    const _SELECTION_TOOLS = ['none', 'click', 'box', 'fence'];
+
+    function _isAreaTool(tool) { return tool === 'box' || tool === 'fence'; }
+
+    function _armAreaDraw(state) {
+        state.map.pm.enableDraw(state.selectionTool === 'box' ? 'Rectangle' : 'Polygon');
+    }
+
+    /** Snapping would pull a selection corner onto nearby assets, and Leaflet's Shift+drag box
+     *  zoom would fight the Shift (additive) modifier — both are off while an area tool is armed. */
+    function _prepareForAreaTool(state) {
+        const map = state.map;
+        const { snappable, snapDistance } = map.pm.getGlobalOptions();
+        state.selectionSaved = { snappable, snapDistance, boxZoom: !!(map.boxZoom && map.boxZoom.enabled()) };
+        map.pm.setGlobalOptions({ snappable: false });
+        if (state.selectionSaved.boxZoom) map.boxZoom.disable();
+    }
+
+    function _restoreAfterAreaTool(state) {
+        const saved = state.selectionSaved;
+        if (!saved) return;
+        state.selectionSaved = null;
+        state.map.pm.setGlobalOptions({ snappable: saved.snappable, snapDistance: saved.snapDistance });
+        if (saved.boxZoom) state.map.boxZoom.enable();
+    }
+
+    /** Disarms whatever selection tool is armed, cancelling an in-progress box/fence. */
+    function _dropSelectionTool(state) {
+        if (_isAreaTool(state.selectionTool)) {
+            state.map.pm.disableDraw();
+            _restoreAfterAreaTool(state);
+        }
+        state.selectionTool = 'none';
+    }
+
+    /**
+     * Arms a selection tool: 'click' (feature clicks toggle), 'box' (Rectangle), 'fence'
+     * (Polygon), or 'none' to disarm. Arming any tool cancels an active feature draw; 'none'
+     * leaves a feature draw alone (it only ends a selection gesture). An unknown value is treated
+     * as 'none'. The tool stays armed until this is called again or a feature draw starts.
+     */
+    function setSelectionTool(divId, tool) {
+        const state = _maps[divId];
+        if (!state) return;
+        if (!state.map.pm) {
+            console.warn('GeoAssets: Leaflet-Geoman not loaded. Selection tools will not work.');
+            return;
+        }
+
+        let next = String(tool ?? '').toLowerCase();
+        if (!_SELECTION_TOOLS.includes(next)) {
+            console.warn(`GeoAssets: unknown selection tool '${tool}' treated as 'none'.`);
+            next = 'none';
+        }
+
+        const wasArea = _isAreaTool(state.selectionTool);
+        const isArea  = _isAreaTool(next);
+
+        if (wasArea || next !== 'none') state.map.pm.disableDraw();
+        if (wasArea && !isArea) _restoreAfterAreaTool(state);
+        if (!wasArea && isArea) _prepareForAreaTool(state);
+
+        state.selectionTool = next;
+        if (isArea) _armAreaDraw(state);
+    }
+
+    /** Tracks the additive modifier and wires Escape. Capture phase on the container, because the
+     *  click that finishes a fence lands on Geoman's first-vertex marker, not on the map. */
+    function _bindSelectionInput(state) {
+        if (state.selectionInput) return;
+        const container = state.map.getContainer();
+        const onPress = e => { state.additive = !!e.shiftKey; };
+        const onKey = e => {
+            // Escape abandons the box/fence being drawn; the tool stays armed for a fresh one.
+            if (e.key !== 'Escape' || !_isAreaTool(state.selectionTool)) return;
+            state.map.pm.disableDraw();
+            _armAreaDraw(state);
+        };
+        container.addEventListener('mousedown', onPress, true);
+        container.addEventListener('click', onPress, true);
+        document.addEventListener('keydown', onKey);
+        state.selectionInput = { container, onPress, onKey };
+    }
+
+    function _unbindSelectionInput(state) {
+        const input = state.selectionInput;
+        if (!input) return;
+        input.container.removeEventListener('mousedown', input.onPress, true);
+        input.container.removeEventListener('click', input.onPress, true);
+        document.removeEventListener('keydown', input.onKey);
+        state.selectionInput = null;
     }
 
     // ─── Type-Aware Snap Scoping (XD01-119) ─────────────────────────────────
@@ -679,8 +806,17 @@ window.GeoAssets = (function () {
     function _bindEvents(state, layer, id, props) {
         const name = props.name || id;
         layer.bindTooltip && layer.bindTooltip(name, { permanent: false, direction: 'top' });
-        layer.on('click', () => {
-            state.dotNetRef && state.dotNetRef.invokeMethodAsync('OnFeatureClickedFromJs', id);
+        layer.on('click', (e) => {
+            if (!state.dotNetRef) return;
+            // While a box/fence is being drawn the click is a corner of that gesture, not a
+            // feature click; with the click tool armed it toggles the feature in the selection.
+            if (_isAreaTool(state.selectionTool)) return;
+            if (state.selectionTool === 'click') {
+                state.dotNetRef.invokeMethodAsync(
+                    'OnSelectionClickFromJs', id, !!(e.originalEvent && e.originalEvent.shiftKey));
+                return;
+            }
+            state.dotNetRef.invokeMethodAsync('OnFeatureClickedFromJs', id);
         });
         layer.on('contextmenu', (e) => {
             L.DomEvent.stop(e);
@@ -1150,6 +1286,7 @@ window.GeoAssets = (function () {
         disableDraw,
         setSnapTargetLayer,
         clearSnapTargetScope,
+        setSelectionTool,
         renderFeature,
         renderAllFeatures,
         renderFeatureBatch,

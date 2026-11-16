@@ -95,7 +95,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 
 - **State**: `IAssetProvider` (`ActiveAssetProvider` proxying the active entry in `IProviderPool`) as source of truth; C# events (`FeatureAdded/Updated/Deleted/CollectionChanged`) as pub/sub
 - **JS↔C# bridge**: `DotNetObjectReference<object>` stored in JS `_maps[divId].dotNetRef`; C# calls JS via `IJSRuntime.InvokeVoidAsync("GeoAssets.*")`
-- **JS→C# callbacks** (all `[JSInvokable]` on `MapContainer`): `OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`, `OnViewportChangedFromJs`
+- **JS→C# callbacks** (all `[JSInvokable]` on `MapContainer`): `OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`, `OnViewportChangedFromJs`, `OnSelectionGeometryFromJs`, `OnSelectionClickFromJs` (the last two only while a map selection tool is armed — XD01-310)
 - **Auto-save**: `AssetService` debounces 500ms on `CollectionChanged` → `IStorageService.SaveAsync`
 
 ## Geometry (NTS Integration)

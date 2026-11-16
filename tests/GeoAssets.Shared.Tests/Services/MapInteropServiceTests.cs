@@ -221,6 +221,33 @@ public class MapInteropServiceTests
         call.Args[2].Should().Be(expectedName);
     }
 
+    [Theory]
+    [InlineData(MapSelectionTool.None, "none")]
+    [InlineData(MapSelectionTool.ClickToggle, "click")]
+    [InlineData(MapSelectionTool.Box, "box")]
+    [InlineData(MapSelectionTool.Fence, "fence")]
+    public async Task SetSelectionToolAsync_CallsSetSelectionToolWithDivIdAndJsToolName(MapSelectionTool tool, string expectedName)
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).SetSelectionToolAsync("map1", tool);
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.setSelectionTool");
+        call.Args.Should().Equal("map1", expectedName);
+    }
+
+    [Fact]
+    public async Task SetSelectionToolAsync_UndefinedTool_ThrowsAndMakesNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+
+        var act = () => Sut(js).SetSelectionToolAsync("map1", (MapSelectionTool)99);
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+        js.Calls.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task SetFeatureStatesAsync_NullIds_ThrowsAndMakesNoJsCall()
     {

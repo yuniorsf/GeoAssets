@@ -3,6 +3,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -21,6 +22,12 @@ public partial class MapContainer
     [Parameter] public EventCallback<GeoFeature> OnFeatureEdited { get; set; }
     [Parameter] public EventCallback<string> OnFeatureClicked { get; set; }
     [Parameter] public EventCallback<(string FeatureId, double X, double Y)> OnFeatureContextMenu { get; set; }
+
+    /// <summary>A box or fence selection gesture was completed on the map (XD01-310).</summary>
+    [Parameter] public EventCallback<MapSelectionGesture> OnSelectionGesture { get; set; }
+
+    /// <summary>A feature was clicked while the click-toggle selection tool was armed (XD01-310).</summary>
+    [Parameter] public EventCallback<(string FeatureId, bool Additive)> OnSelectionClick { get; set; }
 
     /// <summary>Feature count per <see cref="FeatureRenderPipeline.StreamAllAsync"/> chunk for a
     /// full-dataset bulk render — coarser than <c>MapInteropService</c>'s own <c>BatchSize</c>
@@ -246,6 +253,37 @@ public partial class MapContainer
     [JSInvokable("OnFeatureContextMenuFromJs")]
     public Task OnFeatureContextMenuFromJs(string featureId, double x, double y) =>
         OnFeatureContextMenu.InvokeAsync((featureId, x, y));
+
+    /// <summary>
+    /// A selection box or fence was drawn (XD01-310). Unlike <see cref="OnFeatureDrawnFromJs"/> this
+    /// never creates a feature and never touches <see cref="Repository"/>: the geometry only
+    /// describes an area. Malformed input is logged and ignored.
+    /// </summary>
+    [JSInvokable("OnSelectionGeometryFromJs")]
+    public Task OnSelectionGeometryFromJs(string tool, string ringsJson, bool additive)
+    {
+        if (!MapSelectionGestureParser.TryParse(tool, ringsJson, additive, out var gesture, out var rejection) || gesture is null)
+        {
+            Logger.LogWarning("OnSelectionGeometryFromJs — ignored: {Rejection}", rejection);
+            return Task.CompletedTask;
+        }
+
+        Logger.LogDebug("Selection gesture — tool={Tool} additive={Additive}", gesture.Tool, gesture.Additive);
+        return OnSelectionGesture.InvokeAsync(gesture);
+    }
+
+    /// <summary>A feature was clicked while the click-toggle selection tool was armed (XD01-310).</summary>
+    [JSInvokable("OnSelectionClickFromJs")]
+    public Task OnSelectionClickFromJs(string featureId, bool additive)
+    {
+        if (string.IsNullOrWhiteSpace(featureId))
+        {
+            Logger.LogWarning("OnSelectionClickFromJs — ignored: blank feature id");
+            return Task.CompletedTask;
+        }
+
+        return OnSelectionClick.InvokeAsync((featureId, additive));
+    }
 
     [JSInvokable("OnViewportChangedFromJs")]
     public Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)

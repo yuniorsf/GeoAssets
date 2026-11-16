@@ -1,0 +1,54 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+<div class="selection-toolbar" role="toolbar" aria-label="@L["map.select.toolbar"]">
+    <span class="selection-toolbar-label" aria-hidden="true">@L["map.select.label"]</span>
+
+    <div class="btn-group btn-group-sm" role="group" aria-label="@L["map.select.tools"]">
+        @foreach (var option in ToolOptions)
+        {
+            var pressed = Tool == option.Tool;
+            <button type="button"
+                    class="btn selection-btn @(pressed ? "active" : null)"
+                    aria-pressed="@(pressed ? "true" : "false")"
+                    title="@L[option.TitleKey]"
+                    @onclick="() => RequestTool(option.Tool)">
+                <span aria-hidden="true">@option.Glyph</span>
+                <span>@L[option.LabelKey]</span>
+            </button>
+        }
+    </div>
+
+    <button type="button"
+            class="btn btn-sm selection-btn"
+            disabled="@(Count == 0)"
+            title="@L["map.select.clear.title"]"
+            @onclick="OnClear">
+        <span aria-hidden="true">✕</span>
+        <span>@L["map.select.clear"]</span>
+    </button>
+
+    <span class="selection-count" role="status" aria-live="polite" aria-atomic="true">
+        @if (Busy)
+        {
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>@L["map.select.resolving"]</span>
+        }
+        else
+        {
+            @L.GetString(CountKey(Count), Count)
+        }
+    </span>
+
+    @if (Notice is { } notice)
+    {
+        <div class="selection-notice @(notice.IsError ? "selection-notice-error" : "selection-notice-warning")"
+             role="@(notice.IsError ? "alert" : "status")">
+            <span>@L.GetString(NoticeKey(notice.Kind), notice.Count, notice.Limit)</span>
+            <button type="button"
+                    class="btn-close"
+                    aria-label="@L["map.select.notice.dismiss"]"
+                    title="@L["map.select.notice.dismiss"]"
+                    @onclick="OnNoticeDismissed"></button>
+        </div>
+    }
+</div>

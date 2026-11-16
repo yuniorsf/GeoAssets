@@ -1,6 +1,8 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Shared.Components.Assets;
+using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services;
 using Microsoft.AspNetCore.Components;
 
 namespace GeoAssets.Shared.Components.Map;
@@ -18,6 +20,10 @@ public partial class MapWorkspace
     private CandidatePicker? _candidatePicker;
 
     private bool _wasHidden;
+
+    // ─── Multi-selection tools (XD01-310) ──────────────────────────────────
+
+    private MapSelectionCoordinator _selectionCoordinator = null!;
 
     // ─── Candidate picker state (XD01-152) ─────────────────────────────────
 
@@ -42,6 +48,10 @@ public partial class MapWorkspace
     {
         base.OnInitialized();
         Selection.Changed += OnSelectionChanged;
+
+        _selectionCoordinator = new MapSelectionCoordinator(
+            SelectionSet, SelectionResolver, SelectionInterop, SelectionLogger, _mapDivId);
+        _selectionCoordinator.StateChanged += OnSelectionToolsChanged;
     }
 
     protected override Task OnInitializedAsync() => AssetSvc.InitializeAsync();
@@ -79,9 +89,16 @@ public partial class MapWorkspace
 
     // ─── Draw events ──────────────────────────────────────────────────────
 
-    private void OnDrawModeChanged(GeometryType? mode)
+    // Feature drawing and the selection tools share Geoman's draw machinery, so only one is
+    // armed at a time: starting a draw disarms the selection tool (geoassets.js's enableDraw has
+    // already dropped it on the map; this brings the toolbar's pressed state in line).
+    private async Task OnDrawModeChanged(GeometryType? mode)
     {
-        if (mode.HasValue) ClosePanel();
+        if (!mode.HasValue) return;
+
+        ClosePanel();
+        if (_selectionCoordinator.Tool != MapSelectionTool.None)
+            await _selectionCoordinator.SetToolAsync(MapSelectionTool.None);
     }
 
     private async Task OnFeatureDrawn(GeoFeature feature)
@@ -109,6 +126,31 @@ public partial class MapWorkspace
         var feature = Repository.GetById(featureId);
         if (feature is not null)
             OnFeatureSelected(feature);
+    }
+
+    // ─── Multi-selection tools (XD01-310) ──────────────────────────────────
+
+    private void OnSelectionToolsChanged() => _ = InvokeAsync(StateHasChanged);
+
+    // …and arming a selection tool ends an active draw mode: ResetMode clears DrawToolbar's own
+    // state, and geoassets.js's setSelectionTool cancels the Geoman draw itself.
+    private async Task OnSelectionToolRequested(MapSelectionTool tool)
+    {
+        if (tool != MapSelectionTool.None && _drawToolbar is not null)
+            await _drawToolbar.ResetMode();
+
+        await _selectionCoordinator.SetToolAsync(tool);
+    }
+
+    private Task OnSelectionGesture(MapSelectionGesture gesture) =>
+        _selectionCoordinator.HandleGestureAsync(gesture);
+
+    // The map only reports a selection click while it believes the click tool is armed; if the
+    // coordinator disagrees (the tool was just switched off), the click is an ordinary one.
+    private void OnSelectionClick((string FeatureId, bool Additive) click)
+    {
+        if (!_selectionCoordinator.HandleClick(click.FeatureId))
+            OnFeatureClicked(click.FeatureId);
     }
 
     // ─── Multi-candidate "Connect to…" picker (XD01-152) ───────────────────
@@ -209,6 +251,8 @@ public partial class MapWorkspace
     public async ValueTask DisposeAsync()
     {
         Selection.Changed -= OnSelectionChanged;
+        _selectionCoordinator.StateChanged -= OnSelectionToolsChanged;
+        _selectionCoordinator.Dispose();
         await AssetSvc.DisposeAsync();
         GC.SuppressFinalize(this);
     }
