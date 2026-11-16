@@ -15,21 +15,76 @@ public class OrganizationGrantSyncWorkerTests
     private static readonly DateTimeOffset FixedStartUtc =
         DateTimeOffset.Parse("2026-11-11T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Thread-safe: the background-loop test adds an entry from the test thread while the worker
+    /// polls from a thread-pool thread, so both collections are guarded by one lock.
+    /// </summary>
     private sealed class FakeSyncClient : IOrganizationGrantSyncClient
     {
-        public List<OrganizationGrantSyncEntry> Entries { get; } = [];
-        public List<long> ObservedAfterSequences { get; } = [];
+        private readonly Lock _gate = new();
+        private readonly List<OrganizationGrantSyncEntry> _entries = [];
+        private readonly List<long> _observedAfterSequences = [];
+
+        public IReadOnlyList<long> ObservedAfterSequences
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _observedAfterSequences];
+                }
+            }
+        }
+
+        public IReadOnlyList<OrganizationGrantSyncEntry> Entries
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _entries];
+                }
+            }
+        }
+
+        public void Add(OrganizationGrantSyncEntry entry)
+        {
+            lock (_gate)
+            {
+                _entries.Add(entry);
+            }
+        }
 
         public Task<IReadOnlyList<OrganizationGrantSyncEntry>> GetSyncBatchAsync(
             long afterSequence, int take, CancellationToken ct = default)
         {
-            ObservedAfterSequences.Add(afterSequence);
-            var batch = Entries
-                .Where(e => e.SequenceNumber > afterSequence)
-                .OrderBy(e => e.SequenceNumber)
-                .Take(take)
-                .ToList();
-            return Task.FromResult<IReadOnlyList<OrganizationGrantSyncEntry>>(batch);
+            lock (_gate)
+            {
+                _observedAfterSequences.Add(afterSequence);
+                var batch = _entries
+                    .Where(e => e.SequenceNumber > afterSequence)
+                    .OrderBy(e => e.SequenceNumber)
+                    .Take(take)
+                    .ToList();
+                return Task.FromResult<IReadOnlyList<OrganizationGrantSyncEntry>>(batch);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Advances fake time one poll interval at a time until <paramref name="condition"/> holds.
+    /// The worker runs on another thread, so a fixed number of advances can all fire before it
+    /// has registered its next delay; this keeps advancing until the worker has demonstrably
+    /// made progress. The real-time pause and timeout only pace and bound the wait — the
+    /// assertion never depends on how long anything took.
+    /// </summary>
+    private static async Task AdvanceUntilAsync(FakeTimeProvider timeProvider, TimeSpan pollInterval, Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (!condition())
+        {
+            timeProvider.Advance(pollInterval);
+            await Task.Delay(TimeSpan.FromMilliseconds(5), timeout.Token);
         }
     }
 
@@ -45,7 +100,7 @@ public class OrganizationGrantSyncWorkerTests
         var client = new FakeSyncClient();
         var granteeOrg = Guid.NewGuid();
         var resourceOrg = Guid.NewGuid();
-        client.Entries.Add(new OrganizationGrantSyncEntry
+        client.Add(new OrganizationGrantSyncEntry
         {
             SequenceNumber = 1,
             GrantId = Guid.NewGuid(),
@@ -87,7 +142,7 @@ public class OrganizationGrantSyncWorkerTests
         var grantId = Guid.NewGuid();
         var granteeOrg = Guid.NewGuid();
         var resourceOrg = Guid.NewGuid();
-        client.Entries.Add(new OrganizationGrantSyncEntry
+        client.Add(new OrganizationGrantSyncEntry
         {
             SequenceNumber = 1,
             GrantId = grantId,
@@ -108,7 +163,7 @@ public class OrganizationGrantSyncWorkerTests
         await worker.SyncNextBatchAsync();
 
         // Revocation arrives as a second, later snapshot for the SAME grant.
-        client.Entries.Add(new OrganizationGrantSyncEntry
+        client.Add(new OrganizationGrantSyncEntry
         {
             SequenceNumber = 2,
             GrantId = grantId,
@@ -155,24 +210,22 @@ public class OrganizationGrantSyncWorkerTests
     {
         using var fixture = new SqliteFixture();
         var client = new FakeSyncClient();
+        var pollInterval = TimeSpan.FromSeconds(5);
         var timeProvider = new FakeTimeProvider(FixedStartUtc);
         await using var serviceProvider = BuildScopeProvider(fixture);
         using var worker = new OrganizationGrantSyncWorker(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             client,
             timeProvider,
-            Options.Create(new OrganizationGrantSyncOptions { PollInterval = TimeSpan.FromSeconds(5) }),
+            Options.Create(new OrganizationGrantSyncOptions { PollInterval = pollInterval }),
             NullLogger<OrganizationGrantSyncWorker>.Instance);
 
         await worker.StartAsync(CancellationToken.None);
 
-        for (var step = 0; step < 5 && !fixture.Context.OrganizationGrantMirror.Any(); step++)
-        {
-            await Task.Yield();
-            timeProvider.Advance(TimeSpan.FromSeconds(5));
-        }
+        // The worker has polled at least once with nothing to apply.
+        await AdvanceUntilAsync(timeProvider, pollInterval, () => client.ObservedAfterSequences.Count > 0);
 
-        client.Entries.Add(new OrganizationGrantSyncEntry
+        client.Add(new OrganizationGrantSyncEntry
         {
             SequenceNumber = 1,
             GrantId = Guid.NewGuid(),
@@ -181,14 +234,14 @@ public class OrganizationGrantSyncWorkerTests
             IsActive = true,
         });
 
-        for (var step = 0; step < 20 && !fixture.Context.OrganizationGrantMirror.Any(); step++)
-        {
-            await Task.Yield();
-            timeProvider.Advance(TimeSpan.FromSeconds(5));
-        }
+        // The worker reads its cursor from the database before every poll, so being asked for
+        // entries after sequence 1 proves the entry was applied and saved.
+        await AdvanceUntilAsync(timeProvider, pollInterval, () => client.ObservedAfterSequences.Contains(1));
+
+        // Stop before reading: the test's DbContext shares the fixture's SQLite connection with
+        // the worker's scoped context.
+        await worker.StopAsync(CancellationToken.None);
 
         fixture.Context.OrganizationGrantMirror.Count().Should().Be(1);
-
-        await worker.StopAsync(CancellationToken.None);
     }
 }
