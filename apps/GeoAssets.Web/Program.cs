@@ -19,6 +19,7 @@ using GeoAssets.Web;
 using GeoAssets.Web.Extensions;
 using GeoAssets.Web.Services;
 using GeoAssets.Web.Services.Identity;
+using GeoAssets.Web.Services.Map;
 using GeoAssets.Web.Services.Session;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
@@ -217,6 +218,10 @@ builder.Services.AddOrderTypeRegistry();
 var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
     ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
 builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
+
+// Map box/fence selection (XD01-310) resolves through the server's selection/resolve route —
+// replaces the "not available" fallback AddGeoAssetsPanelState registers.
+builder.Services.AddSingleton<IMapSelectionResolver, RestMapSelectionResolver>();
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();

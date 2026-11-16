@@ -1,5 +1,6 @@
 using GeoAssets.Shared.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Shared.Services;
 
@@ -7,7 +8,8 @@ public static class PanelStateServiceExtensions
 {
     /// <summary>
     /// Registers the cross-cutting state services (<see cref="IFeatureSelectionState"/>,
-    /// <see cref="ICurrentMapContext"/>, <see cref="IPendingDrawTypeState"/>) that let panel-type
+    /// <see cref="ICurrentMapContext"/>, <see cref="IPendingDrawTypeState"/>,
+    /// <see cref="IMapSelectionSet"/>) that let panel-type
     /// menu items and map-drawing components become self-sufficient via DI instead of receiving
     /// bespoke parameters from whatever page hosts them (XD01-84).
     /// Called from both <c>Program.cs</c> (Web) and <c>MauiProgram.cs</c>.
@@ -17,6 +19,13 @@ public static class PanelStateServiceExtensions
         services.AddScoped<IFeatureSelectionState, FeatureSelectionState>();
         services.AddSingleton<ICurrentMapContext, CurrentMapContext>();
         services.AddScoped<IPendingDrawTypeState, PendingDrawTypeState>();
+
+        // Map multi-selection (XD01-310). A host that can resolve box/fence gestures registers its
+        // own IMapSelectionResolver (GeoAssets.Web: RestMapSelectionResolver); one that does not
+        // gets the fallback, under which the area tools report "not available" instead of the
+        // map workspace failing to resolve its dependencies.
+        services.AddScoped<IMapSelectionSet, MapSelectionSet>();
+        services.TryAddSingleton<IMapSelectionResolver, UnavailableMapSelectionResolver>();
 
         return services;
     }

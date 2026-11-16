@@ -17,4 +17,11 @@ public interface IMapSelectionInterop
 
     /// <summary>Removes every persistent feature state on the map and restores the features' own styles.</summary>
     Task ClearFeatureStatesAsync(string divId);
+
+    /// <summary>
+    /// Arms <paramref name="tool"/> on the map, or disarms selection with
+    /// <see cref="MapSelectionTool.None"/> (XD01-310). Arming a tool cancels an active feature-draw
+    /// mode; snapping is off while a box or fence is being drawn and restored afterwards.
+    /// </summary>
+    Task SetSelectionToolAsync(string divId, MapSelectionTool tool);
 }

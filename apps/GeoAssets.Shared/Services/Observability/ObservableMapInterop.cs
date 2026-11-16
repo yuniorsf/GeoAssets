@@ -11,8 +11,8 @@ namespace GeoAssets.Shared.Services.Observability;
 /// <summary>
 /// Observable decorator for <see cref="IMapInterop"/> and <see cref="IMapSelectionInterop"/>.
 /// Instruments <see cref="RenderAllFeaturesAsync"/> with an OpenTelemetry span,
-/// a duration metric, and structured logging, and <see cref="SetFeatureStatesAsync"/> with a
-/// span; all other calls are forwarded to the inner service without overhead.
+/// a duration metric, and structured logging, and <see cref="SetFeatureStatesAsync"/> and
+/// <see cref="SetSelectionToolAsync"/> with a span; all other calls are forwarded to the inner service without overhead.
 /// </summary>
 public sealed class ObservableMapInterop(
     IMapInterop inner,
@@ -24,6 +24,9 @@ public sealed class ObservableMapInterop(
 {
     /// <summary>Span emitted by <see cref="SetFeatureStatesAsync"/> (XD01-309).</summary>
     public const string SetFeatureStatesSpanName = "Map.SetFeatureStates";
+
+    /// <summary>Span emitted by <see cref="SetSelectionToolAsync"/> (XD01-310).</summary>
+    public const string SetSelectionToolSpanName = "Map.SetSelectionTool";
 
     private readonly string _renderModeTag = renderMode switch
     {
@@ -95,6 +98,16 @@ public sealed class ObservableMapInterop(
                                   .SetTag("map.feature_state", state.ToJsName())
                                   .SetTag("map.render_mode",   _renderModeTag));
     }
+
+    /// <remarks>Arming a tool is a user action worth a span of its own: it is the start of every
+    /// selection gesture, and a slow or failing JS call here is what the user perceives as "the
+    /// tool did not arm".</remarks>
+    public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) =>
+        TrackAsync(
+            SetSelectionToolSpanName,
+            () => selectionInner.SetSelectionToolAsync(divId, tool),
+            before: span => span?.SetTag("map.selection_tool", tool.ToJsName())
+                                  .SetTag("map.render_mode",    _renderModeTag));
 
     // ── Pass-through ─────────────────────────────────────────────────────────
 

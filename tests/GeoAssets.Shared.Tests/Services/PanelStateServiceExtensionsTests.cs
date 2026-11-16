@@ -71,4 +71,48 @@ public class PanelStateServiceExtensionsTests
         provider.GetRequiredService<ICurrentMapContext>().Should().BeOfType<CurrentMapContext>();
         provider.GetRequiredService<IPendingDrawTypeState>().Should().BeOfType<PendingDrawTypeState>();
     }
+
+    [Fact]
+    public void AddGeoAssetsPanelState_RegistersMapSelectionSetAsScoped()
+    {
+        var services = new ServiceCollection();
+        services.AddGeoAssetsPanelState();
+        using var provider = services.BuildServiceProvider();
+
+        using var scope1 = provider.CreateScope();
+        var first  = scope1.ServiceProvider.GetRequiredService<IMapSelectionSet>();
+        var second = scope1.ServiceProvider.GetRequiredService<IMapSelectionSet>();
+
+        using var scope2 = provider.CreateScope();
+        var thirdInAnotherScope = scope2.ServiceProvider.GetRequiredService<IMapSelectionSet>();
+
+        first.Should().BeOfType<MapSelectionSet>().And.BeSameAs(second);
+        first.Should().NotBeSameAs(thirdInAnotherScope);
+        first.MaxCount.Should().Be(10_000);
+    }
+
+    [Fact]
+    public void AddGeoAssetsPanelState_WithoutAHostResolver_FallsBackToTheUnavailableResolver()
+    {
+        var services = new ServiceCollection();
+        services.AddGeoAssetsPanelState();
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IMapSelectionResolver>().Should().BeOfType<UnavailableMapSelectionResolver>();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddGeoAssetsPanelState_HostResolver_WinsWhicheverSideOfTheCallItIsRegistered(bool registerBefore)
+    {
+        var hostResolver = new UnavailableMapSelectionResolver();
+        var services = new ServiceCollection();
+        if (registerBefore) services.AddSingleton<IMapSelectionResolver>(hostResolver);
+        services.AddGeoAssetsPanelState();
+        if (!registerBefore) services.AddSingleton<IMapSelectionResolver>(hostResolver);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IMapSelectionResolver>().Should().BeSameAs(hostResolver);
+    }
 }

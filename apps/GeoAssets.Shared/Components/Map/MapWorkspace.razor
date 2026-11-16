@@ -4,6 +4,10 @@
 @inject AssetService AssetSvc
 @inject IMapInterop MapInterop
 @inject IFeatureSelectionState Selection
+@inject IMapSelectionSet SelectionSet
+@inject IMapSelectionResolver SelectionResolver
+@inject IMapSelectionInterop SelectionInterop
+@inject Microsoft.Extensions.Logging.ILogger<MapSelectionCoordinator> SelectionLogger
 
 <main class="map-area" style="@(Hidden ? "display:none" : null)">
     <DrawToolbar @ref="_drawToolbar"
@@ -18,7 +22,17 @@
                   OnFeatureDrawn="OnFeatureDrawn"
                   OnFeatureEdited="OnFeatureEdited"
                   OnFeatureClicked="OnFeatureClicked"
-                  OnFeatureContextMenu="OnFeatureContextMenu" />
+                  OnFeatureContextMenu="OnFeatureContextMenu"
+                  OnSelectionGesture="OnSelectionGesture"
+                  OnSelectionClick="OnSelectionClick" />
+
+    <SelectionToolbar Tool="@_selectionCoordinator.Tool"
+                      Count="@SelectionSet.Ids.Count"
+                      Busy="@_selectionCoordinator.IsResolving"
+                      Notice="@_selectionCoordinator.Notice"
+                      OnToolRequested="OnSelectionToolRequested"
+                      OnClear="_selectionCoordinator.Clear"
+                      OnNoticeDismissed="_selectionCoordinator.DismissNotice" />
 
     <!-- Properties Panel -->
     @if (Selection.Selected is not null)

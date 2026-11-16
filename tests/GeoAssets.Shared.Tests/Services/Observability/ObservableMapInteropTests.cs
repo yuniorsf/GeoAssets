@@ -55,6 +55,7 @@ public class ObservableMapInteropTests
         public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) => Record(nameof(RegisterEventHandlersAsync), divId, handlerRef);
         public Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state) => Record(nameof(SetFeatureStatesAsync), divId, featureIds, state);
         public Task ClearFeatureStatesAsync(string divId) => Record(nameof(ClearFeatureStatesAsync), divId);
+        public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) => Record(nameof(SetSelectionToolAsync), divId, tool);
     }
 
     private static ObservableMapInterop Sut(FakeMapInterop inner, MapRenderMode renderMode = MapRenderMode.Leaflet) =>
@@ -223,6 +224,47 @@ public class ObservableMapInteropTests
         public Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state) =>
             Task.FromException(new JSException("boom"));
         public Task ClearFeatureStatesAsync(string divId) => Task.CompletedTask;
+        public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) =>
+            Task.FromException(new JSException("boom"));
+    }
+
+    [Theory]
+    [InlineData(MapSelectionTool.None, MapRenderMode.Leaflet, "none", "leaflet")]
+    [InlineData(MapSelectionTool.ClickToggle, MapRenderMode.Canvas, "click", "canvas")]
+    [InlineData(MapSelectionTool.Box, MapRenderMode.WebGL, "box", "webgl")]
+    [InlineData(MapSelectionTool.Fence, MapRenderMode.Leaflet, "fence", "leaflet")]
+    public async Task SetSelectionToolAsync_ForwardsToInner_AndEmitsSpanWithToolAndRenderModeTags(
+        MapSelectionTool tool, MapRenderMode renderMode, string expectedTool, string expectedMode)
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner, renderMode);
+
+        var spans = await CaptureSpansAsync(() => sut.SetSelectionToolAsync("map1", tool));
+
+        var call = inner.Calls.Should().ContainSingle().Subject;
+        call.Method.Should().Be(nameof(IMapSelectionInterop.SetSelectionToolAsync));
+        call.Args.Should().Equal("map1", tool);
+        var span = spans.Should().ContainSingle().Subject;
+        span.OperationName.Should().Be(ObservableMapInterop.SetSelectionToolSpanName).And.Be("Map.SetSelectionTool");
+        span.GetTagItem("map.selection_tool").Should().Be(expectedTool);
+        span.GetTagItem("map.render_mode").Should().Be(expectedMode);
+        span.GetTagItem("duration_ms").Should().NotBeNull();
+        span.TagObjects.Select(t => t.Key).Should().NotContain("map.div_id");
+    }
+
+    [Fact]
+    public async Task SetSelectionToolAsync_InnerFailure_MarksSpanAsErrorAndRethrows()
+    {
+        var sut = new ObservableMapInterop(
+            new FakeMapInterop(), new ThrowingSelectionInterop(), MapRenderMode.Leaflet,
+            NullLogger<ObservableMapInterop>.Instance, TimeProvider.System);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.SetSelectionToolAsync("map1", MapSelectionTool.Box)));
+
+        thrown.Should().BeOfType<JSException>();
+        spans.Should().ContainSingle().Which.Status.Should().Be(ActivityStatusCode.Error);
     }
 
     // ── Pass-through ─────────────────────────────────────────────────────────

@@ -213,6 +213,9 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     public Task ClearFeatureStatesAsync(string divId) =>
         _js.InvokeVoidAsync($"{Ns}.clearFeatureStates", divId).AsTask();
 
+    public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) =>
+        _js.InvokeVoidAsync($"{Ns}.setSelectionTool", divId, tool.ToJsName()).AsTask();
+
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) =>
         _js.InvokeVoidAsync($"{Ns}.registerHandlers", divId, handlerRef).AsTask();
 
