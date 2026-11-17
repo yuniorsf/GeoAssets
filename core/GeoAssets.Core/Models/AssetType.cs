@@ -43,6 +43,18 @@ public sealed class AssetType : IOrgOwnedResource
     /// </summary>
     public string? AttributesSchemaJson { get; set; }
 
+    /// <summary>
+    /// Lowest map zoom level at which features of this type are drawn (inclusive). <c>null</c>
+    /// leaves the bound open. An interim, client-side level of detail (XD01-311): the map hides
+    /// the type outside its range, the provider still returns its features. Bounds are checked by
+    /// <see cref="AssetTypeZoomRange"/>.
+    /// </summary>
+    public int? MinZoom { get; set; }
+
+    /// <summary>Highest map zoom level at which features of this type are drawn (inclusive).
+    /// <c>null</c> leaves the bound open. See <see cref="MinZoom"/>.</summary>
+    public int? MaxZoom { get; set; }
+
     // Built-in default types
     public static readonly AssetType Point = new()
     {

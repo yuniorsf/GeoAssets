@@ -144,13 +144,11 @@ public class BlazorProjectSessionServiceTests
         public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => throw new NotSupportedException();
         public void AddLayerRule(LayerRule layerRule) => throw new NotSupportedException();
         public void DeleteLayerRule(Guid id) => throw new NotSupportedException();
-        // Never fire — this test double tracks no subscribers, no test relies on these.
-#pragma warning disable CS0067
-        public event EventHandler<GeoFeature>? FeatureAdded;
-        public event EventHandler<GeoFeature>? FeatureUpdated;
-        public event EventHandler<string>? FeatureDeleted;
-        public event EventHandler? CollectionChanged;
-#pragma warning restore CS0067
+        // Never fire — this test double tracks no subscribers (empty accessors), no test relies on these.
+        public event EventHandler<GeoFeature>? FeatureAdded { add { } remove { } }
+        public event EventHandler<GeoFeature>? FeatureUpdated { add { } remove { } }
+        public event EventHandler<string>? FeatureDeleted { add { } remove { } }
+        public event EventHandler? CollectionChanged { add { } remove { } }
     }
 
     private sealed class ThrowingServiceProvider : IServiceProvider
@@ -213,6 +211,7 @@ public class BlazorProjectSessionServiceTests
         public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options) => throw new NotSupportedException();
         public Task RemoveWmsLayerAsync(string divId, string layerId) => throw new NotSupportedException();
         public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => throw new NotSupportedException();
+        public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom) => throw new NotSupportedException();
         public Task FitBoundsAsync(string divId, double[] bbox) => throw new NotSupportedException();
         public Task PanToFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
         public Task HighlightFeatureAsync(string divId, string featureId) => throw new NotSupportedException();

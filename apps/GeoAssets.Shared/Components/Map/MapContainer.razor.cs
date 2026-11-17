@@ -65,6 +65,11 @@ public partial class MapContainer
         await MapInterop.InitializeMapAsync(DivId, InitLat, InitLon, InitZoom);
         await MapInterop.RegisterEventHandlersAsync(DivId, _dotNetRef);
 
+        // A fresh map knows no zoom ranges: start from a clean slate and push them before the
+        // first render, so a type outside its range never flashes onto the map (XD01-311).
+        LayerDisplay.Forget(DivId);
+        await SyncZoomRangesAsync();
+
         await RenderAllViaPipelineAsync();
 
         Repository.FeatureAdded      += OnFeatureAdded;
@@ -84,10 +89,23 @@ public partial class MapContainer
     private void OnFeatureDeletedFromRepo(object? _, string id) =>
         _ = InvokeAsync(() => MapInterop.RemoveFeatureAsync(DivId, id));
 
+    // A collection change is also how a different set of asset types arrives (a saved collection
+    // loaded, the active provider switched), so the zoom ranges are brought up to date first.
     private void OnCollectionChanged(object? _, EventArgs __) =>
-        _ = InvokeAsync(() => ShouldRenderLastViewport(_lastViewport)
-            ? RenderViewportAsync(_lastViewport!.Value)
-            : RenderAllViaPipelineAsync());
+        _ = InvokeAsync(async () =>
+        {
+            await SyncZoomRangesAsync();
+            await (ShouldRenderLastViewport(_lastViewport)
+                ? RenderViewportAsync(_lastViewport!.Value)
+                : RenderAllViaPipelineAsync());
+        });
+
+    /// <summary>
+    /// Pushes the active provider's per-type zoom ranges to the map (XD01-311) — only what
+    /// changed since the last push. Types added or deleted in <c>AssetTypeManager</c> raise no
+    /// repository event; that component pushes for itself through the same service.
+    /// </summary>
+    private Task SyncZoomRangesAsync() => LayerDisplay.SyncZoomRangesAsync(DivId, Repository.GetAssetTypes());
 
     /// <summary>
     /// Decides whether a collection-change re-render should target the last known viewport
@@ -403,6 +421,7 @@ public partial class MapContainer
         if (_initialized)
         {
             Logger.LogDebug("MapContainer disposing — divId={DivId}", DivId);
+            LayerDisplay.Forget(DivId);
             await MapInterop.DestroyMapAsync(DivId);
         }
         _dotNetRef?.Dispose();

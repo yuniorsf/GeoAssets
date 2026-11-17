@@ -11,8 +11,9 @@ namespace GeoAssets.Shared.Services.Observability;
 /// <summary>
 /// Observable decorator for <see cref="IMapInterop"/> and <see cref="IMapSelectionInterop"/>.
 /// Instruments <see cref="RenderAllFeaturesAsync"/> with an OpenTelemetry span,
-/// a duration metric, and structured logging, and <see cref="SetFeatureStatesAsync"/> and
-/// <see cref="SetSelectionToolAsync"/> with a span; all other calls are forwarded to the inner service without overhead.
+/// a duration metric, and structured logging, and <see cref="SetFeatureStatesAsync"/>,
+/// <see cref="SetSelectionToolAsync"/>, <see cref="SetLayerZoomRangeAsync"/> and
+/// <see cref="ShowSelectionOutlineAsync"/> with a span; all other calls are forwarded to the inner service without overhead.
 /// </summary>
 public sealed class ObservableMapInterop(
     IMapInterop inner,
@@ -27,6 +28,12 @@ public sealed class ObservableMapInterop(
 
     /// <summary>Span emitted by <see cref="SetSelectionToolAsync"/> (XD01-310).</summary>
     public const string SetSelectionToolSpanName = "Map.SetSelectionTool";
+
+    /// <summary>Span emitted by <see cref="SetLayerZoomRangeAsync"/> (XD01-311).</summary>
+    public const string SetLayerZoomRangeSpanName = "Map.SetLayerZoomRange";
+
+    /// <summary>Span emitted by <see cref="ShowSelectionOutlineAsync"/> (XD01-311).</summary>
+    public const string ShowSelectionOutlineSpanName = "Map.ShowSelectionOutline";
 
     private readonly string _renderModeTag = renderMode switch
     {
@@ -109,9 +116,36 @@ public sealed class ObservableMapInterop(
             before: span => span?.SetTag("map.selection_tool", tool.ToJsName())
                                   .SetTag("map.render_mode",    _renderModeTag));
 
+    /// <remarks>A range decides whether a whole type is on the map, so "the layer vanished" has to
+    /// be traceable to the call that set it. Tags carry the bounds (absent when open) and the
+    /// render mode — never the asset type id.</remarks>
+    public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom) =>
+        TrackAsync(
+            SetLayerZoomRangeSpanName,
+            () => inner.SetLayerZoomRangeAsync(divId, assetTypeId, minZoom, maxZoom),
+            before: span =>
+            {
+                if (minZoom is { } min) span?.SetTag("map.min_zoom", min);
+                if (maxZoom is { } max) span?.SetTag("map.max_zoom", max);
+                span?.SetTag("map.render_mode", _renderModeTag);
+            });
+
+    /// <remarks>Tags carry the ring and vertex counts only — never coordinates.</remarks>
+    public Task ShowSelectionOutlineAsync(string divId, double[][][] rings)
+    {
+        ArgumentNullException.ThrowIfNull(rings);
+        return TrackAsync(
+            ShowSelectionOutlineSpanName,
+            () => selectionInner.ShowSelectionOutlineAsync(divId, rings),
+            before: span => span?.SetTag("map.outline_ring_count",   rings.Length)
+                                  .SetTag("map.outline_vertex_count", rings.Sum(r => r?.Length ?? 0))
+                                  .SetTag("map.render_mode",          _renderModeTag));
+    }
+
     // ── Pass-through ─────────────────────────────────────────────────────────
 
     public Task ClearFeatureStatesAsync(string divId)                                       => selectionInner.ClearFeatureStatesAsync(divId);
+    public Task ClearSelectionOutlineAsync(string divId)                                    => selectionInner.ClearSelectionOutlineAsync(divId);
     public Task InitializeMapAsync(string divId, double lat, double lon, int zoom)           => inner.InitializeMapAsync(divId, lat, lon, zoom);
     public Task DestroyMapAsync(string divId)                                               => inner.DestroyMapAsync(divId);
     public Task InvalidateSizeAsync(string divId)                                            => inner.InvalidateSizeAsync(divId);

@@ -1,7 +1,9 @@
 using System.Net;
+using System.Text.Json;
 using System.Threading;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Models;
 using Xunit;
 
 namespace GeoAssets.Provider.Rest.Tests;
@@ -193,5 +195,41 @@ public class RestAssetProviderTests
 
         handler.Requests.Should().HaveCount(8);
         maxConcurrent.Should().BeGreaterThan(1).And.BeLessOrEqualTo(4);
+    }
+
+    // ── Asset type zoom range (XD01-311) ─────────────────────────────────────
+
+    [Theory]
+    [InlineData(13, 15, true, true)]
+    [InlineData(15, null, true, false)]
+    [InlineData(null, 13, false, true)]
+    [InlineData(null, null, false, false)]
+    public async Task AddAssetType_PostsTheZoomRange_AndKeepsItInTheLocalCache(int? min, int? max, bool sendsMin, bool sendsMax)
+    {
+        var posted = new TaskCompletionSource<(string Path, string Body)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new FakeHttpMessageHandler(async request =>
+        {
+            posted.TrySetResult((request.RequestUri!.AbsolutePath, await request.Content!.ReadAsStringAsync()));
+            return new HttpResponseMessage(HttpStatusCode.Created);
+        });
+        var sut = CreateSut(handler);
+        var assetType = new AssetType { Name = "Pole", MinZoom = min, MaxZoom = max };
+
+        sut.AddAssetType(assetType);
+        var (path, body) = await posted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        path.Should().EndWith("/asset-types");
+        using var json = JsonDocument.Parse(body);
+        json.RootElement.TryGetProperty("minZoom", out var sentMin).Should().Be(sendsMin);
+        json.RootElement.TryGetProperty("maxZoom", out var sentMax).Should().Be(sendsMax);
+        if (sendsMin) sentMin.GetInt32().Should().Be(min);
+        if (sendsMax) sentMax.GetInt32().Should().Be(max);
+
+        // What the server answers GET /asset-types with is read back with the same options.
+        var reloaded = JsonSerializer.Deserialize<AssetType>(body, GeoAssets.Core.Services.GeoJsonSerializer.Options)!;
+        (reloaded.MinZoom, reloaded.MaxZoom).Should().Be((min, max));
+
+        var cached = sut.GetAssetTypes().Single(t => t.Id == assetType.Id);
+        (cached.MinZoom, cached.MaxZoom).Should().Be((min, max));
     }
 }

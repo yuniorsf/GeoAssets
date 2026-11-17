@@ -772,4 +772,48 @@ public class ValidatingAssetProviderTests
 
         return act.Should().NotThrowAsync();
     }
+
+    // ── Asset type zoom range (XD01-311) ─────────────────────────────────────
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(13, 15)]
+    [InlineData(15, null)]
+    [InlineData(null, 13)]
+    public void AddAssetType_ValidOrOpenZoomRange_IsDelegated(int? min, int? max)
+    {
+        var inner = new TestAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var assetType = new AssetType { Name = "Pole", MinZoom = min, MaxZoom = max };
+
+        sut.AddAssetType(assetType);
+
+        inner.GetAssetTypes().Should().Contain(assetType);
+    }
+
+    [Theory]
+    [InlineData(-1, null, AssetTypeZoomRangeDefect.MinZoomOutOfBounds)]
+    [InlineData(null, 25, AssetTypeZoomRangeDefect.MaxZoomOutOfBounds)]
+    [InlineData(16, 15, AssetTypeZoomRangeDefect.MinZoomAboveMaxZoom)]
+    public void AddAssetType_InvalidZoomRange_ThrowsAndAddsNothing(int? min, int? max, AssetTypeZoomRangeDefect expected)
+    {
+        var inner = new TestAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var assetType = new AssetType { Name = "Pole", MinZoom = min, MaxZoom = max };
+
+        var act = () => sut.AddAssetType(assetType);
+
+        act.Should().Throw<InvalidAssetTypeZoomRangeException>().Which.Defect.Should().Be(expected);
+        inner.GetAssetTypes().Should().NotContain(assetType);
+    }
+
+    [Fact]
+    public void AddAssetType_Null_Throws()
+    {
+        var sut = new ValidatingAssetProvider(new TestAssetProvider());
+
+        var act = () => sut.AddAssetType(null!);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
 }

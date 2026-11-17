@@ -6,7 +6,6 @@ namespace GeoAssets.Shared.Components.Layers;
 
 public partial class AssetTypeManager
 {
-    private readonly Dictionary<Guid, bool> _visibility = [];
     private string _activeTab = "types";
     private Guid? _expandedTypeId;
 
@@ -17,21 +16,31 @@ public partial class AssetTypeManager
     private Guid? _newTypeDefaultLayerId;
     private string _newTypeAttributesSchemaJson = string.Empty;
     private string? _newTypeSchemaError;
+    private string _newTypeMinZoom = string.Empty;
+    private string _newTypeMaxZoom = string.Empty;
+    private AssetTypeZoomRangeInputResult? _newTypeZoomProblem;
 
-    protected override void OnInitialized()
-    {
-        foreach (var t in Repository.GetAssetTypes())
-            _visibility[t.Id] = true;
-    }
+    // The user's layer toggles live in MapLayerDisplayService, not here: this panel is closed and
+    // reopened freely, and the map keeps a switched-off type hidden across re-renders (XD01-311).
+    private bool IsVisible(AssetType type) => LayerDisplay.IsVisible(MapContext.MapDivId, type.Id.ToString());
 
     private void ShowTypesTab() => _activeTab = "types";
     private void ShowStylesTab() => _activeTab = "styles";
 
-    private Task ToggleLayer(AssetType type, bool visible)
-    {
-        _visibility[type.Id] = visible;
-        return MapInterop.SetLayerVisibilityAsync(MapContext.MapDivId, type.Id.ToString(), visible);
-    }
+    private Task ToggleLayer(AssetType type, bool visible) =>
+        LayerDisplay.SetVisibleAsync(MapContext.MapDivId, type.Id.ToString(), visible);
+
+    private string ZoomRangeLabel(AssetType type) =>
+        L.GetString(
+            AssetTypeZoomRangeInput.SummaryKey(type.MinZoom, type.MaxZoom),
+            AssetTypeZoomRangeInput.SummaryArguments(type.MinZoom, type.MaxZoom));
+
+    private string? ZoomRangeError => _newTypeZoomProblem?.Error is { } error
+        ? L.GetString(AssetTypeZoomRangeInput.ErrorKey(error), AssetTypeZoomRange.LowestZoom, AssetTypeZoomRange.HighestZoom)
+        : null;
+
+    // Rendered only when true, so a valid field carries no aria-invalid attribute at all.
+    private static string? AriaInvalid(bool invalid) => invalid ? "true" : null;
 
     private void ToggleExpand(Guid typeId) =>
         _expandedTypeId = _expandedTypeId == typeId ? null : typeId;
@@ -60,9 +69,14 @@ public partial class AssetTypeManager
     private void OnNewTypeDefaultLayerChanged(string? value) =>
         _newTypeDefaultLayerId = string.IsNullOrEmpty(value) ? null : Guid.Parse(value);
 
-    private void SaveNewType()
+    private async Task SaveNewType()
     {
         if (string.IsNullOrWhiteSpace(_newTypeName)) return;
+
+        _newTypeSchemaError = null;
+        var zoom = AssetTypeZoomRangeInput.Parse(_newTypeMinZoom, _newTypeMaxZoom);
+        _newTypeZoomProblem = zoom.IsValid ? null : zoom;
+        if (!zoom.IsValid) return;
 
         var schemaJson = _newTypeAttributesSchemaJson.Trim();
         if (schemaJson.Length > 0)
@@ -81,12 +95,19 @@ public partial class AssetTypeManager
             Color = _newTypeColor,
             AllowedGeometryType = _newTypeAllowedGeometry,
             DefaultLayerId = _newTypeDefaultLayerId,
-            AttributesSchemaJson = schemaJson.Length > 0 ? schemaJson : null
+            AttributesSchemaJson = schemaJson.Length > 0 ? schemaJson : null,
+            MinZoom = zoom.MinZoom,
+            MaxZoom = zoom.MaxZoom
         };
         Repository.AddAssetType(newType);
-        _visibility[newType.Id] = true;
         ResetNewTypeForm();
+
+        // Adding a type raises no repository event, so the map is told about its range here.
+        await SyncZoomRangesAsync();
     }
+
+    private Task SyncZoomRangesAsync() =>
+        LayerDisplay.SyncZoomRangesAsync(MapContext.MapDivId, Repository.GetAssetTypes());
 
     private void ResetNewTypeForm()
     {
@@ -96,13 +117,19 @@ public partial class AssetTypeManager
         _newTypeDefaultLayerId = null;
         _newTypeAttributesSchemaJson = string.Empty;
         _newTypeSchemaError = null;
+        _newTypeMinZoom = string.Empty;
+        _newTypeMaxZoom = string.Empty;
+        _newTypeZoomProblem = null;
         _addingNew = false;
     }
 
-    private void DeleteType(AssetType type)
+    private async Task DeleteType(AssetType type)
     {
         Repository.DeleteAssetType(type.Id);
-        _visibility.Remove(type.Id);
         if (_expandedTypeId == type.Id) _expandedTypeId = null;
+
+        // Its features fall back to "no type": switch them back on and drop the type's range.
+        if (!IsVisible(type)) await ToggleLayer(type, visible: true);
+        await SyncZoomRangesAsync();
     }
 }

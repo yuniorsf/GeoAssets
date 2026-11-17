@@ -318,4 +318,79 @@ public class MapInteropServiceTests
 
         act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("state");
     }
+
+    // ── Zoom range (XD01-311) ────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(13, 15)]
+    [InlineData(0, 24)]
+    [InlineData(15, null)]
+    [InlineData(null, 13)]
+    [InlineData(null, null)]
+    public async Task SetLayerZoomRangeAsync_CallsSetLayerZoomRangeWithDivIdTypeAndBothBounds(int? min, int? max)
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).SetLayerZoomRangeAsync("map1", "type-a", min, max);
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.setLayerZoomRange");
+        call.Args.Should().Equal("map1", "type-a", min, max);
+    }
+
+    [Theory]
+    [InlineData(-1, null, AssetTypeZoomRangeDefect.MinZoomOutOfBounds)]
+    [InlineData(25, null, AssetTypeZoomRangeDefect.MinZoomOutOfBounds)]
+    [InlineData(null, -1, AssetTypeZoomRangeDefect.MaxZoomOutOfBounds)]
+    [InlineData(null, 25, AssetTypeZoomRangeDefect.MaxZoomOutOfBounds)]
+    [InlineData(16, 15, AssetTypeZoomRangeDefect.MinZoomAboveMaxZoom)]
+    public async Task SetLayerZoomRangeAsync_InvalidRange_ThrowsAndMakesNoJsCall(int? min, int? max, AssetTypeZoomRangeDefect expected)
+    {
+        var js = new RecordingJsRuntime();
+
+        var act = () => Sut(js).SetLayerZoomRangeAsync("map1", "type-a", min, max);
+
+        (await act.Should().ThrowAsync<InvalidAssetTypeZoomRangeException>()).Which.Defect.Should().Be(expected);
+        js.Calls.Should().BeEmpty();
+    }
+
+    // ── Selection fence outline (XD01-311) ───────────────────────────────────
+
+    [Fact]
+    public async Task ShowSelectionOutlineAsync_CallsShowSelectionOutlineWithDivIdAndLonLatRings()
+    {
+        var js = new RecordingJsRuntime();
+        double[][][] rings = [[[-46.7, -23.6], [-46.6, -23.6], [-46.6, -23.5], [-46.7, -23.6]]];
+
+        await Sut(js).ShowSelectionOutlineAsync("map1", rings);
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.showSelectionOutline");
+        call.Args.Should().HaveCount(2);
+        call.Args[0].Should().Be("map1");
+        call.Args[1].Should().BeSameAs(rings);
+    }
+
+    [Fact]
+    public async Task ShowSelectionOutlineAsync_NullRings_ThrowsAndMakesNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+
+        var act = () => Sut(js).ShowSelectionOutlineAsync("map1", null!);
+
+        await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("rings");
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearSelectionOutlineAsync_CallsClearSelectionOutlineWithDivId()
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).ClearSelectionOutlineAsync("map1");
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.clearSelectionOutline");
+        call.Args.Should().Equal("map1");
+    }
 }

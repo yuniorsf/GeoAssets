@@ -14,6 +14,8 @@ public sealed class AssetTypeRow
     public GeometryType? AllowedGeometryType { get; set; }
     public Guid?  DefaultLayerId { get; set; }
     public string? AttributesSchemaJson { get; set; }
+    public int?   MinZoom { get; set; }
+    public int?   MaxZoom { get; set; }
     public Guid   OrganizationId { get; set; } = Guid.Empty;
 
     // ── Navigation ──────────────────────────────────────────────────────────────

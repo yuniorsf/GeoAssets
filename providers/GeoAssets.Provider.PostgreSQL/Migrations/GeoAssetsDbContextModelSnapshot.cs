@@ -116,6 +116,12 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<int?>("MaxZoom")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinZoom")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)

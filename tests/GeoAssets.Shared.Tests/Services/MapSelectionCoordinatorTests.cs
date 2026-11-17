@@ -35,6 +35,10 @@ public class MapSelectionCoordinatorTests
             ToolCalls.Add((divId, tool));
             return Task.CompletedTask;
         }
+
+        public Task ShowSelectionOutlineAsync(string divId, double[][][] rings) => Task.CompletedTask;
+
+        public Task ClearSelectionOutlineAsync(string divId) => Task.CompletedTask;
     }
 
     /// <summary>Each call gets its own completion source, so a test decides when — and how — every

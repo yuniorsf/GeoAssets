@@ -83,6 +83,17 @@ public interface IMapInterop
     // --- Layer visibility ---
     Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible);
 
+    /// <summary>
+    /// Sets the zoom range in which features of <paramref name="assetTypeId"/> are drawn
+    /// (XD01-311): the type shows only while it is user-visible (<see cref="SetLayerVisibilityAsync"/>)
+    /// and <paramref name="minZoom"/> ≤ map zoom ≤ <paramref name="maxZoom"/>. A <c>null</c> bound
+    /// is open; two nulls remove the range. The two rules are independent and compose. A range
+    /// that breaks <see cref="GeoAssets.Core.Models.AssetTypeZoomRange"/>'s rules throws
+    /// <see cref="GeoAssets.Core.Models.InvalidAssetTypeZoomRangeException"/> and makes no JS call.
+    /// Client-side only: the provider still returns features of every type for the viewport.
+    /// </summary>
+    Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom);
+
     // --- View ---
     Task FitBoundsAsync(string divId, double[] bbox);
     Task PanToFeatureAsync(string divId, string featureId);

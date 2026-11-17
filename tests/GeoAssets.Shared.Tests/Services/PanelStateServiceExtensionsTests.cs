@@ -2,6 +2,8 @@ using FluentAssertions;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services;
@@ -114,5 +116,35 @@ public class PanelStateServiceExtensionsTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IMapSelectionResolver>().Should().BeSameAs(hostResolver);
+    }
+
+    // ── Layer display and order focus (XD01-311) ─────────────────────────────
+
+    [Fact]
+    public void AddGeoAssetsPanelState_RegistersMapLayerDisplayServiceAsScoped_OverTheHostsMapInterop()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddScoped<IMapInterop, RecordingMapInterop>();
+        services.AddGeoAssetsPanelState();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+
+        using var scopeA = provider.CreateScope();
+        using var scopeB = provider.CreateScope();
+        var first = scopeA.ServiceProvider.GetRequiredService<MapLayerDisplayService>();
+
+        scopeA.ServiceProvider.GetRequiredService<MapLayerDisplayService>().Should().BeSameAs(first);
+        scopeB.ServiceProvider.GetRequiredService<MapLayerDisplayService>().Should().NotBeSameAs(first);
+    }
+
+    [Fact]
+    public void AddGeoAssetsPanelState_RegistersMapOrderFocusAsScoped()
+    {
+        var services = new ServiceCollection();
+        services.AddGeoAssetsPanelState();
+
+        var descriptor = services.Should().ContainSingle(d => d.ServiceType == typeof(IMapOrderFocus)).Subject;
+        descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
+        descriptor.ImplementationType.Should().Be<MapOrderFocusService>();
     }
 }

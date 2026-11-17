@@ -175,6 +175,10 @@ public sealed class GeoEntityAttributeAppRoleTests(PostgresContainerFixture fixt
         finally
         {
             await migrator.MigrateAsync(GrantMigration);
+
+            // …and on to the newest migration: migrating down also reverted every later one, and
+            // the rest of the collection needs the full schema.
+            await migrator.MigrateAsync();
         }
 
         (await StateAsync(db)).Should().Be((true, true, 1));
