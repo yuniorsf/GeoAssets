@@ -24,7 +24,7 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
 
     public async Task<IReadOnlyList<AppUser>> GetByRoleAsync(string roleName, CancellationToken ct = default)
         => await db.Users
-            .Where(u => u.UserRoles.Any(ur => ur.Role.Name == roleName))
+            .Where(u => u.UserRoles.Any(ur => ur.OrganizationId == null && ur.Role.Name == roleName))
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
@@ -33,7 +33,7 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
 
     public async Task<IReadOnlyList<AppRole>> GetRolesAsync(Guid userId, CancellationToken ct = default)
         => await db.UserRoles
-            .Where(ur => ur.UserId == userId)
+            .Where(ur => ur.UserId == userId && ur.OrganizationId == null)
             .Select(ur => ur.Role)
             .ToListAsync(ct)
             .ConfigureAwait(false);
@@ -41,7 +41,7 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
     public async Task<IReadOnlyList<AppPermission>> GetEffectivePermissionsAsync(
         Guid userId, CancellationToken ct = default)
         => await db.UserRoles
-            .Where(ur => ur.UserId == userId)
+            .Where(ur => ur.UserId == userId && ur.OrganizationId == null)
             .SelectMany(ur => ur.Role.RolePermissions)
             .Select(rp => rp.Permission)
             .Distinct()
@@ -57,16 +57,49 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
         return Task.CompletedTask;
     }
 
-    public async Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default)
+    public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default)
+        => AssignAsync(userId, roleId, organizationId: null, assignedBy, ct);
+
+    public Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)
+        => RemoveAsync(userId, roleId, organizationId: null, ct);
+
+    public Task AssignRoleOnOrganizationAsync(Guid userId, Guid roleId, Guid organizationId, string? assignedBy = null, CancellationToken ct = default)
+        => AssignAsync(userId, roleId, organizationId, assignedBy, ct);
+
+    public Task RemoveRoleOnOrganizationAsync(Guid userId, Guid roleId, Guid organizationId, CancellationToken ct = default)
+        => RemoveAsync(userId, roleId, organizationId, ct);
+
+    public async Task<IReadOnlyList<UserRole>> GetScopedRoleAssignmentsAsync(Guid userId, CancellationToken ct = default)
+        => await db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.UserId == userId && ur.OrganizationId != null)
+            .Include(ur => ur.Role).ThenInclude(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<UserRole>> GetRoleAssignmentsOnOrganizationAsync(Guid organizationId, CancellationToken ct = default)
+        => await db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.OrganizationId == organizationId)
+            .Include(ur => ur.User)
+            .Include(ur => ur.Role)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+    private async Task AssignAsync(Guid userId, Guid roleId, Guid? organizationId, string? assignedBy, CancellationToken ct)
     {
-        var exists = await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct).ConfigureAwait(false);
+        var exists = await db.UserRoles
+            .AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId && ur.OrganizationId == organizationId, ct)
+            .ConfigureAwait(false);
         if (!exists)
-            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime }, ct).ConfigureAwait(false);
+            await db.UserRoles.AddAsync(new UserRole { UserId = userId, RoleId = roleId, OrganizationId = organizationId, AssignedBy = assignedBy, AssignedAt = timeProvider.GetUtcNow().UtcDateTime }, ct).ConfigureAwait(false);
     }
 
-    public async Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)
+    private async Task RemoveAsync(Guid userId, Guid roleId, Guid? organizationId, CancellationToken ct)
     {
-        var ur = await db.UserRoles.FindAsync([userId, roleId], ct).ConfigureAwait(false);
+        var ur = await db.UserRoles
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.RoleId == roleId && x.OrganizationId == organizationId, ct)
+            .ConfigureAwait(false);
         if (ur is not null) db.UserRoles.Remove(ur);
     }
 

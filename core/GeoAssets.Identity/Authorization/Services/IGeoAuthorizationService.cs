@@ -21,6 +21,28 @@ public interface IGeoAuthorizationService
     /// <summary>Returns true if the current user has the specified permission (through any of their roles).</summary>
     Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default);
 
+    // ── Organization-scoped checks (XD01-325) ─────────────────────────────────
+
+    /// <summary>
+    /// Returns true if the current user holds the named role on <paramref name="organizationId"/>
+    /// (see <see cref="AuthorizationContext.RolesOn"/>).
+    /// </summary>
+    async Task<bool> IsInRoleOnAsync(Guid organizationId, string roleName, CancellationToken ct = default)
+    {
+        var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
+        return ctx.HasRoleOn(organizationId, roleName);
+    }
+
+    /// <summary>
+    /// Returns true if the current user holds the permission on <paramref name="organizationId"/>
+    /// (see <see cref="AuthorizationContext.PermissionsOn"/>).
+    /// </summary>
+    async Task<bool> HasPermissionOnAsync(Guid organizationId, string permissionCode, CancellationToken ct = default)
+    {
+        var ctx = await GetAuthorizationContextAsync(ct).ConfigureAwait(false);
+        return ctx.HasPermissionOn(organizationId, permissionCode);
+    }
+
     // ── Policy evaluation ─────────────────────────────────────────────────────
 
     /// <summary>Evaluates a named policy against the current user's roles, claims, and permissions.</summary>
@@ -33,7 +55,8 @@ public interface IGeoAuthorizationService
 
     /// <summary>
     /// Returns the fully resolved authorization context for the current user
-    /// (user record + role names + claims + permission codes).
+    /// (user record + role names + claims + permission codes, plus the roles and permissions
+    /// held on other organizations).
     /// Cache this per-request to avoid redundant DB queries.
     /// </summary>
     Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default);

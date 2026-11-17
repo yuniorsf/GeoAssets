@@ -24,7 +24,7 @@ and extends rather than duplicates.
 | Concept | Type |
 |---|---|
 | User | `AppUser` (linked to the external IdP via `ExternalObjectId`, JIT-provisioned) |
-| Role | `AppRole` → `UserRole` (many-to-many) |
+| Role | `AppRole` → `UserRole` (many-to-many; optionally scoped to another organization — §4, XD01-325) |
 | Permission | `AppPermission` (`resource:action` codes) → `RolePermission` |
 | Attribute claim | `UserClaim` (e.g. `zone=north`, `department=operations`) |
 | Group | `AppGroup` → `UserGroup` |
@@ -256,6 +256,33 @@ A `ServiceOrder` passed through `OrgResourceAuthorizationHandler` directly (the 
 tenant portal's attachment-request and dispute routes do this) is still held to the
 left-hand column, including its `403`.
 
+### Organization-scoped role assignments (XD01-325, first slice of XD01-324)
+
+`OrganizationGrant` is organization-to-organization. XD01-324 adds a second layer for the
+individual: a user, who still belongs to exactly one organization, can hold a role **on another
+organization**. This slice ships the data model and the read API only — **no authorization
+decision reads it yet** (`OrgResourceAuthorizationHandler`, `CrossOrgGrantRule` and
+`OrganizationGrant` are untouched; that is XD01-326).
+
+- `UserRole.OrganizationId` (nullable). `null` = held in the user's home organization (the only
+  meaning before, and the value of every pre-existing row); a value = held on that organization.
+  `UserRole` now has a surrogate `Id` key; one assignment per (user, role, scope) is enforced by
+  two unique indexes — `(UserId, RoleId) WHERE "OrganizationId" IS NULL` for the home scope and
+  `(UserId, RoleId, OrganizationId)` for organization scopes. Deleting the role or the
+  organization cascades to its scoped assignments.
+- `IUserRepository`: `AssignRoleOnOrganizationAsync` / `RemoveRoleOnOrganizationAsync`,
+  `GetScopedRoleAssignmentsAsync(userId)`, `GetRoleAssignmentsOnOrganizationAsync(organizationId)`.
+  The pre-existing `AssignRoleAsync`/`RemoveRoleAsync`/`GetRolesAsync`/`GetEffectivePermissionsAsync`/
+  `GetByRoleAsync` stay home-scoped.
+- `AuthorizationContext.RolesOn(org)` / `PermissionsOn(org)` / `HasRoleOn` / `HasPermissionOn`
+  (and `IGeoAuthorizationService.IsInRoleOnAsync` / `HasPermissionOnAsync`): the home set for the
+  user's own organization, otherwise only what is assigned on that organization. `Roles`/
+  `Permissions`/`HasRole`/`HasPermission` never include a scoped assignment.
+- Home roles keep coming from the identity provider's roles claim (§7); scoped assignments are
+  local-only and are the one thing `GeoAuthorizationService` reads from the `UserRole` table.
+  They are not pushed through `IRoleAssignmentProvider`, and `GET /api/identity/me`
+  (`AuthorizationContextDto`) does not carry them yet, so the REST-backed clients see none.
+
 ---
 
 ## 5. Federated authentication
@@ -361,7 +388,7 @@ still unresolved).
 
 | Element | Fate |
 |---|---|
-| `UserRole` (assignment join table, `AssignRoleAsync`) | Eliminated — assignment lives in Entra `appRoleAssignments` |
+| `UserRole` (assignment join table, `AssignRoleAsync`) | Home-scoped rows: eliminated — assignment lives in Entra `appRoleAssignments`. Organization-scoped rows (XD01-325, §4) stay local |
 | `AppRole` | Becomes a shadow lookup (name → permission set), no longer an assignment target |
 | `RolePermission`, `AppPermission` | Unchanged — pure app taxonomy, Entra has no concept of `serviceorders:complete` |
 | `AppPolicy`/`PolicyRequirement` | Unchanged — the whole policy engine is untouched |

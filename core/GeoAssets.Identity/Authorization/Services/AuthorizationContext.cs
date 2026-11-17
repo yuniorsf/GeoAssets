@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using GeoAssets.Identity.Authorization.Models;
 
 namespace GeoAssets.Identity.Authorization.Services;
@@ -23,6 +24,20 @@ public sealed class AuthorizationContext
     /// </summary>
     public IReadOnlyList<OrganizationGrant>   OrganizationGrants { get; init; } = [];
 
+    /// <summary>
+    /// Role names the user holds on organizations other than their own, keyed by that
+    /// organization (XD01-325). Never part of <see cref="Roles"/>; read through <see cref="RolesOn"/>.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, IReadOnlyList<string>> ScopedRoles { get; init; }
+        = ReadOnlyDictionary<Guid, IReadOnlyList<string>>.Empty;
+
+    /// <summary>
+    /// Permission codes granted by <see cref="ScopedRoles"/>, keyed by organization. Never part
+    /// of <see cref="Permissions"/>; read through <see cref="PermissionsOn"/>.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, IReadOnlyList<string>> ScopedPermissions { get; init; }
+        = ReadOnlyDictionary<Guid, IReadOnlyList<string>>.Empty;
+
     /// <summary>Returns true if the user has the specified role (case-insensitive).</summary>
     public bool HasRole(string roleName)
         => Roles.Any(r => r.Equals(roleName, StringComparison.OrdinalIgnoreCase));
@@ -36,4 +51,37 @@ public sealed class AuthorizationContext
     /// <summary>Returns true if the user has the specified permission code (case-insensitive).</summary>
     public bool HasPermission(string permissionCode)
         => Permissions.Any(p => p.Equals(permissionCode, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Role names the user holds on <paramref name="organizationId"/>: <see cref="Roles"/> for the
+    /// user's own organization, otherwise only the roles assigned on that organization.
+    /// </summary>
+    public IReadOnlyList<string> RolesOn(Guid organizationId)
+        => On(organizationId, Roles, ScopedRoles);
+
+    /// <summary>
+    /// Permission codes the user holds on <paramref name="organizationId"/>: <see cref="Permissions"/>
+    /// for the user's own organization, otherwise only those of the roles assigned on that organization.
+    /// </summary>
+    public IReadOnlyList<string> PermissionsOn(Guid organizationId)
+        => On(organizationId, Permissions, ScopedPermissions);
+
+    /// <summary>Returns true if the user holds the specified role on the organization (case-insensitive).</summary>
+    public bool HasRoleOn(Guid organizationId, string roleName)
+        => RolesOn(organizationId).Any(r => r.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns true if the user holds the specified permission code on the organization (case-insensitive).</summary>
+    public bool HasPermissionOn(Guid organizationId, string permissionCode)
+        => PermissionsOn(organizationId).Any(p => p.Equals(permissionCode, StringComparison.OrdinalIgnoreCase));
+
+    private IReadOnlyList<string> On(
+        Guid organizationId,
+        IReadOnlyList<string> home,
+        IReadOnlyDictionary<Guid, IReadOnlyList<string>> scoped)
+    {
+        if (User.OrganizationId == organizationId)
+            return home;
+
+        return scoped.TryGetValue(organizationId, out var values) ? values : [];
+    }
 }

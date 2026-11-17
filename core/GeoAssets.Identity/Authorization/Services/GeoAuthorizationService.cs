@@ -18,8 +18,11 @@ namespace GeoAssets.Identity.Authorization.Services;
 ///      <see cref="IRoleRepository"/> — the permission taxonomy/policy engine stay local
 ///      (<see cref="AppRole"/>/<see cref="RolePermission"/>), only role *assignment* moves to
 ///      whichever provider is configured (see <see cref="IGeoAuthenticationProvider"/>, XD01-48).
-///      The local <c>UserRole</c> table/repository methods are kept, unused by this flow, as
-///      a rollback/dev-mode-fallback safety net rather than removed outright.
+///      The local <c>UserRole</c> table's home-scoped rows/repository methods are kept, unused
+///      by this flow, as a rollback/dev-mode-fallback safety net rather than removed outright.
+///      Its organization-scoped rows (XD01-325) are read here, into
+///      <see cref="AuthorizationContext.ScopedRoles"/>/<see cref="AuthorizationContext.ScopedPermissions"/>
+///      only — never into <see cref="AuthorizationContext.Roles"/>/<see cref="AuthorizationContext.Permissions"/>.
 ///   5. Evaluate the requested condition or policy
 /// </summary>
 public class GeoAuthorizationService(
@@ -117,17 +120,51 @@ public class GeoAuthorizationService(
         // their real permissions instead of reporting an empty set until a second round-trip.
         var roles = current.ExternalRoles;
         var permissions = await roleRepository.GetPermissionsByRoleNamesAsync(roles, ct).ConfigureAwait(false);
+        var (scopedRoles, scopedPermissions) = await LoadScopedAssignmentsAsync(user, ct).ConfigureAwait(false);
 
         var context = new AuthorizationContext
         {
             User        = user,
             Roles       = roles,
             Claims      = claims.ToList(),
-            Permissions = permissions.Select(p => p.Code).Distinct(StringComparer.Ordinal).ToList()
+            Permissions = permissions.Select(p => p.Code).Distinct(StringComparer.Ordinal).ToList(),
+            ScopedRoles = scopedRoles,
+            ScopedPermissions = scopedPermissions,
         };
 
         _cachedContext = (current.ExternalObjectId, roles, context);
         return context;
+    }
+
+    /// <summary>
+    /// XD01-325: roles held on <i>other</i> organizations are local-only (never pushed to the
+    /// identity provider), so unlike the home-scoped roles they do come from the local
+    /// <c>UserRole</c> table. They are kept apart from <see cref="AuthorizationContext.Roles"/>/
+    /// <see cref="AuthorizationContext.Permissions"/> and are only reachable through
+    /// <see cref="AuthorizationContext.RolesOn"/>/<see cref="AuthorizationContext.PermissionsOn"/>.
+    /// A row scoped to the user's own organization is dropped: there, the home-scoped set is the
+    /// only source.
+    /// </summary>
+    private async Task<(Dictionary<Guid, IReadOnlyList<string>> Roles, Dictionary<Guid, IReadOnlyList<string>> Permissions)>
+        LoadScopedAssignmentsAsync(AppUser user, CancellationToken ct)
+    {
+        var assignments = await userRepository.GetScopedRoleAssignmentsAsync(user.Id, ct).ConfigureAwait(false);
+
+        var rolesByOrganization = assignments
+            .Where(ur => ur.OrganizationId is { } organizationId && organizationId != user.OrganizationId)
+            .ToLookup(ur => ur.OrganizationId.GetValueOrDefault(), ur => ur.Role);
+
+        var roles = rolesByOrganization.ToDictionary(
+            g => g.Key,
+            g => (IReadOnlyList<string>)g.Select(r => r.Name).Distinct(StringComparer.Ordinal).ToList());
+        var permissions = rolesByOrganization.ToDictionary(
+            g => g.Key,
+            g => (IReadOnlyList<string>)g.SelectMany(r => r.RolePermissions)
+                                         .Select(rp => rp.Permission.Code)
+                                         .Distinct(StringComparer.Ordinal)
+                                         .ToList());
+
+        return (roles, permissions);
     }
 
     // ── Policy evaluation engine ──────────────────────────────────────────────
