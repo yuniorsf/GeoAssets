@@ -128,25 +128,41 @@ public sealed class EFOutboxStore : IOutboxWriter, IOutboxDispatcherStore
         return _db.SaveChangesAsync(ct);
     }
 
+    public Task<IReadOnlyList<OutboxPendingMessage>> ClaimPendingBatchAsync(
+        int batchSize,
+        TimeSpan leaseDuration,
+        string workerId,
+        CancellationToken ct = default) =>
+        ClaimPendingBatchAsync(batchSize, leaseDuration, workerId, [], ct);
+
     public async Task<IReadOnlyList<OutboxPendingMessage>> ClaimPendingBatchAsync(
         int batchSize,
         TimeSpan leaseDuration,
         string workerId,
+        IReadOnlyCollection<string> messageTypes,
         CancellationToken ct = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(leaseDuration, TimeSpan.Zero);
         ArgumentException.ThrowIfNullOrWhiteSpace(workerId);
+        ArgumentNullException.ThrowIfNull(messageTypes);
         ct.ThrowIfCancellationRequested();
 
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
         var pendingStatus = (int)OutboxMessageStatus.Pending;
         var processingStatus = (int)OutboxMessageStatus.Processing;
 
-        var candidates = await _db.OutboxMessages
+        var claimable = _db.OutboxMessages
             .Where(x =>
                 (x.Status == pendingStatus && x.NextRetryAtUtc <= nowUtc) ||
-                (x.Status == processingStatus && x.LockedUntilUtc != null && x.LockedUntilUtc <= nowUtc))
+                (x.Status == processingStatus && x.LockedUntilUtc != null && x.LockedUntilUtc <= nowUtc));
+        if (messageTypes.Count > 0)
+        {
+            var types = messageTypes.ToList();
+            claimable = claimable.Where(x => types.Contains(x.MessageType));
+        }
+
+        var candidates = await claimable
             .OrderBy(x => x.CreatedAtUtc)
             .Take(batchSize)
             .ToListAsync(ct)

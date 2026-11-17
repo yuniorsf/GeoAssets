@@ -37,14 +37,13 @@ public static class OrderOccupancyHostExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         var poleAssetTypeIds = PoleAssetTypeIds(configuration);
-        var catalogInstanceId = configuration[CatalogInstanceIdKey];
+        var catalogInstanceId = CatalogInstanceId(configuration);
 
         return services.AddOrderOccupancyStaging(options =>
         {
             foreach (var poleAssetTypeId in poleAssetTypeIds)
                 options.PoleAssetTypeIds.Add(poleAssetTypeId);
-            if (!string.IsNullOrWhiteSpace(catalogInstanceId))
-                options.CatalogInstanceId = catalogInstanceId.Trim();
+            options.CatalogInstanceId = catalogInstanceId;
         });
     }
 
@@ -61,6 +60,20 @@ public static class OrderOccupancyHostExtensions
         return services
             .AddOccupancyCommit()
             .AddOccupancyCommitPersistence();
+    }
+
+    /// <summary>
+    /// The catalog instance an approval's attribute updates are addressed to — the configured
+    /// <see cref="CatalogInstanceIdKey"/>, trimmed, or <see cref="OrderOccupancyOptions.DefaultCatalogInstanceId"/>
+    /// when absent or blank. Also the catalog instance this host applies such updates to itself
+    /// when it has no broker (XD01-337).
+    /// </summary>
+    public static string CatalogInstanceId(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var configured = configuration[CatalogInstanceIdKey];
+        return string.IsNullOrWhiteSpace(configured) ? OrderOccupancyOptions.DefaultCatalogInstanceId : configured.Trim();
     }
 
     /// <summary>

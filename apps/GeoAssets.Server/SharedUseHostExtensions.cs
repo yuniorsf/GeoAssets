@@ -48,7 +48,9 @@ public static class SharedUseHostExtensions
     /// The relay runs only when <see cref="OutboxTransportKey"/> names a broker. With no
     /// transport configured (the default, <see cref="NoTransport"/>) staged messages stay in the
     /// outbox table as pending: none is lost, none is marked delivered without having been, and
-    /// they are published once the host is started with a transport.
+    /// they are published once the host is started with a transport — except asset mutation
+    /// batches, which <see cref="InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply"/>
+    /// applies in process in that case (XD01-337).
     /// </summary>
     /// <exception cref="InvalidOperationException"><see cref="OutboxTransportKey"/> names no known transport.</exception>
     public static IServiceCollection AddServerWorkflowOutbox(this IServiceCollection services, IConfiguration configuration)

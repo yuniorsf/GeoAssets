@@ -69,9 +69,13 @@ public sealed partial class OutboxRelayProcessor : BackgroundService
         await using (scope.ConfigureAwait(false))
         {
             var store = scope.ServiceProvider.GetRequiredService<IOutboxDispatcherStore>();
-            var batch = await store
-                .ClaimPendingBatchAsync(_options.BatchSize, _options.LeaseDuration, _options.WorkerId, ct)
-                .ConfigureAwait(false);
+            var batch = _options.MessageTypes.Count == 0
+                ? await store
+                    .ClaimPendingBatchAsync(_options.BatchSize, _options.LeaseDuration, _options.WorkerId, ct)
+                    .ConfigureAwait(false)
+                : await store
+                    .ClaimPendingBatchAsync(_options.BatchSize, _options.LeaseDuration, _options.WorkerId, [.. _options.MessageTypes], ct)
+                    .ConfigureAwait(false);
 
             if (batch.Count == 0)
             {
