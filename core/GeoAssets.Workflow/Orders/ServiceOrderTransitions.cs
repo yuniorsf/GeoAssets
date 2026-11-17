@@ -74,6 +74,27 @@ public static class ServiceOrderTransitions
     }
 
     /// <summary>
+    /// The transitions tagged with <paramref name="action"/> in <paramref name="orderType"/>'s
+    /// graph — the moves that action makes. For order types with no custom graph (or none
+    /// supplied) the only tagged moves are those of <see cref="HasTransitionFor"/>: a
+    /// <see cref="OrderActionType.Cancel"/> from <see cref="ServiceOrderStatus.Draft"/> or
+    /// <see cref="ServiceOrderStatus.Pending"/> to <see cref="ServiceOrderStatus.Cancelled"/>.
+    /// </summary>
+    public static IReadOnlyList<WorkflowTransition> TransitionsFor(OrderType? orderType, OrderActionType action)
+    {
+        if (orderType is { States.Count: > 0 })
+            return [.. orderType.Transitions.Where(t => t.TriggerAction == action)];
+
+        return action == OrderActionType.Cancel
+            ?
+            [
+                new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+                new(ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+            ]
+            : [];
+    }
+
+    /// <summary>
     /// Returns true if <paramref name="status"/> is a success-terminal state for
     /// <paramref name="orderType"/> — i.e. reaching it should stamp
     /// <see cref="IServiceOrder.CompletedAt"/>. For order types with a custom graph,

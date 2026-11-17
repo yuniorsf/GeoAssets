@@ -84,4 +84,15 @@ public sealed class OrderType
     /// targets — so a type that does not say otherwise gives a recipient nothing to change.
     /// </summary>
     public OrderRecipientAccess RecipientAccess { get; init; } = OrderRecipientAccess.Inform;
+
+    /// <summary>
+    /// The order actions a recipient of an order of this type may take on top of what
+    /// <see cref="RecipientAccess"/> gives it (XD01-336) — e.g. accept a notice and comment on it
+    /// while the notice stays read-only. Still a ceiling, never a grant: the rule chain has to
+    /// allow the acting user the action too. An action that moves the order's status moves it only
+    /// along a transition of this type tagged with that action
+    /// (<see cref="ServiceOrderTransitions.TransitionsFor"/>); one with no such transition leaves
+    /// the status as it is. Empty (the default) adds nothing.
+    /// </summary>
+    public List<OrderActionType> RecipientActions { get; init; } = [];
 }

@@ -219,6 +219,53 @@ public class EFOrderTypeRepositoryTests
         (await new EFOrderTypeRepository(afterUpdate).GetByIdAsync("notice"))!.RecipientAccess.Should().Be(OrderRecipientAccess.Edit);
     }
 
+    // ── RecipientActions (XD01-336) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task RecipientActions_RoundTripThroughAddUpdateAndDelete_OnAFreshContext()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        var withActions = FullOrderType("with-actions");
+
+        await repo.AddAsync(new OrderType
+        {
+            Id = withActions.Id,
+            DisplayName = withActions.DisplayName,
+            States = withActions.States,
+            Transitions = withActions.Transitions,
+            RecipientActions = [OrderActionType.Complete, OrderActionType.Annotate],
+        });
+        await repo.AddAsync(new OrderType { Id = "plain", DisplayName = "Plain" });
+        await repo.SaveChangesAsync();
+
+        using (var freshContext = fixture.NewContext())
+        {
+            var reader = new EFOrderTypeRepository(freshContext);
+            (await reader.GetByIdAsync("with-actions"))!.RecipientActions.Should().Equal(OrderActionType.Complete, OrderActionType.Annotate);
+            (await reader.GetByIdAsync("plain"))!.RecipientActions.Should().BeEmpty();
+            (await reader.GetAllAsync()).Single(t => string.Equals(t.Id, "with-actions", StringComparison.Ordinal)).RecipientActions
+                .Should().Equal(OrderActionType.Complete, OrderActionType.Annotate);
+            freshContext.OrderTypeRecipientActions.Count(a => a.OrderTypeId == "with-actions")
+                .Should().Be(3, "Complete is granted, moves Intake to Resolved, and Annotate is granted");
+        }
+
+        await repo.UpdateAsync(new OrderType { Id = "with-actions", DisplayName = "Fewer", RecipientActions = [OrderActionType.Accept] });
+        await repo.SaveChangesAsync();
+
+        using (var afterUpdate = fixture.NewContext())
+        {
+            (await new EFOrderTypeRepository(afterUpdate).GetByIdAsync("with-actions"))!.RecipientActions.Should().Equal(OrderActionType.Accept);
+            afterUpdate.OrderTypeRecipientActions.Count(a => a.OrderTypeId == "with-actions").Should().Be(1);
+        }
+
+        await repo.DeleteAsync("with-actions");
+        await repo.SaveChangesAsync();
+
+        using var afterDelete = fixture.NewContext();
+        afterDelete.OrderTypeRecipientActions.Count(a => a.OrderTypeId == "with-actions").Should().Be(0);
+    }
+
     // ── TargetPolicy (XD01-304) ───────────────────────────────────────────────
 
     private static OrderTargetPolicy FullTargetPolicy() => new()

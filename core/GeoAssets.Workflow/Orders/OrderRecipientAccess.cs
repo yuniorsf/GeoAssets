@@ -18,8 +18,9 @@ namespace GeoAssets.Workflow.Orders;
 public enum OrderRecipientAccess
 {
     /// <summary>
-    /// The recipient reads the order and its targets, and changes nothing: no field, no action,
-    /// no target. The default for every type that does not say otherwise.
+    /// The recipient reads the order and its targets, and changes nothing: no field, no action
+    /// other than the type's <see cref="OrderType.RecipientActions"/> (XD01-336), no target. The
+    /// default for every type that does not say otherwise.
     /// </summary>
     Inform = 0,
 

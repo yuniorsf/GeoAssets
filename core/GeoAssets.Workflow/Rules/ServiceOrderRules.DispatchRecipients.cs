@@ -4,8 +4,9 @@ namespace GeoAssets.Workflow.Rules;
 
 /// <summary>
 /// <see cref="ServiceOrderRules"/>: what sets a recipient of an order's dispatch apart from a
-/// member of the order's organization and from a grantee (XD01-316), and how much of the order
-/// its type lets that recipient change (XD01-333).
+/// member of the order's organization and from a grantee (XD01-316), how much of the order
+/// its type lets that recipient change (XD01-333), and which actions its type lets that recipient
+/// take on top of it (XD01-336).
 /// </summary>
 public sealed partial class ServiceOrderRules
 {
@@ -29,6 +30,14 @@ public sealed partial class ServiceOrderRules
     /// </summary>
     public const string RecipientOrderFieldsAreFixedReason =
         "This order was dispatched to you: you may edit its content, not its type, status, assignee, completion, parent order, scope or recipient.";
+
+    /// <summary>
+    /// The reason given to a recipient of an order's dispatch that takes an action its order type
+    /// lets it take (<see cref="OrderType.RecipientActions"/>) with a resulting status that action
+    /// does not lead to from the order's current one.
+    /// </summary>
+    public const string RecipientActionTransitionIsFixedReason =
+        "This order was dispatched to you: this action may only move it along its own transition.";
 
     /// <summary>
     /// Whether <paramref name="principal"/> reaches <paramref name="order"/> only because the
@@ -57,6 +66,54 @@ public sealed partial class ServiceOrderRules
 
         var access = _orderTypeRegistry?.Find(order.OrderTypeId)?.RecipientAccess ?? OrderRecipientAccess.Inform;
         return Enum.IsDefined(access) ? access : OrderRecipientAccess.Inform;
+    }
+
+    /// <summary>
+    /// The <see cref="OrderType.RecipientActions"/> of <paramref name="order"/>'s type (XD01-336),
+    /// or none when no registry was given or the type is not registered.
+    /// </summary>
+    public IReadOnlyList<OrderActionType> RecipientActionsOf(IServiceOrder order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+
+        return _orderTypeRegistry?.Find(order.OrderTypeId)?.RecipientActions ?? [];
+    }
+
+    /// <summary>
+    /// Whether <paramref name="principal"/> may append <paramref name="entry"/> to
+    /// <paramref name="order"/>'s action log: <see cref="Evaluate"/> for the entry's action, and
+    /// then — for a principal that reaches the order only as a recipient of its dispatch, below
+    /// <see cref="OrderRecipientAccess.Edit"/>, where the action is one its type lets a recipient
+    /// take (XD01-336) — a resulting status that is none, the current one, or the target of a
+    /// transition tagged with that action from the current one
+    /// (<see cref="ServiceOrderTransitions.TransitionsFor"/>). Refused otherwise with
+    /// <see cref="RecipientActionTransitionIsFixedReason"/>, so a comment can never cancel the
+    /// order it comments on. Members, grantees and <see cref="OrderRecipientAccess.Edit"/>
+    /// recipients: exactly <see cref="Evaluate"/>.
+    /// </summary>
+    public RuleEvaluationResult EvaluateAppend(WorkflowPrincipal principal, IServiceOrder order, OrderActionLog entry)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var verdict = Evaluate(principal, entry.Action, order);
+        if (!verdict.Allowed
+            || !IsDispatchRecipientOnly(principal, order)
+            || RecipientAccessOf(order) == OrderRecipientAccess.Edit
+            || entry.ResultingStatus is null
+            || string.Equals(entry.ResultingStatus, order.Status, StringComparison.Ordinal))
+        {
+            return verdict;
+        }
+
+        var movesAlongItsTransition = ServiceOrderTransitions
+            .TransitionsFor(_orderTypeRegistry?.Find(order.OrderTypeId), entry.Action)
+            .Any(t => string.Equals(t.FromStateKey, order.Status, StringComparison.Ordinal)
+                   && string.Equals(t.ToStateKey, entry.ResultingStatus, StringComparison.Ordinal));
+
+        return movesAlongItsTransition
+            ? verdict
+            : RuleEvaluationResult.Deny(entry.Action, RecipientActionTransitionIsFixedReason, RuleDenialCode.DeniedByRecipientAccess);
     }
 
     /// <summary>
@@ -97,9 +154,11 @@ public sealed partial class ServiceOrderRules
     /// <summary>
     /// Whether <paramref name="principal"/> may replace <paramref name="stored"/> with
     /// <paramref name="replacement"/> through the whole-order update: <see cref="Evaluate"/> for
-    /// <see cref="OrderActionType.Annotate"/> — so a recipient needs an
-    /// <see cref="OrderRecipientAccess.Edit"/> type — and then, for a principal that reaches the
-    /// order only as a recipient of its dispatch, a replacement that leaves every field of
+    /// <see cref="OrderActionType.Annotate"/>, and then, for a principal that reaches the order only
+    /// as a recipient of its dispatch, an <see cref="OrderRecipientAccess.Edit"/> type — a type that
+    /// only lets a recipient annotate (<see cref="OrderType.RecipientActions"/>) lets it comment,
+    /// not rewrite the order (refused with <see cref="RecipientOrderIsReadOnlyReason"/>) — and a
+    /// replacement that leaves every field of
     /// <see cref="ServiceOrderRecipientEdit.FixedFieldsChanged"/> as it is (refused with
     /// <see cref="RecipientOrderFieldsAreFixedReason"/>). Members and grantees: exactly
     /// <see cref="Evaluate"/>.
@@ -111,6 +170,12 @@ public sealed partial class ServiceOrderRules
         var verdict = Evaluate(principal, OrderActionType.Annotate, stored);
         if (!verdict.Allowed || !IsDispatchRecipientOnly(principal, stored)) return verdict;
 
+        if (RecipientAccessOf(stored) != OrderRecipientAccess.Edit)
+        {
+            return RuleEvaluationResult.Deny(
+                OrderActionType.Annotate, RecipientOrderIsReadOnlyReason, RuleDenialCode.DeniedByRecipientAccess);
+        }
+
         return ServiceOrderRecipientEdit.FixedFieldsChanged(stored, replacement).Count == 0
             ? verdict
             : RuleEvaluationResult.Deny(
@@ -121,13 +186,15 @@ public sealed partial class ServiceOrderRules
     /// <paramref name="verdict"/> of the rule chain, held to the order type's recipient access when
     /// the principal reaches the order only as a recipient of its dispatch: below
     /// <see cref="OrderRecipientAccess.Edit"/> such a recipient keeps
-    /// <see cref="OrderActionType.View"/> and nothing else.
+    /// <see cref="OrderActionType.View"/> and the type's <see cref="OrderType.RecipientActions"/>
+    /// (XD01-336), and nothing else.
     /// </summary>
     private RuleEvaluationResult LimitToRecipientAccess(RuleEvaluationResult verdict, RuleEvaluationContext context)
     {
         if (!verdict.Allowed || verdict.Action == OrderActionType.View || !IsRecipientOnly(context)) return verdict;
 
         return RecipientAccessOf(context.Order) == OrderRecipientAccess.Edit
+            || RecipientActionsOf(context.Order).Contains(verdict.Action)
             ? verdict
             : RuleEvaluationResult.Deny(verdict.Action, RecipientOrderIsReadOnlyReason, RuleDenialCode.DeniedByRecipientAccess);
     }

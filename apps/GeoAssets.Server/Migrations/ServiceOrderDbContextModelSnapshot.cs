@@ -423,6 +423,37 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("OrderDispatches", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderTypeRecipientActionRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Action")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FromStateKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("OrderTypeId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ToStateKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderTypeId", "Action");
+
+                    b.ToTable("OrderTypeRecipientActions", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderTypeRecord", b =>
                 {
                     b.Property<string>("Id")

@@ -93,6 +93,8 @@ public static class SharedUseOrderTypes
         // records nothing in it — the occupancy that work changes is staged and approved by the
         // pole owner (XD01-315/318).
         RecipientAccess = OrderRecipientAccess.Inform,
+        // XD01-336: the occupant accepts the notice and comments on it, and cancels nothing.
+        RecipientActions = [OrderActionType.Accept, OrderActionType.Annotate],
         States = States(),
         Transitions = NoticeTransitions(),
         TargetPolicy = new OrderTargetPolicy
@@ -153,7 +155,17 @@ public static class SharedUseOrderTypes
         new(ServiceOrderStatus.Cancelled, "Cancelled"),
     ];
 
+    /// <summary>
+    /// The work's graph plus the occupant's acceptance (XD01-336): accepting a dispatched notice
+    /// puts it in progress, as starting it does.
+    /// </summary>
     private static List<WorkflowTransition> NoticeTransitions() =>
+    [
+        new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderActionType.Accept),
+        .. WorkTransitions(),
+    ];
+
+    private static List<WorkflowTransition> WorkTransitions() =>
     [
         new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderActionType.Execute),
         new(ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
@@ -165,7 +177,7 @@ public static class SharedUseOrderTypes
     ];
 
     /// <summary>
-    /// The notice's graph plus the two dispatch edges — a draft becomes dispatched, and a
+    /// The work's graph plus the two dispatch edges — a draft becomes dispatched, and a
     /// dispatched order can be dispatched again, which is how occupants of poles added later get
     /// their notice — and the approval of completed work (XD01-318): approving commits the staged
     /// occupancy, rejecting sends the work back to the crew, and a completed order can still be
@@ -176,7 +188,7 @@ public static class SharedUseOrderTypes
         new(ServiceOrderStatus.Draft, ServiceOrderStatus.Pending, OrderActionType.Dispatch),
         new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
         new(ServiceOrderStatus.Pending, ServiceOrderStatus.Pending, OrderActionType.Dispatch),
-        .. NoticeTransitions(),
+        .. WorkTransitions(),
         new(ServiceOrderStatus.Completed, ApprovedStateKey, OrderActionType.Approve),
         new(ServiceOrderStatus.Completed, ServiceOrderStatus.InProgress, OrderActionType.Reject),
         new(ServiceOrderStatus.Completed, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),

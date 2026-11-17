@@ -84,10 +84,12 @@ public partial class ServiceOrderMigrationChainTests
         (await QueryAsync(db, DispatchRecipientFunctionsSql)).Should().HaveCount(3);
         (await QueryAsync(db, """SELECT "Id"::text AS "Value" FROM "OrderTypes" """)).Should().Equal("inspection");
 
-        // Up again.
-        await db.Database.MigrateAsync();
-        (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
+        // Up again — to this migration, whose functions are counted, then to the head (XD01-336's
+        // migration adds functions of its own).
+        await migrator.MigrateAsync(migration);
         (await QueryAsync(db, RecipientUpdatePoliciesSql)).Should().HaveCount(2);
         (await QueryAsync(db, DispatchRecipientFunctionsSql)).Should().HaveCount(5);
+        await db.Database.MigrateAsync();
+        (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
     }
 }

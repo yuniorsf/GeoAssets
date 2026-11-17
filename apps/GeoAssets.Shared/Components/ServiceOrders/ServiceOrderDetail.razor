@@ -45,6 +45,10 @@
             {
                 <button class="btn btn-outline btn-sm" @onclick="AssignToMe">@L["orders.assignToMe"]</button>
             }
+            @if (CanAccept)
+            {
+                <button class="btn btn-primary btn-sm" @onclick="Accept">@L["orders.accept"]</button>
+            }
             @if (CanStart)
             {
                 <button class="btn btn-primary btn-sm" @onclick="Start">@L["orders.start"]</button>
