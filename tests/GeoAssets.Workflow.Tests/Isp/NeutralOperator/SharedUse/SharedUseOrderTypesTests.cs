@@ -50,8 +50,27 @@ public sealed class SharedUseOrderTypesTests
             .Should().OnlyContain(status => !ServiceOrderTransitions.HasTransitionFor(poleWork, status, OrderActionType.Dispatch));
         ServiceOrderTransitions.IsTerminalState(poleWork, ServiceOrderStatus.Pending)
             .Should().BeFalse("dispatching again is not the only thing a dispatched order can do");
-        ServiceOrderTransitions.IsTerminalState(poleWork, ServiceOrderStatus.Completed).Should().BeTrue();
+        ServiceOrderTransitions.IsTerminalState(poleWork, ServiceOrderStatus.Completed)
+            .Should().BeFalse("completed pole work waits for its approval (XD01-318)");
+        ServiceOrderTransitions.IsTerminalState(poleWork, SharedUseOrderTypes.ApprovedStateKey).Should().BeTrue();
         ServiceOrderTransitions.IsTerminalState(poleWork, ServiceOrderStatus.Cancelled).Should().BeTrue();
+    }
+
+    [Fact]
+    public void PoleWork_IsApprovedOnlyOnceCompleted_AndApprovedIsItsOnlySuccess_WhileTheNoticeStillSucceedsOnCompletion()
+    {
+        var poleWork = SharedUseOrderTypes.CreatePoleWork(["pole"]);
+        var notice = SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+
+        poleWork.Transitions.Where(t => t.TriggerAction == OrderActionType.Approve)
+            .Should().ContainSingle().Which.Should().Be(new WorkflowTransition(ServiceOrderStatus.Completed, SharedUseOrderTypes.ApprovedStateKey, OrderActionType.Approve));
+        poleWork.States.Where(s => s.IsSuccess).Select(s => s.Key).Should().Equal(SharedUseOrderTypes.ApprovedStateKey);
+        ServiceOrderTransitions.IsValid(poleWork, ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed).Should().BeTrue();
+        ServiceOrderTransitions.HasTransitionFor(poleWork, ServiceOrderStatus.Completed, OrderActionType.Reject).Should().BeTrue();
+        ServiceOrderTransitions.IsValid(poleWork, ServiceOrderStatus.Completed, ServiceOrderStatus.InProgress).Should().BeTrue("a rejected approval sends the work back to the crew");
+        ServiceOrderTransitions.HasTransitionFor(poleWork, ServiceOrderStatus.Completed, OrderActionType.Cancel).Should().BeTrue();
+        notice.Transitions.Should().NotContain(t => t.TriggerAction == OrderActionType.Approve);
+        notice.States.Select(s => s.Key).Should().NotContain(SharedUseOrderTypes.ApprovedStateKey);
     }
 
     [Fact]

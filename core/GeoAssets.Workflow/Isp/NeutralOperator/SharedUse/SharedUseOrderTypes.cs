@@ -31,6 +31,13 @@ public static class SharedUseOrderTypes
     /// <summary>Attribute of a pole whose value is shown as the target's alias: the pole's field number.</summary>
     public const string PoleAliasAttributeKey = "barramento";
 
+    /// <summary>
+    /// The success state of a pole-work order (XD01-318): reached only by approving a completed
+    /// order, which commits the occupancy changes staged on its poles. A completed pole-work
+    /// order is not finished yet — it waits for that approval.
+    /// </summary>
+    public const string ApprovedStateKey = "Approved";
+
     /// <summary>How many poles one selection may add to a pole-work order.</summary>
     public const int PoleSelectionLimit = 5000;
 
@@ -54,7 +61,7 @@ public static class SharedUseOrderTypes
             new(PolicyKind.Role, "Administrator"),
         ],
         InitialStateKey = ServiceOrderStatus.Draft,
-        States = States(),
+        States = PoleWorkStates(),
         Transitions = PoleWorkTransitions(),
         TargetPolicy = new OrderTargetPolicy
         {
@@ -123,6 +130,22 @@ public static class SharedUseOrderTypes
         new(ServiceOrderStatus.Cancelled, "Cancelled"),
     ];
 
+    /// <summary>
+    /// The notice's states, except that completing pole work is not success: success is
+    /// <see cref="ApprovedStateKey"/>, so closing the order is the approval that commits its staged
+    /// occupancy (XD01-318).
+    /// </summary>
+    private static List<WorkflowState> PoleWorkStates() =>
+    [
+        new(ServiceOrderStatus.Draft, "Draft"),
+        new(ServiceOrderStatus.Pending, "Dispatched"),
+        new(ServiceOrderStatus.InProgress, "In progress"),
+        new(ServiceOrderStatus.OnHold, "On hold"),
+        new(ServiceOrderStatus.Completed, "Awaiting approval"),
+        new(ApprovedStateKey, "Approved", IsSuccess: true),
+        new(ServiceOrderStatus.Cancelled, "Cancelled"),
+    ];
+
     private static List<WorkflowTransition> NoticeTransitions() =>
     [
         new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderActionType.Execute),
@@ -135,9 +158,11 @@ public static class SharedUseOrderTypes
     ];
 
     /// <summary>
-    /// The notice's graph plus the two dispatch edges: a draft becomes dispatched, and a
-    /// dispatched order can be dispatched again — which is how occupants of poles added later get
-    /// their notice.
+    /// The notice's graph plus the two dispatch edges — a draft becomes dispatched, and a
+    /// dispatched order can be dispatched again, which is how occupants of poles added later get
+    /// their notice — and the approval of completed work (XD01-318): approving commits the staged
+    /// occupancy, rejecting sends the work back to the crew, and a completed order can still be
+    /// cancelled.
     /// </summary>
     private static List<WorkflowTransition> PoleWorkTransitions() =>
     [
@@ -145,5 +170,8 @@ public static class SharedUseOrderTypes
         new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
         new(ServiceOrderStatus.Pending, ServiceOrderStatus.Pending, OrderActionType.Dispatch),
         .. NoticeTransitions(),
+        new(ServiceOrderStatus.Completed, ApprovedStateKey, OrderActionType.Approve),
+        new(ServiceOrderStatus.Completed, ServiceOrderStatus.InProgress, OrderActionType.Reject),
+        new(ServiceOrderStatus.Completed, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
     ];
 }

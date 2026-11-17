@@ -63,12 +63,16 @@ public sealed class GeoAssetsMeter : IDisposable
 
     private readonly FanOutInstruments _fanOut;
 
+    /// <summary>The <c>geoassets.isp.pole_occupancy.*</c> commit instruments (XD01-318).</summary>
+    private readonly OccupancyCommitInstruments _occupancyCommit;
+
     public GeoAssetsMeter(string version)
     {
         _meter = new Meter(MeterName, version);
 
         _targetSelection = new TargetSelectionInstruments(_meter);
         _fanOut = new FanOutInstruments(_meter);
+        _occupancyCommit = new OccupancyCommitInstruments(_meter);
 
         _orderTransitions = _meter.CreateCounter<long>(
             "geoassets.orders.transitions",
@@ -183,6 +187,23 @@ public sealed class GeoAssetsMeter : IDisposable
         _fanOut.ChildrenSpawned.Add(children,
             new KeyValuePair<string, object?>("order.type", orderTypeId));
     }
+
+    /// <summary>Records how long one occupancy approve-and-commit took (XD01-318), by outcome.</summary>
+    public void RecordOccupancyCommitDuration(double milliseconds, string outcome) =>
+        _occupancyCommit.DurationMs.Record(milliseconds,
+            new KeyValuePair<string, object?>("outcome", outcome));
+
+    /// <summary>Counts the occupancy changes of one kind an approval committed (XD01-318). Never tagged with an order, pole or organization id.</summary>
+    public void RecordOccupancyChangesCommitted(int changes, string kind)
+    {
+        if (changes <= 0) return;
+
+        _occupancyCommit.ChangesCommitted.Add(changes,
+            new KeyValuePair<string, object?>("kind", kind));
+    }
+
+    /// <summary>Counts one approval refused because a pole or a staged set changed after staging (XD01-318).</summary>
+    public void RecordOccupancyCommitConflict() => _occupancyCommit.Conflicts.Add(1);
 
     public void Dispose() => _meter.Dispose();
 }

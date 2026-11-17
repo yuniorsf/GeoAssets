@@ -580,6 +580,7 @@ public sealed class OrderOccupancyStagingServiceTests
         public Task<OccupancyChangeSet> StageAsync(OccupancyChangeSet changeSet, CancellationToken ct) => throw Touched();
         public Task<bool> DiscardAsync(string orderId, string targetId, CancellationToken ct) => throw Touched();
         public Task<int> DiscardAllAsync(string orderId, CancellationToken ct) => throw Touched();
+        public Task<bool> MarkCommittedAsync(OccupancyChangeSet committed, CancellationToken ct) => throw Touched();
         public Task<PagedResult<ServiceOrderTarget>> GetPageAsync(OrderTargetQuery query, CancellationToken ct) => throw Touched();
         public Task<ServiceOrderTarget?> GetByIdAsync(string orderId, string targetId, CancellationToken ct) => throw Touched();
         public Task<int> CountAsync(string orderId, CancellationToken ct) => throw Touched();

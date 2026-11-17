@@ -197,6 +197,10 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<IWorkflowUnitOfWork, InMemoryWorkflowUnitOfWork>();
         services.AddSharedUseDispatch();
 
+        // Approval that commits staged occupancy (XD01-318): the real service over the same stores.
+        services.AddSingleton<IPoleOccupancyWriter>(sp => sp.GetRequiredService<InMemoryPoleOccupancyStore>());
+        services.AddOccupancyCommit();
+
         // The production pipeline: every endpoint needs an authenticated caller unless it says
         // otherwise (AddGeoAssetsAuthentication's fallback policy), and named policies resolve
         // to permission codes through the bridge.

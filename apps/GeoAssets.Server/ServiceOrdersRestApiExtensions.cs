@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
@@ -296,23 +297,37 @@ public static class ServiceOrdersRestApiExtensions
             }
         });
 
+        MapServiceOrderActions(routes, prefix, opts);
+    }
+
+    private static void MapServiceOrderActions(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
         routes.MapPost($"{prefix}/service-orders/{{id}}/actions", async (
-            string id, HttpRequest req, IServiceOrderRepository repo,
-            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory) =>
+            string id, HttpRequest req, IServiceOrderRepository repo, OrderTypeRegistry orderTypes,
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
         {
-            var entry = await JsonSerializer.DeserializeAsync<OrderActionLog>(req.Body, opts).ConfigureAwait(false);
+            var entry = await JsonSerializer.DeserializeAsync<OrderActionLog>(req.Body, opts, ct).ConfigureAwait(false);
             if (entry is null) return Results.BadRequest("Invalid action.");
 
-            var order = await repo.GetByIdAsync(id).ConfigureAwait(false);
+            var order = await repo.GetByIdAsync(id, ct).ConfigureAwait(false);
             if (order is null) return Results.NotFound();
 
-            var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
+            var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
             var verdict = rules.Evaluate(principal, entry.Action, order);
             if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
+            // XD01-318: approving an order with targets commits the occupancy staged on its poles.
+            var orderType = orderTypes.Find(order.OrderTypeId);
+            if (OccupancyApprovalRoute.Handles(entry, orderType))
+            {
+                return await OccupancyApprovalRoute.ApproveAsync(
+                    order, orderType!, entry, principal,
+                    req.HttpContext.RequestServices.GetRequiredService<IOccupancyCommitService>(), ct).ConfigureAwait(false);
+            }
+
             try
             {
-                await repo.AppendActionAsync(id, entry).ConfigureAwait(false);
+                await repo.AppendActionAsync(id, entry, ct).ConfigureAwait(false);
                 return Results.NoContent();
             }
             catch (InvalidServiceOrderTransitionException ex)

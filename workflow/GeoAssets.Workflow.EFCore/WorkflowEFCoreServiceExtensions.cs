@@ -5,6 +5,7 @@ using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
@@ -223,6 +224,29 @@ public static class WorkflowEFCoreServiceExtensions
         services.Replace(ServiceDescriptor.Scoped<ISharedUseDispatchService>(sp =>
             new ObservableSharedUseDispatchService(
                 sp.GetRequiredService<SharedUseDispatchService>(),
+                sp.GetRequiredService<GeoAssetsActivitySource>(),
+                sp.GetRequiredService<GeoAssetsMeter>(),
+                sp.GetService<TimeProvider>())));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers what the occupancy approval (XD01-318, <c>AddOccupancyCommit</c>) needs from
+    /// this layer: <see cref="EFWorkflowUnitOfWork"/> as <see cref="IWorkflowUnitOfWork"/> on the
+    /// scope's <see cref="ServiceOrderDbContext"/> (when not registered yet), and
+    /// <see cref="ObservableOccupancyCommitService"/> around the concrete
+    /// <see cref="OccupancyCommitService"/>. Call it after <c>AddOccupancyCommit()</c>: it replaces
+    /// that interface registration.
+    /// </summary>
+    public static IServiceCollection AddOccupancyCommitPersistence(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
+        services.Replace(ServiceDescriptor.Scoped<IOccupancyCommitService>(sp =>
+            new ObservableOccupancyCommitService(
+                sp.GetRequiredService<OccupancyCommitService>(),
                 sp.GetRequiredService<GeoAssetsActivitySource>(),
                 sp.GetRequiredService<GeoAssetsMeter>(),
                 sp.GetService<TimeProvider>())));

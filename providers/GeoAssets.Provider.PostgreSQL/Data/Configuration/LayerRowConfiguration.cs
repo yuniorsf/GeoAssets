@@ -28,5 +28,8 @@ internal sealed class LayerRowConfiguration : IEntityTypeConfiguration<LayerRow>
             new LayerRow { Id = DomainLayerIds.WaterDischargePoint, Name = "Punto de descarga de agua",   GeometryType = GeometryType.Point,      Color = "#3498db", Radius = 6 },
             new LayerRow { Id = DomainLayerIds.Breaker,            Name = "Interruptor",                  GeometryType = GeometryType.Point,      Color = "#e74c3c", Radius = 7 }
         );
+
+        // ── Thematic pole occupancy (XD01-318) ──────────────────────────────────
+        e.HasData(PoleOccupancyThematicSeed.Layers());
     }
 }

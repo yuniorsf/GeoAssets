@@ -162,6 +162,17 @@ public sealed class OccupancyChangeSet
     };
 
     /// <summary>
+    /// Records that the set was applied to the pole's live occupancy (XD01-318): a staged set
+    /// becomes <see cref="OccupancyChangeSetStatus.Committed"/>, closed at <paramref name="committedAt"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The set is already committed or discarded: only a staged set is committed, and only once.</exception>
+    public OccupancyChangeSet Commit(DateTimeOffset committedAt) => Status == OccupancyChangeSetStatus.Staged
+        ? new OccupancyChangeSet(
+            Id, OrderId, TargetId, PoleFeatureId, PoleOwnerOrganizationId, Changes, BaselineVersion,
+            OccupancyChangeSetStatus.Committed, StagedBy, StagedAt, committedAt)
+        : throw new InvalidOperationException($"Change set '{Id}' is {Status}; only a staged set can be committed.");
+
+    /// <summary>
     /// Rebuilds a set from stored data, in whatever status it was stored. For stores; it checks
     /// what must hold of any set but not the changes against a pole (the pole may have moved on).
     /// </summary>

@@ -106,6 +106,21 @@ public sealed class GeoAssetsActivitySource : IDisposable
                 .AddTag("order.parent_id", parentOrderId)
                 .AddTag("fanout.party_organization.id", partyOrganizationId);
 
+    /// <summary>
+    /// Starts the span of one approve-and-commit of staged occupancy (XD01-318),
+    /// <c>ServiceOrder.OccupancyCommit</c>. The organization id belongs on the span, never on a metric.
+    /// </summary>
+    public Activity? StartOccupancyCommitActivity(string orderId, string? organizationId) =>
+        _source.StartActivity("ServiceOrder.OccupancyCommit")
+               ?.AddTag("order.id", orderId)
+                .AddTag("organization.id", organizationId);
+
+    /// <summary>Tags an occupancy-commit span with what the approval committed.</summary>
+    public static void SetOccupancyCommitCounts(Activity? activity, string orderTypeId, int changeSets, int changes) =>
+        activity?.AddTag("order.type", orderTypeId)
+                 .AddTag("occupancy.change_sets", changeSets)
+                 .AddTag("occupancy.changes", changes);
+
     // ── Integration Messaging ─────────────────────────────────────────────────
 
     public Activity? StartIntegrationPublishActivity(

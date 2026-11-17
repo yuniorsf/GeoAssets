@@ -14,6 +14,12 @@ public static class OrderOccupancyHostExtensions
     public const string PoleAssetTypeIdsKey = "Workflow:Occupancy:PoleAssetTypeIds";
 
     /// <summary>
+    /// Configuration key of the asset catalog instance an approval's occupancy attribute updates
+    /// are addressed to (XD01-318); <see cref="OrderOccupancyOptions.DefaultCatalogInstanceId"/> when absent or blank.
+    /// </summary>
+    public const string CatalogInstanceIdKey = "Workflow:Occupancy:CatalogInstanceId";
+
+    /// <summary>
     /// Id of the pole asset type of the global domain catalog this host's database is seeded
     /// with (the PostgreSQL provider's <c>SeedDomainAssetTypesAndLayers</c> migration) — what a
     /// deployment that configures nothing treats as "a pole".
@@ -31,12 +37,30 @@ public static class OrderOccupancyHostExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         var poleAssetTypeIds = PoleAssetTypeIds(configuration);
+        var catalogInstanceId = configuration[CatalogInstanceIdKey];
 
         return services.AddOrderOccupancyStaging(options =>
         {
             foreach (var poleAssetTypeId in poleAssetTypeIds)
                 options.PoleAssetTypeIds.Add(poleAssetTypeId);
+            if (!string.IsNullOrWhiteSpace(catalogInstanceId))
+                options.CatalogInstanceId = catalogInstanceId.Trim();
         });
+    }
+
+    /// <summary>
+    /// Registers the approval that commits staged occupancy (XD01-318) over this host's
+    /// <c>ServiceOrderDbContext</c> stores, its unit of work and its outbox, with its span and
+    /// metrics. Call after <see cref="AddServerOrderOccupancyStaging"/> (whose options it reads)
+    /// and <c>AddServerWorkflowOutbox</c>.
+    /// </summary>
+    public static IServiceCollection AddServerOccupancyCommit(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        return services
+            .AddOccupancyCommit()
+            .AddOccupancyCommitPersistence();
     }
 
     /// <summary>

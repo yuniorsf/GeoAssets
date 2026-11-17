@@ -469,6 +469,66 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             Name = "Interruptor",
                             Radius = 7.0,
                             Weight = 3.0
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0001-000000000006"),
+                            Color = "#8839ef",
+                            FillColor = "#8839ef",
+                            FillOpacity = 0.20000000000000001,
+                            GeometryType = 0,
+                            IconUrl = "",
+                            Name = "Poste — ocupante no identificado",
+                            Radius = 6.0,
+                            Weight = 3.0
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0001-000000000007"),
+                            Color = "#d20f39",
+                            FillColor = "#d20f39",
+                            FillOpacity = 0.20000000000000001,
+                            GeometryType = 0,
+                            IconUrl = "",
+                            Name = "Poste — sobre capacidad",
+                            Radius = 6.0,
+                            Weight = 3.0
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0001-000000000008"),
+                            Color = "#df8e1d",
+                            FillColor = "#df8e1d",
+                            FillOpacity = 0.20000000000000001,
+                            GeometryType = 0,
+                            IconUrl = "",
+                            Name = "Poste — ocupación completa",
+                            Radius = 6.0,
+                            Weight = 3.0
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0001-000000000009"),
+                            Color = "#40a02b",
+                            FillColor = "#40a02b",
+                            FillOpacity = 0.20000000000000001,
+                            GeometryType = 0,
+                            IconUrl = "",
+                            Name = "Poste — ocupación baja",
+                            Radius = 6.0,
+                            Weight = 3.0
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0001-00000000000a"),
+                            Color = "#9ca0b0",
+                            FillColor = "#9ca0b0",
+                            FillOpacity = 0.20000000000000001,
+                            GeometryType = 0,
+                            IconUrl = "",
+                            Name = "Poste — sin ocupantes",
+                            Radius = 6.0,
+                            Weight = 3.0
                         });
                 });
 
@@ -499,6 +559,48 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                     b.HasIndex("LayerRuleId");
 
                     b.ToTable("layer_rule_condition", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0003-000000000001"),
+                            Attribute = "occupancyClass",
+                            LayerRuleId = new Guid("00000000-0000-0000-0002-000000000001"),
+                            Operator = 0,
+                            Value = "Unidentified"
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0003-000000000002"),
+                            Attribute = "occupancyClass",
+                            LayerRuleId = new Guid("00000000-0000-0000-0002-000000000002"),
+                            Operator = 0,
+                            Value = "OverCapacity"
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0003-000000000003"),
+                            Attribute = "occupancyClass",
+                            LayerRuleId = new Guid("00000000-0000-0000-0002-000000000003"),
+                            Operator = 0,
+                            Value = "High"
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0003-000000000004"),
+                            Attribute = "occupancyClass",
+                            LayerRuleId = new Guid("00000000-0000-0000-0002-000000000004"),
+                            Operator = 0,
+                            Value = "Low"
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0003-000000000005"),
+                            Attribute = "occupancyClass",
+                            LayerRuleId = new Guid("00000000-0000-0000-0002-000000000005"),
+                            Operator = 0,
+                            Value = "None"
+                        });
                 });
 
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.LayerRuleRow", b =>
@@ -523,6 +625,43 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                     b.HasIndex("LayerId");
 
                     b.ToTable("layer_rule", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0002-000000000001"),
+                            AssetTypeId = new Guid("00000000-0000-0000-0000-000000000004"),
+                            LayerId = new Guid("00000000-0000-0000-0001-000000000006"),
+                            Priority = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0002-000000000002"),
+                            AssetTypeId = new Guid("00000000-0000-0000-0000-000000000004"),
+                            LayerId = new Guid("00000000-0000-0000-0001-000000000007"),
+                            Priority = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0002-000000000003"),
+                            AssetTypeId = new Guid("00000000-0000-0000-0000-000000000004"),
+                            LayerId = new Guid("00000000-0000-0000-0001-000000000008"),
+                            Priority = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0002-000000000004"),
+                            AssetTypeId = new Guid("00000000-0000-0000-0000-000000000004"),
+                            LayerId = new Guid("00000000-0000-0000-0001-000000000009"),
+                            Priority = 3
+                        },
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0002-000000000005"),
+                            AssetTypeId = new Guid("00000000-0000-0000-0000-000000000004"),
+                            LayerId = new Guid("00000000-0000-0000-0001-00000000000a"),
+                            Priority = 4
+                        });
                 });
 
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.AssetTypeRow", b =>

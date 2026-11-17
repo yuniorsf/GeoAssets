@@ -1,5 +1,7 @@
+using GeoAssets.Shared.Services.Occupancy;
 using GeoAssets.Shared.Services.SharedUse;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Components;
@@ -15,6 +17,8 @@ public partial class ServiceOrderDetail
 
     private bool _dispatchDialogVisible;
     private string _noteText = string.Empty;
+    private bool _approving;
+    private string? _approvalErrorKey;
 
     private bool CanDispatch    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Dispatch, Order).Allowed;
     private bool CanAssignToMe  => Order is not null && !string.Equals(Order.AssignedTo, Principal.UserId, StringComparison.Ordinal)
@@ -28,6 +32,9 @@ public partial class ServiceOrderDetail
                                                     or ServiceOrderStatus.InProgress or ServiceOrderStatus.OnHold
                                     && Rules.Evaluate(Principal, OrderActionType.Cancel, Order).Allowed;
     private bool CanAnnotate    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Annotate, Order).Allowed;
+
+    /// <summary>Approving an order with targets commits the occupancy staged on its poles; only the pole owner may (XD01-318).</summary>
+    private bool CanApprove     => Order is not null && OrderApprovalState.CanApprove(OrderTypes.Find(Order.OrderTypeId), Order, Principal, Rules);
 
     /// <summary>Only orders whose type declares a target policy have targets, and so poles to edit the occupancy of (XD01-315).</summary>
     private bool HasTargets     => Order is not null && OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy is not null;
@@ -78,6 +85,26 @@ public partial class ServiceOrderDetail
     {
         if (Order is null) return;
         await RecordAction(OrderActionType.Complete, ServiceOrderStatus.Completed);
+    }
+
+    private async Task Approve()
+    {
+        if (Order is null) return;
+
+        _approving = true;
+        _approvalErrorKey = null;
+        try
+        {
+            await RecordAction(OrderActionType.Approve, OccupancyApproval.ApprovedStatus(OrderTypes.Find(Order.OrderTypeId), Order.Status)!);
+        }
+        catch (Exception ex)
+        {
+            _approvalErrorKey = OrderApprovalState.ErrorKey(ex);
+        }
+        finally
+        {
+            _approving = false;
+        }
     }
 
     private async Task CancelOrder()

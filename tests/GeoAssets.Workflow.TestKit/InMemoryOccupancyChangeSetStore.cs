@@ -184,6 +184,27 @@ public sealed class InMemoryOccupancyChangeSetStore : IOccupancyChangeSetReader,
         return Discard(orderId, _ => true);
     }
 
+    public async Task<bool> MarkCommittedAsync(OccupancyChangeSet committed, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(committed);
+        ct.ThrowIfCancellationRequested();
+
+        if (committed.Status != OccupancyChangeSetStatus.Committed)
+            throw new ArgumentException($"Only a committed change set can be recorded as committed; this one is {committed.Status}.", nameof(committed));
+        if (committed.PoleOwnerOrganizationId != _tenantContext.CurrentOrganizationId)
+            throw new ArgumentException("The change set belongs to another organization than the store's.", nameof(committed));
+
+        await SettleAsync(committed.OrderId, ct).ConfigureAwait(false);
+        lock (_state.Gate)
+        {
+            if (!_state.Sets.TryGetValue(committed.Id, out var current) || current.Status != OccupancyChangeSetStatus.Staged)
+                return false;
+
+            _state.Sets[committed.Id] = current.Commit(committed.ClosedAt!.Value);
+            return true;
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>The caller's organization's sets of one order. Call under the gate.</summary>

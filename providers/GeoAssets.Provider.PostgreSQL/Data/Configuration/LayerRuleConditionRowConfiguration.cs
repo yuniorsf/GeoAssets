@@ -17,5 +17,8 @@ internal sealed class LayerRuleConditionRowConfiguration : IEntityTypeConfigurat
         e.HasOne(x => x.LayerRule).WithMany(x => x.Conditions).HasForeignKey(x => x.LayerRuleId).OnDelete(DeleteBehavior.Cascade);
 
         e.HasIndex(x => x.LayerRuleId);
+
+        // ── Thematic pole occupancy (XD01-318) ──────────────────────────────────
+        e.HasData(PoleOccupancyThematicSeed.Conditions());
     }
 }

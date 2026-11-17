@@ -44,4 +44,20 @@ public interface IOccupancyChangeSetWriter
     /// </summary>
     /// <exception cref="ArgumentException"><paramref name="orderId"/> is null or blank.</exception>
     Task<int> DiscardAllAsync(string orderId, CancellationToken ct);
+
+    /// <summary>
+    /// Records that a staged set was applied to its pole (XD01-318): the set on file with
+    /// <paramref name="committed"/>'s id becomes <see cref="OccupancyChangeSetStatus.Committed"/>,
+    /// closed at <paramref name="committed"/>'s <see cref="OccupancyChangeSet.ClosedAt"/>. Returns
+    /// true when it did; false when no set with that id is still staged on file (it was replaced,
+    /// discarded or already committed meanwhile) — then nothing changed. Joins the caller's
+    /// transaction when there is one, so the status and the occupancy written from the set are
+    /// stored together.
+    /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="committed"/> is null.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="committed"/> is not <see cref="OccupancyChangeSetStatus.Committed"/>, or
+    /// belongs to another organization than the adapter's.
+    /// </exception>
+    Task<bool> MarkCommittedAsync(OccupancyChangeSet committed, CancellationToken ct);
 }
