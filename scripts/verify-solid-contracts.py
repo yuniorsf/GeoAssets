@@ -115,7 +115,7 @@ def discover_changed_files(target_dir: Path, base_ref: str | None) -> list[str]:
     files: set[str] = set()
     try:
         status_proc = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain", "--untracked-files=all"],
             cwd=target_dir,
             capture_output=True,
             text=True,
