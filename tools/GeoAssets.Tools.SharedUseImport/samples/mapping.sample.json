@@ -1,0 +1,20 @@
+{
+  "poles": [
+    { "legacyPoleId": 9001, "poleFeatureId": "sample-pole-0001" },
+    { "legacyPoleId": 9002, "poleFeatureId": "sample-pole-0002" },
+    { "legacyPoleId": 9003, "poleFeatureId": "sample-pole-0003" },
+    { "legacyPoleId": 9004, "poleFeatureId": "sample-pole-0004" }
+  ],
+  "occupants": [
+    { "legacyOccupantId": 501, "cnpj": "10.000.000/0001-01" },
+    { "legacyOccupantId": 502, "cnpj": "20.000.000/0001-02" },
+    { "legacyOccupantId": 503, "cnpj": null }
+  ],
+  "organizations": [
+    { "cnpj": "10000000000101", "organizationId": "00000000-0000-0000-0000-00000000a501" }
+  ],
+  "wireTypes": [
+    { "legacyWireTypeId": 1, "cableDiameterMm": 10.12345, "cableLoadDaN": 2.5 },
+    { "legacyWireTypeId": 2, "cableDiameterMm": 14.0005, "cableLoadDaN": 3.0004 }
+  ]
+}
