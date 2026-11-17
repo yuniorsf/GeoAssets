@@ -22,6 +22,7 @@ using GeoAssets.Shared.Services.FieldWork;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.Offline;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
@@ -174,7 +175,10 @@ public static class MauiProgram
     /// </summary>
     private static void AddServiceOrderWorkflow(MauiAppBuilder builder)
     {
-        builder.Services.AddOrderTypeRegistry();
+        // Shared pole use (XD01-316): seeded in code on the server, so registered here too —
+        // see the same registration in GeoAssets.Web's Program.cs.
+        builder.Services.AddOrderTypeRegistry(registry =>
+            SharedUseOrderTypes.RegisterAll(registry, [SharedUseOrderTypes.SeededPoleAssetTypeId]));
 
         var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
             ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");

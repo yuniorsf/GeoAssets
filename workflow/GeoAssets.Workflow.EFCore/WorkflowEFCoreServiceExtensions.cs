@@ -4,6 +4,7 @@ using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Contractors;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
@@ -165,13 +166,32 @@ public static class WorkflowEFCoreServiceExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<OutboxRelayOptions>();
         if (configure is not null)
         {
             services.Configure(configure);
         }
 
+        services.AddWorkflowOutboxStore();
+        services.AddHostedService<OutboxRelayProcessor>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the EF Core transactional outbox and idempotent inbox <b>without</b> the relay:
+    /// <see cref="IOutboxWriter"/>, <see cref="IOutboxDispatcherStore"/> and
+    /// <see cref="IIdempotentInbox"/> on the scope's <see cref="ServiceOrderDbContext"/>, so a
+    /// message is staged in the same transaction as the write it reports. Staged messages stay
+    /// pending until a host that also runs <see cref="OutboxRelayProcessor"/> — through
+    /// <see cref="AddWorkflowOutbox"/>, which needs an <see cref="IIntegrationEventPublisher"/> —
+    /// claims them. <see cref="AddWorkflowOutbox"/> calls this itself.
+    /// </summary>
+    public static IServiceCollection AddWorkflowOutboxStore(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped(sp => new EFOutboxStore(
             sp.GetRequiredService<ServiceOrderDbContext>(),
             sp.GetRequiredService<TimeProvider>(),
@@ -179,7 +199,33 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IOutboxWriter>(sp => sp.GetRequiredService<EFOutboxStore>());
         services.AddScoped<IOutboxDispatcherStore>(sp => sp.GetRequiredService<EFOutboxStore>());
         services.AddScoped<IIdempotentInbox, EFIdempotentInbox>();
-        services.AddHostedService<OutboxRelayProcessor>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers what the shared-use dispatch (XD01-316, <c>AddSharedUseDispatch</c>) needs from
+    /// this layer: <see cref="EFWorkflowUnitOfWork"/> as <see cref="IWorkflowUnitOfWork"/> on the
+    /// scope's <see cref="ServiceOrderDbContext"/>, <see cref="ActivitySharedUseFanOutTracer"/>
+    /// for the per-child spans, and <see cref="ObservableSharedUseDispatchService"/> around the
+    /// registered <see cref="ISharedUseDispatchService"/>. Call it after
+    /// <c>AddSharedUseDispatch()</c>: it replaces that interface registration and decorates the
+    /// concrete <see cref="SharedUseDispatchService"/>.
+    /// </summary>
+    public static IServiceCollection AddSharedUseDispatchPersistence(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
+        services.TryAddSingleton<ISharedUseFanOutTracer>(sp =>
+            new ActivitySharedUseFanOutTracer(sp.GetRequiredService<GeoAssetsActivitySource>()));
+
+        services.Replace(ServiceDescriptor.Scoped<ISharedUseDispatchService>(sp =>
+            new ObservableSharedUseDispatchService(
+                sp.GetRequiredService<SharedUseDispatchService>(),
+                sp.GetRequiredService<GeoAssetsActivitySource>(),
+                sp.GetRequiredService<GeoAssetsMeter>(),
+                sp.GetService<TimeProvider>())));
 
         return services;
     }

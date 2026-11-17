@@ -70,7 +70,8 @@
         @if (HasTargets)
         {
             <h6 class="order-section-title">@L["occupancy.targets.title"]</h6>
-            <OrderTargetOccupancyPanel Order="Order" Principal="Principal" CanEdit="CanAnnotate" />
+            <OrderTargetOccupancyPanel Order="Order" Principal="Principal" CanEdit="CanAnnotate && !IsRecipientOnly"
+                                       CanOpenOccupancy="!IsRecipientOnly" />
         }
 
         <h6 class="order-section-title">@L["orders.dispatchHistory"]</h6>
@@ -118,7 +119,18 @@
         }
     </div>
 
-    <ServiceOrderDispatchDialog Visible="_dispatchDialogVisible"
-                                 OnConfirm="ConfirmDispatch"
+    @if (IsFanOut)
+    {
+        <SharedUseDispatchDialog Visible="_dispatchDialogVisible"
+                                 Order="Order"
+                                 Principal="Principal"
+                                 OnDispatched="OnSharedUseDispatched"
                                  OnCancel="() => _dispatchDialogVisible = false" />
+    }
+    else
+    {
+        <ServiceOrderDispatchDialog Visible="_dispatchDialogVisible"
+                                     OnConfirm="ConfirmDispatch"
+                                     OnCancel="() => _dispatchDialogVisible = false" />
+    }
 }

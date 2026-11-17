@@ -1,3 +1,4 @@
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
@@ -45,6 +46,11 @@ public static class WorkflowRestServiceExtensions
         // Staged occupancy changes (XD01-315) — same named client, same lifetime.
         services.AddSingleton(sp => new RestOrderOccupancyStagingService(BuildClient(sp, baseUrl)));
         services.AddSingleton<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<RestOrderOccupancyStagingService>());
+
+        // Shared-use dispatch (XD01-316) — one client behind both ports, same named client.
+        services.AddSingleton(sp => new RestSharedUseDispatchClient(BuildClient(sp, baseUrl)));
+        services.AddSingleton<ISharedUseDispatchService>(sp => sp.GetRequiredService<RestSharedUseDispatchClient>());
+        services.AddSingleton<ISharedUseDispatchPlanReader>(sp => sp.GetRequiredService<RestSharedUseDispatchClient>());
 
         return services;
     }

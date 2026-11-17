@@ -1357,6 +1357,71 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 .occupancy-form .is-invalid { border-color: var(--danger); }
 .occupancy-editor-actions { margin: 12px 0 0; }
 
+/* ─── Shared-use dispatch dialog (XD01-316) ──────────────────────────────── */
+
+.dialog-box.shared-use-dialog {
+    width: min(640px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+}
+
+.dialog-box .shared-use-intro { margin: 0 0 12px; }
+
+.shared-use-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px 16px;
+    margin: 0 0 12px;
+}
+.shared-use-summary dt {
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+.shared-use-summary dd { margin: 2px 0 0; font-size: 1rem; color: var(--text-primary); }
+
+.dialog-box .shared-use-notice {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--warning);
+    border-radius: 4px;
+    background: var(--surface-tint-weak);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+.dialog-box .shared-use-notice-error   { border-left-color: var(--danger); }
+.dialog-box .shared-use-notice-success { border-left-color: var(--success); }
+
+.shared-use-caveats {
+    margin: 0 0 12px;
+    padding-left: 18px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.shared-use-table { font-size: 0.82rem; color: var(--text-primary); }
+.shared-use-table caption { caption-side: top; padding-top: 0; font-size: 0.75rem; color: var(--text-secondary); }
+.shared-use-table th[scope="row"] { font-weight: 600; }
+.shared-use-organization { font-family: var(--bs-font-monospace); font-size: 0.75rem; word-break: break-all; }
+
+.shared-use-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.shared-use-badge-muted  { background: var(--surface-tint-strong); color: var(--text-primary); }
+.shared-use-badge-accent { background: var(--accent); color: var(--on-accent); }
+
+.shared-use-toggle { margin: 4px 0 12px; }
+.shared-use-dialog .dialog-actions { margin-top: 16px; }
+
+.order-received-badge { background: var(--accent); color: var(--on-accent); }
+
 /* ─── Confirm Dialog ─────────────────────────────────────────────────────── */
 
 .dialog-backdrop {

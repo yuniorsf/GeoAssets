@@ -30,15 +30,29 @@ public static class OrderOccupancyHostExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        var poleAssetTypeIds = PoleAssetTypeIds(configuration);
+
+        return services.AddOrderOccupancyStaging(options =>
+        {
+            foreach (var poleAssetTypeId in poleAssetTypeIds)
+                options.PoleAssetTypeIds.Add(poleAssetTypeId);
+        });
+    }
+
+    /// <summary>
+    /// The asset types this host treats as poles: the configured <see cref="PoleAssetTypeIdsKey"/>
+    /// when it lists any, otherwise <see cref="SeededPoleAssetTypeId"/> alone. Also what the
+    /// shared-use order types are registered with (XD01-316), so "a pole" means one thing here.
+    /// </summary>
+    public static IReadOnlyList<string> PoleAssetTypeIds(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         var configured = (configuration.GetSection(PoleAssetTypeIdsKey).Get<string[]>() ?? [])
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id.Trim())
             .ToList();
 
-        return services.AddOrderOccupancyStaging(options =>
-        {
-            foreach (var poleAssetTypeId in configured.Count > 0 ? configured : [SeededPoleAssetTypeId])
-                options.PoleAssetTypeIds.Add(poleAssetTypeId);
-        });
+        return configured.Count > 0 ? configured : [SeededPoleAssetTypeId];
     }
 }

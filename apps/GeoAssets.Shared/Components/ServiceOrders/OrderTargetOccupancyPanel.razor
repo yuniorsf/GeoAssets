@@ -1,7 +1,9 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Shared.Services.Occupancy
+@using GeoAssets.Workflow.Orders
 @using GeoAssets.Workflow.Targets
 @inject IServiceOrderTargetReader Targets
+@inject OrderTypeRegistry OrderTypes
 
 <div class="occupancy-targets">
     @if (_loadFailed)
@@ -20,12 +22,16 @@
     {
         <div class="table-responsive">
             <table class="table table-sm align-middle occupancy-table">
-                <caption>@L["occupancy.targets.caption"]</caption>
+                <caption>@L[CanOpenOccupancy ? "occupancy.targets.caption" : "sharedUse.targets.readOnlyCaption"]</caption>
                 <thead>
                     <tr>
                         <th scope="col">@L["occupancy.targets.target"]</th>
+                        <th scope="col">@L["sharedUse.targets.activities"]</th>
                         <th scope="col">@L["occupancy.table.status"]</th>
-                        <th scope="col">@L["occupancy.table.actions"]</th>
+                        @if (CanOpenOccupancy)
+                        {
+                            <th scope="col">@L["occupancy.table.actions"]</th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
@@ -34,13 +40,17 @@
                         var label = target.Alias ?? target.FeatureId;
                         <tr @key="target.Id" class="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "occupancy-row-selected" : null)">
                             <th scope="row">@label</th>
+                            <td>@ActivitiesOf(target)</td>
                             <td>@target.Status</td>
-                            <td>
-                                <button type="button" class="btn btn-outline btn-sm"
-                                        aria-label="@L.GetString("occupancy.targets.openFor", label)"
-                                        aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
-                                        @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
-                            </td>
+                            @if (CanOpenOccupancy)
+                            {
+                                <td>
+                                    <button type="button" class="btn btn-outline btn-sm"
+                                            aria-label="@L.GetString("occupancy.targets.openFor", label)"
+                                            aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
+                                            @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>
@@ -62,7 +72,7 @@
         </div>
     }
 
-    @if (_selected is not null)
+    @if (_selected is not null && CanOpenOccupancy)
     {
         <OccupancyChangeEditor OrderId="@Order.Id"
                                TargetId="@_selected.Id"

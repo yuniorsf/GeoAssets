@@ -78,6 +78,9 @@ builder.Services.AddOrderTypeRegistry(registry =>
 {
     ClandestineAttachmentOrderTypes.RegisterAll(registry);
     TenantAttachmentRequestOrderTypes.RegisterAll(registry);
+
+    // Shared pole use (XD01-316): the pole owner's order and the notice each occupant gets.
+    registry.RegisterSharedUseOrderTypes(builder.Configuration);
 });
 builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     connectionString,
@@ -118,6 +121,14 @@ builder.Services.AddObservableOrderTargetSelection();
 // the pole occupancy store and the change-set store AddWorkflowPersistence registered above.
 // Which asset types are poles is this host's to say — see OrderOccupancyHostExtensions.
 builder.Services.AddServerOrderOccupancyStaging(builder.Configuration);
+
+// Shared-use dispatch (XD01-316): a pole owner's order fans out into one order per occupant
+// organization, each with a notification staged on the transactional outbox in the same
+// transaction — this host's first use of the outbox, whose tables its migrations have carried
+// since XD01-228. The relay publishes only when Workflow:Outbox:Transport names a broker; see
+// SharedUseHostExtensions.AddServerWorkflowOutbox for what happens to messages until then.
+builder.Services.AddServerWorkflowOutbox(builder.Configuration);
+builder.Services.AddServerSharedUseDispatch();
 
 // IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
 // IServiceOrderRepository as every other order-driven workflow in this host.
@@ -220,6 +231,10 @@ app.MapServiceOrdersApi();
 // see ServiceOrderTargetsRestApiExtensions for the full endpoint list.
 app.MapServiceOrderTargetsApi();
 app.MapServiceOrderOccupancyApi();
+
+// Shared-use dispatch endpoints under /api/workflow (XD01-316) —
+// see SharedUseRestApiExtensions for the full endpoint list.
+app.MapSharedUseDispatchApi();
 
 // Project REST endpoints under /api/projects (XD01-141) —
 // see ProjectsRestApiExtensions for the full endpoint list.

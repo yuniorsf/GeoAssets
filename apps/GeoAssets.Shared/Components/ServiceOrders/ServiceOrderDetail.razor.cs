@@ -1,3 +1,5 @@
+using GeoAssets.Shared.Services.SharedUse;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Components;
@@ -30,7 +32,16 @@ public partial class ServiceOrderDetail
     /// <summary>Only orders whose type declares a target policy have targets, and so poles to edit the occupancy of (XD01-315).</summary>
     private bool HasTargets     => Order is not null && OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy is not null;
 
+    /// <summary>An order whose type fans out to its poles' occupants is dispatched through the shared-use dialog (XD01-316).</summary>
+    private bool IsFanOut       => Order is not null && SharedUseDispatchDialogState.IsFanOut(OrderTypes.Find(Order.OrderTypeId));
+
+    /// <summary>The viewer reaches the order only because it was dispatched to it: its targets are read-only and its poles' occupancy is not shown (XD01-316).</summary>
+    private bool IsRecipientOnly => Order is not null && Rules.IsDispatchRecipientOnly(Principal, Order);
+
     private void OpenDispatchDialog() => _dispatchDialogVisible = true;
+
+    /// <summary>The dialog stays open on its result; the order behind it is reloaded with its new status and children.</summary>
+    private Task OnSharedUseDispatched(SharedUseDispatchResult result) => OnChanged.InvokeAsync();
 
     private async Task ConfirmDispatch((string TargetId, DispatchTargetType TargetType, string? Note) result)
     {

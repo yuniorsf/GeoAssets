@@ -1,6 +1,8 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Providers;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Notifications;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
@@ -217,6 +219,38 @@ public static class WorkflowServiceExtensions
             sp.GetRequiredService<OrderOccupancyOptions>(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System));
         services.TryAddScoped<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<OrderOccupancyStagingService>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the shared-use dispatch (XD01-316): one scoped
+    /// <see cref="SharedUseDispatchService"/> behind both of its ports,
+    /// <see cref="ISharedUseDispatchService"/> and <see cref="ISharedUseDispatchPlanReader"/>.
+    ///
+    /// The host must have registered <see cref="OrderTypeRegistry"/> (with
+    /// <see cref="SharedUseOrderTypes"/> in it), <see cref="ServiceOrderRules"/>,
+    /// <see cref="IServiceOrderRepository"/>, both target ports, <see cref="IPoleOccupancyReader"/>,
+    /// an <see cref="IOutboxWriter"/> and an <see cref="IWorkflowUnitOfWork"/> over the same stores.
+    /// An <see cref="ISharedUseFanOutTracer"/> is used when one is registered.
+    /// </summary>
+    public static IServiceCollection AddSharedUseDispatch(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped(sp => new SharedUseDispatchService(
+            sp.GetRequiredService<IServiceOrderRepository>(),
+            sp.GetRequiredService<OrderTypeRegistry>(),
+            sp.GetRequiredService<ServiceOrderRules>(),
+            sp.GetRequiredService<IServiceOrderTargetReader>(),
+            sp.GetRequiredService<IServiceOrderTargetWriter>(),
+            sp.GetRequiredService<IPoleOccupancyReader>(),
+            sp.GetRequiredService<IOutboxWriter>(),
+            sp.GetRequiredService<IWorkflowUnitOfWork>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetService<ISharedUseFanOutTracer>()));
+        services.TryAddScoped<ISharedUseDispatchService>(sp => sp.GetRequiredService<SharedUseDispatchService>());
+        services.TryAddScoped<ISharedUseDispatchPlanReader>(sp => sp.GetRequiredService<SharedUseDispatchService>());
 
         return services;
     }

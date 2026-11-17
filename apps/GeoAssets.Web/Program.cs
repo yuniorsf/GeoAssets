@@ -22,6 +22,7 @@ using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Map;
 using GeoAssets.Web.Services.Session;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
@@ -213,7 +214,12 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
 // ── Service Order workflow — REST-backed via GeoAssets.Server (XD01-8). OrderTypes are also
 // loaded from the server below, overlaying the seeded defaults — see AddWorkflowRest's doc
 // comment. InMemory removed as an option (XD01-129) — Rest is the only supported backend.
-builder.Services.AddOrderTypeRegistry();
+builder.Services.AddOrderTypeRegistry(registry =>
+    // Shared pole use (XD01-316): the server seeds these two types in code, so they never come
+    // with the server-persisted overlay loaded below. The client needs their shape — the
+    // fan-out that selects the dispatch dialog, the activities a target lists — not the
+    // server's pole-type configuration, which stays the authority on what a pole is.
+    SharedUseOrderTypes.RegisterAll(registry, [SharedUseOrderTypes.SeededPoleAssetTypeId]));
 
 var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
     ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");

@@ -76,14 +76,16 @@ public partial class FieldServiceMigrationChainTests
     {
         await using var db = await NewContextOnEmptyDatabaseAsync();
 
-        await db.Database.MigrateAsync();
+        // Up to the last of the three: what follows describes the policies as they leave them.
+        // A later migration (XD01-316, dispatch recipients) adds policies of its own to
+        // "ServiceOrders" and "OrderDispatches"; the chain is taken to its head at the end.
+        await db.GetService<IMigrator>().MigrateAsync(MigrationId(db, OrderChildTablesRowLevelSecurityMigration));
 
         var chain = db.Database.GetMigrations().ToList();
         chain.Skip(chain.IndexOf(MigrationId(db, LastMigrationBeforeTheCorrection)) + 1).Take(3).Should().Equal(
             MigrationId(db, RowVersionTriggerMigration),
             MigrationId(db, IsolatedHistoryRowLevelSecurityMigration),
             MigrationId(db, OrderChildTablesRowLevelSecurityMigration));
-        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(chain);
         (await QueryAsync(db, CorrectedTablesRowLevelSecuritySql)).Should().Equal(
             CorrectedTables.Select(table => $"{table}:true:false:1"), "enabled, not forced (as in the shared database), exactly one policy each");
         (await QueryAsync(db, RowVersionTriggerSql)).Should().Equal(
@@ -106,6 +108,9 @@ public partial class FieldServiceMigrationChainTests
         orderPolicy[..4].Should().Equal("ServiceOrders", "tenant_isolation_policy", "PERMISSIVE", "ALL");
         orderPolicy[4].Should().Contain("\"OrganizationGrantMirror\"").And.Contain("\"ScopeId\"").And.Contain("'scopeId'");
         orderPolicy[5].Should().Be(orderPolicy[4]);
+
+        await db.Database.MigrateAsync();
+        (await db.Database.GetAppliedMigrationsAsync()).Should().Equal(chain);
     }
 
     [Fact]
@@ -190,10 +195,12 @@ public partial class FieldServiceMigrationChainTests
         (await QueryAsync(db, OccupancyRowLevelSecuritySql)).Should().Equal(
             "field_pole_occupancies:true:false:1", "field_pole_occupancy_entries:true:false:1");
 
-        // Up again.
+        // Up again: back to the correction first, where each table has the one policy it gives
+        // it (a later migration, XD01-316, adds more to two of them), then on to the head.
+        await migrator.MigrateAsync(orderChildren);
+        (await QueryAsync(db, CorrectedTablesRowLevelSecuritySql)).Should().Equal(CorrectedTables.Select(table => $"{table}:true:false:1"));
         await db.Database.MigrateAsync();
         (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
-        (await QueryAsync(db, CorrectedTablesRowLevelSecuritySql)).Should().Equal(CorrectedTables.Select(table => $"{table}:true:false:1"));
         (await ReadStringsAsync(scoped, VisibleRowCountsSql)).Should().Equal(oneOfEach);
         await AddOrderThroughEFAsync(connectionString, "ord-ef-after");
         (await QueryAsync(db, """SELECT length("RowVersion")::text AS "Value" FROM "ServiceOrders" WHERE "Id" = 'ord-ef-after'""")).Should().Equal("16");

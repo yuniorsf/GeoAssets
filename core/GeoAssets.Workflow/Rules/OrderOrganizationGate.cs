@@ -39,6 +39,17 @@ internal static class OrderOrganizationGate
         if ((context.Relationship & RecipientFlags) != OrderUserRelationship.None)
             return true;
 
+        return PassesWithoutDispatch(context, allowOrdersWithoutOrganization, utcNow);
+    }
+
+    /// <summary>
+    /// Conditions 1 and 2 of the gate on their own (and the host's choice for an order with no
+    /// organization): whether the principal reaches the order as a member of its organization or
+    /// through a covering grant, whatever was dispatched to it. A principal that passes the gate
+    /// and fails this reaches the order only as a recipient of one of its dispatches (XD01-316).
+    /// </summary>
+    public static bool PassesWithoutDispatch(RuleEvaluationContext context, bool allowOrdersWithoutOrganization, DateTime utcNow)
+    {
         var owner = context.Order.OrganizationId;
         if (owner == Guid.Empty)
             return allowOrdersWithoutOrganization;

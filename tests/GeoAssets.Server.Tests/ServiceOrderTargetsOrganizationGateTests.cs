@@ -1,6 +1,7 @@
 using System.Net;
 using FluentAssertions;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 using Xunit;
 using static GeoAssets.Server.Tests.OrderTargetsApiAssertions;
@@ -169,7 +170,7 @@ public class ServiceOrderTargetsOrganizationGateTests
     [Theory]
     [InlineData(DispatchTargetType.Organization)]
     [InlineData(DispatchTargetType.User)]
-    public async Task XD01_332_DispatchRecipientOfAnotherOrganization_KeepsViewAndAnnotate_AndIsForbiddenNotHiddenBeyondThem(DispatchTargetType targetType)
+    public async Task XD01_332_DispatchRecipientOfAnotherOrganization_KeepsView_AndIsForbiddenNotHiddenBeyondIt_ItsTargetsAreReadOnly(DispatchTargetType targetType)
     {
         await using var host = await HostAsync();
         var outsider = OrderTargetsApiHost.Identities["outsider"];
@@ -182,7 +183,13 @@ public class ServiceOrderTargetsOrganizationGateTests
         var edit = await client.PatchRawAsync("service-orders/ord-1/targets/ord-1-t001", PatchBody);
 
         (await read.ReadJsonAsync()).GetProperty("count").GetInt32().Should().Be(2);
-        edit.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // XD01-316: the rules still grant a recipient Annotate on the order, but the targets of an
+        // order dispatched to another organization are read-only for it. Until that decision this
+        // edit was a 204; it stays a 403 — the recipient is inside the gate — and never a 404.
+        var problem = await edit.ShouldBeProblemAsync(HttpStatusCode.Forbidden, WorkflowProblemCodes.Denied);
+        problem.GetProperty("reason").GetString().Should().Be(ServiceOrderRules.RecipientTargetsAreReadOnlyReason);
+        host.Store.Snapshot().Should().HaveCount(2);
     }
 
     [Fact]
