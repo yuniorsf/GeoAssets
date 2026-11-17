@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Security.Claims;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -40,21 +42,57 @@ public class TelemetryEnrichmentMiddlewareTests
         }
     }
 
-    private static (TelemetryEnrichmentMiddleware Middleware, CapturingLogger Logger, bool[] NextCalled) BuildMiddleware(
+    private ITenantContext? _requestTenantContext;
+
+    /// <summary>
+    /// <paramref name="tenantContext"/> is what the request's services resolve as
+    /// <see cref="ITenantContext"/> (null: the host registers none), as on a real host.
+    /// </summary>
+    private (TelemetryEnrichmentMiddleware Middleware, CapturingLogger Logger, bool[] NextCalled) BuildMiddleware(
         ITenantContext? tenantContext = null)
     {
+        _requestTenantContext = tenantContext;
         var logger = new CapturingLogger();
         var nextCalled = new bool[1];
         RequestDelegate next = _ => { nextCalled[0] = true; return Task.CompletedTask; };
-        return (new TelemetryEnrichmentMiddleware(next, logger, tenantContext), logger, nextCalled);
+        return (new TelemetryEnrichmentMiddleware(next, logger), logger, nextCalled);
     }
 
-    private static DefaultHttpContext AnonymousContext(string path = "/features", string method = "GET")
+    private DefaultHttpContext AnonymousContext(string path = "/features", string method = "GET")
     {
-        var ctx = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        if (_requestTenantContext is not null)
+        {
+            services.AddSingleton(_requestTenantContext);
+        }
+
+        var ctx = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
         ctx.Request.Path = path;
         ctx.Request.Method = method;
         return ctx;
+    }
+
+    [Fact]
+    public async Task Pipeline_WithScopedTenantContextAndScopeValidation_BuildsAndUsesTheRequestsTenant()
+    {
+        var organizationId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddScoped<ITenantContext>(_ => new FakeTenantContext(organizationId));
+        await using var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+
+        var nextCalled = false;
+        var app = new ApplicationBuilder(root);
+        app.UseMiddleware<TelemetryEnrichmentMiddleware>();
+        app.Run(_ => { nextCalled = true; return Task.CompletedTask; });
+        var pipeline = app.Build();
+
+        await using var requestScope = root.CreateAsyncScope();
+        using var activity = new Activity("test-request").Start();
+        await pipeline(new DefaultHttpContext { RequestServices = requestScope.ServiceProvider });
+
+        nextCalled.Should().BeTrue("building the pipeline must not resolve the scoped ITenantContext from the root provider (XD01-342)");
+        activity.GetTagItem("organization.id").Should().Be(organizationId.ToString());
     }
 
     [Fact]

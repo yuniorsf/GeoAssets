@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using GeoAssets.Core.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Infrastructure.Observability;
@@ -30,7 +31,10 @@ namespace GeoAssets.Infrastructure.Observability;
 /// <c>organization.id</c>/tenant id as an instrument tag for this reason — per-tenant metric
 /// drill-down goes through trace search on this span attribute instead, not a metric dimension.
 ///
-/// <paramref name="tenantContext"/> is optional: not every host registers
+/// The request's <see cref="ITenantContext"/> is resolved per request from
+/// <see cref="HttpContext.RequestServices"/>, never through the constructor: this middleware is
+/// built once from the root provider, and hosts register <see cref="ITenantContext"/> as scoped
+/// (XD01-342). It is optional: not every host registers
 /// <see cref="ITenantContext"/> (e.g. <c>GeoAssets.IpBilling.Server</c> doesn't), and this
 /// middleware must keep working — just without the extra field — when it isn't.
 ///
@@ -41,13 +45,13 @@ namespace GeoAssets.Infrastructure.Observability;
 /// </summary>
 public sealed class TelemetryEnrichmentMiddleware(
     RequestDelegate next,
-    ILogger<TelemetryEnrichmentMiddleware> logger,
-    ITenantContext? tenantContext = null)
+    ILogger<TelemetryEnrichmentMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        var tenantContext = context.RequestServices?.GetService<ITenantContext>();
         var activity = Activity.Current;
         activity?.SetTag("organization.id", tenantContext?.CurrentOrganizationId.ToString());
 
