@@ -263,6 +263,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     public void Add(GeoFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
+        StampOrganization(feature);
         var row = MapToRow(feature);
         _db.GeoEntities.Add(row);
         _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
@@ -275,6 +276,8 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     public void Update(GeoFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
+        RefuseRowsOfAnotherOrganization([feature.Id]);
+        StampOrganization(feature);
         feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = MapToRow(feature);
         _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
@@ -290,9 +293,11 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     {
         var list = features.ToList();
         var ids = list.Select(f => f.Id).ToList();
+        RefuseRowsOfAnotherOrganization(ids);
         _db.GeoEntityAttributes.Where(a => ids.Contains(a.EntityId)).ExecuteDelete();
         foreach (var f in list)
         {
+            StampOrganization(f);
             var row = MapToRow(f);
             // Upsert: EF will track whether to insert or update
             if (_db.GeoEntities.Find(f.Id) is null)
@@ -329,9 +334,12 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     public void LoadAll(IEnumerable<GeoFeature> features)
     {
         ArgumentNullException.ThrowIfNull(features);
+        var list = features.ToList();
+        RefuseRowsOfAnotherOrganization([.. list.Select(f => f.Id)]);
         _db.GeoEntities.RemoveRange(_db.GeoEntities);
-        foreach (var f in features)
+        foreach (var f in list)
         {
+            StampOrganization(f);
             _db.GeoEntities.Add(MapToRow(f));
             _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
         }
