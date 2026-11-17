@@ -1,0 +1,123 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Services.OrderTargets
+@using GeoAssets.Workflow.Targets
+@inject IOrderTargetSelectionService Selection
+
+<section class="order-selection-panel" aria-labelledby="order-selection-title" aria-busy="@(_session.IsBusy ? "true" : "false")">
+    <h6 id="order-selection-title" class="order-section-title">@L["orders.fromSelection.previewTitle"]</h6>
+    <p class="order-selection-intro">
+        @(Plan.IsFence ? L["orders.fromSelection.planFence"] : L.GetString("orders.fromSelection.planIds", Plan.IdentifierCount))
+    </p>
+
+    @if (_session.ErrorKey is not null)
+    {
+        <div class="occupancy-notice occupancy-notice-error" role="alert">
+            @L[_session.ErrorKey]
+            <button type="button" class="btn btn-link btn-sm" disabled="@_session.IsBusy" @onclick="() => PreviewAsync(1)">@L["orders.fromSelection.previewAgain"]</button>
+        </div>
+    }
+
+    @if (_session.Summary is null)
+    {
+        @if (_session.IsPreviewing)
+        {
+            <p class="empty-state" role="status">@L["orders.fromSelection.previewing"]</p>
+        }
+    }
+    else
+    {
+        var summary = _session.Summary;
+        <dl class="occupancy-summary order-selection-summary" aria-live="polite">
+            <div><dt>@L["orders.fromSelection.selected"]</dt><dd>@SelectedCount</dd></div>
+            <div><dt>@L["orders.fromSelection.matched"]</dt><dd>@summary.Preview.Matched</dd></div>
+            <div><dt>@L["orders.fromSelection.alreadyInOrder"]</dt><dd>@summary.Preview.AlreadyInOrder</dd></div>
+            <div><dt>@L["orders.fromSelection.toAdd"]</dt><dd>@summary.ToAdd</dd></div>
+            <div><dt>@L["orders.fromSelection.truncated"]</dt><dd>@summary.Preview.TruncatedByLimit</dd></div>
+            <div><dt>@L["orders.fromSelection.warnings"]</dt><dd>@summary.Preview.WarningCount</dd></div>
+            <div><dt>@L["orders.fromSelection.blocked"]</dt><dd>@summary.Preview.BlockedCount</dd></div>
+            @if (!Plan.IsFence)
+            {
+                <div><dt>@L["orders.fromSelection.notResolved"]</dt><dd>@summary.NotResolvedCount</dd></div>
+            }
+        </dl>
+
+        @if (summary.HasNothingToAdd)
+        {
+            <p class="occupancy-notice" role="status">@L["orders.fromSelection.nothingToAdd"]</p>
+        }
+
+        @if (summary.Preview.WarningCount + summary.Preview.BlockedCount > 0)
+        {
+            <p class="occupancy-notice" role="status">@L.GetString("orders.fromSelection.conflictNotice", summary.Preview.WarningCount, summary.Preview.BlockedCount)</p>
+        }
+
+        @if (summary.IsTruncated)
+        {
+            <div class="occupancy-notice order-selection-truncation">
+                <p id="order-selection-truncation-text" class="mb-1">@L.GetString("orders.fromSelection.truncationNotice", summary.ToAdd, summary.Preview.TruncatedByLimit)</p>
+                <div class="form-check">
+                    <input id="order-selection-accept-truncation" class="form-check-input" type="checkbox"
+                           aria-describedby="order-selection-truncation-text"
+                           checked="@_session.TruncationAccepted" disabled="@_session.IsBusy"
+                           @onchange="OnTruncationAcceptedChanged" />
+                    <label class="form-check-label" for="order-selection-accept-truncation">@L.GetString("orders.fromSelection.acceptTruncation", summary.ToAdd)</label>
+                </div>
+            </div>
+        }
+
+        @if (summary.Preview.FirstPage.TotalCount > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle occupancy-table">
+                    <caption>@L["orders.fromSelection.previewCaption"]</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">@L["occupancy.targets.target"]</th>
+                            <th scope="col">@L["orders.targets.conflict"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var target in summary.Preview.FirstPage.Items)
+                        {
+                            <tr @key="target.Id">
+                                <th scope="row">@(target.Alias ?? target.FeatureId)</th>
+                                <td>
+                                    @if (OrderTargetMessages.ConflictBadgeClass(target.ConflictLevel) is { } badge)
+                                    {
+                                        <span class="@badge">@L[OrderTargetMessages.ConflictKey(target.ConflictLevel)]</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="occupancy-cell-empty">@L[OrderTargetMessages.ConflictKey(target.ConflictLevel)]</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <ServiceOrderPager Page="_session.PreviewPage"
+                               PageSize="OrderTargetSelectionSession.PreviewPageSize"
+                               TotalCount="summary.Preview.FirstPage.TotalCount"
+                               ItemCount="summary.Preview.FirstPage.Items.Count"
+                               LabelKey="orders.fromSelection.previewPager"
+                               OnPageRequested="PreviewAsync" />
+        }
+    }
+
+    <div class="form-actions order-selection-actions">
+        <button type="button" class="btn btn-primary" disabled="@(!_session.CanApply)" aria-busy="@(_session.IsApplying ? "true" : "false")" @onclick="ApplyAsync">
+            @if (_session.IsApplying)
+            {
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span>@L["orders.fromSelection.applying"]</span>
+            }
+            else
+            {
+                @L.GetString("orders.fromSelection.apply", _session.Summary?.ToAdd ?? 0)
+            }
+        </button>
+        <button type="button" class="btn btn-secondary" disabled="@_session.IsApplying" @onclick="SkipAsync">@L["orders.fromSelection.skip"]</button>
+    </div>
+</section>

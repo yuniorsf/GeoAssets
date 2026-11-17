@@ -27,6 +27,18 @@
         <span>@L["map.select.clear"]</span>
     </button>
 
+    @if (OnCreateOrder.HasDelegate)
+    {
+        <button type="button"
+                class="btn btn-sm selection-btn"
+                disabled="@(!CanCreateOrder(Count, Busy))"
+                title="@L["map.select.createOrder.title"]"
+                @onclick="OnCreateOrder">
+            <span aria-hidden="true">＋</span>
+            <span>@L["map.select.createOrder"]</span>
+        </button>
+    }
+
     <span class="selection-count" role="status" aria-live="polite" aria-atomic="true">
         @if (Busy)
         {

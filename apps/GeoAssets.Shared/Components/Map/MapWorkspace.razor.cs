@@ -51,7 +51,7 @@ public partial class MapWorkspace
         Selection.Changed += OnSelectionChanged;
 
         _selectionCoordinator = new MapSelectionCoordinator(
-            SelectionSet, SelectionResolver, SelectionInterop, SelectionLogger, _mapDivId);
+            SelectionSet, SelectionResolver, SelectionInterop, SelectionLogger, _mapDivId, SelectionFence);
         _selectionCoordinator.StateChanged += OnSelectionToolsChanged;
     }
 
@@ -170,6 +170,11 @@ public partial class MapWorkspace
         if (!_selectionCoordinator.HandleClick(click.FeatureId))
             OnFeatureClicked(click.FeatureId);
     }
+
+    // XD01-312: the order screen takes the selection from the scoped IMapSelectionSet (and its
+    // fence from MapSelectionFenceMemory); the map only has to open it.
+    private void OpenCreateOrderFromSelection() =>
+        Navigation.NavigateTo(GeoAssets.Shared.Pages.ServiceOrders.CreateFromSelectionUri);
 
     // ─── Multi-candidate "Connect to…" picker (XD01-152) ───────────────────
 

@@ -28,6 +28,10 @@ public static class PanelStateServiceExtensions
         services.AddScoped<IMapSelectionSet, MapSelectionSet>();
         services.TryAddSingleton<IMapSelectionResolver, UnavailableMapSelectionResolver>();
 
+        // The fence the selection was made with, while it still is (XD01-312): lets an order
+        // created from the selection send that fence instead of a list of ids.
+        services.AddScoped<MapSelectionFenceMemory>();
+
         // Layer display and order focus (XD01-311). Both reach the map through the host's own
         // IMapInterop/IMapSelectionInterop registrations; IMapOrderFocus additionally needs the
         // workflow ports (IServiceOrderReader, IServiceOrderTargetReader) a host registers with

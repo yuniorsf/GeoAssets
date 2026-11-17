@@ -142,7 +142,7 @@ public sealed partial class SharedUseDispatchMessagesTests
         var components = Path.Combine(RepositoryRoot().FullName, "apps", "GeoAssets.Shared", "Components", "ServiceOrders");
         string[] files =
         [
-            "SharedUseDispatchDialog.razor", "SharedUseDispatchDialog.razor.cs", "OrderTargetOccupancyPanel.razor", "ServiceOrderList.razor",
+            "SharedUseDispatchDialog.razor", "SharedUseDispatchDialog.razor.cs", "OrderTargetOccupancyPanel.razor", "OrderTargetsTable.razor", "ServiceOrderList.razor",
         ];
 
         var named = files

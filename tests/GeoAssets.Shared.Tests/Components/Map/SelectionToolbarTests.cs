@@ -53,12 +53,21 @@ public class SelectionToolbarTests
             .Should().OnlyContain(k => new MapSelectionNotice(k, 0, 0).IsError);
     }
 
+    [Theory]
+    [InlineData(0, false, false)]
+    [InlineData(1, false, true)]
+    [InlineData(1, true, false)]
+    [InlineData(10_000, false, true)]
+    public void CanCreateOrder_OnceSomethingIsSelected_AndNothingIsResolving(int count, bool busy, bool expected) =>
+        SelectionToolbar.CanCreateOrder(count, busy).Should().Be(expected);
+
     // ── i18n ─────────────────────────────────────────────────────────────────
 
     private static readonly string[] _staticKeys =
     [
         "map.select.toolbar", "map.select.label", "map.select.tools", "map.select.clear",
-        "map.select.clear.title", "map.select.resolving", "map.select.notice.dismiss"
+        "map.select.clear.title", "map.select.resolving", "map.select.notice.dismiss",
+        "map.select.createOrder", "map.select.createOrder.title"
     ];
 
     private static IEnumerable<string> ToolbarKeys() =>

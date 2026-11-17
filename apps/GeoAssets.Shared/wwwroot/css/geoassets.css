@@ -1830,3 +1830,80 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     color: var(--text-secondary);
     font-size: 0.85rem;
 }
+
+/* ─── Order targets grid and create-from-selection (XD01-312) ───────────── */
+/* Theme tokens only: every colour below resolves in both Mocha and Latte. */
+
+.order-targets-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.order-targets-control {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.order-targets-control .form-select { width: auto; min-width: 9rem; }
+
+.order-targets-sort {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.order-targets-sort:hover { color: var(--accent); }
+
+.order-targets-sort:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.order-targets-sort-indicator { color: var(--accent); }
+
+.order-target-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.order-target-badge-warning { background: var(--warning); color: var(--on-accent); }
+.order-target-badge-danger  { background: var(--danger); color: var(--on-accent); }
+
+.order-selection-panel {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: var(--surface-tint-weak);
+}
+
+.order-selection-panel .order-section-title { margin-top: 0; }
+
+.order-selection-intro { font-size: 0.85rem; color: var(--text-secondary); }
+
+.order-selection-summary dd { font-variant-numeric: tabular-nums; }
+
+.order-selection-truncation .form-check-label { font-size: 0.85rem; }
+
+.order-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.order-from-selection-toggle { margin: 4px 0 12px; font-size: 0.87rem; }
+
+.order-from-selection-hint { color: var(--text-secondary); }
+
+.order-from-selection-limit { margin-top: 4px; padding-left: 6px; border-left: 3px solid var(--warning); color: var(--text-primary); }

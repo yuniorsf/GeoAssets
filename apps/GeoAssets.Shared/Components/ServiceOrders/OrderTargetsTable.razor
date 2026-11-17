@@ -1,0 +1,112 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Services.OrderTargets
+@using GeoAssets.Workflow.Targets
+@inject IServiceOrderTargetReader Targets
+
+<div class="order-targets-grid" aria-busy="@(_loading ? "true" : "false")">
+    <div class="order-targets-controls">
+        <label class="order-targets-control">
+            <span>@L["orders.targets.filterStatus"]</span>
+            <select class="form-select form-select-sm" @onchange="OnStatusChangedAsync">
+                <option value="" selected="@(_state.Status is null)">@L["orders.targets.anyStatus"]</option>
+                @foreach (var status in OrderTargetStatus.All)
+                {
+                    <option value="@status" selected="@(string.Equals(_state.Status, status, StringComparison.Ordinal))">@L[OrderTargetMessages.StatusKey(status)]</option>
+                }
+            </select>
+        </label>
+        <label class="order-targets-control">
+            <span>@L["orders.targets.filterConflict"]</span>
+            <select class="form-select form-select-sm" @onchange="OnConflictChangedAsync">
+                <option value="" selected="@(_state.Conflict is null)">@L["orders.targets.anyConflict"]</option>
+                @foreach (var level in Enum.GetValues<OrderTargetConflictLevel>())
+                {
+                    <option value="@level" selected="@(_state.Conflict == level)">@L[OrderTargetMessages.ConflictKey(level)]</option>
+                }
+            </select>
+        </label>
+        <label class="order-targets-control">
+            <span>@L["orders.targets.pageSize"]</span>
+            <select class="form-select form-select-sm" @onchange="OnPageSizeChangedAsync">
+                @foreach (var size in OrderTargetsGridState.PageSizeOptions)
+                {
+                    <option value="@size" selected="@(size == _state.PageSize)">@size</option>
+                }
+            </select>
+        </label>
+    </div>
+
+    @if (_loadFailed)
+    {
+        <p class="occupancy-notice occupancy-notice-error" role="alert">
+            @L["occupancy.targets.loadError"]
+            <button type="button" class="btn btn-link btn-sm" @onclick="LoadAsync">@L["orders.targets.retry"]</button>
+        </p>
+    }
+    else if (_page is null)
+    {
+        <p class="empty-state" role="status">@L["occupancy.editor.loading"]</p>
+    }
+    else if (_page.TotalCount == 0)
+    {
+        <p class="empty-state">@L[IsFiltered ? "orders.targets.emptyFiltered" : "occupancy.targets.empty"]</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle occupancy-table order-targets-table">
+                <caption>@L[CaptionKey]</caption>
+                <thead>
+                    <tr>
+                        @foreach (var column in Columns)
+                        {
+                            <th scope="col" aria-sort="@_state.AriaSort(column.SortKey)">
+                                <button type="button" class="order-targets-sort" @onclick="() => SortAsync(column.SortKey)">
+                                    @L[column.LabelKey]<span class="order-targets-sort-indicator" aria-hidden="true">@SortIndicator(column.SortKey)</span>
+                                </button>
+                            </th>
+                        }
+                        <th scope="col">@L["sharedUse.targets.activities"]</th>
+                        @if (RowActions is not null)
+                        {
+                            <th scope="col">@L["occupancy.table.actions"]</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var target in _page.Items)
+                    {
+                        <tr @key="target.Id" class="@(string.Equals(SelectedTargetId, target.Id, StringComparison.Ordinal) ? "occupancy-row-selected" : null)">
+                            <th scope="row">@(target.Alias ?? target.FeatureId)</th>
+                            <td>@target.FeatureId</td>
+                            <td>@L[OrderTargetMessages.StatusKey(target.Status)]</td>
+                            <td>
+                                @if (OrderTargetMessages.ConflictBadgeClass(target.ConflictLevel) is { } badge)
+                                {
+                                    <span class="@badge">@L[OrderTargetMessages.ConflictKey(target.ConflictLevel)]</span>
+                                }
+                                else
+                                {
+                                    <span class="occupancy-cell-empty">@L[OrderTargetMessages.ConflictKey(target.ConflictLevel)]</span>
+                                }
+                            </td>
+                            <td>@target.AddedAt.ToLocalTime()</td>
+                            <td>@ActivitiesOf(target, ActivityCatalog)</td>
+                            @if (RowActions is not null)
+                            {
+                                <td>@RowActions(target)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <ServiceOrderPager Page="_state.Page"
+                           PageSize="_state.PageSize"
+                           TotalCount="_page.TotalCount"
+                           ItemCount="_page.Items.Count"
+                           LabelKey="occupancy.targets.pager"
+                           OnPageRequested="GoToPageAsync" />
+    }
+</div>

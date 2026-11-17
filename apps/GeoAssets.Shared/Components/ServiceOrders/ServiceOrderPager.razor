@@ -1,0 +1,19 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+<div class="assets-table-pager">
+    <span class="assets-table-pager-summary" role="status" aria-live="polite" aria-atomic="true">@Summary()</span>
+    <nav aria-label="@L[LabelKey]">
+        <ul class="pagination pagination-sm mb-0">
+            @foreach (var step in Steps)
+            {
+                var enabled = IsEnabled(step);
+                <li class="page-item @(enabled ? null : "disabled")">
+                    <button type="button" class="page-link"
+                            disabled="@(!enabled)"
+                            aria-disabled="@(enabled ? "false" : "true")"
+                            @onclick="() => RequestAsync(step)">@L[StepLabelKey(step)]</button>
+                </li>
+            }
+        </ul>
+    </nav>
+</div>
