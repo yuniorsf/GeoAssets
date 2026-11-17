@@ -15,7 +15,6 @@ namespace GeoAssets.Server.Migrations
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
-#pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
@@ -448,10 +447,8 @@ namespace GeoAssets.Server.Migrations
 
             modelBuilder.Entity("GeoAssets.Identity.Authorization.Models.UserRole", b =>
                 {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("RoleId")
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("AssignedAt")
@@ -461,9 +458,27 @@ namespace GeoAssets.Server.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.HasKey("UserId", "RoleId");
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
 
                     b.HasIndex("RoleId");
+
+                    b.HasIndex("UserId", "RoleId")
+                        .IsUnique()
+                        .HasFilter("\"OrganizationId\" IS NULL");
+
+                    b.HasIndex("UserId", "RoleId", "OrganizationId")
+                        .IsUnique();
 
                     b.ToTable("UserRoles", (string)null);
                 });
@@ -550,6 +565,11 @@ namespace GeoAssets.Server.Migrations
 
             modelBuilder.Entity("GeoAssets.Identity.Authorization.Models.UserRole", b =>
                 {
+                    b.HasOne("GeoAssets.Identity.Authorization.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("GeoAssets.Identity.Authorization.Models.AppRole", "Role")
                         .WithMany("UserRoles")
                         .HasForeignKey("RoleId")
@@ -561,6 +581,8 @@ namespace GeoAssets.Server.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Organization");
 
                     b.Navigation("Role");
 
@@ -602,7 +624,6 @@ namespace GeoAssets.Server.Migrations
                 {
                     b.Navigation("Users");
                 });
-#pragma warning restore 612, 618
         }
     }
 }

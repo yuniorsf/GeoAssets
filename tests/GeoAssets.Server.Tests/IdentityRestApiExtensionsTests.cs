@@ -225,6 +225,10 @@ public class IdentityRestApiExtensionsTests
         public Task AddAsync(AppUser user, CancellationToken ct = default) => throw new NotSupportedException();
         public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AssignRoleOnOrganizationAsync(Guid userId, Guid roleId, Guid organizationId, string? assignedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task RemoveRoleOnOrganizationAsync(Guid userId, Guid roleId, Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<UserRole>> GetScopedRoleAssignmentsAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<UserRole>> GetRoleAssignmentsOnOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeAdminRoleRepository(
@@ -477,10 +481,8 @@ public class IdentityRestApiExtensionsTests
         public Task UpdateAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         // Never fire — this test double is never actually invoked, no test relies on them.
-#pragma warning disable CS0067
-        public event EventHandler<Project>? ProjectSaved;
-        public event EventHandler<Guid>? ProjectDeleted;
-#pragma warning restore CS0067
+        public event EventHandler<Project>? ProjectSaved { add { } remove { } }
+        public event EventHandler<Guid>? ProjectDeleted { add { } remove { } }
     }
 
     /// <summary>Drives the XD01-144 default-Project-seed assertion on org creation.</summary>
@@ -505,10 +507,8 @@ public class IdentityRestApiExtensionsTests
         public Task UpdateAsync(Project project, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         // Never fire — AddAsync records to Added directly, no test relies on these.
-#pragma warning disable CS0067
-        public event EventHandler<Project>? ProjectSaved;
-        public event EventHandler<Guid>? ProjectDeleted;
-#pragma warning restore CS0067
+        public event EventHandler<Project>? ProjectSaved { add { } remove { } }
+        public event EventHandler<Guid>? ProjectDeleted { add { } remove { } }
     }
 
     /// <summary>Drives the XD01-69 invitations endpoint tests below.</summary>

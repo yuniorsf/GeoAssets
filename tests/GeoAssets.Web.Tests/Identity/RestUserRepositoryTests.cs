@@ -145,6 +145,10 @@ public class RestUserRepositoryTests
         yield return [Call((IUserRepository r) => r.AddAsync(new AppUser { CreatedAt = default }))];
         yield return [Call((IUserRepository r) => r.AssignRoleAsync(Guid.NewGuid(), Guid.NewGuid()))];
         yield return [Call((IUserRepository r) => r.RemoveRoleAsync(Guid.NewGuid(), Guid.NewGuid()))];
+        yield return [Call((IUserRepository r) => r.AssignRoleOnOrganizationAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()))];
+        yield return [Call((IUserRepository r) => r.RemoveRoleOnOrganizationAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()))];
+        yield return [Call((IUserRepository r) => r.GetScopedRoleAssignmentsAsync(Guid.NewGuid()))];
+        yield return [Call((IUserRepository r) => r.GetRoleAssignmentsOnOrganizationAsync(Guid.NewGuid()))];
 
         static Func<IUserRepository, Task> Call(Func<IUserRepository, Task> f) => f;
     }

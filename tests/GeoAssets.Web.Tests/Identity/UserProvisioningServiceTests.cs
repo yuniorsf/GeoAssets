@@ -92,6 +92,10 @@ public class UserProvisioningServiceTests
         public Task UpdateAsync(AppUser user, CancellationToken ct = default) => throw new NotSupportedException();
         public Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task AssignRoleOnOrganizationAsync(Guid userId, Guid roleId, Guid organizationId, string? assignedBy = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task RemoveRoleOnOrganizationAsync(Guid userId, Guid roleId, Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<UserRole>> GetScopedRoleAssignmentsAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<UserRole>> GetRoleAssignmentsOnOrganizationAsync(Guid organizationId, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     /// <summary>
