@@ -194,6 +194,31 @@ public class EFOrderTypeRepositoryTests
         (await new EFOrderTypeRepository(freshContext).GetByIdAsync("inspection"))!.AttributesSchemaJson.Should().BeNull();
     }
 
+    // ── RecipientAccess (XD01-333) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecipientAccess_IsAdded_Updated_AndReadBackFromAFreshContext()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        await repo.AddAsync(new OrderType { Id = "notice", DisplayName = "Notice", RecipientAccess = OrderRecipientAccess.Execute });
+        await repo.AddAsync(new OrderType { Id = "plain", DisplayName = "Plain" });
+        await repo.SaveChangesAsync();
+
+        using (var freshContext = fixture.NewContext())
+        {
+            var reader = new EFOrderTypeRepository(freshContext);
+            (await reader.GetByIdAsync("notice"))!.RecipientAccess.Should().Be(OrderRecipientAccess.Execute);
+            (await reader.GetByIdAsync("plain"))!.RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
+        }
+
+        await repo.UpdateAsync(new OrderType { Id = "notice", DisplayName = "Notice", RecipientAccess = OrderRecipientAccess.Edit });
+        await repo.SaveChangesAsync();
+
+        using var afterUpdate = fixture.NewContext();
+        (await new EFOrderTypeRepository(afterUpdate).GetByIdAsync("notice"))!.RecipientAccess.Should().Be(OrderRecipientAccess.Edit);
+    }
+
     // ── TargetPolicy (XD01-304) ───────────────────────────────────────────────
 
     private static OrderTargetPolicy FullTargetPolicy() => new()

@@ -141,7 +141,7 @@ public sealed class SharedUseDispatchServiceTests
         var act = () => _fixture.Sut.DispatchAsync(childId, [], recipient, CancellationToken.None);
 
         (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which.Evaluation!.Reason
-            .Should().Be(SharedUseDispatchService.OwnerOnlyReason, "a supervisor's dispatch right does not make an occupant the pole owner");
+            .Should().Be(ServiceOrderRules.RecipientOrderIsReadOnlyReason, "XD01-333: the notice type only informs its occupant, which the rules refuse before the owner-only check");
     }
 
     // ── Order types (DISP-G4, DISP-G5) ────────────────────────────────────────

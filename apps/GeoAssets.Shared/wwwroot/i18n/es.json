@@ -378,6 +378,7 @@
   "orderApproval.error.unexpected": "No se pudo aprobar la orden. Inténtelo de nuevo.",
   "sharedUse.targets.activities": "Actividades",
   "sharedUse.targets.readOnlyCaption": "Objetivos de esta orden y el trabajo pedido en cada uno. Despachada a su organización: solo lectura.",
+  "sharedUse.targets.workCaption": "Objetivos de esta orden y el trabajo pedido en cada uno. Despachada a su organización: registre el trabajo que realiza en cada objetivo.",
   "sharedUse.dispatch.title": "Despachar a los ocupantes de los postes",
   "sharedUse.dispatch.intro": "Se crea una orden para cada organización ocupante con contrato vigente en estos postes.",
   "sharedUse.dispatch.loading": "Calculando a quién despachar…",

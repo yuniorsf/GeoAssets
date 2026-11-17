@@ -16,7 +16,7 @@ namespace GeoAssets.Security.Tests;
 /// A shared-use order is fanned out into one child order per occupant organization. The child
 /// stays the pole owner's and is dispatched to its occupant. These tests pin what that occupant
 /// can do in the database: read the order dispatched to it, its dispatches and its targets;
-/// update the order without relabelling it; and nothing else — not the parent, not another
+/// and — its order being of a type that only informs it (XD01-333) — nothing else — not the parent, not another
 /// occupant's child, not a target, not a dispatch row, not the occupancy behind it. And that
 /// nobody else gained anything.
 /// </summary>
@@ -118,7 +118,7 @@ public sealed class DispatchRecipientRowLevelSecurityTests
     // ── The order itself: update yes, relabel no, insert and delete no ────────
 
     [Fact]
-    public async Task Orders_ARecipient_CanUpdateTheOrderDispatchedToIt_ButNotInsertOrDeleteOne()
+    public async Task Orders_ARecipientOfAnInformOrder_CanNeitherUpdateNorInsertNorDeleteOne()
     {
         await SeedAsync();
         await using var connection = await OpenScopedRoleAsync();
@@ -130,7 +130,7 @@ public sealed class DispatchRecipientRowLevelSecurityTests
         var deleted = await DeleteOrderAsync(connection, ChildA);
         var insertUnderOwner = async () => await InsertOrderAsync(connection, "dr-forged", Owner);
 
-        accepted.Should().Be(1, "accepting or annotating an order stamps it");
+        accepted.Should().Be(0, "XD01-333: the order's type has no row in \"OrderTypes\", so it only informs its recipient");
         onParent.Should().Be(0);
         onOthers.Should().Be(0);
         deleted.Should().Be(0, "no policy lets a recipient delete");
@@ -146,8 +146,8 @@ public sealed class DispatchRecipientRowLevelSecurityTests
         await using var connection = await OpenScopedRoleAsync();
 
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, OccupantA);
-        var recipientSteals = async () => await RelabelAsync(connection, ChildA, OccupantA);
-        (await recipientSteals.Should().ThrowAsync<PostgresException>()).Which.SqlState.Should().Be("42501");
+        (await RelabelAsync(connection, ChildA, OccupantA)).Should().Be(
+            0, "XD01-333: an Inform recipient updates no order at all; a recipient of an Edit order is refused by RecipientAccessRowLevelSecurityTests' facts");
 
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, Grantee);
         var granteeSteals = async () => await RelabelAsync(connection, Parent, Grantee);

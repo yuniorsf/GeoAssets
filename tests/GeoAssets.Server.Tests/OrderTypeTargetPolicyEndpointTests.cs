@@ -177,4 +177,55 @@ public class OrderTypeTargetPolicyEndpointTests
         var stored = await client.GetFromJsonAsync<OrderType>(PoleInspectionUri, ClientOptions);
         stored!.TargetPolicy.Should().BeEquivalentTo(FullPolicy());
     }
+
+    // ── RecipientAccess (XD01-333) ────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(OrderRecipientAccess.Inform)]
+    [InlineData(OrderRecipientAccess.Execute)]
+    [InlineData(OrderRecipientAccess.Edit)]
+    public async Task PostAndPut_RoundTripRecipientAccess(OrderRecipientAccess access)
+    {
+        using var server = await BuildServerAsync();
+        using var client = server.CreateClient();
+
+        var created = await client.PostAsJsonAsync(OrderTypesUri, new OrderType { Id = "pole-inspection", DisplayName = "Pole inspection" }, ClientOptions);
+        var afterCreate = await client.GetFromJsonAsync<OrderType>(PoleInspectionUri, ClientOptions);
+        var replaced = await client.PutAsJsonAsync(
+            PoleInspectionUri, new OrderType { Id = "pole-inspection", DisplayName = "Pole inspection", RecipientAccess = access }, ClientOptions);
+        var afterReplace = await client.GetFromJsonAsync<OrderType>(PoleInspectionUri, ClientOptions);
+
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        afterCreate!.RecipientAccess.Should().Be(OrderRecipientAccess.Inform, "a type that says nothing only informs its recipients");
+        replaced.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        afterReplace!.RecipientAccess.Should().Be(access);
+    }
+
+    [Theory]
+    [InlineData("POST", 3)]
+    [InlineData("POST", -1)]
+    [InlineData("PUT", 9)]
+    public async Task PostAndPut_ARecipientAccessOutsideTheEnumeration_Returns400_AndStoresNothing(string verb, int recipientAccess)
+    {
+        using var server = await BuildServerAsync();
+        using var client = server.CreateClient();
+        if (string.Equals(verb, "PUT", StringComparison.Ordinal))
+            await client.PostAsJsonAsync(OrderTypesUri, new OrderType { Id = "pole-inspection", DisplayName = "Pole inspection" }, ClientOptions);
+        using var body = new StringContent(
+            $$"""{"id":"pole-inspection","displayName":"Pole inspection","recipientAccess":{{recipientAccess}}}""",
+            System.Text.Encoding.UTF8, "application/json");
+
+        var response = string.Equals(verb, "PUT", StringComparison.Ordinal)
+            ? await client.PutAsync(PoleInspectionUri, body)
+            : await client.PostAsync(OrderTypesUri, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        problem.RootElement.GetProperty("errors")[0].GetString().Should().Contain("recipientAccess");
+        var stored = await client.GetAsync(PoleInspectionUri);
+        if (string.Equals(verb, "PUT", StringComparison.Ordinal))
+            (await stored.Content.ReadFromJsonAsync<OrderType>(ClientOptions))!.RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
+        else
+            stored.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

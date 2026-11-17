@@ -45,6 +45,7 @@ public sealed partial class ServiceOrderRules
     private readonly List<IOrderCreationRule>  _creationRules;
     private readonly bool                      _allowOrdersWithoutOrganization;
     private readonly TimeProvider              _timeProvider;
+    private readonly OrderTypeRegistry?        _orderTypeRegistry;
 
     /// <param name="orderTypeRegistry">
     /// Optional. When supplied, <see cref="Evaluate"/> also consults each order type's
@@ -87,6 +88,7 @@ public sealed partial class ServiceOrderRules
     {
         _allowOrdersWithoutOrganization = allowOrdersWithoutOrganization;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _orderTypeRegistry = orderTypeRegistry;
 
         _rules =
         [
@@ -160,8 +162,9 @@ public sealed partial class ServiceOrderRules
     /// <summary>
     /// Evaluates whether <paramref name="principal"/> may perform
     /// <paramref name="action"/> on <paramref name="order"/>: the organization gate first
-    /// (see the class summary), then the rule chain. <see cref="RuleEvaluationResult.Code"/>
-    /// tells the two kinds of refusal apart.
+    /// (see the class summary), then the rule chain, held for a principal that reaches the order only
+    /// through a dispatch to its type's <see cref="OrderType.RecipientAccess"/> (XD01-333, see
+    /// <c>LimitToRecipientAccess</c>). <see cref="RuleEvaluationResult.Code"/> tells the refusals apart.
     /// </summary>
     public RuleEvaluationResult Evaluate(
         WorkflowPrincipal principal,
@@ -180,7 +183,7 @@ public sealed partial class ServiceOrderRules
                 action, "The order is outside the principal's organization.", RuleDenialCode.OutsideOrganization);
         }
 
-        return EvaluateChain(action, context);
+        return LimitToRecipientAccess(EvaluateChain(action, context), context);
     }
 
     /// <summary>

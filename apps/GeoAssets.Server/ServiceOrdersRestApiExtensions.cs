@@ -231,7 +231,9 @@ public static class ServiceOrdersRestApiExtensions
             if (existing is null) return Results.NotFound();
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
-            var verdict = rules.Evaluate(principal, OrderActionType.Annotate, existing);
+            // XD01-333: a recipient of the order's dispatch replaces it only when the order's type
+            // lets it edit the order, and even then never changes what the order is.
+            var verdict = rules.EvaluateReplace(principal, existing, order);
             if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             try
@@ -376,7 +378,7 @@ public static class ServiceOrdersRestApiExtensions
         {
             var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
             if (orderType is null) return Results.BadRequest("Invalid order type.");
-            if (TargetPolicyProblem(orderType) is { } problem) return problem;
+            if (OrderTypeProblem(orderType) is { } problem) return problem;
             await repo.AddAsync(orderType).ConfigureAwait(false);
             await repo.SaveChangesAsync().ConfigureAwait(false);
             return Results.Created(new Uri($"{prefix}/order-types/{orderType.Id}", UriKind.Relative), null);
@@ -387,7 +389,7 @@ public static class ServiceOrdersRestApiExtensions
             var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
             if (orderType is null) return Results.BadRequest("Invalid order type.");
             if (!string.Equals(orderType.Id, id, StringComparison.Ordinal)) return Results.BadRequest("Route id does not match body id.");
-            if (TargetPolicyProblem(orderType) is { } problem) return problem;
+            if (OrderTypeProblem(orderType) is { } problem) return problem;
             if (await repo.GetByIdAsync(id).ConfigureAwait(false) is null) return Results.NotFound();
 
             await repo.UpdateAsync(orderType).ConfigureAwait(false);
@@ -423,13 +425,23 @@ public static class ServiceOrdersRestApiExtensions
     }
 
     /// <summary>
-    /// Rejects an order type whose <see cref="OrderType.TargetPolicy"/> breaks its own invariants
-    /// before it is stored: <see cref="OrderTypeRegistry"/> validates the same policy when it
-    /// loads order types at startup, so a stored invalid policy would stop the host from starting.
-    /// Returns null when there is no policy or the policy is valid.
+    /// Rejects an order type whose <see cref="OrderType.RecipientAccess"/> is not one of the
+    /// enumeration's values (XD01-333), or whose <see cref="OrderType.TargetPolicy"/> breaks its
+    /// own invariants, before it is stored: <see cref="OrderTypeRegistry"/> validates the same
+    /// policy when it loads order types at startup, so a stored invalid policy would stop the host
+    /// from starting. Returns null when the type can be stored.
     /// </summary>
-    private static IResult? TargetPolicyProblem(OrderType orderType)
+    private static IResult? OrderTypeProblem(OrderType orderType)
     {
+        if (!Enum.IsDefined(orderType.RecipientAccess))
+        {
+            return Results.BadRequest(new
+            {
+                orderTypeId = orderType.Id,
+                errors = new[] { $"recipientAccess must be one of {string.Join(", ", Enum.GetValues<OrderRecipientAccess>().Select(a => $"{(int)a} ({a})"))}." },
+            });
+        }
+
         try
         {
             orderType.TargetPolicy?.Validate(orderType.Id);

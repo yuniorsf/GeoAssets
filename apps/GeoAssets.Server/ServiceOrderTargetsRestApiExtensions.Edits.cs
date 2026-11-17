@@ -26,7 +26,7 @@ public static partial class ServiceOrderTargetsRestApiExtensions
             if (!raw.TryGetProperty("version", out _))
                 return WorkflowProblemResults.Validation("version is required.");
 
-            var access = await OrderTargetEndpointSupport.ForEditAsync(id, orders, rules, principalFactory, ct).ConfigureAwait(false);
+            var access = await OrderTargetEndpointSupport.ForEditAsync(id, OrderTargetWrite.RecordWork, orders, rules, principalFactory, ct).ConfigureAwait(false);
             if (access.Problem is not null) return access.Problem;
 
             var current = await reader.GetByIdAsync(id, targetId, ct).ConfigureAwait(false);
@@ -93,7 +93,7 @@ public static partial class ServiceOrderTargetsRestApiExtensions
             if (bodyProblem is not null) return bodyProblem;
             if (OrderTargetEndpointSupport.CheckIds(body!.TargetIds, "targetIds") is { } idsProblem) return idsProblem;
 
-            var access = await OrderTargetEndpointSupport.ForEditAsync(id, orders, rules, principalFactory, ct).ConfigureAwait(false);
+            var access = await OrderTargetEndpointSupport.ForEditAsync(id, OrderTargetWrite.AddOrRemove, orders, rules, principalFactory, ct).ConfigureAwait(false);
             if (access.Problem is not null) return access.Problem;
 
             var removed = await writer.RemoveAsync(id, body.TargetIds!, ct).ConfigureAwait(false);

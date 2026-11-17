@@ -209,16 +209,12 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         var order = await _orders.GetByIdAsync(request.OrderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"ServiceOrder '{request.OrderId}' not found.");
 
-        var verdict = _rules.Evaluate(principal, action, order);
+        // XD01-316/333: applying a selection adds targets, which a recipient of the order's dispatch never may.
+        var verdict = action == OrderActionType.Annotate
+            ? _rules.EvaluateTargetWrite(principal, order, OrderTargetWrite.AddOrRemove)
+            : _rules.Evaluate(principal, action, order);
         if (!verdict.Allowed)
             throw new OrderActionDeniedException(order.Id, verdict);
-
-        // XD01-316: a recipient of the order's dispatch may annotate the order, never add to its targets.
-        if (action == OrderActionType.Annotate && _rules.IsDispatchRecipientOnly(principal, order))
-        {
-            throw new OrderActionDeniedException(
-                order.Id, RuleEvaluationResult.Deny(action, ServiceOrderRules.RecipientTargetsAreReadOnlyReason));
-        }
 
         var orderType = _orderTypes.Find(order.OrderTypeId)
             ?? throw new KeyNotFoundException($"Order type '{order.OrderTypeId}' is not registered.");

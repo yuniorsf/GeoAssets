@@ -25,4 +25,11 @@ public enum RuleDenialCode
 
     /// <summary>The principal passed the organization gate and no rule granted the action.</summary>
     NoRuleGranted = 4,
+
+    /// <summary>
+    /// The rule chain allowed the action, and the principal reaches the order only as a recipient
+    /// of its dispatch, which the order type's <see cref="Orders.OrderRecipientAccess"/> does not
+    /// let do it (XD01-333).
+    /// </summary>
+    DeniedByRecipientAccess = 5,
 }

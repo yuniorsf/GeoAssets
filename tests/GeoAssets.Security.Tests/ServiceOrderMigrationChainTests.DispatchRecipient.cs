@@ -118,10 +118,12 @@ public partial class ServiceOrderMigrationChainTests
         (await QueryAsync(db, DispatchesRowLevelSecuritySql)).Should().Equal("false:false");
         (await QueryAsync(db, StoredDispatchRowsSql)).Should().Equal("ord-1:2:1");
 
-        // Up again.
-        await db.Database.MigrateAsync();
-        (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
+        // Up again — to this migration, whose policies and functions are counted, then to the head
+        // (XD01-333's migration adds one policy and two functions of its own).
+        await migrator.MigrateAsync(migration);
         (await QueryAsync(db, DispatchRecipientPoliciesSql)).Should().HaveCount(8);
         (await QueryAsync(db, DispatchRecipientFunctionsSql)).Should().HaveCount(3);
+        await db.Database.MigrateAsync();
+        (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
     }
 }

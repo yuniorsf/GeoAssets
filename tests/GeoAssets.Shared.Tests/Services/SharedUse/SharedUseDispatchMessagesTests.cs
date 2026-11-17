@@ -20,7 +20,7 @@ public sealed partial class SharedUseDispatchMessagesTests
     private static readonly string[] _staticKeys =
     [
         "orders.receivedBadge", "orders.receivedBadgeTitle",
-        "sharedUse.targets.activities", "sharedUse.targets.readOnlyCaption",
+        "sharedUse.targets.activities", "sharedUse.targets.readOnlyCaption", "sharedUse.targets.workCaption",
         "sharedUse.dispatch.title", "sharedUse.dispatch.intro", "sharedUse.dispatch.loading", "sharedUse.dispatch.nothingNew",
         "sharedUse.dispatch.confirm", "sharedUse.dispatch.dispatching", "sharedUse.dispatch.result", "sharedUse.dispatch.close",
         "sharedUse.summary.poles", "sharedUse.summary.recipients", "sharedUse.summary.newOrders",
