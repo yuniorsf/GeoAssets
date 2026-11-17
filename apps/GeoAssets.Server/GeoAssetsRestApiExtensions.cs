@@ -56,6 +56,7 @@ public static class GeoAssetsRestApiExtensions
 
         MapFeaturesApi(routes, prefix, opts);
         MapAssetTypesApi(routes, prefix, opts);
+        MapLayersApi(routes, prefix, opts);
         MapMutationBatchesApi(routes, prefix, opts);
         MapGisExportApi(routes, prefix);
 
@@ -321,6 +322,71 @@ public static class GeoAssetsRestApiExtensions
             }
 
             provider.DeleteAssetType(id);
+            return Results.NoContent();
+        })
+            .RequireAuthorization("features:delete");
+    }
+
+    /// <summary>
+    /// Layer / layer-rule routes (XD01-153), mirroring <see cref="MapAssetTypesApi"/>. Unlike
+    /// <c>DELETE /asset-types/{id}</c> these run the subject-only policy gate alone:
+    /// <see cref="Layer"/> and <see cref="LayerRule"/> carry no owning organization, so there is
+    /// no resource for <see cref="OrgResourceAuthorizationHandler"/> to evaluate.
+    /// </summary>
+    private static void MapLayersApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        MapLayerRoutes(routes, prefix, opts);
+        MapLayerRuleRoutes(routes, prefix, opts);
+    }
+
+    private static void MapLayerRoutes(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapGet($"{prefix}/layers", (IAssetProvider provider) =>
+            Results.Json(provider.GetLayers(), opts))
+            .RequireAuthorization("features:read");
+
+        routes.MapPost($"{prefix}/layers", async (HttpRequest req, IAssetProvider provider) =>
+        {
+            var layer = await JsonSerializer.DeserializeAsync<Layer>(req.Body, opts).ConfigureAwait(false);
+            if (layer is null) return Results.BadRequest("Invalid layer.");
+            provider.AddLayer(layer);
+            return Results.Created(new Uri($"{prefix}/layers/{layer.Id}", UriKind.Relative), null);
+        })
+            .RequireAuthorization("features:edit");
+
+        routes.MapDelete($"{prefix}/layers/{{id}}", (Guid id, IAssetProvider provider) =>
+        {
+            provider.DeleteLayer(id);
+            return Results.NoContent();
+        })
+            .RequireAuthorization("features:delete");
+    }
+
+    private static void MapLayerRuleRoutes(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        // IAssetProvider.GetLayerRules is per asset type, but a REST client needs every rule at
+        // startup — so the unfiltered form fans out over the provider's asset types.
+        routes.MapGet($"{prefix}/layer-rules", (Guid? assetTypeId, IAssetProvider provider) =>
+        {
+            IReadOnlyList<LayerRule> rules = assetTypeId is { } id
+                ? provider.GetLayerRules(id)
+                : [.. provider.GetAssetTypes().SelectMany(t => provider.GetLayerRules(t.Id))];
+            return Results.Json(rules, opts);
+        })
+            .RequireAuthorization("features:read");
+
+        routes.MapPost($"{prefix}/layer-rules", async (HttpRequest req, IAssetProvider provider) =>
+        {
+            var layerRule = await JsonSerializer.DeserializeAsync<LayerRule>(req.Body, opts).ConfigureAwait(false);
+            if (layerRule is null) return Results.BadRequest("Invalid layer rule.");
+            provider.AddLayerRule(layerRule);
+            return Results.Created(new Uri($"{prefix}/layer-rules/{layerRule.Id}", UriKind.Relative), null);
+        })
+            .RequireAuthorization("features:edit");
+
+        routes.MapDelete($"{prefix}/layer-rules/{{id}}", (Guid id, IAssetProvider provider) =>
+        {
+            provider.DeleteLayerRule(id);
             return Results.NoContent();
         })
             .RequireAuthorization("features:delete");

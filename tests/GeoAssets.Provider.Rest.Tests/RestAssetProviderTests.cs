@@ -1,9 +1,11 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Services;
 using Xunit;
 
 namespace GeoAssets.Provider.Rest.Tests;
@@ -35,6 +37,115 @@ public class RestAssetProviderTests
         var sut = CreateSut(handler);
 
         sut.Should().BeAssignableTo<ISyncProvider>();
+    }
+
+    // ── Layers / layer rules (XD01-153) ──────────────────────────────────────
+
+    private static HttpResponseMessage JsonBody<T>(T body) =>
+        new(HttpStatusCode.OK) { Content = JsonContent.Create(body, options: GeoJsonSerializer.Options) };
+
+    [Fact]
+    public async Task InitializeAsync_RequestsLayersAndLayerRules_AndPopulatesTheCache()
+    {
+        var layer = new Layer { Name = "Poles", Color = "#ff0000" };
+        var rule = new LayerRule
+        {
+            AssetTypeId = AssetType.Point.Id,
+            LayerId = layer.Id,
+            Priority = 1,
+            Conditions = [new LayerRuleCondition { Attribute = "status", Operator = LayerRuleOperator.NotEquals, Value = "retired" }]
+        };
+        var otherTypeRule = new LayerRule { AssetTypeId = AssetType.Line.Id, LayerId = layer.Id };
+        var handler = new FakeHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/geoassets/layers" => JsonBody(new[] { layer }),
+            "/api/geoassets/layer-rules" => JsonBody(new[] { rule, otherTypeRule }),
+            _ => JsonResponse("[]")
+        });
+        var factory = new RestProviderFactory(new FakeHttpClientFactory(handler));
+
+        // InitializeAsync is internal — CreateAsync is its only caller and the public way in.
+        var sut = await factory.CreateAsync("http://localhost/api/geoassets");
+
+        handler.Requests.Should().OnlyContain(r => r.Method == HttpMethod.Get);
+        handler.Requests.Select(r => r.RequestUri!.PathAndQuery)
+            .Should().Contain(["/api/geoassets/layers", "/api/geoassets/layer-rules"]);
+        sut.GetLayers().Should().ContainSingle().Which.Should().BeEquivalentTo(layer);
+        sut.GetLayerRules(AssetType.Point.Id).Should().ContainSingle().Which.Should().BeEquivalentTo(rule);
+        sut.GetLayerRules(AssetType.Line.Id).Should().ContainSingle().Which.Id.Should().Be(otherTypeRule.Id);
+    }
+
+    [Fact]
+    public async Task AddLayer_UpdatesTheCache_AndPostsToLayers()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        var sut = CreateSut(handler);
+        var layer = new Layer { Name = "Cables" };
+
+        sut.AddLayer(layer);
+
+        sut.GetLayers().Should().ContainSingle().Which.Should().BeSameAs(layer);
+        var request = handler.Requests.Should().ContainSingle().Subject;
+        request.Method.Should().Be(HttpMethod.Post);
+        request.RequestUri!.AbsolutePath.Should().Be("/api/geoassets/layers");
+        var sent = await request.Content!.ReadFromJsonAsync<Layer>(GeoJsonSerializer.Options);
+        sent.Should().BeEquivalentTo(layer);
+    }
+
+    [Fact]
+    public void DeleteLayer_UpdatesTheCache_AndIssuesDeleteForThatId()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var sut = CreateSut(handler);
+        var layer = new Layer { Name = "Cables" };
+        sut.AddLayer(layer);
+
+        sut.DeleteLayer(layer.Id);
+
+        sut.GetLayers().Should().BeEmpty();
+        handler.Requests.Should().HaveCount(2);
+        var request = handler.Requests[^1];
+        request.Method.Should().Be(HttpMethod.Delete);
+        request.RequestUri!.AbsolutePath.Should().Be($"/api/geoassets/layers/{layer.Id}");
+    }
+
+    [Fact]
+    public async Task AddLayerRule_UpdatesTheCache_AndPostsToLayerRules_WithConditions()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        var sut = CreateSut(handler);
+        var rule = new LayerRule
+        {
+            AssetTypeId = AssetType.Point.Id,
+            LayerId = Guid.NewGuid(),
+            Conditions = [new LayerRuleCondition { Attribute = "voltageKv", Operator = LayerRuleOperator.GreaterThanOrEqual, Value = "13.8" }]
+        };
+
+        sut.AddLayerRule(rule);
+
+        sut.GetLayerRules(AssetType.Point.Id).Should().ContainSingle().Which.Should().BeSameAs(rule);
+        var request = handler.Requests.Should().ContainSingle().Subject;
+        request.Method.Should().Be(HttpMethod.Post);
+        request.RequestUri!.AbsolutePath.Should().Be("/api/geoassets/layer-rules");
+        var sent = await request.Content!.ReadFromJsonAsync<LayerRule>(GeoJsonSerializer.Options);
+        sent.Should().BeEquivalentTo(rule);
+    }
+
+    [Fact]
+    public void DeleteLayerRule_UpdatesTheCache_AndIssuesDeleteForThatId()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var sut = CreateSut(handler);
+        var rule = new LayerRule { AssetTypeId = AssetType.Point.Id, LayerId = Guid.NewGuid() };
+        sut.AddLayerRule(rule);
+
+        sut.DeleteLayerRule(rule.Id);
+
+        sut.GetLayerRules(AssetType.Point.Id).Should().BeEmpty();
+        handler.Requests.Should().HaveCount(2);
+        var request = handler.Requests[^1];
+        request.Method.Should().Be(HttpMethod.Delete);
+        request.RequestUri!.AbsolutePath.Should().Be($"/api/geoassets/layer-rules/{rule.Id}");
     }
 
     // ── SplitIntoTiles (pure) ────────────────────────────────────────────────

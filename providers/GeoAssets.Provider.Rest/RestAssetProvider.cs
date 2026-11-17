@@ -68,10 +68,16 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
     {
         var features = await _http.GetFromJsonAsync<GeoFeature[]>("features",    _opts, ct).ConfigureAwait(false) ?? [];
         var types    = await _http.GetFromJsonAsync<AssetType[]> ("asset-types", _opts, ct).ConfigureAwait(false) ?? [];
+        var layers   = await _http.GetFromJsonAsync<Layer[]>     ("layers",      _opts, ct).ConfigureAwait(false) ?? [];
+        var rules    = await _http.GetFromJsonAsync<LayerRule[]> ("layer-rules", _opts, ct).ConfigureAwait(false) ?? [];
 
         _cache.LoadAll(features);
         foreach (var t in types.Where(t => !t.IsBuiltIn))
             _cache.AddAssetType(t);
+        foreach (var l in layers)
+            _cache.AddLayer(l);
+        foreach (var r in rules)
+            _cache.AddLayerRule(r);
     }
 
     // ── Reads — served from local cache ───────────────────────────────────
@@ -249,14 +255,29 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
         _ = _http.DeleteAsync(new Uri($"asset-types/{id}", UriKind.RelativeOrAbsolute));
     }
 
-    /// <summary>
-    /// Cache-only — no server endpoint for layers exists yet, so unlike the other write methods
-    /// this doesn't forward over HTTP. Revisit once the server gains a <c>layers</c> route.
-    /// </summary>
-    public void AddLayer(Layer layer)             => _cache.AddLayer(layer);
-    public void DeleteLayer(Guid id)              => _cache.DeleteLayer(id);
-    public void AddLayerRule(LayerRule layerRule) => _cache.AddLayerRule(layerRule);
-    public void DeleteLayerRule(Guid id)          => _cache.DeleteLayerRule(id);
+    public void AddLayer(Layer layer)
+    {
+        _cache.AddLayer(layer);
+        _ = _http.PostAsJsonAsync("layers", layer, _opts);
+    }
+
+    public void DeleteLayer(Guid id)
+    {
+        _cache.DeleteLayer(id);
+        _ = _http.DeleteAsync(new Uri($"layers/{id}", UriKind.RelativeOrAbsolute));
+    }
+
+    public void AddLayerRule(LayerRule layerRule)
+    {
+        _cache.AddLayerRule(layerRule);
+        _ = _http.PostAsJsonAsync("layer-rules", layerRule, _opts);
+    }
+
+    public void DeleteLayerRule(Guid id)
+    {
+        _cache.DeleteLayerRule(id);
+        _ = _http.DeleteAsync(new Uri($"layer-rules/{id}", UriKind.RelativeOrAbsolute));
+    }
 
     public void Dispose() => _boundsFetchThrottle.Dispose();
 }
