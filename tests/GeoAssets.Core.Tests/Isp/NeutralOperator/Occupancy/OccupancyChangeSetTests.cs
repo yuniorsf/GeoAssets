@@ -288,6 +288,31 @@ public sealed class OccupancyChangeSetTests
         act.Should().Throw<InvalidOperationException>();
     }
 
+    // ── Commit (XD01-318) ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Commit_OnAStagedSet_GivesACommittedSetClosedAtTheGivenInstant_WithEverythingElseKept()
+    {
+        var staged = Stage(PoleWith(2, 0), Add(50, 4));
+
+        var committed = staged.Commit(Now.AddMinutes(9));
+
+        committed.Status.Should().Be(OccupancyChangeSetStatus.Committed);
+        committed.ClosedAt.Should().Be(Now.AddMinutes(9));
+        committed.Should().BeEquivalentTo(staged, options => options.Excluding(s => s.Status).Excluding(s => s.ClosedAt));
+        staged.Status.Should().Be(OccupancyChangeSetStatus.Staged, "the staged set itself is unchanged");
+    }
+
+    [Theory]
+    [InlineData(OccupancyChangeSetStatus.Committed)]
+    [InlineData(OccupancyChangeSetStatus.Discarded)]
+    public void Commit_OnASetThatIsNoLongerStaged_ThrowsInvalidOperationException(OccupancyChangeSetStatus status)
+    {
+        var act = () => Restored(status).Commit(Now);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
     // ── OCC-B8 ────────────────────────────────────────────────────────────────
 
     [Theory]

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.Rest;
@@ -175,6 +176,13 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
                 throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
             case HttpStatusCode.Conflict:
+                // XD01-318: an approval refused because a pole's occupancy changed after staging.
+                if (await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None).ConfigureAwait(false) is
+                    { Code: OccupancyProblemCodes.ConcurrentModification } conflict)
+                {
+                    throw WorkflowProblemTranslator.ToException(conflict, orderId, OrderActionType.Approve)!;
+                }
+
                 throw new ServiceOrderConcurrencyException(orderId);
 
             case HttpStatusCode.BadRequest:

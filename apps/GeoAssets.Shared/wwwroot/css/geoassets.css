@@ -1141,6 +1141,7 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 .order-status-onhold      { background: var(--warning); }
 .order-status-completed   { background: var(--success); }
 .order-status-cancelled   { background: var(--danger); }
+.order-status-approved    { background: var(--success); }
 
 .order-name {
     flex: 1;

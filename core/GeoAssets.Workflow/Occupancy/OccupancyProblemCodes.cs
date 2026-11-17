@@ -25,4 +25,10 @@ public static class OccupancyProblemCodes
 
     /// <summary>The target was released when its order closed.</summary>
     public const string TargetReleased = "occupancy.target-released";
+
+    /// <summary>
+    /// An approval could not commit: a pole's occupancy, or a staged set, changed after the set
+    /// was staged (XD01-318). Nothing was committed; the changes must be staged again.
+    /// </summary>
+    public const string ConcurrentModification = "occupancy.concurrent-modification";
 }

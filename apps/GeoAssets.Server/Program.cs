@@ -129,6 +129,9 @@ builder.Services.AddServerOrderOccupancyStaging(builder.Configuration);
 // SharedUseHostExtensions.AddServerWorkflowOutbox for what happens to messages until then.
 builder.Services.AddServerWorkflowOutbox(builder.Configuration);
 builder.Services.AddServerSharedUseDispatch();
+// Approving an order with targets commits the occupancy staged on its poles (XD01-318) — see
+// OccupancyApprovalRoute for how POST /service-orders/{id}/actions routes an approval to it.
+builder.Services.AddServerOccupancyCommit();
 
 // IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
 // IServiceOrderRepository as every other order-driven workflow in this host.

@@ -95,6 +95,8 @@ internal static class WorkflowProblemTranslator
         OccupancyProblemCodes.EntryNotFound => new OccupancyEntryNotFoundException(problem.Detail),
         OccupancyProblemCodes.NotAPole => new TargetIsNotAPoleException(problem.Detail),
         OccupancyProblemCodes.TargetReleased => new OccupancyTargetReleasedException(problem.Detail),
+        // Approval that commits staged occupancy (XD01-318).
+        OccupancyProblemCodes.ConcurrentModification => new OccupancyConflictException(problem.Strings("poleFeatureIds")),
         // Shared-use dispatch (XD01-316).
         SharedUseProblemCodes.NoFanOut => new OrderTypeHasNoFanOutException(
             problem.String("orderTypeId") ?? string.Empty, problem.Detail),

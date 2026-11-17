@@ -92,7 +92,9 @@ public sealed class AssetTypeZoomRangeTests(PostgresContainerFixture fixture)
         }
         finally
         {
-            await migrator.MigrateAsync(ZoomMigration);
+            // Back to the head of the chain, not just this migration: the collection shares one
+            // database, and later migrations (XD01-318's seed) must stay applied for other tests.
+            await migrator.MigrateAsync();
         }
 
         (await ZoomColumnsAsync(db)).Should().Equal("MaxZoom:integer:YES", "MinZoom:integer:YES");

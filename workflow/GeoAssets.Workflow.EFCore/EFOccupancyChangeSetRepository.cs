@@ -55,6 +55,8 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
 
     private static readonly string DiscardedStatus = OccupancyChangeSetMapper.ToStatusText(OccupancyChangeSetStatus.Discarded);
 
+    private static readonly string CommittedStatus = OccupancyChangeSetMapper.ToStatusText(OccupancyChangeSetStatus.Committed);
+
     private readonly ServiceOrderDbContext _db;
     private readonly TimeProvider _timeProvider;
 
@@ -170,6 +172,35 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
         var stagedStatus = StagedStatus;
         return DiscardWhereAsync(
             _db.OccupancyChangeSets.Where(s => s.ServiceOrderId == orderId && s.Status == stagedStatus), ct);
+    }
+
+    /// <summary>
+    /// One <c>UPDATE … WHERE Id = @id AND Status = 'Staged'</c>, past the change tracker, in the
+    /// context's transaction when it has one: a set replaced, discarded or committed by another
+    /// session in between matches no row, so this returns false and changes nothing.
+    /// </summary>
+    public async Task<bool> MarkCommittedAsync(OccupancyChangeSet committed, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(committed);
+        ct.ThrowIfCancellationRequested();
+
+        if (committed.Status != OccupancyChangeSetStatus.Committed)
+            throw new ArgumentException($"Only a committed change set can be recorded as committed; this one is {committed.Status}.", nameof(committed));
+        if (committed.PoleOwnerOrganizationId != _db.CurrentOrganizationId)
+            throw new ArgumentException("The change set belongs to another organization than the store's.", nameof(committed));
+
+        var (setId, stagedStatus) = (committed.Id, StagedStatus);
+        var committedStatus = CommittedStatus;
+        DateTime? closedAt = OccupancyChangeSetMapper.WholeMicroseconds(committed.ClosedAt!.Value);
+        var updated = await _db.OccupancyChangeSets
+            .Where(s => s.Id == setId && s.Status == stagedStatus)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(s => s.Status, committedStatus)
+                    .SetProperty(s => s.ClosedAt, closedAt),
+                ct).ConfigureAwait(false);
+
+        return updated == 1;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

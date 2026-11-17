@@ -16,5 +16,8 @@ internal sealed class LayerRuleRowConfiguration : IEntityTypeConfiguration<Layer
 
         e.HasIndex(x => x.AssetTypeId);
         e.HasIndex(x => x.LayerId);
+
+        // ── Thematic pole occupancy (XD01-318) ──────────────────────────────────
+        e.HasData(PoleOccupancyThematicSeed.Rules());
     }
 }

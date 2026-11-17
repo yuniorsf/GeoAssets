@@ -255,6 +255,36 @@ public static class WorkflowServiceExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers the approval that commits staged occupancy (XD01-318): one scoped
+    /// <see cref="OccupancyCommitService"/> behind <see cref="IOccupancyCommitService"/>. Needs
+    /// what <see cref="AddOrderOccupancyStaging"/> needs plus <see cref="IServiceOrderRepository"/>,
+    /// <see cref="IPoleOccupancyWriter"/>, <see cref="IOutboxWriter"/> and
+    /// <see cref="IWorkflowUnitOfWork"/>; reads <see cref="OrderOccupancyOptions"/> (the catalog
+    /// instance) when registered, the defaults otherwise.
+    /// </summary>
+    public static IServiceCollection AddOccupancyCommit(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped(sp => new OccupancyCommitService(
+            sp.GetRequiredService<IServiceOrderRepository>(),
+            sp.GetRequiredService<OrderTypeRegistry>(),
+            sp.GetRequiredService<ServiceOrderRules>(),
+            sp.GetRequiredService<IServiceOrderTargetReader>(),
+            sp.GetRequiredService<IPoleOccupancyReader>(),
+            sp.GetRequiredService<IPoleOccupancyWriter>(),
+            sp.GetRequiredService<IOccupancyChangeSetReader>(),
+            sp.GetRequiredService<IOccupancyChangeSetWriter>(),
+            sp.GetRequiredService<IOutboxWriter>(),
+            sp.GetRequiredService<IWorkflowUnitOfWork>(),
+            sp.GetService<OrderOccupancyOptions>() ?? new OrderOccupancyOptions(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.TryAddScoped<IOccupancyCommitService>(sp => sp.GetRequiredService<OccupancyCommitService>());
+
+        return services;
+    }
+
     // ── Default order types ───────────────────────────────────────────────────
 
     /// <summary>

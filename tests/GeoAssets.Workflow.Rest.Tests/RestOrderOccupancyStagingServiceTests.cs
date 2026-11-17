@@ -320,7 +320,7 @@ public sealed class RestOrderOccupancyStagingServiceTests
             .Select(f => (string)f.GetRawConstantValue()!)
             .ToList();
 
-        codes.Should().HaveCount(5);
+        codes.Should().HaveCount(6, "XD01-318 added the approval conflict");
         foreach (var code in codes)
         {
             using var response = BodyRecordingHandler.Problem(HttpStatusCode.BadRequest, code);
