@@ -77,4 +77,11 @@ public sealed class OrderType
     /// <see cref="OrderTypeRegistry"/> whenever the type enters the registry.
     /// </summary>
     public OrderTargetPolicy? TargetPolicy { get; init; }
+
+    /// <summary>
+    /// What the organization an order of this type was dispatched to may do with it (XD01-333).
+    /// Defaults to <see cref="OrderRecipientAccess.Inform"/> — read-only on the order and its
+    /// targets — so a type that does not say otherwise gives a recipient nothing to change.
+    /// </summary>
+    public OrderRecipientAccess RecipientAccess { get; init; } = OrderRecipientAccess.Inform;
 }

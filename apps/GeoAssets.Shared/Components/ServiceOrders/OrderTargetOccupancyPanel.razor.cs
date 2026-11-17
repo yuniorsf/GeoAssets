@@ -32,14 +32,16 @@ public partial class OrderTargetOccupancyPanel
 
     /// <summary>
     /// Whether the editors offer editing controls; the host still decides what is allowed. The
-    /// per-target work editor is not offered at all without it.
+    /// per-target work editor is not offered at all without it. A recipient of the order's dispatch
+    /// whose order type lets it execute the order gets it without the occupancy (XD01-333).
     /// </summary>
     [Parameter] public bool CanEdit { get; set; }
 
     /// <summary>
     /// Whether each target offers its pole's occupancy. False for a caller the occupancy is not
     /// for — the organization an order was dispatched to (XD01-316) reads the order's targets and
-    /// the work asked on each, never the pole owner's occupancy — and the list is then read-only.
+    /// the work asked on each, never the pole owner's occupancy — and the list is then read-only
+    /// unless <see cref="CanEdit"/> offers it the per-target work.
     /// </summary>
     [Parameter] public bool CanOpenOccupancy { get; set; } = true;
 

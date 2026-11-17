@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using Xunit;
 using static GeoAssets.Server.Tests.OrderTargetsApiAssertions;
 
@@ -231,7 +232,7 @@ public class ServiceOrderOrganizationGateEndpointTests
     [Theory]
     [InlineData(DispatchTargetType.Organization)]
     [InlineData(DispatchTargetType.User)]
-    public async Task XD01_332_DispatchRecipientOfAnotherOrganization_ReadsAndAnnotates_AndIsForbiddenNotHiddenForTheRest(DispatchTargetType targetType)
+    public async Task XD01_332_DispatchRecipientOfAnotherOrganization_Reads_AndIsForbiddenNotHiddenForTheRest(DispatchTargetType targetType)
     {
         await using var host = await HostAsync();
         var recipientId = targetType == DispatchTargetType.Organization
@@ -245,7 +246,8 @@ public class ServiceOrderOrganizationGateEndpointTests
         var delete = await WriteAsync(client, "DELETE", "ord-1");
 
         read.StatusCode.Should().Be(HttpStatusCode.OK);
-        annotate.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await annotate.ReadJsonAsync(HttpStatusCode.Forbidden)).GetProperty("reason").GetString()
+            .Should().Be(ServiceOrderRules.RecipientOrderIsReadOnlyReason, "XD01-333: the order's type only informs a recipient");
         delete.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 

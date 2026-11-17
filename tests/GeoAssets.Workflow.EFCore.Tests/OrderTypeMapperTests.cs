@@ -163,4 +163,29 @@ public class OrderTypeMapperTests
 
         act.Should().Throw<JsonException>();
     }
+
+    // ── RecipientAccess (XD01-333) ────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(OrderRecipientAccess.Inform, 0)]
+    [InlineData(OrderRecipientAccess.Execute, 1)]
+    [InlineData(OrderRecipientAccess.Edit, 2)]
+    public void RecipientAccess_IsStoredAsItsNumber_AndReadBack(OrderRecipientAccess access, int stored)
+    {
+        var record = OrderTypeMapper.ToRecord(new OrderType { Id = "notice", DisplayName = "Notice", RecipientAccess = access });
+
+        record.RecipientAccess.Should().Be(stored);
+        OrderTypeMapper.ToDomain(record).RecipientAccess.Should().Be(access);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    [InlineData(7)]
+    public void RecipientAccess_AStoredNumberOutsideTheEnumeration_ReadsAsInform(int stored)
+    {
+        var record = new OrderTypeRecord { Id = "notice", DisplayName = "Notice", RecipientAccess = stored };
+
+        OrderTypeMapper.ToDomain(record).RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
+    }
 }

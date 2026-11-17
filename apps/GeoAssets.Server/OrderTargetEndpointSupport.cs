@@ -46,26 +46,24 @@ internal static class OrderTargetEndpointSupport
     }
 
     /// <summary>
-    /// Loads the order and checks the order rules grant the caller <see cref="OrderActionType.Annotate"/>;
-    /// refused as <see cref="ForReadAsync"/> refuses.
+    /// Loads the order and checks the caller may make a change of kind <paramref name="write"/>
+    /// to its targets (<see cref="ServiceOrderRules.EvaluateTargetWrite"/>): the order rules must
+    /// grant it <see cref="OrderActionType.Annotate"/>, and a recipient of the order's dispatch
+    /// records work only on an order whose type allows it and never adds or removes a target
+    /// (XD01-316/333). Refused as <see cref="ForReadAsync"/> refuses.
     /// </summary>
     public static async Task<OrderAccess> ForEditAsync(
-        string orderId, IServiceOrderRepository orders, ServiceOrderRules rules,
+        string orderId, OrderTargetWrite write, IServiceOrderRepository orders, ServiceOrderRules rules,
         ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct)
     {
         var order = await orders.GetByIdAsync(orderId, ct).ConfigureAwait(false);
         if (order is null) return new OrderAccess(null, null, WorkflowProblemResults.OrderNotFound(orderId));
 
         var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
-        var verdict = rules.Evaluate(principal, OrderActionType.Annotate, order);
-        if (!verdict.Allowed)
-            return new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
-
-        // XD01-316: the rules let a recipient of the order's dispatch annotate the order; its
-        // targets stay the owning organization's to change.
-        return rules.IsDispatchRecipientOnly(principal, order)
-            ? new OrderAccess(null, null, WorkflowProblemResults.Denied(ServiceOrderRules.RecipientTargetsAreReadOnlyReason))
-            : new OrderAccess(order, principal, null);
+        var verdict = rules.EvaluateTargetWrite(principal, order, write);
+        return verdict.Allowed
+            ? new OrderAccess(order, principal, null)
+            : new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
     }
 
     /// <summary>The caller's organization, <see cref="Guid.Empty"/> when the token carries none — as <see cref="HttpTenantContext"/> reads it.</summary>

@@ -24,4 +24,11 @@ internal sealed class OrderTypeRecord
     /// the order type has no target policy.
     /// </summary>
     public string? TargetPolicyJson { get; set; }
+
+    /// <summary>
+    /// OrderType.RecipientAccess as its number (XD01-333). 0 (Inform) for every row stored before
+    /// the column existed. Read by the row-level security of "ServiceOrders" and
+    /// "ServiceOrderTargets", so its values are the enumeration's own and never renumbered.
+    /// </summary>
+    public int RecipientAccess { get; set; }
 }

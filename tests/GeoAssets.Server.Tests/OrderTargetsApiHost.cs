@@ -57,6 +57,15 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         // XD01-316: an occupant organization of organization A's poles, and one of its supervisors.
         ["supervisor-a"] = new(new Guid("00000000-0000-4000-8000-0000000005a1"), OrgA, ["Supervisor"], ["serviceorders:read", "features:read"]),
         ["occupant"] = new(new Guid("00000000-0000-4000-8000-0000000000c1"), OrgC, ["Supervisor"], ["serviceorders:read", "features:read"]),
+        // XD01-333: one user per role in each of the owner, the recipient and the grantee
+        // organizations, for the recipient-access matrix; "Crew" is the role the matrix's order
+        // types require to annotate.
+        ["crew-a"] = new(new Guid("00000000-0000-4000-8000-0000000003a1"), OrgA, ["Crew"], ["serviceorders:read"]),
+        ["occupant-plain"] = new(new Guid("00000000-0000-4000-8000-0000000003c1"), OrgC, [], ["serviceorders:read"]),
+        ["occupant-crew"] = new(new Guid("00000000-0000-4000-8000-0000000003c2"), OrgC, ["Crew"], ["serviceorders:read"]),
+        ["occupant-admin"] = new(new Guid("00000000-0000-4000-8000-0000000003c3"), OrgC, ["Administrator"], ["serviceorders:read"]),
+        ["crew-b"] = new(new Guid("00000000-0000-4000-8000-0000000003b1"), OrgB, ["Crew"], ["serviceorders:read"]),
+        ["supervisor-b"] = new(new Guid("00000000-0000-4000-8000-0000000003b2"), OrgB, ["Supervisor"], ["serviceorders:read"]),
     };
 
     private readonly IHost _host;
@@ -220,7 +229,40 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         registry.Register(SurveyType(LimitedSurvey, selectionLimit: 2, OrderTargetExclusivity.None));
         registry.Register(SurveyType(BlockingSurvey, selectionLimit: null, OrderTargetExclusivity.BlockOnOverlap));
         SharedUseOrderTypes.RegisterAll(registry, ["pole"]);
+        foreach (var access in Enum.GetValues<OrderRecipientAccess>())
+            registry.Register(RecipientAccessType(access));
     }
+
+    /// <summary>The order type of the recipient-access matrix (XD01-333) for one level.</summary>
+    public static string RecipientAccessTypeId(OrderRecipientAccess access) => access switch
+    {
+        OrderRecipientAccess.Execute => "recipient-execute",
+        OrderRecipientAccess.Edit => "recipient-edit",
+        _ => "recipient-inform",
+    };
+
+    /// <summary>
+    /// A pole survey whose dispatch recipients get <paramref name="access"/>, and on which only the
+    /// Crew, Supervisor and Administrator roles may annotate — so a user with none of them lacks
+    /// Annotate wherever it stands.
+    /// </summary>
+    private static OrderType RecipientAccessType(OrderRecipientAccess access) => new()
+    {
+        Id = RecipientAccessTypeId(access),
+        DisplayName = RecipientAccessTypeId(access),
+        RecipientAccess = access,
+        ActionPermissions =
+        [
+            new(OrderActionType.Annotate, PolicyKind.Role, "Crew"),
+            new(OrderActionType.Annotate, PolicyKind.Role, "Supervisor"),
+            new(OrderActionType.Annotate, PolicyKind.Role, "Administrator"),
+        ],
+        TargetPolicy = new OrderTargetPolicy
+        {
+            TargetAssetTypeIds = ["pole"],
+            Activities = [new OrderTargetActivity("inspect", "Inspect"), new OrderTargetActivity("replace", "Replace")],
+        },
+    };
 
     private static OrderType SurveyType(string id, int? selectionLimit, OrderTargetExclusivity exclusivity) => new()
     {

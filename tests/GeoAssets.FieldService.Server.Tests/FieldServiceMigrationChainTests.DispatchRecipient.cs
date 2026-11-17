@@ -11,8 +11,9 @@ namespace GeoAssets.FieldService.Server.Tests;
 /// The XD01-316 migration <c>AddServiceOrderDispatchRecipientRowLevelSecurity</c> in the
 /// <c>GeoAssets.FieldService.Server</c> history: which policies and functions it creates, up,
 /// down and up again, and — as a non-owner role — what it lets the organization an order was
-/// dispatched to do: read the order, its dispatches, its action log and its targets; update the
-/// order without relabelling it; and write neither a target nor a dispatch.
+/// dispatched to do: read the order, its dispatches, its action log and its targets; append to
+/// the log; and — the order being of a type that only informs it (XD01-333) — write neither the
+/// order, nor a target, nor a dispatch.
 /// </summary>
 public partial class FieldServiceMigrationChainTests
 {
@@ -107,10 +108,12 @@ public partial class FieldServiceMigrationChainTests
         (await QueryAsync(db, DispatchRecipientFunctionsSql)).Should().BeEmpty();
         (await QueryAsync(db, """SELECT count(*)::text AS "Value" FROM "OrderDispatches" """)).Should().Equal("1");
 
-        // Up again.
+        // Up again — to this migration, whose policies are counted, then to the head (XD01-333's
+        // migration adds a policy of its own).
+        await migrator.MigrateAsync(migration);
+        (await QueryAsync(db, DispatchRecipientPoliciesSql)).Should().HaveCount(8);
         await db.Database.MigrateAsync();
         (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
-        (await QueryAsync(db, DispatchRecipientPoliciesSql)).Should().HaveCount(8);
     }
 
     [Fact]
@@ -138,7 +141,7 @@ public partial class FieldServiceMigrationChainTests
     }
 
     [Fact]
-    public async Task DispatchRecipientPolicy_AsANonOwnerRole_LetsTheOccupantUpdateAndAnnotateItsOrder_AndWriteNothingElse()
+    public async Task DispatchRecipientPolicy_AsANonOwnerRole_LetsTheOccupantOfAnInformOrderAppendToItsLog_AndWriteNothingElse()
     {
         await using var db = await NewContextOnEmptyDatabaseAsync();
         await db.Database.MigrateAsync();
@@ -146,11 +149,11 @@ public partial class FieldServiceMigrationChainTests
         await using var scoped = await OpenAsTenantScopedRoleAsync(db);
         await SetOrganizationAsync(scoped, FirstRecipientOrganization);
 
-        // The order: stamped, never relabelled, never deleted.
-        (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "AssignedTo" = 'occupant-crew' WHERE "Id" = 'child-a'""")).Should().Be(1);
-        (await ExecuteAsync(scoped, OrderChildInserts["OrderActionLogs"], ("orderId", "child-a"))).Should().Be(1, "accepting or annotating appends to the log");
-        var relabel = async () => await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "OrganizationId" = @org WHERE "Id" = 'child-a'""", ("org", FirstRecipientOrganization));
-        (await relabel.Should().ThrowAsync<PostgresException>()).Which.SqlState.Should().Be(RowSecurityViolation);
+        // The order: its type has no row in "OrderTypes", so it only informs the occupant (XD01-333) —
+        // not updated, not relabelled, not deleted. The log still follows its order.
+        (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "AssignedTo" = 'occupant-crew' WHERE "Id" = 'child-a'""")).Should().Be(0);
+        (await ExecuteAsync(scoped, OrderChildInserts["OrderActionLogs"], ("orderId", "child-a"))).Should().Be(1, "the log follows its order, which the occupant sees");
+        (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "OrganizationId" = @org WHERE "Id" = 'child-a'""", ("org", FirstRecipientOrganization))).Should().Be(0);
         (await ExecuteAsync(scoped, """DELETE FROM "ServiceOrders" WHERE "Id" = 'child-a'""")).Should().Be(0);
         (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "AssignedTo" = 'occupant-crew' WHERE "Id" = 'parent'""")).Should().Be(0);
 

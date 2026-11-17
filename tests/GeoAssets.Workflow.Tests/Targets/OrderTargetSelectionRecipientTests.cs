@@ -22,7 +22,7 @@ public sealed class OrderTargetSelectionRecipientTests
         using var fixture = new SelectionServiceFixture(answer: SelectionServiceFixture.Poles(3));
         var order = await fixture.SeedOrderAsync();
         order.Dispatches.Add(new OrderDispatch(SelectionServiceFixture.OrgB.ToString(), DispatchTargetType.Organization, "admin-1", SelectionServiceFixture.Now.UtcDateTime));
-        fixture.Rules.Evaluate(Recipient, OrderActionType.Annotate, order).Allowed
+        fixture.Rules.EvaluateRuleChainOnly(Recipient, OrderActionType.Annotate, order).Allowed
             .Should().BeTrue("the rule chain alone allows a recipient to annotate");
 
         var act = () => fixture.Sut.ApplyAsync(SelectionServiceFixture.FenceRequest(), Recipient, CancellationToken.None);
@@ -33,6 +33,31 @@ public sealed class OrderTargetSelectionRecipientTests
         denied.Evaluation.IsOutsideOrganization.Should().BeFalse();
         fixture.StoredFor().Should().BeEmpty();
         order.ActionLog.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(OrderRecipientAccess.Execute)]
+    [InlineData(OrderRecipientAccess.Edit)]
+    public async Task Apply_ByARecipient_IsDenied_EvenWhenTheOrdersTypeLetsItExecuteOrEditTheOrder(OrderRecipientAccess level)
+    {
+        // XD01-333: a recipient may at most record the work on the targets the owner chose.
+        using var fixture = new SelectionServiceFixture(answer: SelectionServiceFixture.Poles(3));
+        fixture.OrderTypes.Register(new OrderType
+        {
+            Id = "survey-for-recipients",
+            DisplayName = "Survey for recipients",
+            TargetPolicy = SelectionServiceFixture.Policy(),
+            RecipientAccess = level,
+        });
+        var order = await fixture.SeedOrderAsync(orderTypeId: "survey-for-recipients");
+        order.Dispatches.Add(new OrderDispatch(SelectionServiceFixture.OrgB.ToString(), DispatchTargetType.Organization, "admin-1", SelectionServiceFixture.Now.UtcDateTime));
+
+        var act = () => fixture.Sut.ApplyAsync(SelectionServiceFixture.FenceRequest(), Recipient, CancellationToken.None);
+
+        var denied = (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which;
+        denied.Evaluation!.Reason.Should().Be(ServiceOrderRules.RecipientTargetsAreReadOnlyReason);
+        denied.Evaluation.Code.Should().Be(RuleDenialCode.DeniedByRecipientAccess);
+        fixture.StoredFor().Should().BeEmpty();
     }
 
     [Fact]

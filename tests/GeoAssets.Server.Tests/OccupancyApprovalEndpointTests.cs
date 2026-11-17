@@ -5,6 +5,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.TestKit;
 using Xunit;
 using static GeoAssets.Server.Tests.OrderTargetsApiAssertions;
@@ -98,7 +99,7 @@ public sealed class OccupancyApprovalEndpointTests
     }
 
     [Fact]
-    public async Task Approve_ByAnOccupantTheOrderWasDispatchedTo_Returns403_OwnerOnly_AndCommitsNothing()
+    public async Task Approve_ByAnOccupantTheOrderWasDispatchedTo_Returns403_AndCommitsNothing()
     {
         await using var host = await StartAsync();
         await StageAsync(host, OccupancyChangeBuilder.Add(1));
@@ -109,7 +110,8 @@ public sealed class OccupancyApprovalEndpointTests
         var response = await client.PostJsonAsync($"service-orders/{Order}/actions", Approve());
 
         var body = await response.ReadJsonAsync(HttpStatusCode.Forbidden);
-        body.GetProperty("reason").GetString().Should().Be(OccupancyCommitService.OwnerOnlyReason);
+        body.GetProperty("reason").GetString().Should().Be(
+            ServiceOrderRules.RecipientOrderIsReadOnlyReason, "XD01-333: the order's type only informs a recipient, so the rules refuse it before the owner-only check");
         (await host.Orders.GetByIdAsync(Order))!.Status.Should().Be(ServiceOrderStatus.Completed);
     }
 

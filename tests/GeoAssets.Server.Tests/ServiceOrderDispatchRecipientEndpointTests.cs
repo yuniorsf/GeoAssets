@@ -14,8 +14,9 @@ namespace GeoAssets.Server.Tests;
 /// <summary>
 /// What the organization a shared-use order was dispatched to can do through the REST surface
 /// (XD01-316): list and open the order dispatched to it and read its targets — and nothing
-/// more. It does not see the parent or another occupant's order, it cannot change a target, it
-/// cannot read or stage occupancy, and it cannot dispatch. Order <c>ord-1</c> of organization A
+/// more, the notice type being one that only informs its recipient (XD01-333). It does not see
+/// the parent or another occupant's order, it cannot change the order or a target, it cannot
+/// read or stage occupancy, and it cannot dispatch. Order <c>ord-1</c> of organization A
 /// is dispatched to organizations B and C before each fact.
 /// </summary>
 public sealed class ServiceOrderDispatchRecipientEndpointTests
@@ -155,7 +156,7 @@ public sealed class ServiceOrderDispatchRecipientEndpointTests
     // ── What a recipient may still do, and what stays the owner's ─────────────
 
     [Fact]
-    public async Task ARecipient_CanAcceptAndAnnotateItsOrder_ThroughTheActionRoute()
+    public async Task ARecipient_CanNeitherAcceptNorCancelItsNotice_ThroughTheActionRoute_TheNoticeOnlyInformsIt()
     {
         await using var host = await DispatchedAsync();
         using var occupant = host.ClientFor("occupant");
@@ -167,9 +168,17 @@ public sealed class ServiceOrderDispatchRecipientEndpointTests
             $"service-orders/{ChildOfC}/actions",
             new { action = (int)OrderActionType.Cancel, performedBy = actor, performedAt = OrderTargetsApiHost.Now.UtcDateTime, resultingStatus = ServiceOrderStatus.Cancelled });
 
-        accept.StatusCode.Should().Be(HttpStatusCode.NoContent);
-        cancel.StatusCode.Should().Be(HttpStatusCode.NoContent, "a Supervisor of the recipient organization holds the default role grant for Cancel — as before this slice");
-        (await host.Orders.GetByIdAsync(ChildOfC))!.ActionLog.Select(a => a.Action).Should().Equal(OrderActionType.Accept, OrderActionType.Cancel);
+        // XD01-333: the occupant-notice type is Inform, so its recipient reads it and changes nothing —
+        // not even with the Supervisor role that grants Cancel inside its own organization.
+        foreach (var response in new[] { accept, cancel })
+        {
+            (await response.ReadJsonAsync(HttpStatusCode.Forbidden)).GetProperty("reason").GetString()
+                .Should().Be(ServiceOrderRules.RecipientOrderIsReadOnlyReason);
+        }
+
+        var stored = await host.Orders.GetByIdAsync(ChildOfC);
+        stored!.ActionLog.Should().BeEmpty();
+        stored.Status.Should().Be(ServiceOrderStatus.Pending);
     }
 
     [Fact]

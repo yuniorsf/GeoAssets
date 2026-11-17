@@ -60,14 +60,15 @@ public sealed class OrderApprovalStateTests
     }
 
     [Fact]
-    public void CanApprove_IsFalse_ForACallerOfAnotherOrganizationOrOfNone_EvenWhenTheRulesWouldAllowIt()
+    public void CanApprove_IsFalse_ForACallerOfAnotherOrganizationOrOfNone()
     {
         var occupantOrganization = Guid.NewGuid();
         var occupant = new WorkflowPrincipal("occ-1", occupantOrganization.ToString(), ["Supervisor"], [], []);
         var noOrganization = new WorkflowPrincipal("x-1", null, ["Administrator"], [], []);
         var dispatched = Order();
         dispatched.Dispatches.Add(new OrderDispatch(occupantOrganization.ToString("D"), DispatchTargetType.Organization, "planner-1", DateTime.UnixEpoch));
-        Rules.Evaluate(occupant, OrderActionType.Approve, dispatched).Allowed.Should().BeTrue("the order was dispatched to the occupant, whose supervisor role grants approval");
+        Rules.Evaluate(occupant, OrderActionType.Approve, dispatched).Code.Should().Be(
+            RuleDenialCode.DeniedByRecipientAccess, "XD01-333: the pole-work type only informs a recipient, whatever its supervisor role grants");
 
         OrderApprovalState.CanApprove(Registry.Find(SharedUseOrderTypes.PoleWorkId), dispatched, occupant, Rules).Should().BeFalse();
         OrderApprovalState.CanApprove(Registry.Find(SharedUseOrderTypes.PoleWorkId), Order(), noOrganization, Rules).Should().BeFalse();

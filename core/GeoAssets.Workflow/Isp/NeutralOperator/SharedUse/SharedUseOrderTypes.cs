@@ -61,6 +61,9 @@ public static class SharedUseOrderTypes
             new(PolicyKind.Role, "Administrator"),
         ],
         InitialStateKey = ServiceOrderStatus.Draft,
+        // XD01-333: a pole-work order is never dispatched to anyone — its fan-out creates notices,
+        // and the order itself gets no dispatch — so no recipient ever reaches it.
+        RecipientAccess = OrderRecipientAccess.Inform,
         States = PoleWorkStates(),
         Transitions = PoleWorkTransitions(),
         TargetPolicy = new OrderTargetPolicy
@@ -86,6 +89,10 @@ public static class SharedUseOrderTypes
         ],
         // A notice exists only once dispatched to its occupant, so it starts where a dispatch leaves an order.
         InitialStateKey = ServiceOrderStatus.Pending,
+        // XD01-333: the occupant reads the notice, its poles and the work asked on each, and
+        // records nothing in it — the occupancy that work changes is staged and approved by the
+        // pole owner (XD01-315/318).
+        RecipientAccess = OrderRecipientAccess.Inform,
         States = States(),
         Transitions = NoticeTransitions(),
         TargetPolicy = new OrderTargetPolicy

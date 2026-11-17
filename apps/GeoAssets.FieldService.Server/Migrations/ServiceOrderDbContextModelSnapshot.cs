@@ -446,6 +446,9 @@ namespace GeoAssets.FieldService.Server.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int>("RecipientAccess")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TargetPolicyJson")
                         .HasColumnType("text");
 

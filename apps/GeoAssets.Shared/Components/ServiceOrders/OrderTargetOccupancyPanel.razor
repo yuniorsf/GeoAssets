@@ -5,11 +5,11 @@
 @inject OrderTargetMapStates MapStates
 
 <div class="occupancy-targets">
-    @if (CanOpenOccupancy)
+    @if (CanOpenOccupancy || CanEdit)
     {
         <OrderTargetsTable @ref="_table"
                            OrderId="@Order.Id"
-                           CaptionKey="occupancy.targets.caption"
+                           CaptionKey="@(CanOpenOccupancy ? "occupancy.targets.caption" : "sharedUse.targets.workCaption")"
                            ActivityCatalog="@ActivityCatalog"
                            SelectedTargetId="@((_selected ?? _working)?.Id)">
             <RowActions Context="target">
@@ -21,10 +21,13 @@
                                 aria-pressed="@(string.Equals(_working?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
                                 @onclick="() => Work(target)">@L["targetWork.open"]</button>
                     }
-                    <button type="button" class="btn btn-outline btn-sm"
-                            aria-label="@L.GetString("occupancy.targets.openFor", target.Alias ?? target.FeatureId)"
-                            aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
-                            @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
+                    @if (CanOpenOccupancy)
+                    {
+                        <button type="button" class="btn btn-outline btn-sm"
+                                aria-label="@L.GetString("occupancy.targets.openFor", target.Alias ?? target.FeatureId)"
+                                aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
+                                @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
+                    }
                 </div>
             </RowActions>
         </OrderTargetsTable>
@@ -51,7 +54,7 @@
         <p class="order-target-work-saved" role="status">@L.GetString("targetWork.saved", _savedLabel)</p>
     }
 
-    @if (_working is not null && CanEdit && CanOpenOccupancy)
+    @if (_working is not null && CanEdit)
     {
         <OrderTargetWorkEditor Target="_working"
                                ActivityCatalog="@ActivityCatalog"

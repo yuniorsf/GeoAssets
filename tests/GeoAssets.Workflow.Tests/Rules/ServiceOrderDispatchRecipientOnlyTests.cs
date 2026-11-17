@@ -9,8 +9,8 @@ namespace GeoAssets.Workflow.Tests.Rules;
 /// <summary>
 /// <see cref="ServiceOrderRules.IsDispatchRecipientOnly"/> (XD01-316): true exactly for a
 /// principal that passes the organization gate through a dispatch and through nothing else. It
-/// is what keeps the targets of an order read-only for the organization it was dispatched to,
-/// while the rule chain still lets that organization view, annotate and accept the order.
+/// is what bounds what the organization an order was dispatched to may change by the order
+/// type's recipient access (XD01-333).
 /// </summary>
 public sealed class ServiceOrderDispatchRecipientOnlyTests
 {
@@ -32,8 +32,9 @@ public sealed class ServiceOrderDispatchRecipientOnlyTests
         _rules.IsDispatchRecipientOnly(recipient, order).Should().BeTrue();
         _rules.PassesOrganizationGate(recipient, order).Should().BeTrue();
         _rules.Evaluate(recipient, OrderActionType.View, order).Allowed.Should().BeTrue();
-        _rules.Evaluate(recipient, OrderActionType.Annotate, order).Allowed
-            .Should().BeTrue("the rules still let a recipient annotate the order; it is its targets that are read-only");
+        var annotate = _rules.Evaluate(recipient, OrderActionType.Annotate, order);
+        annotate.Allowed.Should().BeFalse("XD01-333: an order of a type that does not say otherwise only informs its recipient");
+        annotate.Code.Should().Be(RuleDenialCode.DeniedByRecipientAccess);
     }
 
     [Theory]

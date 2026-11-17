@@ -139,7 +139,7 @@ public sealed class OccupancyCommitServiceTests
         var act = () => _fixture.Sut.ApproveAndCommitAsync(Order, recipient, CancellationToken.None);
 
         (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which.Evaluation!.Reason
-            .Should().Be(OccupancyCommitService.OwnerOnlyReason, "a supervisor's approval right does not make an occupant the pole owner");
+            .Should().Be(ServiceOrderRules.RecipientOrderIsReadOnlyReason, "XD01-333: the pole-work type only informs a recipient, which the rules refuse before the owner-only check");
         _fixture.UnitOfWork.Started.Should().Be(0);
     }
 

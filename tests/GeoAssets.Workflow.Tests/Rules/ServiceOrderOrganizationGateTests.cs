@@ -70,8 +70,18 @@ public class ServiceOrderOrganizationGateTests
 
     private static Relation Parse(string relationName) => Enum.Parse<Relation>(relationName);
 
-    private static ServiceOrderRules Rules(bool allowOrdersWithoutOrganization = true) =>
-        new(allowOrdersWithoutOrganization: allowOrdersWithoutOrganization, timeProvider: new FakeTimeProvider(Now));
+    /// <summary>
+    /// The engine, with the orders' type registered at <see cref="OrderRecipientAccess.Edit"/> —
+    /// the one recipient access that leaves the rule chain's outcome as it is (XD01-333) — so the
+    /// proofs here keep isolating the gate. The ceiling a lower access puts on a recipient is
+    /// <see cref="ServiceOrderRecipientAccessTests"/>'s.
+    /// </summary>
+    private static ServiceOrderRules Rules(bool allowOrdersWithoutOrganization = true)
+    {
+        var registry = new OrderTypeRegistry();
+        registry.Register(new OrderType { Id = "any", DisplayName = "Any", RecipientAccess = OrderRecipientAccess.Edit });
+        return new(registry, allowOrdersWithoutOrganization: allowOrdersWithoutOrganization, timeProvider: new FakeTimeProvider(Now));
+    }
 
     private static WorkflowOrgGrant Grant(
         Guid? resource = null, string? resourceType = "ServiceOrder", string? scopeId = null,

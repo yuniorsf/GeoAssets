@@ -378,6 +378,7 @@
   "orderApproval.error.unexpected": "The order could not be approved. Try again.",
   "sharedUse.targets.activities": "Activities",
   "sharedUse.targets.readOnlyCaption": "Targets of this order and the work asked on each. Dispatched to your organization: read-only.",
+  "sharedUse.targets.workCaption": "Targets of this order and the work asked on each. Dispatched to your organization: record the work you carry out on each target.",
   "sharedUse.dispatch.title": "Dispatch to pole occupants",
   "sharedUse.dispatch.intro": "One order is created for each occupant organization with an active contract on these poles.",
   "sharedUse.dispatch.loading": "Working out who to dispatch to…",

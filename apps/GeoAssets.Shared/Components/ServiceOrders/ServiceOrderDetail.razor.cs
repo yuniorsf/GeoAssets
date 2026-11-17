@@ -21,8 +21,9 @@ public partial class ServiceOrderDetail
     private string? _approvalErrorKey;
 
     private bool CanDispatch    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Dispatch, Order).Allowed;
+    // XD01-333: assigning goes through the whole-order update, where a recipient of the order's dispatch never changes the assignee.
     private bool CanAssignToMe  => Order is not null && !string.Equals(Order.AssignedTo, Principal.UserId, StringComparison.Ordinal)
-                                    && Rules.Evaluate(Principal, OrderActionType.Assign, Order).Allowed;
+                                    && Rules.Evaluate(Principal, OrderActionType.Assign, Order).Allowed && !IsRecipientOnly;
     private bool CanStart       => Order is not null && string.Equals(Order.Status, ServiceOrderStatus.Pending, StringComparison.Ordinal)
                                     && Rules.Evaluate(Principal, OrderActionType.Execute, Order).Allowed;
     private bool CanComplete    => Order is not null && string.Equals(Order.Status, ServiceOrderStatus.InProgress, StringComparison.Ordinal)
@@ -42,8 +43,14 @@ public partial class ServiceOrderDetail
     /// <summary>An order whose type fans out to its poles' occupants is dispatched through the shared-use dialog (XD01-316).</summary>
     private bool IsFanOut       => Order is not null && SharedUseDispatchDialogState.IsFanOut(OrderTypes.Find(Order.OrderTypeId));
 
-    /// <summary>The viewer reaches the order only because it was dispatched to it: its targets are read-only and its poles' occupancy is not shown (XD01-316).</summary>
+    /// <summary>The viewer reaches the order only because it was dispatched to it: its poles' occupancy is not shown (XD01-316).</summary>
     private bool IsRecipientOnly => Order is not null && Rules.IsDispatchRecipientOnly(Principal, Order);
+
+    /// <summary>
+    /// Whether the viewer may record the work on the order's targets: what it may annotate, and — for
+    /// a recipient of the order's dispatch — only when the order's type lets a recipient execute it (XD01-333).
+    /// </summary>
+    private bool CanRecordTargetWork => Order is not null && Rules.EvaluateTargetWrite(Principal, Order, OrderTargetWrite.RecordWork).Allowed;
 
     private void OpenDispatchDialog() => _dispatchDialogVisible = true;
 

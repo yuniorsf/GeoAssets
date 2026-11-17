@@ -15,6 +15,7 @@ internal static class OrderTypeMapper
         InitialStateKey = t.InitialStateKey,
         AttributesSchemaJson = t.AttributesSchemaJson,
         TargetPolicyJson = OrderTargetPolicyMapper.ToJson(t.TargetPolicy),
+        RecipientAccess = (int)t.RecipientAccess,
         CreationPolicies = t.CreationPolicies
             .Select(p => new OrderCreationPolicyRecord
             {
@@ -59,6 +60,7 @@ internal static class OrderTypeMapper
         InitialStateKey = r.InitialStateKey,
         AttributesSchemaJson = r.AttributesSchemaJson,
         TargetPolicy = OrderTargetPolicyMapper.FromJson(r.TargetPolicyJson),
+        RecipientAccess = RecipientAccessFrom(r.RecipientAccess),
         CreationPolicies = r.CreationPolicies
             .Select(p => new OrderCreationPolicy((PolicyKind)p.Kind, p.Value))
             .ToList(),
@@ -75,4 +77,12 @@ internal static class OrderTypeMapper
                 x.TriggerAction.HasValue ? (OrderActionType)x.TriggerAction.Value : null))
             .ToList(),
     };
+
+    /// <summary>
+    /// The stored number as an <see cref="OrderRecipientAccess"/>; a number outside the
+    /// enumeration (written by hand) reads as <see cref="OrderRecipientAccess.Inform"/>, never as
+    /// more access — as the row-level security functions read it.
+    /// </summary>
+    public static OrderRecipientAccess RecipientAccessFrom(int stored) =>
+        Enum.IsDefined((OrderRecipientAccess)stored) ? (OrderRecipientAccess)stored : OrderRecipientAccess.Inform;
 }
