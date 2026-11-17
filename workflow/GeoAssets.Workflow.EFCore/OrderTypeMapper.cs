@@ -50,9 +50,33 @@ internal static class OrderTypeMapper
             }).ToList(),
     };
 
+    /// <summary>
+    /// The <c>OrderTypeRecipientActions</c> rows of <paramref name="t"/> (XD01-336): per action of
+    /// <see cref="OrderType.RecipientActions"/>, one row granting it with no move, then one per
+    /// transition of the type tagged with it (<see cref="ServiceOrderTransitions.TransitionsFor"/>)
+    /// — what the row-level security of "ServiceOrders" checks a recipient's status change against.
+    /// </summary>
+    public static List<OrderTypeRecipientActionRecord> ToRecipientActionRecords(OrderType t) =>
+    [
+        .. t.RecipientActions.Distinct().SelectMany(action => (IEnumerable<OrderTypeRecipientActionRecord>)
+        [
+            new() { OrderTypeId = t.Id, Action = (int)action },
+            .. ServiceOrderTransitions.TransitionsFor(t, action).Select(x => new OrderTypeRecipientActionRecord
+            {
+                OrderTypeId  = t.Id,
+                Action       = (int)action,
+                FromStateKey = x.FromStateKey,
+                ToStateKey   = x.ToStateKey,
+            }),
+        ]),
+    ];
+
     // ── EF → Domain ───────────────────────────────────────────────────────────
 
-    public static OrderType ToDomain(OrderTypeRecord r) => new()
+    /// <summary>A type with no <c>OrderTypeRecipientActions</c> rows: its recipients take no action of their own.</summary>
+    public static OrderType ToDomain(OrderTypeRecord r) => ToDomain(r, []);
+
+    public static OrderType ToDomain(OrderTypeRecord r, IEnumerable<OrderTypeRecipientActionRecord> recipientActions) => new()
     {
         Id              = r.Id,
         DisplayName     = r.DisplayName,
@@ -61,6 +85,7 @@ internal static class OrderTypeMapper
         AttributesSchemaJson = r.AttributesSchemaJson,
         TargetPolicy = OrderTargetPolicyMapper.FromJson(r.TargetPolicyJson),
         RecipientAccess = RecipientAccessFrom(r.RecipientAccess),
+        RecipientActions = RecipientActionsFrom(recipientActions),
         CreationPolicies = r.CreationPolicies
             .Select(p => new OrderCreationPolicy((PolicyKind)p.Kind, p.Value))
             .ToList(),
@@ -85,4 +110,17 @@ internal static class OrderTypeMapper
     /// </summary>
     public static OrderRecipientAccess RecipientAccessFrom(int stored) =>
         Enum.IsDefined((OrderRecipientAccess)stored) ? (OrderRecipientAccess)stored : OrderRecipientAccess.Inform;
+
+    /// <summary>
+    /// The distinct actions of <paramref name="stored"/>, in the order they were written; a number
+    /// outside <see cref="OrderActionType"/> (written by hand) is dropped — never more than stored.
+    /// </summary>
+    public static List<OrderActionType> RecipientActionsFrom(IEnumerable<OrderTypeRecipientActionRecord> stored) =>
+    [
+        .. stored
+            .OrderBy(a => a.Id)
+            .Select(a => (OrderActionType)a.Action)
+            .Where(action => Enum.IsDefined(action))
+            .Distinct(),
+    ];
 }

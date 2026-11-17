@@ -46,6 +46,7 @@ public class ServiceOrderDbContext(
     internal DbSet<OrderActionPermissionRecord> ActionPermissions => Set<OrderActionPermissionRecord>();
     internal DbSet<OrderTypeStateRecord> OrderTypeStates => Set<OrderTypeStateRecord>();
     internal DbSet<OrderTypeTransitionRecord> OrderTypeTransitions => Set<OrderTypeTransitionRecord>();
+    internal DbSet<OrderTypeRecipientActionRecord> OrderTypeRecipientActions => Set<OrderTypeRecipientActionRecord>();
     internal DbSet<OutboxMessageRecord> OutboxMessages => Set<OutboxMessageRecord>();
     internal DbSet<InboxProcessedMessageRecord> InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
     internal DbSet<ContractorUsLedgerEntryRecord> ContractorUsLedgerEntries => Set<ContractorUsLedgerEntryRecord>();

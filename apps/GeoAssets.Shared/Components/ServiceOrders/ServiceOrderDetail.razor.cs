@@ -34,6 +34,18 @@ public partial class ServiceOrderDetail
                                     && Rules.Evaluate(Principal, OrderActionType.Cancel, Order).Allowed;
     private bool CanAnnotate    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Annotate, Order).Allowed;
 
+    /// <summary>
+    /// A recipient of the order's dispatch accepts it along its type's accept transition, when the
+    /// type lets it (XD01-336) — e.g. an occupant accepting its shared-use notice.
+    /// </summary>
+    private bool CanAccept      => Order is not null && IsRecipientOnly && AcceptedStatus is not null
+                                    && Rules.EvaluateAppend(Principal, Order, AcceptEntry(AcceptedStatus)).Allowed;
+
+    /// <summary>The status accepting the order moves it to from its current one; null when its type has no such move.</summary>
+    private string? AcceptedStatus => Order is null ? null
+        : ServiceOrderTransitions.TransitionsFor(OrderTypes.Find(Order.OrderTypeId), OrderActionType.Accept)
+            .FirstOrDefault(t => string.Equals(t.FromStateKey, Order.Status, StringComparison.Ordinal))?.ToStateKey;
+
     /// <summary>Approving an order with targets commits the occupancy staged on its poles; only the pole owner may (XD01-318).</summary>
     private bool CanApprove     => Order is not null && OrderApprovalState.CanApprove(OrderTypes.Find(Order.OrderTypeId), Order, Principal, Rules);
 
@@ -113,6 +125,19 @@ public partial class ServiceOrderDetail
             _approving = false;
         }
     }
+
+    private async Task Accept()
+    {
+        if (Order is null || AcceptedStatus is not { } acceptedStatus) return;
+        await Repository.AppendActionAsync(Order.Id, AcceptEntry(acceptedStatus));
+        await OnChanged.InvokeAsync();
+    }
+
+    private OrderActionLog AcceptEntry(string acceptedStatus) => new(
+        Action: OrderActionType.Accept,
+        PerformedBy: Principal.UserId,
+        PerformedAt: Clock.GetUtcNow().UtcDateTime,
+        ResultingStatus: acceptedStatus);
 
     private async Task CancelOrder()
     {

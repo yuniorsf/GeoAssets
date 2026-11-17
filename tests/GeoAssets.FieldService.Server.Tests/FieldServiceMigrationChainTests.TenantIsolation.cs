@@ -37,6 +37,7 @@ public partial class FieldServiceMigrationChainTests
         ["OrderTypeTransitions"] = "transitions of a shared order type",
         ["OrderActionPermissions"] = "role permissions of a shared order type",
         ["OrderCreationPolicies"] = "creation policies of a shared order type",
+        ["OrderTypeRecipientActions"] = "the actions a shared order type lets the recipients of its orders take",
         ["WorkflowOutboxMessages"] = "messaging outbox, drained by a background relay that runs for no organization",
         ["WorkflowInboxProcessedMessages"] = "message deduplication keys, written by background consumers",
         ["OrganizationGrantSyncCursor"] = "the grant sync worker's one-row position",

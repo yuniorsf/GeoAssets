@@ -141,7 +141,7 @@ public partial class FieldServiceMigrationChainTests
     }
 
     [Fact]
-    public async Task DispatchRecipientPolicy_AsANonOwnerRole_LetsTheOccupantOfAnInformOrderAppendToItsLog_AndWriteNothingElse()
+    public async Task DispatchRecipientPolicy_AsANonOwnerRole_LetsTheOccupantOfAnInformOrderWriteNothing_NotEvenToItsLog()
     {
         await using var db = await NewContextOnEmptyDatabaseAsync();
         await db.Database.MigrateAsync();
@@ -149,10 +149,12 @@ public partial class FieldServiceMigrationChainTests
         await using var scoped = await OpenAsTenantScopedRoleAsync(db);
         await SetOrganizationAsync(scoped, FirstRecipientOrganization);
 
-        // The order: its type has no row in "OrderTypes", so it only informs the occupant (XD01-333) —
-        // not updated, not relabelled, not deleted. The log still follows its order.
+        // The order: its type has no row in "OrderTypes" and no recipient action, so it only informs
+        // the occupant (XD01-333) — not updated, not relabelled, not deleted, and (XD01-336) its log
+        // no longer follows it to the occupant: no entry is appended.
         (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "AssignedTo" = 'occupant-crew' WHERE "Id" = 'child-a'""")).Should().Be(0);
-        (await ExecuteAsync(scoped, OrderChildInserts["OrderActionLogs"], ("orderId", "child-a"))).Should().Be(1, "the log follows its order, which the occupant sees");
+        var append = async () => await ExecuteAsync(scoped, OrderChildInserts["OrderActionLogs"], ("orderId", "child-a"));
+        (await append.Should().ThrowAsync<PostgresException>()).Which.SqlState.Should().Be(RowSecurityViolation);
         (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "OrganizationId" = @org WHERE "Id" = 'child-a'""", ("org", FirstRecipientOrganization))).Should().Be(0);
         (await ExecuteAsync(scoped, """DELETE FROM "ServiceOrders" WHERE "Id" = 'child-a'""")).Should().Be(0);
         (await ExecuteAsync(scoped, """UPDATE "ServiceOrders" SET "AssignedTo" = 'occupant-crew' WHERE "Id" = 'parent'""")).Should().Be(0);

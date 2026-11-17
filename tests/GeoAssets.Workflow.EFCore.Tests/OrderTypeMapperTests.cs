@@ -188,4 +188,47 @@ public class OrderTypeMapperTests
 
         OrderTypeMapper.ToDomain(record).RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
     }
+
+    // ── RecipientActions (XD01-336) ───────────────────────────────────────────
+
+    [Fact]
+    public void RecipientActions_OfTheNotice_AreOneGrantRowPerAction_PlusOneRowPerMoveItMakes()
+    {
+        var notice = GeoAssets.Workflow.Isp.NeutralOperator.SharedUse.SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+
+        OrderTypeMapper.ToRecipientActionRecords(notice)
+            .Select(r => (r.OrderTypeId, r.Action, r.FromStateKey, r.ToStateKey))
+            .Should().Equal(
+                ("shared-use-occupant-notice", 4, (string?)null, (string?)null),
+                ("shared-use-occupant-notice", 4, "Pending", "InProgress"),
+                ("shared-use-occupant-notice", 9, null, null));
+    }
+
+    [Fact]
+    public void RecipientActions_ATypeWithNone_HasNoRows_AndADuplicateIsWrittenOnce()
+    {
+        OrderTypeMapper.ToRecipientActionRecords(new OrderType { Id = "plain", DisplayName = "Plain" }).Should().BeEmpty();
+        OrderTypeMapper.ToRecipientActionRecords(new OrderType
+        {
+            Id = "twice",
+            DisplayName = "Twice",
+            RecipientActions = [OrderActionType.Annotate, OrderActionType.Annotate],
+        }).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RecipientActions_ReadBack_AreTheDistinctActionsInWrittenOrder_AndAnUndefinedNumberIsDropped()
+    {
+        var stored = new List<OrderTypeRecipientActionRecord>
+        {
+            new() { Id = 3, OrderTypeId = "notice", Action = 9 },
+            new() { Id = 1, OrderTypeId = "notice", Action = 4 },
+            new() { Id = 2, OrderTypeId = "notice", Action = 4, FromStateKey = "Pending", ToStateKey = "InProgress" },
+            new() { Id = 4, OrderTypeId = "notice", Action = 99 },
+        };
+
+        OrderTypeMapper.ToDomain(new OrderTypeRecord { Id = "notice", DisplayName = "Notice" }, stored).RecipientActions
+            .Should().Equal(OrderActionType.Accept, OrderActionType.Annotate);
+        OrderTypeMapper.ToDomain(new OrderTypeRecord { Id = "notice", DisplayName = "Notice" }).RecipientActions.Should().BeEmpty();
+    }
 }

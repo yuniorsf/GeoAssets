@@ -255,6 +255,7 @@
   "orders.assignToMe": "Atribuir a mim",
   "orders.start": "Iniciar",
   "orders.complete": "Concluir",
+  "orders.accept": "Aceitar",
   "orders.annotatePlaceholder": "Adicionar uma nota...",
   "orders.addNote": "Adicionar nota",
   "orders.dispatchHistory": "Histórico de despachos",

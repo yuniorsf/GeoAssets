@@ -54,6 +54,8 @@ public static class ServiceOrdersRestApiExtensions
 {
     private static readonly string[] EmptySchemaBodyError = ["Request body must contain a JSON Schema document."];
 
+    private static readonly string[] UndefinedRecipientActionError = ["recipientActions may only name order actions."];
+
     private const string ReadPolicy = "serviceorders:read";
 
     public static IEndpointRouteBuilder MapServiceOrdersApi(
@@ -315,7 +317,8 @@ public static class ServiceOrdersRestApiExtensions
             if (order is null) return Results.NotFound();
 
             var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
-            var verdict = rules.Evaluate(principal, entry.Action, order);
+            // XD01-336: a recipient takes the actions its order's type lets it take, each only along its own transition.
+            var verdict = rules.EvaluateAppend(principal, order, entry);
             if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             // XD01-318: approving an order with targets commits the occupancy staged on its poles.
@@ -426,7 +429,8 @@ public static class ServiceOrdersRestApiExtensions
 
     /// <summary>
     /// Rejects an order type whose <see cref="OrderType.RecipientAccess"/> is not one of the
-    /// enumeration's values (XD01-333), or whose <see cref="OrderType.TargetPolicy"/> breaks its
+    /// enumeration's values (XD01-333), whose <see cref="OrderType.RecipientActions"/> name an
+    /// action outside <see cref="OrderActionType"/> (XD01-336), or whose <see cref="OrderType.TargetPolicy"/> breaks its
     /// own invariants, before it is stored: <see cref="OrderTypeRegistry"/> validates the same
     /// policy when it loads order types at startup, so a stored invalid policy would stop the host
     /// from starting. Returns null when the type can be stored.
@@ -439,6 +443,15 @@ public static class ServiceOrdersRestApiExtensions
             {
                 orderTypeId = orderType.Id,
                 errors = new[] { $"recipientAccess must be one of {string.Join(", ", Enum.GetValues<OrderRecipientAccess>().Select(a => $"{(int)a} ({a})"))}." },
+            });
+        }
+
+        if (orderType.RecipientActions.Any(action => !Enum.IsDefined(action)))
+        {
+            return Results.BadRequest(new
+            {
+                orderTypeId = orderType.Id,
+                errors = UndefinedRecipientActionError,
             });
         }
 

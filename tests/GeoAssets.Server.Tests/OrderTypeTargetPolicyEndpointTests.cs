@@ -228,4 +228,54 @@ public class OrderTypeTargetPolicyEndpointTests
         else
             stored.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    // ── RecipientActions (XD01-336) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task PostAndPut_RoundTripRecipientActions()
+    {
+        using var server = await BuildServerAsync();
+        using var client = server.CreateClient();
+
+        var created = await client.PostAsJsonAsync(OrderTypesUri, new OrderType { Id = "pole-inspection", DisplayName = "Pole inspection" }, ClientOptions);
+        var afterCreate = await client.GetFromJsonAsync<OrderType>(PoleInspectionUri, ClientOptions);
+        var replaced = await client.PutAsJsonAsync(
+            PoleInspectionUri,
+            new OrderType { Id = "pole-inspection", DisplayName = "Pole inspection", RecipientActions = [OrderActionType.Accept, OrderActionType.Annotate] },
+            ClientOptions);
+        var afterReplace = await client.GetFromJsonAsync<OrderType>(PoleInspectionUri, ClientOptions);
+
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        afterCreate!.RecipientActions.Should().BeEmpty("a type that says nothing grants its recipients no action");
+        replaced.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        afterReplace!.RecipientActions.Should().Equal(OrderActionType.Accept, OrderActionType.Annotate);
+    }
+
+    [Theory]
+    [InlineData("POST", 99)]
+    [InlineData("POST", -1)]
+    [InlineData("PUT", 14)]
+    public async Task PostAndPut_ARecipientActionOutsideTheEnumeration_Returns400_AndStoresNothing(string verb, int recipientAction)
+    {
+        using var server = await BuildServerAsync();
+        using var client = server.CreateClient();
+        if (string.Equals(verb, "PUT", StringComparison.Ordinal))
+            await client.PostAsJsonAsync(OrderTypesUri, new OrderType { Id = "pole-inspection", DisplayName = "Pole inspection" }, ClientOptions);
+        using var body = new StringContent(
+            $$"""{"id":"pole-inspection","displayName":"Pole inspection","recipientActions":[{{(int)OrderActionType.Accept}},{{recipientAction}}]}""",
+            System.Text.Encoding.UTF8, "application/json");
+
+        var response = string.Equals(verb, "PUT", StringComparison.Ordinal)
+            ? await client.PutAsync(PoleInspectionUri, body)
+            : await client.PostAsync(OrderTypesUri, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        problem.RootElement.GetProperty("errors")[0].GetString().Should().Be("recipientActions may only name order actions.");
+        var stored = await client.GetAsync(PoleInspectionUri);
+        if (string.Equals(verb, "PUT", StringComparison.Ordinal))
+            (await stored.Content.ReadFromJsonAsync<OrderType>(ClientOptions))!.RecipientActions.Should().BeEmpty();
+        else
+            stored.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }

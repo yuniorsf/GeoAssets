@@ -270,6 +270,7 @@
   "orders.assignToMe": "Assign to me",
   "orders.start": "Start",
   "orders.complete": "Complete",
+  "orders.accept": "Accept",
   "orders.annotatePlaceholder": "Add a note...",
   "orders.addNote": "Add note",
   "orders.dispatchHistory": "Dispatch history",
