@@ -147,4 +147,21 @@ public class PanelStateServiceExtensionsTests
         descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
         descriptor.ImplementationType.Should().Be<MapOrderFocusService>();
     }
+
+    [Fact]
+    public void AddGeoAssetsPanelState_RegistersMapSelectionFenceMemoryAsScoped_OverTheScopedSelection()
+    {
+        var services = new ServiceCollection();
+        services.AddGeoAssetsPanelState();
+
+        var descriptor = services.Should().ContainSingle(d => d.ServiceType == typeof(MapSelectionFenceMemory)).Subject;
+        descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var memory = scope.ServiceProvider.GetRequiredService<MapSelectionFenceMemory>();
+        memory.Remember([[[0, 0], [1, 0], [1, 1], [0, 0]]]);
+        scope.ServiceProvider.GetRequiredService<IMapSelectionSet>().Add(["a"]);
+        memory.Rings.Should().BeNull("the memory watches the same scoped selection the map changes");
+    }
 }

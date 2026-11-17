@@ -8,6 +8,8 @@
 @inject IMapSelectionResolver SelectionResolver
 @inject IMapSelectionInterop SelectionInterop
 @inject Microsoft.Extensions.Logging.ILogger<MapSelectionCoordinator> SelectionLogger
+@inject MapSelectionFenceMemory SelectionFence
+@inject NavigationManager Navigation
 
 <main class="map-area" style="@(Hidden ? "display:none" : null)">
     <DrawToolbar @ref="_drawToolbar"
@@ -32,7 +34,8 @@
                       Notice="@_selectionCoordinator.Notice"
                       OnToolRequested="OnSelectionToolRequested"
                       OnClear="_selectionCoordinator.Clear"
-                      OnNoticeDismissed="_selectionCoordinator.DismissNotice" />
+                      OnNoticeDismissed="_selectionCoordinator.DismissNotice"
+                      OnCreateOrder="OpenCreateOrderFromSelection" />
 
     <!-- Properties Panel -->
     @if (Selection.Selected is not null)

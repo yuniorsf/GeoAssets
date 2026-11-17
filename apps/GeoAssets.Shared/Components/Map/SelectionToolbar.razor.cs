@@ -30,6 +30,12 @@ public partial class SelectionToolbar
 
     [Parameter] public EventCallback OnNoticeDismissed { get; set; }
 
+    /// <summary>
+    /// Creates a service order from the selection (XD01-312). The button is shown only when the
+    /// host handles it.
+    /// </summary>
+    [Parameter] public EventCallback OnCreateOrder { get; set; }
+
     /// <summary>The toggle tools, in display order.</summary>
     public static IReadOnlyList<SelectionToolOption> ToolOptions { get; } =
     [
@@ -43,6 +49,9 @@ public partial class SelectionToolbar
     /// <summary>Clicking the pressed tool disarms it; clicking another arms that one.</summary>
     public static MapSelectionTool NextTool(MapSelectionTool current, MapSelectionTool clicked) =>
         current == clicked ? MapSelectionTool.None : clicked;
+
+    /// <summary>An order can be created from the selection once something is selected and no gesture is still resolving.</summary>
+    public static bool CanCreateOrder(int count, bool busy) => count > 0 && !busy;
 
     /// <summary>The localization key for the selected count (formatted with the count).</summary>
     public static string CountKey(int count) => count switch

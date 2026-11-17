@@ -1,5 +1,3 @@
-using GeoAssets.Shared.Services.Occupancy;
-using GeoAssets.Shared.Services.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -8,21 +6,14 @@ using Microsoft.AspNetCore.Components;
 namespace GeoAssets.Shared.Components.ServiceOrders;
 
 /// <summary>
-/// The smallest way into <see cref="OccupancyChangeEditor"/> from an order (XD01-315): a compact,
-/// paged list of the order's targets — <see cref="OrderTargetPaging.PageSize"/> per request,
-/// in the target store's default order — each with a button that opens the editor for that
-/// pole beneath the list. It is not the targets grid (filters, sorting, activities, selection):
-/// that belongs to the slice that builds it, which can host the editor the same way.
+/// An order's targets with the way into <see cref="OccupancyChangeEditor"/> (XD01-315): the paged
+/// targets grid (<see cref="OrderTargetsTable"/>, XD01-312) with the work asked on each target
+/// (XD01-316) and one "Occupancy" button per target, which opens the editor for that pole beneath
+/// the grid. For a caller the occupancy is not for, the grid is read-only (XD01-316).
 /// </summary>
 public partial class OrderTargetOccupancyPanel
 {
-    private readonly CancellationTokenSource _lifetime = new();
-
     private string? _loadedOrderId;
-    private IReadOnlyList<ServiceOrderTarget>? _targets;
-    private int _totalCount;
-    private int _page = 1;
-    private bool _loadFailed;
     private ServiceOrderTarget? _selected;
 
     [Parameter, EditorRequired] public IServiceOrder Order { get; set; } = null!;
@@ -38,71 +29,19 @@ public partial class OrderTargetOccupancyPanel
     /// </summary>
     [Parameter] public bool CanOpenOccupancy { get; set; } = true;
 
-    private bool CanGoPrevious => OrderTargetPaging.HasPrevious(_page);
+    /// <summary>The order type's activity catalog, which names the activities of each target.</summary>
+    private IReadOnlyList<OrderTargetActivity>? ActivityCatalog => OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy?.Activities;
 
-    private bool CanGoNext => OrderTargetPaging.HasNext(_page, _totalCount, OrderTargetPaging.PageSize);
-
-    protected override async Task OnParametersSetAsync()
+    protected override void OnParametersSet()
     {
         if (string.Equals(Order.Id, _loadedOrderId, StringComparison.Ordinal)) return;
 
         _loadedOrderId = Order.Id;
-        (_page, _selected) = (1, null);
-        await LoadAsync();
+        _selected = null;
     }
-
-    private async Task LoadAsync()
-    {
-        (_targets, _loadFailed) = (null, false);
-        try
-        {
-            var result = await Targets.GetPageAsync(
-                new OrderTargetQuery(Order.Id, _page, OrderTargetPaging.PageSize), _lifetime.Token);
-            (_targets, _totalCount) = (result.Items, result.TotalCount);
-        }
-        catch (OperationCanceledException)
-        {
-            // The component went away while loading.
-        }
-        catch (Exception)
-        {
-            _loadFailed = true;
-        }
-    }
-
-    private async Task GoToAsync(int page)
-    {
-        var clamped = OrderTargetPaging.Clamp(page, _totalCount, OrderTargetPaging.PageSize);
-        if (clamped == _page) return;
-
-        _page = clamped;
-        await LoadAsync();
-    }
-
-    /// <summary>The work asked on a target, by the names the order's type gives its activities.</summary>
-    private string ActivitiesOf(ServiceOrderTarget target) =>
-        TargetActivityLabels.Describe(target.ActivityIds, OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy?.Activities);
 
     private void Select(ServiceOrderTarget target) =>
         _selected = string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? null : target;
 
     private void CloseEditor() => _selected = null;
-
-    private string Summary() => L.GetString(
-        "assetsTable.pagerSummary",
-        _targets?.Count ?? 0,
-        _totalCount,
-        _totalCount == 0 ? 0 : _page,
-        Math.Max(OrderTargetPaging.TotalPages(_totalCount, OrderTargetPaging.PageSize), 1));
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _lifetime.Cancel();
-            _lifetime.Dispose();
-        }
-
-        base.Dispose(disposing);
-    }
 }

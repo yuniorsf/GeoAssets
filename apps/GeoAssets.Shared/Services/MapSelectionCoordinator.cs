@@ -20,6 +20,7 @@ public sealed class MapSelectionCoordinator : IDisposable
     private readonly IMapSelectionInterop _interop;
     private readonly ILogger<MapSelectionCoordinator> _logger;
     private readonly string _divId;
+    private readonly MapSelectionFenceMemory? _fenceMemory;
 
     private CancellationTokenSource? _resolveCts;
     private Task _statePushes = Task.CompletedTask;
@@ -30,7 +31,8 @@ public sealed class MapSelectionCoordinator : IDisposable
         IMapSelectionResolver resolver,
         IMapSelectionInterop interop,
         ILogger<MapSelectionCoordinator> logger,
-        string divId)
+        string divId,
+        MapSelectionFenceMemory? fenceMemory = null)
     {
         ArgumentNullException.ThrowIfNull(selection);
         ArgumentNullException.ThrowIfNull(resolver);
@@ -43,6 +45,7 @@ public sealed class MapSelectionCoordinator : IDisposable
         _interop = interop;
         _logger = logger;
         _divId = divId;
+        _fenceMemory = fenceMemory;
 
         _selection.Changed += OnSelectionChanged;
     }
@@ -117,7 +120,15 @@ public sealed class MapSelectionCoordinator : IDisposable
             var ids = await _resolver.ResolveAsync(gesture, cts.Token);
             if (cts.IsCancellationRequested) return;
 
-            Report(gesture.Additive ? _selection.Add(ids) : _selection.Replace(ids));
+            if (gesture.Additive)
+            {
+                Report(_selection.Add(ids));
+                return;
+            }
+
+            var change = _selection.Replace(ids);
+            if (change.Overflow == 0) RememberFence(gesture);
+            Report(change);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
@@ -179,6 +190,25 @@ public sealed class MapSelectionCoordinator : IDisposable
 
         // The gesture that owns the source disposes it when its resolve unwinds.
         Interlocked.Exchange(ref _resolveCts, null)?.Cancel();
+    }
+
+    /// <summary>
+    /// Records the gesture's fence as the origin of the selection it just replaced (XD01-312), in
+    /// the normalised form the resolver sent. A gesture the normaliser rejects — only possible with
+    /// a resolver that does not normalise itself — is simply not remembered.
+    /// </summary>
+    private void RememberFence(MapSelectionGesture gesture)
+    {
+        if (_fenceMemory is null) return;
+
+        try
+        {
+            _fenceMemory.Remember(MapSelectionRequest.FromGesture(gesture).Rings);
+        }
+        catch (Exception ex) when (ex is InvalidSelectionFenceException or ArgumentException)
+        {
+            _logger.LogDebug(ex, "Map selection fence not remembered: the gesture does not normalise");
+        }
     }
 
     /// <summary>Surfaces an overflow; an operation that changed nothing still has to re-render

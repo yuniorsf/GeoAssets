@@ -1,15 +1,33 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.Interfaces
+@using GeoAssets.Shared.Interfaces
+@using GeoAssets.Shared.Services
+@using GeoAssets.Shared.Services.OrderTargets
 @using GeoAssets.Workflow.Orders
 @using GeoAssets.Workflow.Rules
 @inject IServiceOrderRepository Repository
 @inject OrderTypeRegistry OrderTypes
 @inject ServiceOrderRules Rules
 @inject TimeProvider Clock
+@inject IMapSelectionSet SelectionSet
+@inject MapSelectionFenceMemory FenceMemory
+@inject IAssetProvider AssetProvider
+@inject IMapOrderFocus MapFocus
+@inject Microsoft.Extensions.Logging.ILogger<ServiceOrderCreateForm> Logger
 
 <div>
     <h5>@L["orders.newOrder"]</h5>
 
-    @if (_allowedTypes.Count == 0)
+    @if (_createdOrder is not null && _plan is not null)
+    {
+        <OrderTargetSelectionPanel Order="_createdOrder"
+                                   Principal="Principal"
+                                   Plan="_plan"
+                                   SelectedCount="_plannedSelectionCount"
+                                   OnApplied="OnTargetsApplied"
+                                   OnSkipped="OnTargetsSkipped" />
+    }
+    else if (_allowedTypes.Count == 0)
     {
         <p class="empty-state">@L["orders.noCreatableTypes"]</p>
     }
@@ -28,15 +46,54 @@
                 <InputTextArea class="form-control" @bind-Value="_model.Description" rows="3" />
             </div>
 
-            <div class="form-group">
-                <label>@L["orders.orderType"]</label>
-                <InputSelect class="form-control" @bind-Value="_model.OrderTypeId">
-                    @foreach (var type in _allowedTypes)
+            @if (SelectionSet.Ids.Count > 0 || _useSelection)
+            {
+                <div class="form-check order-from-selection-toggle">
+                    <input id="order-use-selection" class="form-check-input" type="checkbox"
+                           checked="@_useSelection" @onchange="OnUseSelectionChanged" />
+                    <label class="form-check-label" for="order-use-selection">@L.GetString("orders.fromSelection.use", SelectionSet.Ids.Count)</label>
+                </div>
+            }
+
+            @if (_useSelection && _fits.Count == 0)
+            {
+                <p class="occupancy-notice" role="status">@L["orders.fromSelection.noType"]</p>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label for="order-type-select">@L["orders.orderType"]</label>
+                    <InputSelect id="order-type-select" class="form-control" @bind-Value="_model.OrderTypeId" aria-describedby="@(HintFit is null ? null : "order-type-hint")">
+                        @if (_useSelection)
+                        {
+                            @foreach (var fit in _fits)
+                            {
+                                <option value="@fit.Type.Id">@L.GetString("orders.fromSelection.typeOption", fit.Type.DisplayName, fit.EligibleCount + fit.UnknownCount, SelectionSet.Ids.Count)</option>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var type in _allowedTypes)
+                            {
+                                <option value="@type.Id">@type.DisplayName</option>
+                            }
+                        }
+                    </InputSelect>
+                    @if (HintFit is { } selectedFit)
                     {
-                        <option value="@type.Id">@type.DisplayName</option>
+                        <div id="order-type-hint" class="form-text order-from-selection-hint">
+                            @if (selectedFit.OtherTypeCount > 0)
+                            {
+                                <div>@L.GetString("orders.fromSelection.otherTypes", selectedFit.OtherTypeCount)</div>
+                            }
+                            @if (selectedFit.MayExceedLimit)
+                            {
+                                <div class="order-from-selection-limit">@L.GetString("orders.fromSelection.limitWarning", selectedFit.SelectionLimit ?? 0)</div>
+                            }
+                        </div>
                     }
-                </InputSelect>
-            </div>
+                </div>
+            }
 
             <div class="form-group">
                 <label>@L["orders.priority"]</label>
@@ -48,8 +105,13 @@
                 </InputSelect>
             </div>
 
+            @if (_planProblemKey is not null)
+            {
+                <p class="occupancy-notice occupancy-notice-error" role="alert">@L[_planProblemKey]</p>
+            }
+
             <div class="form-actions">
-                <button class="btn btn-primary" type="submit">@L["assets.save"]</button>
+                <button class="btn btn-primary" type="submit" disabled="@(_useSelection && _fits.Count == 0)">@L[_useSelection ? "orders.fromSelection.save" : "assets.save"]</button>
                 <button class="btn btn-secondary" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
             </div>
         </EditForm>

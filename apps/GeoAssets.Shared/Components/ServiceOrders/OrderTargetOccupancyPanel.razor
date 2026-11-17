@@ -1,75 +1,27 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
-@using GeoAssets.Shared.Services.Occupancy
 @using GeoAssets.Workflow.Orders
-@using GeoAssets.Workflow.Targets
-@inject IServiceOrderTargetReader Targets
 @inject OrderTypeRegistry OrderTypes
 
 <div class="occupancy-targets">
-    @if (_loadFailed)
+    @if (CanOpenOccupancy)
     {
-        <p class="occupancy-notice occupancy-notice-error" role="alert">@L["occupancy.targets.loadError"]</p>
-    }
-    else if (_targets is null)
-    {
-        <p class="empty-state" role="status">@L["occupancy.editor.loading"]</p>
-    }
-    else if (_totalCount == 0)
-    {
-        <p class="empty-state">@L["occupancy.targets.empty"]</p>
+        <OrderTargetsTable OrderId="@Order.Id"
+                           CaptionKey="occupancy.targets.caption"
+                           ActivityCatalog="@ActivityCatalog"
+                           SelectedTargetId="@_selected?.Id">
+            <RowActions Context="target">
+                <button type="button" class="btn btn-outline btn-sm"
+                        aria-label="@L.GetString("occupancy.targets.openFor", target.Alias ?? target.FeatureId)"
+                        aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
+                        @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
+            </RowActions>
+        </OrderTargetsTable>
     }
     else
     {
-        <div class="table-responsive">
-            <table class="table table-sm align-middle occupancy-table">
-                <caption>@L[CanOpenOccupancy ? "occupancy.targets.caption" : "sharedUse.targets.readOnlyCaption"]</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">@L["occupancy.targets.target"]</th>
-                        <th scope="col">@L["sharedUse.targets.activities"]</th>
-                        <th scope="col">@L["occupancy.table.status"]</th>
-                        @if (CanOpenOccupancy)
-                        {
-                            <th scope="col">@L["occupancy.table.actions"]</th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var target in _targets)
-                    {
-                        var label = target.Alias ?? target.FeatureId;
-                        <tr @key="target.Id" class="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "occupancy-row-selected" : null)">
-                            <th scope="row">@label</th>
-                            <td>@ActivitiesOf(target)</td>
-                            <td>@target.Status</td>
-                            @if (CanOpenOccupancy)
-                            {
-                                <td>
-                                    <button type="button" class="btn btn-outline btn-sm"
-                                            aria-label="@L.GetString("occupancy.targets.openFor", label)"
-                                            aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
-                                            @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
-                                </td>
-                            }
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-
-        <div class="assets-table-pager">
-            <span class="assets-table-pager-summary" aria-live="polite">@Summary()</span>
-            <nav aria-label="@L["occupancy.targets.pager"]">
-                <ul class="pagination pagination-sm mb-0">
-                    <li class="page-item @(CanGoPrevious ? "" : "disabled")">
-                        <button type="button" class="page-link" disabled="@(!CanGoPrevious)" @onclick="() => GoToAsync(_page - 1)">@L["assetsTable.previous"]</button>
-                    </li>
-                    <li class="page-item @(CanGoNext ? "" : "disabled")">
-                        <button type="button" class="page-link" disabled="@(!CanGoNext)" @onclick="() => GoToAsync(_page + 1)">@L["assetsTable.next"]</button>
-                    </li>
-                </ul>
-            </nav>
-        </div>
+        <OrderTargetsTable OrderId="@Order.Id"
+                           CaptionKey="sharedUse.targets.readOnlyCaption"
+                           ActivityCatalog="@ActivityCatalog" />
     }
 
     @if (_selected is not null && CanOpenOccupancy)
