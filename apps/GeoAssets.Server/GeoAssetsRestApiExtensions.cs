@@ -301,6 +301,8 @@ public static class GeoAssetsRestApiExtensions
         {
             var assetType = await JsonSerializer.DeserializeAsync<AssetType>(req.Body, opts).ConfigureAwait(false);
             if (assetType is null) return Results.BadRequest("Invalid asset type.");
+            if (AssetTypeZoomRange.FindDefect(assetType.MinZoom, assetType.MaxZoom) is { } zoomDefect)
+                return Results.BadRequest($"Invalid asset type zoom range: {zoomDefect}.");
             provider.AddAssetType(assetType);
             return Results.Created(new Uri($"{prefix}/asset-types/{assetType.Id}", UriKind.Relative), null);
         })

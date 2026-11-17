@@ -356,6 +356,8 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                 AllowedGeometryType = r.AllowedGeometryType,
                 DefaultLayerId = r.DefaultLayerId,
                 AttributesSchemaJson = r.AttributesSchemaJson,
+                MinZoom = r.MinZoom,
+                MaxZoom = r.MaxZoom,
                 OrganizationId = r.OrganizationId
             }).ToList();
         return [.. _typeCache];
@@ -376,6 +378,8 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             AllowedGeometryType = assetType.AllowedGeometryType,
             DefaultLayerId = assetType.DefaultLayerId,
             AttributesSchemaJson = assetType.AttributesSchemaJson,
+            MinZoom = assetType.MinZoom,
+            MaxZoom = assetType.MaxZoom,
             OrganizationId = assetType.OrganizationId
         });
         SaveChanges();

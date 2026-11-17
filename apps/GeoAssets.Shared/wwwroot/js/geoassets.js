@@ -406,7 +406,6 @@ window.GeoAssets = (function () {
             },
             buf:          gl.createBuffer(),
             features:     new Map(),   // featureId → { feature, colorHex, assetTypeId }
-            hiddenTypes:  new Set(),
             rafHandle:    null,        // pending requestAnimationFrame id
             anchorLatLng: null,        // map center at last full draw
             anchorPx:     null         // pixel position of anchorLatLng at last full draw
@@ -444,7 +443,7 @@ window.GeoAssets = (function () {
         const state = _maps[divId];
         const wgl   = state?.webgl;
         if (!wgl) return;
-        const { canvas, gl, prog, locs, features, hiddenTypes } = wgl;
+        const { canvas, gl, prog, locs, features } = wgl;
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(prog);
@@ -452,8 +451,11 @@ window.GeoAssets = (function () {
         // Two passes so stateful features (selected, conflict, highlight overlay, …) are never
         // hidden under their unstyled neighbours. State is colour/alpha only in this renderer.
         const stateful = [];
+        const drawn = new Map(); // assetTypeId → is the type drawn right now (user toggle × zoom range)
         features.forEach(({ feature, colorHex, assetTypeId }, id) => {
-            if (hiddenTypes.has(assetTypeId)) return;
+            let show = drawn.get(assetTypeId);
+            if (show === undefined) drawn.set(assetTypeId, show = _isTypeDrawn(state, assetTypeId));
+            if (!show) return;
             const name = _effectiveState(state, id);
             if (name) stateful.push([feature, name]);
             else _webglDrawGeoFeature(state, feature, colorHex);
@@ -546,8 +548,19 @@ window.GeoAssets = (function () {
             selectionTool:  'none',     // 'none' | 'click' | 'box' | 'fence' — the armed selection tool (XD01-310)
             selectionSaved: null,       // snapping / box-zoom settings to restore once an area tool is disarmed
             selectionInput: null,       // DOM listeners added by _bindSelectionInput, removed in destroyMap
-            additive:       false       // was Shift held on the most recent pointer press on the map?
+            additive:       false,      // was Shift held on the most recent pointer press on the map?
+            hiddenTypes:    new Set(),  // assetTypeIds the user switched off (setLayerVisibility); sticky across re-renders
+            zoomRanges:     new Map(),  // assetTypeId → { min, max } (null = open bound) — setLayerZoomRange (XD01-311)
+            selectionOutline: null      // the fence-outline overlay of showSelectionOutline, if any (XD01-311)
         };
+
+        // A zoom range is re-evaluated whenever the zoom settles. Registered here, not in
+        // registerHandlers, so it runs before that function's viewport callback asks .NET for the
+        // new viewport's features, and also when Geoman is not loaded.
+        map.on('zoomend', () => {
+            const state = _maps[divId];
+            if (state && state.zoomRanges.size > 0) _applyTypeVisibility(divId, state);
+        });
 
         if (mode === 'webgl') _initWebGL(divId);
     }
@@ -573,6 +586,9 @@ window.GeoAssets = (function () {
             state.map.remove();
             state.featureStates.clear();
             state.highlights.clear();
+            state.hiddenTypes.clear();
+            state.zoomRanges.clear();
+            state.selectionOutline = null;
             delete _maps[divId];
         }
     }
@@ -881,7 +897,10 @@ window.GeoAssets = (function () {
 
         let group = state.layerGroups.get(assetTypeId);
         if (!group) {
-            group = L.layerGroup().addTo(state.map);
+            // A type hidden by the user or by its zoom range gets its group too, just not on the
+            // map: viewport refreshes rebuild the groups constantly and must not un-hide it.
+            group = L.layerGroup();
+            if (_isTypeDrawn(state, assetTypeId)) group.addTo(state.map);
             state.layerGroups.set(assetTypeId, group);
         }
         layer.addTo(group);
@@ -925,7 +944,9 @@ window.GeoAssets = (function () {
             pointToLayer: (_f, latlng) =>
                 L.circleMarker(latlng, { radius: 12, opacity: 0, fillOpacity: 0, weight: 0, interactive: true }),
             onEachFeature: (_f, l) => _bindEvents(state, l, id, props)
-        }).addTo(state.map);
+        });
+        // A type that is not drawn (user toggle or zoom range) must not be clickable either.
+        if (_isTypeDrawn(state, assetTypeId)) evtLayer.addTo(state.map);
 
         state.featureLayers.set(id, evtLayer);
     }
@@ -1093,28 +1114,75 @@ window.GeoAssets = (function () {
     }
 
     // ─── Layer Visibility ────────────────────────────────────────────────────
+    // Two independent rules decide whether an asset type is drawn, and both must agree:
+    //   • the user's own toggle (setLayerVisibility → state.hiddenTypes), and
+    //   • the type's zoom range (setLayerZoomRange → state.zoomRanges, XD01-311).
+    // Neither rule overwrites the other: a type the user hid stays hidden when the zoom comes back
+    // into range, and one hidden by zoom reappears when the zoom returns if the user has it on.
+    // Both are sticky per map — they survive clearAllFeatures and viewport re-renders. Hiding only
+    // takes layers off the map; feature states (state.featureStates) are untouched and re-apply.
+
+    function _inZoomRange(state, assetTypeId) {
+        const range = state.zoomRanges.get(assetTypeId);
+        if (!range) return true;
+        const zoom = state.map.getZoom();
+        return (range.min === null || zoom >= range.min) && (range.max === null || zoom <= range.max);
+    }
+
+    function _isTypeDrawn(state, assetTypeId) {
+        return !state.hiddenTypes.has(assetTypeId) && _inZoomRange(state, assetTypeId);
+    }
+
+    /** Puts on / takes off the map whatever _isTypeDrawn says, for one type or (no id) for all. */
+    function _applyTypeVisibility(divId, state, assetTypeId) {
+        const sync = (layer, tid) => {
+            const show = _isTypeDrawn(state, tid);
+            if (show === state.map.hasLayer(layer)) return;
+            show ? state.map.addLayer(layer) : state.map.removeLayer(layer);
+        };
+
+        if (state.webgl) {
+            // WebGL mode: the redraw skips the type; its invisible event layers follow it.
+            state.webgl.features.forEach(({ assetTypeId: tid }, fid) => {
+                if (assetTypeId !== undefined && tid !== assetTypeId) return;
+                const evtLayer = state.featureLayers.get(fid);
+                if (evtLayer) sync(evtLayer, tid);
+            });
+            _scheduleRedraw(divId);
+            return;
+        }
+
+        // Leaflet / Canvas mode: toggle the type's LayerGroup
+        state.layerGroups.forEach((group, tid) => {
+            if (assetTypeId === undefined || tid === assetTypeId) sync(group, tid);
+        });
+    }
 
     function setLayerVisibility(divId, assetTypeId, visible) {
         const state = _maps[divId];
         if (!state) return;
+        visible ? state.hiddenTypes.delete(assetTypeId) : state.hiddenTypes.add(assetTypeId);
+        _applyTypeVisibility(divId, state, assetTypeId);
+    }
 
-        if (state.webgl) {
-            // WebGL mode: track visibility set, toggle event layers, redraw
-            visible ? state.webgl.hiddenTypes.delete(assetTypeId)
-                    : state.webgl.hiddenTypes.add(assetTypeId);
-            state.webgl.features.forEach(({ assetTypeId: tid }, fid) => {
-                if (tid !== assetTypeId) return;
-                const evtLayer = state.featureLayers.get(fid);
-                if (!evtLayer) return;
-                visible ? evtLayer.addTo(state.map) : state.map.removeLayer(evtLayer);
-            });
-            _scheduleRedraw(divId);
-        } else {
-            // Leaflet / Canvas mode: toggle the LayerGroup
-            const group = state.layerGroups.get(assetTypeId);
-            if (!group) return;
-            visible ? state.map.addLayer(group) : state.map.removeLayer(group);
-        }
+    function _zoomBound(value) {
+        if (value === null || value === undefined) return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    /**
+     * Draws `assetTypeId` only while `min <= zoom <= max` (null/undefined bound = open; both open
+     * removes the range). Evaluated now and on every `zoomend`. Client-side only: .NET still
+     * sends features of every type for the viewport — they are kept, just not on the map.
+     */
+    function setLayerZoomRange(divId, assetTypeId, min, max) {
+        const state = _maps[divId];
+        if (!state) return;
+        const range = { min: _zoomBound(min), max: _zoomBound(max) };
+        if (range.min === null && range.max === null) state.zoomRanges.delete(assetTypeId);
+        else state.zoomRanges.set(assetTypeId, range);
+        _applyTypeVisibility(divId, state, assetTypeId);
     }
 
     // ─── View ────────────────────────────────────────────────────────────────
@@ -1146,6 +1214,52 @@ window.GeoAssets = (function () {
         if (first && first.getLatLng) {
             state.map.setView(first.getLatLng(), 16);
         }
+    }
+
+    // ─── Selection fence outline (XD01-311) ──────────────────────────────────
+    // A drawing aid, not a feature: it lives outside featureLayers / layerGroups / the WebGL
+    // feature store, so clearAllFeatures, layer visibility, zoom ranges, feature states, snapping
+    // and the selection tools never see it. Always SVG (the map's default renderer), in every
+    // render mode, so its colour comes from CSS (.geoassets-selection-outline → a theme token)
+    // and follows a theme switch without being redrawn.
+
+    function _isPosition(p) {
+        return Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+    }
+
+    /** `rings`: RFC 7946 polygon rings of [lon, lat] positions, exterior first. Replaces any
+     *  outline already shown. Rings that are not drawable are ignored with a warning. */
+    function showSelectionOutline(divId, rings) {
+        const state = _maps[divId];
+        if (!state) return;
+        clearSelectionOutline(divId);
+
+        const latLngs = (Array.isArray(rings) ? rings : [])
+            .filter(ring => Array.isArray(ring) && ring.length >= 3 && ring.every(_isPosition))
+            .map(ring => ring.map(p => [p[1], p[0]]));
+        if (latLngs.length === 0) {
+            console.warn('GeoAssets: selection outline ignored — no drawable ring.');
+            return;
+        }
+
+        state.selectionOutline = L.polygon(latLngs, {
+            className:   'geoassets-selection-outline',
+            color:       'currentColor',   // resolved by the CSS class above
+            weight:      3,
+            dashArray:   '8 6',
+            fill:        false,
+            interactive: false,            // no click, hover, tooltip or context menu
+            bubblingMouseEvents: false,
+            pmIgnore:    true,             // Geoman: never editable, draggable or removable
+            snapIgnore:  true              // …and never a snap target
+        }).addTo(state.map);
+    }
+
+    function clearSelectionOutline(divId) {
+        const state = _maps[divId];
+        if (!state || !state.selectionOutline) return;
+        state.map.removeLayer(state.selectionOutline);
+        state.selectionOutline = null;
     }
 
     // ─── Per-feature states: public API (XD01-309) ───────────────────────────
@@ -1297,6 +1411,9 @@ window.GeoAssets = (function () {
         addWmsLayer,
         removeWmsLayer,
         setLayerVisibility,
+        setLayerZoomRange,
+        showSelectionOutline,
+        clearSelectionOutline,
         fitBounds,
         panToFeature,
         setFeatureStates,

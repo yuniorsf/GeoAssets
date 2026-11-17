@@ -245,4 +245,45 @@ public class GeoAssetsRestApiExtensionsTests
         props.GetProperty("schemaVersion").GetString().Should().Be("1");
         props.GetProperty("complianceStatus").GetString().Should().Be("unknown");
     }
+
+    // ── Asset type zoom range (XD01-311) ─────────────────────────────────────
+
+    [Theory]
+    [InlineData(13, 15)]
+    [InlineData(15, null)]
+    [InlineData(null, 13)]
+    [InlineData(null, null)]
+    public async Task PostAssetType_ThenGetAssetTypes_RoundTripsTheZoomRange(int? min, int? max)
+    {
+        var provider = new TestAssetProvider();
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+        var assetType = new AssetType { Name = "Pole", MinZoom = min, MaxZoom = max };
+
+        var post = await client.PostAsJsonAsync(new Uri("/api/geoassets/asset-types", UriKind.Relative), assetType, GeoJsonSerializer.Options);
+        var listed = await client.GetFromJsonAsync<AssetType[]>(new Uri("/api/geoassets/asset-types", UriKind.Relative), GeoJsonSerializer.Options);
+
+        post.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+        var returned = listed!.Single(t => t.Id == assetType.Id);
+        returned.MinZoom.Should().Be(min);
+        returned.MaxZoom.Should().Be(max);
+    }
+
+    [Theory]
+    [InlineData("""{"name":"Pole","minZoom":-1}""")]
+    [InlineData("""{"name":"Pole","maxZoom":25}""")]
+    [InlineData("""{"name":"Pole","minZoom":16,"maxZoom":15}""")]
+    public async Task PostAssetType_InvalidZoomRange_Returns400AndStoresNothing(string body)
+    {
+        var provider = new TestAssetProvider();
+        var before = provider.GetAssetTypes().Count;
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(new Uri("/api/geoassets/asset-types", UriKind.Relative), content);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        provider.GetAssetTypes().Should().HaveCount(before);
+    }
 }

@@ -48,6 +48,9 @@ public class ObservableMapInteropTests
         public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options) => Record(nameof(AddWmsLayerAsync), divId, layerId, wmsBaseUrl, options);
         public Task RemoveWmsLayerAsync(string divId, string layerId) => Record(nameof(RemoveWmsLayerAsync), divId, layerId);
         public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => Record(nameof(SetLayerVisibilityAsync), divId, assetTypeId, visible);
+        public Exception? FailZoomRangeWith { get; init; }
+        public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom) =>
+            FailZoomRangeWith is { } failure ? Task.FromException(failure) : Record(nameof(SetLayerZoomRangeAsync), divId, assetTypeId, minZoom, maxZoom);
         public Task FitBoundsAsync(string divId, double[] bbox) => Record(nameof(FitBoundsAsync), divId, bbox);
         public Task PanToFeatureAsync(string divId, string featureId) => Record(nameof(PanToFeatureAsync), divId, featureId);
         public Task HighlightFeatureAsync(string divId, string featureId) => Record(nameof(HighlightFeatureAsync), divId, featureId);
@@ -56,6 +59,8 @@ public class ObservableMapInteropTests
         public Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state) => Record(nameof(SetFeatureStatesAsync), divId, featureIds, state);
         public Task ClearFeatureStatesAsync(string divId) => Record(nameof(ClearFeatureStatesAsync), divId);
         public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) => Record(nameof(SetSelectionToolAsync), divId, tool);
+        public Task ShowSelectionOutlineAsync(string divId, double[][][] rings) => Record(nameof(ShowSelectionOutlineAsync), divId, rings);
+        public Task ClearSelectionOutlineAsync(string divId) => Record(nameof(ClearSelectionOutlineAsync), divId);
     }
 
     private static ObservableMapInterop Sut(FakeMapInterop inner, MapRenderMode renderMode = MapRenderMode.Leaflet) =>
@@ -226,6 +231,9 @@ public class ObservableMapInteropTests
         public Task ClearFeatureStatesAsync(string divId) => Task.CompletedTask;
         public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) =>
             Task.FromException(new JSException("boom"));
+        public Task ShowSelectionOutlineAsync(string divId, double[][][] rings) =>
+            Task.FromException(new JSException("boom"));
+        public Task ClearSelectionOutlineAsync(string divId) => Task.CompletedTask;
     }
 
     [Theory]
@@ -265,6 +273,118 @@ public class ObservableMapInteropTests
 
         thrown.Should().BeOfType<JSException>();
         spans.Should().ContainSingle().Which.Status.Should().Be(ActivityStatusCode.Error);
+    }
+
+    // ── Zoom range and fence outline (XD01-311) ──────────────────────────────
+
+    [Theory]
+    [InlineData(13, 15, MapRenderMode.Leaflet, "leaflet")]
+    [InlineData(15, null, MapRenderMode.Canvas, "canvas")]
+    [InlineData(null, 13, MapRenderMode.WebGL, "webgl")]
+    [InlineData(null, null, MapRenderMode.Leaflet, "leaflet")]
+    public async Task SetLayerZoomRangeAsync_ForwardsToInner_AndEmitsSpanWithBoundsAndRenderModeTags(
+        int? min, int? max, MapRenderMode renderMode, string expectedMode)
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner, renderMode);
+
+        var spans = await CaptureSpansAsync(() => sut.SetLayerZoomRangeAsync("map1", "type-a", min, max));
+
+        var call = inner.Calls.Should().ContainSingle().Subject;
+        call.Method.Should().Be(nameof(IMapInterop.SetLayerZoomRangeAsync));
+        call.Args.Should().Equal("map1", "type-a", min, max);
+        var span = spans.Should().ContainSingle().Subject;
+        span.OperationName.Should().Be(ObservableMapInterop.SetLayerZoomRangeSpanName).And.Be("Map.SetLayerZoomRange");
+        span.GetTagItem("map.min_zoom").Should().Be(min);
+        span.GetTagItem("map.max_zoom").Should().Be(max);
+        span.GetTagItem("map.render_mode").Should().Be(expectedMode);
+        span.GetTagItem("duration_ms").Should().NotBeNull();
+        span.TagObjects.Select(t => t.Key).Should().NotContain("map.div_id");
+        span.TagObjects.Select(t => t.Value).Should().NotContain("type-a", "an asset type id is unbounded cardinality");
+    }
+
+    [Fact]
+    public async Task SetLayerZoomRangeAsync_InnerFailure_MarksSpanAsErrorAndRethrows()
+    {
+        var inner = new FakeMapInterop { FailZoomRangeWith = new JSException("boom") };
+        var sut = Sut(inner);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.SetLayerZoomRangeAsync("map1", "type-a", 13, 15)));
+
+        thrown.Should().BeOfType<JSException>();
+        spans.Should().ContainSingle().Which.Status.Should().Be(ActivityStatusCode.Error);
+    }
+
+    [Fact]
+    public async Task ShowSelectionOutlineAsync_ForwardsToInner_AndEmitsSpanWithCountsOnly()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner, MapRenderMode.WebGL);
+        double[][][] rings =
+        [
+            [[-46.7, -23.6], [-46.6, -23.6], [-46.6, -23.5], [-46.7, -23.6]],
+            [[-46.68, -23.58], [-46.62, -23.58], [-46.62, -23.52]]
+        ];
+
+        var spans = await CaptureSpansAsync(() => sut.ShowSelectionOutlineAsync("map1", rings));
+
+        var call = inner.Calls.Should().ContainSingle().Subject;
+        call.Method.Should().Be(nameof(IMapSelectionInterop.ShowSelectionOutlineAsync));
+        call.Args[0].Should().Be("map1");
+        call.Args[1].Should().BeSameAs(rings);
+        var span = spans.Should().ContainSingle().Subject;
+        span.OperationName.Should().Be(ObservableMapInterop.ShowSelectionOutlineSpanName).And.Be("Map.ShowSelectionOutline");
+        span.GetTagItem("map.outline_ring_count").Should().Be(2);
+        span.GetTagItem("map.outline_vertex_count").Should().Be(7);
+        span.GetTagItem("map.render_mode").Should().Be("webgl");
+        span.GetTagItem("duration_ms").Should().NotBeNull();
+        span.TagObjects.Select(t => t.Key).Should().BeEquivalentTo(
+            "map.outline_ring_count", "map.outline_vertex_count", "map.render_mode", "duration_ms");
+    }
+
+    [Fact]
+    public async Task ShowSelectionOutlineAsync_NullRings_ThrowsWithoutCallingInnerOrEmittingSpan()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.ShowSelectionOutlineAsync("map1", null!)));
+
+        thrown.Should().BeOfType<ArgumentNullException>();
+        inner.Calls.Should().BeEmpty();
+        spans.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ShowSelectionOutlineAsync_InnerFailure_MarksSpanAsErrorAndRethrows()
+    {
+        var sut = new ObservableMapInterop(
+            new FakeMapInterop(), new ThrowingSelectionInterop(), MapRenderMode.Leaflet,
+            NullLogger<ObservableMapInterop>.Instance, TimeProvider.System);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.ShowSelectionOutlineAsync("map1", [[[0, 0], [1, 1], [1, 0]]])));
+
+        thrown.Should().BeOfType<JSException>();
+        spans.Should().ContainSingle().Which.Status.Should().Be(ActivityStatusCode.Error);
+    }
+
+    [Fact]
+    public async Task ClearSelectionOutlineAsync_DelegatesToInner_WithoutASpan()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+
+        var spans = await CaptureSpansAsync(() => sut.ClearSelectionOutlineAsync("map1"));
+
+        inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapSelectionInterop.ClearSelectionOutlineAsync))
+            .Which.Args.Should().Equal("map1");
+        spans.Should().BeEmpty();
     }
 
     // ── Pass-through ─────────────────────────────────────────────────────────

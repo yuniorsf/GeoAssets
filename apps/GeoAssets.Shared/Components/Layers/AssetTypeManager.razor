@@ -2,7 +2,7 @@
 @using GeoAssets.Core.Interfaces
 @using GeoAssets.Core.Models.Geometry
 @inject IAssetProvider Repository
-@inject IMapInterop MapInterop
+@inject MapLayerDisplayService LayerDisplay
 @inject ICurrentMapContext MapContext
 
 <div class="sidebar-section">
@@ -18,7 +18,7 @@
         <div class="asset-list">
             @foreach (var type in Repository.GetAssetTypes())
             {
-                var isVisible = _visibility.TryGetValue(type.Id, out var v) ? v : true;
+                var isVisible = IsVisible(type);
                 <div class="layer-row">
                     <input type="checkbox"
                            checked="@isVisible"
@@ -44,6 +44,8 @@
                             @L["map.layers.allowedGeometry"]: @(type.AllowedGeometryType is { } g ? GeometryTypeLabel(g) : L["map.layers.anyGeometry"])
                             <br />
                             @L["map.layers.defaultLayer"]: @(Repository.GetLayers().FirstOrDefault(l => l.Id == type.DefaultLayerId)?.Name ?? L["map.layers.noneOption"])
+                            <br />
+                            @L["map.layers.zoomRange"]: @ZoomRangeLabel(type)
                         </div>
                         <LayerRuleEditor AssetType="type" />
                     </div>
@@ -90,6 +92,37 @@
             {
                 <div class="attribute-errors"><strong>@_newTypeSchemaError</strong></div>
             }
+
+            <fieldset class="form-group zoom-range">
+                <legend>@L["map.layers.zoomRange"]</legend>
+                <div class="zoom-range-fields">
+                    <div class="zoom-range-field">
+                        <label for="new-type-min-zoom">@L["map.layers.zoomRange.min"]</label>
+                        <input id="new-type-min-zoom" class="form-control" type="number" inputmode="numeric"
+                               min="@AssetTypeZoomRange.LowestZoom" max="@AssetTypeZoomRange.HighestZoom" step="1"
+                               aria-describedby="new-type-zoom-help new-type-zoom-error"
+                               aria-invalid="@AriaInvalid(_newTypeZoomProblem?.MinInvalid == true)"
+                               @bind="_newTypeMinZoom" />
+                    </div>
+                    <div class="zoom-range-field">
+                        <label for="new-type-max-zoom">@L["map.layers.zoomRange.max"]</label>
+                        <input id="new-type-max-zoom" class="form-control" type="number" inputmode="numeric"
+                               min="@AssetTypeZoomRange.LowestZoom" max="@AssetTypeZoomRange.HighestZoom" step="1"
+                               aria-describedby="new-type-zoom-help new-type-zoom-error"
+                               aria-invalid="@AriaInvalid(_newTypeZoomProblem?.MaxInvalid == true)"
+                               @bind="_newTypeMaxZoom" />
+                    </div>
+                </div>
+                <div id="new-type-zoom-help" class="form-text">
+                    @L.GetString("map.layers.zoomRange.help", AssetTypeZoomRange.LowestZoom, AssetTypeZoomRange.HighestZoom)
+                </div>
+                <div id="new-type-zoom-error" role="alert">
+                    @if (ZoomRangeError is { } zoomError)
+                    {
+                        <div class="attribute-errors"><strong>@zoomError</strong></div>
+                    }
+                </div>
+            </fieldset>
 
             <div class="form-actions">
                 <button class="btn btn-primary btn-sm" @onclick="SaveNewType" type="button">✓</button>

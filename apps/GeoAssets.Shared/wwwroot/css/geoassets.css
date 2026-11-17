@@ -32,6 +32,9 @@
     --map-state-highlighted: var(--warning);
     --map-state-conflict:    var(--danger);
     --map-state-disabled:    var(--text-secondary);
+
+    /* Outline of an order's selection fence (XD01-311) — an alias too, so it follows the theme. */
+    --map-selection-outline: var(--accent);
 }
 
 /* ─── Bootstrap 5 token bridge (Catppuccin Mocha / Latte) ───────────────────
@@ -411,6 +414,16 @@ html, body {
 .leaflet-marker-icon.geoassets-state-disabled {
     opacity: 0.35;
     filter: grayscale(1);
+}
+
+/* Selection fence outline (XD01-311): a dashed, unfilled SVG path drawn by geoassets.js's
+   showSelectionOutline. Colour comes from here (the path's stroke is `currentColor`), so it
+   switches with the theme; it never takes pointer events. */
+.geoassets-selection-outline {
+    color: var(--map-selection-outline);
+    stroke: var(--map-selection-outline);
+    fill: none;
+    pointer-events: none;
 }
 
 /* ─── Draw Toolbar ───────────────────────────────────────────────────────── */
@@ -912,6 +925,43 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     color: var(--text-secondary);
     margin-bottom: 8px;
 }
+
+/* Optional per-type zoom range in the asset-type editor (XD01-311). */
+.zoom-range {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+}
+
+.zoom-range legend {
+    float: none;
+    width: auto;
+    padding: 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.zoom-range-fields {
+    display: flex;
+    gap: 8px;
+}
+
+.zoom-range-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.zoom-range .form-control[aria-invalid="true"] { border-color: var(--danger); }
+
+.zoom-range .form-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.zoom-range .attribute-errors { margin-top: 6px; }
 
 /* ─── Custom Attribute Editor ───────────────────────────────────────────── */
 

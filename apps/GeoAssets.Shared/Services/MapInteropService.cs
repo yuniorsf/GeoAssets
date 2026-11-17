@@ -188,6 +188,12 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) =>
         _js.InvokeVoidAsync($"{Ns}.setLayerVisibility", divId, assetTypeId, visible).AsTask();
 
+    public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom)
+    {
+        AssetTypeZoomRange.EnsureValid(minZoom, maxZoom);
+        return _js.InvokeVoidAsync($"{Ns}.setLayerZoomRange", divId, assetTypeId, minZoom, maxZoom).AsTask();
+    }
+
     public Task FitBoundsAsync(string divId, double[] bbox) =>
         _js.InvokeVoidAsync($"{Ns}.fitBounds", divId, bbox).AsTask();
 
@@ -215,6 +221,15 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
 
     public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) =>
         _js.InvokeVoidAsync($"{Ns}.setSelectionTool", divId, tool.ToJsName()).AsTask();
+
+    public Task ShowSelectionOutlineAsync(string divId, double[][][] rings)
+    {
+        ArgumentNullException.ThrowIfNull(rings);
+        return _js.InvokeVoidAsync($"{Ns}.showSelectionOutline", divId, rings).AsTask();
+    }
+
+    public Task ClearSelectionOutlineAsync(string divId) =>
+        _js.InvokeVoidAsync($"{Ns}.clearSelectionOutline", divId).AsTask();
 
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) =>
         _js.InvokeVoidAsync($"{Ns}.registerHandlers", divId, handlerRef).AsTask();

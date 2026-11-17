@@ -3,6 +3,7 @@ using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Shared.Components.Assets;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
+using GeoAssets.Workflow.Targets;
 using Microsoft.AspNetCore.Components;
 
 namespace GeoAssets.Shared.Components.Map;
@@ -65,6 +66,23 @@ public partial class MapWorkspace
         var justShown = _wasHidden && !Hidden;
         _wasHidden = Hidden;
         return justShown ? MapInterop.InvalidateSizeAsync(_mapDivId) : Task.CompletedTask;
+    }
+
+    // ─── View ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fits this workspace's map to <paramref name="extent"/> (XD01-311): a null or non-finite
+    /// extent is a no-op returning false, and a single-point or zero-width/height extent is
+    /// padded first so the map does not zoom all the way in (<see cref="MapExtentFitter"/>).
+    /// Components that hold no reference to the workspace reach the same behaviour through
+    /// <see cref="IMapOrderFocus"/>.
+    /// </summary>
+    public async Task<bool> FitToExtentAsync(OrderTargetExtent? extent)
+    {
+        if (MapExtentFitter.ToFitBounds(extent) is not { } bbox) return false;
+
+        await MapInterop.FitBoundsAsync(_mapDivId, bbox);
+        return true;
     }
 
     // ─── Selection ────────────────────────────────────────────────────────

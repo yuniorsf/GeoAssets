@@ -24,4 +24,16 @@ public interface IMapSelectionInterop
     /// mode; snapping is off while a box or fence is being drawn and restored afterwards.
     /// </summary>
     Task SetSelectionToolAsync(string divId, MapSelectionTool tool);
+
+    /// <summary>
+    /// Draws the outline of a selection fence (XD01-311): <paramref name="rings"/> are RFC 7946
+    /// polygon rings of [longitude, latitude] positions, exterior first. The outline is a dashed,
+    /// non-interactive overlay, not a feature — it cannot be clicked or selected, takes no feature
+    /// state, is never sent to the provider and ignores layer visibility and zoom ranges. One
+    /// outline per map: showing another replaces it. A <c>null</c> <paramref name="rings"/> throws.
+    /// </summary>
+    Task ShowSelectionOutlineAsync(string divId, double[][][] rings);
+
+    /// <summary>Removes the outline drawn by <see cref="ShowSelectionOutlineAsync"/>, if any.</summary>
+    Task ClearSelectionOutlineAsync(string divId);
 }

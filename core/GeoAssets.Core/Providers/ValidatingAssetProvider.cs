@@ -117,7 +117,16 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public void Delete(string id)                          => inner.Delete(id);
     public void Clear()                                    => inner.Clear();
     public void LoadAll(IEnumerable<GeoFeature> features)  => inner.LoadAll(features);
-    public void AddAssetType(AssetType assetType)          => inner.AddAssetType(assetType);
+
+    /// <summary>Rejects an asset type whose zoom range breaks <see cref="AssetTypeZoomRange"/>'s
+    /// rules (<see cref="InvalidAssetTypeZoomRangeException"/>) before delegating.</summary>
+    public void AddAssetType(AssetType assetType)
+    {
+        ArgumentNullException.ThrowIfNull(assetType);
+        AssetTypeZoomRange.EnsureValid(assetType.MinZoom, assetType.MaxZoom);
+        inner.AddAssetType(assetType);
+    }
+
     public void DeleteAssetType(Guid id)                   => inner.DeleteAssetType(id);
     public void AddLayer(Layer layer)                      => inner.AddLayer(layer);
     public void DeleteLayer(Guid id)                       => inner.DeleteLayer(id);
