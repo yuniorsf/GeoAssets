@@ -228,10 +228,12 @@ public partial class ServiceOrderMigrationChainTests
         (await db.Database.GetAppliedMigrationsAsync()).Should().NotContain([table, rowLevelSecurity]);
         (await QueryAsync(db, """SELECT "Id"::text AS "Value" FROM "ServiceOrders" """)).Should().Equal("ord-1");
 
-        // Up again.
+        // Up again: back to this pair first, where the table has the one policy this pair gives
+        // it (a later migration, XD01-316, adds a second), then on to the head of the chain.
+        await migrator.MigrateAsync(rowLevelSecurity);
+        (await QueryAsync(db, TargetRowLevelSecuritySql)).Should().Equal("true:false:1");
         await db.Database.MigrateAsync();
         (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
-        (await QueryAsync(db, TargetRowLevelSecuritySql)).Should().Equal("true:false:1");
     }
 
     [Fact]

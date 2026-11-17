@@ -39,7 +39,7 @@ namespace GeoAssets.Workflow.Rules;
 ///   var  result    = rules.Evaluate(principal, OrderActionType.Approve, order);
 /// </code>
 /// </summary>
-public sealed class ServiceOrderRules
+public sealed partial class ServiceOrderRules
 {
     private readonly List<IServiceOrderRule>   _rules;
     private readonly List<IOrderCreationRule>  _creationRules;

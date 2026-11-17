@@ -58,9 +58,14 @@ internal static class OrderTargetEndpointSupport
 
         var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
         var verdict = rules.Evaluate(principal, OrderActionType.Annotate, order);
-        return verdict.Allowed
-            ? new OrderAccess(order, principal, null)
-            : new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
+        if (!verdict.Allowed)
+            return new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
+
+        // XD01-316: the rules let a recipient of the order's dispatch annotate the order; its
+        // targets stay the owning organization's to change.
+        return rules.IsDispatchRecipientOnly(principal, order)
+            ? new OrderAccess(null, null, WorkflowProblemResults.Denied(ServiceOrderRules.RecipientTargetsAreReadOnlyReason))
+            : new OrderAccess(order, principal, null);
     }
 
     /// <summary>The caller's organization, <see cref="Guid.Empty"/> when the token carries none — as <see cref="HttpTenantContext"/> reads it.</summary>

@@ -81,6 +81,31 @@ public sealed class GeoAssetsActivitySource : IDisposable
                  .AddTag("selection.conflicts.blocked", counts.Blocked);
     }
 
+    /// <summary>
+    /// Starts the span of one fan-out dispatch (XD01-316), <c>ServiceOrder.FanOutDispatch</c>.
+    /// The organization id belongs on the span, never on a metric.
+    /// </summary>
+    public Activity? StartFanOutDispatchActivity(string orderId, string? organizationId) =>
+        _source.StartActivity("ServiceOrder.FanOutDispatch")
+               ?.AddTag("order.id", orderId)
+                .AddTag("organization.id", organizationId);
+
+    /// <summary>Tags a fan-out dispatch span with what the dispatch did.</summary>
+    public static void SetFanOutCounts(Activity? activity, string orderTypeId, int children, int unnotifiablePoles) =>
+        activity?.AddTag("order.type", orderTypeId)
+                 .AddTag("fanout.children", children)
+                 .AddTag("fanout.unnotifiable_poles", unnotifiablePoles);
+
+    /// <summary>
+    /// Starts the span of one child order of a fan-out, <c>ServiceOrder.FanOutChild</c>. Whatever
+    /// is staged on the outbox while it is current carries it as its trace parent.
+    /// </summary>
+    public Activity? StartFanOutChildActivity(string parentOrderId, string childOrderId, string partyOrganizationId) =>
+        _source.StartActivity("ServiceOrder.FanOutChild")
+               ?.AddTag("order.id", childOrderId)
+                .AddTag("order.parent_id", parentOrderId)
+                .AddTag("fanout.party_organization.id", partyOrganizationId);
+
     // ── Integration Messaging ─────────────────────────────────────────────────
 
     public Activity? StartIntegrationPublishActivity(

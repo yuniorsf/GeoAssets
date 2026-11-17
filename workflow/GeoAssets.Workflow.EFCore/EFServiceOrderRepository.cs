@@ -106,16 +106,45 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     public Task<IReadOnlyList<IServiceOrder>> GetByDateRangeAsync(DateTime from, DateTime toExclusive, CancellationToken ct = default)
         => LoadAllAsync(_db.ServiceOrders.Where(o => o.CreatedAt >= from && o.CreatedAt <= toExclusive), ct);
 
+    /// <summary>
+    /// The orders dispatched to the given target. Among the caller's own organization's orders
+    /// that is whatever target is asked for. The one case that reaches past the tenant filter is
+    /// the inbox of an organization (XD01-316): when the target asked for <i>is</i> this
+    /// context's organization, orders of other organizations dispatched to it are included —
+    /// the application-layer twin of the dispatch-recipient row-level-security policy. Asking for
+    /// any other organization never reaches past the filter, so the target id a caller supplies
+    /// cannot widen what it sees.
+    /// </summary>
     public async Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(
         string targetId, DispatchTargetType targetType, CancellationToken ct = default)
     {
-        var orderIds = await _db.OrderDispatches
-            .Where(d => d.TargetId == targetId && d.TargetType == (int)targetType)
+        var isOwnInbox = IsOwnOrganization(targetId, targetType, out var spellings);
+
+        // An organization's inbox is matched on both conventional spellings of its id (lower and
+        // upper case); any other target id is matched exactly as it is asked for.
+        var dispatches = isOwnInbox
+            ? _db.OrderDispatches.Where(d => d.TargetType == (int)targetType && spellings.Contains(d.TargetId))
+            : _db.OrderDispatches.Where(d => d.TargetType == (int)targetType && d.TargetId == targetId);
+
+        var orderIds = await dispatches
             .Select(d => d.ServiceOrderId)
             .Distinct()
             .ToHashSetAsync(ct).ConfigureAwait(false);
 
-        return await LoadAllAsync(_db.ServiceOrders.Where(o => orderIds.Contains(o.Id)), ct).ConfigureAwait(false);
+        var orders = isOwnInbox ? _db.ServiceOrders.IgnoreQueryFilters() : _db.ServiceOrders;
+        return await LoadAllAsync(orders.Where(o => orderIds.Contains(o.Id)), ct).ConfigureAwait(false);
+    }
+
+    private bool IsOwnOrganization(string targetId, DispatchTargetType targetType, out string[] spellings)
+    {
+        spellings = [];
+        if (targetType != DispatchTargetType.Organization) return false;
+        if (!Guid.TryParse(targetId, out var organizationId) || organizationId == Guid.Empty) return false;
+        if (organizationId != _db.CurrentOrganizationId) return false;
+
+        var canonical = organizationId.ToString("D");
+        spellings = [canonical, canonical.ToUpperInvariant()];
+        return true;
     }
 
     // ── Write ─────────────────────────────────────────────────────────────────

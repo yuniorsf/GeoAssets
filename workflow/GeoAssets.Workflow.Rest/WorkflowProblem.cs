@@ -12,6 +12,12 @@ internal sealed record WorkflowProblem(string Code, string Detail, JsonElement B
     public string? String(string member) =>
         Body.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
+    /// <summary>The strings of an array member; empty when the member is absent or not an array of strings.</summary>
+    public IReadOnlyList<string> Strings(string member) =>
+        Body.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.Array
+            ? [.. value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
+            : [];
+
     public int Int32(string member) =>
         Body.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
             ? number

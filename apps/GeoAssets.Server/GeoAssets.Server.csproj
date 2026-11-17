@@ -51,6 +51,12 @@
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\projects\GeoAssets.Projects.EFCore\GeoAssets.Projects.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
+    <!-- Transactional outbox for the shared-use dispatch notifications (XD01-316): the wire
+         serializer, and the two brokers the relay can publish to (chosen by configuration,
+         Workflow:Outbox:Transport — see SharedUseHostExtensions.AddServerWorkflowOutbox). -->
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj" />
   </ItemGroup>
 
 </Project>

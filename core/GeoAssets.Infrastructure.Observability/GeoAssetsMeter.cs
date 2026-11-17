@@ -61,11 +61,14 @@ public sealed class GeoAssetsMeter : IDisposable
     /// <summary>The <c>geoassets.orders.targets.*</c> instruments (XD01-308).</summary>
     private readonly TargetSelectionInstruments _targetSelection;
 
+    private readonly FanOutInstruments _fanOut;
+
     public GeoAssetsMeter(string version)
     {
         _meter = new Meter(MeterName, version);
 
         _targetSelection = new TargetSelectionInstruments(_meter);
+        _fanOut = new FanOutInstruments(_meter);
 
         _orderTransitions = _meter.CreateCounter<long>(
             "geoassets.orders.transitions",
@@ -164,6 +167,20 @@ public sealed class GeoAssetsMeter : IDisposable
 
         _targetSelection.Conflicts.Add(targets,
             new KeyValuePair<string, object?>("level", level),
+            new KeyValuePair<string, object?>("order.type", orderTypeId));
+    }
+
+    /// <summary>Records how long one fan-out dispatch took (XD01-316), by outcome.</summary>
+    public void RecordFanOutDuration(double milliseconds, string outcome) =>
+        _fanOut.DurationMs.Record(milliseconds,
+            new KeyValuePair<string, object?>("outcome", outcome));
+
+    /// <summary>Counts the child orders one fan-out dispatch created (XD01-316). Never tagged with an order or organization id.</summary>
+    public void RecordFanOutChildrenSpawned(int children, string orderTypeId)
+    {
+        if (children <= 0) return;
+
+        _fanOut.ChildrenSpawned.Add(children,
             new KeyValuePair<string, object?>("order.type", orderTypeId));
     }
 

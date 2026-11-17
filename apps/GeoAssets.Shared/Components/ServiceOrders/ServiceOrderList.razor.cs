@@ -1,4 +1,6 @@
+using GeoAssets.Shared.Services.SharedUse;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Components;
 
 namespace GeoAssets.Shared.Components.ServiceOrders;
@@ -6,6 +8,13 @@ namespace GeoAssets.Shared.Components.ServiceOrders;
 public partial class ServiceOrderList
 {
     [Parameter] public string? SelectedOrderId { get; set; }
+
+    /// <summary>
+    /// The viewer. When given, the list also holds the orders other organizations dispatched to
+    /// the viewer's organization (XD01-316), which the ordinary list — narrowed to the viewer's
+    /// own organization by the store — does not contain.
+    /// </summary>
+    [Parameter] public WorkflowPrincipal? Principal { get; set; }
     [Parameter] public EventCallback<IServiceOrder> OnOrderSelected { get; set; }
     [Parameter] public EventCallback OnCreateRequested { get; set; }
 
@@ -42,7 +51,11 @@ public partial class ServiceOrderList
 
     private async Task RefreshListAsync()
     {
-        _all = [.. await Repository.GetAllAsync()];
+        var own = await Repository.GetAllAsync();
+        var received = ServiceOrderInbox.OrganizationOf(Principal) is { } organizationId
+            ? await Repository.GetDispatchedToAsync(organizationId, DispatchTargetType.Organization)
+            : [];
+        _all = ServiceOrderInbox.Merge(own, received);
         ApplyFilters();
     }
 

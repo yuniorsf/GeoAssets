@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
@@ -94,8 +95,20 @@ internal static class WorkflowProblemTranslator
         OccupancyProblemCodes.EntryNotFound => new OccupancyEntryNotFoundException(problem.Detail),
         OccupancyProblemCodes.NotAPole => new TargetIsNotAPoleException(problem.Detail),
         OccupancyProblemCodes.TargetReleased => new OccupancyTargetReleasedException(problem.Detail),
+        // Shared-use dispatch (XD01-316).
+        SharedUseProblemCodes.NoFanOut => new OrderTypeHasNoFanOutException(
+            problem.String("orderTypeId") ?? string.Empty, problem.Detail),
+        _ when SharedUseProblemCodes.ReasonOf(problem.Code) is { } reason => Blocked(problem, orderId, reason),
         _ => null,
     };
+
+    /// <summary>A blocked dispatch comes back with its reason and the offending targets the host listed.</summary>
+    private static SharedUseDispatchBlockedException Blocked(WorkflowProblem problem, string? orderId, SharedUseDispatchBlockReason reason)
+    {
+        var targetIds = problem.Strings("targetIds");
+        return new SharedUseDispatchBlockedException(
+            orderId ?? string.Empty, reason, targetIds, targetIds.Count > 0 ? problem.Int32("targetCount") : 0);
+    }
 
     /// <summary>An invalid fence comes back as the typed exception the validator throws; anything else as <see cref="ArgumentException"/>.</summary>
     private static Exception InvalidParameters(WorkflowProblem problem) =>

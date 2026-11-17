@@ -213,6 +213,13 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         if (!verdict.Allowed)
             throw new OrderActionDeniedException(order.Id, verdict);
 
+        // XD01-316: a recipient of the order's dispatch may annotate the order, never add to its targets.
+        if (action == OrderActionType.Annotate && _rules.IsDispatchRecipientOnly(principal, order))
+        {
+            throw new OrderActionDeniedException(
+                order.Id, RuleEvaluationResult.Deny(action, ServiceOrderRules.RecipientTargetsAreReadOnlyReason));
+        }
+
         var orderType = _orderTypes.Find(order.OrderTypeId)
             ?? throw new KeyNotFoundException($"Order type '{order.OrderTypeId}' is not registered.");
 

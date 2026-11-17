@@ -1,4 +1,5 @@
 using GeoAssets.Shared.Services.Occupancy;
+using GeoAssets.Shared.Services.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -29,6 +30,13 @@ public partial class OrderTargetOccupancyPanel
 
     /// <summary>Whether the editor offers editing controls; the host still decides what is allowed.</summary>
     [Parameter] public bool CanEdit { get; set; }
+
+    /// <summary>
+    /// Whether each target offers its pole's occupancy. False for a caller the occupancy is not
+    /// for — the organization an order was dispatched to (XD01-316) reads the order's targets and
+    /// the work asked on each, never the pole owner's occupancy — and the list is then read-only.
+    /// </summary>
+    [Parameter] public bool CanOpenOccupancy { get; set; } = true;
 
     private bool CanGoPrevious => OrderTargetPaging.HasPrevious(_page);
 
@@ -70,6 +78,10 @@ public partial class OrderTargetOccupancyPanel
         _page = clamped;
         await LoadAsync();
     }
+
+    /// <summary>The work asked on a target, by the names the order's type gives its activities.</summary>
+    private string ActivitiesOf(ServiceOrderTarget target) =>
+        TargetActivityLabels.Describe(target.ActivityIds, OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy?.Activities);
 
     private void Select(ServiceOrderTarget target) =>
         _selected = string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? null : target;

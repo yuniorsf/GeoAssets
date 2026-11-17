@@ -1,6 +1,7 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Workflow.Orders
 @using GeoAssets.Shared.Components.Shared
+@using GeoAssets.Shared.Services.SharedUse
 @inject IServiceOrderRepository Repository
 
 <div class="sidebar-section">
@@ -35,6 +36,10 @@
                      @onclick="() => SelectOrder(order)">
                     <span class="order-status-dot order-status-@order.Status.ToString().ToLowerInvariant()"></span>
                     <span class="order-name">@order.Title</span>
+                    @if (ServiceOrderInbox.IsReceived(order, Principal))
+                    {
+                        <span class="order-type-badge order-received-badge" title="@L["orders.receivedBadgeTitle"]">@L["orders.receivedBadge"]</span>
+                    }
                     <span class="order-priority-badge order-priority-@order.Priority.ToString().ToLowerInvariant()">@order.Priority</span>
                 </div>
             }

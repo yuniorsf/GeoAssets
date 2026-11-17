@@ -85,7 +85,9 @@ public partial class FieldServiceMigrationChainTests
         var rowLevelSecurity = MigrationId(db, ChangeSetsRowLevelSecurityMigration);
         var previous = chain[chain.IndexOf(table) - 1];
         chain.IndexOf(rowLevelSecurity).Should().Be(chain.IndexOf(table) + 1);
-        chain[^1].Should().Be(rowLevelSecurity, "these are the newest migrations of this history");
+        chain.Skip(chain.IndexOf(rowLevelSecurity) + 1).Should().OnlyContain(
+            later => string.CompareOrdinal(later, rowLevelSecurity) > 0,
+            "whatever follows this pair was added by a later ticket (XD01-316's dispatch-recipient policies were the first)");
 
         // The schema every deployed database has today, with an order and its target stored.
         await migrator.MigrateAsync(previous);

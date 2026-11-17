@@ -1,12 +1,14 @@
 using System.Security.Claims;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using GeoAssets.Workflow.TestKit;
@@ -40,6 +42,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
 
     public static readonly Guid OrgA = new("a0a0a0a0-0000-4000-8000-0000000a0308");
     public static readonly Guid OrgB = new("b0b0b0b0-0000-4000-8000-0000000b0308");
+    public static readonly Guid OrgC = new("c0c0c0c0-0000-4000-8000-0000000c0316");
     public static readonly DateTimeOffset Now = new(2026, 11, 16, 14, 0, 0, TimeSpan.Zero);
 
     /// <summary>Who each token is. Permissions gate the routes; roles feed the order rules.</summary>
@@ -51,6 +54,9 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         ["outsider"] = new(new Guid("00000000-0000-4000-8000-0000000000b1"), OrgB, [], ["serviceorders:read", "features:read"]),
         ["admin-b"] = new(new Guid("00000000-0000-4000-8000-0000000000b2"), OrgB, ["Administrator"], ["serviceorders:read", "features:read"]),
         ["no-permission"] = new(new Guid("00000000-0000-4000-8000-000000000001"), OrgA, ["Administrator"], []),
+        // XD01-316: an occupant organization of organization A's poles, and one of its supervisors.
+        ["supervisor-a"] = new(new Guid("00000000-0000-4000-8000-0000000005a1"), OrgA, ["Supervisor"], ["serviceorders:read", "features:read"]),
+        ["occupant"] = new(new Guid("00000000-0000-4000-8000-0000000000c1"), OrgC, ["Supervisor"], ["serviceorders:read", "features:read"]),
     };
 
     private readonly IHost _host;
@@ -66,6 +72,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         Grants = host.Services.GetRequiredService<TestOrganizationGrantRepository>();
         Occupancy = host.Services.GetRequiredService<InMemoryPoleOccupancyStore>();
         ChangeSets = host.Services.GetRequiredService<InMemoryOccupancyChangeSetStore>();
+        Outbox = host.Services.GetRequiredService<RecordingOutboxWriter>();
     }
 
     public TestServer Server { get; }
@@ -84,12 +91,16 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
     /// <summary>The store of staged occupancy changes behind the occupancy routes (XD01-315).</summary>
     public InMemoryOccupancyChangeSetStore ChangeSets { get; }
 
+    /// <summary>What the shared-use dispatch staged on the outbox (XD01-316).</summary>
+    public RecordingOutboxWriter Outbox { get; }
+
     public static async Task<OrderTargetsApiHost> StartAsync(
         Action<OrderTargetSelectionOptions>? configure = null,
         IAssetSpatialQuery? spatialQuery = null,
         Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders = null,
         bool mapOrderRoutes = false,
-        bool mapOccupancyRoutes = false)
+        bool mapOccupancyRoutes = false,
+        bool mapSharedUseRoutes = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -119,6 +130,8 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
                         // XD01-315: on request, the staged-occupancy routes, over the same
                         // identities, orders and targets.
                         if (mapOccupancyRoutes) endpoints.MapServiceOrderOccupancyApi();
+                        // XD01-316: on request, the shared-use dispatch routes.
+                        if (mapSharedUseRoutes) endpoints.MapSharedUseDispatchApi();
                     });
                 });
             })
@@ -177,6 +190,13 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<IOccupancyChangeSetWriter>(sp => sp.GetRequiredService<InMemoryOccupancyChangeSetStore>());
         services.AddOrderOccupancyStaging(options => options.PoleAssetTypeIds.Add("pole"));
 
+        // Shared-use dispatch (XD01-316): the real service over the same in-memory stores, a
+        // recording outbox, and a unit of work that just runs the work.
+        services.AddSingleton<RecordingOutboxWriter>();
+        services.AddSingleton<IOutboxWriter>(sp => sp.GetRequiredService<RecordingOutboxWriter>());
+        services.AddSingleton<IWorkflowUnitOfWork, InMemoryWorkflowUnitOfWork>();
+        services.AddSharedUseDispatch();
+
         // The production pipeline: every endpoint needs an authenticated caller unless it says
         // otherwise (AddGeoAssetsAuthentication's fallback policy), and named policies resolve
         // to permission codes through the bridge.
@@ -195,6 +215,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         registry.Register(SurveyType(PoleSurvey, selectionLimit: null, OrderTargetExclusivity.None));
         registry.Register(SurveyType(LimitedSurvey, selectionLimit: 2, OrderTargetExclusivity.None));
         registry.Register(SurveyType(BlockingSurvey, selectionLimit: null, OrderTargetExclusivity.BlockOnOverlap));
+        SharedUseOrderTypes.RegisterAll(registry, ["pole"]);
     }
 
     private static OrderType SurveyType(string id, int? selectionLimit, OrderTargetExclusivity exclusivity) => new()

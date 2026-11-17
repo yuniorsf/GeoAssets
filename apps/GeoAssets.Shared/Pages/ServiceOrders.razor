@@ -17,6 +17,7 @@
     @if (_principal is not null)
     {
         <ServiceOrderList SelectedOrderId="@_selectedOrder?.Id"
+                           Principal="@_principal"
                            OnOrderSelected="OnOrderSelected"
                            OnCreateRequested="OnCreateRequested" />
     }
