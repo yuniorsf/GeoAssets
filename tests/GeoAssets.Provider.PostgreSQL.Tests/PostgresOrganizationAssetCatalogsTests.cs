@@ -5,6 +5,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -116,6 +117,16 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
     }
 
     private sealed record GeoEntityRowSnapshot(string Name, Guid OrganizationId);
+
+    private async Task<List<string>> AttributesAsync(string id)
+    {
+        await using var db = new GeoAssetsDbContext(fixture.CreateOptions());
+        return await db.GeoEntityAttributes
+            .Where(a => a.EntityId == id)
+            .OrderBy(a => a.Key)
+            .Select(a => a.Key + "=" + a.Value)
+            .ToListAsync();
+    }
 
     /// <summary>A tenant-less provider, standing for a shared catalog nobody reads in the test.</summary>
     private PostgresAssetProvider Unused()
@@ -236,15 +247,17 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
 
         var renamed = catalogs.For(world.A).GetById(world.Shared)!;
         renamed.Properties.Name = $"{world.Token} renamed";
+        renamed.Properties.OrganizationId = world.A;
         catalogs.For(world.A).Update(renamed);
 
         catalogs.For(world.B).GetById(world.Shared)!.Properties.Name.Should().Be($"{world.Token} renamed");
         catalogs.For(Guid.Empty).GetById(world.Shared)!.Properties.Name.Should().Be($"{world.Token} renamed");
-        (await RowAsync(world.Shared))!.OrganizationId.Should().Be(Guid.Empty);
+        (await RowAsync(world.Shared))!.OrganizationId.Should().Be(Guid.Empty, "an update never takes a shared feature into an organization (XD01-340)");
 
-        var newShared = NewId("new-shared");
-        catalogs.For(world.A).Add(Feature(newShared, Guid.Empty, world, 0.005));
-        catalogs.For(world.B).GetById(newShared).Should().NotBeNull("a new organization-less feature is shared");
+        var newOne = NewId("new-stated-shared");
+        catalogs.For(world.A).Add(Feature(newOne, Guid.Empty, world, 0.005));
+        (await RowAsync(newOne))!.OrganizationId.Should().Be(world.A, "a new feature is the organization's, whatever it states (XD01-340)");
+        catalogs.For(world.B).GetById(newOne).Should().BeNull();
     }
 
     [Fact]
@@ -346,19 +359,132 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
     }
 
     [Fact]
-    public async Task AddRange_SplitsTheFeaturesBetweenTheOrganizationAndTheSharedCatalog()
+    public async Task AddRange_StampsNewFeaturesWithTheOrganization_WhateverOrganizationTheyState()
     {
         var world = await SeedWorldAsync();
         await using var catalogs = await NewCatalogsAsync();
         var ownAdded = NewId("range-a");
-        var sharedAdded = NewId("range-s");
+        var statedShared = NewId("range-s");
+        var statedOther = NewId("range-b");
 
-        catalogs.For(world.A).AddRange([Feature(ownAdded, world.A, world, 0.006), Feature(sharedAdded, Guid.Empty, world, 0.007)]);
+        catalogs.For(world.A).AddRange(
+        [
+            Feature(ownAdded, world.A, world, 0.006),
+            Feature(statedShared, Guid.Empty, world, 0.007),
+            Feature(statedOther, world.B, world, 0.0075),
+        ]);
 
-        catalogs.For(world.A).GetById(ownAdded).Should().NotBeNull();
-        catalogs.For(world.A).GetById(sharedAdded).Should().NotBeNull();
-        catalogs.For(world.B).GetById(sharedAdded).Should().NotBeNull();
-        catalogs.For(world.B).GetById(ownAdded).Should().BeNull();
+        (await RowAsync(ownAdded))!.OrganizationId.Should().Be(world.A);
+        (await RowAsync(statedShared))!.OrganizationId.Should().Be(world.A);
+        (await RowAsync(statedOther))!.OrganizationId.Should().Be(world.A);
+        Ids(catalogs.For(world.A).GetByAssetType(world.AssetType))
+            .Should().BeEquivalentTo([world.OwnA, ownAdded, statedShared, statedOther, world.Shared]);
+        Ids(catalogs.For(world.B).GetByAssetType(world.AssetType)).Should().BeEquivalentTo([world.OwnB, world.Shared]);
+    }
+
+    // ── Writes naming another organization's feature (XD01-340) ───────────────
+
+    [Fact]
+    public async Task Update_OfAnotherOrganizationsFeature_IsRefused_WhateverOrganizationItStates_AndLeavesItsRowUntouched()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var view = catalogs.For(world.A);
+
+        foreach (var stated in new[] { world.A, world.B, Guid.Empty })
+        {
+            var hijack = Feature(world.OwnB, stated, world, 0.05);
+            hijack.Properties.Name = "hijacked";
+            hijack.Properties.CustomAttributes["plate"] = "stolen";
+
+            var update = () => view.Update(hijack);
+
+            update.Should().Throw<ForeignGeoFeatureWriteException>().Which.FeatureIds.Should().Equal(world.OwnB);
+        }
+
+        (await RowAsync(world.OwnB)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} {world.OwnB}", world.B));
+        (await AttributesAsync(world.OwnB)).Should().Equal($"plate=P-{world.OwnB}");
+        catalogs.For(world.B).GetById(world.OwnB)!.Properties.Name.Should().Be($"{world.Token} {world.OwnB}");
+    }
+
+    [Fact]
+    public async Task AddRange_NamingAnotherOrganizationsFeature_IsRefusedWhole_AndChangesNothing()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var added = NewId("range-new");
+        var hijack = Feature(world.OwnB, world.A, world, 0.05);
+        hijack.Properties.Name = "hijacked";
+
+        var addRange = () => catalogs.For(world.A).AddRange([Feature(added, world.A, world, 0.011), hijack]);
+
+        addRange.Should().Throw<ForeignGeoFeatureWriteException>().Which.FeatureIds.Should().Equal(world.OwnB);
+        (await RowAsync(added)).Should().BeNull();
+        (await RowAsync(world.OwnB)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} {world.OwnB}", world.B));
+        (await AttributesAsync(world.OwnB)).Should().Equal(new[] { $"plate=P-{world.OwnB}" }, "the upsert's attribute reset must not reach the foreign row");
+    }
+
+    [Fact]
+    public async Task LoadAll_StampsTheOrganization_AndNamingAnotherOrganizationsFeature_IsRefusedWithNothingRemoved()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var view = catalogs.For(world.A);
+
+        var refused = () => view.LoadAll([Feature(NewId("load-x"), world.A, world, 0.012), Feature(world.OwnB, world.A, world, 0.05)]);
+
+        refused.Should().Throw<ForeignGeoFeatureWriteException>();
+        (await RowAsync(world.OwnA)).Should().NotBeNull("a refused load removes nothing");
+        (await RowAsync(world.OwnB))!.OrganizationId.Should().Be(world.B);
+
+        var loaded = NewId("load-a");
+        view.LoadAll([Feature(loaded, world.B, world, 0.013)]);
+
+        (await RowAsync(loaded))!.OrganizationId.Should().Be(world.A);
+        (await RowAsync(world.OwnA)).Should().BeNull("a load replaces the organization's own features");
+        (await RowAsync(world.OwnB)).Should().NotBeNull();
+        (await RowAsync(world.Shared)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Update_OfTheOrganizationsOwnFeature_StillWorks_AndKeepsItTheOrganizations()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var view = catalogs.For(world.A);
+
+        var renamed = Feature(world.OwnA, world.B, world, 0.001);
+        renamed.Properties.Name = $"{world.Token} renamed";
+        view.Update(renamed);
+
+        (await RowAsync(world.OwnA)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} renamed", world.A));
+        view.GetById(world.OwnA)!.Properties.Name.Should().Be($"{world.Token} renamed");
+        catalogs.For(world.B).GetById(world.OwnA).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TheViewWithoutAnOrganization_KeepsTheStatedOrganization_ButCannotOverwriteAnOrganizationsFeature()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var view = catalogs.For(Guid.Empty);
+
+        var stated = NewId("no-org-b");
+        view.Add(Feature(stated, world.B, world, 0.014));
+        (await RowAsync(stated))!.OrganizationId.Should().Be(world.B, "an organization-less caller's writes are unchanged");
+
+        var renamed = view.GetById(world.Shared)!;
+        renamed.Properties.Name = $"{world.Token} renamed";
+        view.Update(renamed);
+        (await RowAsync(world.Shared)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} renamed", Guid.Empty));
+
+        var hijack = Feature(world.OwnA, Guid.Empty, world, 0.05);
+        hijack.Properties.Name = "hijacked";
+        var update = () => view.Update(hijack);
+
+        update.Should().Throw<ForeignGeoFeatureWriteException>();
+        (await RowAsync(world.OwnA)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} {world.OwnA}", world.A));
+        (await AttributesAsync(world.OwnA)).Should().Equal($"plate=P-{world.OwnA}");
     }
 
     [Fact]
@@ -374,15 +500,20 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
         view.FeatureAdded += OnAdded;
         view.CollectionChanged += OnChanged;
 
+        var updated = new List<string>();
+        void OnUpdated(object? sender, GeoFeature feature) => updated.Add(feature.Id);
+        view.FeatureUpdated += OnUpdated;
+
         var ownAdded = NewId("event-a");
-        var sharedAdded = NewId("event-s");
         view.Add(Feature(ownAdded, world.A, world, 0.008));
-        view.Add(Feature(sharedAdded, Guid.Empty, world, 0.009));
+        view.Update(view.GetById(world.Shared)!);
         view.FeatureAdded -= OnAdded;
+        view.FeatureUpdated -= OnUpdated;
         view.CollectionChanged -= OnChanged;
         view.Add(Feature(NewId("event-late"), world.A, world, 0.010));
 
-        added.Should().Equal(ownAdded, sharedAdded);
+        added.Should().Equal(ownAdded);
+        updated.Should().Equal(world.Shared);
         changes.Should().Be(2);
     }
 

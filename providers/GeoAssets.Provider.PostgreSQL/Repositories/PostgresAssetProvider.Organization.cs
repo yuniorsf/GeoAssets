@@ -1,4 +1,6 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Models;
+using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,11 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///
 /// <para>Built without an organization (the public constructor), nothing changes: contexts are
 /// opened without a tenant, as before.</para>
+///
+/// <para><b>Writes (XD01-340).</b> Either way, an update, upsert or load naming an id whose row is
+/// outside the provider's rows (another organization's) is refused with
+/// <see cref="ForeignGeoFeatureWriteException"/> before anything is written. An organization's
+/// provider also stamps its organization on every feature it writes.</para>
 /// </summary>
 public sealed partial class PostgresAssetProvider
 {
@@ -68,6 +75,47 @@ public sealed partial class PostgresAssetProvider
         return db.GeoEntities
             .IgnoreQueryFilters()
             .Where(e => e.OrganizationId == organizationId || e.OrganizationId == Guid.Empty);
+    }
+
+    /// <summary>
+    /// For an organization's provider, stamps its organization on <paramref name="feature"/>, so
+    /// it never writes a row of another organization or an organization-less one, whatever the
+    /// feature states (XD01-340); without an organization, the feature's own is kept, as before.
+    /// </summary>
+    private void StampOrganization(GeoFeature feature)
+    {
+        if (_organization is not null)
+            feature.Properties.OrganizationId = _organization.CurrentOrganizationId;
+    }
+
+    /// <summary>
+    /// Refuses a write naming an id whose row exists but is outside this provider's rows (the
+    /// long-lived context's query filter: its organization's, or the organization-less ones
+    /// without one) — an update or upsert by id would otherwise overwrite another organization's
+    /// row, which the filter hides from every read but not from <c>UPDATE … WHERE id</c>
+    /// (XD01-340). Checked before anything is written.
+    /// </summary>
+    /// <exception cref="ForeignGeoFeatureWriteException">Some of <paramref name="ids"/> belong to another organization.</exception>
+    private void RefuseRowsOfAnotherOrganization(List<string> ids)
+    {
+        if (ids.Count == 0)
+            return;
+
+        var existing = _db.GeoEntities.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => ids.Contains(e.Id))
+            .Select(e => e.Id)
+            .ToList();
+        if (existing.Count == 0)
+            return;
+
+        var own = _db.GeoEntities.AsNoTracking()
+            .Where(e => existing.Contains(e.Id))
+            .Select(e => e.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var foreign = existing.Where(id => !own.Contains(id)).ToList();
+        if (foreign.Count > 0)
+            throw new ForeignGeoFeatureWriteException(foreign);
     }
 
     private sealed class Organization(Guid organizationId) : ITenantContext

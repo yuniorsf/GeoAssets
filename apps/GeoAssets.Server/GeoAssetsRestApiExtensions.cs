@@ -36,6 +36,13 @@ namespace GeoAssets.Server;
 /// act on *this* feature", scoped by owning organization / cross-org grant. Bulk/list
 /// endpoints (no single loaded resource) and creates (no existing resource to check
 /// ownership of) only run the subject-only gate.
+///
+/// Organization-scoped writes (XD01-340): with the host's organization catalogs
+/// (<c>OrganizationAssetCatalog</c>), creates, bulk adds and loads are stamped with the caller's
+/// organization, whatever the body states. A caller with an organization that <c>PUT</c>s an id it
+/// cannot see gets 404, and any write the provider refuses for naming another organization's
+/// feature (<see cref="ForeignGeoFeatureWriteException"/>) is answered 404 with nothing written —
+/// another organization's ids are never disclosed.
 /// </summary>
 public static class GeoAssetsRestApiExtensions
 {
@@ -183,6 +190,12 @@ public static class GeoAssetsRestApiExtensions
             string id, HttpRequest req, IAssetProvider provider, IAuthorizationService authz, HttpContext http) =>
         {
             var existing = provider.GetById(id);
+
+            // An organization's caller updates only a feature it can see (XD01-340): another
+            // organization's id is answered as unknown, so it is neither overwritten nor disclosed.
+            if (existing is null && CallersOrganization(http) != Guid.Empty)
+                return Results.NotFound();
+
             if (existing is not null)
             {
                 var result = await authz.AuthorizeAsync(http.User, existing, new OrgResourceRequirement("features:edit")).ConfigureAwait(false);
@@ -194,7 +207,15 @@ public static class GeoAssetsRestApiExtensions
             var feature = await JsonSerializer.DeserializeAsync<GeoFeature>(req.Body, opts).ConfigureAwait(false);
             if (feature is null) return Results.BadRequest("Invalid feature.");
             feature.Id = id;
-            provider.Update(feature);
+            try
+            {
+                provider.Update(feature);
+            }
+            catch (ForeignGeoFeatureWriteException)
+            {
+                return Results.NotFound();
+            }
+
             return Results.NoContent();
         })
             .RequireAuthorization("features:edit");
@@ -222,7 +243,15 @@ public static class GeoAssetsRestApiExtensions
         routes.MapPost($"{prefix}/features/bulk", async (HttpRequest req, IAssetProvider provider) =>
         {
             var features = await JsonSerializer.DeserializeAsync<GeoFeature[]>(req.Body, opts).ConfigureAwait(false) ?? [];
-            provider.AddRange(features);
+            try
+            {
+                provider.AddRange(features);
+            }
+            catch (ForeignGeoFeatureWriteException)
+            {
+                return Results.NotFound();
+            }
+
             return Results.NoContent();
         })
             .RequireAuthorization("features:edit");
@@ -230,7 +259,15 @@ public static class GeoAssetsRestApiExtensions
         routes.MapPost($"{prefix}/features/load", async (HttpRequest req, IAssetProvider provider) =>
         {
             var features = await JsonSerializer.DeserializeAsync<GeoFeature[]>(req.Body, opts).ConfigureAwait(false) ?? [];
-            provider.LoadAll(features);
+            try
+            {
+                provider.LoadAll(features);
+            }
+            catch (ForeignGeoFeatureWriteException)
+            {
+                return Results.NotFound();
+            }
+
             return Results.NoContent();
         })
             .RequireAuthorization("features:edit");
@@ -242,6 +279,10 @@ public static class GeoAssetsRestApiExtensions
         })
             .RequireAuthorization("features:delete");
     }
+
+    /// <summary>The request's organization (<see cref="ITenantContext"/>); <see cref="Guid.Empty"/> when it has none or none is registered.</summary>
+    private static Guid CallersOrganization(HttpContext http) =>
+        http.RequestServices.GetService<ITenantContext>()?.CurrentOrganizationId ?? Guid.Empty;
 
     /// <summary>
     /// Applies an <see cref="AssetMutationBatchRequestedEvent"/> atomically against

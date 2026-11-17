@@ -21,17 +21,22 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///   <item>Reads pushed down to PostgreSQL (<see cref="GetInBoundsAsync"/>,
 ///   <see cref="GetPageAsync"/>) are one query over both by the organization's provider, so paging
 ///   and the total count stay exact.</item>
-///   <item>A write to an existing shared feature goes to the shared catalog; any other feature
-///   write goes to the organization's provider, except a new feature stated as organization-less,
-///   which goes to the shared catalog. <see cref="Clear"/> and <see cref="LoadAll"/> act on the
-///   organization's own features only.</item>
+///   <item>A write to an existing shared feature goes to the shared catalog and the feature stays
+///   shared; any other feature write goes to the organization's provider and is stamped with the
+///   organization, whatever organization the feature states (XD01-340) — so a new feature is
+///   always the organization's, and an update never moves a feature between organizations. A
+///   write naming another organization's feature is refused by the provider
+///   (<see cref="GeoAssets.Core.Services.ForeignGeoFeatureWriteException"/>) and changes nothing.
+///   <see cref="Clear"/> and <see cref="LoadAll"/> act on the organization's own features only.</item>
 ///   <item>Asset types are read from the shared catalog, narrowed to the organization's and the
 ///   shared ones; deleting one the organization cannot see does nothing. Layers and layer rules
 ///   carry no organization and are the shared catalog's, as before.</item>
 /// </list>
 ///
 /// <para><b>No organization.</b> Built without an organization's provider, every member is the
-/// shared catalog's, unchanged — what an unauthenticated or organization-less caller had before.</para>
+/// shared catalog's, unchanged — what an unauthenticated or organization-less caller had before
+/// (its writes keep the organization the feature states; only the shared catalog's own refusal
+/// to overwrite another organization's row applies, XD01-340).</para>
 ///
 /// <para>Deliberately not disposable: a request scope hands it out without owning it.
 /// <see cref="PostgresOrganizationAssetCatalogs"/> owns the organization's provider.</para>
@@ -99,13 +104,30 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
     public void Add(GeoFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
-        WriterFor(feature.Id, feature.Properties.OrganizationId).Add(feature);
+
+        if (_own is null)
+        {
+            _shared.Add(feature);
+            return;
+        }
+
+        Stamp(feature, _own);
+        _own.Add(feature);
     }
 
     public void Update(GeoFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
-        WriterFor(feature.Id, feature.Properties.OrganizationId).Update(feature);
+
+        if (_own is null)
+        {
+            _shared.Update(feature);
+            return;
+        }
+
+        var writer = WriterFor(feature.Id);
+        Stamp(feature, writer);
+        writer.Update(feature);
     }
 
     public void AddRange(IEnumerable<GeoFeature> features)
@@ -118,16 +140,34 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
             return;
         }
 
-        var byWriter = features.ToLookup(f => WriterFor(f.Id, f.Properties.OrganizationId));
+        var byWriter = features.ToLookup(f => WriterFor(f.Id));
         foreach (var group in byWriter)
+        {
+            foreach (var feature in group)
+                Stamp(feature, group.Key);
             group.Key.AddRange([.. group]);
+        }
     }
 
-    public void Delete(string id) => WriterFor(id, OrganizationId).Delete(id);
+    public void Delete(string id) => WriterFor(id).Delete(id);
 
     public void Clear() => (_own ?? _shared).Clear();
 
-    public void LoadAll(IEnumerable<GeoFeature> features) => (_own ?? _shared).LoadAll(features);
+    public void LoadAll(IEnumerable<GeoFeature> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+
+        if (_own is null)
+        {
+            _shared.LoadAll(features);
+            return;
+        }
+
+        var list = features.ToList();
+        foreach (var feature in list)
+            Stamp(feature, _own);
+        _own.LoadAll(list);
+    }
 
     // ── Asset types, layers, layer rules ───────────────────────────────────────
 
@@ -226,18 +266,25 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
 
     /// <summary>
     /// The part that owns the feature <paramref name="id"/>: the organization's when it has it, the
-    /// shared catalog when that has it, otherwise — a feature neither part can see — the shared
-    /// catalog for an organization-less <paramref name="organizationId"/> and the organization's
-    /// provider for anything else.
+    /// shared catalog when that has it, otherwise — a feature neither part can see, new or another
+    /// organization's — the organization's provider, which refuses another organization's id
+    /// (XD01-340). Without an organization, the shared catalog.
     /// </summary>
-    private IAssetProvider WriterFor(string id, Guid organizationId)
+    private IAssetProvider WriterFor(string id)
     {
         if (_own is null)
             return _shared;
         if (_own.GetById(id) is not null)
             return _own;
-        if (_shared.GetById(id) is not null || organizationId == Guid.Empty)
+        if (_shared.GetById(id) is not null)
             return _shared;
         return _own;
     }
+
+    /// <summary>
+    /// The organization a feature written through <paramref name="writer"/> gets (XD01-340): this
+    /// view's for its own part, none for the shared catalog — never the one the feature states.
+    /// </summary>
+    private void Stamp(GeoFeature feature, IAssetProvider writer) =>
+        feature.Properties.OrganizationId = ReferenceEquals(writer, _shared) ? Guid.Empty : OrganizationId;
 }
