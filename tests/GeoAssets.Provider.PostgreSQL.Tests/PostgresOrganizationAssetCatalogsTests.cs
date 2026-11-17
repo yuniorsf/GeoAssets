@@ -463,6 +463,56 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
     }
 
     [Fact]
+    public async Task RepeatedUpdates_OfTheSameOwnAndSharedFeatures_AllSucceed_AndTheLatestValuesAreStored()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+
+        foreach (var (organization, round) in new[] { (world.A, 1), (world.A, 2), (world.B, 3) })
+        {
+            var view = catalogs.For(organization);
+            foreach (var id in organization == world.A ? new[] { world.OwnA, world.Shared } : [world.Shared])
+            {
+                var renamed = view.GetById(id)!;
+                renamed.Properties.Name = $"{world.Token} round {round}";
+                renamed.Properties.CustomAttributes["plate"] = $"P-{round}";
+                view.Update(renamed);
+            }
+        }
+
+        (await RowAsync(world.OwnA)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} round 2", world.A));
+        (await AttributesAsync(world.OwnA)).Should().Equal("plate=P-2");
+        (await RowAsync(world.Shared)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} round 3", Guid.Empty));
+        (await AttributesAsync(world.Shared)).Should().Equal("plate=P-3");
+        catalogs.For(world.A).GetById(world.Shared)!.Properties.Name.Should().Be($"{world.Token} round 3");
+    }
+
+    [Fact]
+    public async Task AddRange_OfTheOrganizationsStoredFeatures_UpdatesThem_AndTheSharedOnesStayShared()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var view = catalogs.For(world.A);
+
+        for (var round = 1; round <= 2; round++)
+        {
+            var own = Feature(world.OwnA, world.A, world, 0.001);
+            own.Properties.Name = $"{world.Token} own {round}";
+            own.Properties.CustomAttributes["plate"] = $"P-own-{round}";
+            var shared = Feature(world.Shared, world.A, world, 0.003);
+            shared.Properties.Name = $"{world.Token} shared {round}";
+            shared.Properties.CustomAttributes["plate"] = $"P-shared-{round}";
+            view.AddRange([own, shared]);
+        }
+
+        (await RowAsync(world.OwnA)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} own 2", world.A));
+        (await AttributesAsync(world.OwnA)).Should().Equal("plate=P-own-2");
+        (await RowAsync(world.Shared)).Should().Be(new GeoEntityRowSnapshot($"{world.Token} shared 2", Guid.Empty));
+        (await AttributesAsync(world.Shared)).Should().Equal("plate=P-shared-2");
+        view.GetById(world.OwnA)!.Properties.Name.Should().Be($"{world.Token} own 2");
+    }
+
+    [Fact]
     public async Task TheViewWithoutAnOrganization_KeepsTheStatedOrganization_ButCannotOverwriteAnOrganizationsFeature()
     {
         var world = await SeedWorldAsync();

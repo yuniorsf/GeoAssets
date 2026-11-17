@@ -280,10 +280,12 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         StampOrganization(feature);
         feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = MapToRow(feature);
-        _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
-        _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
-        _db.GeoEntities.Update(row);
-        SaveChanges();
+        SaveChangesInTransaction(() =>
+        {
+            _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
+            _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
+            _db.GeoEntities.Update(row);
+        });
         InvalidateCache();
         FeatureUpdated?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
@@ -294,19 +296,26 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         var list = features.ToList();
         var ids = list.Select(f => f.Id).ToList();
         RefuseRowsOfAnotherOrganization(ids);
-        _db.GeoEntityAttributes.Where(a => ids.Contains(a.EntityId)).ExecuteDelete();
         foreach (var f in list)
-        {
             StampOrganization(f);
-            var row = MapToRow(f);
-            // Upsert: EF will track whether to insert or update
-            if (_db.GeoEntities.Find(f.Id) is null)
-                _db.GeoEntities.Add(row);
-            else
-                _db.GeoEntities.Update(row);
-            _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
-        }
-        SaveChanges();
+        SaveChangesInTransaction(() =>
+        {
+            // Upsert: the ids already stored are updated, the others inserted (XD01-341).
+            var existing = _db.GeoEntities.AsNoTracking()
+                .Where(e => ids.Contains(e.Id))
+                .Select(e => e.Id)
+                .ToHashSet(StringComparer.Ordinal);
+            _db.GeoEntityAttributes.Where(a => ids.Contains(a.EntityId)).ExecuteDelete();
+            foreach (var f in list)
+            {
+                var row = MapToRow(f);
+                if (existing.Contains(f.Id))
+                    _db.GeoEntities.Update(row);
+                else
+                    _db.GeoEntities.Add(row);
+                _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
+            }
+        });
         InvalidateCache();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -557,6 +566,13 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         feature.Properties.CustomAttributes.Select(kv =>
             new GeoEntityAttributeRow { EntityId = feature.Id, Key = kv.Key, Value = kv.Value });
 
+    /// <summary>
+    /// Saves the long-lived <see cref="_db"/>'s pending changes, then stops tracking every entity,
+    /// saved or not: the next write maps fresh row instances for the same keys (a second
+    /// <see cref="Update"/> of a feature, an upsert of a stored id), which a still-tracked
+    /// instance would refuse, and a failed write must not leave its changes pending for the next
+    /// one (XD01-341).
+    /// </summary>
     private void SaveChanges()
     {
         var startTimestamp = _timeProvider.GetTimestamp();
@@ -570,6 +586,48 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         {
             LogSaveChangesFailed(_logger, ex);
             throw;
+        }
+        finally
+        {
+            _db.ChangeTracker.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="stage"/> — which may write directly (<c>ExecuteDelete</c>) as well as
+    /// stage tracked changes — and saves, in one transaction, so a failed write leaves every row
+    /// as it was (XD01-341). Inside a transaction the context's owner already began (as
+    /// <see cref="PostgresAssetMutationBatchApplier"/> does), that one is used; otherwise one is
+    /// begun under the context's execution strategy, which a retrying one requires of a
+    /// user-initiated transaction.
+    /// </summary>
+    private void SaveChangesInTransaction(Action stage)
+    {
+        if (_db.Database.CurrentTransaction is not null)
+        {
+            StageAndSaveChanges(stage);
+            return;
+        }
+
+        _db.Database.CreateExecutionStrategy().Execute(() =>
+        {
+            using var transaction = _db.Database.BeginTransaction();
+            StageAndSaveChanges(stage);
+            transaction.Commit();
+        });
+    }
+
+    /// <summary>A failed <paramref name="stage"/> leaves nothing tracked either, as <see cref="SaveChanges"/> does.</summary>
+    private void StageAndSaveChanges(Action stage)
+    {
+        try
+        {
+            stage();
+            SaveChanges();
+        }
+        finally
+        {
+            _db.ChangeTracker.Clear();
         }
     }
 
