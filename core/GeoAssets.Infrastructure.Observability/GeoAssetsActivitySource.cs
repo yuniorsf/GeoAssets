@@ -121,6 +121,17 @@ public sealed class GeoAssetsActivitySource : IDisposable
                  .AddTag("occupancy.change_sets", changeSets)
                  .AddTag("occupancy.changes", changes);
 
+    /// <summary>
+    /// Starts the span of one attempt to apply an asset mutation batch to the catalog (XD01-337),
+    /// <c>Catalog.MutationBatchApply</c>. The batch and organization ids belong on the span, never on a metric.
+    /// </summary>
+    public Activity? StartAssetMutationBatchActivity(Guid batchId, string catalogInstanceId, Guid organizationId, int mutations) =>
+        _source.StartActivity("Catalog.MutationBatchApply")
+               ?.AddTag("catalog.batch.id", batchId.ToString("D"))
+                .AddTag("catalog.instance.id", catalogInstanceId)
+                .AddTag("organization.id", organizationId.ToString("D"))
+                .AddTag("catalog.batch.mutations", mutations);
+
     // ── Integration Messaging ─────────────────────────────────────────────────
 
     public Activity? StartIntegrationPublishActivity(

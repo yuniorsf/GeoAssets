@@ -366,4 +366,64 @@ public abstract class OutboxStoreContractTests
         await inboxAct.Should().ThrowAsync<OperationCanceledException>();
     }
 
+    [Fact]
+    public async Task ClaimPendingBatchAsync_WithMessageTypes_ClaimsOnlyThoseTypes_AndLeavesTheOthersPendingAndUntouched()
+    {
+        await using var harness = CreateHarness();
+        var batchEnvelope = IntegrationMessagingTestDataBuilders.Envelope()
+            .WithMessageId(Guid.Parse("00000000-0000-0000-0337-000000000001"))
+            .WithMessageType(IntegrationEventTypes.AssetMutationBatchRequestedV1)
+            .WithOccurredAtUtc(harness.TimeProvider.GetUtcNow())
+            .Build();
+        var notificationEnvelope = IntegrationMessagingTestDataBuilders.Envelope()
+            .WithMessageId(Guid.Parse("00000000-0000-0000-0337-000000000002"))
+            .WithMessageType(IntegrationEventTypes.OrderStateChangedV1)
+            .WithOccurredAtUtc(harness.TimeProvider.GetUtcNow())
+            .Build();
+        await harness.Writer.EnqueueEnvelopeAsync(notificationEnvelope);
+        await harness.Writer.EnqueueEnvelopeAsync(batchEnvelope);
+
+        var claimed = await harness.DispatcherStore.ClaimPendingBatchAsync(
+            10, TimeSpan.FromMinutes(1), "in-process", [IntegrationEventTypes.AssetMutationBatchRequestedV1]);
+        var again = await harness.DispatcherStore.ClaimPendingBatchAsync(
+            10, TimeSpan.FromMinutes(1), "in-process", [IntegrationEventTypes.AssetMutationBatchRequestedV1]);
+        var rest = await harness.DispatcherStore.ClaimPendingBatchAsync(10, TimeSpan.FromMinutes(1), "broker");
+
+        claimed.Should().ContainSingle().Which.Envelope.MessageId.Should().Be(batchEnvelope.MessageId);
+        again.Should().BeEmpty("the claimed batch is leased and nothing else matches");
+        rest.Should().ContainSingle().Which.Should().Match<OutboxPendingMessage>(m =>
+            m.Envelope.MessageId == notificationEnvelope.MessageId && m.AttemptCount == 0,
+            "a message of another type was neither claimed nor counted as an attempt");
+    }
+
+    [Fact]
+    public async Task ClaimPendingBatchAsync_WithNoMessageTypes_ClaimsEveryType()
+    {
+        await using var harness = CreateHarness();
+        await harness.Writer.EnqueueEnvelopeAsync(IntegrationMessagingTestDataBuilders.Envelope()
+            .WithMessageId(Guid.Parse("00000000-0000-0000-0337-000000000003"))
+            .WithMessageType(IntegrationEventTypes.AssetMutationBatchRequestedV1)
+            .WithOccurredAtUtc(harness.TimeProvider.GetUtcNow())
+            .Build());
+        await harness.Writer.EnqueueEnvelopeAsync(IntegrationMessagingTestDataBuilders.Envelope()
+            .WithMessageId(Guid.Parse("00000000-0000-0000-0337-000000000004"))
+            .WithMessageType(IntegrationEventTypes.OrderStateChangedV1)
+            .WithOccurredAtUtc(harness.TimeProvider.GetUtcNow())
+            .Build());
+
+        var claimed = await harness.DispatcherStore.ClaimPendingBatchAsync(10, TimeSpan.FromMinutes(1), "worker-1", []);
+
+        claimed.Select(m => m.Envelope.MessageType).Should().BeEquivalentTo(
+            [IntegrationEventTypes.AssetMutationBatchRequestedV1, IntegrationEventTypes.OrderStateChangedV1]);
+    }
+
+    [Fact]
+    public async Task ClaimPendingBatchAsync_WithNullMessageTypes_ThrowsArgumentNullException()
+    {
+        await using var harness = CreateHarness();
+
+        var act = () => harness.DispatcherStore.ClaimPendingBatchAsync(5, TimeSpan.FromMinutes(1), "worker-1", null!);
+
+        await act.Should().ThrowAsync<ArgumentNullException>();
+    }
 }

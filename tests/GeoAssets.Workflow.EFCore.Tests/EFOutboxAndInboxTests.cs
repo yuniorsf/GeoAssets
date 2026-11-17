@@ -291,6 +291,55 @@ public sealed class EFOutboxAndInboxTests : OutboxStoreContractTests
     }
 
     [Fact]
+    public async Task OutboxRelayProcessor_WithMessageTypes_PublishesOnlyThoseTypes_AndLeavesEveryOtherMessagePending()
+    {
+        using var fixture = new SqliteFixture();
+        var timeProvider = new FakeTimeProvider(FixedStartUtc);
+        var serializer = new ProtobufIntegrationMessageSerializer();
+        var seedStore = new EFOutboxStore(fixture.Context, timeProvider, serializer, "seed-service");
+        var listed = new IntegrationEnvelope(
+            MessageId: Guid.Parse("33700000-0000-0000-0000-000000000001"),
+            MessageType: IntegrationEventTypes.FeatureCatalogMutatedV1,
+            SchemaVersion: 1,
+            PartitionKey: "catalog-1:feat-100",
+            ContentType: serializer.ContentType,
+            Payload: serializer.Serialize(CreateSampleMutatedEvent("catalog-1")),
+            OccurredAtUtc: FixedStartUtc,
+            CatalogInstanceId: "catalog-1");
+        var other = listed with
+        {
+            MessageId = Guid.Parse("33700000-0000-0000-0000-000000000002"),
+            MessageType = IntegrationEventTypes.OrderStateChangedV1,
+        };
+        await seedStore.EnqueueEnvelopeAsync(other);
+        await seedStore.EnqueueEnvelopeAsync(listed);
+
+        var publisher = new LocalRecordingPublisher();
+        var options = new OutboxRelayOptions { WorkerId = "in-process" };
+        options.MessageTypes.Add(IntegrationEventTypes.FeatureCatalogMutatedV1);
+        using var tracer = new GeoAssetsActivitySource("1.0.0");
+        await using var serviceProvider = BuildRelayScopeProvider(fixture, timeProvider, serializer);
+        using var processor = new OutboxRelayProcessor(
+            serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            publisher,
+            timeProvider,
+            Options.Create(options),
+            tracer,
+            NullLogger<OutboxRelayProcessor>.Instance);
+
+        var dispatched = await processor.ProcessNextBatchAsync(CancellationToken.None);
+        var nothingLeft = await processor.ProcessNextBatchAsync(CancellationToken.None);
+
+        dispatched.Should().Be(1);
+        nothingLeft.Should().Be(0);
+        publisher.Published.Should().ContainSingle().Which.MessageId.Should().Be(listed.MessageId);
+        var pending = await new EFOutboxStore(fixture.NewContext(), timeProvider, serializer)
+            .ClaimPendingBatchAsync(10, TimeSpan.FromMinutes(1), "broker");
+        pending.Should().ContainSingle().Which.Should().Match<OutboxPendingMessage>(m =>
+            m.Envelope.MessageId == other.MessageId && m.AttemptCount == 0);
+    }
+
+    [Fact]
     public async Task OutboxRelayProcessor_BackgroundExecutionWithFakeTimeProvider_PollsAndStopsCleanlyOnCancellation()
     {
         using var fixture = new SqliteFixture();

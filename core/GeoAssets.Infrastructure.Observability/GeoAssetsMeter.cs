@@ -66,6 +66,9 @@ public sealed class GeoAssetsMeter : IDisposable
     /// <summary>The <c>geoassets.isp.pole_occupancy.*</c> commit instruments (XD01-318).</summary>
     private readonly OccupancyCommitInstruments _occupancyCommit;
 
+    /// <summary>The <c>geoassets.catalog.mutation_batch*</c> instruments (XD01-337).</summary>
+    private readonly AssetMutationBatchInstruments _assetMutationBatch;
+
     public GeoAssetsMeter(string version)
     {
         _meter = new Meter(MeterName, version);
@@ -73,6 +76,7 @@ public sealed class GeoAssetsMeter : IDisposable
         _targetSelection = new TargetSelectionInstruments(_meter);
         _fanOut = new FanOutInstruments(_meter);
         _occupancyCommit = new OccupancyCommitInstruments(_meter);
+        _assetMutationBatch = new AssetMutationBatchInstruments(_meter);
 
         _orderTransitions = _meter.CreateCounter<long>(
             "geoassets.orders.transitions",
@@ -204,6 +208,17 @@ public sealed class GeoAssetsMeter : IDisposable
 
     /// <summary>Counts one approval refused because a pole or a staged set changed after staging (XD01-318).</summary>
     public void RecordOccupancyCommitConflict() => _occupancyCommit.Conflicts.Add(1);
+
+    /// <summary>
+    /// Records one attempt to apply an asset mutation batch to the catalog (XD01-337): counted and
+    /// timed by outcome. Never tagged with a batch, organization or feature id.
+    /// </summary>
+    public void RecordAssetMutationBatch(double milliseconds, string outcome)
+    {
+        var tag = new KeyValuePair<string, object?>("outcome", outcome);
+        _assetMutationBatch.Batches.Add(1, tag);
+        _assetMutationBatch.DurationMs.Record(milliseconds, tag);
+    }
 
     public void Dispose() => _meter.Dispose();
 }

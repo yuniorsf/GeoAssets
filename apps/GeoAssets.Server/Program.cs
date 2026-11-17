@@ -132,6 +132,10 @@ builder.Services.AddServerSharedUseDispatch();
 // Approving an order with targets commits the occupancy staged on its poles (XD01-318) — see
 // OccupancyApprovalRoute for how POST /service-orders/{id}/actions routes an approval to it.
 builder.Services.AddServerOccupancyCommit();
+// With no broker configured, the asset mutation batches that approval stages are applied to this
+// host's own catalog by an in-process outbox relay (XD01-337); every other message stays pending.
+// See InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply.
+builder.Services.AddServerInProcessAssetMutationApply(builder.Configuration, connectionString);
 
 // IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
 // IServiceOrderRepository as every other order-driven workflow in this host.
