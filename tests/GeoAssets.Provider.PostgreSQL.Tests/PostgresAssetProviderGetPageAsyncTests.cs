@@ -39,11 +39,17 @@ public sealed class PostgresAssetProviderGetPageAsyncTests(PostgresContainerFixt
     /// A fresh table has no planner statistics, so Postgres may under/over-estimate selectivity
     /// and pick a sequential scan regardless of which indexes exist — ANALYZE is required for the
     /// index-usage assertions below to reflect steady-state behavior, not a cold-cache fluke.
+    /// VACUUM, not just ANALYZE (XD01-334): a bulk INSERT leaves the trigram GIN indexes'
+    /// fastupdate pending lists full and their metapage statistics stale, and only VACUUM
+    /// flushes/refreshes them — after a plain ANALYZE every GIN bitmap scan has to walk the
+    /// whole pending list, so the planner (correctly) costs it like a sequential scan. VACUUM
+    /// can't run inside a multi-statement batch, hence one command per table.
     /// </summary>
     private async Task AnalyzeAsync()
     {
         await using var db = new GeoAssetsDbContext(fixture.CreateOptions());
-        await db.Database.ExecuteSqlRawAsync("ANALYZE geo_entity; ANALYZE geo_entity_attribute;");
+        await db.Database.ExecuteSqlRawAsync("VACUUM ANALYZE geo_entity");
+        await db.Database.ExecuteSqlRawAsync("VACUUM ANALYZE geo_entity_attribute");
     }
 
     /// <summary>
@@ -252,11 +258,13 @@ public sealed class PostgresAssetProviderGetPageAsyncTests(PostgresContainerFixt
     /// <summary>
     /// XD01-171 added trigram GIN indexes on Name/Description specifically so GetPageAsync's
     /// SearchText path's leading-wildcard ILIKE (line ~172-174) doesn't force a sequential scan
-    /// at scale. Needs a larger row count than this class's other scale tests (10,500/11,000):
-    /// verified empirically against this exact schema that Postgres's planner still (correctly)
-    /// prefers a sequential scan over the trigram indexes below ~150k narrow rows — the fixed
-    /// overhead of a bitmap index scan only pays off once the table is big enough. 200,000 rows
-    /// is comfortably past that crossover.
+    /// at scale. 30,000 rows (XD01-334): once <see cref="AnalyzeAsync"/> has flushed the GIN
+    /// pending lists, the planner picks the trigram indexes from ~10k rows on (measured against
+    /// this exact schema), so 30,000 leaves a wide margin while still being exactly ANALYZE's
+    /// default 30,000-row sample — the statistics cover every row, so the plan is deterministic.
+    /// The previous 200,000-row seed only existed to outweigh the unflushed pending list, and
+    /// inserting that many rows through three trigram GIN indexes regularly blew the 30 s
+    /// command timeout on a busy host.
     /// </summary>
     [Fact]
     public async Task GetPageAsync_SearchTextIlikeOnNameOrDescription_UsesTrigramIndexNotSequentialScan()
@@ -265,7 +273,7 @@ public sealed class PostgresAssetProviderGetPageAsyncTests(PostgresContainerFixt
         await SeedAsync("""
             INSERT INTO geo_entity ("Id", "Name", "Description", "AssetTypeId")
             SELECT 'seed-' || gs, 'Asset ' || gs, 'Description for asset ' || gs, 'type-a'
-            FROM generate_series(1, 200000) AS gs;
+            FROM generate_series(1, 30000) AS gs;
             """);
         await AnalyzeAsync();
 
@@ -283,7 +291,7 @@ public sealed class PostgresAssetProviderGetPageAsyncTests(PostgresContainerFixt
             var plan = await ExplainCapturedAsync(cmd);
             plan.Should().NotContain("Seq Scan on geo_entity ",
                 because: "a leading-wildcard ILIKE on Name/Description should use the IX_geo_entity_Name_Trgm / " +
-                         "IX_geo_entity_Description_Trgm GIN indexes instead of scanning all 200,000 rows");
+                         "IX_geo_entity_Description_Trgm GIN indexes instead of scanning all 30,000 rows");
         }
     }
 
@@ -333,18 +341,19 @@ public sealed class PostgresAssetProviderGetPageAsyncTests(PostgresContainerFixt
     [Fact]
     public async Task GetPageAsync_SearchTextOnCustomAttributes_UsesAttributeTrigramIndexNotSequentialScan()
     {
-        // 200,000 rows, not this file's usual 10,500/11,000 scale: the same empirically-observed
-        // crossover as the Name/Description trigram test above applies here — below ~150k narrow
-        // rows Postgres's planner correctly prefers a sequential scan over a GIN bitmap scan, so a
-        // smaller table wouldn't actually exercise the index either.
+        // 30,000 rows, not this file's usual 10,500/11,000 scale: with the GIN pending lists
+        // flushed (see AnalyzeAsync), the planner only prefers the attribute trigram indexes over
+        // a sequential scan from ~20k rows on (measured against this exact schema), so a smaller
+        // table wouldn't actually exercise the index. 30,000 clears that crossover and is still
+        // fully covered by ANALYZE's default 30,000-row sample (XD01-334).
         await ClearAsync();
         await SeedAsync("""
             INSERT INTO geo_entity ("Id", "Name", "AssetTypeId")
             SELECT 'seed-' || gs, 'Asset ' || gs, 'type-a'
-            FROM generate_series(1, 200000) AS gs;
+            FROM generate_series(1, 30000) AS gs;
             INSERT INTO geo_entity_attribute ("EntityId", "Key", "Value")
             SELECT 'seed-' || gs, 'material', 'concreto'
-            FROM generate_series(1, 200000) AS gs;
+            FROM generate_series(1, 30000) AS gs;
             """);
         await AnalyzeAsync();
 
