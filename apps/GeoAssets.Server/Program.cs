@@ -49,6 +49,11 @@ builder.Services.AddGeoAssetsPostgres();
 // comment for why this needs an interim service provider.
 await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
 
+// Organization-scoped asset reads (XD01-338) — the warmed provider above becomes the shared
+// (organization-less) catalog, and each request's IAssetProvider is the caller's organization's
+// view: its own features plus the shared ones. See OrganizationAssetCatalogHostExtensions.
+builder.Services.AddServerOrganizationAssetCatalogs(connectionString);
+
 // IAssetSpatialQuery (XD01-307) — area/attribute selection is pushed down to PostGIS and scoped
 // to the request's ITenantContext, instead of scanning the tenant-less IAssetProvider cache above.
 builder.Services.AddPostgresAssetSpatialQuery(connectionString);
@@ -215,6 +220,9 @@ await app.Services.SeedDefaultProjectsAsync().ConfigureAwait(false);
 app.UseCors();
 
 app.UseGeoAssetsAuthentication();
+
+// Loads the caller's organization's asset catalog before its endpoint runs (XD01-338).
+app.UseOrganizationAssetCatalogs();
 
 app.UseGeoAssetsObservability();
 

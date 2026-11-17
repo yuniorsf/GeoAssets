@@ -56,7 +56,7 @@ public static class InProcessAssetMutationHostExtensions
 
         services.AddPostgresAssetMutationBatchApplier(connectionString);
         services.AddSingleton<IAssetMutationBatchApplier>(sp => new ObservableAssetMutationBatchApplier(
-            sp.GetRequiredService<PostgresAssetMutationBatchApplier>(),
+            RefreshingTheOrganizationCatalogs(sp, sp.GetRequiredService<PostgresAssetMutationBatchApplier>()),
             sp.GetRequiredService<GeoAssetsActivitySource>(),
             sp.GetRequiredService<GeoAssetsMeter>(),
             sp.GetRequiredService<TimeProvider>()));
@@ -73,4 +73,14 @@ public static class InProcessAssetMutationHostExtensions
         services.AddHostedService<OutboxRelayProcessor>();
         return services;
     }
+
+    /// <summary>
+    /// <paramref name="applier"/>, followed by a reload of the batch's organization's cached
+    /// catalog (XD01-338) when the host serves organization-scoped catalogs
+    /// (<see cref="OrganizationAssetCatalogHostExtensions.AddServerOrganizationAssetCatalogs"/>).
+    /// </summary>
+    private static IAssetMutationBatchApplier RefreshingTheOrganizationCatalogs(IServiceProvider sp, IAssetMutationBatchApplier applier) =>
+        sp.GetService<PostgresOrganizationAssetCatalogs>() is { } catalogs
+            ? new OrganizationCatalogRefreshingApplier(applier, catalogs)
+            : applier;
 }

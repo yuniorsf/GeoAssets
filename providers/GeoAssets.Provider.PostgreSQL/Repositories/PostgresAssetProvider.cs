@@ -78,7 +78,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     internal async Task WarmCacheAsync(CancellationToken ct = default)
     {
         var startTimestamp = _timeProvider.GetTimestamp();
-        var db = new GeoAssetsDbContext(_dbOptions);
+        var db = NewContext();
         try
         {
             var rows = await db.GeoEntities.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
@@ -134,10 +134,10 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
 
         // Use a dedicated short-lived context so concurrent viewport requests
         // never share the same DbContext instance (which would cause a concurrency exception).
-        var db = new GeoAssetsDbContext(_dbOptions);
+        var db = NewContext();
         try
         {
-            var rows = await db.GeoEntities
+            var rows = await QueryableRows(db)
                 .AsNoTracking()
                 .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
                 .ToListAsync()
@@ -180,7 +180,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var db = new GeoAssetsDbContext(_dbOptions);
+        var db = NewContext();
         try
         {
             var rows = await ApplyPageQueryFiltersAsync(db, query).ConfigureAwait(false);
@@ -206,10 +206,10 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         }
     }
 
-    private static async Task<IQueryable<GeoEntityRow>> ApplyPageQueryFiltersAsync(
+    private async Task<IQueryable<GeoEntityRow>> ApplyPageQueryFiltersAsync(
         GeoAssetsDbContext db, AssetQuery query)
     {
-        IQueryable<GeoEntityRow> rows = db.GeoEntities.AsNoTracking();
+        var rows = QueryableRows(db).AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(query.AssetTypeId))
             rows = rows.Where(r => r.AssetTypeId == query.AssetTypeId);
