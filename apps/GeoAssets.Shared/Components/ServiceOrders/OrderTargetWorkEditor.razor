@@ -1,0 +1,70 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Services.OrderTargets
+@using GeoAssets.Workflow.Targets
+@inject IServiceOrderTargetReader Reader
+@inject IServiceOrderTargetWriter Writer
+
+<section class="order-target-work" aria-labelledby="@Id("title")" aria-busy="@(_session?.IsBusy == true ? "true" : "false")">
+    <div class="order-target-work-header">
+        <h6 id="@Id("title")" class="order-target-work-title">@L.GetString("targetWork.title", TargetLabel)</h6>
+        <button type="button" class="btn-icon" aria-label="@L["targetWork.close"]" title="@L["targetWork.close"]" @onclick="CloseAsync">✕</button>
+    </div>
+
+    @if (_session?.ErrorKey is { } errorKey)
+    {
+        <div class="alert alert-danger py-2 small" role="alert">@L[errorKey]</div>
+    }
+
+    @if (_session?.Draft is { } draft)
+    {
+        @if (draft.DroppedActivityCount > 0)
+        {
+            <p class="order-target-work-notice" role="status">@L.GetString("targetWork.droppedActivities", draft.DroppedActivityCount)</p>
+        }
+
+        <fieldset class="order-target-work-activities">
+            <legend class="form-label small">@L["targetWork.activities"]</legend>
+            @if (draft.Catalog.Count == 0)
+            {
+                <p class="empty-state">@L["targetWork.noActivities"]</p>
+            }
+            @foreach (var activity in draft.Catalog)
+            {
+                var inputId = Id("activity-" + activity.Id);
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="@inputId" checked="@draft.IsChosen(activity.Id)"
+                           @onchange="e => draft.SetChosen(activity.Id, e.Value is true)" />
+                    <label class="form-check-label" for="@inputId">@activity.DisplayName</label>
+                </div>
+            }
+        </fieldset>
+
+        <div class="order-target-work-field">
+            <label class="form-label small" for="@Id("status")">@L["targetWork.status"]</label>
+            <select id="@Id("status")" class="form-select form-select-sm" @onchange="e => draft.Status = e.Value?.ToString() ?? draft.Status">
+                @foreach (var status in draft.StatusOptions)
+                {
+                    <option value="@status" selected="@(string.Equals(draft.Status, status, StringComparison.Ordinal))">@L[OrderTargetMessages.StatusKey(status)]</option>
+                }
+            </select>
+        </div>
+
+        <div class="order-target-work-field">
+            <label class="form-label small" for="@Id("note")">@L["targetWork.note"]</label>
+            <textarea id="@Id("note")" class="form-control form-control-sm" rows="2"
+                      aria-describedby="@Id("note-count")" aria-invalid="@(draft.NoteTooLong ? "true" : "false")"
+                      @bind="draft.Note" @bind:event="oninput"></textarea>
+            <small id="@Id("note-count")" class="@(draft.NoteTooLong ? "order-target-work-count order-target-work-count-over" : "order-target-work-count")">
+                @L.GetString("targetWork.noteCount", draft.Note.Length, OrderTargetWorkDraft.MaxNoteLength)
+            </small>
+        </div>
+
+        <div class="order-target-work-actions">
+            <button type="button" class="btn btn-primary btn-sm" disabled="@(!_session.CanSave)"
+                    aria-busy="@(_session.IsBusy ? "true" : "false")" @onclick="SaveAsync">
+                @(_session.IsBusy ? L["targetWork.saving"] : L["targetWork.save"])
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" @onclick="CloseAsync">@L["targetWork.cancel"]</button>
+        </div>
+    }
+</section>

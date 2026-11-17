@@ -1,19 +1,31 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Services.OrderTargets
 @using GeoAssets.Workflow.Orders
 @inject OrderTypeRegistry OrderTypes
+@inject OrderTargetMapStates MapStates
 
 <div class="occupancy-targets">
     @if (CanOpenOccupancy)
     {
-        <OrderTargetsTable OrderId="@Order.Id"
+        <OrderTargetsTable @ref="_table"
+                           OrderId="@Order.Id"
                            CaptionKey="occupancy.targets.caption"
                            ActivityCatalog="@ActivityCatalog"
-                           SelectedTargetId="@_selected?.Id">
+                           SelectedTargetId="@((_selected ?? _working)?.Id)">
             <RowActions Context="target">
-                <button type="button" class="btn btn-outline btn-sm"
-                        aria-label="@L.GetString("occupancy.targets.openFor", target.Alias ?? target.FeatureId)"
-                        aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
-                        @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
+                <div class="order-target-row-actions">
+                    @if (CanEdit)
+                    {
+                        <button type="button" class="btn btn-outline btn-sm"
+                                aria-label="@L.GetString("targetWork.openFor", target.Alias ?? target.FeatureId)"
+                                aria-pressed="@(string.Equals(_working?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
+                                @onclick="() => Work(target)">@L["targetWork.open"]</button>
+                    }
+                    <button type="button" class="btn btn-outline btn-sm"
+                            aria-label="@L.GetString("occupancy.targets.openFor", target.Alias ?? target.FeatureId)"
+                            aria-pressed="@(string.Equals(_selected?.Id, target.Id, StringComparison.Ordinal) ? "true" : "false")"
+                            @onclick="() => Select(target)">@L["occupancy.targets.open"]</button>
+                </div>
             </RowActions>
         </OrderTargetsTable>
     }
@@ -22,6 +34,29 @@
         <OrderTargetsTable OrderId="@Order.Id"
                            CaptionKey="sharedUse.targets.readOnlyCaption"
                            ActivityCatalog="@ActivityCatalog" />
+    }
+
+    <div class="order-target-map-legend">
+        <span class="order-target-map-legend-title">@L["targetWork.map.legend"]</span>
+        <ul>
+            @foreach (var state in OrderTargetMapState.Legend)
+            {
+                <li><span class="@OrderTargetMapState.SwatchClass(state)" aria-hidden="true"></span>@L[OrderTargetMapState.LegendKey(state)!]</li>
+            }
+        </ul>
+    </div>
+
+    @if (_savedLabel is not null)
+    {
+        <p class="order-target-work-saved" role="status">@L.GetString("targetWork.saved", _savedLabel)</p>
+    }
+
+    @if (_working is not null && CanEdit && CanOpenOccupancy)
+    {
+        <OrderTargetWorkEditor Target="_working"
+                               ActivityCatalog="@ActivityCatalog"
+                               OnClose="CloseWork"
+                               OnStored="OnWorkStoredAsync" />
     }
 
     @if (_selected is not null && CanOpenOccupancy)

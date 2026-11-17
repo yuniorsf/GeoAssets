@@ -32,6 +32,10 @@
     --map-state-highlighted: var(--warning);
     --map-state-conflict:    var(--danger);
     --map-state-disabled:    var(--text-secondary);
+    /* Targets of the shown order (XD01-313): work still to do (Catppuccin mauve — no theme token
+       carries it, so it is set per theme here and in the light block) and work done. */
+    --map-state-pending:     #cba6f7;
+    --map-state-done:        var(--success);
 
     /* Outline of an order's selection fence (XD01-311) — an alias too, so it follows the theme. */
     --map-selection-outline: var(--accent);
@@ -71,6 +75,7 @@
     --text-primary: #4c4f69;
     --text-secondary: #6c6f85;
     --on-accent: #ffffff;
+    --map-state-pending: #8839ef;
     --surface-tint-weak:   rgba(0,0,0,0.04);
     --surface-tint:        rgba(0,0,0,0.05);
     --surface-tint-strong: rgba(0,0,0,0.08);
@@ -402,7 +407,9 @@ html, body {
    same --map-state-* tokens; an <img> marker has no stroke to recolour, so it gets a ring. */
 .leaflet-marker-icon.geoassets-state-selected,
 .leaflet-marker-icon.geoassets-state-highlighted,
-.leaflet-marker-icon.geoassets-state-conflict {
+.leaflet-marker-icon.geoassets-state-conflict,
+.leaflet-marker-icon.geoassets-state-pending,
+.leaflet-marker-icon.geoassets-state-done {
     border-radius: 50%;
     outline: 3px solid var(--map-state-color);
     outline-offset: 2px;
@@ -411,6 +418,8 @@ html, body {
 .leaflet-marker-icon.geoassets-state-selected    { --map-state-color: var(--map-state-selected); }
 .leaflet-marker-icon.geoassets-state-highlighted { --map-state-color: var(--map-state-highlighted); }
 .leaflet-marker-icon.geoassets-state-conflict    { --map-state-color: var(--map-state-conflict); }
+.leaflet-marker-icon.geoassets-state-pending     { --map-state-color: var(--map-state-pending); }
+.leaflet-marker-icon.geoassets-state-done        { --map-state-color: var(--map-state-done); }
 .leaflet-marker-icon.geoassets-state-disabled {
     opacity: 0.35;
     filter: grayscale(1);
@@ -1907,3 +1916,85 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 .order-from-selection-hint { color: var(--text-secondary); }
 
 .order-from-selection-limit { margin-top: 4px; padding-left: 6px; border-left: 3px solid var(--warning); color: var(--text-primary); }
+
+/* ─── Per-target work (XD01-313) ─────────────────────────────────────────── */
+
+.order-target-row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.order-target-note {
+    max-width: 16rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.85rem;
+}
+
+.order-target-map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    margin: 6px 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.order-target-map-legend ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.order-target-map-legend li { display: inline-flex; align-items: center; color: var(--text-primary); }
+
+.order-target-map-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--panel-border);
+    background: var(--map-state-color);
+}
+
+.order-target-map-swatch-pending  { --map-state-color: var(--map-state-pending); }
+.order-target-map-swatch-done     { --map-state-color: var(--map-state-done); }
+.order-target-map-swatch-conflict { --map-state-color: var(--map-state-conflict); }
+.order-target-map-swatch-disabled { --map-state-color: var(--map-state-disabled); opacity: 0.45; }
+
+.order-target-work-saved { margin: 6px 0; font-size: 0.85rem; color: var(--success); }
+
+.order-target-work {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: var(--surface-tint-weak);
+}
+
+.order-target-work-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.order-target-work-title { margin: 0; font-size: 0.95rem; color: var(--accent); }
+
+.order-target-work-notice {
+    margin: 8px 0;
+    padding: 6px 10px;
+    border-left: 3px solid var(--warning);
+    background: var(--surface-tint);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.order-target-work-activities { margin: 10px 0; padding: 0; border: 0; }
+
+.order-target-work-activities .form-check-label { font-size: 0.87rem; }
+
+.order-target-work-field { margin: 10px 0; }
+
+.order-target-work-count { display: block; margin-top: 2px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+.order-target-work-count-over { color: var(--danger); }
+
+.order-target-work-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
