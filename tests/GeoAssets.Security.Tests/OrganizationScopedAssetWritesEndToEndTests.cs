@@ -176,6 +176,72 @@ public sealed class OrganizationScopedAssetWritesEndToEndTests
         (await host.RowAsync(SharedPole)).Should().Be(new Row("renamed by the owner", Guid.Empty));
         (await FeatureAsync(other, SharedPole)).Properties.Name.Should().Be("renamed by the owner");
         (await IdsAsync(owner)).Should().BeEquivalentTo([OwnersPole, SharedPole]);
+
+        // The shared catalog is one provider for the whole host: further PUTs of the same feature
+        // through it succeed and store the latest values (XD01-341).
+        var renamedAgain = Pole(SharedPole, Owner, 0.03);
+        renamedAgain.Properties.Name = "renamed by the owner again";
+        renamedAgain.Properties.CustomAttributes["plate"] = "P-again";
+        using (var put = await owner.PutAsync(Uri($"features/{SharedPole}"), Json(renamedAgain)))
+            put.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var renamedByOther = Pole(SharedPole, Other, 0.03);
+        renamedByOther.Properties.Name = "renamed by the other";
+        renamedByOther.Properties.CustomAttributes["plate"] = "P-other";
+        using (var put = await other.PutAsync(Uri($"features/{SharedPole}"), Json(renamedByOther)))
+            put.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await host.RowAsync(SharedPole)).Should().Be(new Row("renamed by the other", Guid.Empty));
+        (await host.AttributesAsync(SharedPole)).Should().Equal("plate=P-other");
+        (await FeatureAsync(owner, SharedPole)).Properties.Name.Should().Be("renamed by the other");
+    }
+
+    [Fact]
+    public async Task Put_TwiceOfTheCallersOwnFeature_BothSucceed()
+    {
+        await using var host = await HostAsync();
+        using var owner = host.ClientFor(Owner);
+
+        foreach (var name in new[] { "first", "second" })
+        {
+            var renamed = Pole(OwnersPole, Owner, 0.01);
+            renamed.Properties.Name = name;
+            renamed.Properties.CustomAttributes["plate"] = $"P-{name}";
+            using var response = await owner.PutAsync(Uri($"features/{OwnersPole}"), Json(renamed));
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        (await host.RowAsync(OwnersPole)).Should().Be(new Row("second", Owner));
+        (await host.AttributesAsync(OwnersPole)).Should().Equal("plate=P-second");
+    }
+
+    [Fact]
+    public async Task Bulk_OfExistingFeatures_UpdatesThem_AndASharedOneStaysShared()
+    {
+        await using var host = await HostAsync();
+        using var owner = host.ClientFor(Owner);
+        using var other = host.ClientFor(Other);
+
+        foreach (var round in new[] { 1, 2 })
+        {
+            var own = Pole(OwnersPole, Owner, 0.01);
+            own.Properties.Name = $"own bulk {round}";
+            own.Properties.CustomAttributes["plate"] = $"P-own-{round}";
+            var shared = Pole(SharedPole, Owner, 0.03);
+            shared.Properties.Name = $"shared bulk {round}";
+            shared.Properties.CustomAttributes["plate"] = $"P-shared-{round}";
+
+            using var bulk = await owner.PostAsync(Uri("features/bulk"), Json(new[] { own, shared, Pole($"osw-bulk-new-{round}", Owner, 0.05 + round / 100.0) }));
+
+            bulk.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        (await host.RowAsync(OwnersPole)).Should().Be(new Row("own bulk 2", Owner));
+        (await host.AttributesAsync(OwnersPole)).Should().Equal("plate=P-own-2");
+        (await host.RowAsync(SharedPole)).Should().Be(new Row("shared bulk 2", Guid.Empty));
+        (await host.AttributesAsync(SharedPole)).Should().Equal("plate=P-shared-2");
+        (await FeatureAsync(owner, OwnersPole)).Properties.Name.Should().Be("own bulk 2");
+        (await FeatureAsync(other, SharedPole)).Properties.Name.Should().Be("shared bulk 2");
+        (await IdsAsync(owner)).Should().BeEquivalentTo([OwnersPole, SharedPole, "osw-bulk-new-1", "osw-bulk-new-2"]);
     }
 
     [Fact]
