@@ -26,7 +26,9 @@ window.GeoAssets = (function () {
         selected:    { token: '--map-state-selected',    fallback: '#89b4fa', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
         highlighted: { token: '--map-state-highlighted', fallback: '#f9e2af', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
         conflict:    { token: '--map-state-conflict',    fallback: '#f38ba8', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
-        disabled:    { token: '--map-state-disabled',    fallback: '#6c7086', weight: null, alpha: 0.25, fillAlpha: 0.1 }
+        disabled:    { token: '--map-state-disabled',    fallback: '#6c7086', weight: null, alpha: 0.25, fillAlpha: 0.1 },
+        pending:     { token: '--map-state-pending',     fallback: '#cba6f7', weight: 5,    alpha: 1,    fillAlpha: 0.55 },
+        done:        { token: '--map-state-done',        fallback: '#a6e3a1', weight: 5,    alpha: 1,    fillAlpha: 0.55 }
     };
     const _STATE_CLASS_PREFIX = 'geoassets-state-';
     const _HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -1266,7 +1268,7 @@ window.GeoAssets = (function () {
 
     /**
      * Sets the persistent state of `featureIds` to `stateName` — 'default' | 'selected' |
-     * 'highlighted' | 'disabled' | 'conflict' (case-insensitive). 'default' removes the entry and
+     * 'highlighted' | 'disabled' | 'conflict' | 'pending' | 'done' (case-insensitive). 'default' removes the entry and
      * restores the feature's own style. Ids that are not rendered right now are still recorded
      * and styled when they next render. WebGL mode shows state as colour/alpha only.
      */

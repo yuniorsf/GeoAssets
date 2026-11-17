@@ -67,6 +67,7 @@
                             </th>
                         }
                         <th scope="col">@L["sharedUse.targets.activities"]</th>
+                        <th scope="col">@L["targetWork.note"]</th>
                         @if (RowActions is not null)
                         {
                             <th scope="col">@L["occupancy.table.actions"]</th>
@@ -92,6 +93,7 @@
                             </td>
                             <td>@target.AddedAt.ToLocalTime()</td>
                             <td>@ActivitiesOf(target, ActivityCatalog)</td>
+                            <td class="order-target-note">@target.Note</td>
                             @if (RowActions is not null)
                             {
                                 <td>@RowActions(target)</td>

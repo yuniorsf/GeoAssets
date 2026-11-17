@@ -1,4 +1,5 @@
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services.OrderTargets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -10,7 +11,7 @@ public static class PanelStateServiceExtensions
     /// Registers the cross-cutting state services (<see cref="IFeatureSelectionState"/>,
     /// <see cref="ICurrentMapContext"/>, <see cref="IPendingDrawTypeState"/>,
     /// <see cref="IMapSelectionSet"/>, <see cref="MapLayerDisplayService"/>,
-    /// <see cref="IMapOrderFocus"/>) that let panel-type
+    /// <see cref="IMapOrderFocus"/>, <see cref="OrderTargetMapStates"/>) that let panel-type
     /// menu items and map-drawing components become self-sufficient via DI instead of receiving
     /// bespoke parameters from whatever page hosts them (XD01-84).
     /// Called from both <c>Program.cs</c> (Web) and <c>MauiProgram.cs</c>.
@@ -38,6 +39,10 @@ public static class PanelStateServiceExtensions
         // AddWorkflowRest — it is resolved only by the order UI, never by the map workspace.
         services.AddScoped<MapLayerDisplayService>();
         services.AddScoped<IMapOrderFocus, MapOrderFocusService>();
+
+        // The shown order's targets as map feature states (XD01-313); needs IServiceOrderTargetReader
+        // from AddWorkflowRest, and like IMapOrderFocus is resolved only by the order UI.
+        services.AddScoped<OrderTargetMapStates>();
 
         return services;
     }

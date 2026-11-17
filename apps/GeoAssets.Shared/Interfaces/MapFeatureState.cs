@@ -21,5 +21,11 @@ public enum MapFeatureState
     Disabled,
 
     /// <summary>In conflict with another order — danger colour.</summary>
-    Conflict
+    Conflict,
+
+    /// <summary>A target of the shown service order whose work is still to do (XD01-313).</summary>
+    Pending,
+
+    /// <summary>A target of the shown service order whose work is done — success colour (XD01-313).</summary>
+    Done
 }

@@ -91,6 +91,13 @@ public partial class OrderTargetsTable
         }
     }
 
+    /// <summary>Reads the current page again, keeping the filters, sort and page (XD01-313: after a target's work was saved).</summary>
+    public async Task ReloadAsync()
+    {
+        await LoadAsync();
+        StateHasChanged();
+    }
+
     private Task ApplyAsync(OrderTargetsGridState next)
     {
         if (next == _state) return Task.CompletedTask;

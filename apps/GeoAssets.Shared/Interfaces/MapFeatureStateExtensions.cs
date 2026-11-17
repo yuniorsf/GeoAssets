@@ -15,6 +15,8 @@ public static class MapFeatureStateExtensions
         MapFeatureState.Highlighted => "highlighted",
         MapFeatureState.Disabled => "disabled",
         MapFeatureState.Conflict => "conflict",
+        MapFeatureState.Pending => "pending",
+        MapFeatureState.Done => "done",
         _ => throw new ArgumentOutOfRangeException(nameof(state), state, "Unknown map feature state.")
     };
 }
