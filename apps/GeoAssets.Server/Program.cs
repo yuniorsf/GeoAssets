@@ -223,7 +223,9 @@ var wmsRequireAuthentication = app.Configuration.GetValue("Wms:RequireAuthentica
 // Expose all GeoAssets REST endpoints under /api/geoassets
 // Endpoints: GET/POST /features, GET/PUT/DELETE /features/{id},
 //            POST /features/bulk, POST /features/load, DELETE /features,
-//            GET/POST /asset-types, DELETE /asset-types/{id}
+//            GET/POST /asset-types, DELETE /asset-types/{id},
+//            GET/POST /layers, DELETE /layers/{id},
+//            GET/POST /layer-rules (GET takes optional ?assetTypeId=), DELETE /layer-rules/{id}
 app.MapGeoAssetsApi(wmsRequireAuthentication: wmsRequireAuthentication);
 
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —

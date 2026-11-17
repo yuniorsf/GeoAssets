@@ -286,4 +286,182 @@ public class GeoAssetsRestApiExtensionsTests
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
         provider.GetAssetTypes().Should().HaveCount(before);
     }
+
+    // ── Layers / layer rules (XD01-153) ──────────────────────────────────────
+
+    private static readonly Uri LayersUri = new("/api/geoassets/layers", UriKind.Relative);
+    private static readonly Uri LayerRulesUri = new("/api/geoassets/layer-rules", UriKind.Relative);
+
+    private static StringContent JsonNullBody() => new("null", System.Text.Encoding.UTF8, "application/json");
+
+    [Fact]
+    public async Task GetLayers_ReturnsEveryLayerTheProviderHolds()
+    {
+        var provider = new TestAssetProvider();
+        var layer = new Layer { Name = "Poles", GeometryType = GeometryType.Point, Color = "#ff0000", Radius = 5 };
+        provider.AddLayer(layer);
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var layers = await client.GetFromJsonAsync<Layer[]>(LayersUri, GeoJsonSerializer.Options);
+
+        layers.Should().ContainSingle().Which.Should().BeEquivalentTo(layer);
+    }
+
+    [Fact]
+    public async Task PostLayer_AddsItToTheProvider_AndReturns201WithLocation()
+    {
+        var provider = new TestAssetProvider();
+        var layer = new Layer { Name = "Cables", GeometryType = GeometryType.LineString, DashArray = "5, 5" };
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsJsonAsync(LayersUri, layer, GeoJsonSerializer.Options);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+        response.Headers.Location.Should().Be(new Uri($"/api/geoassets/layers/{layer.Id}", UriKind.Relative));
+        provider.GetLayers().Should().ContainSingle().Which.Should().BeEquivalentTo(layer);
+    }
+
+    [Fact]
+    public async Task PostLayer_NullBody_Returns400_AndAddsNothing()
+    {
+        var provider = new TestAssetProvider();
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+        using var body = JsonNullBody();
+
+        var response = await client.PostAsync(LayersUri, body);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        provider.GetLayers().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteLayer_RemovesOnlyThatLayer_AndReturns204()
+    {
+        var provider = new TestAssetProvider();
+        var doomed = new Layer { Name = "Doomed" };
+        var kept = new Layer { Name = "Kept" };
+        provider.AddLayer(doomed);
+        provider.AddLayer(kept);
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync(new Uri($"/api/geoassets/layers/{doomed.Id}", UriKind.Relative));
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+        provider.GetLayers().Should().ContainSingle().Which.Id.Should().Be(kept.Id);
+    }
+
+    [Fact]
+    public async Task DeleteLayer_UnknownId_StillReturns204()
+    {
+        using var server = await BuildServerAsync(new TestAssetProvider());
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync(new Uri($"/api/geoassets/layers/{Guid.NewGuid()}", UriKind.Relative));
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task GetLayerRules_NoFilter_ReturnsRulesAcrossEveryAssetType()
+    {
+        var provider = new TestAssetProvider();
+        var pointRule = new LayerRule { AssetTypeId = AssetType.Point.Id, LayerId = Guid.NewGuid(), Priority = 1 };
+        var lineRule = new LayerRule { AssetTypeId = AssetType.Line.Id, LayerId = Guid.NewGuid(), Priority = 2 };
+        provider.AddLayerRule(pointRule);
+        provider.AddLayerRule(lineRule);
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var rules = await client.GetFromJsonAsync<LayerRule[]>(LayerRulesUri, GeoJsonSerializer.Options);
+
+        rules.Should().BeEquivalentTo([pointRule, lineRule]);
+    }
+
+    [Fact]
+    public async Task GetLayerRules_AssetTypeIdFilter_ReturnsOnlyThatAssetTypesRules()
+    {
+        var provider = new TestAssetProvider();
+        var pointRule = new LayerRule { AssetTypeId = AssetType.Point.Id, LayerId = Guid.NewGuid() };
+        provider.AddLayerRule(pointRule);
+        provider.AddLayerRule(new LayerRule { AssetTypeId = AssetType.Line.Id, LayerId = Guid.NewGuid() });
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var rules = await client.GetFromJsonAsync<LayerRule[]>(
+            new Uri($"/api/geoassets/layer-rules?assetTypeId={AssetType.Point.Id}", UriKind.Relative), GeoJsonSerializer.Options);
+
+        rules.Should().ContainSingle().Which.Id.Should().Be(pointRule.Id);
+    }
+
+    [Fact]
+    public async Task PostLayerRule_ThenGet_RoundTripsConditionsIntact()
+    {
+        var provider = new TestAssetProvider();
+        var rule = new LayerRule
+        {
+            AssetTypeId = AssetType.Point.Id,
+            LayerId = Guid.NewGuid(),
+            Priority = 3,
+            Conditions =
+            [
+                new LayerRuleCondition { Attribute = "voltageKv", Operator = LayerRuleOperator.GreaterThanOrEqual, Value = "13.8" },
+                new LayerRuleCondition { Attribute = "status", Operator = LayerRuleOperator.NotEquals, Value = "retired" }
+            ]
+        };
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var response = await client.PostAsJsonAsync(LayerRulesUri, rule, GeoJsonSerializer.Options);
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+        response.Headers.Location.Should().Be(new Uri($"/api/geoassets/layer-rules/{rule.Id}", UriKind.Relative));
+
+        var rules = await client.GetFromJsonAsync<LayerRule[]>(LayerRulesUri, GeoJsonSerializer.Options);
+
+        rules.Should().ContainSingle().Which.Should().BeEquivalentTo(rule);
+        rules![0].Conditions.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task PostLayerRule_NullBody_Returns400_AndAddsNothing()
+    {
+        var provider = new TestAssetProvider();
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+        using var body = JsonNullBody();
+
+        var response = await client.PostAsync(LayerRulesUri, body);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        provider.GetLayerRules(AssetType.Point.Id).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteLayerRule_RemovesOnlyThatRule_AndReturns204()
+    {
+        var provider = new TestAssetProvider();
+        var doomed = new LayerRule { AssetTypeId = AssetType.Point.Id, LayerId = Guid.NewGuid() };
+        var kept = new LayerRule { AssetTypeId = AssetType.Point.Id, LayerId = Guid.NewGuid() };
+        provider.AddLayerRule(doomed);
+        provider.AddLayerRule(kept);
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync(new Uri($"/api/geoassets/layer-rules/{doomed.Id}", UriKind.Relative));
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+        provider.GetLayerRules(AssetType.Point.Id).Should().ContainSingle().Which.Id.Should().Be(kept.Id);
+    }
 }

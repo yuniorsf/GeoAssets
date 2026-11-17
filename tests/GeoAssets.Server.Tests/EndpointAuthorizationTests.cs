@@ -211,6 +211,90 @@ public class EndpointAuthorizationTests
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
+    // ── /api/geoassets/layers + /layer-rules (XD01-153) — policy-level gate only: layers
+    // carry no owning organization, so there is no resource-level check to exercise ──────
+
+    public static TheoryData<string, string> LayerRoutes => new()
+    {
+        { "GET", "/api/geoassets/layers" },
+        { "POST", "/api/geoassets/layers" },
+        { "DELETE", "/api/geoassets/layers/3f2504e0-4f89-11d3-9a0c-0305e82c3301" },
+        { "GET", "/api/geoassets/layer-rules" },
+        { "POST", "/api/geoassets/layer-rules" },
+        { "DELETE", "/api/geoassets/layer-rules/3f2504e0-4f89-11d3-9a0c-0305e82c3301" },
+    };
+
+    private static HttpRequestMessage LayerRequest(string method, string path)
+    {
+        var request = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative));
+        if (string.Equals(method, "POST", StringComparison.Ordinal))
+            request.Content = new StringContent("""{"name":"Test"}""", Encoding.UTF8, "application/json");
+        return request;
+    }
+
+    [Theory]
+    [MemberData(nameof(LayerRoutes))]
+    public async Task LayerRoutes_Unauthenticated_Return401(string method, string path)
+    {
+        using var server = await BuildServerAsync("features:read", "features:edit", "features:delete");
+        using var client = server.CreateClient();
+        using var request = LayerRequest(method, path);
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory]
+    [MemberData(nameof(LayerRoutes))]
+    public async Task LayerRoutes_NoPermissions_Return403(string method, string path)
+    {
+        using var server = await BuildServerAsync(); // authenticated, no permissions granted
+        using var client = AuthenticatedClient(server);
+        using var request = LayerRequest(method, path);
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Theory]
+    [InlineData("GET", "/api/geoassets/layers", "features:read", HttpStatusCode.OK)]
+    [InlineData("POST", "/api/geoassets/layers", "features:edit", HttpStatusCode.Created)]
+    [InlineData("DELETE", "/api/geoassets/layers/3f2504e0-4f89-11d3-9a0c-0305e82c3301", "features:delete", HttpStatusCode.NoContent)]
+    [InlineData("GET", "/api/geoassets/layer-rules", "features:read", HttpStatusCode.OK)]
+    [InlineData("POST", "/api/geoassets/layer-rules", "features:edit", HttpStatusCode.Created)]
+    [InlineData("DELETE", "/api/geoassets/layer-rules/3f2504e0-4f89-11d3-9a0c-0305e82c3301", "features:delete", HttpStatusCode.NoContent)]
+    public async Task LayerRoutes_HasMatchingPermission_Succeed(string method, string path, string permission, HttpStatusCode expected)
+    {
+        using var server = await BuildServerAsync(permission);
+        using var client = AuthenticatedClient(server);
+        using var request = LayerRequest(method, path);
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(expected);
+    }
+
+    [Theory]
+    // Non-leakage: each permission unlocks only its own verb, never a stronger one.
+    [InlineData("POST", "/api/geoassets/layers", "features:read")]
+    [InlineData("POST", "/api/geoassets/layer-rules", "features:read")]
+    [InlineData("DELETE", "/api/geoassets/layers/3f2504e0-4f89-11d3-9a0c-0305e82c3301", "features:edit")]
+    [InlineData("DELETE", "/api/geoassets/layer-rules/3f2504e0-4f89-11d3-9a0c-0305e82c3301", "features:edit")]
+    [InlineData("GET", "/api/geoassets/layers", "features:edit")]
+    [InlineData("GET", "/api/geoassets/layer-rules", "features:delete")]
+    public async Task LayerRoutes_OnlyHasADifferentPermission_Return403(string method, string path, string grantedPermission)
+    {
+        using var server = await BuildServerAsync(grantedPermission);
+        using var client = AuthenticatedClient(server);
+        using var request = LayerRequest(method, path);
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     // ── GET /wfs (features:read) ──────────────────────────────────────────────
 
     [Fact]
