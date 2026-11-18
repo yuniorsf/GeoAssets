@@ -1,6 +1,6 @@
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 
-namespace GeoAssets.Server.Occupancy;
+namespace GeoAssets.Server.Modules.NeutralOperator.Occupancy;
 
 /// <summary>
 /// Body of <c>PUT /service-orders/{id}/targets/{targetId}/occupancy-changes</c>: the changes to

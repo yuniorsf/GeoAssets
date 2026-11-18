@@ -22,23 +22,16 @@ internal static class ServerHostFixture
 {
     private static readonly SemaphoreSlim StartLock = new(1, 1);
     private static PostgreSqlContainer? _container;
+    private static string? _connectionString;
     private static WebApplicationFactory<HttpTenantContext>? _factory;
+    private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
 
     public static async Task<IServiceProvider> GetServicesAsync()
     {
         await StartLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_factory is null)
-            {
-                var connectionString = await StartDatabaseAsync().ConfigureAwait(false);
-                _factory = new WebApplicationFactory<HttpTenantContext>().WithWebHostBuilder(host =>
-                {
-                    host.UseEnvironment("Testing");
-                    host.UseSetting("ConnectionStrings:GeoAssets", connectionString);
-                });
-            }
-
+            _factory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), kernelOnly: false);
             return _factory.Services;
         }
         finally
@@ -46,6 +39,38 @@ internal static class ServerHostFixture
             StartLock.Release();
         }
     }
+
+    /// <summary>
+    /// The same host on the same database, with <c>GeoAssets:Modules:0</c> blanked so no module is enabled (XD01-358):
+    /// what the kernel alone maps and registers.
+    /// </summary>
+    public static async Task<IServiceProvider> GetKernelOnlyServicesAsync()
+    {
+        await StartLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _kernelOnlyFactory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), kernelOnly: true);
+            return _kernelOnlyFactory.Services;
+        }
+        finally
+        {
+            StartLock.Release();
+        }
+    }
+
+    private static async Task<string> GetConnectionStringAsync() =>
+        _connectionString ??= await StartDatabaseAsync().ConfigureAwait(false);
+
+    private static WebApplicationFactory<HttpTenantContext> CreateFactory(string connectionString, bool kernelOnly) =>
+        new WebApplicationFactory<HttpTenantContext>().WithWebHostBuilder(host =>
+        {
+            host.UseEnvironment("Testing");
+            host.UseSetting("ConnectionStrings:GeoAssets", connectionString);
+            if (kernelOnly)
+            {
+                host.UseSetting("GeoAssets:Modules:0", "");
+            }
+        });
 
     private static async Task<string> StartDatabaseAsync()
     {

@@ -3,7 +3,7 @@ namespace GeoAssets.Hosting.Abstractions;
 /// <summary>
 /// Picks the enabled modules out of a host's built-ins (XD01-356): exactly the ids listed, in the listed order — so the
 /// order is deterministic and owned by configuration. Fails fast, naming the offending id, on a duplicate built-in id,
-/// a duplicate enabled id, or an enabled id no built-in provides.
+/// a duplicate enabled id, or an enabled id no built-in provides. Blank enabled entries are ignored.
 /// </summary>
 public static class GeoAssetsModuleResolver
 {
@@ -34,6 +34,13 @@ public static class GeoAssetsModuleResolver
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in enabledIds)
         {
+            // A blank entry enables nothing: it is how configuration that can't remove an array element
+            // (an environment variable overriding appsettings.json) disables a listed module.
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
             if (!seen.Add(id))
             {
                 throw new InvalidOperationException(

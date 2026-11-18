@@ -2,7 +2,7 @@ using GeoAssets.Workflow;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// This host's wiring of the shared-use dispatch (XD01-316): the two order types, the dispatch

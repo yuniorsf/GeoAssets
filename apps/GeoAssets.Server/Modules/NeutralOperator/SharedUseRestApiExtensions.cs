@@ -1,11 +1,11 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
-using GeoAssets.Server.SharedUse;
+using GeoAssets.Server.Modules.NeutralOperator.SharedUse;
 using GeoAssets.Server.Targets;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Rules;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// The shared-use dispatch routes (XD01-316), under the same prefix as the other service-order

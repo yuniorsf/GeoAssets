@@ -1,4 +1,4 @@
-namespace GeoAssets.Server.SharedUse;
+namespace GeoAssets.Server.Modules.NeutralOperator.SharedUse;
 
 /// <summary>
 /// Body of <c>POST /service-orders/{id}/shared-use/dispatch</c>.

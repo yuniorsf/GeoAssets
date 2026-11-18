@@ -3,7 +3,7 @@ using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// The RFC 9457 answer for each exception the shared-use dispatch service throws (XD01-316),
