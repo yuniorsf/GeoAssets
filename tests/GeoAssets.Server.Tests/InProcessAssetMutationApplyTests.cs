@@ -7,6 +7,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Services;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL.Repositories;
+using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Persistence.Outbox;

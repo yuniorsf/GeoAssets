@@ -24,6 +24,17 @@ public sealed class GeoAssetsModuleResolverTests
         GeoAssetsModuleResolver.Resolve([new RecordingModule("a")], []).Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Resolve_BlankEnabledIds_AreIgnored(string blank)
+    {
+        var a = new RecordingModule("a");
+
+        GeoAssetsModuleResolver.Resolve([a], [blank, "a", blank]).Should().Equal(a);
+        GeoAssetsModuleResolver.Resolve([a], [blank]).Should().BeEmpty();
+    }
+
     [Fact]
     public void Resolve_UnknownId_ThrowsNamingTheId()
     {

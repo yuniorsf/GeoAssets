@@ -3,7 +3,7 @@ using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// The approval branch of <c>POST /service-orders/{id}/actions</c> (XD01-318). An

@@ -4,7 +4,7 @@ using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// Turns what <see cref="IOrderOccupancyStagingService"/> throws into the

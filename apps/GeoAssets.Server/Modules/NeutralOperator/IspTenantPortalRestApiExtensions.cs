@@ -4,7 +4,7 @@ using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Authorization;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// Maps the tenant ISP self-service portal's REST surface (XD01-269) at

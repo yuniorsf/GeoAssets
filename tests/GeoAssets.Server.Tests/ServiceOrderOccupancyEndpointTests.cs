@@ -4,6 +4,7 @@ using System.Text;
 using FluentAssertions;
 using GeoAssets.Core.Isp.NeutralOperator;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;

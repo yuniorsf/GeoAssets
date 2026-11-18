@@ -2,6 +2,7 @@ using System.Net;
 using FluentAssertions;
 using GeoAssets.Core.Isp.NeutralOperator;
 using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Notifications;
 using GeoAssets.Workflow.Orders;

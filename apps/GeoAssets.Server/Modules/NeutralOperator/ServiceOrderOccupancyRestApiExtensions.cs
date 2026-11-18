@@ -1,13 +1,13 @@
 using System.Text.Json;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Services;
-using GeoAssets.Server.Occupancy;
+using GeoAssets.Server.Modules.NeutralOperator.Occupancy;
 using GeoAssets.Server.Targets;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// Maps the staged-occupancy routes (XD01-315) under the same prefix as

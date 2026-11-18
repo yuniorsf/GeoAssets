@@ -1,7 +1,7 @@
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Occupancy;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// This host's registration of staged occupancy changes (XD01-315): it decides which asset

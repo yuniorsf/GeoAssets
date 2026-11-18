@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
@@ -8,8 +9,8 @@ using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
 using GeoAssets.Server.IpBilling;
+using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.EntityFrameworkCore;
@@ -75,18 +76,9 @@ builder.Services.AddSingleton<WmsPostGisRenderer>();
 // ── Service Order workflow persistence (XD01-8) — same Postgres database/connection
 // as assets; workflow tables live alongside geo_entity/asset_type. OrderTypes seeded
 // in-code by default, then overlaid with any DB-persisted types after the host builds
-// (see LoadRegistryFromDbAsync below).
-// Isp.NeutralOperator order types (XD01-263's clandestine-notice, XD01-269's tenant
-// attachment-request) — registered here since XD01-263 built the OrderType itself but never
-// wired it into any host's registry; this is the first REST/Blazor surface exercising either.
-builder.Services.AddOrderTypeRegistry(registry =>
-{
-    ClandestineAttachmentOrderTypes.RegisterAll(registry);
-    TenantAttachmentRequestOrderTypes.RegisterAll(registry);
-
-    // Shared pole use (XD01-316): the pole owner's order and the notice each occupant gets.
-    registry.RegisterSharedUseOrderTypes(builder.Configuration);
-});
+// (see LoadRegistryFromDbAsync below). Modules add their own order types to this registry
+// (ConfigureOrderTypeRegistry) when AddGeoAssetsModules runs below.
+builder.Services.AddOrderTypeRegistry();
 builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     connectionString,
     // ServiceOrderDbContext lives in GeoAssets.Workflow.EFCore (kept provider-agnostic —
@@ -122,30 +114,16 @@ builder.Services.AddFeatureSelection();
 builder.Services.AddOrderTargets();
 builder.Services.AddObservableOrderTargetSelection();
 
-// Staged occupancy changes on an order's targets (XD01-315): the service over the target store,
-// the pole occupancy store and the change-set store AddWorkflowPersistence registered above.
-// Which asset types are poles is this host's to say — see OrderOccupancyHostExtensions.
-builder.Services.AddServerOrderOccupancyStaging(builder.Configuration);
-
 // Workflow integration-event transport (XD01-357): the transactional outbox every order workflow
 // stages its integration events on, in the same transaction as the change they report. The relay
 // publishes only when Workflow:Outbox:Transport names a broker; see
 // WorkflowMessagingHostExtensions.AddServerWorkflowMessaging for what happens to messages until then.
 builder.Services.AddServerWorkflowMessaging(builder.Configuration);
-// Shared-use dispatch (XD01-316): a pole owner's order fans out into one order per occupant
-// organization, each with a notification staged on that outbox.
-builder.Services.AddServerSharedUseDispatch();
-// Approving an order with targets commits the occupancy staged on its poles (XD01-318) — see
-// OccupancyApprovalRoute for how POST /service-orders/{id}/actions routes an approval to it.
-builder.Services.AddServerOccupancyCommit();
-// With no broker configured, the asset mutation batches that approval stages are applied to this
-// host's own catalog by an in-process outbox relay (XD01-337); every other message stays pending.
-// See InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply.
-builder.Services.AddServerInProcessAssetMutationApply(builder.Configuration, connectionString);
 
-// IClandestineAttachmentService (XD01-263) — first host wiring; backed by the same
-// IServiceOrderRepository as every other order-driven workflow in this host.
-builder.Services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
+// ── Vertical modules (XD01-358, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in
+// that order. NeutralOperatorModule: shared-use dispatch, pole occupancy staging and commit, the
+// in-process asset-mutation apply, clandestine attachments and the ISP tenant portal.
+builder.AddGeoAssetsModules(new NeutralOperatorModule());
 
 // SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
 // (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in
@@ -248,19 +226,10 @@ app.MapServiceOrdersApi();
 // Service-order target + selection endpoints under /api/workflow (XD01-308) —
 // see ServiceOrderTargetsRestApiExtensions for the full endpoint list.
 app.MapServiceOrderTargetsApi();
-app.MapServiceOrderOccupancyApi();
-
-// Shared-use dispatch endpoints under /api/workflow (XD01-316) —
-// see SharedUseRestApiExtensions for the full endpoint list.
-app.MapSharedUseDispatchApi();
 
 // Project REST endpoints under /api/projects (XD01-141) —
 // see ProjectsRestApiExtensions for the full endpoint list.
 app.MapProjectsApi();
-
-// Tenant ISP self-service portal REST endpoints under /api/isp/tenant-portal (XD01-269) —
-// see IspTenantPortalRestApiExtensions for the full endpoint list.
-app.MapIspTenantPortalApi();
 
 // Read-only identity/authorization endpoints under /api/identity (XD01-18) — also includes
 // the município↔Prefeitura grant-provisioning endpoints (XD01-177, MapMunicipioGrantsApi) —
@@ -276,5 +245,8 @@ app.MapOwnOrganizationGrantsApi();
 // for server-to-server or native desktop tools).
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
 app.MapWmsApi(requireAuthentication: wmsRequireAuthentication);  // GET /wms — OGC WMS 1.1.1
+
+// The enabled modules' endpoints, after the kernel's own (XD01-358).
+app.MapGeoAssetsModules();
 
 await app.RunAsync().ConfigureAwait(false);
