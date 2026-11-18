@@ -1158,7 +1158,7 @@ An architecture review of `apps/GeoAssets.Server` against this document found th
 
 | Invariant | Status | Evidence (ADR-001 Part 2) |
 |---|---|---|
-| 1. Core Database Encapsulation | **Violated** — `apps/GeoAssets.FieldService.Server/Program.cs:85` opens `GeoAssetsDbContext` on the core connection string; inside the core, `WmsPostGisRenderer` bypasses `IAssetProvider` (smell E). | E, P |
+| 1. Core Database Encapsulation | **Violated** — `apps/GeoAssets.FieldService.Server/Program.cs:72-89` loads the Postgres asset provider and opens `GeoAssetsDbContext` on the core connection string (remediation: XD01-386, which also makes this invariant an architecture test); inside the core, `WmsPostGisRenderer` bypasses `IAssetProvider` (smell E, remediation: XD01-372). | E, P |
 | 2. Workflow Domain Neutrality | **Violated** — `core/GeoAssets.Workflow` contains `Isp/NeutralOperator`, `Occupancy`, `FieldWork`, `Contractors`, `Erp`, `Scada`, `SlaGuard` and references `GeoAssets.Domain.Sanitation`; `ServiceOrderDbContext` declares pole-occupancy, paving, manhole and contractor tables; the generic `/actions` route special-cases occupancy approval. The token-based test (`MessagingArchitectureTests` Invariant02) does not list these terms. | B, C, D, I, J, K, O |
 | 3. Single-DB Commercial Ledger | Holds for `IpBilling.Server` and `FieldService.Server`; the contractor tables are additionally (and needlessly) created in the core database. | I |
 | 4. Offline Life-Safety Precedence | Not assessed by ADR-001. | — |
