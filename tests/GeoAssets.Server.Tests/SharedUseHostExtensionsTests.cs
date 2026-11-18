@@ -1,23 +1,17 @@
 using FluentAssertions;
-using GeoAssets.Core.Messaging;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Messaging.Kafka;
-using GeoAssets.Workflow.Messaging.Protobuf;
-using GeoAssets.Workflow.Messaging.ServiceBus;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
-using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace GeoAssets.Server.Tests;
 
 /// <summary>
-/// This host's wiring of the shared-use dispatch (XD01-316): the order types it registers, the
-/// outbox it stages notifications on — and which broker, if any, its relay publishes to — and
-/// the dispatch service with its unit of work and telemetry.
+/// This host's wiring of the shared-use dispatch (XD01-316): the order types it registers and
+/// the dispatch service with its unit of work and telemetry. The outbox and broker wiring is
+/// covered by <c>WorkflowMessagingHostExtensionsTests</c> (XD01-357).
 /// </summary>
 public sealed class SharedUseHostExtensionsTests
 {
@@ -68,71 +62,9 @@ public sealed class SharedUseHostExtensionsTests
         ((Action)(() => OrderOccupancyHostExtensions.PoleAssetTypeIds(null!))).Should().Throw<ArgumentNullException>();
     }
 
-    // ── Outbox ────────────────────────────────────────────────────────────────
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("None")]
-    [InlineData("none")]
-    public void AddServerWorkflowOutbox_WithNoTransport_RegistersTheStoreAndTheSerializer_ButNoRelayAndNoPublisher(string? transport)
-    {
-        var services = new ServiceCollection();
-
-        services.AddServerWorkflowOutbox(Configuration((SharedUseHostExtensions.OutboxTransportKey, transport)));
-
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IOutboxWriter));
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IOutboxDispatcherStore));
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IIdempotentInbox));
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IIntegrationMessageSerializer));
-        services.Should().NotContain(d => d.ServiceType == typeof(IHostedService), "with nowhere to publish, staged messages wait in the table");
-        services.Should().NotContain(d => d.ServiceType == typeof(IIntegrationEventPublisher));
-    }
-
-    [Theory]
-    [InlineData("Kafka", typeof(KafkaIntegrationEventPublisher))]
-    [InlineData("kafka", typeof(KafkaIntegrationEventPublisher))]
-    [InlineData("ServiceBus", typeof(ServiceBusIntegrationEventPublisher))]
-    [InlineData("SERVICEBUS", typeof(ServiceBusIntegrationEventPublisher))]
-    public void AddServerWorkflowOutbox_WithATransport_RegistersItsPublisher_AndTheRelay(string transport, Type publisher)
-    {
-        var services = new ServiceCollection();
-
-        services.AddServerWorkflowOutbox(Configuration((SharedUseHostExtensions.OutboxTransportKey, transport)));
-
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IIntegrationEventPublisher))
-            .Which.ImplementationType.Should().Be(publisher);
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IHostedService))
-            .Which.ImplementationType.Should().Be<OutboxRelayProcessor>();
-        services.Should().ContainSingle(d => d.ServiceType == typeof(IOutboxWriter));
-    }
-
     [Fact]
-    public void AddServerWorkflowOutbox_WithAnUnknownTransport_FailsAtStartup_NamingTheSettingAndWhatItAccepts()
-    {
-        var act = () => new ServiceCollection().AddServerWorkflowOutbox(Configuration((SharedUseHostExtensions.OutboxTransportKey, "RabbitMQ")));
-
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage($"*{SharedUseHostExtensions.OutboxTransportKey}*RabbitMQ*Kafka*ServiceBus*None*");
-    }
-
-    [Fact]
-    public void AddServerWorkflowOutbox_SerializesWithProtocolBuffers()
-    {
-        var services = new ServiceCollection();
-        services.AddServerWorkflowOutbox(Configuration());
-        using var provider = services.BuildServiceProvider();
-
-        provider.GetRequiredService<IIntegrationMessageSerializer>().Should().BeOfType<ProtobufIntegrationMessageSerializer>();
-    }
-
-    [Fact]
-    public void AddServerWorkflowOutbox_AndAddServerSharedUseDispatch_NullArguments_ThrowArgumentNullException()
-    {
-        ((Action)(() => SharedUseHostExtensions.AddServerWorkflowOutbox(null!, Configuration()))).Should().Throw<ArgumentNullException>();
-        ((Action)(() => new ServiceCollection().AddServerWorkflowOutbox(null!))).Should().Throw<ArgumentNullException>();
+    public void AddServerSharedUseDispatch_NullServices_ThrowsArgumentNullException() =>
         ((Action)(() => SharedUseHostExtensions.AddServerSharedUseDispatch(null!))).Should().Throw<ArgumentNullException>();
-    }
 
     // ── Dispatch service ──────────────────────────────────────────────────────
 

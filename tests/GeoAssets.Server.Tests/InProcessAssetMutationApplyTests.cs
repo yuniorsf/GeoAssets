@@ -13,6 +13,7 @@ using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -301,14 +302,14 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
     public void AddServerInProcessAssetMutationApply_WithNoTransport_RunsTheRelayOnAssetBatchesOnly_ThroughTheDecoratedPostgresApplier(string? transport)
     {
         var configuration = Configuration(
-            (SharedUseHostExtensions.OutboxTransportKey, transport),
+            (WorkflowMessagingHostExtensions.OutboxTransportKey, transport),
             (OrderOccupancyHostExtensions.CatalogInstanceIdKey, " west "));
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<TimeProvider>(_clock);
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
-        services.AddServerWorkflowOutbox(configuration);
+        services.AddServerWorkflowMessaging(configuration);
 
         services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
         using var provider = services.BuildServiceProvider(validateScopes: true);
@@ -331,7 +332,7 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddSingleton<TimeProvider>(_clock);
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
-        services.AddServerWorkflowOutbox(configuration);
+        services.AddServerWorkflowMessaging(configuration);
         services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
         await using var provider = services.BuildServiceProvider();
 
@@ -340,14 +341,64 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'default'*'west'*");
     }
 
+    private ServiceProvider RelayProvider(IConfiguration configuration, CapturingLoggerProvider logs)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging(b => b.AddProvider(logs));
+        services.AddSingleton<TimeProvider>(_clock);
+        services.AddSingleton(_tracer);
+        services.AddSingleton(_metrics);
+        services.AddServerWorkflowMessaging(configuration);
+        services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task Relay_AppliesToTheCatalogNamedByTheNewKey()
+    {
+        var configuration = Configuration(
+            (AssetCatalogConfiguration.InstanceIdKey, " east "),
+            (AssetCatalogConfiguration.LegacyInstanceIdKey, "west"));
+        await using var provider = RelayProvider(configuration, new CapturingLoggerProvider());
+
+        var act = () => provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(Batch("default")));
+
+        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'default'*'east'*");
+    }
+
+    [Fact]
+    public async Task Relay_FallsBackToTheLegacyKey_WhenOnlyItIsSet_AndLogsADeprecationWarning()
+    {
+        var logs = new CapturingLoggerProvider();
+        var configuration = Configuration((AssetCatalogConfiguration.LegacyInstanceIdKey, " west "));
+        await using var provider = RelayProvider(configuration, logs);
+
+        var act = () => provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(Batch("default")));
+
+        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'default'*'west'*");
+        logs.Entries.Should().Contain(e => e.EventId.Id == 3570 && e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task Relay_UsingTheNewKey_LogsNoDeprecationWarning()
+    {
+        var logs = new CapturingLoggerProvider();
+        var configuration = Configuration((AssetCatalogConfiguration.InstanceIdKey, "east"));
+        await using var provider = RelayProvider(configuration, logs);
+
+        provider.GetRequiredService<IIntegrationEventPublisher>().Should().BeOfType<InProcessAssetMutationBatchPublisher>();
+
+        logs.Entries.Should().NotContain(e => e.EventId.Id == 3570);
+    }
+
     [Theory]
     [InlineData("Kafka")]
     [InlineData("ServiceBus")]
     public void AddServerInProcessAssetMutationApply_WithABroker_RegistersNothing_SoTheBrokerRelayIsUnchanged(string transport)
     {
-        var configuration = Configuration((SharedUseHostExtensions.OutboxTransportKey, transport));
+        var configuration = Configuration((WorkflowMessagingHostExtensions.OutboxTransportKey, transport));
         var services = new ServiceCollection();
-        services.AddServerWorkflowOutbox(configuration);
+        services.AddServerWorkflowMessaging(configuration);
         var before = services.Select(d => (d.ServiceType, d.ImplementationType)).ToList();
 
         services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
@@ -376,6 +427,38 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         OrderOccupancyHostExtensions.CatalogInstanceId(Configuration((OrderOccupancyHostExtensions.CatalogInstanceIdKey, configured)))
             .Should().Be(expected);
         ((Action)(() => OrderOccupancyHostExtensions.CatalogInstanceId(null!))).Should().Throw<ArgumentNullException>();
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        private readonly List<(EventId EventId, LogLevel Level)> _entries = [];
+
+        public IReadOnlyList<(EventId EventId, LogLevel Level)> Entries
+        {
+            get
+            {
+                lock (_entries) return [.. _entries];
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(CapturingLoggerProvider owner) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                lock (owner._entries) owner._entries.Add((eventId, logLevel));
+            }
+        }
     }
 
     private sealed class StubApplier : IAssetMutationBatchApplier

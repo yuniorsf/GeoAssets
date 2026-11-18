@@ -127,12 +127,13 @@ builder.Services.AddObservableOrderTargetSelection();
 // Which asset types are poles is this host's to say — see OrderOccupancyHostExtensions.
 builder.Services.AddServerOrderOccupancyStaging(builder.Configuration);
 
+// Workflow integration-event transport (XD01-357): the transactional outbox every order workflow
+// stages its integration events on, in the same transaction as the change they report. The relay
+// publishes only when Workflow:Outbox:Transport names a broker; see
+// WorkflowMessagingHostExtensions.AddServerWorkflowMessaging for what happens to messages until then.
+builder.Services.AddServerWorkflowMessaging(builder.Configuration);
 // Shared-use dispatch (XD01-316): a pole owner's order fans out into one order per occupant
-// organization, each with a notification staged on the transactional outbox in the same
-// transaction — this host's first use of the outbox, whose tables its migrations have carried
-// since XD01-228. The relay publishes only when Workflow:Outbox:Transport names a broker; see
-// SharedUseHostExtensions.AddServerWorkflowOutbox for what happens to messages until then.
-builder.Services.AddServerWorkflowOutbox(builder.Configuration);
+// organization, each with a notification staged on that outbox.
 builder.Services.AddServerSharedUseDispatch();
 // Approving an order with targets commits the occupancy staged on its poles (XD01-318) — see
 // OccupancyApprovalRoute for how POST /service-orders/{id}/actions routes an approval to it.
