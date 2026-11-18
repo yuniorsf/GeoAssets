@@ -1,3 +1,4 @@
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 
@@ -66,6 +67,8 @@ public static class SharedUseOrderTypes
         RecipientAccess = OrderRecipientAccess.Inform,
         States = PoleWorkStates(),
         Transitions = PoleWorkTransitions(),
+        // Approving it commits the occupancy staged on its poles (XD01-361).
+        Capabilities = [OccupancyCapabilities.Commit],
         TargetPolicy = new OrderTargetPolicy
         {
             TargetAssetTypeIds = PoleTypes(poleAssetTypeIds),
@@ -97,6 +100,8 @@ public static class SharedUseOrderTypes
         RecipientActions = [OrderActionType.Accept, OrderActionType.Annotate],
         States = States(),
         Transitions = NoticeTransitions(),
+        // Approving it commits the occupancy staged on its poles (XD01-361).
+        Capabilities = [OccupancyCapabilities.Commit],
         TargetPolicy = new OrderTargetPolicy
         {
             TargetAssetTypeIds = PoleTypes(poleAssetTypeIds),

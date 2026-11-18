@@ -16,6 +16,7 @@ internal static class OrderTypeMapper
         AttributesSchemaJson = t.AttributesSchemaJson,
         TargetPolicyJson = OrderTargetPolicyMapper.ToJson(t.TargetPolicy),
         RecipientAccess = (int)t.RecipientAccess,
+        CapabilitiesJson = CapabilitiesToJson(t.Capabilities),
         CreationPolicies = t.CreationPolicies
             .Select(p => new OrderCreationPolicyRecord
             {
@@ -86,6 +87,7 @@ internal static class OrderTypeMapper
         TargetPolicy = OrderTargetPolicyMapper.FromJson(r.TargetPolicyJson),
         RecipientAccess = RecipientAccessFrom(r.RecipientAccess),
         RecipientActions = RecipientActionsFrom(recipientActions),
+        Capabilities = CapabilitiesFromJson(r.CapabilitiesJson),
         CreationPolicies = r.CreationPolicies
             .Select(p => new OrderCreationPolicy((PolicyKind)p.Kind, p.Value))
             .ToList(),
@@ -123,4 +125,15 @@ internal static class OrderTypeMapper
             .Where(action => Enum.IsDefined(action))
             .Distinct(),
     ];
+
+    /// <summary>The stored form of <see cref="OrderType.Capabilities"/>: sorted, distinct, null when empty (XD01-361).</summary>
+    public static string? CapabilitiesToJson(IEnumerable<string> capabilities)
+    {
+        var names = capabilities.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        return names.Length == 0 ? null : System.Text.Json.JsonSerializer.Serialize(names);
+    }
+
+    /// <summary>The <see cref="OrderType.Capabilities"/> of a stored row; none for a row stored before the column existed.</summary>
+    public static List<string> CapabilitiesFromJson(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? [] : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
 }

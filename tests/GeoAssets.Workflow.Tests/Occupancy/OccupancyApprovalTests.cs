@@ -21,10 +21,43 @@ public sealed class OccupancyApprovalTests
         {
             Id = "survey",
             DisplayName = "Survey",
+            Capabilities = [OccupancyCapabilities.Commit],
             TargetPolicy = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"] },
         }).Should().BeTrue();
         OccupancyApproval.Commits(PoleWork).Should().BeTrue();
     }
+
+    [Fact]
+    public void Commits_CapabilityAndTargets_True()
+    {
+        OccupancyApproval.Commits(TypeWith(OccupancyCapabilities.Commit, withTargets: true)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Commits_TargetsWithoutCapability_False()
+    {
+        OccupancyApproval.Commits(TypeWith(capability: null, withTargets: true)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Commits_CapabilityWithoutTargets_False()
+    {
+        OccupancyApproval.Commits(TypeWith(OccupancyCapabilities.Commit, withTargets: false)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Commits_NullType_False()
+    {
+        OccupancyApproval.Commits(null).Should().BeFalse();
+    }
+
+    private static OrderType TypeWith(string? capability, bool withTargets) => new()
+    {
+        Id = "custom",
+        DisplayName = "Custom",
+        Capabilities = capability is null ? [] : [capability],
+        TargetPolicy = withTargets ? new OrderTargetPolicy { TargetAssetTypeIds = ["pole"] } : null,
+    };
 
     [Fact]
     public void ApprovedStatus_IsTheTargetOfTheApprovalTransitionOutOfTheStatus()

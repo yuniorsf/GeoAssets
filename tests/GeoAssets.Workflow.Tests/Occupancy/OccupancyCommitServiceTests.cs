@@ -195,6 +195,7 @@ public sealed class OccupancyCommitServiceTests
         {
             Id = "pole-survey",
             DisplayName = "Pole survey",
+            Capabilities = [OccupancyCapabilities.Commit],
             TargetPolicy = new OrderTargetPolicy { TargetAssetTypeIds = [PoleType] },
         });
         await _fixture.Orders.AddAsync(NewOrder("pole-survey", ServiceOrderStatus.Completed));

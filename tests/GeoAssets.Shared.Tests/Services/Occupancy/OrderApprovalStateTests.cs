@@ -3,8 +3,10 @@ using FluentAssertions;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Shared.Services.Occupancy;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
+using GeoAssets.Workflow.Targets;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services.Occupancy;
@@ -49,6 +51,34 @@ public sealed class OrderApprovalStateTests
     {
         OrderApprovalState.CanApprove(Registry.Find("plain"), Order(orderTypeId: "plain"), OwnerSupervisor, Rules).Should().BeFalse();
         OrderApprovalState.CanApprove(null, Order(), OwnerSupervisor, Rules).Should().BeFalse();
+    }
+
+    // XD01-361: ServiceOrderDetail gates its occupancy panel (HasTargets) and the approve button (CanApprove) on the same
+    // OccupancyApproval.Commits; the project has no component-rendering harness, so the gate is proven where it is exposed.
+    [Fact]
+    public void CanApprove_IsFalse_ForATargetedTypeWithoutTheOccupancyCommitCapability()
+    {
+        var poleWork = Registry.Find(SharedUseOrderTypes.PoleWorkId)!;
+        var withoutCapability = new OrderType
+        {
+            Id = poleWork.Id,
+            DisplayName = poleWork.DisplayName,
+            States = poleWork.States,
+            Transitions = poleWork.Transitions,
+            TargetPolicy = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"] },
+        };
+
+        OccupancyApproval.Commits(withoutCapability).Should().BeFalse("the occupancy panel is hidden with it");
+        OrderApprovalState.CanApprove(withoutCapability, Order(), OwnerSupervisor, Rules).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanApprove_IsTrue_ForTheSharedUseTypeThatDeclaresTheOccupancyCommitCapability()
+    {
+        var poleWork = Registry.Find(SharedUseOrderTypes.PoleWorkId)!;
+
+        OccupancyApproval.Commits(poleWork).Should().BeTrue("the occupancy panel is shown with it");
+        OrderApprovalState.CanApprove(poleWork, Order(), OwnerSupervisor, Rules).Should().BeTrue();
     }
 
     [Theory]

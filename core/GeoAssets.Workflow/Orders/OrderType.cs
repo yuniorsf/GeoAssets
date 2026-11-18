@@ -95,4 +95,15 @@ public sealed class OrderType
     /// the status as it is. Empty (the default) adds nothing.
     /// </summary>
     public List<OrderActionType> RecipientActions { get; init; } = [];
+
+    /// <summary>
+    /// What a module lets orders of this type do beyond the generic workflow (XD01-361), as opaque, module-owned names —
+    /// e.g. the NeutralOperator module's <c>occupancy-commit</c>. The engine never interprets them; a module checks for its
+    /// own with <see cref="HasCapability"/>. Compared ordinally. Empty (the default) declares none.
+    /// </summary>
+    public List<string> Capabilities { get; init; } = [];
+
+    /// <summary>Whether this type declares <paramref name="capability"/> (ordinal comparison).</summary>
+    public bool HasCapability(string capability) =>
+        Capabilities.Contains(capability, StringComparer.Ordinal);
 }

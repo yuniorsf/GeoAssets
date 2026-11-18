@@ -463,6 +463,9 @@ namespace GeoAssets.Server.Migrations
                     b.Property<string>("AttributesSchemaJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("CapabilitiesJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(1024)

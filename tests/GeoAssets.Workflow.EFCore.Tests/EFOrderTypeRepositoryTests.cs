@@ -397,4 +397,37 @@ public class EFOrderTypeRepositoryTests
 
         await act.Should().NotThrowAsync();
     }
+
+    // ── Capabilities (XD01-361) ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddAsync_ThenGetById_RoundTripsCapabilities()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        await repo.AddAsync(new OrderType { Id = "with", DisplayName = "With", Capabilities = ["occupancy-commit"] });
+        await repo.AddAsync(new OrderType { Id = "without", DisplayName = "Without" });
+        await repo.SaveChangesAsync();
+
+        using var fresh = fixture.NewContext();
+        var freshRepo = new EFOrderTypeRepository(fresh);
+
+        (await freshRepo.GetByIdAsync("with"))!.Capabilities.Should().Equal("occupancy-commit");
+        (await freshRepo.GetByIdAsync("without"))!.Capabilities.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ReplacesCapabilities()
+    {
+        using var fixture = new SqliteFixture();
+        var repo = new EFOrderTypeRepository(fixture.Context);
+        await repo.AddAsync(new OrderType { Id = "t", DisplayName = "T", Capabilities = ["occupancy-commit"] });
+        await repo.SaveChangesAsync();
+
+        await repo.UpdateAsync(new OrderType { Id = "t", DisplayName = "T", Capabilities = ["other"] });
+        await repo.SaveChangesAsync();
+
+        using var fresh = fixture.NewContext();
+        (await new EFOrderTypeRepository(fresh).GetByIdAsync("t"))!.Capabilities.Should().Equal("other");
+    }
 }
