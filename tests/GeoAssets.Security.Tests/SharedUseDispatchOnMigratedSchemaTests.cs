@@ -150,7 +150,7 @@ public sealed class SharedUseDispatchOnMigratedSchemaTests
         services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes(configuration));
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
         services.AddServiceOrderRules();
-        services.AddServerWorkflowOutbox(configuration);
+        services.AddServerWorkflowMessaging(configuration);
         services.AddServerSharedUseDispatch();
         return services.BuildServiceProvider(validateScopes: true);
     }

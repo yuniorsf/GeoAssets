@@ -14,10 +14,10 @@ public static class OrderOccupancyHostExtensions
     public const string PoleAssetTypeIdsKey = "Workflow:Occupancy:PoleAssetTypeIds";
 
     /// <summary>
-    /// Configuration key of the asset catalog instance an approval's occupancy attribute updates
-    /// are addressed to (XD01-318); <see cref="OrderOccupancyOptions.DefaultCatalogInstanceId"/> when absent or blank.
+    /// Deprecated (XD01-357): the catalog instance id is the host's <see cref="AssetCatalogConfiguration.InstanceIdKey"/>;
+    /// this key is still read as its fallback (<see cref="AssetCatalogConfiguration.LegacyInstanceIdKey"/>).
     /// </summary>
-    public const string CatalogInstanceIdKey = "Workflow:Occupancy:CatalogInstanceId";
+    public const string CatalogInstanceIdKey = AssetCatalogConfiguration.LegacyInstanceIdKey;
 
     /// <summary>
     /// Id of the pole asset type of the global domain catalog this host's database is seeded
@@ -63,18 +63,11 @@ public static class OrderOccupancyHostExtensions
     }
 
     /// <summary>
-    /// The catalog instance an approval's attribute updates are addressed to — the configured
-    /// <see cref="CatalogInstanceIdKey"/>, trimmed, or <see cref="OrderOccupancyOptions.DefaultCatalogInstanceId"/>
-    /// when absent or blank. Also the catalog instance this host applies such updates to itself
-    /// when it has no broker (XD01-337).
+    /// The catalog instance an approval's attribute updates are addressed to: the host's
+    /// <see cref="AssetCatalogConfiguration.InstanceId(IConfiguration)"/> (XD01-357), so the batches staged here and the
+    /// catalog the host applies them to itself when it has no broker (XD01-337) always agree.
     /// </summary>
-    public static string CatalogInstanceId(IConfiguration configuration)
-    {
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        var configured = configuration[CatalogInstanceIdKey];
-        return string.IsNullOrWhiteSpace(configured) ? OrderOccupancyOptions.DefaultCatalogInstanceId : configured.Trim();
-    }
+    public static string CatalogInstanceId(IConfiguration configuration) => AssetCatalogConfiguration.InstanceId(configuration);
 
     /// <summary>
     /// The asset types this host treats as poles: the configured <see cref="PoleAssetTypeIdsKey"/>

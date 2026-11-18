@@ -19,22 +19,23 @@ public static class InProcessAssetMutationHostExtensions
     public const string RelayWorkerId = "geoassets-server-in-process";
 
     /// <summary>
-    /// With <see cref="SharedUseHostExtensions.OutboxTransportKey"/> absent or
-    /// <see cref="SharedUseHostExtensions.NoTransport"/>: runs the existing outbox relay
+    /// With <see cref="WorkflowMessagingHostExtensions.OutboxTransportKey"/> absent or
+    /// <see cref="WorkflowMessagingHostExtensions.NoTransport"/>: runs the existing outbox relay
     /// (<see cref="OutboxRelayProcessor"/>) claiming
     /// <see cref="IntegrationEventTypes.AssetMutationBatchRequestedV1"/> messages only, with
     /// <see cref="InProcessAssetMutationBatchPublisher"/> as its "broker", which applies each batch
-    /// to this host's catalog (<see cref="OrderOccupancyHostExtensions.CatalogInstanceId"/>) through
+    /// to this host's catalog (<see cref="AssetCatalogConfiguration.InstanceId(IConfiguration)"/>; a warning is logged
+    /// when it comes from the deprecated <see cref="AssetCatalogConfiguration.LegacyInstanceIdKey"/>) through
     /// <see cref="PostgresAssetMutationBatchApplier"/> on <paramref name="connectionString"/>,
     /// with <see cref="ObservableAssetMutationBatchApplier"/>'s span and metrics. Every other
     /// message type stays pending in the outbox, as before. The relay's options are its defaults
     /// (lease, exponential backoff, attempt limit), with <see cref="RelayWorkerId"/>.
     ///
     /// With a broker configured this registers nothing: the relay
-    /// <see cref="SharedUseHostExtensions.AddServerWorkflowOutbox"/> set up publishes every
+    /// <see cref="WorkflowMessagingHostExtensions.AddServerWorkflowMessaging"/> set up publishes every
     /// message, asset batches included, exactly as before.
     ///
-    /// Call after <see cref="SharedUseHostExtensions.AddServerWorkflowOutbox"/> (the outbox store
+    /// Call after <see cref="WorkflowMessagingHostExtensions.AddServerWorkflowMessaging"/> (the outbox store
     /// and serializer) and after the host registered <see cref="GeoAssetsActivitySource"/> and
     /// <see cref="GeoAssetsMeter"/>.
     /// </summary>
@@ -45,14 +46,12 @@ public static class InProcessAssetMutationHostExtensions
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-        var transport = configuration[SharedUseHostExtensions.OutboxTransportKey];
-        if (!string.IsNullOrWhiteSpace(transport)
-            && !string.Equals(transport, SharedUseHostExtensions.NoTransport, StringComparison.OrdinalIgnoreCase))
+        if (WorkflowMessagingHostExtensions.HasBroker(configuration))
         {
             return services;
         }
 
-        var catalogInstanceId = OrderOccupancyHostExtensions.CatalogInstanceId(configuration);
+        var catalogInstanceId = AssetCatalogConfiguration.InstanceId(configuration, out var fromLegacyKey);
 
         services.AddPostgresAssetMutationBatchApplier(connectionString);
         services.AddSingleton<IAssetMutationBatchApplier>(sp => new ObservableAssetMutationBatchApplier(
@@ -60,10 +59,20 @@ public static class InProcessAssetMutationHostExtensions
             sp.GetRequiredService<GeoAssetsActivitySource>(),
             sp.GetRequiredService<GeoAssetsMeter>(),
             sp.GetRequiredService<TimeProvider>()));
-        services.AddSingleton<IIntegrationEventPublisher>(sp => new InProcessAssetMutationBatchPublisher(
-            sp.GetRequiredService<IIntegrationMessageSerializer>(),
-            sp.GetRequiredService<IAssetMutationBatchApplier>(),
-            catalogInstanceId));
+        services.AddSingleton<IIntegrationEventPublisher>(sp =>
+        {
+            if (fromLegacyKey)
+            {
+                AssetCatalogConfiguration.LegacyInstanceIdKeyUsed(
+                    sp.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(InProcessAssetMutationHostExtensions).FullName!),
+                    catalogInstanceId);
+            }
+
+            return new InProcessAssetMutationBatchPublisher(
+                sp.GetRequiredService<IIntegrationMessageSerializer>(),
+                sp.GetRequiredService<IAssetMutationBatchApplier>(),
+                catalogInstanceId);
+        });
 
         services.AddOptions<OutboxRelayOptions>().Configure(options =>
         {

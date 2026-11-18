@@ -195,7 +195,7 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
         services.AddServiceOrderRules();
         services.AddServerOrderOccupancyStaging(configuration);
-        services.AddServerWorkflowOutbox(configuration);
+        services.AddServerWorkflowMessaging(configuration);
         services.AddServerOccupancyCommit();
         services.AddServerInProcessAssetMutationApply(configuration, catalogConnectionString);
         if (maxAttempts is { } attempts)
