@@ -452,11 +452,14 @@ All tickets carry the label `server-decoupling` (`project = XD01 AND labels = se
 | P2 Extension points & authz | XD01-346 | XD01-360 `IOrderActionHandler` → XD01-361 occupancy capability; XD01-362 lifecycle hook + transition guard; XD01-363 DI rules + problem mappers → XD01-364 single order-authz decision point → XD01-365 remove tenant-portal routes; XD01-366 extensible action vocabulary |
 | P3 Feature semantics | XD01-347 | XD01-367 `AssetType.Roles` → XD01-368 role-based target policy → XD01-369 descriptor registry + `/features/{id}/actions` → XD01-370 context-menu actions |
 | P4 Provider pool | XD01-348 | XD01-371 `PostgresProviderPlugin` + `ICatalogPool` → XD01-372 `IAssetRenderQuery` (WMS) · XD01-373 `IOrganizationCatalogFactory` → XD01-374 plugin-owned applier, drop Provider ref |
-| P5 Assembly split | XD01-349 | XD01-375 NeutralOperator assemblies → XD01-376 FieldWork/ERP/SCADA out of engine · XD01-377 permission contributors → XD01-378 client vertical RCLs |
+| P5 Assembly split | XD01-349 | XD01-375 NeutralOperator assemblies → XD01-376 FieldWork/ERP/SCADA out of engine · XD01-377 permission contributors → XD01-378 client vertical RCLs · XD01-386 FieldService.Server via `IGeoCoreClient` only (after XD01-376, XD01-362) |
 | P6 Persistence & ledger | XD01-350 | XD01-379 global target ledger → XD01-380 `NeutralOperatorDbContext` → XD01-381 FieldService tables out of kernel |
 | P7 Extraction & saga | XD01-351 | XD01-382 `NeutralOperator.Server` → XD01-383 approval saga → XD01-384 gateway + client re-pointing → XD01-385 Município bridge to IpBilling.Server, ratchets at zero |
 
+## Related host deviation (tracked: XD01-386)
+
+`apps/GeoAssets.FieldService.Server/Program.cs:72-89` loads the Postgres asset provider (with a full warmed in-memory catalog) and registers `GeoAssetsDbContext` against the **core** `GeoAssets` connection string, contradicting Invariant 1 of the intersection evaluation ("only `GeoAssets.Server` may connect to `geo_entity`"). Only two consumers depend on it — `GeofenceArrivalTransitionGuard` (`IsWithinDistanceAsync`, XD01-295) and `FeederOutageDispatchService` (`GetNearby`, XD01-239); everything else on that host already uses `IGeoCoreClient`. Suspected consequences, to be verified by XD01-386: a stale catalog copy (edits made in the kernel not seen by the geofence) and missing organization scoping (the organization-less shared catalog instead of the XD01-338 per-organization view). XD01-386 moves both consumers onto narrow ports backed by `IGeoCoreClient`, removes the provider/DbContext/connection-string from FieldService.Server, and adds an architecture test that only `GeoAssets.Server` may reference `GeoAssets.Provider.PostgreSQL`.
+
 ## Follow-ups not yet ticketed
 
-- `apps/GeoAssets.FieldService.Server/Program.cs:85` registers `GeoAssetsDbContext` directly against the core `GeoAssets` connection string, contradicting Invariant 1 of the intersection evaluation ("only `GeoAssets.Server` may connect to `geo_entity`"). Out of this ADR's scope (FieldService host), but the same `IGeoCoreClient`/ledger route applies.
 - `CLAUDE.md`'s gate table names NetArchTest; the repository's architecture tests are reflection-based (`GetReferencedAssemblies`). P0 extends those; adopting `NetArchTest.Rules` is optional.
