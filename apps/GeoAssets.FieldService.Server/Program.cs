@@ -184,8 +184,11 @@ builder.Services.AddScoped<IServiceOrderRepository>(sp =>
         new EFServiceOrderRepository(
             sp.GetRequiredService<ServiceOrderDbContext>(),
             orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>(),
-            timeProvider: sp.GetRequiredService<TimeProvider>()),
-        sp.GetRequiredService<OrderTypeRegistry>()));
+            timeProvider: sp.GetRequiredService<TimeProvider>(),
+            hooks: sp.GetServices<IOrderLifecycleHook>()),
+        sp.GetRequiredService<OrderTypeRegistry>(),
+        sp.GetServices<ITransitionGuard>(),
+        sp.GetRequiredService<TimeProvider>()));
 
 // Service order targets (XD01-306): same scoped ServiceOrderDbContext as the repository above,
 // which is what lets an order's closing transition release its targets in one SaveChanges.

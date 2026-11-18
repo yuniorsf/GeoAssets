@@ -16,7 +16,9 @@ namespace GeoAssets.Workflow.Orders;
 /// </summary>
 public sealed class ValidatingServiceOrderRepository(
     IServiceOrderRepository inner,
-    OrderTypeRegistry? orderTypeRegistry = null) : IServiceOrderRepository
+    OrderTypeRegistry? orderTypeRegistry = null,
+    IEnumerable<ITransitionGuard>? guards = null,
+    TimeProvider? timeProvider = null) : IServiceOrderRepository
 {
     // ── Read (pass-through) ────────────────────────────────────────────────────
 
@@ -77,9 +79,31 @@ public sealed class ValidatingServiceOrderRepository(
         if (!ServiceOrderTransitions.IsValid(orderType, existing.Status, order.Status))
             throw new InvalidServiceOrderTransitionException(existing.Status, order.Status);
 
+        await EnsureGuardsAllowAsync(existing, orderType, order.Status, ct).ConfigureAwait(false);
+
         // XD01-332: the organization is fixed at creation — a stated change is refused, and an
         // update that states none is stored with the organization the order already has.
         await inner.UpdateAsync(ServiceOrderOrganization.ForUpdate(existing, order), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The registered <see cref="ITransitionGuard"/>s, in order, for a move of <paramref name="existing"/> to
+    /// <paramref name="toStatus"/> (XD01-362) — only when the status actually changes; the first denial throws
+    /// <see cref="TransitionGuardDeniedException"/> and nothing is persisted.
+    /// </summary>
+    private async Task EnsureGuardsAllowAsync(IServiceOrder existing, OrderType? orderType, string toStatus, CancellationToken ct)
+    {
+        if (guards is null || string.Equals(existing.Status, toStatus, StringComparison.Ordinal))
+            return;
+
+        var context = new OrderTransitionContext(
+            existing, orderType, existing.Status, toStatus, (timeProvider ?? TimeProvider.System).GetUtcNow());
+        foreach (var guard in guards)
+        {
+            var verdict = await guard.EvaluateAsync(context, ct).ConfigureAwait(false);
+            if (!verdict.Allowed)
+                throw new TransitionGuardDeniedException(verdict, existing.Status, toStatus);
+        }
     }
 
     /// <summary>
@@ -110,6 +134,8 @@ public sealed class ValidatingServiceOrderRepository(
             var orderType = orderTypeRegistry?.Find(existing.OrderTypeId);
             if (!ServiceOrderTransitions.IsValid(orderType, existing.Status, resultingStatus))
                 throw new InvalidServiceOrderTransitionException(existing.Status, resultingStatus);
+
+            await EnsureGuardsAllowAsync(existing, orderType, resultingStatus, ct).ConfigureAwait(false);
         }
 
         await inner.AppendActionAsync(orderId, entry, ct).ConfigureAwait(false);

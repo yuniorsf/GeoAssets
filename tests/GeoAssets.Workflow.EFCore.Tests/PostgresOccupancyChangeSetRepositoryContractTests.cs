@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.TestKit;
@@ -39,7 +40,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
             store,
             Owner,
             clock,
-            new EFServiceOrderRepository(context, orderTypeRegistry: orderTypes, timeProvider: clock),
+            new EFServiceOrderRepository(context, orderTypeRegistry: orderTypes, timeProvider: clock, hooks: [new OccupancyReleaseLifecycleHook(store)]),
             new EFServiceOrderTargetRepository(context, orderTypes, clock),
             organizationId =>
             {

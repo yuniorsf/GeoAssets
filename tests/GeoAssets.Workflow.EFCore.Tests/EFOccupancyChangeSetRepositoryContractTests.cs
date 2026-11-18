@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Entities;
@@ -43,7 +44,7 @@ public sealed class EFOccupancyChangeSetRepositoryContractTests : OccupancyChang
             store,
             Owner,
             clock,
-            new EFServiceOrderRepository(context, orderTypeRegistry: orderTypes, timeProvider: clock),
+            new EFServiceOrderRepository(context, orderTypeRegistry: orderTypes, timeProvider: clock, hooks: [new OccupancyReleaseLifecycleHook(store)]),
             new EFServiceOrderTargetRepository(context, orderTypes, clock),
             organizationId =>
             {

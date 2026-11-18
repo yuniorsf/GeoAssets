@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Isp.NeutralOperator;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Configurations;
@@ -235,7 +236,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
         await SeedTargetAsync("ord-1", "pole-2");
         await Store().StageAsync(NewSet("ord-1", "pole-1"), CancellationToken.None);
         await Store().StageAsync(NewSet("ord-1", "pole-2"), CancellationToken.None);
-        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock);
+        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock, hooks: [new OccupancyReleaseLifecycleHook(Store())]);
         var saves = new List<List<string>>();
         _fixture.Context.SavingChanges += (_, _) => saves.Add(
             [.. _fixture.Context.ChangeTracker.Entries().Where(e => e.State == EntityState.Modified).Select(e => e.Metadata.ClrType.Name).Order(StringComparer.Ordinal)]);
@@ -257,7 +258,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
     {
         var targetId = await SeedTargetAsync();
         await Store().StageAsync(NewSet(), CancellationToken.None);
-        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock);
+        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock, hooks: [new OccupancyReleaseLifecycleHook(Store())]);
 
         await orders.AppendActionAsync("ord-1", new OrderActionLog(OrderActionType.Cancel, "op", _clock.GetUtcNow().UtcDateTime, ResultingStatus: ServiceOrderStatus.Cancelled));
 
@@ -271,7 +272,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
     {
         var targetId = await SeedTargetAsync();
         var staged = await Store().StageAsync(NewSet(), CancellationToken.None);
-        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock);
+        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock, hooks: [new OccupancyReleaseLifecycleHook(Store())]);
         var stale = (ServiceOrder)(await orders.GetByIdAsync("ord-1"))!;
         await using (var other = _fixture.NewContext())
         {
@@ -306,7 +307,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
                 ("Id", "ServiceOrderId", "TargetId", "PoleFeatureId", "ChangesJson", "BaselineVersion", "Status", "StagedBy", "StagedAt", "ClosedAt", "OrganizationId")
             VALUES ({Guid.NewGuid()}, 'ord-1', {targetId}, 'pole-1', {CommittedChanges}, 2, 'Committed', 'crew-1', '2026-06-01 09:00:00', '2026-06-01 10:00:00', {Owner})
             """);
-        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock);
+        var orders = new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _orderTypes, timeProvider: _clock, hooks: [new OccupancyReleaseLifecycleHook(Store())]);
         _clock.Advance(TimeSpan.FromDays(1));
 
         var order = (ServiceOrder)(await orders.GetByIdAsync("ord-1"))!;

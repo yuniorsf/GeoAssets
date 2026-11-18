@@ -51,12 +51,15 @@ public static class WorkflowEFCoreServiceExtensions
                 sp.GetRequiredService<ServiceOrderDbContext>(),
                 sp.GetService<IAssetProvider>(),
                 sp.GetService<OrderTypeRegistry>(),
-                sp.GetService<TimeProvider>()));
+                sp.GetService<TimeProvider>(),
+                sp.GetServices<IOrderLifecycleHook>()));
         services.AddScoped<IServiceOrderRepository>(sp =>
             new ObservableServiceOrderRepository(
                 new ValidatingServiceOrderRepository(
                     sp.GetRequiredService<EFServiceOrderRepository>(),
-                    sp.GetService<OrderTypeRegistry>()),
+                    sp.GetService<OrderTypeRegistry>(),
+                    sp.GetServices<ITransitionGuard>(),
+                    sp.GetService<TimeProvider>()),
                 sp.GetRequiredService<GeoAssetsActivitySource>(),
                 sp.GetRequiredService<GeoAssetsMeter>(),
                 sp.GetRequiredService<ILogger<ObservableServiceOrderRepository>>()));
@@ -105,6 +108,10 @@ public static class WorkflowEFCoreServiceExtensions
             sp.GetService<TimeProvider>()));
         services.TryAddScoped<IOccupancyChangeSetReader>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
         services.TryAddScoped<IOccupancyChangeSetWriter>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
+
+        // Closing an order discards what is still staged on it, in the closing SaveChanges (XD01-362).
+        services.TryAddScoped<IOccupancyChangeSetCloser>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IOrderLifecycleHook, OccupancyReleaseLifecycleHook>());
 
         return services;
     }
