@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Hosting.Abstractions</RootNamespace>
+  </PropertyGroup>
+
+  <!-- The order-type chassis contract (XD01-356, ADR-001 Phase 1): every host — GeoAssets.Server and,
+       from P7, each vertical microservice — composes its modules through this. It needs the ASP.NET Core
+       hosting/routing surface (WebApplicationBuilder, IEndpointRouteBuilder) and nothing else: no EF Core,
+       Npgsql, provider or vertical-domain references (harness.config.json core import rules). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>
