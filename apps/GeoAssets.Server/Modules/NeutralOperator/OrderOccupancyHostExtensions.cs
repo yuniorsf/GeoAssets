@@ -1,6 +1,8 @@
+using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
 
@@ -39,6 +41,9 @@ public static class OrderOccupancyHostExtensions
 
         var poleAssetTypeIds = PoleAssetTypeIds(configuration);
         var catalogInstanceId = CatalogInstanceId(configuration);
+
+        // The staged-occupancy routes' problem answers (XD01-363).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IProblemDetailsMapper, OccupancyProblemMapper>());
 
         return services.AddOrderOccupancyStaging(options =>
         {

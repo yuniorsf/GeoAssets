@@ -1,6 +1,8 @@
+using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
 
@@ -32,6 +34,9 @@ public static class SharedUseHostExtensions
     public static IServiceCollection AddServerSharedUseDispatch(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // The shared-use routes' problem answers (XD01-363).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IProblemDetailsMapper, SharedUseProblemMapper>());
 
         return services
             .AddSharedUseDispatch()

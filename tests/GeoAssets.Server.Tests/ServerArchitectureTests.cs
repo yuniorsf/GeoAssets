@@ -40,6 +40,14 @@ public sealed class ServerArchitectureTests
             because: "the kernel reference allowlist is a ratchet (XD01-352): once a type stops referencing provider/domain/vertical namespaces its entry must be removed from KernelReferenceRatchet.Allowlist so the coupling cannot return");
     }
 
+    [Fact]
+    public void NoServerType_IsADomainProblemResults() =>
+        typeof(GeoAssetsRestApiExtensions).Assembly.GetTypes()
+            .Where(t => t.Name.EndsWith("ProblemResults", StringComparison.Ordinal))
+            .Select(t => t.FullName)
+            .Should().BeEquivalentTo(["GeoAssets.Server.WorkflowProblemResults"],
+                because: "problem answers a vertical needs are IProblemDetailsMapper implementations (XD01-363), not *ProblemResults types the routes reference");
+
     [Theory]
     [InlineData("GeoAssets.Server.Modules", false)]
     [InlineData("GeoAssets.Server.Modules.NeutralOperator", false)]
