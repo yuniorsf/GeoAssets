@@ -1,4 +1,5 @@
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Workflow.Persistence;
@@ -55,6 +56,18 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
         await ReplaceRecipientActionsAsync(orderType, ct).ConfigureAwait(false);
     }
 
+    /// <summary>The order type's own columns, copied onto the stored row an update rewrites.</summary>
+    private static void CopyScalars(OrderType orderType, OrderTypeRecord existing)
+    {
+        existing.DisplayName     = orderType.DisplayName;
+        existing.Description     = orderType.Description;
+        existing.InitialStateKey = orderType.InitialStateKey;
+        existing.AttributesSchemaJson = orderType.AttributesSchemaJson;
+        existing.TargetPolicyJson = OrderTargetPolicyMapper.ToJson(orderType.TargetPolicy);
+        existing.RecipientAccess = (int)orderType.RecipientAccess;
+        existing.CapabilitiesJson = OrderTypeMapper.CapabilitiesToJson(orderType.Capabilities);
+    }
+
     public async Task UpdateAsync(OrderType orderType, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(orderType);
@@ -67,12 +80,7 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
 
         if (existing is null) return;
 
-        existing.DisplayName     = orderType.DisplayName;
-        existing.Description     = orderType.Description;
-        existing.InitialStateKey = orderType.InitialStateKey;
-        existing.AttributesSchemaJson = orderType.AttributesSchemaJson;
-        existing.TargetPolicyJson = OrderTargetPolicyMapper.ToJson(orderType.TargetPolicy);
-        existing.RecipientAccess = (int)orderType.RecipientAccess;
+        CopyScalars(orderType, existing);
         await ReplaceRecipientActionsAsync(orderType, ct).ConfigureAwait(false);
 
         // Replace child collections (simplest correct strategy for small sets)

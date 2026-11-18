@@ -20,6 +20,7 @@ public sealed class OccupancyApprovalHandlerTests
     {
         Id = "targeted",
         DisplayName = "Targeted",
+        Capabilities = [OccupancyCapabilities.Commit],
         TargetPolicy = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"] },
         States = [new WorkflowState(Open, "Open"), new WorkflowState(Approved, "Approved", IsSuccess: true)],
         Transitions = [new WorkflowTransition(Open, Approved, OrderActionType.Approve)],

@@ -50,7 +50,8 @@ public partial class ServiceOrderDetail
     private bool CanApprove     => Order is not null && OrderApprovalState.CanApprove(OrderTypes.Find(Order.OrderTypeId), Order, Principal, Rules);
 
     /// <summary>Only orders whose type declares a target policy have targets, and so poles to edit the occupancy of (XD01-315).</summary>
-    private bool HasTargets     => Order is not null && OrderTypes.Find(Order.OrderTypeId)?.TargetPolicy is not null;
+    // XD01-361: the occupancy panel belongs to order types that commit occupancy, not to every targeted type.
+    private bool HasTargets     => Order is not null && OccupancyApproval.Commits(OrderTypes.Find(Order.OrderTypeId));
 
     /// <summary>An order whose type fans out to its poles' occupants is dispatched through the shared-use dialog (XD01-316).</summary>
     private bool IsFanOut       => Order is not null && SharedUseDispatchDialogState.IsFanOut(OrderTypes.Find(Order.OrderTypeId));

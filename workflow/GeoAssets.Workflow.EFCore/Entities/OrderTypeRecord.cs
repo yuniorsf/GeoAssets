@@ -31,4 +31,9 @@ internal sealed class OrderTypeRecord
     /// "ServiceOrderTargets", so its values are the enumeration's own and never renumbered.
     /// </summary>
     public int RecipientAccess { get; set; }
+
+    /// <summary>
+    /// OrderType.Capabilities as a JSON array of names (XD01-361), sorted and distinct; null when the type declares none.
+    /// </summary>
+    public string? CapabilitiesJson { get; set; }
 }
