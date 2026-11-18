@@ -19,21 +19,28 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
     private readonly IAssetProvider? _assets;
     private readonly OrderTypeRegistry? _orderTypeRegistry;
     private readonly TimeProvider _timeProvider;
+    private readonly IOrderLifecycleHook[] _hooks;
 
     /// <param name="timeProvider">
     /// Clock for the release stamp an order's targets get when the order reaches a terminal
     /// state (see <see cref="ServiceOrderTargetRelease"/>); the system clock when omitted.
     /// </param>
+    /// <param name="hooks">
+    /// Modules' side effects of a status change (XD01-362), run before the change is saved and in the same transaction —
+    /// see <see cref="SaveTransitionAsync"/>.
+    /// </param>
     public EFServiceOrderRepository(
         ServiceOrderDbContext db,
         IAssetProvider? assets = null,
         OrderTypeRegistry? orderTypeRegistry = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IEnumerable<IOrderLifecycleHook>? hooks = null)
     {
         _db = db;
         _assets = assets;
         _orderTypeRegistry = orderTypeRegistry;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _hooks = hooks?.ToArray() ?? [];
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
@@ -188,23 +195,13 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         if (so.RowVersion.Length > 0)
             _db.Entry(existing).Property(e => e.RowVersion).OriginalValue = so.RowVersion;
 
-        // Same SaveChanges as the status change itself (XD01-306).
-        var releasedTargets = await ServiceOrderTargetRelease
-            .StampIfClosingAsync(_db, order.Id, orderType, previous, so.Status, _timeProvider, ct).ConfigureAwait(false);
-
         try
         {
-            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await SaveTransitionAsync(so, orderType, previous, so.Status, ct).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
         {
-            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
             throw new ServiceOrderConcurrencyException(order.Id);
-        }
-        catch
-        {
-            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
-            throw;
         }
 
         OrderUpdated?.Invoke(this, order);
@@ -272,26 +269,94 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             record.UpdatedAt = entry.PerformedAt;
         }
 
-        // Same SaveChanges as the status change itself (XD01-306); an entry without a
-        // ResultingStatus keeps the status and so releases nothing.
-        var releasedTargets = await ServiceOrderTargetRelease
-            .StampIfClosingAsync(_db, orderId, orderType, previous, entry.ResultingStatus ?? previous, _timeProvider, ct).ConfigureAwait(false);
-
-        try
-        {
-            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
-            throw;
-        }
+        // An entry without a ResultingStatus keeps the status: no release, no hooks.
+        await SaveTransitionAsync(
+            ServiceOrderMapper.ToDomain(record, []), orderType, previous, entry.ResultingStatus ?? previous, ct).ConfigureAwait(false);
 
         var updated = await GetByIdAsync(orderId, ct).ConfigureAwait(false);
         OrderUpdated?.Invoke(this, updated!);
 
         if (entry.ResultingStatus is not null && !string.Equals(entry.ResultingStatus, previous, StringComparison.Ordinal))
             OrderStatusChanged?.Invoke(this, (updated!, previous));
+    }
+
+    /// <summary>
+    /// Saves a write that may move the order from <paramref name="previous"/> to <paramref name="next"/> as one unit:
+    /// the release stamp of its targets when it closes (XD01-306), then — on an actual status change — every
+    /// <see cref="IOrderLifecycleHook"/> (XD01-362), then <c>SaveChanges</c>. With hooks on a relational store this runs in
+    /// a transaction (the caller's, when it has one), so a hook's own writes commit or roll back with the transition; any
+    /// failure undoes the tracked release stamp too, so a later save on this context cannot release the targets of an
+    /// order that never moved.
+    /// </summary>
+    private async Task SaveTransitionAsync(ServiceOrder order, OrderType? orderType, string previous, string next, CancellationToken ct)
+    {
+        var occurredAt = _timeProvider.GetUtcNow();
+        var releasedTargets = await ServiceOrderTargetRelease
+            .StampIfClosingAsync(_db, order.Id, orderType, previous, next, occurredAt, ct).ConfigureAwait(false);
+
+        var transition = string.Equals(previous, next, StringComparison.Ordinal) || _hooks.Length == 0
+            ? null
+            : new OrderTransitionContext(order, orderType, previous, next, occurredAt);
+        var transaction = transition is not null && _db.Database.IsRelational() && _db.Database.CurrentTransaction is null
+            ? await _db.Database.BeginTransactionAsync(ct).ConfigureAwait(false)
+            : null;
+
+        var trackedBeforeHooks = transition is null ? null : PendingEntities();
+        try
+        {
+            if (transition is not null)
+            {
+                foreach (var hook in _hooks)
+                    await hook.OnTransitionedAsync(transition, ct).ConfigureAwait(false);
+            }
+
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            if (transaction is not null)
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            ServiceOrderTargetRelease.Discard(_db, releasedTargets);
+            if (trackedBeforeHooks is not null)
+                UndoHookChanges(trackedBeforeHooks);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The entities with changes pending in the context, before the hooks run.</summary>
+    private HashSet<object> PendingEntities() =>
+        _db.ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .Select(e => e.Entity)
+            .ToHashSet(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// After a failed save, undoes in the change tracker what the hooks staged (XD01-362) — rows they added are detached, rows
+    /// they modified or deleted go back to their original values — so a later save on this context cannot persist a hook's
+    /// effect of a transition that never happened.
+    /// </summary>
+    private void UndoHookChanges(HashSet<object> pendingBeforeHooks)
+    {
+        foreach (var entry in _db.ChangeTracker.Entries().Where(e => !pendingBeforeHooks.Contains(e.Entity)).ToList())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    entry.State = EntityState.Detached;
+                    break;
+                case EntityState.Modified:
+                case EntityState.Deleted:
+                    entry.CurrentValues.SetValues(entry.OriginalValues);
+                    entry.State = EntityState.Unchanged;
+                    break;
+            }
+        }
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)

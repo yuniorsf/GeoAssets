@@ -76,7 +76,6 @@ internal static partial class VerticalTokenRatchet
             ["GeoAssets.Workflow.Persistence.PavingMeasurementMapper"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
             ["GeoAssets.Workflow.Persistence.PoleOccupancyMapper"] = "XD01-350 (P6) — XD01-380 moves pole occupancies & change sets into NeutralOperatorDbContext",
             ["GeoAssets.Workflow.Persistence.ServiceOrderDbContext"] = "XD01-350 (P6) — XD01-380/XD01-381 move the vertical DbSets out of the kernel context",
-            ["GeoAssets.Workflow.Persistence.ServiceOrderTargetRelease"] = "XD01-346 (P2) — XD01-362 replaces the occupancy discard with IOrderLifecycleHook",
             ["GeoAssets.Workflow.WorkflowEFCoreServiceExtensions"] = "XD01-350 (P6) — XD01-380 moves pole-occupancy/commit persistence registration to the vertical",
         };
 

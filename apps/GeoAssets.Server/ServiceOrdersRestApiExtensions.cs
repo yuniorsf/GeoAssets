@@ -256,6 +256,10 @@ public static class ServiceOrdersRestApiExtensions
             {
                 return Results.BadRequest(new { from = ex.From, to = ex.To });
             }
+            catch (TransitionGuardDeniedException ex)
+            {
+                return TransitionGuardProblem(ex);
+            }
             catch (ServiceOrderConcurrencyException)
             {
                 return Results.Conflict();
@@ -339,12 +343,25 @@ public static class ServiceOrdersRestApiExtensions
             {
                 return Results.BadRequest(new { from = ex.From, to = ex.To });
             }
+            catch (TransitionGuardDeniedException ex)
+            {
+                return TransitionGuardProblem(ex);
+            }
             catch (KeyNotFoundException)
             {
                 return Results.NotFound();
             }
         });
     }
+
+    /// <summary>
+    /// A transition an <see cref="ITransitionGuard"/> denied (XD01-362): 409 with the guard's own code, its reason and the
+    /// transition, so a client tells it apart from an illegal edge (400) or a changed order (409 without a body).
+    /// </summary>
+    private static IResult TransitionGuardProblem(TransitionGuardDeniedException denied) =>
+        WorkflowProblemResults.Create(
+            StatusCodes.Status409Conflict, denied.Verdict.Code ?? "workflow.transition-denied",
+            "The transition was denied.", denied.Verdict.Reason, ("from", denied.From), ("to", denied.To));
 
     private static void MapServiceOrderDelete(IEndpointRouteBuilder routes, string prefix)
     {

@@ -1,6 +1,7 @@
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.Workflow.Occupancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Workflow.Persistence;
@@ -22,11 +23,11 @@ namespace GeoAssets.Workflow.Persistence;
 /// insert is skipped (<c>ON CONFLICT DO NOTHING</c>), and that session then replaces the row
 /// the earlier one committed — so every caller succeeds and one whole set remains.</para>
 ///
-/// <para><b>Closing an order</b> discards what is still staged on it: that is done by
-/// <see cref="ServiceOrderTargetRelease"/>, in the same <c>SaveChanges</c> as the order's own
-/// status change, not here.</para>
+/// <para><b>Closing an order</b> discards what is still staged on it through
+/// <see cref="DiscardStagedAsync"/> — tracked, unsaved — which the order's lifecycle hook calls so it
+/// lands in the same <c>SaveChanges</c> as the order's own status change (XD01-362).</para>
 /// </summary>
-public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, IOccupancyChangeSetWriter
+public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, IOccupancyChangeSetWriter, IOccupancyChangeSetCloser
 {
     /// <summary>
     /// How often a staging retries after losing the insert to another session. Each retry
@@ -162,6 +163,24 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
             _db.OccupancyChangeSets.Where(s => s.ServiceOrderId == orderId && s.TargetId == targetId && s.Status == stagedStatus), ct)
             .ConfigureAwait(false);
         return discarded > 0;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Unfiltered, like the order the caller is closing: whoever may close it discards all of its staged sets.</remarks>
+    public async Task DiscardStagedAsync(string orderId, DateTimeOffset closedAt, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
+
+        var stagedStatus = StagedStatus;
+        var staged = await _db.OccupancyChangeSets.IgnoreQueryFilters()
+            .Where(s => s.ServiceOrderId == orderId && s.Status == stagedStatus)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        foreach (var changeSet in staged)
+        {
+            changeSet.Status = DiscardedStatus;
+            changeSet.ClosedAt = OccupancyChangeSetMapper.WholeMicroseconds(closedAt);
+        }
     }
 
     public Task<int> DiscardAllAsync(string orderId, CancellationToken ct)
