@@ -7,7 +7,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Server.IpBilling;
+using GeoAssets.Server.Modules.IpBillingBridge;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -685,7 +685,11 @@ public class IdentityRestApiExtensionsTests
                     });
                     app.UseRouting();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapIdentityApi());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapIdentityApi();
+                        endpoints.MapMunicipioGrantsApi();
+                    });
                 });
             })
             .StartAsync();

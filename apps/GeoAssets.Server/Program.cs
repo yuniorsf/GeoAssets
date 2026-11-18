@@ -1,19 +1,19 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Providers;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Projects;
-using GeoAssets.Provider.PostgreSQL;
-using GeoAssets.Provider.PostgreSQL.Data;
-using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
-using GeoAssets.Server.IpBilling;
+using GeoAssets.Server.Modules.IpBillingBridge;
 using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.Server.Modules.PostgresSpatial;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,39 +39,10 @@ var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
         "Connection string 'GeoAssets' not found. " +
         "Set it in appsettings.json or via the ConnectionStrings__GeoAssets environment variable.");
 
-// ── PostgreSQL provider ───────────────────────────────────────────────────────
+// ── Clock ─────────────────────────────────────────────────────────────────────
+// The asset store (PostgreSQL/PostGIS: provider, organization catalogs, spatial query, WMS
+// renderer) is a module since XD01-359 — see PostgresSpatialModule, enabled below.
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddGeoAssetsPostgres();
-
-// Pre-warms the IAssetProvider singleton before app.Run() — otherwise PostgresAssetProvider's
-// ISyncProvider marker (XD01-161) would be dishonest for this deployment: the first
-// GetAll()/GetById() call, on whatever request thread happens to hit it first, would still
-// block on LoadCacheFromDb (XD01-173). See AddWarmedPostgresAssetProviderAsync's own doc
-// comment for why this needs an interim service provider.
-await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
-
-// Organization-scoped asset reads (XD01-338) — the warmed provider above becomes the shared
-// (organization-less) catalog, and each request's IAssetProvider is the caller's organization's
-// view: its own features plus the shared ones. See OrganizationAssetCatalogHostExtensions.
-builder.Services.AddServerOrganizationAssetCatalogs(connectionString);
-
-// IAssetSpatialQuery (XD01-307) — area/attribute selection is pushed down to PostGIS and scoped
-// to the request's ITenantContext, instead of scanning the tenant-less IAssetProvider cache above.
-builder.Services.AddPostgresAssetSpatialQuery(connectionString);
-
-// IDbContextFactory<GeoAssetsDbContext> — used by WmsPostGisRenderer so each
-// tile request opens its own short-lived, thread-safe DbContext without touching
-// the shared IAssetProvider in-memory cache.
-builder.Services.AddGeoAssetsDbContextFactory(connectionString);
-
-// IAppliedMutationBatchStore (XD01-229) — same factory, a scoped per-request DbContext
-// (disposed by EFAppliedMutationBatchStore's own IAsyncDisposable, since nothing created
-// inside this factory lambda is tracked by the container directly).
-builder.Services.AddScoped<IAppliedMutationBatchStore>(sp =>
-    new EFAppliedMutationBatchStore(sp.GetRequiredService<IDbContextFactory<GeoAssetsDbContext>>().CreateDbContext()));
-
-// WMS renderer — queries PostGIS directly (geometry + color projection only).
-builder.Services.AddSingleton<WmsPostGisRenderer>();
 
 // ── Service Order workflow persistence (XD01-8) — same Postgres database/connection
 // as assets; workflow tables live alongside geo_entity/asset_type. OrderTypes seeded
@@ -111,6 +82,9 @@ builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
 // registered above and the IAssetSpatialQuery registered with the Postgres provider, and its
 // span/metric decorator.
 builder.Services.AddFeatureSelection();
+// The generic IAssetSpatialQuery over IAssetProvider (ADR-001 Part 1.1): what the kernel scans with
+// when no module registers a pushdown; PostgresSpatialModule's PostGIS query, registered later, wins.
+builder.Services.TryAddScoped<IAssetSpatialQuery, AssetProviderSpatialQuery>();
 builder.Services.AddOrderTargets();
 builder.Services.AddObservableOrderTargetSelection();
 
@@ -120,10 +94,14 @@ builder.Services.AddObservableOrderTargetSelection();
 // WorkflowMessagingHostExtensions.AddServerWorkflowMessaging for what happens to messages until then.
 builder.Services.AddServerWorkflowMessaging(builder.Configuration);
 
-// ── Vertical modules (XD01-358, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in
-// that order. NeutralOperatorModule: shared-use dispatch, pole occupancy staging and commit, the
-// in-process asset-mutation apply, clandestine attachments and the ISP tenant portal.
-builder.AddGeoAssetsModules(new NeutralOperatorModule());
+// ── Modules (XD01-358/XD01-359, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in that
+// order; with none the kernel boots on its own (invariant I5).
+//   PostgresSpatialModule: the PostgreSQL/PostGIS asset store, organization catalogs, WMS.
+//   NeutralOperatorModule: shared-use dispatch, pole occupancy staging and commit, the in-process
+//     asset-mutation apply, clandestine attachments and the ISP tenant portal.
+//   IpBillingBridgeModule: the município↔Prefeitura grant provisioning for IP billing.
+await builder.AddGeoAssetsModulesAsync(
+    [new PostgresSpatialModule(), new NeutralOperatorModule(), new IpBillingBridgeModule()]).ConfigureAwait(false);
 
 // SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
 // (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in
@@ -137,10 +115,6 @@ builder.Services.AddSlaBreachReporting();
 builder.Services.AddGeoIdentity(o => o.UseNpgsql(
     connectionString,
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
-
-// MunicipioProvisioningService (XD01-177) — grant provisioning for município↔Prefeitura
-// authorization, layered on top of IOrganizationGrantRepository (AddGeoIdentity, above).
-builder.Services.AddScoped<MunicipioProvisioningService>();
 
 // ICurrentUserAccessor reads the authenticated ClaimsPrincipal populated by
 // AddGeoAssetsAuthentication (XD01-12) — pattern documented on
@@ -200,16 +174,11 @@ app.UseCors();
 
 app.UseGeoAssetsAuthentication();
 
-// Loads the caller's organization's asset catalog before its endpoint runs (XD01-338).
-app.UseOrganizationAssetCatalogs();
+// Module middleware, after authentication (XD01-359) — e.g. PostgresSpatialModule loads the
+// caller's organization's asset catalog before its endpoint runs (XD01-338).
+app.UseGeoAssetsModules();
 
 app.UseGeoAssetsObservability();
-
-// Interim toggle (XD01-95): the in-app Leaflet map loads WMS tiles via plain <img> elements,
-// which can never carry a bearer token, so features:read can't actually be enforced against
-// this app's own map yet. Defaults to false (open) — see Wms:RequireAuthentication in
-// appsettings.json and WmsEndpointExtensions.MapWmsApi's doc comment.
-var wmsRequireAuthentication = app.Configuration.GetValue("Wms:RequireAuthentication", defaultValue: false);
 
 // Expose all GeoAssets REST endpoints under /api/geoassets
 // Endpoints: GET/POST /features, GET/PUT/DELETE /features/{id},
@@ -217,7 +186,7 @@ var wmsRequireAuthentication = app.Configuration.GetValue("Wms:RequireAuthentica
 //            GET/POST /asset-types, DELETE /asset-types/{id},
 //            GET/POST /layers, DELETE /layers/{id},
 //            GET/POST /layer-rules (GET takes optional ?assetTypeId=), DELETE /layer-rules/{id}
-app.MapGeoAssetsApi(wmsRequireAuthentication: wmsRequireAuthentication);
+app.MapGeoAssetsApi();
 
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
@@ -231,9 +200,9 @@ app.MapServiceOrderTargetsApi();
 // see ProjectsRestApiExtensions for the full endpoint list.
 app.MapProjectsApi();
 
-// Read-only identity/authorization endpoints under /api/identity (XD01-18) — also includes
-// the município↔Prefeitura grant-provisioning endpoints (XD01-177, MapMunicipioGrantsApi) —
-// see IdentityRestApiExtensions for the full endpoint list.
+// Read-only identity/authorization endpoints under /api/identity (XD01-18) — see
+// IdentityRestApiExtensions for the full endpoint list. (The município grant-provisioning
+// endpoints under the same prefix belong to IpBillingBridgeModule since XD01-359.)
 app.MapIdentityApi();
 
 // The caller's own organization's active cross-organization grants, under the same
@@ -241,10 +210,10 @@ app.MapIdentityApi();
 // organization gate as this host does. See OwnOrganizationGrantsRestApiExtensions.
 app.MapOwnOrganizationGrantsApi();
 
-// Standalone OGC endpoints for external GIS clients (CORS not required
-// for server-to-server or native desktop tools).
+// Standalone OGC endpoint for external GIS clients (CORS not required for server-to-server or
+// native desktop tools). The WMS routes (/wms, /api/geoassets/wms) render from PostGIS and are
+// PostgresSpatialModule's (XD01-359).
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
-app.MapWmsApi(requireAuthentication: wmsRequireAuthentication);  // GET /wms — OGC WMS 1.1.1
 
 // The enabled modules' endpoints, after the kernel's own (XD01-358).
 app.MapGeoAssetsModules();

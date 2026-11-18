@@ -52,12 +52,13 @@ public static class GeoAssetsRestApiExtensions
     /// as <c>WfsProviderFactory.DefaultMaxFeatures</c>'s existing per-request cap convention.</summary>
     private const int MaxBoundsFeatureCount = 10_000;
 
-    /// <param name="wmsRequireAuthentication">Forwarded to <see cref="WmsEndpointExtensions.MapWmsApi"/>
-    /// for the <c>{prefix}/wms</c> alias mounted below — see that method's own doc comment (XD01-95).</param>
+    /// <summary>
+    /// The kernel's asset endpoints under <paramref name="prefix"/>, with the WFS alias. The WMS alias
+    /// (<c>{prefix}/wms</c>) renders straight from PostGIS, so the PostgreSQL spatial module maps it (XD01-359).
+    /// </summary>
     public static IEndpointRouteBuilder MapGeoAssetsApi(
         this IEndpointRouteBuilder routes,
-        string prefix = "/api/geoassets",
-        bool wmsRequireAuthentication = true)
+        string prefix = "/api/geoassets")
     {
         var opts = GeoJsonSerializer.Options;
 
@@ -67,11 +68,10 @@ public static class GeoAssetsRestApiExtensions
         MapMutationBatchesApi(routes, prefix, opts);
         MapGisExportApi(routes, prefix);
 
-        // WFS 2.0 and WMS 1.1.1 handlers mounted under the same CORS-configured prefix so
-        // Blazor WASM clients can reach them without separate CORS origin entries.
-        // External OGC clients can also use the standalone /wfs and /wms routes.
+        // WFS 2.0 handler mounted under the same CORS-configured prefix so Blazor WASM clients can
+        // reach it without separate CORS origin entries. External OGC clients can also use the
+        // standalone /wfs route.
         routes.MapWfsApi(route: $"{prefix}/wfs");
-        routes.MapWmsApi(route: $"{prefix}/wms", requireAuthentication: wmsRequireAuthentication);
 
         return routes;
     }

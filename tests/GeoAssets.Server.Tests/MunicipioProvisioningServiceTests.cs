@@ -1,7 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
-using GeoAssets.Server.IpBilling;
+using GeoAssets.Server.Modules.IpBillingBridge;
 using Xunit;
 
 namespace GeoAssets.Server.Tests;

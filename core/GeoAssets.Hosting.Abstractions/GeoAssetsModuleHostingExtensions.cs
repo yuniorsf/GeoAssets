@@ -23,9 +23,68 @@ public static class GeoAssetsModuleHostingExtensions
     /// Enables the <paramref name="builtIns"/> listed in <see cref="ModulesSectionKey"/>, in that order, runs each one's
     /// <see cref="IGeoAssetsModule.ConfigureServices"/> and registers the <see cref="GeoAssetsModuleCatalog"/>.
     /// Discovery happens here, before the container is built, because module services must be registered with it.
-    /// Throws <see cref="InvalidOperationException"/> on an unknown or duplicate id, or when called twice.
+    /// Throws <see cref="InvalidOperationException"/> on an unknown or duplicate id, when called twice, or when an enabled
+    /// module has an asynchronous step (<see cref="IModuleServiceInitializer"/> — use <see cref="AddGeoAssetsModulesAsync"/>).
     /// </summary>
     public static WebApplicationBuilder AddGeoAssetsModules(this WebApplicationBuilder builder, params IGeoAssetsModule[] builtIns)
+    {
+        var modules = ResolveAndRegisterCatalog(builder, builtIns);
+        if (modules.FirstOrDefault(m => m is IModuleServiceInitializer) is { } asyncModule)
+        {
+            throw new InvalidOperationException(
+                $"GeoAssets module '{asyncModule.Id}' has an asynchronous configuration step; enable modules with AddGeoAssetsModulesAsync.");
+        }
+
+        foreach (var module in modules)
+        {
+            module.ConfigureServices(builder.Services, builder.Configuration);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// <see cref="AddGeoAssetsModules"/> for hosts whose modules may have an asynchronous configuration step: each enabled
+    /// module's <see cref="IGeoAssetsModule.ConfigureServices"/>, then its <see cref="IModuleServiceInitializer.ConfigureServicesAsync"/>
+    /// if it has one, module by module in the enabled order.
+    /// </summary>
+    public static async Task<WebApplicationBuilder> AddGeoAssetsModulesAsync(
+        this WebApplicationBuilder builder, IReadOnlyList<IGeoAssetsModule> builtIns, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(builtIns);
+
+        foreach (var module in ResolveAndRegisterCatalog(builder, [.. builtIns]))
+        {
+            module.ConfigureServices(builder.Services, builder.Configuration);
+            if (module is IModuleServiceInitializer initializer)
+            {
+                await initializer.ConfigureServicesAsync(builder.Services, builder.Configuration, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds every enabled module's <see cref="IModuleMiddleware"/> to the request pipeline, in the enabled order. Call where
+    /// module middleware belongs — after authentication.
+    /// </summary>
+    public static WebApplication UseGeoAssetsModules(this WebApplication app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+
+        foreach (var module in app.Services.GetRequiredService<GeoAssetsModuleCatalog>().Modules)
+        {
+            if (module is IModuleMiddleware middleware)
+            {
+                middleware.UseMiddleware(app);
+            }
+        }
+
+        return app;
+    }
+
+    private static IReadOnlyList<IGeoAssetsModule> ResolveAndRegisterCatalog(WebApplicationBuilder builder, IGeoAssetsModule[] builtIns)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(builtIns);
@@ -37,14 +96,8 @@ public static class GeoAssetsModuleHostingExtensions
 
         var enabledIds = builder.Configuration.GetSection(ModulesSectionKey).Get<string[]>() ?? [];
         var modules = GeoAssetsModuleResolver.Resolve(builtIns, enabledIds);
-
-        foreach (var module in modules)
-        {
-            module.ConfigureServices(builder.Services, builder.Configuration);
-        }
-
         builder.Services.AddSingleton(new GeoAssetsModuleCatalog(modules));
-        return builder;
+        return modules;
     }
 
     /// <summary>
