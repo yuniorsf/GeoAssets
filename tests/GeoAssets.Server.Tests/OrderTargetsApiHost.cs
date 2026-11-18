@@ -210,6 +210,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         // Approval that commits staged occupancy (XD01-318): the real service over the same stores.
         services.AddSingleton<IPoleOccupancyWriter>(sp => sp.GetRequiredService<InMemoryPoleOccupancyStore>());
         services.AddOccupancyCommit();
+        services.AddScoped<IOrderActionHandler, OccupancyApprovalHandler>(); // the module's wiring (XD01-360)
 
         // The production pipeline: every endpoint needs an authenticated caller unless it says
         // otherwise (AddGeoAssetsAuthentication's fallback policy), and named policies resolve

@@ -40,8 +40,8 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         // with a notification staged on the host's workflow outbox.
         services.AddServerSharedUseDispatch();
 
-        // Approving an order with targets commits the occupancy staged on its poles (XD01-318) — see
-        // OccupancyApprovalRoute for how POST /service-orders/{id}/actions routes an approval to it.
+        // Approving an order with targets commits the occupancy staged on its poles (XD01-318) — OccupancyApprovalHandler,
+        // this module's order action handler on POST /service-orders/{id}/actions (XD01-360).
         services.AddServerOccupancyCommit();
 
         // With no broker configured, the asset mutation batches that approval stages are applied to this host's own

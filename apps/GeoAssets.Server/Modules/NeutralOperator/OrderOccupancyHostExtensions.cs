@@ -1,5 +1,6 @@
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Occupancy;
+using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
 
@@ -56,6 +57,9 @@ public static class OrderOccupancyHostExtensions
     public static IServiceCollection AddServerOccupancyCommit(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // The approval that commits staged occupancy is this module's order action handler (XD01-360).
+        services.AddScoped<IOrderActionHandler, OccupancyApprovalHandler>();
 
         return services
             .AddOccupancyCommit()

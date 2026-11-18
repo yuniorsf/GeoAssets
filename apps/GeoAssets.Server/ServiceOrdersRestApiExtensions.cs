@@ -1,7 +1,5 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
-using GeoAssets.Server.Modules.NeutralOperator;
-using GeoAssets.Workflow.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
@@ -309,7 +307,8 @@ public static class ServiceOrdersRestApiExtensions
     {
         routes.MapPost($"{prefix}/service-orders/{{id}}/actions", async (
             string id, HttpRequest req, IServiceOrderRepository repo, OrderTypeRegistry orderTypes,
-            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory,
+            IEnumerable<IOrderActionHandler> handlers, CancellationToken ct) =>
         {
             var entry = await JsonSerializer.DeserializeAsync<OrderActionLog>(req.Body, opts, ct).ConfigureAwait(false);
             if (entry is null) return Results.BadRequest("Invalid action.");
@@ -322,13 +321,13 @@ public static class ServiceOrdersRestApiExtensions
             var verdict = rules.EvaluateAppend(principal, order, entry);
             if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
-            // XD01-318: approving an order with targets commits the occupancy staged on its poles.
+            // XD01-360: an action a module's handler claims is that handler's write (e.g. an approval that commits the
+            // occupancy staged on the order's poles, XD01-318); every other action is the default append below.
             var orderType = orderTypes.Find(order.OrderTypeId);
-            if (OccupancyApprovalRoute.Handles(entry, orderType))
+            if (orderType is not null && new OrderActionHandlerRegistry(handlers).Find(orderType, entry) is { } handler)
             {
-                return await OccupancyApprovalRoute.ApproveAsync(
-                    order, orderType!, entry, principal,
-                    req.HttpContext.RequestServices.GetRequiredService<IOccupancyCommitService>(), ct).ConfigureAwait(false);
+                var outcome = await handler.HandleAsync(new OrderActionContext(order, orderType, entry, principal), ct).ConfigureAwait(false);
+                return OrderActionResults.ToResult(outcome);
             }
 
             try
