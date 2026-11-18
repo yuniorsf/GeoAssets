@@ -76,6 +76,8 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 // against from the authenticated caller (IGeoAuthorizationService, registered below).
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
+// Fails startup when two modules' order action handlers claim the same (order type, action) (XD01-360).
+builder.Services.AddHostedService<OrderActionHandlerValidation>();
 
 // Service-order targets from a selection (XD01-308): the strategy registry (registered in no
 // host before this), the selection service over the target store AddWorkflowPersistence
