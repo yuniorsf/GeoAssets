@@ -1,0 +1,99 @@
+namespace GeoAssets.Server.Tests.Architecture;
+
+/// <summary>
+/// Kernel reference ratchet (XD01-352, ADR-001 invariant I1 / smell O): no <c>GeoAssets.Server</c> type may
+/// reference a provider, domain or vertical namespace unless it is on <see cref="Allowlist"/>, and the allowlist
+/// may only shrink — an entry whose owner no longer violates fails the build until it is removed.
+/// </summary>
+internal static class KernelReferenceRatchet
+{
+    public static IReadOnlyList<string> ForbiddenNamespacePrefixes { get; } =
+    [
+        "GeoAssets.Provider",
+        "GeoAssets.Domain",
+        "GeoAssets.IpBilling",
+        "GeoAssets.Core.Isp",
+        "GeoAssets.Core.Bdgd",
+        "GeoAssets.Workflow.Contractors",
+        "GeoAssets.Workflow.Erp",
+        "GeoAssets.Workflow.FieldWork",
+        "GeoAssets.Workflow.Infrastructure",
+        "GeoAssets.Workflow.Isp",
+        "GeoAssets.Workflow.Occupancy",
+        "GeoAssets.Workflow.Scada",
+        "GeoAssets.Workflow.SlaGuard",
+    ];
+
+    /// <summary>
+    /// The ADR-001 Phase 1 quarantine (<c>apps/GeoAssets.Server/Modules/</c>): vertical modules hosted in the Server
+    /// assembly until Phase 7 lifts them out. Types in it are not kernel types, so moving an offender into a module
+    /// removes its allowlist entry instead of renaming it.
+    /// </summary>
+    public const string ModuleQuarantineNamespace = "GeoAssets.Server.Modules";
+
+    /// <summary>
+    /// Today's offenders, keyed by top-level type full name, each annotated with the epic that removes it from the
+    /// kernel (by deleting it, moving it into the module quarantine, or replacing the reference with a port).
+    /// Remove an entry in the same change that eliminates its violation. Never add one.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Allowlist { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Program"] = "XD01-345 (P1) — XD01-358/XD01-359 reduce Program.cs to kernel wiring + module bootstrap",
+            ["GeoAssets.Server.GeoAssetsRestApiExtensions"] = "XD01-345 (P1) — NeutralOperator GIS export route (Core.Isp.NeutralOperator.GisExport); not yet in any child ticket's scope",
+            ["GeoAssets.Server.IspTenantPortalRestApiExtensions"] = "XD01-345 (P1) — XD01-358 moves it into NeutralOperatorModule; XD01-365 deletes it",
+            ["GeoAssets.Server.InProcessAssetMutationHostExtensions"] = "XD01-345 (P1) — XD01-358 moves the in-process mutation apply into NeutralOperatorModule",
+            ["GeoAssets.Server.OrderOccupancyHostExtensions"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule",
+            ["GeoAssets.Server.ServiceOrderOccupancyRestApiExtensions"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule",
+            ["GeoAssets.Server.Occupancy.StageOccupancyChangesRequest"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule",
+            ["GeoAssets.Server.OccupancyProblemResults"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule (XD01-363 module problem mappers)",
+            ["GeoAssets.Server.SharedUseHostExtensions"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule",
+            ["GeoAssets.Server.SharedUseRestApiExtensions"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule",
+            ["GeoAssets.Server.SharedUseProblemResults"] = "XD01-345 (P1) — XD01-358 NeutralOperatorModule (XD01-363 module problem mappers)",
+            ["GeoAssets.Server.OccupancyApprovalRoute"] = "XD01-346 (P2) — XD01-360 turns it into a NeutralOperator IOrderActionHandler",
+            ["GeoAssets.Server.ServiceOrdersRestApiExtensions"] = "XD01-346 (P2) — XD01-360 generic /actions dispatches through the handler registry",
+            ["GeoAssets.Server.WmsPostGisRenderer"] = "XD01-348 (P4) — XD01-372 IAssetRenderQuery port",
+            ["GeoAssets.Server.OrganizationAssetCatalogHostExtensions"] = "XD01-348 (P4) — XD01-373 IOrganizationCatalogFactory port",
+            ["GeoAssets.Server.GeoAssetsDbContextFactory"] = "XD01-348 (P4) — XD01-374 moves the design-time factory into the provider project",
+        };
+
+    public static bool IsKernelType(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+
+        return IsKernelNamespace(type.Namespace);
+    }
+
+    public static bool IsKernelNamespace(string? ns) => !IsInNamespace(ns, ModuleQuarantineNamespace);
+
+    public static bool IsForbidden(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+
+        return ForbiddenNamespacePrefixes.Any(prefix => IsInNamespace(type.Namespace, prefix));
+    }
+
+    private static bool IsInNamespace(string? ns, string prefix) =>
+        ns is not null
+        && (string.Equals(ns, prefix, StringComparison.Ordinal)
+            || ns.StartsWith(prefix + ".", StringComparison.Ordinal));
+
+    public static KernelRatchetResult Evaluate(
+        IReadOnlyDictionary<string, IReadOnlySet<string>> violations,
+        IReadOnlyDictionary<string, string> allowlist)
+    {
+        ArgumentNullException.ThrowIfNull(violations);
+        ArgumentNullException.ThrowIfNull(allowlist);
+
+        var newOffenders = violations.Keys
+            .Where(owner => !allowlist.ContainsKey(owner))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var stale = allowlist.Keys
+            .Where(owner => !violations.ContainsKey(owner))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return new KernelRatchetResult(newOffenders, stale);
+    }
+}
