@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
+using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Server.Modules.NeutralOperator.SharedUse;
 using GeoAssets.Server.Targets;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
@@ -27,7 +28,7 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 /// always the principal of the token. All four ask the rules for <c>Dispatch</c> and are for the
 /// order's own organization only: a caller the organization gate refuses gets 404 exactly as for
 /// an unknown order, a cross-organization grantee or a recipient gets 403. Failures are
-/// <c>application/problem+json</c> with a stable <c>code</c> (see <see cref="SharedUseProblemResults"/>).
+/// <c>application/problem+json</c> with a stable <c>code</c> (see <see cref="SharedUseProblemMapper"/>).
 /// </summary>
 public static class SharedUseRestApiExtensions
 {
@@ -52,12 +53,12 @@ public static class SharedUseRestApiExtensions
     {
         routes.MapGet($"{prefix}/service-orders/{{id}}/shared-use/dispatch-plan", (
             string id, string? page, string? pageSize, ISharedUseDispatchPlanReader plans,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
         {
             if (OrderTargetEndpointSupport.ReadPaging(page, pageSize, out var pageNumber, out var size) is { } pagingProblem)
                 return Task.FromResult(pagingProblem);
 
-            return RunAsync(id, principalFactory, async principal =>
+            return RunAsync(id, principalFactory, problemMappers, async principal =>
                 Results.Json(await plans.PreviewAsync(id, pageNumber, size, principal, ct).ConfigureAwait(false), opts), ct);
         }).RequireAuthorization(ReadPolicy);
     }
@@ -66,12 +67,12 @@ public static class SharedUseRestApiExtensions
     {
         routes.MapGet($"{prefix}/service-orders/{{id}}/shared-use/dispatch-plan/skipped-entries", (
             string id, string? page, string? pageSize, ISharedUseDispatchPlanReader plans,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
         {
             if (OrderTargetEndpointSupport.ReadPaging(page, pageSize, out var pageNumber, out var size) is { } pagingProblem)
                 return Task.FromResult(pagingProblem);
 
-            return RunAsync(id, principalFactory, async principal =>
+            return RunAsync(id, principalFactory, problemMappers, async principal =>
             {
                 var result = await plans.GetSkippedEntriesAsync(id, pageNumber, size, principal, ct).ConfigureAwait(false);
                 return Results.Json(new PagedResponse<SharedUseSkippedEntry>(result.Items, pageNumber, size, result.TotalCount), opts);
@@ -80,12 +81,12 @@ public static class SharedUseRestApiExtensions
 
         routes.MapGet($"{prefix}/service-orders/{{id}}/shared-use/dispatch-plan/unnotifiable-poles", (
             string id, string? page, string? pageSize, ISharedUseDispatchPlanReader plans,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
         {
             if (OrderTargetEndpointSupport.ReadPaging(page, pageSize, out var pageNumber, out var size) is { } pagingProblem)
                 return Task.FromResult(pagingProblem);
 
-            return RunAsync(id, principalFactory, async principal =>
+            return RunAsync(id, principalFactory, problemMappers, async principal =>
             {
                 var result = await plans.GetUnnotifiablePolesAsync(id, pageNumber, size, principal, ct).ConfigureAwait(false);
                 return Results.Json(new PagedResponse<string>(result.Items, pageNumber, size, result.TotalCount), opts);
@@ -97,7 +98,7 @@ public static class SharedUseRestApiExtensions
     {
         routes.MapPost($"{prefix}/service-orders/{{id}}/shared-use/dispatch", async (
             string id, HttpRequest request, ISharedUseDispatchService dispatch,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
         {
             var (body, _, bodyProblem) = await OrderTargetEndpointSupport
                 .ReadBodyAsync<DispatchSharedUseOrderRequest>(request, opts, ct).ConfigureAwait(false);
@@ -105,7 +106,7 @@ public static class SharedUseRestApiExtensions
             if (body!.RowVersion is not { } rowVersion)
                 return WorkflowProblemResults.Validation("rowVersion is required.");
 
-            return await RunAsync(id, principalFactory, async principal =>
+            return await RunAsync(id, principalFactory, problemMappers, async principal =>
                 Results.Json(await dispatch.DispatchAsync(id, rowVersion, principal, ct).ConfigureAwait(false), opts), ct)
                 .ConfigureAwait(false);
         });
@@ -113,6 +114,7 @@ public static class SharedUseRestApiExtensions
 
     private static async Task<IResult> RunAsync(
         string orderId, ServerWorkflowPrincipalFactory principalFactory,
+        IEnumerable<IProblemDetailsMapper> problemMappers,
         Func<WorkflowPrincipal, Task<IResult>> call, CancellationToken ct)
     {
         var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -121,7 +123,7 @@ public static class SharedUseRestApiExtensions
             return await call(principal).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException
-            && SharedUseProblemResults.FromException(ex, orderId) is { } problem)
+            && new ProblemDetailsMapperChain(problemMappers).TryMap(ex, new ProblemContext(SharedUseProblemMapper.Scope, orderId)) is { } problem)
         {
             return problem;
         }

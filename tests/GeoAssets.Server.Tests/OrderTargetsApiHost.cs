@@ -6,6 +6,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
+using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow;
@@ -20,6 +21,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 
@@ -199,6 +201,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<IOccupancyChangeSetReader>(sp => sp.GetRequiredService<InMemoryOccupancyChangeSetStore>());
         services.AddSingleton<IOccupancyChangeSetWriter>(sp => sp.GetRequiredService<InMemoryOccupancyChangeSetStore>());
         services.AddOrderOccupancyStaging(options => options.PoleAssetTypeIds.Add("pole"));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IProblemDetailsMapper, OccupancyProblemMapper>()); // the module's wiring (XD01-363)
 
         // Shared-use dispatch (XD01-316): the real service over the same in-memory stores, a
         // recording outbox, and a unit of work that just runs the work.
@@ -206,6 +209,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<IOutboxWriter>(sp => sp.GetRequiredService<RecordingOutboxWriter>());
         services.AddSingleton<IWorkflowUnitOfWork, InMemoryWorkflowUnitOfWork>();
         services.AddSharedUseDispatch();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IProblemDetailsMapper, SharedUseProblemMapper>()); // the module's wiring (XD01-363)
 
         // Approval that commits staged occupancy (XD01-318): the real service over the same stores.
         services.AddSingleton<IPoleOccupancyWriter>(sp => sp.GetRequiredService<InMemoryPoleOccupancyStore>());

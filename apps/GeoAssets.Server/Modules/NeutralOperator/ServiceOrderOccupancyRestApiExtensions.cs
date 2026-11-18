@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Services;
+using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Server.Modules.NeutralOperator.Occupancy;
 using GeoAssets.Server.Targets;
 using GeoAssets.Workflow.Occupancy;
@@ -31,7 +32,7 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 /// <c>403 auth.denied</c>. The reads additionally require <c>serviceorders:read</c>.</para>
 ///
 /// <para><b>Nothing here writes a pole's live occupancy.</b> Errors are
-/// <c>application/problem+json</c> with a stable <c>code</c>; see <see cref="OccupancyProblemResults"/>.
+/// <c>application/problem+json</c> with a stable <c>code</c>; see <see cref="OccupancyProblemMapper"/>.
 /// Every handler binds the request's <see cref="CancellationToken"/> and forwards it.</para>
 /// </summary>
 public static class ServiceOrderOccupancyRestApiExtensions
@@ -58,8 +59,8 @@ public static class ServiceOrderOccupancyRestApiExtensions
     {
         routes.MapGet($"{prefix}/service-orders/{{id}}/targets/{{targetId}}/occupancy", (
             string id, string targetId, IOrderOccupancyStagingService staging,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
-            RunAsync(id, targetId, principalFactory, async principal =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
+            RunAsync(id, targetId, principalFactory, problemMappers, async principal =>
                 Results.Json(await staging.GetAsync(id, targetId, principal, ct).ConfigureAwait(false), opts), ct))
             .RequireAuthorization(ReadPolicy);
     }
@@ -68,14 +69,14 @@ public static class ServiceOrderOccupancyRestApiExtensions
     {
         routes.MapGet($"{prefix}/service-orders/{{id}}/occupancy-changes", (
             string id, string? page, string? pageSize, string? status, IOrderOccupancyStagingService staging,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
         {
             if (OrderTargetEndpointSupport.ReadPaging(page, pageSize, out var pageNumber, out var size) is { } pagingProblem)
                 return Task.FromResult(pagingProblem);
             if (ReadStatus(status, out var wanted) is { } statusProblem)
                 return Task.FromResult(statusProblem);
 
-            return RunAsync(id, targetId: null, principalFactory, async principal =>
+            return RunAsync(id, targetId: null, principalFactory, problemMappers, async principal =>
             {
                 var result = await staging.GetPageAsync(id, pageNumber, size, wanted, principal, ct).ConfigureAwait(false);
                 return Results.Json(new PagedResponse<OccupancyChangeSetView>(result.Items, pageNumber, size, result.TotalCount), opts);
@@ -112,14 +113,14 @@ public static class ServiceOrderOccupancyRestApiExtensions
     {
         routes.MapPut($"{prefix}/service-orders/{{id}}/targets/{{targetId}}/occupancy-changes", async (
             string id, string targetId, HttpRequest request, IOrderOccupancyStagingService staging,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
         {
             var (body, _, bodyProblem) = await OrderTargetEndpointSupport
                 .ReadBodyAsync<StageOccupancyChangesRequest>(request, opts, ct).ConfigureAwait(false);
             if (bodyProblem is not null) return bodyProblem;
             if (ReadChanges(body!, out var changes) is { } changesProblem) return changesProblem;
 
-            return await RunAsync(id, targetId, principalFactory, async principal =>
+            return await RunAsync(id, targetId, principalFactory, problemMappers, async principal =>
                 Results.Json(await staging.StageAsync(id, targetId, changes, principal, ct).ConfigureAwait(false), opts), ct)
                 .ConfigureAwait(false);
         });
@@ -153,8 +154,8 @@ public static class ServiceOrderOccupancyRestApiExtensions
     {
         routes.MapDelete($"{prefix}/service-orders/{{id}}/targets/{{targetId}}/occupancy-changes", (
             string id, string targetId, IOrderOccupancyStagingService staging,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
-            RunAsync(id, targetId, principalFactory, async principal =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
+            RunAsync(id, targetId, principalFactory, problemMappers, async principal =>
             {
                 var discarded = await staging.DiscardAsync(id, targetId, principal, ct).ConfigureAwait(false);
                 return Results.Json(new DiscardOccupancyChangesResponse(discarded ? 1 : 0), opts);
@@ -162,8 +163,8 @@ public static class ServiceOrderOccupancyRestApiExtensions
 
         routes.MapDelete($"{prefix}/service-orders/{{id}}/occupancy-changes", (
             string id, IOrderOccupancyStagingService staging,
-            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
-            RunAsync(id, targetId: null, principalFactory, async principal =>
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
+            RunAsync(id, targetId: null, principalFactory, problemMappers, async principal =>
             {
                 var discarded = await staging.DiscardAllAsync(id, principal, ct).ConfigureAwait(false);
                 return Results.Json(new DiscardOccupancyChangesResponse(discarded), opts);
@@ -177,6 +178,7 @@ public static class ServiceOrderOccupancyRestApiExtensions
     /// </summary>
     private static async Task<IResult> RunAsync(
         string orderId, string? targetId, ServerWorkflowPrincipalFactory principalFactory,
+        IEnumerable<IProblemDetailsMapper> problemMappers,
         Func<WorkflowPrincipal, Task<IResult>> call, CancellationToken ct)
     {
         var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -185,7 +187,7 @@ public static class ServiceOrderOccupancyRestApiExtensions
             return await call(principal).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException
-            && OccupancyProblemResults.FromException(ex, orderId, targetId) is { } problem)
+            && new ProblemDetailsMapperChain(problemMappers).TryMap(ex, new ProblemContext(OccupancyProblemMapper.Scope, orderId, targetId)) is { } problem)
         {
             return problem;
         }

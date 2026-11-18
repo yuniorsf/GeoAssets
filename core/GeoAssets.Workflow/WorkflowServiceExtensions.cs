@@ -77,7 +77,8 @@ public static class WorkflowServiceExtensions
     /// <see cref="AddOrderTypeRegistry"/> if present. Without this, every caller would
     /// otherwise hand-construct its own <see cref="ServiceOrderRules"/> — a risk once both
     /// human-facing and AI-agent-facing callers need to share the exact same role-grant
-    /// configuration.
+    /// configuration. Every <see cref="IServiceOrderRule"/> and <see cref="IOrderCreationRule"/> registered in DI is appended
+    /// to the built-in chains, in registration order (XD01-363).
     /// </summary>
     public static IServiceCollection AddServiceOrderRules(
         this IServiceCollection services,
@@ -86,13 +87,25 @@ public static class WorkflowServiceExtensions
         var options = new ServiceOrderRulesOptions();
         configure?.Invoke(options);
 
-        services.AddSingleton(sp => new ServiceOrderRules(
-            orderTypeRegistry: sp.GetService<OrderTypeRegistry>(),
-            roleGrants: options.RoleGrants.Count > 0 ? options.RoleGrants : null,
-            unrestrictedRoles: options.UnrestrictedRoles.Count > 0 ? options.UnrestrictedRoles : null,
-            recipientRoleGrants: options.RecipientRoleGrants.Count > 0 ? options.RecipientRoleGrants : null,
-            allowOrdersWithoutOrganization: options.AllowOrdersWithoutOrganization,
-            timeProvider: sp.GetService<TimeProvider>()));
+        services.AddSingleton(sp =>
+        {
+            var rules = new ServiceOrderRules(
+                orderTypeRegistry: sp.GetService<OrderTypeRegistry>(),
+                roleGrants: options.RoleGrants.Count > 0 ? options.RoleGrants : null,
+                unrestrictedRoles: options.UnrestrictedRoles.Count > 0 ? options.UnrestrictedRoles : null,
+                recipientRoleGrants: options.RecipientRoleGrants.Count > 0 ? options.RecipientRoleGrants : null,
+                allowOrdersWithoutOrganization: options.AllowOrdersWithoutOrganization,
+                timeProvider: sp.GetService<TimeProvider>());
+
+            // Modules' own rules (XD01-363), after the built-in chain, in registration order; deny still overrides.
+            // Resolved once, by this singleton: register them as singletons.
+            foreach (var rule in sp.GetServices<IServiceOrderRule>())
+                rules.AddRule(rule);
+            foreach (var rule in sp.GetServices<IOrderCreationRule>())
+                rules.AddCreationRule(rule);
+
+            return rules;
+        });
 
         return services;
     }
