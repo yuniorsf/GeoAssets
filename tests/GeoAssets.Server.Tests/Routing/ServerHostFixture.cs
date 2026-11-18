@@ -1,9 +1,11 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Projects.Persistence;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 
@@ -24,6 +26,7 @@ internal static class ServerHostFixture
     private static PostgreSqlContainer? _container;
     private static string? _connectionString;
     private static WebApplicationFactory<HttpTenantContext>? _factory;
+    private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
 
     public static async Task<IServiceProvider> GetServicesAsync()
@@ -31,7 +34,7 @@ internal static class ServerHostFixture
         await StartLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            _factory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), kernelOnly: false);
+            _factory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: []);
             return _factory.Services;
         }
         finally
@@ -41,16 +44,37 @@ internal static class ServerHostFixture
     }
 
     /// <summary>
-    /// The same host on the same database, with <c>GeoAssets:Modules:0</c> blanked so no module is enabled (XD01-358):
-    /// what the kernel alone maps and registers.
+    /// The same host on the same database, with <c>GeoAssets:Modules:1</c> (neutral-operator) blanked (XD01-358): what the
+    /// host maps and registers without the ISP neutral-operator vertical.
     /// </summary>
-    public static async Task<IServiceProvider> GetKernelOnlyServicesAsync()
+    public static async Task<IServiceProvider> GetNeutralOperatorDisabledServicesAsync()
     {
         await StartLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            _kernelOnlyFactory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), kernelOnly: true);
-            return _kernelOnlyFactory.Services;
+            _neutralOperatorDisabledFactory ??= CreateFactory(
+                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [1]);
+            return _neutralOperatorDisabledFactory.Services;
+        }
+        finally
+        {
+            StartLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// The same host on the same database with every module entry blanked (XD01-359, invariant I5): the kernel alone, on a
+    /// test-only in-memory <see cref="IAssetProvider"/> with a signed-in, fully permitted caller so authorized endpoints can
+    /// be called.
+    /// </summary>
+    public static async Task<WebApplicationFactory<HttpTenantContext>> GetKernelOnlyFactoryAsync()
+    {
+        await StartLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _kernelOnlyFactory ??= CreateFactory(
+                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [0, 1, 2], kernelTestDoubles: true);
+            return _kernelOnlyFactory;
         }
         finally
         {
@@ -61,14 +85,20 @@ internal static class ServerHostFixture
     private static async Task<string> GetConnectionStringAsync() =>
         _connectionString ??= await StartDatabaseAsync().ConfigureAwait(false);
 
-    private static WebApplicationFactory<HttpTenantContext> CreateFactory(string connectionString, bool kernelOnly) =>
+    private static WebApplicationFactory<HttpTenantContext> CreateFactory(
+        string connectionString, int[] blankedModuleIndexes, bool kernelTestDoubles = false) =>
         new WebApplicationFactory<HttpTenantContext>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Testing");
             host.UseSetting("ConnectionStrings:GeoAssets", connectionString);
-            if (kernelOnly)
+            foreach (var index in blankedModuleIndexes)
             {
-                host.UseSetting("GeoAssets:Modules:0", "");
+                host.UseSetting($"GeoAssets:Modules:{index}", "");
+            }
+
+            if (kernelTestDoubles)
+            {
+                host.ConfigureTestServices(KernelOnlyTestDoubles.Register);
             }
         });
 

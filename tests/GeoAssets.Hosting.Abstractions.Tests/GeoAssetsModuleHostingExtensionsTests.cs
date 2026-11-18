@@ -199,4 +199,81 @@ public sealed class GeoAssetsModuleHostingExtensionsTests
 
         tokens.Should().ContainSingle().Which.Should().Be(cts.Token);
     }
+
+    [Fact]
+    public async Task AddGeoAssetsModulesAsync_RunsEachModulesAsyncStepAfterItsConfigureServices_InEnabledOrder()
+    {
+        var calls = new List<string>();
+        var builder = NewBuilder("b", "plain", "a");
+
+        await builder.AddGeoAssetsModulesAsync(
+            [new AsyncRecordingModule("a", calls), new AsyncRecordingModule("b", calls), new RecordingModule("plain", calls), new AsyncRecordingModule("off", calls)]);
+        await using var app = builder.Build();
+
+        calls.Should().Equal("configure:b", "configure-async:b", "configure:plain", "configure:a", "configure-async:a");
+        app.Services.GetRequiredService<GeoAssetsModuleCatalog>().Modules.Select(m => m.Id).Should().Equal("b", "plain", "a");
+    }
+
+    [Fact]
+    public async Task AddGeoAssetsModulesAsync_ForwardsCancellationToken()
+    {
+        var tokens = new List<CancellationToken>();
+        var builder = NewBuilder("a");
+        using var cts = new CancellationTokenSource();
+
+        await builder.AddGeoAssetsModulesAsync([new AsyncRecordingModule("a", [], tokens)], cts.Token);
+
+        tokens.Should().ContainSingle().Which.Should().Be(cts.Token);
+    }
+
+    [Fact]
+    public void AddGeoAssetsModules_WithAnAsyncModuleEnabled_ThrowsNamingIt()
+    {
+        var builder = NewBuilder("plain", "slow");
+
+        var act = () => builder.AddGeoAssetsModules(new RecordingModule("plain"), new AsyncRecordingModule("slow", []));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*'slow'*AddGeoAssetsModulesAsync*");
+    }
+
+    [Fact]
+    public void AddGeoAssetsModules_WithAnAsyncModuleNotEnabled_DoesNotThrow()
+    {
+        var calls = new List<string>();
+        var builder = NewBuilder("plain");
+
+        var act = () => builder.AddGeoAssetsModules(new RecordingModule("plain", calls), new AsyncRecordingModule("slow", calls));
+
+        act.Should().NotThrow();
+        calls.Should().Equal("configure:plain");
+    }
+
+    [Fact]
+    public async Task UseGeoAssetsModules_RunsMiddlewareOfEnabledModules_InOrder_SkippingOthers()
+    {
+        var calls = new List<string>();
+        var builder = NewBuilder("b", "plain", "a");
+        await builder.AddGeoAssetsModulesAsync(
+            [new AsyncRecordingModule("a", calls), new AsyncRecordingModule("b", calls), new RecordingModule("plain", calls), new AsyncRecordingModule("off", calls)]);
+        await using var app = builder.Build();
+        calls.Clear();
+
+        app.UseGeoAssetsModules();
+
+        calls.Should().Equal("middleware:b", "middleware:a");
+    }
+
+    [Fact]
+    public async Task AddGeoAssetsModulesAsync_NullBuiltIns_Throws()
+    {
+        var builder = NewBuilder();
+
+        var nullBuiltIns = async () => await builder.AddGeoAssetsModulesAsync(null!);
+        var nullBuilder = async () => await GeoAssetsModuleHostingExtensions.AddGeoAssetsModulesAsync(null!, []);
+        var nullApp = () => GeoAssetsModuleHostingExtensions.UseGeoAssetsModules(null!);
+
+        await nullBuiltIns.Should().ThrowAsync<ArgumentNullException>();
+        await nullBuilder.Should().ThrowAsync<ArgumentNullException>();
+        nullApp.Should().Throw<ArgumentNullException>();
+    }
 }

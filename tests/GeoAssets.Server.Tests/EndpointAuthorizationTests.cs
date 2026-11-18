@@ -108,6 +108,7 @@ public class EndpointAuthorizationTests
                     {
                         endpoints.MapGeoAssetsApi();
                         endpoints.MapWfsApi();
+                        endpoints.MapWmsApi(route: "/api/geoassets/wms", requireAuthentication: wmsRequireAuthentication);
                         endpoints.MapWmsApi(requireAuthentication: wmsRequireAuthentication);
                     });
                 });

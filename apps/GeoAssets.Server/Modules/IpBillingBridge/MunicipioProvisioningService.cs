@@ -1,7 +1,7 @@
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 
-namespace GeoAssets.Server.IpBilling;
+namespace GeoAssets.Server.Modules.IpBillingBridge;
 
 /// <summary>
 /// Keeps a município's Prefeitura↔Distribuidora <see cref="OrganizationGrant"/> in sync with its
