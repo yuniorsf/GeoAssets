@@ -54,6 +54,7 @@
    - 7.3 [Phase 3: Vertical Microservice Extraction (`apps/GeoAssets.FieldService.Server`)](#73-phase-3-vertical-microservice-extraction-appsgeoassetsfieldserviceserver)
    - 7.4 [Phase 4: Mobile Gateway Routing, Offline Sync Engine & Asset Mutation Outbox](#74-phase-4-mobile-gateway-routing-offline-sync-engine--asset-mutation-outbox)
 8. [Architectural Governance & Non-Regression Invariants](#8-architectural-governance--non-regression-invariants)
+   - [Amendment A (2026-11-18) — GeoAssets.Server domain decoupling (ADR-001)](#amendment-a-2026-11-18--geoassetsserver-domain-decoupling-adr-001)
 
 ---
 
@@ -1148,3 +1149,26 @@ To guarantee long-term system stability and prevent architectural regression, al
 4. **Offline Life-Safety Precedence Invariant**:
    - In 3-way offline synchronization collisions where dual on-site interventions occur concurrently, the conflict engine must **always** prioritize field crew life-safety by quarantining the order to `ConflictReview` and pushing halt alerts to mobile clients. Automatic last-write-wins (LWW) is strictly prohibited for active field orders.
    - *Enforced by*: Unit test suite `ServiceOrderSyncEngineConflictTests`.
+
+### Amendment A (2026-11-18) — GeoAssets.Server domain decoupling ([ADR-001](../architecture/ADR-001-server-domain-decoupling.md))
+
+An architecture review of `apps/GeoAssets.Server` against this document found that the Topology B decision (§4.6) has not yet reached the core host itself. The review confirms Topology B as the target and records the gaps and the remediation programme in ADR-001 (Jira epics XD01-344 … XD01-351, label `server-decoupling`).
+
+**Status of the §8 invariants on `develop` (2026-11-18):**
+
+| Invariant | Status | Evidence (ADR-001 Part 2) |
+|---|---|---|
+| 1. Core Database Encapsulation | **Violated** — `apps/GeoAssets.FieldService.Server/Program.cs:85` opens `GeoAssetsDbContext` on the core connection string; inside the core, `WmsPostGisRenderer` bypasses `IAssetProvider` (smell E). | E, P |
+| 2. Workflow Domain Neutrality | **Violated** — `core/GeoAssets.Workflow` contains `Isp/NeutralOperator`, `Occupancy`, `FieldWork`, `Contractors`, `Erp`, `Scada`, `SlaGuard` and references `GeoAssets.Domain.Sanitation`; `ServiceOrderDbContext` declares pole-occupancy, paving, manhole and contractor tables; the generic `/actions` route special-cases occupancy approval. The token-based test (`MessagingArchitectureTests` Invariant02) does not list these terms. | B, C, D, I, J, K, O |
+| 3. Single-DB Commercial Ledger | Holds for `IpBilling.Server` and `FieldService.Server`; the contractor tables are additionally (and needlessly) created in the core database. | I |
+| 4. Offline Life-Safety Precedence | Not assessed by ADR-001. | — |
+
+**Enforcement correction.** §8 names `NetArchTest.Rules`; the repository's architecture tests are reflection-based (`GetReferencedAssemblies`) in `tests/GeoAssets.Server.Tests` and `tests/GeoAssets.Core.Tests`. ADR-001 Phase 0 (XD01-352, XD01-353) extends them into shrink-only *ratchets* that turn invariants 1 and 2 into executable gates.
+
+**Additional decisions taken in ADR-001 that refine this blueprint:**
+
+1. **Order-type chassis.** Every vertical host (FieldService, IpBilling, the new NeutralOperator.Server) is built on one shared contract (`IGeoAssetsModule` + generic engine extension points: action handlers, transition guards, lifecycle hooks, DI-collected rules, problem mappers, permission contributors).
+2. **Global target ledger in the core.** Feature selection *and* the order→features target store stay in `GeoAssets.Server`, keyed by `(vertical, orderId)`, so exclusive targeting is enforced across verticals. Verticals reserve/release/commit through the core API or events.
+3. **Single order-authorization decision point.** `ServiceOrderRules` decides every service-order operation; the `/api/isp/tenant-portal` surface (which used `OrgResourceRequirement` and let `serviceorders:create` authorize a dispute) is removed.
+4. **Feature-type semantics as data.** Asset types carry roles; verticals register feature-action descriptors with the core; the map renders them without vertical code in the core.
+5. **Cross-service approval saga.** "Approve + commit occupancy + apply asset mutation" becomes a saga over `AssetMutationBatchRequestedV1` / `AppliedV1` / `RejectedV1` with idempotent inbox consumers and compensation.

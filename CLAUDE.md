@@ -90,6 +90,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 | Web app | `apps/GeoAssets.Web/` |
 | Server app | `apps/GeoAssets.Server/` |
 | MAUI app | `apps/GeoAssets.MAUI/` |
+| Architecture decision records | `docs/architecture/` (ADR-001: GeoAssets.Server domain decoupling) |
 
 ## Architecture
 
@@ -97,6 +98,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 - **JS↔C# bridge**: `DotNetObjectReference<object>` stored in JS `_maps[divId].dotNetRef`; C# calls JS via `IJSRuntime.InvokeVoidAsync("GeoAssets.*")`
 - **JS→C# callbacks** (all `[JSInvokable]` on `MapContainer`): `OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`, `OnViewportChangedFromJs`, `OnSelectionGeometryFromJs`, `OnSelectionClickFromJs` (the last two only while a map selection tool is armed — XD01-310)
 - **Auto-save**: `AssetService` debounces 500ms on `CollectionChanged` → `IStorageService.SaveAsync`
+- **Server domain decoupling (ADR-001, in progress)**: `GeoAssets.Server` is the domain-agnostic spatial & platform kernel (provider pool, features/WFS/WMS, identity, global target ledger, order-type descriptor registry); vertical service-order domains run as modules on the order-type chassis and are extracted to their own hosts (one microservice per vertical). Don't add vertical-domain registrations, routes, tables or special cases to the kernel — see `docs/architecture/ADR-001-server-domain-decoupling.md` and Jira epics XD01-344…XD01-351 (label `server-decoupling`).
 
 ## Geometry (NTS Integration)
 
