@@ -49,9 +49,6 @@ GET /api/identity/userclaims/{claimType} | none
 GET /api/identity/users | policy:users:read
 GET /api/identity/users/by-external-id/{oid} | policy:users:read
 GET /api/identity/users/{id} | policy:users:read
-GET /api/isp/tenant-portal/attachment-requests | policy:serviceorders:read
-GET /api/isp/tenant-portal/attachment-requests/{id} | policy:serviceorders:read
-GET /api/isp/tenant-portal/flagged-notices | policy:serviceorders:read
 GET /api/projects | policy:projects:read
 GET /api/projects/organization/{organizationId} | policy:projects:read
 GET /api/projects/{id} | policy:projects:read
@@ -101,8 +98,6 @@ POST /api/identity/roles/{id}/permissions/{permId} | policy:roles:edit
 POST /api/identity/rolesync/roles/{id} | policy:roles:edit
 POST /api/identity/rolesync/users/{externalObjectId}/roles/{roleName} | policy:users:edit
 POST /api/identity/userclaims | none
-POST /api/isp/tenant-portal/attachment-requests | policy:serviceorders:create
-POST /api/isp/tenant-portal/flagged-notices/{id}/dispute | policy:serviceorders:create
 POST /api/projects | policy:projects:read
 POST /api/workflow/order-types | none
 POST /api/workflow/order-types/validate-schema | none

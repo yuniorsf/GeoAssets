@@ -93,6 +93,15 @@ public static class ServiceOrdersRestApiExtensions
             await ServiceOrderRouteAccess.KeepReadableAsync(orders, rules, principalFactory, ct).ConfigureAwait(false), opts);
     }
 
+    /// <summary>The orders of <paramref name="query"/> in <paramref name="status"/>; all of them when no status is given.</summary>
+    private static async Task<IReadOnlyList<IServiceOrder>> InStatusAsync(Task<IReadOnlyList<IServiceOrder>> query, string? status)
+    {
+        var orders = await query.ConfigureAwait(false);
+        return string.IsNullOrEmpty(status)
+            ? orders
+            : [.. orders.Where(o => string.Equals(o.Status, status, StringComparison.Ordinal))];
+    }
+
     private static void MapServiceOrderLists(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
         routes.MapGet($"{prefix}/service-orders", (
@@ -122,9 +131,12 @@ public static class ServiceOrdersRestApiExtensions
             string userId, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
             ListAsync(repo.GetByCreatorAsync(userId, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
 
+        // XD01-365: an optional ?status= narrows the type's orders to one state (e.g. the tenant portal's flagged notices).
         routes.MapGet($"{prefix}/service-orders/by-order-type/{{orderTypeId}}", (
-            string orderTypeId, IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
-            ListAsync(repo.GetByOrderTypeAsync(orderTypeId, ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
+            string orderTypeId, string? status, IServiceOrderRepository repo, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
+            ListAsync(InStatusAsync(repo.GetByOrderTypeAsync(orderTypeId, ct), status), rules, principalFactory, opts, ct))
+            .RequireAuthorization(ReadPolicy);
 
         routes.MapGet($"{prefix}/service-orders/by-date-range", (
             DateTime from, DateTime to, IServiceOrderRepository repo, ServiceOrderRules rules,

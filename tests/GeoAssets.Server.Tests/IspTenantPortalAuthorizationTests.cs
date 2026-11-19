@@ -1,7 +1,5 @@
 using System.Net;
-using System.Net.Http.Json;
 using FluentAssertions;
-using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using Xunit;
@@ -10,8 +8,8 @@ using static GeoAssets.Server.Tests.OrderTargetsApiAssertions;
 namespace GeoAssets.Server.Tests;
 
 /// <summary>
-/// Who may do what through the ISP tenant portal and the generic action route (XD01-364, ADR-001 smell H): both decide with
-/// <c>ServiceOrderRules</c> — the order type's creation and action policies, the organization gate and the dispatch
+/// Who may do what when the ISP tenant portal creates, reads and disputes through the generic service-order routes
+/// (XD01-364, XD01-365; ADR-001 smell H): the create and action routes decide with <c>ServiceOrderRules</c> — the order type's creation and action policies, the organization gate and the dispatch
 /// recipient's actions — instead of a fixed permission code. Inverted by XD01-364 from the XD01-355 characterization facts
 /// that pinned the permission-based behaviour.
 /// </summary>
@@ -21,16 +19,22 @@ public sealed class IspTenantPortalAuthorizationTests
     private const string Evidence = "receipt-digest-abc123";
     private const string DenialByActionPermissions = "Denied by rule 'OrderTypeActionPermissionRule'.";
 
-    private static Task<OrderTargetsApiHost> StartAsync() => OrderTargetsApiHost.StartAsync(mapOrderRoutes: true, mapIspPortalRoutes: true);
+    private static Task<OrderTargetsApiHost> StartAsync() => OrderTargetsApiHost.StartAsync(mapOrderRoutes: true, withIspOrderTypes: true);
 
-    private static HttpClient PortalClientFor(OrderTargetsApiHost host, string token)
-    {
-        var client = host.Server.CreateClient();
-        client.DefaultRequestHeaders.Add(OrderTargetsApiHost.TokenHeader, token);
-        return client;
-    }
+    /// <summary>What the portal posts to dispute a notice: the evidence as the comment, and the Disputed status.</summary>
+    private static Task<HttpResponseMessage> DisputeAsync(HttpClient client, string id = NoticeId) =>
+        client.PostJsonAsync($"service-orders/{id}/actions", Action(OrderActionType.Dispute, Evidence, ClandestineAttachmentWorkflowGraph.Disputed));
 
-    private static Uri Dispute(string id = NoticeId) => new($"/api/isp/tenant-portal/flagged-notices/{id}/dispute", UriKind.Relative);
+    /// <summary>What the portal posts to submit an attachment request.</summary>
+    private static Task<HttpResponseMessage> SubmitAsync(HttpClient client) =>
+        client.PostJsonAsync("service-orders", new
+        {
+            id = "request-1",
+            title = "Attachment request — pole-123",
+            orderTypeId = TenantAttachmentRequestOrderTypes.AttachmentRequestId,
+            status = TenantAttachmentRequestWorkflowGraph.Submitted,
+            attributes = new Dictionary<string, string>(StringComparer.Ordinal) { [TenantAttachmentRequestOrderTypes.PoleFeatureIdAttribute] = "pole-123" },
+        });
 
     private static object Action(OrderActionType action, string? comment = null, string? resultingStatus = null) => new
     {
@@ -69,9 +73,9 @@ public sealed class IspTenantPortalAuthorizationTests
     {
         await using var host = await StartAsync();
         await SeedNoticeAsync(host);
-        using var client = PortalClientFor(host, "create-only-a");
+        using var client = host.ClientFor("create-only-a");
 
-        var response = await client.PostAsJsonAsync(Dispute(), new SubmitDisputeRequest(Evidence));
+        var response = await DisputeAsync(client);
 
         var body = await response.ReadJsonAsync(HttpStatusCode.Forbidden);
         body.GetProperty("reason").GetString().Should().Be(DenialByActionPermissions);
@@ -80,7 +84,7 @@ public sealed class IspTenantPortalAuthorizationTests
 
     /// <summary>
     /// Inverted by XD01-364 (was <c>Characterization_OtherOrganizationsAttachmentRequest_Returns403InsteadOf404</c>): the
-    /// portal answers 404, as for an unknown id, so a refusal never confirms that the id exists.
+    /// generic read route answers 404, as for an unknown id, so a refusal never confirms that the id exists.
     /// </summary>
     [Fact]
     public async Task GetAttachmentRequest_OtherOrganization_Returns404()
@@ -89,20 +93,21 @@ public sealed class IspTenantPortalAuthorizationTests
         await host.SeedOrderAsync(
             "request-of-a", TenantAttachmentRequestOrderTypes.AttachmentRequestId,
             TenantAttachmentRequestWorkflowGraph.Submitted, OrderTargetsApiHost.OrgA);
-        using var client = PortalClientFor(host, "tenant-b");
+        using var client = host.ClientFor("tenant-b");
 
-        var response = await client.GetAsync(Path("/api/isp/tenant-portal/attachment-requests/request-of-a"));
+        var response = await client.GetAsync(Path("service-orders/request-of-a"));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
     /// Inverted by XD01-364 (was <c>Characterization_OrderDispatchedToOtherOrganization_IsReadableViaWorkflowButRefusedByPortal</c>):
-    /// the workflow API and the portal agree on who may read the order, because both pass the organization gate, which admits
-    /// the recipients of a dispatch.
+    /// the organization gate admits the recipients of a dispatch, so the workflow API, which the portal now reads through,
+    /// lets them read the order. Renamed by XD01-365 from <c>OrderDispatchedToOtherOrganization_IsReadableViaWorkflowAndPortal</c>:
+    /// the portal has no read route of its own.
     /// </summary>
     [Fact]
-    public async Task OrderDispatchedToOtherOrganization_IsReadableViaWorkflowAndPortal()
+    public async Task OrderDispatchedToOtherOrganization_IsReadableViaWorkflow()
     {
         await using var host = await StartAsync();
         await host.SeedOrderAsync(
@@ -110,28 +115,26 @@ public sealed class IspTenantPortalAuthorizationTests
             TenantAttachmentRequestWorkflowGraph.Submitted, OrderTargetsApiHost.OrgA);
         await DispatchToOrgBAsync(host, "request-of-a");
         using var workflowClient = host.ClientFor("tenant-b");
-        using var portalClient = PortalClientFor(host, "tenant-b");
 
         var viaWorkflow = await workflowClient.GetAsync(Path("service-orders/request-of-a"));
-        var viaPortal = await portalClient.GetAsync(Path("/api/isp/tenant-portal/attachment-requests/request-of-a"));
 
         viaWorkflow.StatusCode.Should().Be(HttpStatusCode.OK);
-        viaPortal.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // ── Dispute through the portal ────────────────────────────────────────────
+    // ── Dispute through the generic actions route ────────────────────────────────────────────
 
     [Fact]
     public async Task Dispute_IspTenantOfTheOrdersOrganization_TransitionsToDisputed()
     {
         await using var host = await StartAsync();
         await SeedNoticeAsync(host);
-        using var client = PortalClientFor(host, "tenant-a");
+        using var client = host.ClientFor("tenant-a");
 
-        var response = await client.PostAsJsonAsync(Dispute(), new SubmitDisputeRequest(Evidence));
+        var response = await DisputeAsync(client);
 
-        var body = await response.ReadJsonAsync();
-        body.GetProperty("status").GetString().Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+        var reloaded = await client.GetAsync(Path($"service-orders/{NoticeId}"));
+        (await reloaded.ReadJsonAsync()).GetProperty("status").GetString().Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
         (await StatusOfAsync(host)).Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
     }
 
@@ -140,9 +143,9 @@ public sealed class IspTenantPortalAuthorizationTests
     {
         await using var host = await StartAsync();
         await SeedNoticeAsync(host);
-        using var client = PortalClientFor(host, "tenant-b");
+        using var client = host.ClientFor("tenant-b");
 
-        var response = await client.PostAsJsonAsync(Dispute(), new SubmitDisputeRequest(Evidence));
+        var response = await DisputeAsync(client);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await StatusOfAsync(host)).Should().Be(ClandestineAttachmentWorkflowGraph.CaboARevelia);
@@ -154,12 +157,11 @@ public sealed class IspTenantPortalAuthorizationTests
         await using var host = await StartAsync();
         await SeedNoticeAsync(host);
         await DispatchToOrgBAsync(host);
-        using var client = PortalClientFor(host, "tenant-b");
+        using var client = host.ClientFor("tenant-b");
 
-        var response = await client.PostAsJsonAsync(Dispute(), new SubmitDisputeRequest(Evidence));
+        var response = await DisputeAsync(client);
 
-        var body = await response.ReadJsonAsync();
-        body.GetProperty("status").GetString().Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
         (await StatusOfAsync(host)).Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
     }
 
@@ -239,14 +241,12 @@ public sealed class IspTenantPortalAuthorizationTests
     public async Task SubmitAttachmentRequest_WithoutIspTenantRole_Returns403()
     {
         await using var host = await StartAsync();
-        using var client = PortalClientFor(host, "create-only-a");
+        using var client = host.ClientFor("create-only-a");
 
-        var response = await client.PostAsJsonAsync(
-            Path("/api/isp/tenant-portal/attachment-requests"), new SubmitAttachmentRequestRequest("pole-123", "New fiber attachment"));
+        var response = await SubmitAsync(client);
 
         var body = await response.ReadJsonAsync(HttpStatusCode.Forbidden);
-        body.GetProperty("reason").GetString().Should().Be(
-            $"No creation policy of order type '{TenantAttachmentRequestOrderTypes.AttachmentRequestId}' admits the caller.");
+        body.GetProperty("reason").GetString().Should().Be("Not authorized to create orders of this type.");
         (await host.Orders.GetByOrderTypeAsync(TenantAttachmentRequestOrderTypes.AttachmentRequestId)).Should().BeEmpty();
     }
 
@@ -254,10 +254,9 @@ public sealed class IspTenantPortalAuthorizationTests
     public async Task SubmitAttachmentRequest_IspTenant_Returns201()
     {
         await using var host = await StartAsync();
-        using var client = PortalClientFor(host, "tenant-a");
+        using var client = host.ClientFor("tenant-a");
 
-        var response = await client.PostAsJsonAsync(
-            Path("/api/isp/tenant-portal/attachment-requests"), new SubmitAttachmentRequestRequest("pole-123", "New fiber attachment"));
+        var response = await SubmitAsync(client);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         (await host.Orders.GetByOrderTypeAsync(TenantAttachmentRequestOrderTypes.AttachmentRequestId))

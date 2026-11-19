@@ -1,3 +1,4 @@
+using GeoAssets.Shared.Services;
 using GeoAssets.Web.Services.Isp.Rest;
 using GeoAssets.Workflow.Isp.NeutralOperator;
 using Microsoft.Extensions.Configuration;
@@ -7,7 +8,7 @@ namespace GeoAssets.Web.Extensions;
 
 /// <summary>
 /// DI registration for XD01-269's tenant ISP self-service portal, backed by
-/// <c>GeoAssets.Server</c>'s <c>/api/isp/tenant-portal/*</c> endpoints — reuses the same
+/// <c>GeoAssets.Server</c>'s generic <c>/api/workflow</c> service-order routes (XD01-365) — reuses the same
 /// "GeoAssetsServer" named HttpClient/bearer-token scope as <see cref="GeoIdentityRestExtensions"/>,
 /// since both target the same host (unlike <see cref="IpBillingRestExtensions"/>, which targets
 /// the separate <c>GeoAssets.IpBilling.Server</c> host).
@@ -16,7 +17,8 @@ internal static class IspTenantPortalRestExtensions
 {
     public static IServiceCollection AddIspTenantPortalRest(this IServiceCollection services)
     {
-        services.AddScoped<ITenantPortalRestClient>(sp => new TenantPortalRestClient(CreateClient(sp)));
+        services.AddScoped<ITenantPortalRestClient>(sp => new TenantPortalRestClient(
+            CreateClient(sp), sp.GetRequiredService<WorkflowPrincipalFactory>(), sp.GetRequiredService<TimeProvider>()));
         return services;
     }
 
@@ -27,7 +29,7 @@ internal static class IspTenantPortalRestExtensions
             ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
 
         var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeoAssetsServer");
-        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/api/isp/tenant-portal/");
+        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/api/workflow/");
         return client;
     }
 }

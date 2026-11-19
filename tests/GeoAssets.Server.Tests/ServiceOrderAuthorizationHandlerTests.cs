@@ -14,8 +14,9 @@ namespace GeoAssets.Server.Tests;
 /// <summary>
 /// The service-order requirements (XD01-364) in isolation: <see cref="ServiceOrderActionAuthorizationHandler"/> and
 /// <see cref="ServiceOrderCreateAuthorizationHandler"/> answer with the real <see cref="ServiceOrderRules"/> over the
-/// real ISP order types, for a caller whose organization and roles the fake identity store names. Over HTTP the same
-/// handlers are covered by <see cref="IspTenantPortalAuthorizationTests"/>.
+/// real ISP order types, for a caller whose organization and roles the fake identity store names. Since XD01-365 no route evaluates either
+/// requirement (the generic routes call <c>ServiceOrderRules</c> directly, covered over HTTP by
+/// <see cref="IspTenantPortalAuthorizationTests"/>), so the handlers are covered here alone.
 /// </summary>
 public sealed class ServiceOrderAuthorizationHandlerTests
 {

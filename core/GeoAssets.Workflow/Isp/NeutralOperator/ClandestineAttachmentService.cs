@@ -202,19 +202,6 @@ public sealed class ClandestineAttachmentService(
         return results;
     }
 
-    /// <summary>
-    /// A flagged order's current clandestine-notice state (XD01-364) — what the tenant portal answers after an action the
-    /// rule chain authorized and a handler performed. Throws <see cref="InvalidOperationException"/> for an order that was
-    /// never flagged.
-    /// </summary>
-    public static ClandestineFlagResult DescribeFlag(IServiceOrder order)
-    {
-        ArgumentNullException.ThrowIfNull(order);
-
-        var (flaggedAt, deadline) = ReadFlagAttributes(order);
-        return new ClandestineFlagResult(order.Id, order.Status, flaggedAt, deadline);
-    }
-
     private static (DateTimeOffset FlaggedAtUtc, DateTimeOffset DeadlineUtc) ReadFlagAttributes(IServiceOrder order)
     {
         if (!order.Attributes.TryGetValue(AttrFlaggedAtUtc, out var flaggedAtText) ||
