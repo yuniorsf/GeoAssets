@@ -5,12 +5,12 @@ using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
 /// Span and metrics around <see cref="IOccupancyCommitService.ApproveAndCommitAsync"/>
 /// (XD01-318), in the adapter project because the workflow core references no telemetry library
-/// — the arrangement of <see cref="ObservableSharedUseDispatchService"/>.
+/// — the arrangement of the engine persistence's <c>ObservableSharedUseDispatchService</c>.
 ///
 /// The span is <c>ServiceOrder.OccupancyCommit</c>, tagged with the order, the caller's
 /// organization and, when the approval completed, the order type and how many sets and changes it

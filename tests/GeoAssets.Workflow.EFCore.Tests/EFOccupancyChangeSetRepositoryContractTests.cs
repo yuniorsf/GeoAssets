@@ -6,6 +6,7 @@ using GeoAssets.Workflow.Persistence.Entities;
 using GeoAssets.Workflow.TestKit;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -37,7 +38,7 @@ public sealed class EFOccupancyChangeSetRepositoryContractTests : OccupancyChang
         };
         var orderTypes = new OrderTypeRegistry();
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 6, 1, 9, 0, 0, TimeSpan.Zero));
-        var store = new EFOccupancyChangeSetRepository(context, clock);
+        var store = new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(context), clock);
 
         return Task.FromResult(new OccupancyChangeSetStoreContractHarness(
             store,
@@ -48,7 +49,7 @@ public sealed class EFOccupancyChangeSetRepositoryContractTests : OccupancyChang
             new EFServiceOrderTargetRepository(context, orderTypes, clock),
             organizationId =>
             {
-                var view = new EFOccupancyChangeSetRepository(scope.Add(fixture.NewContext(new FakeTenantContext(organizationId))), clock);
+                var view = new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(scope.Add(fixture.NewContext(new FakeTenantContext(organizationId)))), clock);
                 return new OccupancyChangeSetStoreView(view, view);
             },
             scope));

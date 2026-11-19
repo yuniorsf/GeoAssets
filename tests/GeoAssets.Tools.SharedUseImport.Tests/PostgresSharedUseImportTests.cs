@@ -24,7 +24,7 @@ public sealed class PostgresSharedUseImportTests : IAsyncLifetime, IDisposable
     {
         _connectionString = await PostgresOccupancyDatabase.EnsureCreatedAsync();
         await using var db = new ServiceOrderDbContext(new DbContextOptionsBuilder<ServiceOrderDbContext>().UseNpgsql(_connectionString).Options);
-        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE field_pole_occupancies CASCADE;");
+        await db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE neutral_operator.field_pole_occupancies CASCADE;");
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

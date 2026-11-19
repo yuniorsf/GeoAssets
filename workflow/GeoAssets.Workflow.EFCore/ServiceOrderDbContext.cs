@@ -57,9 +57,6 @@ public class ServiceOrderDbContext(
     internal DbSet<OrganizationGrantMirrorRecord> OrganizationGrantMirror => Set<OrganizationGrantMirrorRecord>();
     internal DbSet<OrganizationGrantSyncCursorRecord> OrganizationGrantSyncCursor => Set<OrganizationGrantSyncCursorRecord>();
     internal DbSet<ServiceOrderTargetRecord> ServiceOrderTargets => Set<ServiceOrderTargetRecord>();
-    internal DbSet<PoleOccupancyRecord> PoleOccupancies => Set<PoleOccupancyRecord>();
-    internal DbSet<PoleOccupancyEntryRecord> PoleOccupancyEntries => Set<PoleOccupancyEntryRecord>();
-    internal DbSet<OccupancyChangeSetRecord> OccupancyChangeSets => Set<OccupancyChangeSetRecord>();
 
     /// <summary>The organization this context is scoped to — the one its tenant query filters compare against.</summary>
     internal Guid CurrentOrganizationId => _tenantContext.CurrentOrganizationId;
@@ -117,42 +114,6 @@ public class ServiceOrderDbContext(
             .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
 
         ConfigureServiceOrderTargets(modelBuilder);
-        ConfigurePoleOccupancy(modelBuilder);
-        ConfigureOccupancyChangeSets(modelBuilder);
-    }
-
-    private void ConfigureOccupancyChangeSets(ModelBuilder modelBuilder)
-    {
-        // OccupancyChangeSetRecord (XD01-315) — uniform-filter treatment, like the occupancy it
-        // proposes to change: a staged set names the occupants of the pole owner's poles, so it
-        // does not follow its order to a cross-organization grantee the way a target does.
-        // EFOccupancyChangeSetRepository never calls IgnoreQueryFilters(); the one unfiltered
-        // access is ServiceOrderTargetRelease discarding what is still staged when the order
-        // closes, whoever closes it. The database-layer half is the
-        // AddServiceOrderOccupancyChangeSetsRowLevelSecurity migration.
-        modelBuilder.Entity<OccupancyChangeSetRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-
-        if (string.Equals(Database.ProviderName, PostgreSqlProviderName, StringComparison.Ordinal))
-            OccupancyChangeSetRecordConfiguration.UseOrdinalTextOrder(modelBuilder.Entity<OccupancyChangeSetRecord>());
-    }
-
-    private void ConfigurePoleOccupancy(ModelBuilder modelBuilder)
-    {
-        // PoleOccupancyRecord and PoleOccupancyEntryRecord (XD01-314) — uniform-filter treatment,
-        // like ManholeAuditRecord: occupancy belongs to the pole owner and has no cross-organization
-        // delegation (an occupant never reads it, not even the entries that name it), so
-        // EFPoleOccupancyRepository never calls IgnoreQueryFilters(). The database-layer half is
-        // the AddPoleOccupanciesRowLevelSecurity migration.
-        modelBuilder.Entity<PoleOccupancyRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-        modelBuilder.Entity<PoleOccupancyEntryRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-
-        // Provider-specific, keyed on the provider's name for the same reason as
-        // ConfigureServiceOrderTargets: see PoleOccupancyRecordConfiguration.UseOrdinalTextOrder.
-        if (string.Equals(Database.ProviderName, PostgreSqlProviderName, StringComparison.Ordinal))
-            PoleOccupancyRecordConfiguration.UseOrdinalTextOrder(modelBuilder.Entity<PoleOccupancyRecord>());
     }
 
     private void ConfigureServiceOrderTargets(ModelBuilder modelBuilder)

@@ -6,29 +6,37 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Configurations;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
 /// <summary>
 /// The <c>field_pole_occupancies</c> and <c>field_pole_occupancy_entries</c> tables as the EF
-/// model describes them (XD01-314). The PostgreSQL model is built without a server: reading
+/// model of the NeutralOperator context describes them (XD01-314, moved by XD01-380). The PostgreSQL model is built without a server: reading
 /// <see cref="DbContext.Model"/> never connects.
 /// </summary>
 public sealed class PoleOccupancyModelTests : IDisposable
 {
     private readonly SqliteFixture _fixture = new();
-    private readonly ServiceOrderDbContext _postgres = new(
-        new DbContextOptionsBuilder<ServiceOrderDbContext>().UseNpgsql("Host=never-connected").Options);
+    private readonly NeutralOperatorDbContext _sqlite;
+    private readonly NeutralOperatorDbContext _postgres = new(
+        new DbContextOptionsBuilder<NeutralOperatorDbContext>()
+            .UseNpgsql("Host=never-connected", NeutralOperatorDbContext.ConfigureMigrations).Options);
+
+    public PoleOccupancyModelTests() => _sqlite = NeutralOperatorTestContext.Over(_fixture.Context);
 
     public void Dispose()
     {
         _postgres.Dispose();
+        _sqlite.Dispose();
         _fixture.Dispose();
     }
 
     public static TheoryData<bool> Providers => new() { { true }, { false } };
 
-    private IModel Model(bool postgres) => (postgres ? _postgres : _fixture.Context).GetService<IDesignTimeModel>().Model;
+    private IModel Model(bool postgres) => (postgres ? _postgres : _sqlite).GetService<IDesignTimeModel>().Model;
 
     private IEntityType Pole(bool postgres) => Model(postgres).FindEntityType(typeof(PoleOccupancyRecord))!;
 
@@ -45,6 +53,8 @@ public sealed class PoleOccupancyModelTests : IDisposable
     {
         Pole(postgres).GetTableName().Should().Be("field_pole_occupancies");
         Entry(postgres).GetTableName().Should().Be("field_pole_occupancy_entries");
+        Pole(postgres).GetSchema().Should().Be("neutral_operator");
+        Entry(postgres).GetSchema().Should().Be("neutral_operator");
         Pole(postgres).FindPrimaryKey()!.Properties.Select(p => p.Name).Should().Equal("Id");
         Entry(postgres).FindPrimaryKey()!.Properties.Select(p => p.Name).Should().Equal("Id");
         Pole(postgres).FindProperty("Id")!.ValueGenerated.Should().Be(ValueGenerated.Never);

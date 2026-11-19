@@ -9,6 +9,7 @@ using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.TestKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -36,8 +37,8 @@ internal sealed class OccupancyCommitEfHarness
         Rules = new ServiceOrderRules(OrderTypes, timeProvider: Clock);
         Orders = new EFServiceOrderRepository(context, orderTypeRegistry: OrderTypes, timeProvider: Clock);
         Targets = new EFServiceOrderTargetRepository(context, OrderTypes, Clock);
-        Occupancy = new EFPoleOccupancyRepository(context, Clock);
-        ChangeSets = new EFOccupancyChangeSetRepository(context, Clock);
+        Occupancy = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(context), Clock);
+        ChangeSets = new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(context), Clock);
         UnitOfWork = new EFWorkflowUnitOfWork(context);
         Service = new OccupancyCommitService(
             Orders, OrderTypes, Rules, Targets, Occupancy, Occupancy, ChangeSets, ChangeSets,

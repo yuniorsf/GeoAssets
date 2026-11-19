@@ -1,11 +1,9 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.NeutralOperator.Application.SharedUse;
-using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
@@ -72,46 +70,6 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
         services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
         services.AddServiceOrderTargetPersistence();
-        services.AddPoleOccupancyPersistence();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers the EF Core store of pole occupancy (XD01-314) for both of its ports:
-    /// <see cref="IPoleOccupancyReader"/> and <see cref="IPoleOccupancyWriter"/> resolve to the
-    /// same scoped <see cref="EFPoleOccupancyRepository"/>, which shares the scope's
-    /// <see cref="ServiceOrderDbContext"/> — and therefore its tenant and any transaction — with
-    /// the order repository.
-    ///
-    /// Also registers the store of staged occupancy changes (XD01-315) the same way:
-    /// <see cref="IOccupancyChangeSetReader"/> and <see cref="IOccupancyChangeSetWriter"/>
-    /// resolve to one scoped <see cref="EFOccupancyChangeSetRepository"/> on that same context.
-    ///
-    /// Already called by <see cref="AddWorkflowPersistence"/>; a host that registers
-    /// <see cref="ServiceOrderDbContext"/> itself calls this directly. <see cref="TimeProvider"/>
-    /// is used when registered, the system clock otherwise.
-    /// </summary>
-    public static IServiceCollection AddPoleOccupancyPersistence(this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        services.TryAddScoped(sp => new EFPoleOccupancyRepository(
-            sp.GetRequiredService<ServiceOrderDbContext>(),
-            sp.GetService<TimeProvider>()));
-        services.TryAddScoped<IPoleOccupancyReader>(sp => sp.GetRequiredService<EFPoleOccupancyRepository>());
-        services.TryAddScoped<IPoleOccupancyWriter>(sp => sp.GetRequiredService<EFPoleOccupancyRepository>());
-
-        // Staged occupancy changes (XD01-315): same scope, same context, same tenant.
-        services.TryAddScoped(sp => new EFOccupancyChangeSetRepository(
-            sp.GetRequiredService<ServiceOrderDbContext>(),
-            sp.GetService<TimeProvider>()));
-        services.TryAddScoped<IOccupancyChangeSetReader>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
-        services.TryAddScoped<IOccupancyChangeSetWriter>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
-
-        // Closing an order discards what is still staged on it, in the closing SaveChanges (XD01-362).
-        services.TryAddScoped<IOccupancyChangeSetCloser>(sp => sp.GetRequiredService<EFOccupancyChangeSetRepository>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IOrderLifecycleHook, OccupancyReleaseLifecycleHook>());
 
         return services;
     }
@@ -249,29 +207,6 @@ public static class WorkflowEFCoreServiceExtensions
         services.Replace(ServiceDescriptor.Scoped<ISharedUseDispatchService>(sp =>
             new ObservableSharedUseDispatchService(
                 sp.GetRequiredService<SharedUseDispatchService>(),
-                sp.GetRequiredService<GeoAssetsActivitySource>(),
-                sp.GetRequiredService<GeoAssetsMeter>(),
-                sp.GetService<TimeProvider>())));
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers what the occupancy approval (XD01-318, <c>AddOccupancyCommit</c>) needs from
-    /// this layer: <see cref="EFWorkflowUnitOfWork"/> as <see cref="IWorkflowUnitOfWork"/> on the
-    /// scope's <see cref="ServiceOrderDbContext"/> (when not registered yet), and
-    /// <see cref="ObservableOccupancyCommitService"/> around the concrete
-    /// <see cref="OccupancyCommitService"/>. Call it after <c>AddOccupancyCommit()</c>: it replaces
-    /// that interface registration.
-    /// </summary>
-    public static IServiceCollection AddOccupancyCommitPersistence(this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
-        services.Replace(ServiceDescriptor.Scoped<IOccupancyCommitService>(sp =>
-            new ObservableOccupancyCommitService(
-                sp.GetRequiredService<OccupancyCommitService>(),
                 sp.GetRequiredService<GeoAssetsActivitySource>(),
                 sp.GetRequiredService<GeoAssetsMeter>(),
                 sp.GetService<TimeProvider>())));

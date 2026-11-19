@@ -38,6 +38,8 @@
     <Compile Include="..\GeoAssets.FieldService.Server.Tests\ServiceOrderRowVersionContract.cs" Link="ServiceOrderRowVersionContract.cs" />
     <!-- XD01-379: the AddTargetLedgerVertical migration contract is likewise one body run against both histories. -->
     <Compile Include="..\GeoAssets.FieldService.Server.Tests\TargetLedgerMigrationContract.cs" Link="TargetLedgerMigrationContract.cs" />
+    <!-- XD01-380: the NeutralOperator move (kernel RemoveOccupancyFromKernelModel + the AdoptOccupancyTables baseline) is likewise one body run against both histories. -->
+    <Compile Include="..\GeoAssets.FieldService.Server.Tests\NeutralOperatorMigrationContract.cs" Link="NeutralOperatorMigrationContract.cs" />
   </ItemGroup>
 
   <ItemGroup>

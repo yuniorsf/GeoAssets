@@ -38,6 +38,26 @@ internal sealed class SqliteFixture : IDisposable
         Context = NewContext();
         Context.Database.EnsureCreated();
 
+        // The NeutralOperator vertical's tables (XD01-380) live in its own context, over this same connection. EnsureCreated
+        // would see the kernel's tables and create nothing, so its create script is run instead (SQLite ignores the schema).
+        // The change sets' foreign key to the kernel's targets is DB-only (the vertical's model does not know the kernel's
+        // target entity — on PostgreSQL its baseline migration creates it), so it is added to the script here.
+        using (var neutralOperator = NeutralOperatorTestContext.Over(Context))
+        {
+            var script = neutralOperator.Database.GenerateCreateScript();
+            var tableStart = script.IndexOf("CREATE TABLE \"ServiceOrderOccupancyChangeSets\"", StringComparison.Ordinal);
+            var tableEnd = tableStart < 0 ? -1 : script.IndexOf(");", tableStart, StringComparison.Ordinal);
+            if (tableEnd < 0)
+                throw new InvalidOperationException("The NeutralOperator create script no longer declares the change set table as expected.");
+
+            while (char.IsWhiteSpace(script[tableEnd - 1]))
+                tableEnd--;
+
+            neutralOperator.Database.ExecuteSqlRaw(script.Insert(
+                tableEnd,
+                ",\n    CONSTRAINT \"FK_ServiceOrderOccupancyChangeSets_ServiceOrderTargets_TargetId\" FOREIGN KEY (\"TargetId\") REFERENCES \"ServiceOrderTargets\" (\"Id\") ON DELETE CASCADE"));
+        }
+
         // SQLite has no native auto-updating rowversion column — this trigger is what
         // makes ServiceOrders.RowVersion actually change on every UPDATE, so it behaves
         // like the SQL Server target ServiceOrderRecordConfiguration.IsRowVersion() is

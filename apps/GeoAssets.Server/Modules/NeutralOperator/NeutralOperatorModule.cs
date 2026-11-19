@@ -4,6 +4,7 @@ using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Registry;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.NeutralOperator.Application;
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
@@ -28,6 +29,10 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         _ = configuration.GetConnectionString("GeoAssets")
             ?? throw new InvalidOperationException(
                 $"The '{ModuleId}' module needs the 'GeoAssets' connection string.");
+
+        // The vertical's own context (XD01-380): pole occupancies and staged change sets in schema neutral_operator, over the
+        // kernel ServiceOrderDbContext's connection and joining its transaction until Phase 7 — and the stores on it.
+        services.AddNeutralOperatorPersistence();
 
         // Isp.NeutralOperator order types (XD01-263's clandestine notice, XD01-269's tenant attachment request) and the
         // shared pole use ones (XD01-316: the pole owner's order and the notice each occupant gets).

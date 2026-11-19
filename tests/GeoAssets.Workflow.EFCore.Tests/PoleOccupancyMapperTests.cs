@@ -5,6 +5,8 @@ using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Entities;
 using GeoAssets.Workflow.TestKit;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 

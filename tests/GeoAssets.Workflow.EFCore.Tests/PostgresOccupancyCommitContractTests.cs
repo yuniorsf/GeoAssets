@@ -32,7 +32,7 @@ public sealed class PostgresOccupancyCommitContractTests : OccupancyCommitContra
         var connectionString = await PostgresTargetStoreDatabase.EnsureCreatedAsync(DatabaseName);
         await using var db = PostgresTargetStoreDatabase.NewContext(connectionString);
         await db.Database.ExecuteSqlRawAsync(
-            """TRUNCATE TABLE "ServiceOrders", "WorkflowOutboxMessages", field_pole_occupancies CASCADE;""");
+            """TRUNCATE TABLE "ServiceOrders", "WorkflowOutboxMessages", neutral_operator.field_pole_occupancies CASCADE;""");
         return connectionString;
     }
 

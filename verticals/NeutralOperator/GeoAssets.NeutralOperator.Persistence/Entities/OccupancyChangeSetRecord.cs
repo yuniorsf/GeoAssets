@@ -1,4 +1,4 @@
-namespace GeoAssets.Workflow.Persistence.Entities;
+namespace GeoAssets.NeutralOperator.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>ServiceOrderOccupancyChangeSets</c> table (XD01-315): the
@@ -14,7 +14,7 @@ internal sealed class OccupancyChangeSetRecord
     /// <summary>The order the set was staged on. Repeated from the target so an order's sets are one index read.</summary>
     public string ServiceOrderId { get; set; } = string.Empty;
 
-    /// <summary>FK to the <see cref="ServiceOrderTargetRecord"/> the set was staged on; its sets are deleted with it.</summary>
+    /// <summary>FK (database-only) to the kernel target the set was staged on; its sets are deleted with it.</summary>
     public string TargetId { get; set; } = string.Empty;
 
     public string PoleFeatureId { get; set; } = string.Empty;

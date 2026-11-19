@@ -8,8 +8,10 @@ namespace GeoAssets.Workflow.Persistence;
 /// <see cref="IWorkflowUnitOfWork"/> over the scope's <see cref="ServiceOrderDbContext"/>
 /// (XD01-316): the work runs in one database transaction on that context's connection, which
 /// every repository registered in the same scope writes through — the order repository, the
-/// target store, the occupancy stores and the outbox. That shared context is the whole
-/// mechanism; a store built on another context takes no part.
+/// target store and the outbox. A store on another context takes part only when that context
+/// shares this connection and joins its <c>Database.CurrentTransaction</c> before it
+/// writes (a vertical's context does, until it gets a database of its own — XD01-380); one on a
+/// connection of its own takes no part.
 ///
 /// When the context already has a transaction the work joins it, and whoever opened that one
 /// commits or rolls back. Otherwise this class opens one, commits it when the work returns, and

@@ -67,6 +67,8 @@
     <ProjectReference Include="..\..\verticals\Integrations\GeoAssets.Integrations.Erp\GeoAssets.Integrations.Erp.csproj" />
     <ProjectReference Include="..\..\verticals\Integrations\GeoAssets.Integrations.Scada\GeoAssets.Integrations.Scada.csproj" />
     <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Application\GeoAssets.FieldService.Application.csproj" />
+    <!-- Pole occupancy (XD01-314) lives in the NeutralOperator vertical's own context since XD01-380. -->
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

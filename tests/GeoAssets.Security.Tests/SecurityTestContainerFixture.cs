@@ -1,4 +1,5 @@
 using GeoAssets.Identity.Authorization.EFCore;
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -125,6 +126,19 @@ internal static class SecurityTestContainerFixture
         new DbContextOptionsBuilder<ServiceOrderDbContext>()
             .UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server"))
             .Options;
+
+    /// <summary>The NeutralOperator vertical's context (XD01-380) with its own migrations assembly and history table.</summary>
+    public static DbContextOptions<NeutralOperatorDbContext> BuildNeutralOperatorOptions(string connectionString) =>
+        new DbContextOptionsBuilder<NeutralOperatorDbContext>()
+            .UseNpgsql(connectionString, NeutralOperatorDbContext.ConfigureMigrations)
+            .Options;
+
+    /// <summary>Applies the NeutralOperator chain (XD01-380) to <paramref name="connectionString"/>'s database — after the kernel chain, which it requires.</summary>
+    public static async Task MigrateNeutralOperatorAsync(string connectionString)
+    {
+        await using var neutralOperator = new NeutralOperatorDbContext(BuildNeutralOperatorOptions(connectionString));
+        await neutralOperator.Database.MigrateAsync();
+    }
 
     public static async Task<NpgsqlConnection> OpenScopedRoleConnectionAsync()
     {

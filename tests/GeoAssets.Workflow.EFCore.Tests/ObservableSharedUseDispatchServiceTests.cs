@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -298,6 +299,7 @@ public sealed class ObservableSharedUseDispatchServiceTests : IDisposable
         services.AddServiceOrderRules();
         services.AddLogging();
         services.AddWorkflowPersistence(options => options.UseSqlite("Data Source=:memory:"));
+        services.AddNeutralOperatorPersistence((options, connection) => options.UseSqlite(connection));
         services.AddSingleton<IIntegrationMessageSerializer>(new ProtobufIntegrationMessageSerializer());
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
