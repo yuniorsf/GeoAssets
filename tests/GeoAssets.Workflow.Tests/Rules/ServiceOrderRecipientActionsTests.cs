@@ -31,7 +31,7 @@ public sealed class ServiceOrderRecipientActionsTests
     private static OrderTypeRegistry Registry()
     {
         var registry = new OrderTypeRegistry();
-        SharedUseOrderTypes.RegisterAll(registry, ["pole"]);
+        SharedUseOrderTypes.RegisterAll(registry);
         registry.Register(new OrderType
         {
             Id = ByRoleTypeId,
@@ -267,9 +267,9 @@ public sealed class ServiceOrderRecipientActionsTests
     public void ATypeThatSaysNothing_GrantsItsRecipientsNoAction_WhileTheNoticeGrantsAcceptAndAnnotate_OnAnInformLevel()
     {
         new OrderType { Id = "plain", DisplayName = "Plain" }.RecipientActions.Should().BeEmpty();
-        SharedUseOrderTypes.CreatePoleWork(["pole"]).RecipientActions.Should().BeEmpty();
+        SharedUseOrderTypes.CreatePoleWork().RecipientActions.Should().BeEmpty();
 
-        var notice = SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+        var notice = SharedUseOrderTypes.CreateOccupantNotice();
         notice.RecipientActions.Should().Equal(OrderActionType.Accept, OrderActionType.Annotate);
         notice.RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
         ((int)OrderActionType.Accept, (int)OrderActionType.Annotate)
@@ -281,14 +281,14 @@ public sealed class ServiceOrderRecipientActionsTests
     [Fact]
     public void TransitionsFor_ACustomGraph_IsItsTransitionsTaggedWithTheAction()
     {
-        var notice = SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+        var notice = SharedUseOrderTypes.CreateOccupantNotice();
 
         ServiceOrderTransitions.TransitionsFor(notice, OrderActionType.Accept)
             .Should().Equal(new WorkflowTransition(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderActionType.Accept));
         ServiceOrderTransitions.TransitionsFor(notice, OrderActionType.Annotate).Should().BeEmpty();
         ServiceOrderTransitions.TransitionsFor(notice, OrderActionType.Cancel).Select(t => t.FromStateKey)
             .Should().Equal(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, ServiceOrderStatus.OnHold);
-        ServiceOrderTransitions.TransitionsFor(SharedUseOrderTypes.CreatePoleWork(["pole"]), OrderActionType.Accept)
+        ServiceOrderTransitions.TransitionsFor(SharedUseOrderTypes.CreatePoleWork(), OrderActionType.Accept)
             .Should().BeEmpty("pole work is never dispatched to a recipient");
     }
 

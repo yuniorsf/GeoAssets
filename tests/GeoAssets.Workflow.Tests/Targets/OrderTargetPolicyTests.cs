@@ -76,6 +76,62 @@ public class OrderTargetPolicyTests
         act.Should().ThrowExactly<ArgumentException>();
     }
 
+    // ── Roles (XD01-368) ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Validate_RolesOnly_DoesNotThrow()
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeRoles = ["occupiable-support"] };
+
+        var act = () => policy.Validate(OwningTypeId);
+
+        act.Should().NotThrow();
+        policy.TargetAssetTypeIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_NoIdsAndNoRoles_ThrowsArgumentException()
+    {
+        var policy = new OrderTargetPolicy();
+
+        var act = () => policy.Validate(OwningTypeId);
+
+        act.Should().ThrowExactly<ArgumentException>().WithMessage($"*'{OwningTypeId}'*at least one target asset type*");
+    }
+
+    [Theory]
+    [InlineData("Occupiable-Support")]
+    [InlineData("has space")]
+    [InlineData("")]
+    public void Validate_MalformedRole_ThrowsArgumentExceptionNamingIt(string role)
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"], TargetAssetTypeRoles = ["occupiable-support", role] };
+
+        var act = () => policy.Validate(OwningTypeId);
+
+        act.Should().ThrowExactly<ArgumentException>().WithMessage($"*'{role}'*");
+    }
+
+    [Fact]
+    public void Validate_IdsAndWellFormedRoles_DoesNotThrow()
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"], TargetAssetTypeRoles = ["occupiable-support"] };
+
+        var act = () => policy.Validate(OwningTypeId);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void NullIdsAndNullRoles_BecomeEmptyLists()
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeIds = null!, TargetAssetTypeRoles = null! };
+
+        policy.TargetAssetTypeIds.Should().BeEmpty();
+        policy.TargetAssetTypeRoles.Should().BeEmpty();
+        new OrderTargetPolicy().TargetAssetTypeRoles.Should().BeEmpty();
+    }
+
     // ── POL-G2 ────────────────────────────────────────────────────────────────
 
     [Theory]

@@ -31,7 +31,7 @@ public sealed class OrderTypeCapabilityTests
     [Fact]
     public void SharedUseOrderTypes_DeclareOccupancyCommit()
     {
-        SharedUseOrderTypes.CreatePoleWork(["pole"]).HasCapability(OccupancyCapabilities.Commit).Should().BeTrue();
-        SharedUseOrderTypes.CreateOccupantNotice(["pole"]).HasCapability(OccupancyCapabilities.Commit).Should().BeTrue();
+        SharedUseOrderTypes.CreatePoleWork().HasCapability(OccupancyCapabilities.Commit).Should().BeTrue();
+        SharedUseOrderTypes.CreateOccupantNotice().HasCapability(OccupancyCapabilities.Commit).Should().BeTrue();
     }
 }

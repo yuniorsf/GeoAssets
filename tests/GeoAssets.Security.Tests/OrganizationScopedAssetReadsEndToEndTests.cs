@@ -64,7 +64,7 @@ namespace GeoAssets.Security.Tests;
 public sealed class OrganizationScopedAssetReadsEndToEndTests
 {
     private const string Order = "osr-order";
-    private const string PoleType = OrderOccupancyHostExtensions.SeededPoleAssetTypeId;
+    private const string PoleType = "00000000-0000-0000-0000-000000000004";
     private const string OrganizationClaim = "test_org";
     private const string OrganizationHeader = "X-Test-Organization";
     private const string NoOrganization = "none";
@@ -283,7 +283,7 @@ public sealed class OrganizationScopedAssetReadsEndToEndTests
         // The occupancy commit and its in-process apply, as in XD01-337's end-to-end test.
         services.AddSingleton(new GeoAssetsActivitySource("1.0.0"));
         services.AddSingleton(new GeoAssetsMeter("1.0.0"));
-        services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes(configuration));
+        services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes());
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
         services.AddServiceOrderRules();
         services.AddServerOrderOccupancyStaging(configuration);

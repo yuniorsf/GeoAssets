@@ -1,3 +1,4 @@
+using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Selection.Strategies;
 using GeoAssets.Workflow.Targets;
 
@@ -20,22 +21,25 @@ public static class OrderTargetSelectionPlanner
     /// that are of a targeted asset type or not loaded on the client (the server decides about
     /// those), in ordinal order.</item>
     /// </list>
-    /// Both carry <c>assetTypeIds</c> = the policy's target asset types.
+    /// Both carry <c>assetTypeIds</c> = the policy's target asset types, its roles resolved against
+    /// <paramref name="assetTypes"/> (XD01-368).
     /// </summary>
     /// <exception cref="ArgumentNullException">An argument other than <paramref name="fenceRings"/> is null.</exception>
     public static OrderTargetSelectionPlanResult Plan(
         OrderTargetPolicy policy,
         IReadOnlyCollection<string> selectedIds,
         double[][][]? fenceRings,
-        Func<string, string?> assetTypeOf)
+        Func<string, string?> assetTypeOf,
+        IReadOnlyCollection<AssetType> assetTypes)
     {
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(selectedIds);
         ArgumentNullException.ThrowIfNull(assetTypeOf);
+        ArgumentNullException.ThrowIfNull(assetTypes);
 
         if (selectedIds.Count == 0) return OrderTargetSelectionPlanResult.Failed(OrderTargetSelectionPlanProblem.EmptySelection);
 
-        string[] assetTypeIds = [.. policy.TargetAssetTypeIds];
+        string[] assetTypeIds = [.. OrderTargetAssetTypes.Resolve(policy, assetTypes)];
 
         if (fenceRings is not null)
         {
@@ -50,7 +54,7 @@ public static class OrderTargetSelectionPlanner
                 IdentifierCount: 0));
         }
 
-        var targeted = assetTypeIds.ToHashSet(StringComparer.Ordinal);
+        var targeted = assetTypeIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         string[] values =
         [
             .. selectedIds

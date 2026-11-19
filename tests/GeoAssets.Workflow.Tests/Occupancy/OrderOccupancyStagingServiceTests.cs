@@ -199,7 +199,28 @@ public sealed class OrderOccupancyStagingServiceTests
 
         (await configured.Sut.GetAsync(OrderId, TargetId(), Admin, CancellationToken.None)).PoleFeatureId.Should().Be(Pole);
         await ((Func<Task>)(() => unconfigured.Sut.GetAsync(OrderId, TargetId(), Admin, CancellationToken.None))).Should().ThrowAsync<TargetIsNotAPoleException>();
-        new OrderOccupancyOptions().IsPole(null).Should().BeFalse();
+        new OrderOccupancyOptions().IsPole(null, []).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TargetOfAnAssetTypeCarryingThePoleRole_IsAPole_WithoutAnyConfiguredId_AndOneWithoutItIsNot()
+    {
+        var fixture = new OccupancyStagingFixture();
+        fixture.Options.PoleAssetTypeIds.Clear();
+        var support = new AssetType { Id = Guid.NewGuid(), Name = "Support", Roles = ["occupiable-support"] };
+        var plain = new AssetType { Id = Guid.NewGuid(), Name = "Plain" };
+        var assets = new TestAssetProvider();
+        assets.AddAssetType(support);
+        assets.AddAssetType(plain);
+        var sut = new OrderOccupancyStagingService(
+            fixture.Orders, fixture.OrderTypes, fixture.Rules, fixture.Targets, fixture.Occupancy, fixture.ChangeSets, fixture.ChangeSets,
+            fixture.Options, fixture.Clock, assets);
+        await fixture.SeedOrderAsync(assetTypeId: support.Id.ToString());
+        await fixture.SeedOrderAsync("ord-2", assetTypeId: plain.Id.ToString());
+
+        (await sut.GetAsync(OrderId, TargetId(), Admin, CancellationToken.None)).PoleFeatureId.Should().Be(Pole);
+        await ((Func<Task>)(() => sut.GetAsync("ord-2", TargetId(orderId: "ord-2"), Admin, CancellationToken.None)))
+            .Should().ThrowAsync<TargetIsNotAPoleException>();
     }
 
     // ── GetAsync ──────────────────────────────────────────────────────────────

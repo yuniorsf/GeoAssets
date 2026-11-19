@@ -146,7 +146,7 @@ public sealed class OccupancyCommitServiceTests
     [Fact]
     public async Task ApproveAndCommitAsync_OnAnOrderOfNoOrganization_ByAPrincipalOfNone_IsRefusedAsOwnerOnly()
     {
-        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes, [PoleType]);
+        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes);
         var orderless = NewOrder(SharedUseOrderTypes.PoleWorkId, ServiceOrderStatus.Completed, organizationId: Guid.Empty);
         await _fixture.Orders.AddAsync(orderless);
         var noOrganization = new WorkflowPrincipal("approver-x", null, ["Administrator"], [], []);
@@ -387,7 +387,7 @@ public sealed class OccupancyCommitServiceTests
     /// <summary>A completed pole-work order of the owner with one pole target.</summary>
     private async Task SeedAsync(byte[]? rowVersion = null, string? scopeId = null)
     {
-        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes, [PoleType]);
+        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes);
         await _fixture.Orders.AddAsync(NewOrder(SharedUseOrderTypes.PoleWorkId, ServiceOrderStatus.Completed, rowVersion, scopeId));
         await _fixture.Targets.AddRangeAsync(
             Order,

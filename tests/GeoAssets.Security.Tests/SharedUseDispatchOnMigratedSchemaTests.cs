@@ -33,7 +33,7 @@ namespace GeoAssets.Security.Tests;
 public sealed class SharedUseDispatchOnMigratedSchemaTests
 {
     private const string Order = "sud-parent";
-    private const string PoleType = OrderOccupancyHostExtensions.SeededPoleAssetTypeId;
+    private const string PoleType = "00000000-0000-0000-0000-000000000004";
 
     private static readonly Guid Owner = new("f1f1f1f1-0000-4000-8000-000000000316");
     private static readonly Guid OccupantOne = new("f2f2f2f2-0000-4000-8000-000000000316");
@@ -148,7 +148,7 @@ public sealed class SharedUseDispatchOnMigratedSchemaTests
         services.AddSingleton(new GeoAssetsActivitySource("1.0.0"));
         services.AddSingleton(new GeoAssetsMeter("1.0.0"));
         services.AddScoped<ITenantContext>(_ => new FixedTenant(Owner));
-        services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes(configuration));
+        services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes());
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
         services.AddServiceOrderRules();
         services.AddServerWorkflowMessaging(configuration);

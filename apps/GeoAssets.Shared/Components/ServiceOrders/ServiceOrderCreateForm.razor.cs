@@ -63,7 +63,7 @@ public partial class ServiceOrderCreateForm
     private void RefreshOrderTypes()
     {
         _fits = _useSelection
-            ? SelectionOrderTypes.Evaluate(_allowedTypes, SelectionSet.Ids, AssetTypeOf)
+            ? SelectionOrderTypes.Evaluate(_allowedTypes, SelectionSet.Ids, AssetTypeOf, AssetProvider.GetAssetTypes())
             : [];
 
         IReadOnlyList<OrderType> offered = _useSelection ? [.. _fits.Select(f => f.Type)] : _allowedTypes;
@@ -80,7 +80,7 @@ public partial class ServiceOrderCreateForm
             var policy = OrderTypes.Find(_model.OrderTypeId)?.TargetPolicy;
             var planned = policy is null
                 ? OrderTargetSelectionPlanResult.Failed(OrderTargetSelectionPlanProblem.NoEligibleFeature)
-                : OrderTargetSelectionPlanner.Plan(policy, SelectionSet.Ids, FenceMemory.Rings, AssetTypeOf);
+                : OrderTargetSelectionPlanner.Plan(policy, SelectionSet.Ids, FenceMemory.Rings, AssetTypeOf, AssetProvider.GetAssetTypes());
 
             if (planned.Problem is { } problem)
             {

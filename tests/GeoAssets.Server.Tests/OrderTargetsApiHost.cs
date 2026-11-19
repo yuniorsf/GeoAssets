@@ -266,7 +266,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         registry.Register(SurveyType(PoleSurvey, selectionLimit: null, OrderTargetExclusivity.None));
         registry.Register(SurveyType(LimitedSurvey, selectionLimit: 2, OrderTargetExclusivity.None));
         registry.Register(SurveyType(BlockingSurvey, selectionLimit: null, OrderTargetExclusivity.BlockOnOverlap));
-        SharedUseOrderTypes.RegisterAll(registry, ["pole"]);
+        SharedUseOrderTypes.RegisterAll(registry);
         foreach (var access in Enum.GetValues<OrderRecipientAccess>())
             registry.Register(RecipientAccessType(access));
     }

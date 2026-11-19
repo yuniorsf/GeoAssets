@@ -157,11 +157,47 @@ public class OrderTypeMapperTests
     }
 
     [Fact]
-    public void FromJson_MissingRequiredTargetAssetTypeIds_ThrowsJsonException()
+    public void FromJson_MissingTargetAssetTypeIds_ReadsAsNone_SinceTheyAreNoLongerRequired()
     {
-        var act = () => OrderTargetPolicyMapper.FromJson("""{"selectionLimit":5}""");
+        var policy = OrderTargetPolicyMapper.FromJson("""{"selectionLimit":5}""");
 
-        act.Should().Throw<JsonException>();
+        policy!.TargetAssetTypeIds.Should().BeEmpty();
+        policy.TargetAssetTypeRoles.Should().BeEmpty();
+        policy.SelectionLimit.Should().Be(5);
+    }
+
+    [Fact]
+    public void FromJson_PolicyPersistedBeforeRoles_ReadsWithEmptyRolesAndTheSameIds()
+    {
+        var policy = OrderTargetPolicyMapper.FromJson("""{"targetAssetTypeIds":["pole","manhole"],"selectionLimit":500}""");
+
+        policy!.TargetAssetTypeIds.Should().Equal("pole", "manhole");
+        policy.TargetAssetTypeRoles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FromJson_NullRoles_ReadAsEmpty()
+    {
+        var policy = OrderTargetPolicyMapper.FromJson("""{"targetAssetTypeIds":["pole"],"targetAssetTypeRoles":null}""");
+
+        policy!.TargetAssetTypeRoles.Should().BeEmpty();
+        policy.TargetAssetTypeIds.Should().Equal("pole");
+    }
+
+    [Fact]
+    public void ToJsonThenFromJson_APolicyWithRoles_RoundTrips()
+    {
+        var original = new OrderTargetPolicy { TargetAssetTypeRoles = ["occupiable-support", "ducted-run"], SelectionLimit = 10 };
+
+        var json = OrderTargetPolicyMapper.ToJson(original);
+        var roundTripped = OrderTargetPolicyMapper.FromJson(json);
+
+        using var document = JsonDocument.Parse(json!);
+        document.RootElement.GetProperty("targetAssetTypeRoles").EnumerateArray().Select(e => e.GetString())
+            .Should().Equal("occupiable-support", "ducted-run");
+        roundTripped!.TargetAssetTypeRoles.Should().Equal("occupiable-support", "ducted-run");
+        roundTripped.TargetAssetTypeIds.Should().BeEmpty();
+        roundTripped.SelectionLimit.Should().Be(10);
     }
 
     // ── RecipientAccess (XD01-333) ────────────────────────────────────────────
@@ -194,7 +230,7 @@ public class OrderTypeMapperTests
     [Fact]
     public void RecipientActions_OfTheNotice_AreOneGrantRowPerAction_PlusOneRowPerMoveItMakes()
     {
-        var notice = GeoAssets.Workflow.Isp.NeutralOperator.SharedUse.SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+        var notice = GeoAssets.Workflow.Isp.NeutralOperator.SharedUse.SharedUseOrderTypes.CreateOccupantNotice();
 
         OrderTypeMapper.ToRecipientActionRecords(notice)
             .Select(r => (r.OrderTypeId, r.Action, r.FromStateKey, r.ToStateKey))

@@ -14,15 +14,14 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 public static class SharedUseHostExtensions
 {
     /// <summary>
-    /// Registers the shared-use order types in <paramref name="registry"/>, with the pole asset
-    /// types this host is configured with (<see cref="OrderOccupancyHostExtensions.PoleAssetTypeIds"/>).
+    /// Registers the shared-use order types in <paramref name="registry"/>: they target every asset type carrying the
+    /// <c>occupiable-support</c> role (XD01-368), so no host configuration names the poles.
     /// </summary>
-    public static void RegisterSharedUseOrderTypes(this OrderTypeRegistry registry, IConfiguration configuration)
+    public static void RegisterSharedUseOrderTypes(this OrderTypeRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
-        ArgumentNullException.ThrowIfNull(configuration);
 
-        SharedUseOrderTypes.RegisterAll(registry, OrderOccupancyHostExtensions.PoleAssetTypeIds(configuration));
+        SharedUseOrderTypes.RegisterAll(registry);
     }
 
     /// <summary>

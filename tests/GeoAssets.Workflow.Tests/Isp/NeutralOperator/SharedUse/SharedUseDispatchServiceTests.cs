@@ -179,7 +179,7 @@ public sealed class SharedUseDispatchServiceTests
     [Fact]
     public async Task DispatchAsync_FanOutChildTypeNotRegistered_ThrowsOrderTypeNotRegistered_NamingTheChildType()
     {
-        _fixture.OrderTypes.Register(SharedUseOrderTypes.CreatePoleWork([PoleType]));
+        _fixture.OrderTypes.Register(SharedUseOrderTypes.CreatePoleWork());
         await _fixture.Orders.AddAsync(NewOrder(SharedUseOrderTypes.PoleWorkId));
 
         var act = () => _fixture.Sut.DispatchAsync(Order, [], Admin, CancellationToken.None);
@@ -190,7 +190,7 @@ public sealed class SharedUseDispatchServiceTests
     [Fact]
     public async Task DispatchAsync_AStatusWithNoDispatch_IsRefusedBeforeTargetsOrOccupancyAreRead()
     {
-        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes, [PoleType]);
+        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes);
         var order = NewOrder(SharedUseOrderTypes.PoleWorkId);
         order.Status = ServiceOrderStatus.Completed;
         await _fixture.Orders.AddAsync(order);
@@ -419,7 +419,7 @@ public sealed class SharedUseDispatchServiceTests
     /// <summary>A draft pole-work order on one pole occupied by <see cref="Occupant"/> and, unless asked otherwise, <see cref="OtherOccupant"/>.</summary>
     private async Task SeedAsync(bool OccupantOnly = false, byte[]? rowVersion = null)
     {
-        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes, [PoleType]);
+        SharedUseOrderTypes.RegisterAll(_fixture.OrderTypes);
         await _fixture.Orders.AddAsync(NewOrder(SharedUseOrderTypes.PoleWorkId, rowVersion));
         await _fixture.Targets.AddRangeAsync(
             Order,

@@ -217,9 +217,9 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
 builder.Services.AddOrderTypeRegistry(registry =>
     // Shared pole use (XD01-316): the server seeds these two types in code, so they never come
     // with the server-persisted overlay loaded below. The client needs their shape — the
-    // fan-out that selects the dispatch dialog, the activities a target lists — not the
-    // server's pole-type configuration, which stays the authority on what a pole is.
-    SharedUseOrderTypes.RegisterAll(registry, [SharedUseOrderTypes.SeededPoleAssetTypeId]));
+    // fan-out that selects the dispatch dialog, the activities a target lists. Both target the
+    // occupiable-support asset-type role (XD01-368), resolved against the loaded asset types.
+    SharedUseOrderTypes.RegisterAll(registry));
 
 var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
     ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");

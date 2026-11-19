@@ -10,7 +10,7 @@ namespace GeoAssets.Workflow.Tests.Occupancy;
 /// <summary><see cref="OccupancyApproval"/> (XD01-318): which approvals commit staged occupancy, and where they lead.</summary>
 public sealed class OccupancyApprovalTests
 {
-    private static readonly OrderType PoleWork = SharedUseOrderTypes.CreatePoleWork(["pole"]);
+    private static readonly OrderType PoleWork = SharedUseOrderTypes.CreatePoleWork();
 
     [Fact]
     public void Commits_OnlyForATypeDeclaringATargetPolicy()

@@ -12,22 +12,14 @@ namespace GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 /// order per occupant organization that has a contracted attachment on those poles. The notice
 /// is owned by the pole owner and dispatched to the occupant, who reads it and its poles.
 ///
-/// Which asset types are poles is the host's to say (the asset-type catalog has no fixed pole
-/// type), so both factories take them.
+/// Both target every asset type carrying the <see cref="OccupancyAssetTypeRoles.OccupiableSupport"/>
+/// role (XD01-368): which types are poles is the asset-type catalog's to say, by tagging them.
 /// </summary>
 public static class SharedUseOrderTypes
 {
     public const string PoleWorkId = "shared-use-pole-work";
 
     public const string OccupantNoticeId = "shared-use-occupant-notice";
-
-    /// <summary>
-    /// The pole asset type of the seeded domain catalog: what a host with no pole types of its
-    /// own configured registers these order types with, and what a client that only needs their
-    /// shape (the fan-out, the activities) uses. The host that serves the orders is the authority
-    /// on which asset types are poles.
-    /// </summary>
-    public const string SeededPoleAssetTypeId = "00000000-0000-0000-0000-000000000004";
 
     /// <summary>Attribute of a pole whose value is shown as the target's alias: the pole's field number.</summary>
     public const string PoleAliasAttributeKey = "barramento";
@@ -51,7 +43,7 @@ public static class SharedUseOrderTypes
         new("identify-attachment", "Identify and tag attachment"),
     ];
 
-    public static OrderType CreatePoleWork(IReadOnlyCollection<string> poleAssetTypeIds) => new()
+    public static OrderType CreatePoleWork() => new()
     {
         Id = PoleWorkId,
         DisplayName = "Shared-use pole work",
@@ -71,7 +63,7 @@ public static class SharedUseOrderTypes
         Capabilities = [OccupancyCapabilities.Commit],
         TargetPolicy = new OrderTargetPolicy
         {
-            TargetAssetTypeIds = PoleTypes(poleAssetTypeIds),
+            TargetAssetTypeRoles = [OccupancyAssetTypeRoles.OccupiableSupport],
             AliasAttributeKey = PoleAliasAttributeKey,
             SelectionLimit = PoleSelectionLimit,
             Activities = Activities,
@@ -80,7 +72,7 @@ public static class SharedUseOrderTypes
         },
     };
 
-    public static OrderType CreateOccupantNotice(IReadOnlyCollection<string> poleAssetTypeIds) => new()
+    public static OrderType CreateOccupantNotice() => new()
     {
         Id = OccupantNoticeId,
         DisplayName = "Shared-use occupant notice",
@@ -104,34 +96,19 @@ public static class SharedUseOrderTypes
         Capabilities = [OccupancyCapabilities.Commit],
         TargetPolicy = new OrderTargetPolicy
         {
-            TargetAssetTypeIds = PoleTypes(poleAssetTypeIds),
+            TargetAssetTypeRoles = [OccupancyAssetTypeRoles.OccupiableSupport],
             AliasAttributeKey = PoleAliasAttributeKey,
             Activities = Activities,
         },
     };
 
     /// <summary>Registers both types. The notice goes in first only for readability: the registry resolves a fan-out's child when the fan-out runs.</summary>
-    public static void RegisterAll(OrderTypeRegistry registry, IReadOnlyCollection<string> poleAssetTypeIds)
+    public static void RegisterAll(OrderTypeRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
 
-        registry.Register(CreateOccupantNotice(poleAssetTypeIds));
-        registry.Register(CreatePoleWork(poleAssetTypeIds));
-    }
-
-    private static List<string> PoleTypes(IReadOnlyCollection<string> poleAssetTypeIds)
-    {
-        ArgumentNullException.ThrowIfNull(poleAssetTypeIds);
-
-        var poleTypes = poleAssetTypeIds
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Select(id => id.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return poleTypes.Count > 0
-            ? poleTypes
-            : throw new ArgumentException("At least one pole asset type id is required.", nameof(poleAssetTypeIds));
+        registry.Register(CreateOccupantNotice());
+        registry.Register(CreatePoleWork());
     }
 
     private static List<WorkflowState> States() =>
