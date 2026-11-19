@@ -1,4 +1,4 @@
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.Time.Testing;

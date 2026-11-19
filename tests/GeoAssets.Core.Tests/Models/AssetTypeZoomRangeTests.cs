@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Bdgd;
-using GeoAssets.Core.Isp;
+using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 using Xunit;

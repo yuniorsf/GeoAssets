@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;

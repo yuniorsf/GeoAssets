@@ -1,7 +1,7 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Entities;

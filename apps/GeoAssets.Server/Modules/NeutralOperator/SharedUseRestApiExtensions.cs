@@ -3,7 +3,7 @@ using GeoAssets.Core.Services;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Server.Modules.NeutralOperator.SharedUse;
 using GeoAssets.Server.Targets;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Rules;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;

@@ -1,6 +1,6 @@
 using System.Globalization;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 
 namespace GeoAssets.Shared.Services.Occupancy;
 

@@ -1,8 +1,8 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.GisExport;
-using GeoAssets.Core.Isp.NeutralOperator.Leasing;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.GisExport;
+using GeoAssets.NeutralOperator.Domain.Leasing;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using Xunit;

@@ -1,6 +1,6 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using GeoAssets.Workflow.Rules;

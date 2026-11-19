@@ -1,9 +1,10 @@
+using GeoAssets.NeutralOperator.Application;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using FluentAssertions;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;

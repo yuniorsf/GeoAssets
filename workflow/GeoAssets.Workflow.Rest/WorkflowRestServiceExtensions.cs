@@ -1,5 +1,5 @@
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,5 +1,5 @@
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 
 namespace GeoAssets.Workflow.Persistence;
 

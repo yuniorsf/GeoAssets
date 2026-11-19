@@ -1,7 +1,8 @@
+using GeoAssets.NeutralOperator.Application;
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -371,7 +372,7 @@ public sealed class SharedUseDispatchServiceTests
         services.Count(d => d.ServiceType == typeof(ISharedUseDispatchService)).Should().Be(1);
         services.Count(d => d.ServiceType == typeof(ISharedUseDispatchPlanReader)).Should().Be(1);
         services.Count(d => d.ServiceType == typeof(SharedUseDispatchService)).Should().Be(1);
-        ((Action)(() => WorkflowServiceExtensions.AddSharedUseDispatch(null!))).Should().Throw<ArgumentNullException>();
+        ((Action)(() => NeutralOperatorServiceExtensions.AddSharedUseDispatch(null!))).Should().Throw<ArgumentNullException>();
     }
 
     [Fact]

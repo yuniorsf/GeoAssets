@@ -1,6 +1,6 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.Compliance;
-using GeoAssets.Core.Isp.Compliance.PoleAudit;
+using GeoAssets.NeutralOperator.Domain.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance.PoleAudit;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Isp.Compliance.PoleAudit;

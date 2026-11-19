@@ -1,4 +1,4 @@
-using GeoAssets.Core.Isp.Otdr;
+using GeoAssets.NeutralOperator.Domain.Otdr;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;

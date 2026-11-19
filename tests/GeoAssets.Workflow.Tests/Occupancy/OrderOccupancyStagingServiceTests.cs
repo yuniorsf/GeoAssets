@@ -1,8 +1,9 @@
+using GeoAssets.NeutralOperator.Application;
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -574,7 +575,7 @@ public sealed class OrderOccupancyStagingServiceTests
         otherScope.ServiceProvider.GetRequiredService<IOrderOccupancyStagingService>().Should().NotBeSameAs(service);
         provider.GetRequiredService<OrderOccupancyOptions>().PoleAssetTypeIds.Should().Equal("pole");
         services.Count(d => d.ServiceType == typeof(IOrderOccupancyStagingService)).Should().Be(1);
-        ((Action)(() => WorkflowServiceExtensions.AddOrderOccupancyStaging(null!))).Should().Throw<ArgumentNullException>();
+        ((Action)(() => NeutralOperatorServiceExtensions.AddOrderOccupancyStaging(null!))).Should().Throw<ArgumentNullException>();
     }
 
     [Fact]

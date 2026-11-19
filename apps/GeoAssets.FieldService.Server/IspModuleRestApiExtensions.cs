@@ -1,5 +1,5 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.NeutralOperator.Application.Bss;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GeoAssets.FieldService.Server;

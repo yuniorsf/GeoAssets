@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance;
 using GeoAssets.Core.Models;
 using Xunit;
 

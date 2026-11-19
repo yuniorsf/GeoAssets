@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-375 (ADR-001 Phase 5): the NeutralOperator vertical's pure domain — pole occupancy, attachment slots,
+       leasing, evidence, OTDR and compliance types — moved out of GeoAssets.Core. Depends on Core's non-vertical parts only. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.NeutralOperator.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+  </ItemGroup>
+
+</Project>

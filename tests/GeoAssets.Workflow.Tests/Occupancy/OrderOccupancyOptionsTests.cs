@@ -1,6 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Occupancy;

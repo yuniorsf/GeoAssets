@@ -22,7 +22,7 @@ using GeoAssets.Shared.Services.FieldWork;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.Offline;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;

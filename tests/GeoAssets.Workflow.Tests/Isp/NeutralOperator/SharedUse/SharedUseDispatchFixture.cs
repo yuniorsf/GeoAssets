@@ -1,7 +1,7 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Notifications;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;

@@ -1,10 +1,11 @@
+using GeoAssets.NeutralOperator.Application;
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -345,7 +346,7 @@ public sealed class OccupancyCommitServiceTests
     [Fact]
     public void AddOccupancyCommit_NullServices_ThrowsArgumentNullException()
     {
-        var act = () => WorkflowServiceExtensions.AddOccupancyCommit(null!);
+        var act = () => NeutralOperatorServiceExtensions.AddOccupancyCommit(null!);
 
         act.Should().Throw<ArgumentNullException>();
     }

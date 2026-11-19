@@ -1,10 +1,10 @@
 using System.Text.Json;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Services;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Server.Modules.NeutralOperator.Occupancy;
 using GeoAssets.Server.Targets;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 

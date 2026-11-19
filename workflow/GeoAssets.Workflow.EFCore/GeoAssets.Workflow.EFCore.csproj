@@ -28,6 +28,7 @@
     <!-- IOrganizationGrantSyncClient only (XD01-290) — GeoAssets.Identity is a dependency-free
          leaf project, so this adds nothing heavier than that one interface + its DTO. -->
     <ProjectReference Include="../../core/GeoAssets.Identity/GeoAssets.Identity.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
   </ItemGroup>
 
 </Project>

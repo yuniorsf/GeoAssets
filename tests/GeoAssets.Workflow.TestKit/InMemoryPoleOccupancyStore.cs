@@ -1,5 +1,5 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 

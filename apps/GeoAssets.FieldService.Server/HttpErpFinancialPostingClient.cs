@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using GeoAssets.Workflow.Isp.NeutralOperator.Leasing.Settlement;
+using GeoAssets.NeutralOperator.Application.Leasing.Settlement;
 using Microsoft.Extensions.Configuration;
 
 namespace GeoAssets.FieldService.Server;

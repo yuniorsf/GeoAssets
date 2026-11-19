@@ -1,6 +1,6 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.Compliance;
-using GeoAssets.Core.Isp.Compliance.PoleAudit;
+using GeoAssets.NeutralOperator.Domain.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance.PoleAudit;
 using GeoAssets.Core.Services.Evidence;
 
 namespace GeoAssets.FieldService.Server;

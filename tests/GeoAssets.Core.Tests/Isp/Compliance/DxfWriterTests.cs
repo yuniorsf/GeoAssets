@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 using FluentAssertions;
-using GeoAssets.Core.Isp.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Isp.Compliance;

@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
 

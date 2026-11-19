@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using GeoAssets.Core.Isp;
+using GeoAssets.NeutralOperator.Domain;
 
 namespace GeoAssets.Shared.Services.Scanning;
 
@@ -9,7 +9,7 @@ namespace GeoAssets.Shared.Services.Scanning;
 /// needs to decode an image into raw text; every format/re-scan decision lives here where it's
 /// unit-testable without a camera.
 ///
-/// FSAN/MAC patterns are shared with <see cref="GeoAssets.Core.Isp.IspAssetTypes.Ont"/>'s own
+/// FSAN/MAC patterns are shared with <see cref="GeoAssets.NeutralOperator.Domain.IspAssetTypes.Ont"/>'s own
 /// attribute schema via <see cref="OpticalNetworkTerminalPatterns"/>, so a scanned value that
 /// passes here is guaranteed to also pass <c>GeoFeatureAttributeValidator</c> when written to the
 /// ONT feature's <c>CustomAttributes</c>.

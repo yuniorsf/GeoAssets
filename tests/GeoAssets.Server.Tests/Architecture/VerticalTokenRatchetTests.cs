@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Xunit;
@@ -40,7 +40,7 @@ public sealed class VerticalTokenRatchetTests
         { "GeoAssets.Workflow.Notifications", true },
         { "GeoAssets.Workflow.Selection.Strategies", true },
         { "GeoAssets.Workflow.OrdersExtra", false },
-        { "GeoAssets.Workflow.Occupancy", false },
+        { "GeoAssets.NeutralOperator.Application.Occupancy", false },
         { "GeoAssets.Workflow", false },
         { null, false },
     };

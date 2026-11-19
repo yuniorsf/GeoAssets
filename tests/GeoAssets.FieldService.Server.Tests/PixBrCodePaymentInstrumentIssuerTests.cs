@@ -1,7 +1,7 @@
 using Xunit;
-using GeoAssets.Core.Isp.NeutralOperator.Leasing;
+using GeoAssets.NeutralOperator.Domain.Leasing;
 using GeoAssets.FieldService.Server;
-using GeoAssets.Workflow.Isp.NeutralOperator.Leasing.Settlement;
+using GeoAssets.NeutralOperator.Application.Leasing.Settlement;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 

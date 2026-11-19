@@ -8,7 +8,7 @@ namespace GeoAssets.Shared.Services.Scanning;
 /// <param name="IsValid">Whether the scan matched the expected field's format.</param>
 /// <param name="NormalizedValue">
 /// The value to write into the work-order field — e.g. a bare 12-hex-digit MAC scan normalized
-/// to colon-separated form, matching <see cref="GeoAssets.Core.Isp.OpticalNetworkTerminalPatterns.MacAddressPattern"/>
+/// to colon-separated form, matching <see cref="GeoAssets.NeutralOperator.Domain.OpticalNetworkTerminalPatterns.MacAddressPattern"/>
 /// exactly. Null when <see cref="IsValid"/> is false.
 /// </param>
 /// <param name="RawPayload">The raw, unmodified decoded barcode payload, for diagnostics.</param>

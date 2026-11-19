@@ -1,6 +1,6 @@
 using System.Text;
 using FluentAssertions;
-using GeoAssets.Core.Isp.Otdr;
+using GeoAssets.NeutralOperator.Domain.Otdr;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Isp.Otdr;

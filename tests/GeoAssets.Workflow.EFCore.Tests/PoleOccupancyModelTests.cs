@@ -84,7 +84,7 @@ public sealed class PoleOccupancyModelTests : IDisposable
 
         check.Name.Should().Be("CK_field_pole_occupancy_entries_SlotIndex");
         check.Sql.Should().Be("\"SlotIndex\" IS NULL OR \"SlotIndex\" BETWEEN 1 AND 6");
-        Core.Isp.NeutralOperator.PoleAttachmentSlotMatrix.MaxSlots.Should().Be(6, "the check constraint spells the limit out");
+        NeutralOperator.Domain.PoleAttachmentSlotMatrix.MaxSlots.Should().Be(6, "the check constraint spells the limit out");
     }
 
     [Theory]

@@ -1,4 +1,4 @@
-using GeoAssets.Core.Isp.Compliance.PoleAudit;
+using GeoAssets.NeutralOperator.Domain.Compliance.PoleAudit;
 
 namespace GeoAssets.FieldService.Server;
 

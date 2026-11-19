@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-375 (ADR-001 Phase 5): the NeutralOperator vertical's application layer — shared use, occupancy staging and
+       commit, clandestine attachments, leasing/settlement, BSS — moved out of the generic GeoAssets.Workflow engine.
+       Depends on the vertical's Domain, the generic engine and Core. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.NeutralOperator.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The tests of this code stayed where they were when it moved out of GeoAssets.Workflow (XD01-375). -->
+    <InternalsVisibleTo Include="GeoAssets.Workflow.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.NeutralOperator.Domain\GeoAssets.NeutralOperator.Domain.csproj" />
+    <ProjectReference Include="..\..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+  </ItemGroup>
+
+</Project>

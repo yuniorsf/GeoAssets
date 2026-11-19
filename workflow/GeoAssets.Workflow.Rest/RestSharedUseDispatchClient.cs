@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;

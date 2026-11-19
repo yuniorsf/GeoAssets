@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Tests.Orders;
 using Microsoft.Extensions.Time.Testing;

@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Services;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Web.Services.Isp.Rest;
