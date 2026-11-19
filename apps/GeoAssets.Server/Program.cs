@@ -76,6 +76,8 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 // against from the authenticated caller (IGeoAuthorizationService, registered below).
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<ServerWorkflowPrincipalFactory>();
+// XD01-364: ServiceOrderRules as ASP.NET Core requirements — the one decision point for a route that acts on an order.
+builder.Services.AddServiceOrderAuthorization();
 // Fails startup when two modules' order action handlers claim the same (order type, action) (XD01-360).
 builder.Services.AddHostedService<OrderActionHandlerValidation>();
 

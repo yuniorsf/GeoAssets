@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -70,9 +71,9 @@ public sealed class OrgResourceAuthorizationHandler(
         var grants = await grantRepository.GetActiveGrantsAsync(userOrganizationId.Value, resource.OrganizationId).ConfigureAwait(false);
 
         var hasGrant = grants.Any(g =>
-            (g.ResourceType is null || string.Equals(g.ResourceType, resourceType, StringComparison.Ordinal)) &&
-            (g.ScopeId is null || (resource is IScopeableResource scoped && string.Equals(scoped.ScopeId, g.ScopeId, StringComparison.Ordinal))) &&
-            g.AllowedActions.Contains(requirement.PermissionCode, StringComparer.Ordinal) &&
+            OrganizationGrantMatching.CoversResourceType(g.ResourceType, resourceType) &&
+            (g.ScopeId is null || (resource is IScopeableResource scoped && OrganizationGrantMatching.CoversScope(g.ScopeId, scoped.ScopeId))) &&
+            OrganizationGrantMatching.AllowsAction(g.AllowedActions, requirement.PermissionCode) &&
             (g.RequiredRole is null || authContext.HasRole(g.RequiredRole)));
 
         if (hasGrant)

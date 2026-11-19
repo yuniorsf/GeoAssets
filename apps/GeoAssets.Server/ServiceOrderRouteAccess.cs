@@ -1,5 +1,6 @@
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
+using Microsoft.AspNetCore.Authorization;
 
 namespace GeoAssets.Server;
 
@@ -21,6 +22,21 @@ internal static class ServiceOrderRouteAccess
         verdict.IsOutsideOrganization
             ? Results.NotFound()
             : Results.Json(new { reason = verdict.Reason }, statusCode: StatusCodes.Status403Forbidden);
+
+    /// <summary>
+    /// The response for a service-order requirement that failed (XD01-364): the verdict's answer when the rule chain
+    /// refused, 403 with the handler's reason otherwise.
+    /// </summary>
+    public static IResult Refusal(AuthorizationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var reason = result.Failure?.FailureReasons.OfType<ServiceOrderAuthorizationFailureReason>().FirstOrDefault();
+        if (reason?.Verdict is { } verdict) return Refusal(verdict);
+
+        return Results.Json(
+            new { reason = reason?.Message ?? "Not authorized." }, statusCode: StatusCodes.Status403Forbidden);
+    }
 
     /// <summary>
     /// The order with this id when the caller passes the organization gate on it; null when it does not exist or the caller is

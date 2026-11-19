@@ -7,6 +7,7 @@ using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.Workflow;
 using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Authentication;
@@ -28,7 +29,7 @@ namespace GeoAssets.Server.Tests;
 /// </summary>
 public class IspTenantPortalRestApiExtensionsTests
 {
-    private sealed class FakeAuthorizationService(Guid userOrganizationId) : IGeoAuthorizationService
+    private sealed class FakeAuthorizationService(Guid userOrganizationId, IReadOnlyList<string> roles) : IGeoAuthorizationService
     {
         public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) => throw new NotSupportedException();
@@ -47,7 +48,7 @@ public class IspTenantPortalRestApiExtensionsTests
                     CreatedAt = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc),
                     OrganizationId = userOrganizationId,
                 },
-                Roles = [],
+                Roles = roles,
                 Claims = [],
                 Permissions = [],
             });
@@ -72,7 +73,8 @@ public class IspTenantPortalRestApiExtensionsTests
         public Task<IReadOnlyList<OrganizationGrantSyncEntry>> GetSyncBatchAsync(long afterSequence, int take, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private static async Task<(TestServer Server, FakeServiceOrderRepository Orders)> BuildServerAsync(Guid callerOrganizationId)
+    private static async Task<(TestServer Server, FakeServiceOrderRepository Orders)> BuildServerAsync(
+        Guid callerOrganizationId, IReadOnlyList<string>? roles = null)
     {
         var orders = new FakeServiceOrderRepository();
         var time = TimeProvider.System;
@@ -88,12 +90,23 @@ public class IspTenantPortalRestApiExtensionsTests
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization();
                     services.AddGeoAuthorizationPolicyBridge();
-                    services.AddSingleton<IGeoAuthorizationService>(new FakeAuthorizationService(callerOrganizationId));
+                    services.AddSingleton<IGeoAuthorizationService>(new FakeAuthorizationService(callerOrganizationId, roles ?? [IspRoles.Tenant]));
                     services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
                     services.AddSingleton<ITenantContext>(new FakeTenantContext(callerOrganizationId));
                     services.AddSingleton<IServiceOrderRepository>(orders);
                     services.AddSingleton<TimeProvider>(time);
                     services.AddSingleton<IClandestineAttachmentService, ClandestineAttachmentService>();
+                    // What the portal's routes decide with (XD01-364): the order types' policies as ServiceOrderRules, the
+                    // requirements that evaluate them, and the module's handler that performs a dispute.
+                    services.AddOrderTypeRegistry(registry =>
+                    {
+                        ClandestineAttachmentOrderTypes.RegisterAll(registry);
+                        TenantAttachmentRequestOrderTypes.RegisterAll(registry);
+                    });
+                    services.AddServiceOrderRules();
+                    services.AddScoped<ServerWorkflowPrincipalFactory>();
+                    services.AddServiceOrderAuthorization();
+                    services.AddScoped<IOrderActionHandler, ClandestineNoticeActionHandler>();
                 });
                 webHost.Configure(app =>
                 {
@@ -165,7 +178,7 @@ public class IspTenantPortalRestApiExtensionsTests
     }
 
     [Fact]
-    public async Task GetAttachmentRequest_DifferentOrganization_Returns403()
+    public async Task GetAttachmentRequest_DifferentOrganization_Returns404()
     {
         var (server, orders) = await BuildServerAsync(Guid.NewGuid());
         var competitorsRequest = new ServiceOrder
@@ -181,7 +194,7 @@ public class IspTenantPortalRestApiExtensionsTests
         // Direct-ID-manipulation attempt: guessing/incrementing another tenant's order ID.
         var response = await client.GetAsync(new Uri($"/api/isp/tenant-portal/attachment-requests/{competitorsRequest.Id}", UriKind.Relative));
 
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -250,7 +263,7 @@ public class IspTenantPortalRestApiExtensionsTests
     }
 
     [Fact]
-    public async Task SubmitDispute_DifferentOrganizationsFlaggedNotice_Returns403_AndDoesNotTransition()
+    public async Task SubmitDispute_DifferentOrganizationsFlaggedNotice_Returns404_AndDoesNotTransition()
     {
         var (server, orders) = await BuildServerAsync(Guid.NewGuid());
         var clandestine = new ClandestineAttachmentService(orders, TimeProvider.System);
@@ -264,7 +277,7 @@ public class IspTenantPortalRestApiExtensionsTests
             new Uri($"/api/isp/tenant-portal/flagged-notices/{competitorsNotice.Id}/dispute", UriKind.Relative),
             new SubmitDisputeRequest("receipt-digest-abc123"));
 
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         var reloaded = await orders.GetByIdAsync(competitorsNotice.Id);
         reloaded!.Status.Should().Be(ClandestineAttachmentWorkflowGraph.CaboARevelia,
             "a denied dispute attempt must not transition the order");

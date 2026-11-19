@@ -28,6 +28,7 @@ public static class GeoIdentitySeeder
     public static readonly Guid SupervisorRoleId = new("10000000-0000-0000-0000-000000000002");
     public static readonly Guid TechnicianRoleId = new("10000000-0000-0000-0000-000000000003");
     public static readonly Guid ReadOnlyRoleId   = new("10000000-0000-0000-0000-000000000004");
+    public static readonly Guid IspTenantRoleId  = new("10000000-0000-0000-0000-000000000005");
 
     public static async Task SeedAsync(
         GeoIdentityDbContext db, TimeProvider timeProvider, CancellationToken ct = default)
@@ -155,6 +156,11 @@ public static class GeoIdentitySeeder
         await AddRoleAsync(db, ReadOnlyRoleId,   "ReadOnly",        "Solo lectura, sin modificaciones", isBuiltIn: true, ct,
             "serviceorders:read", "features:read",
             "projects:read")
+            .ConfigureAwait(false);
+
+        // XD01-364: the role the ISP order types' policies name — submits attachment requests and disputes notices.
+        await AddRoleAsync(db, IspTenantRoleId,  "IspTenant",       "Inquilino ISP: solicitudes y disputas", isBuiltIn: true, ct,
+            "serviceorders:read", "serviceorders:create")
             .ConfigureAwait(false);
     }
 
