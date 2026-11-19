@@ -360,7 +360,8 @@ public sealed class OrganizationScopedAssetWritesEndToEndTests
         services.AddSingleton(TimeProvider.System);
         services.AddGeoAssetsPostgres();
         services.AddWarmedPostgresAssetProvider(connectionString);
-        services.AddServerOrganizationAssetCatalogs(connectionString);
+        services.AddPostgresOrganizationAssetCatalogs(connectionString);
+        services.AddServerOrganizationAssetCatalogs();
         services.AddGeoAssetsDbContextFactory(connectionString);
         services.AddSingleton<WmsPostGisRenderer>();
 

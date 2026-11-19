@@ -113,6 +113,10 @@ builder.Services.AddServerCatalogPool(builder.Configuration);
 await builder.AddGeoAssetsModulesAsync(
     [new PostgresSpatialModule(), new NeutralOperatorModule(), new IpBillingBridgeModule()]).ConfigureAwait(false);
 
+// Organization-scoped asset reads (XD01-373): when no module registered a native IOrganizationCatalogFactory, each
+// request's IAssetProvider is its organization's filtering view of the default catalog.
+builder.Services.AddServerOrganizationAssetCatalogs();
+
 // SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
 // (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in
 // its documented "not configured" state until a host supplies the real REN 1.000/Sabesp ISAP
