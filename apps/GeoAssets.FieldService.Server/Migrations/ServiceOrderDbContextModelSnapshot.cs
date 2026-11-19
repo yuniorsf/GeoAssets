@@ -983,11 +983,18 @@ namespace GeoAssets.FieldService.Server.Migrations
                     b.Property<int>("ConflictLevel")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("Exclusivity")
+                        .HasColumnType("integer");
+
                     b.Property<string>("FeatureId")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
+
+                    b.Property<string>("KernelOrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
 
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
@@ -998,6 +1005,10 @@ namespace GeoAssets.FieldService.Server.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("OrderTypeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
@@ -1019,19 +1030,31 @@ namespace GeoAssets.FieldService.Server.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("integer");
 
+                    b.Property<string>("VerticalId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("kernel");
+
                     b.HasKey("Id");
 
                     b.HasIndex("FeatureId")
                         .HasFilter("\"ReleasedAt\" IS NULL");
 
-                    b.HasIndex("OrganizationId");
+                    b.HasIndex("KernelOrderId");
 
-                    b.HasIndex("ServiceOrderId", "FeatureId")
-                        .IsUnique();
+                    b.HasIndex("OrganizationId");
 
                     b.HasIndex("ServiceOrderId", "Status");
 
-                    b.ToTable("ServiceOrderTargets", (string)null);
+                    b.HasIndex("VerticalId", "ServiceOrderId", "FeatureId")
+                        .IsUnique();
+
+                    b.ToTable("ServiceOrderTargets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ServiceOrderTargets_KernelOrderId", "CASE WHEN \"VerticalId\" = 'kernel' THEN \"KernelOrderId\" IS NOT NULL AND \"KernelOrderId\" = \"ServiceOrderId\" ELSE \"KernelOrderId\" IS NULL END");
+                        });
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.UsCatalogItemRecord", b =>
@@ -1211,9 +1234,8 @@ namespace GeoAssets.FieldService.Server.Migrations
                 {
                     b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
                         .WithMany()
-                        .HasForeignKey("ServiceOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("KernelOrderId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderTypeRecord", b =>

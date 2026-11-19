@@ -10,8 +10,16 @@ namespace GeoAssets.Server;
 /// Falls back to <see cref="Guid.Empty"/> (unauthenticated requests, or a claim mapping with no
 /// <see cref="ClaimMapping.OrganizationIdClaimTypes"/> configured) so existing single-tenant
 /// callers are unaffected.
+///
+/// A caller whose token carries no organization (a <c>GeoAssets.ServiceCaller</c> service principal, or a message
+/// consumer with no user at all) resolves to the organization kernel code entered in <paramref name="organizationScope"/>
+/// for this unit of work (XD01-379 — the target ledger routes enter the organization they validated from the request
+/// body, never from a header). A caller with an organization always keeps its own; the scope is ignored for it.
 /// </summary>
-public sealed class HttpTenantContext(ICurrentUserAccessor currentUserAccessor) : ITenantContext
+public sealed class HttpTenantContext(ICurrentUserAccessor currentUserAccessor, ITenantOrganizationScope? organizationScope = null) : ITenantContext
 {
-    public Guid CurrentOrganizationId => currentUserAccessor.GetCurrentUser()?.OrganizationId ?? Guid.Empty;
+    public Guid CurrentOrganizationId =>
+        currentUserAccessor.GetCurrentUser()?.OrganizationId is { } own && own != Guid.Empty
+            ? own
+            : organizationScope?.OrganizationId ?? Guid.Empty;
 }

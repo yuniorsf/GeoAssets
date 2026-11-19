@@ -23,9 +23,31 @@ public static class OrderTypeDescriptorValidation
                 return $"Descriptor '{descriptor.OrderTypeId}' needs a display name key and an API base route.";
             if (descriptor.FeatureActions.Select(a => ActionProblem(descriptor.OrderTypeId, a)).FirstOrDefault(p => p is not null) is { } problem)
                 return problem;
+            if (TargetProblem(descriptor) is { } targetProblem)
+                return targetProblem;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// XD01-379: a published target policy meets the rules an in-process order type's does
+    /// (<see cref="Targets.OrderTargetPolicy.Validate"/>), and no terminal status is blank.
+    /// </summary>
+    private static string? TargetProblem(OrderTypeDescriptor descriptor)
+    {
+        if (descriptor.TerminalStatuses.Any(string.IsNullOrWhiteSpace))
+            return $"Descriptor '{descriptor.OrderTypeId}' lists a blank terminal status.";
+
+        try
+        {
+            descriptor.TargetPolicy?.Validate(descriptor.OrderTypeId);
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
     }
 
     private static string? ActionProblem(string orderTypeId, FeatureActionDescriptor? action) => action switch

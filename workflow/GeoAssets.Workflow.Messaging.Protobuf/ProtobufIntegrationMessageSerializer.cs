@@ -31,6 +31,7 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             AssetBatchAppliedEvent evt => MapBatchAppliedToProto(evt, nameof(message)).ToByteArray(),
             FeatureCatalogMutatedEvent evt => MapFeatureMutatedToProto(evt, nameof(message)).ToByteArray(),
             TopologyInvalidatedEvent evt => MapTopologyInvalidatedToProto(evt, nameof(message)).ToByteArray(),
+            TargetLedgerEvent evt => MapTargetLedgerToProto(evt, nameof(message)).ToByteArray(),
             _ => throw new NotSupportedException(
                 $"Message type '{typeof(TMessage).FullName}' is not supported by {nameof(ProtobufIntegrationMessageSerializer)}.")
         };
@@ -63,6 +64,12 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
                     MapFeatureMutatedFromProto(FeatureCatalogMutatedEventProto.Parser.ParseFrom(payload.Span), nameof(payload)),
                 var t when t == typeof(TopologyInvalidatedEvent) =>
                     MapTopologyInvalidatedFromProto(TopologyInvalidatedEventProto.Parser.ParseFrom(payload.Span), nameof(payload)),
+                var t when t == typeof(TargetsReservedEvent) =>
+                    MapTargetLedgerFromProto(TargetLedgerEventProto.Parser.ParseFrom(payload.Span), new TargetsReservedEvent { VerticalId = string.Empty, OrderId = string.Empty, OrganizationId = Guid.Empty, Targets = [], OccurredAt = default }),
+                var t when t == typeof(TargetsReleasedEvent) =>
+                    MapTargetLedgerFromProto(TargetLedgerEventProto.Parser.ParseFrom(payload.Span), new TargetsReleasedEvent { VerticalId = string.Empty, OrderId = string.Empty, OrganizationId = Guid.Empty, Targets = [], OccurredAt = default }),
+                var t when t == typeof(TargetsCommittedEvent) =>
+                    MapTargetLedgerFromProto(TargetLedgerEventProto.Parser.ParseFrom(payload.Span), new TargetsCommittedEvent { VerticalId = string.Empty, OrderId = string.Empty, OrganizationId = Guid.Empty, Targets = [], OccurredAt = default }),
                 _ => throw new NotSupportedException(
                     $"Message type '{typeof(TMessage).FullName}' is not supported by {nameof(ProtobufIntegrationMessageSerializer)}.")
             };
@@ -85,7 +92,10 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             && target != typeof(AssetMutationBatchRequestedEvent)
             && target != typeof(AssetBatchAppliedEvent)
             && target != typeof(FeatureCatalogMutatedEvent)
-            && target != typeof(TopologyInvalidatedEvent))
+            && target != typeof(TopologyInvalidatedEvent)
+            && target != typeof(TargetsReservedEvent)
+            && target != typeof(TargetsReleasedEvent)
+            && target != typeof(TargetsCommittedEvent))
         {
             throw new NotSupportedException(
                 $"Message type '{target.FullName}' is not supported by {nameof(ProtobufIntegrationMessageSerializer)}.");
@@ -248,8 +258,28 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             }
         }
 
+        if (evt.VerticalId is not null)
+        {
+            proto.VerticalId = evt.VerticalId;
+        }
+
+        if (evt.IsTerminal is { } isTerminal)
+        {
+            proto.IsTerminal = isTerminal;
+        }
+
+        if (evt.OrganizationId is { } organizationId)
+        {
+            proto.OrganizationId = organizationId.ToString("D");
+        }
+
         return proto;
     }
+
+    private static Guid ParseOrganizationIdOrThrow(string value) =>
+        Guid.TryParseExact(value, "D", out var organizationId)
+            ? organizationId
+            : throw new FormatException("OrderStateChangedEventProto.organization_id must be a GUID in \"D\" format.");
 
     private static OrderStateChangedEvent MapOrderStateChangedFromProto(OrderStateChangedEventProto proto)
     {
@@ -274,7 +304,58 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             PerformedBy: proto.PerformedBy,
             OccurredAt: occurredAt,
             CorrelationId: proto.HasCorrelationId ? proto.CorrelationId : null,
-            Metadata: metadata);
+            Metadata: metadata,
+            VerticalId: proto.HasVerticalId ? proto.VerticalId : null,
+            IsTerminal: proto.HasIsTerminal ? proto.IsTerminal : null,
+            OrganizationId: proto.HasOrganizationId ? ParseOrganizationIdOrThrow(proto.OrganizationId) : null);
+    }
+
+    private static TargetLedgerEventProto MapTargetLedgerToProto(TargetLedgerEvent evt, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(evt.VerticalId) || string.IsNullOrWhiteSpace(evt.OrderId))
+        {
+            throw new ArgumentException($"{evt.GetType().Name}.VerticalId and OrderId must not be empty.", paramName);
+        }
+
+        if (evt.Targets is null || evt.Targets.Any(t => t is null || string.IsNullOrWhiteSpace(t.TargetId) || string.IsNullOrWhiteSpace(t.FeatureId)))
+        {
+            throw new ArgumentException($"{evt.GetType().Name}.Targets must list targets with a target id and a feature id.", paramName);
+        }
+
+        var proto = new TargetLedgerEventProto
+        {
+            VerticalId = evt.VerticalId,
+            OrderId = evt.OrderId,
+            OrganizationId = FormatGuid(evt.OrganizationId),
+            OccurredAt = ToProtoTimestamp(evt.OccurredAt),
+        };
+        proto.Targets.AddRange(evt.Targets.Select(t => new TargetLedgerEventItemProto { TargetId = t.TargetId, FeatureId = t.FeatureId }));
+
+        if (evt.PerformedBy is not null)
+        {
+            proto.PerformedBy = evt.PerformedBy;
+        }
+
+        return proto;
+    }
+
+    /// <summary>Reads the shared ledger payload into <paramref name="shape"/>, the concrete event the caller asked for.</summary>
+    private static TargetLedgerEvent MapTargetLedgerFromProto(TargetLedgerEventProto proto, TargetLedgerEvent shape)
+    {
+        if (string.IsNullOrWhiteSpace(proto.VerticalId) || string.IsNullOrWhiteSpace(proto.OrderId))
+        {
+            throw new FormatException("TargetLedgerEventProto.vertical_id and order_id are required.");
+        }
+
+        return shape with
+        {
+            VerticalId = proto.VerticalId,
+            OrderId = proto.OrderId,
+            OrganizationId = ParseGuidOrThrow(proto.OrganizationId, "organization_id"),
+            Targets = [.. proto.Targets.Select(t => new TargetLedgerEventItem(t.TargetId, t.FeatureId))],
+            OccurredAt = FromProtoTimestampOrThrow(proto.OccurredAt, "occurred_at"),
+            PerformedBy = proto.HasPerformedBy ? proto.PerformedBy : null,
+        };
     }
 
     private static AssetMutationBatchRequestedEventProto MapBatchRequestedToProto(

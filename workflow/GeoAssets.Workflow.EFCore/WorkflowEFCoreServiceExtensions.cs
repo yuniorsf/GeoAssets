@@ -117,6 +117,24 @@ public static class WorkflowEFCoreServiceExtensions
     }
 
     /// <summary>
+    /// Registers the global target ledger's EF Core store (XD01-379): <see cref="ITargetLedgerStore"/> as a scoped
+    /// <see cref="EFTargetLedgerStore"/> on the scope's <see cref="ServiceOrderDbContext"/>, and — unless a host already
+    /// did — <see cref="IWorkflowUnitOfWork"/> over that same context, so a ledger change and the integration event the
+    /// outbox stages for it are one transaction. <see cref="OrderTypeRegistry"/> is used when registered.
+    /// </summary>
+    public static IServiceCollection AddTargetLedgerPersistence(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped<ITargetLedgerStore>(sp => new EFTargetLedgerStore(
+            sp.GetRequiredService<ServiceOrderDbContext>(),
+            sp.GetService<OrderTypeRegistry>()));
+        services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
+
+        return services;
+    }
+
+    /// <summary>
     /// Registers the EF Core store of service order targets (XD01-306) for both of its ports:
     /// <see cref="IServiceOrderTargetReader"/> and <see cref="IServiceOrderTargetWriter"/> resolve
     /// to the same scoped <see cref="EFServiceOrderTargetRepository"/>, which shares the scope's

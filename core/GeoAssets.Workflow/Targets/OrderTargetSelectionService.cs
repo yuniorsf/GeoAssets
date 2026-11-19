@@ -79,16 +79,188 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         ArgumentNullException.ThrowIfNull(principal);
 
         var plan = await PlanAsync(request, principal, OrderAction.View, ct).ConfigureAwait(false);
+        return Preview(plan, request, principal.UserId);
+    }
+
+    public async Task<TargetSelectionResult> ApplyAsync(TargetSelectionRequest request, WorkflowPrincipal principal, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(principal);
+
+        var plan = await PlanAsync(request, principal, OrderAction.Annotate, ct).ConfigureAwait(false);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var targets = plan.Kept.Select(f => ToTarget(plan, f, principal.UserId, now)).ToList();
+
+        // Last exit before the first write: a caller that gave up leaves the order untouched.
+        ct.ThrowIfCancellationRequested();
+
+        var added = await _targetWriter.AddRangeAsync(plan.Subject.OrderId, targets, ct).ConfigureAwait(false);
+        var result = Result(plan, added);
+
+        // Only ServiceOrder can carry a new SelectionSpec; another IServiceOrder implementation
+        // still gets its targets and its action-log entry.
+        if (plan.Order is ServiceOrder order)
+        {
+            order.SelectionSpec = plan.Spec;
+            order.UpdatedAt = now;
+            await _orders.UpdateAsync(order, ct).ConfigureAwait(false);
+        }
+
+        await _orders.AppendActionAsync(
+            plan.Subject.OrderId,
+            new OrderActionLog(OrderAction.Annotate, principal.UserId, now, Summary(plan.Spec.StrategyId, result))
+            {
+                ActorKind = principal.Kind,
+            },
+            ct).ConfigureAwait(false);
+
+        return result;
+    }
+
+    // ── Global target ledger (XD01-379) ───────────────────────────────────────
+
+    /// <summary>
+    /// <see cref="PreviewAsync"/> for an order of the global target ledger that the kernel does not hold
+    /// (<see cref="TargetLedgerOrder"/>): the same selection, eligibility, limit and conflict evaluation, with the order's
+    /// held features read from <paramref name="ledger"/> and conflicts searched across every vertical. Writes nothing.
+    /// Authorizing the caller is the caller's job. A strategy that needs the order itself (inheriting from a parent or
+    /// children) has none to read and throws <see cref="InvalidOperationException"/>.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The strategy is unknown, or a required selection parameter is missing.</exception>
+    public async Task<TargetSelectionPreview> PreviewLedgerAsync(
+        TargetLedgerOrder order, TargetSelectionRequest request, string performedBy, ITargetLedgerStore ledger, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(performedBy);
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        var (plan, _) = await PlanLedgerAsync(order, request, isApply: false, ledger, ct).ConfigureAwait(false);
+        return Preview(plan, request, performedBy);
+    }
+
+    /// <summary>
+    /// What applying <paramref name="request"/> to a ledger order would write — the targets, the counts and the
+    /// conflicts that block it — without writing it: the caller writes the targets through <paramref name="ledger"/>
+    /// in its own unit of work, or refuses when <see cref="TargetLedgerReservation.Conflicts"/> is not empty.
+    /// The limit rules are <see cref="ApplyAsync"/>'s.
+    /// </summary>
+    /// <exception cref="SelectionLimitExceededException">The selection does not fit and truncation was not accepted.</exception>
+    public async Task<TargetLedgerReservation> PlanLedgerReservationAsync(
+        TargetLedgerOrder order, TargetSelectionRequest request, string performedBy, ITargetLedgerStore ledger, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(performedBy);
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        var (plan, usages) = await PlanLedgerAsync(order, request, isApply: true, ledger, ct).ConfigureAwait(false);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        return new TargetLedgerReservation(
+            plan.Kept.Select(f => ToTarget(plan, f, performedBy, now)).ToList(),
+            Result(plan, added: 0),
+            BlockingConflicts(plan, usages));
+    }
+
+    private async Task<(SelectionPlan Plan, IReadOnlyList<TargetLedgerUsage> Usages)> PlanLedgerAsync(
+        TargetLedgerOrder order, TargetSelectionRequest request, bool isApply, ITargetLedgerStore ledger, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.StrategyId, nameof(request));
+        if (!_selector.HasStrategy(request.StrategyId))
+            throw new KeyNotFoundException($"Selection strategy '{request.StrategyId}' not found.");
+
+        IReadOnlyList<TargetLedgerUsage> found = [];
+        var sources = new PlanSources(
+            token => HeldLedgerFeatureIdsAsync(ledger, order, token),
+            async (featureIds, token) =>
+            {
+                found = await ledger.FindOpenUsagesAsync(featureIds, order.Key, token).ConfigureAwait(false);
+                return [.. found.Select(u => u.Usage)];
+            });
+
+        var plan = await PlanForAsync(new PlanSubject(order, null), request, isApply, sources, ct).ConfigureAwait(false);
+        return (plan, found);
+    }
+
+    // ── Shared by preview and apply ───────────────────────────────────────────
+
+    private async Task<SelectionPlan> PlanAsync(
+        TargetSelectionRequest request, WorkflowPrincipal principal, OrderAction action, CancellationToken ct)
+    {
+        var (order, policy) = await AuthorizeAsync(request, principal, action, ct).ConfigureAwait(false);
+
+        var subject = new PlanSubject(
+            new TargetLedgerOrder(TargetLedger.KernelVerticalId, order.Id, order.OrderTypeId, order.OrganizationId, policy),
+            order);
+        var sources = new PlanSources(
+            token => HeldFeatureIdsAsync(order.Id, token),
+            (featureIds, token) => _targetReader.FindOpenUsagesAsync(featureIds, order.Id, token));
+
+        return await PlanForAsync(subject, request, action == OrderAction.Annotate, sources, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The selection, eligibility, limit and conflict evaluation shared by in-process orders and ledger orders. Reads,
+    /// in this order: the selection, the order's held features, the open usages of the kept ones.
+    /// </summary>
+    private async Task<SelectionPlan> PlanForAsync(
+        PlanSubject subject, TargetSelectionRequest request, bool isApply, PlanSources sources, CancellationToken ct)
+    {
+        var policy = subject.Ledger.Policy;
+        var selection = await _selector.SelectAsync(
+            new BoundedFeatureSelectionRequest(request.StrategyId, request.Parameters, subject.Ledger.OrganizationId, _options.MaxMatched)
+            {
+                // Roles are resolved once per selection, against the catalog's types as they are now.
+                AllowedAssetTypeIds = OrderTargetAssetTypes.Resolve(policy, _assets?.GetAssetTypes() ?? []),
+                DefaultAttributeKey = policy.AliasAttributeKey,
+                TargetOrder = subject.Order,
+                OrderRepository = _orders,
+            },
+            ct).ConfigureAwait(false);
+
+        var held = await sources.HeldAsync(ct).ConfigureAwait(false);
+        var eligible = selection.Features.Where(f => !held.Contains(f.Id)).ToList();
+
+        var kept = eligible;
+        if (policy.SelectionLimit is { } limit)
+        {
+            var remaining = Math.Max(0, limit - held.Count);
+            if (eligible.Count > remaining)
+            {
+                if (isApply && !request.AcceptTruncation)
+                    throw new SelectionLimitExceededException(limit, held.Count, eligible.Count);
+
+                kept = eligible.GetRange(0, remaining);
+            }
+        }
+
+        var keptIds = kept.Select(f => f.Id).ToList();
+        var usages = keptIds.Count == 0
+            ? []
+            : await sources.UsagesAsync(keptIds, ct).ConfigureAwait(false);
+
+        var (notFound, ambiguous) = IdentifierDiagnostics(selection);
+        var levels = subject.Order is { } order
+            ? TargetConflictEvaluator.Evaluate(order, policy.Exclusivity, keptIds, usages)
+            : TargetConflictEvaluator.Evaluate(subject.Ledger, keptIds, usages);
+
+        return new SelectionPlan(
+            subject, selection.Spec, selection.Features.Count, eligible.Count, kept, levels, notFound, ambiguous);
+    }
+
+    private TargetSelectionPreview Preview(SelectionPlan plan, TargetSelectionRequest request, string addedBy)
+    {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var skip = (long)(request.Page - 1) * request.PageSize;
         var page = skip >= plan.Kept.Count
             ? []
-            : plan.Kept.Skip((int)skip).Take(request.PageSize).Select(f => ToTarget(plan, f, principal, now)).ToList();
+            : plan.Kept.Skip((int)skip).Take(request.PageSize).Select(f => ToTarget(plan, f, addedBy, now)).ToList();
 
         return new TargetSelectionPreview
         {
-            OrderTypeId = plan.Order.OrderTypeId,
+            OrderTypeId = plan.Subject.OrderTypeId,
             Matched = plan.Matched,
             Eligible = plan.Eligible,
             AlreadyInOrder = plan.Matched - plan.Eligible,
@@ -101,105 +273,62 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         };
     }
 
-    public async Task<TargetSelectionResult> ApplyAsync(TargetSelectionRequest request, WorkflowPrincipal principal, CancellationToken ct)
+    private static TargetSelectionResult Result(SelectionPlan plan, int added) => new()
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(principal);
+        OrderTypeId = plan.Subject.OrderTypeId,
+        Added = added,
+        Matched = plan.Matched,
+        Eligible = plan.Eligible,
+        AlreadyInOrder = plan.Matched - plan.Eligible,
+        TruncatedByLimit = plan.Eligible - plan.Kept.Count,
+        WarningCount = plan.CountAt(OrderTargetConflictLevel.Warning),
+        BlockedCount = plan.CountAt(OrderTargetConflictLevel.Blocked),
+        NotFoundValues = plan.NotFoundValues,
+        AmbiguousValues = plan.AmbiguousValues,
+    };
 
-        var plan = await PlanAsync(request, principal, OrderAction.Annotate, ct).ConfigureAwait(false);
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var targets = plan.Kept.Select(f => ToTarget(plan, f, principal, now)).ToList();
+    /// <summary>
+    /// For each kept feature evaluated <see cref="OrderTargetConflictLevel.Blocked"/>, the holders that block it — every
+    /// other order when the order's own type blocks overlaps, otherwise those whose type does — redacted for another
+    /// organization (see <see cref="TargetLedgerConflict"/>).
+    /// </summary>
+    /// <summary>
+    /// The blocking conflicts <paramref name="usages"/> raise for <paramref name="order"/> reserving
+    /// <paramref name="featureIds"/> — the same rule a reservation plan applies, for re-checking under the feature locks
+    /// right before the write (XD01-379).
+    /// </summary>
+    public static IReadOnlyList<TargetLedgerConflict> LedgerConflicts(
+        TargetLedgerOrder order, IReadOnlyCollection<string> featureIds, IReadOnlyList<TargetLedgerUsage> usages)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        ArgumentNullException.ThrowIfNull(featureIds);
+        ArgumentNullException.ThrowIfNull(usages);
 
-        // Last exit before the first write: a caller that gave up leaves the order untouched.
-        ct.ThrowIfCancellationRequested();
-
-        var added = await _targetWriter.AddRangeAsync(plan.Order.Id, targets, ct).ConfigureAwait(false);
-
-        var result = new TargetSelectionResult
-        {
-            OrderTypeId = plan.Order.OrderTypeId,
-            Added = added,
-            Matched = plan.Matched,
-            Eligible = plan.Eligible,
-            AlreadyInOrder = plan.Matched - plan.Eligible,
-            TruncatedByLimit = plan.Eligible - plan.Kept.Count,
-            WarningCount = plan.CountAt(OrderTargetConflictLevel.Warning),
-            BlockedCount = plan.CountAt(OrderTargetConflictLevel.Blocked),
-            NotFoundValues = plan.NotFoundValues,
-            AmbiguousValues = plan.AmbiguousValues,
-        };
-
-        // Only ServiceOrder can carry a new SelectionSpec; another IServiceOrder implementation
-        // still gets its targets and its action-log entry.
-        if (plan.Order is ServiceOrder order)
-        {
-            order.SelectionSpec = plan.Spec;
-            order.UpdatedAt = now;
-            await _orders.UpdateAsync(order, ct).ConfigureAwait(false);
-        }
-
-        await _orders.AppendActionAsync(
-            plan.Order.Id,
-            new OrderActionLog(OrderAction.Annotate, principal.UserId, now, Summary(plan.Spec.StrategyId, result))
-            {
-                ActorKind = principal.Kind,
-            },
-            ct).ConfigureAwait(false);
-
-        return result;
+        var levels = TargetConflictEvaluator.Evaluate(order, featureIds, [.. usages.Select(u => u.Usage)]);
+        return BlockingConflicts(order, levels, usages);
     }
 
-    // ── Shared by preview and apply ───────────────────────────────────────────
+    private static List<TargetLedgerConflict> BlockingConflicts(SelectionPlan plan, IReadOnlyList<TargetLedgerUsage> usages) =>
+        BlockingConflicts(plan.Subject, plan.ConflictLevels, usages);
 
-    private async Task<SelectionPlan> PlanAsync(
-        TargetSelectionRequest request, WorkflowPrincipal principal, OrderAction action, CancellationToken ct)
+    private static List<TargetLedgerConflict> BlockingConflicts(
+        TargetLedgerOrder order, IReadOnlyDictionary<string, OrderTargetConflictLevel> levels, IReadOnlyList<TargetLedgerUsage> usages)
     {
-        var (order, policy) = await AuthorizeAsync(request, principal, action, ct).ConfigureAwait(false);
+        var identity = new TargetConflictEvaluator.OrderIdentity(order.VerticalId, order.OrderId, ParentOrderId: null);
+        var ownBlocks = order.Policy.Exclusivity == OrderTargetExclusivity.BlockOnOverlap;
 
-        var selection = await _selector.SelectAsync(
-            new BoundedFeatureSelectionRequest(request.StrategyId, request.Parameters, order.OrganizationId, _options.MaxMatched)
-            {
-                // Roles are resolved once per selection, against the catalog's types as they are now.
-                AllowedAssetTypeIds = OrderTargetAssetTypes.Resolve(policy, _assets?.GetAssetTypes() ?? []),
-                DefaultAttributeKey = policy.AliasAttributeKey,
-                TargetOrder = order,
-                OrderRepository = _orders,
-            },
-            ct).ConfigureAwait(false);
-
-        var held = await HeldFeatureIdsAsync(order.Id, ct).ConfigureAwait(false);
-        var eligible = selection.Features.Where(f => !held.Contains(f.Id)).ToList();
-
-        var kept = eligible;
-        if (policy.SelectionLimit is { } limit)
-        {
-            var remaining = Math.Max(0, limit - held.Count);
-            if (eligible.Count > remaining)
-            {
-                if (action == OrderAction.Annotate && !request.AcceptTruncation)
-                    throw new SelectionLimitExceededException(limit, held.Count, eligible.Count);
-
-                kept = eligible.GetRange(0, remaining);
-            }
-        }
-
-        var keptIds = kept.Select(f => f.Id).ToList();
-        var usages = keptIds.Count == 0
-            ? []
-            : await _targetReader.FindOpenUsagesAsync(keptIds, order.Id, ct).ConfigureAwait(false);
-
-        var (notFound, ambiguous) = IdentifierDiagnostics(selection);
-
-        return new SelectionPlan(
-            order,
-            policy,
-            selection.Spec,
-            selection.Features.Count,
-            eligible.Count,
-            kept,
-            TargetConflictEvaluator.Evaluate(order, policy.Exclusivity, keptIds, usages),
-            notFound,
-            ambiguous);
+        return usages
+            .Where(u => levels.GetValueOrDefault(u.Usage.FeatureId) == OrderTargetConflictLevel.Blocked)
+            .Where(u => !TargetConflictEvaluator.IsOwnOrSameFamily(identity, u.Usage))
+            .Where(u => ownBlocks || u.Usage.Exclusivity == OrderTargetExclusivity.BlockOnOverlap)
+            .Select(u => u.OrganizationId == order.OrganizationId
+                ? new TargetLedgerConflict(u.Usage.FeatureId, u.Usage.VerticalId, u.Usage.Exclusivity, u.Usage.OrderId, u.Usage.OrderTypeId)
+                : new TargetLedgerConflict(u.Usage.FeatureId, u.Usage.VerticalId, u.Usage.Exclusivity, null, null))
+            .Distinct()
+            .OrderBy(c => c.FeatureId, StringComparer.Ordinal)
+            .ThenBy(c => c.VerticalId, StringComparer.Ordinal)
+            .ThenBy(c => c.OrderId, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>
@@ -259,14 +388,34 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         }
     }
 
-    private static ServiceOrderTarget ToTarget(SelectionPlan plan, GeoFeature feature, WorkflowPrincipal principal, DateTime addedAt)
+    /// <summary>The feature ids a ledger order already holds in its organization, released ones included, read page by page.</summary>
+    private static async Task<HashSet<string>> HeldLedgerFeatureIdsAsync(ITargetLedgerStore ledger, TargetLedgerOrder order, CancellationToken ct)
+    {
+        const int PageSize = 1000;
+        var held = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var skip = 0; ; skip += PageSize)
+        {
+            var result = await ledger.GetPageAsync(order.Key, order.OrganizationId, skip, PageSize, ct).ConfigureAwait(false);
+
+            foreach (var entry in result.Items)
+                held.Add(entry.Target.FeatureId);
+
+            if (result.Items.Count < PageSize || skip + PageSize >= result.TotalCount)
+                return held;
+        }
+    }
+
+    private static ServiceOrderTarget ToTarget(SelectionPlan plan, GeoFeature feature, string addedBy, DateTime addedAt)
     {
         var (longitude, latitude) = Position(feature);
+        var subject = plan.Subject;
 
         return new ServiceOrderTarget
         {
-            Id = TargetId(plan.Order.Id, feature.Id),
-            OrderId = plan.Order.Id,
+            Id = TargetLedger.TargetId(subject.VerticalId, subject.OrderId, feature.Id),
+            OrderId = subject.OrderId,
+            VerticalId = subject.VerticalId,
             FeatureId = feature.Id,
             AssetTypeId = feature.Properties.AssetTypeId,
             Alias = Alias(plan.Policy, feature),
@@ -275,8 +424,8 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
             Longitude = longitude,
             Latitude = latitude,
             AddedAt = addedAt,
-            AddedBy = principal.UserId,
-            OrganizationId = plan.Order.OrganizationId,
+            AddedBy = addedBy,
+            OrganizationId = subject.OrganizationId,
         };
     }
 
@@ -352,9 +501,16 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
             CultureInfo.InvariantCulture,
             $"Target selection '{strategyId}': matched {result.Matched}, added {result.Added}, already in order {result.AlreadyInOrder}, truncated {result.TruncatedByLimit}, warnings {result.WarningCount}, blocked {result.BlockedCount}.");
 
+    /// <summary>The order a plan is for: always its ledger description, and the order itself when the kernel holds it.</summary>
+    private sealed record PlanSubject(TargetLedgerOrder Ledger, IServiceOrder? Order);
+
+    /// <summary>Where a plan reads the order's held features and the kept features' open usages from.</summary>
+    private sealed record PlanSources(
+        Func<CancellationToken, Task<HashSet<string>>> HeldAsync,
+        Func<List<string>, CancellationToken, Task<IReadOnlyList<OrderTargetUsage>>> UsagesAsync);
+
     private sealed record SelectionPlan(
-        IServiceOrder Order,
-        OrderTargetPolicy Policy,
+        PlanSubject Of,
         FeatureSelectionSpec Spec,
         int Matched,
         int Eligible,
@@ -363,6 +519,12 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         IReadOnlyList<string> NotFoundValues,
         IReadOnlyList<string> AmbiguousValues)
     {
+        public TargetLedgerOrder Subject => Of.Ledger;
+
+        public IServiceOrder? Order => Of.Order;
+
+        public OrderTargetPolicy Policy => Of.Ledger.Policy;
+
         public int CountAt(OrderTargetConflictLevel level) => ConflictLevels.Values.Count(l => l == level);
     }
 }

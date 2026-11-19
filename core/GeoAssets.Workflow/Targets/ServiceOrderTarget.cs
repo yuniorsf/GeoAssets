@@ -20,12 +20,22 @@ public sealed record ServiceOrderTarget
         init => field = RequireText(value, "Id");
     }
 
-    /// <summary>The order this target belongs to.</summary>
+    /// <summary>The order this target belongs to, within <see cref="VerticalId"/>.</summary>
     public required string OrderId
     {
         get;
         init => field = RequireText(value, "OrderId");
     }
+
+    /// <summary>
+    /// The vertical that owns <see cref="OrderId"/> (XD01-379): <see cref="TargetLedger.KernelVerticalId"/> — the
+    /// default — for an in-process order, a remote vertical's id for a target reserved through the ledger API.
+    /// </summary>
+    public string VerticalId
+    {
+        get;
+        init => field = RequireText(value, "VerticalId");
+    } = TargetLedger.KernelVerticalId;
 
     /// <summary>The targeted feature. An order holds a feature at most once.</summary>
     public required string FeatureId

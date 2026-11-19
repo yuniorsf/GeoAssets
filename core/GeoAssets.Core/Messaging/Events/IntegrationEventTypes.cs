@@ -12,4 +12,13 @@ public static class IntegrationEventTypes
     public const string AssetBatchAppliedV1 = "geoassets.assets.batch-applied.v1";
     public const string FeatureCatalogMutatedV1 = "geoassets.assets.feature-catalog-mutated.v1";
     public const string TopologyInvalidatedV1 = "geoassets.assets.topology-invalidated.v1";
+
+    /// <summary>The global target ledger reserved targets for a vertical's order (XD01-379).</summary>
+    public const string TargetsReservedV1 = "geoassets.targets.targets-reserved.v1";
+
+    /// <summary>The global target ledger released targets of a vertical's order (XD01-379).</summary>
+    public const string TargetsReleasedV1 = "geoassets.targets.targets-released.v1";
+
+    /// <summary>The global target ledger committed targets of a vertical's order (XD01-379).</summary>
+    public const string TargetsCommittedV1 = "geoassets.targets.targets-committed.v1";
 }

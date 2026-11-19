@@ -56,6 +56,7 @@ GET /api/projects | policy:projects:read
 GET /api/projects/organization/{organizationId} | policy:projects:read
 GET /api/projects/{id} | policy:projects:read
 GET /api/registry/order-types | policy:serviceorders:read
+GET /api/targets/ledger/{vertical}/{orderId}/usages | authorize, requirement:RolesAuthorizationRequirement
 GET /api/workflow/order-types | none
 GET /api/workflow/order-types/{id} | none
 GET /api/workflow/service-orders | policy:serviceorders:read
@@ -103,6 +104,9 @@ POST /api/identity/rolesync/roles/{id} | policy:roles:edit
 POST /api/identity/rolesync/users/{externalObjectId}/roles/{roleName} | policy:users:edit
 POST /api/identity/userclaims | none
 POST /api/projects | policy:projects:read
+POST /api/targets/ledger/{vertical}/{orderId}/commit | authorize, requirement:RolesAuthorizationRequirement
+POST /api/targets/ledger/{vertical}/{orderId}/release | authorize, requirement:RolesAuthorizationRequirement
+POST /api/targets/ledger/{vertical}/{orderId}/reserve | authorize, requirement:RolesAuthorizationRequirement
 POST /api/workflow/order-types | none
 POST /api/workflow/order-types/validate-schema | none
 POST /api/workflow/selection/resolve | policy:features:read

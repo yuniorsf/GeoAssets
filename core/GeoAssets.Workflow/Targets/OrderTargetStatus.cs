@@ -28,11 +28,11 @@ public static class OrderTargetStatus
 
     private static readonly Dictionary<string, string[]> _allowed = new(StringComparer.Ordinal)
     {
-        [Pending]       = [InProgress, Skipped],
-        [InProgress]    = [Done, NotExecutable],
-        [Done]          = [],
+        [Pending] = [InProgress, Skipped],
+        [InProgress] = [Done, NotExecutable],
+        [Done] = [],
         [NotExecutable] = [],
-        [Skipped]       = [],
+        [Skipped] = [],
     };
 
     /// <summary>Every defined status key, in lifecycle order.</summary>

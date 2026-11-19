@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Hosting.Abstractions;
@@ -113,6 +114,10 @@ builder.Services.AddServerCatalogPool(builder.Configuration);
 // modules contribute theirs while they are enabled below, remote verticals PUT theirs.
 builder.Services.AddOrderTypeDescriptorRegistry();
 
+// ── Global target ledger (XD01-379, ADR-001 §3.4) — remote verticals' order targets keyed by (vertical, orderId), so
+// exclusivity holds across verticals; with a broker, the verticals' OrderStateChangedV1 releases a closed order's targets.
+builder.Services.AddServerTargetLedger(builder.Configuration);
+
 // ── Modules (XD01-358/XD01-359, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in that
 // order; with none the kernel boots on its own (invariant I5).
 //   PostgresSpatialModule: the "postgres" provider plugin, organization catalogs, WMS.
@@ -150,6 +155,7 @@ builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
 // ITenantContext (XD01-200) — resolves GeoAssetsDbContext's row-level tenant scoping from the
 // same per-request ICurrentUserAccessor above, replacing the NullTenantContext default.
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
+builder.Services.AddScoped<ITenantOrganizationScope, TenantOrganizationScope>();
 
 // AuthZ bridge (XD01-13) — lets endpoints declare .RequireAuthorization("SomePolicyName")
 // (matching an AppPolicy.Name row) and get evaluated against IGeoAuthorizationService,
@@ -226,6 +232,10 @@ app.MapServiceOrdersApi();
 // Service-order target + selection endpoints under /api/workflow (XD01-308) —
 // see ServiceOrderTargetsRestApiExtensions for the full endpoint list.
 app.MapServiceOrderTargetsApi();
+
+// The global target ledger's machine-to-machine routes under /api/targets/ledger (XD01-379) —
+// see TargetLedgerRestApiExtensions.
+app.MapTargetLedgerApi();
 
 // Project REST endpoints under /api/projects (XD01-141) —
 // see ProjectsRestApiExtensions for the full endpoint list.

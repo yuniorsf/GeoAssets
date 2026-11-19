@@ -39,8 +39,11 @@ internal static class ServiceOrderTargetRelease
 
         // Unfiltered for the same reason the order itself is fetched unfiltered: whoever is
         // allowed to close the order (possibly a cross-org grantee) releases all of its targets.
+        // Only the in-process order's own targets: a remote vertical's order of the same id is
+        // another order, released when that vertical reports it closed (XD01-379).
+        var kernel = Targets.TargetLedger.KernelVerticalId;
         var open = await db.ServiceOrderTargets.IgnoreQueryFilters()
-            .Where(t => t.ServiceOrderId == orderId && t.ReleasedAt == null)
+            .Where(t => t.ServiceOrderId == orderId && t.VerticalId == kernel && t.ReleasedAt == null)
             .ToListAsync(ct).ConfigureAwait(false);
 
         foreach (var target in open)
