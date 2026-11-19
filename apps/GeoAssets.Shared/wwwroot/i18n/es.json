@@ -674,6 +674,7 @@
   "permissions.features.delete": "Eliminar activos GIS",
   "permissions.reports.export": "Exportar reportes",
   "permissions.users.manage": "Gestionar usuarios y roles",
+  "permissions.registry.manage": "Publicar descriptores de tipos de orden en el registro",
   "permissions.users.read": "Ver usuarios",
   "permissions.users.edit": "Editar usuarios y su estado",
   "permissions.roles.read": "Ver roles",

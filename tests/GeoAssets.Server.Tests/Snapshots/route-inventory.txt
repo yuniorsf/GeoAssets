@@ -21,6 +21,7 @@ GET /api/geoassets/export/gis/v1 | policy:features:read
 GET /api/geoassets/features | policy:features:read
 GET /api/geoassets/features/bounds | policy:features:read
 GET /api/geoassets/features/{id} | policy:features:read
+GET /api/geoassets/features/{id}/actions | policy:features:read
 GET /api/geoassets/features/{id}/topology/neighbors | policy:features:read
 GET /api/geoassets/layer-rules | policy:features:read
 GET /api/geoassets/layers | policy:features:read
@@ -52,6 +53,7 @@ GET /api/identity/users/{id} | policy:users:read
 GET /api/projects | policy:projects:read
 GET /api/projects/organization/{organizationId} | policy:projects:read
 GET /api/projects/{id} | policy:projects:read
+GET /api/registry/order-types | policy:serviceorders:read
 GET /api/workflow/order-types | none
 GET /api/workflow/order-types/{id} | none
 GET /api/workflow/service-orders | policy:serviceorders:read
@@ -121,6 +123,7 @@ PUT /api/projects/{id}/layers | policy:projects:read
 PUT /api/projects/{id}/name | policy:projects:rename
 PUT /api/projects/{id}/providers | policy:projects:read
 PUT /api/projects/{id}/view | policy:projects:read
+PUT /api/registry/verticals/{verticalId}/order-types | policy:registry:manage
 PUT /api/workflow/order-types/{id} | none
 PUT /api/workflow/service-orders/{id} | none
 PUT /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none

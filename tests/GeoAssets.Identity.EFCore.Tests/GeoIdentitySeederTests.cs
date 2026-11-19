@@ -29,13 +29,13 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(34);
+        (await db.Permissions.CountAsync()).Should().Be(35);
         (await db.Roles.CountAsync()).Should().Be(5);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
 
     [Fact]
-    public async Task SeedAsync_AdministratorRole_IsLinkedToAllTwentySevenPermissions()
+    public async Task SeedAsync_AdministratorRole_IsLinkedToAllTwentyEightPermissions()
     {
         // Guards the ChangeTracker lookup in AddRoleAsync: permissions and roles are
         // added in the *same* SaveChanges batch, so a naive database-only lookup for
@@ -51,7 +51,7 @@ public class GeoIdentitySeederTests
         var adminRolePermissionCount = await db.RolePermissions
             .CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId);
 
-        adminRolePermissionCount.Should().Be(27);
+        adminRolePermissionCount.Should().Be(28);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class GeoIdentitySeederTests
             .SingleAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "users:read");
         db.RolePermissions.Remove(usersReadGrant);
         await db.SaveChangesAsync();
-        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(26);
+        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(27);
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -82,7 +82,7 @@ public class GeoIdentitySeederTests
             .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
             .ToListAsync();
         adminCodes.Should().Contain("users:read");
-        adminCodes.Should().HaveCount(27);
+        adminCodes.Should().HaveCount(28);
     }
 
     [Fact]
@@ -98,11 +98,11 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(34);
+        (await db.Permissions.CountAsync()).Should().Be(35);
         (await db.Roles.CountAsync()).Should().Be(5);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
-            .Should().Be(27);
+            .Should().Be(28);
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var permissions = await db.Permissions.ToListAsync();
-        permissions.Should().HaveCount(34);
+        permissions.Should().HaveCount(35);
         foreach (var permission in permissions)
         {
             permission.Description.Should().StartWith("permissions.",
@@ -349,5 +349,67 @@ public class GeoIdentitySeederTests
         var seededCodes = await db.Permissions.Select(p => p.Code).ToListAsync();
 
         seededCodes.Should().Contain(IpBillingPermissionCodes);
+    }
+
+    // ── XD01-369: registry:manage ────────────────────────────────────────────
+
+    [Fact]
+    public async Task SeedAsync_RegistryManage_IsSeededAndGrantedToAdministratorOnly()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var permission = await db.Permissions.SingleAsync(p => p.Code == "registry:manage");
+        permission.Description.Should().Be("permissions.registry.manage");
+        var holders = await db.RolePermissions
+            .Where(rp => rp.PermissionId == permission.Id)
+            .Select(rp => rp.RoleId)
+            .ToListAsync();
+        holders.Should().Equal(GeoIdentitySeeder.AdminRoleId);
+        holders.Should().NotContain(
+            [GeoIdentitySeeder.SupervisorRoleId, GeoIdentitySeeder.TechnicianRoleId, GeoIdentitySeeder.ReadOnlyRoleId]);
+    }
+
+    [Fact]
+    public async Task SeedAsync_ExistingAdministratorMissingRegistryManage_BackfillsIt()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+        var grant = await db.RolePermissions
+            .Include(rp => rp.Permission)
+            .SingleAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "registry:manage");
+        db.RolePermissions.Remove(grant);
+        await db.SaveChangesAsync();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        (await db.RolePermissions.AnyAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "registry:manage"))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SeedAsync_ExistingDatabaseWithoutRegistryManage_AddsThePermissionAndGrantsIt()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+        var permission = await db.Permissions.SingleAsync(p => p.Code == "registry:manage");
+        db.RolePermissions.RemoveRange(db.RolePermissions.Where(rp => rp.PermissionId == permission.Id));
+        db.Permissions.Remove(permission);
+        await db.SaveChangesAsync();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        (await db.RolePermissions.AnyAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "registry:manage"))
+            .Should().BeTrue();
     }
 }
