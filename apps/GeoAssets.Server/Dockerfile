@@ -2,6 +2,14 @@
 # projects under core/, providers/, workflow/) — see deploy/server/docker-compose.yaml.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
+# The protoc that Grpc.Tools 2.71.0 bundles for linux-arm64 (libprotoc 29.0) segfaults (exit 139) whenever it reads its
+# arguments from a response file — which is how Grpc.Tools' ProtoCompile task always invokes it — on current Docker
+# Desktop VM kernels, failing GeoAssets.Workflow.Messaging.Protobuf's build. Compile the .proto files with the distro's
+# protoc instead (the same override that project's csproj already makes with Homebrew's protoc on macOS arm64); the
+# well-known types still come from Grpc.Tools' include path, and the generated code targets the same Google.Protobuf runtime.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends protobuf-compiler && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
 # Explicit RID is required even for a framework-dependent publish — without it,
@@ -16,7 +24,8 @@ RUN case "$TARGETARCH" in \
     esac && \
     dotnet restore apps/GeoAssets.Server/GeoAssets.Server.csproj -r $RID && \
     dotnet publish apps/GeoAssets.Server/GeoAssets.Server.csproj \
-      -c Release -o /app/publish --no-restore -r $RID --self-contained false
+      -c Release -o /app/publish --no-restore -r $RID --self-contained false \
+      -p:Protobuf_ProtocFullPath=/usr/bin/protoc
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
