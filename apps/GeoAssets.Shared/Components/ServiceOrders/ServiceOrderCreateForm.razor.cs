@@ -19,6 +19,9 @@ public partial class ServiceOrderCreateForm
     /// </summary>
     [Parameter] public bool FromSelection { get; set; }
 
+    /// <summary>The order type the form starts with when it is offered (XD01-370: a map feature action's).</summary>
+    [Parameter] public string? InitialOrderTypeId { get; set; }
+
     private readonly NewOrderModel _model = new();
     private readonly CancellationTokenSource _lifetime = new();
     private List<OrderType> _allowedTypes = [];
@@ -47,6 +50,7 @@ public partial class ServiceOrderCreateForm
         {
             _selectionModeInitialized = true;
             _useSelection = SelectionOrderTypes.UseSelectionInitially(FromSelection, SelectionSet.Ids.Count);
+            if (!string.IsNullOrEmpty(InitialOrderTypeId)) _model.OrderTypeId = InitialOrderTypeId;
         }
 
         RefreshOrderTypes();

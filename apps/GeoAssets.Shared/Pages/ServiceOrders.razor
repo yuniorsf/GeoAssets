@@ -30,7 +30,7 @@
     }
     else if (_showCreateForm)
     {
-        <ServiceOrderCreateForm Principal="@_principal" FromSelection="_createFromSelection" OnSave="OnOrderCreated" OnCancel="() => _showCreateForm = false" />
+        <ServiceOrderCreateForm Principal="@_principal" FromSelection="_createFromSelection" InitialOrderTypeId="@_initialOrderTypeId" OnSave="OnOrderCreated" OnCancel="() => _showCreateForm = false" />
     }
     else if (_selectedOrder is not null)
     {

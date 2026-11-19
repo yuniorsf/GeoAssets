@@ -13,6 +13,26 @@
                 <span class="ctx-icon">💾</span> @L["assets.save"]
             </button>
         }
+        @switch (_actionsState)
+        {
+            case FeatureActionsState.Loading:
+                <div class="ctx-separator"></div>
+                <div class="ctx-item ctx-status" role="status">@L["featureActions.loading"]</div>
+                break;
+            case FeatureActionsState.Loaded when _actions.Count > 0:
+                <div class="ctx-separator"></div>
+                @foreach (var action in _actions)
+                {
+                    <button class="ctx-item ctx-feature-action" @onclick="() => HandleFeatureAction(action)">
+                        <span class="ctx-icon">➕</span> @L[action.LabelKey]
+                    </button>
+                }
+                break;
+            case FeatureActionsState.Failed:
+                <div class="ctx-separator"></div>
+                <div class="ctx-item ctx-status" role="status">@L["featureActions.unavailable"]</div>
+                break;
+        }
         <div class="ctx-separator"></div>
         <button class="ctx-item ctx-danger" @onclick="HandleDelete">
             <span class="ctx-icon">🗑️</span> @L["assets.delete"]

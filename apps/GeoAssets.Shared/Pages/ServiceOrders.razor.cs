@@ -16,6 +16,19 @@ public partial class ServiceOrders
     public const string CreateFromSelectionUri = "service-orders?" + FromSelectionQueryName + "=true";
 
     private const string FromSelectionQueryName = "fromSelection";
+    private const string OrderTypeQueryName = "orderTypeId";
+
+    /// <summary>
+    /// <see cref="CreateFromSelectionUri"/> with <paramref name="orderTypeId"/> chosen in the form — what a map feature
+    /// action opens (XD01-370).
+    /// </summary>
+    public static string CreateFromSelectionForOrderType(string orderTypeId) =>
+        CreateFromSelectionUri + "&" + OrderTypeQueryName + "=" + Uri.EscapeDataString(orderTypeId);
+
+    /// <summary>Set by <see cref="CreateFromSelectionForOrderType"/>: the order type the create form starts with.</summary>
+    [SupplyParameterFromQuery(Name = OrderTypeQueryName)] public string? OrderTypeId { get; set; }
+
+    private string? _initialOrderTypeId;
 
     /// <summary>Set by <see cref="CreateFromSelectionUri"/>: open the create form with the map selection as targets.</summary>
     [SupplyParameterFromQuery(Name = FromSelectionQueryName)] public bool FromSelection { get; set; }
@@ -38,6 +51,7 @@ public partial class ServiceOrders
         _fromSelectionHandled = true;
         _selectedOrder        = null;
         _createFromSelection  = true;
+        _initialOrderTypeId   = OrderTypeId;
         _showCreateForm       = true;
     }
 
@@ -52,6 +66,7 @@ public partial class ServiceOrders
     {
         _selectedOrder       = null;
         _createFromSelection = false;
+        _initialOrderTypeId  = null;
         _showCreateForm      = true;
         StateHasChanged();
     }
