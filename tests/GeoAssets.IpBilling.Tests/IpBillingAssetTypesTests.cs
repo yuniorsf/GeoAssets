@@ -34,4 +34,21 @@ public class IpBillingAssetTypesTests
             type.OrganizationId.Should().Be(Guid.Empty);
         }
     }
+
+    [Fact]
+    public void Defaults_CarryTheirIpBillingRoles()
+    {
+        IpBillingAssetTypes.Transformador.Roles.Should().Equal("ip-billing:transformer");
+        IpBillingAssetTypes.Poste.Roles.Should().Equal("ip-billing:pole");
+        IpBillingAssetTypes.LampGroup24h.Roles.Should().Equal("ip-billing:lamp-group-24h");
+    }
+
+    [Fact]
+    public void Defaults_RolesAreValidAndUniqueAcrossTheTypes()
+    {
+        foreach (var type in IpBillingAssetTypes.Defaults)
+            Core.Models.AssetTypeRoles.FindDefect(type.Roles).Should().BeNull();
+
+        IpBillingAssetTypes.Defaults.SelectMany(t => t.Roles).Should().OnlyHaveUniqueItems();
+    }
 }

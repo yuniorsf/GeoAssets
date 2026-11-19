@@ -972,6 +972,57 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 
 .zoom-range .attribute-errors { margin-top: 6px; }
 
+/* ─── Asset type roles (XD01-367) ───────────────────────────────────────── */
+
+.role-input {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+}
+
+.role-input legend {
+    float: none;
+    width: auto;
+    padding: 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.role-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0 0 6px;
+    padding: 0;
+}
+
+.role-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+    font-family: var(--bs-font-monospace);
+    background: var(--surface-tint);
+    border: 1px solid var(--panel-border);
+    color: var(--text-primary);
+}
+
+.role-tag-remove {
+    width: 0.5em;
+    height: 0.5em;
+    padding: 0;
+}
+
+.role-input .form-control[aria-invalid="true"] { border-color: var(--danger); }
+
+.role-input .form-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.role-input .attribute-errors { margin-top: 6px; }
+
 /* ─── Custom Attribute Editor ───────────────────────────────────────────── */
 
 .attr-row {

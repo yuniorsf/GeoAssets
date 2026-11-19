@@ -343,4 +343,62 @@ public class RestAssetProviderTests
         var cached = sut.GetAssetTypes().Single(t => t.Id == assetType.Id);
         (cached.MinZoom, cached.MaxZoom).Should().Be((min, max));
     }
+
+    // ── Asset type roles (XD01-367) ──────────────────────────────────────────
+
+    [Fact]
+    public async Task InitializeAsync_RolesFromGetAssetTypes_LandOnTheCachedAssetTypes()
+    {
+        var withRoles = new AssetType { Name = "Support", Roles = ["occupiable-support", "isp:pole"] };
+        var handler = new FakeHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/geoassets/asset-types" => JsonBody(new[] { withRoles }),
+            _ => JsonResponse("[]")
+        });
+        var factory = new RestProviderFactory(new FakeHttpClientFactory(handler));
+
+        var sut = await factory.CreateAsync("http://localhost/api/geoassets");
+
+        sut.GetAssetTypes().Single(t => t.Id == withRoles.Id).Roles.Should().Equal("occupiable-support", "isp:pole");
+        ((IAssetProvider)sut).GetAssetTypesWithRole("isp:pole").Select(t => t.Id).Should().Equal(withRoles.Id);
+    }
+
+    [Theory]
+    [InlineData("""[{"id":"11111111-1111-1111-1111-111111111111","name":"Legacy","roles":null}]""")]
+    [InlineData("""[{"id":"11111111-1111-1111-1111-111111111111","name":"Legacy"}]""")]
+    public async Task InitializeAsync_NullOrMissingRoles_ReadAsEmpty(string assetTypesJson)
+    {
+        var handler = new FakeHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/geoassets/asset-types" => JsonResponse(assetTypesJson),
+            _ => JsonResponse("[]")
+        });
+        var factory = new RestProviderFactory(new FakeHttpClientFactory(handler));
+
+        var sut = await factory.CreateAsync("http://localhost/api/geoassets");
+
+        var legacy = sut.GetAssetTypes().Single(t => string.Equals(t.Name, "Legacy", StringComparison.Ordinal));
+        legacy.Roles.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task AddAssetType_PostsTheRoles()
+    {
+        var posted = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new FakeHttpMessageHandler(async request =>
+        {
+            posted.TrySetResult(await request.Content!.ReadAsStringAsync());
+            return new HttpResponseMessage(HttpStatusCode.Created);
+        });
+        var sut = CreateSut(handler);
+        var assetType = new AssetType { Name = "Support", Roles = ["occupiable-support", "isp:pole"] };
+
+        sut.AddAssetType(assetType);
+        var body = await posted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        using var json = JsonDocument.Parse(body);
+        json.RootElement.GetProperty("roles").EnumerateArray().Select(e => e.GetString())
+            .Should().Equal("occupiable-support", "isp:pole");
+        sut.GetAssetTypes().Single(t => t.Id == assetType.Id).Roles.Should().Equal("occupiable-support", "isp:pole");
+    }
 }

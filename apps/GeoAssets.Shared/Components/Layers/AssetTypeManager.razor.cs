@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using Microsoft.AspNetCore.Components.Web;
 
 namespace GeoAssets.Shared.Components.Layers;
 
@@ -19,6 +20,12 @@ public partial class AssetTypeManager
     private string _newTypeMinZoom = string.Empty;
     private string _newTypeMaxZoom = string.Empty;
     private AssetTypeZoomRangeInputResult? _newTypeZoomProblem;
+    private IReadOnlyList<string> _newTypeRoles = [];
+    private string _newTypeRoleText = string.Empty;
+    private AssetTypeRolesInputResult? _newTypeRoleProblem;
+
+    // Room for several roles typed at once, separated by commas or spaces.
+    private const int RoleTextMaxLength = AssetTypeRoles.MaxCount * (AssetTypeRoles.MaxLength + 1);
 
     // The user's layer toggles live in MapLayerDisplayService, not here: this panel is closed and
     // reopened freely, and the map keeps a switched-off type hidden across re-renders (XD01-311).
@@ -37,6 +44,10 @@ public partial class AssetTypeManager
 
     private string? ZoomRangeError => _newTypeZoomProblem?.Error is { } error
         ? L.GetString(AssetTypeZoomRangeInput.ErrorKey(error), AssetTypeZoomRange.LowestZoom, AssetTypeZoomRange.HighestZoom)
+        : null;
+
+    private string? RoleError => _newTypeRoleProblem is { Error: { } error } problem
+        ? L.GetString(AssetTypeRolesInput.ErrorKey(error), AssetTypeRolesInput.ErrorArguments(error, problem.OffendingRole))
         : null;
 
     // Rendered only when true, so a valid field carries no aria-invalid attribute at all.
@@ -69,9 +80,34 @@ public partial class AssetTypeManager
     private void OnNewTypeDefaultLayerChanged(string? value) =>
         _newTypeDefaultLayerId = string.IsNullOrEmpty(value) ? null : Guid.Parse(value);
 
+    private void AddNewTypeRoles()
+    {
+        var result = AssetTypeRolesInput.Add(_newTypeRoles, _newTypeRoleText);
+        _newTypeRoleProblem = result.IsValid ? null : result;
+        if (!result.IsValid) return;
+
+        _newTypeRoles = result.Roles;
+        _newTypeRoleText = string.Empty;
+    }
+
+    private void RemoveNewTypeRole(string role)
+    {
+        _newTypeRoles = AssetTypeRolesInput.Remove(_newTypeRoles, role);
+        _newTypeRoleProblem = null;
+    }
+
+    private void OnNewTypeRoleKeyDown(KeyboardEventArgs e)
+    {
+        if (string.Equals(e.Key, "Enter", StringComparison.Ordinal)) AddNewTypeRoles();
+    }
+
     private async Task SaveNewType()
     {
         if (string.IsNullOrWhiteSpace(_newTypeName)) return;
+
+        // Text still in the role field counts, so a typed-but-not-added role is never dropped.
+        AddNewTypeRoles();
+        if (_newTypeRoleProblem is not null) return;
 
         _newTypeSchemaError = null;
         var zoom = AssetTypeZoomRangeInput.Parse(_newTypeMinZoom, _newTypeMaxZoom);
@@ -97,7 +133,8 @@ public partial class AssetTypeManager
             DefaultLayerId = _newTypeDefaultLayerId,
             AttributesSchemaJson = schemaJson.Length > 0 ? schemaJson : null,
             MinZoom = zoom.MinZoom,
-            MaxZoom = zoom.MaxZoom
+            MaxZoom = zoom.MaxZoom,
+            Roles = _newTypeRoles
         };
         Repository.AddAssetType(newType);
         ResetNewTypeForm();
@@ -120,6 +157,9 @@ public partial class AssetTypeManager
         _newTypeMinZoom = string.Empty;
         _newTypeMaxZoom = string.Empty;
         _newTypeZoomProblem = null;
+        _newTypeRoles = [];
+        _newTypeRoleText = string.Empty;
+        _newTypeRoleProblem = null;
         _addingNew = false;
     }
 

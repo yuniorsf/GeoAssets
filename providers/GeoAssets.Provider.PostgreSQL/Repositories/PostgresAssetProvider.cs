@@ -375,6 +375,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                 AttributesSchemaJson = r.AttributesSchemaJson,
                 MinZoom = r.MinZoom,
                 MaxZoom = r.MaxZoom,
+                Roles = r.Roles,
                 OrganizationId = r.OrganizationId
             }).ToList();
         return [.. _typeCache];
@@ -397,6 +398,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             AttributesSchemaJson = assetType.AttributesSchemaJson,
             MinZoom = assetType.MinZoom,
             MaxZoom = assetType.MaxZoom,
+            Roles = [.. assetType.Roles],
             OrganizationId = assetType.OrganizationId
         });
         SaveChanges();

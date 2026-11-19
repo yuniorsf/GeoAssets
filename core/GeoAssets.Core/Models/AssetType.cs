@@ -55,6 +55,16 @@ public sealed class AssetType : IOrgOwnedResource
     /// <c>null</c> leaves the bound open. See <see cref="MinZoom"/>.</summary>
     public int? MaxZoom { get; set; }
 
+    /// <summary>
+    /// Semantic roles of the type (XD01-367, ADR-001 Part 1.1): lower-kebab tags, optionally
+    /// namespaced by a vertical (e.g. <c>occupiable-support</c>, <c>isp:pole</c>), that let a
+    /// module ask "which types are supports?" instead of hard-coding an asset-type id. Matched
+    /// ordinally. Empty by default; a <c>null</c> assignment (e.g. <c>"roles": null</c> in JSON)
+    /// becomes empty. The rules (pattern, count, length, no duplicates) are
+    /// <see cref="AssetTypeRoles"/>'s, enforced on every write by <c>ValidatingAssetProvider</c>.
+    /// </summary>
+    public IReadOnlyCollection<string> Roles { get; set => field = value ?? []; } = [];
+
     // Built-in default types
     public static readonly AssetType Point = new()
     {

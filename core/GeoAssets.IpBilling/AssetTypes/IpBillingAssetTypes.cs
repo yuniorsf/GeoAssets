@@ -11,7 +11,8 @@ namespace GeoAssets.IpBilling.AssetTypes;
 /// (<c>...0004</c> through <c>...0008</c> are already taken by
 /// <c>SeedDomainAssetTypesAndLayers</c> in <c>GeoAssets.Provider.PostgreSQL</c>), and are
 /// seeded into Postgres by that same migration-based convention — see
-/// <c>SeedIpBillingAssetTypes</c>.
+/// <c>SeedIpBillingAssetTypes</c>; their <see cref="AssetType.Roles"/> (XD01-367) by
+/// <c>AddAssetTypeRoles</c> — keep both in sync with these definitions.
 ///
 /// Per the parent epic (XD01-175): Transformer and Pole are real <see cref="GeoFeature"/>s
 /// (<c>TopoEdge(Kind="feeds")</c> Transformer→Pole, mirroring
@@ -30,6 +31,7 @@ public static class IpBillingAssetTypes
         IsBuiltIn = true,
         IsProtected = true,
         AllowedGeometryType = GeometryType.Point,
+        Roles = ["ip-billing:transformer"],
     };
 
     public static readonly AssetType Poste = new()
@@ -40,6 +42,7 @@ public static class IpBillingAssetTypes
         IsBuiltIn = true,
         IsProtected = true,
         AllowedGeometryType = GeometryType.Point,
+        Roles = ["ip-billing:pole"],
     };
 
     public static readonly AssetType LampGroup24h = new()
@@ -50,6 +53,7 @@ public static class IpBillingAssetTypes
         IsBuiltIn = true,
         IsProtected = true,
         AllowedGeometryType = GeometryType.Point,
+        Roles = ["ip-billing:lamp-group-24h"],
     };
 
     public static IEnumerable<AssetType> Defaults => [Transformador, Poste, LampGroup24h];

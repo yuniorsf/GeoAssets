@@ -807,6 +807,54 @@ public class ValidatingAssetProviderTests
         inner.GetAssetTypes().Should().NotContain(assetType);
     }
 
+    // ── Asset type roles (XD01-367) ──────────────────────────────────────────
+
+    [Theory]
+    [InlineData("occupiable-support")]
+    [InlineData("isp:pole")]
+    public void AddAssetType_ValidRoles_AreDelegatedUnchanged(string role)
+    {
+        var inner = new TestAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var assetType = new AssetType { Name = "Pole", Roles = [role] };
+
+        sut.AddAssetType(assetType);
+
+        inner.GetAssetTypes().Should().Contain(assetType);
+        inner.GetAssetTypes().Single(t => t.Id == assetType.Id).Roles.Should().Equal(role);
+    }
+
+    [Theory]
+    [InlineData("Pole", AssetTypeRoleDefect.MalformedRole)]
+    [InlineData("a--b", AssetTypeRoleDefect.MalformedRole)]
+    [InlineData("dup", AssetTypeRoleDefect.DuplicateRole)]
+    public void AddAssetType_InvalidRoles_ThrowsAndDoesNotDelegate(string role, AssetTypeRoleDefect expected)
+    {
+        var inner = new TestAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var assetType = new AssetType { Name = "Pole", Roles = expected == AssetTypeRoleDefect.DuplicateRole ? [role, role] : [role] };
+
+        var act = () => sut.AddAssetType(assetType);
+
+        var thrown = act.Should().Throw<InvalidAssetTypeRolesException>().Which;
+        thrown.Defect.Should().Be(expected);
+        thrown.Role.Should().Be(role);
+        inner.GetAssetTypes().Should().NotContain(assetType);
+    }
+
+    [Fact]
+    public void AddAssetType_TooManyRoles_ThrowsAndDoesNotDelegate()
+    {
+        var inner = new TestAssetProvider();
+        var sut = new ValidatingAssetProvider(inner);
+        var assetType = new AssetType { Name = "Pole", Roles = [.. Enumerable.Range(0, AssetTypeRoles.MaxCount + 1).Select(i => $"r{i}")] };
+
+        var act = () => sut.AddAssetType(assetType);
+
+        act.Should().Throw<InvalidAssetTypeRolesException>().Which.Defect.Should().Be(AssetTypeRoleDefect.TooManyRoles);
+        inner.GetAssetTypes().Should().NotContain(assetType);
+    }
+
     [Fact]
     public void AddAssetType_Null_Throws()
     {

@@ -215,6 +215,19 @@ public interface IAssetProvider
 
     // Asset type management
     IReadOnlyList<AssetType> GetAssetTypes();
+
+    /// <summary>
+    /// The asset types carrying <paramref name="role"/> (<see cref="AssetType.Roles"/>, ordinal),
+    /// in <see cref="GetAssetTypes"/> order (XD01-367). Provider-agnostic: the default filters
+    /// <see cref="GetAssetTypes"/>, so every provider — including those whose types carry no
+    /// roles — answers it.
+    /// </summary>
+    IReadOnlyList<AssetType> GetAssetTypesWithRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        return [.. GetAssetTypes().Where(t => AssetTypeRoles.HasRole(t, role))];
+    }
+
     void AddAssetType(AssetType assetType);
     void DeleteAssetType(Guid id);
 

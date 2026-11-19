@@ -287,6 +287,50 @@ public class GeoAssetsRestApiExtensionsTests
         provider.GetAssetTypes().Should().HaveCount(before);
     }
 
+    // ── Asset type roles (XD01-367) ──────────────────────────────────────────
+
+    [Theory]
+    [InlineData]
+    [InlineData("occupiable-support")]
+    [InlineData("occupiable-support", "isp:pole")]
+    public async Task PostAssetType_WithRoles_ThenGet_RoundTripsRoles(params string[] roles)
+    {
+        var provider = new TestAssetProvider();
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+        var assetType = new AssetType { Name = "Pole", Roles = roles };
+
+        var post = await client.PostAsJsonAsync(new Uri("/api/geoassets/asset-types", UriKind.Relative), assetType, GeoJsonSerializer.Options);
+        var raw = await client.GetStringAsync(new Uri("/api/geoassets/asset-types", UriKind.Relative));
+        var listed = await client.GetFromJsonAsync<AssetType[]>(new Uri("/api/geoassets/asset-types", UriKind.Relative), GeoJsonSerializer.Options);
+
+        post.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
+        raw.Should().Contain("\"roles\"");
+        listed!.Single(t => t.Id == assetType.Id).Roles.Should().Equal(roles);
+        provider.GetAssetTypes().Single(t => t.Id == assetType.Id).Roles.Should().Equal(roles);
+    }
+
+    [Theory]
+    [InlineData("""{"name":"Pole","roles":["Pole"]}""", "MalformedRole")]
+    [InlineData("""{"name":"Pole","roles":["a--b"]}""", "MalformedRole")]
+    [InlineData("""{"name":"Pole","roles":["a:b:c"]}""", "MalformedRole")]
+    [InlineData("""{"name":"Pole","roles":["dup","dup"]}""", "DuplicateRole")]
+    [InlineData("""{"name":"Pole","roles":["r0","r1","r2","r3","r4","r5","r6","r7","r8","r9","r10","r11","r12","r13","r14","r15","r16"]}""", "TooManyRoles")]
+    public async Task PostAssetType_InvalidRoles_Returns400(string body, string defect)
+    {
+        var provider = new TestAssetProvider();
+        var before = provider.GetAssetTypes().Count;
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(new Uri("/api/geoassets/asset-types", UriKind.Relative), content);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain($"Invalid asset type roles: {defect}.");
+        provider.GetAssetTypes().Should().HaveCount(before);
+    }
+
     // ── Layers / layer rules (XD01-153) ──────────────────────────────────────
 
     private static readonly Uri LayersUri = new("/api/geoassets/layers", UriKind.Relative);
