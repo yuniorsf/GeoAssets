@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
-using GeoAssets.Shared.Services.SharedUse;
+using GeoAssets.NeutralOperator.UI.Services.SharedUse;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
@@ -139,14 +139,20 @@ public sealed partial class SharedUseDispatchMessagesTests
     [Fact]
     public void TheKeysTheComponentsNameLiterally_AreExactlyTheStaticKeysOfThisTest()
     {
-        var components = Path.Combine(RepositoryRoot().FullName, "apps", "GeoAssets.Shared", "Components", "ServiceOrders");
+        var root = RepositoryRoot().FullName;
+        var shared = Path.Combine(root, "apps", "GeoAssets.Shared", "Components", "ServiceOrders");
+        var neutralOperator = Path.Combine(root, "verticals", "NeutralOperator", "GeoAssets.NeutralOperator.UI", "Components", "ServiceOrders");
         string[] files =
         [
-            "SharedUseDispatchDialog.razor", "SharedUseDispatchDialog.razor.cs", "OrderTargetOccupancyPanel.razor", "OrderTargetsTable.razor", "ServiceOrderList.razor",
+            Path.Combine(neutralOperator, "SharedUseDispatchDialog.razor"), Path.Combine(neutralOperator, "SharedUseDispatchDialog.razor.cs"),
+            Path.Combine(neutralOperator, "OrderTargetOccupancyPanel.razor"),
+            Path.Combine(neutralOperator, "OccupancyOrderPanel.razor"), Path.Combine(neutralOperator, "OccupancyOrderPanel.razor.cs"),
+            Path.Combine(shared, "OrderTargetsTable.razor"), Path.Combine(shared, "ServiceOrderList.razor"),
+            Path.Combine(shared, "ServiceOrderDetail.razor"), Path.Combine(shared, "ServiceOrderDetail.razor.cs"),
         ];
 
         var named = files
-            .SelectMany(file => LiteralKey().Matches(File.ReadAllText(Path.Combine(components, file))).Select(match => match.Groups["key"].Value))
+            .SelectMany(file => LiteralKey().Matches(File.ReadAllText(file)).Select(match => match.Groups["key"].Value))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();

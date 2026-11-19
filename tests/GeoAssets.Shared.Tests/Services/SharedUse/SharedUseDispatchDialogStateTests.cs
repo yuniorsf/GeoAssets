@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
+using GeoAssets.NeutralOperator.UI.Services.SharedUse;
 using GeoAssets.Shared.Services.SharedUse;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;

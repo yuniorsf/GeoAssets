@@ -127,6 +127,17 @@ dotnet_diagnostic.CA1873.severity = none
 # as the project-wide CA1711 exemption above.
 dotnet_diagnostic.CA1716.severity = none
 
+[verticals/NeutralOperator/GeoAssets.NeutralOperator.UI/**.cs]
+# The vertical Razor class libraries (XD01-378) hold the Blazor components that left GeoAssets.Shared, with the same
+# SynchronizationContext-marshaling requirement for UI updates after an await — see apps/GeoAssets.Shared/**.cs above.
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+
+[ipbilling/GeoAssets.IpBilling.UI/**.cs]
+# Same rationale as verticals/NeutralOperator/GeoAssets.NeutralOperator.UI/**.cs above.
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA2007.severity = none
+
 [apps/GeoAssets.Web/**.cs]
 # Same rationale as apps/GeoAssets.Shared/**.cs — GeoAssets.Web is the Blazor WebAssembly host,
 # with the same SynchronizationContext-marshaling requirement for UI updates after an await.

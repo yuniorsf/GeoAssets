@@ -95,6 +95,14 @@ public static class ServiceOrderTransitions
     }
 
     /// <summary>
+    /// The status <paramref name="action"/> moves an order of <paramref name="orderType"/> in
+    /// <paramref name="from"/> to: the target of the first of <see cref="TransitionsFor"/> leaving
+    /// <paramref name="from"/>; null when the action makes no move from there.
+    /// </summary>
+    public static string? StatusAfter(OrderType? orderType, OrderAction action, string from) =>
+        TransitionsFor(orderType, action).FirstOrDefault(t => string.Equals(t.FromStateKey, from, StringComparison.Ordinal))?.ToStateKey;
+
+    /// <summary>
     /// Returns true if <paramref name="status"/> is a success-terminal state for
     /// <paramref name="orderType"/> — i.e. reaching it should stamp
     /// <see cref="IServiceOrder.CompletedAt"/>. For order types with a custom graph,

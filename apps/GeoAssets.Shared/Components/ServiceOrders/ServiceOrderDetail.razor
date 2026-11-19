@@ -1,9 +1,11 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Workflow.Orders
 @using GeoAssets.Workflow.Rules
+@using GeoAssets.Shared.Services.OrderDetail
 @inject IServiceOrderRepository Repository
 @inject ServiceOrderRules Rules
 @inject OrderTypeRegistry OrderTypes
+@inject IOrderDetailPanelRegistry PanelRegistry
 @inject TimeProvider Clock
 
 @if (Order is not null)
@@ -57,22 +59,11 @@
             {
                 <button class="btn btn-primary btn-sm" @onclick="Complete">@L["orders.complete"]</button>
             }
-            @if (CanApprove)
-            {
-                <button class="btn btn-primary btn-sm" disabled="@_approving" aria-busy="@(_approving ? "true" : "false")" @onclick="Approve">
-                    @(_approving ? L["orderApproval.approving"] : L["orderApproval.approve"])
-                </button>
-            }
             @if (CanCancel)
             {
                 <button class="btn btn-danger btn-sm" @onclick="CancelOrder">@L["assets.cancel"]</button>
             }
         </div>
-
-        @if (_approvalErrorKey is not null)
-        {
-            <div class="alert alert-danger py-2 small" role="alert">@L[_approvalErrorKey]</div>
-        }
 
         @if (CanAnnotate)
         {
@@ -82,11 +73,9 @@
             </div>
         }
 
-        @if (HasTargets)
+        @foreach (var panel in PanelRegistry.PanelsFor(OrderType))
         {
-            <h6 class="order-section-title">@L["occupancy.targets.title"]</h6>
-            <OrderTargetOccupancyPanel Order="Order" Principal="Principal" CanEdit="CanRecordTargetWork"
-                                       CanOpenOccupancy="!IsRecipientOnly" />
+            <DynamicComponent @key="panel" Type="panel" Parameters="PanelParameters" />
         }
 
         <h6 class="order-section-title">@L["orders.dispatchHistory"]</h6>
@@ -134,13 +123,9 @@
         }
     </div>
 
-    @if (IsFanOut)
+    @if (PanelRegistry.DispatchDialogFor(OrderType) is { } dispatchDialog)
     {
-        <SharedUseDispatchDialog Visible="_dispatchDialogVisible"
-                                 Order="Order"
-                                 Principal="Principal"
-                                 OnDispatched="OnSharedUseDispatched"
-                                 OnCancel="() => _dispatchDialogVisible = false" />
+        <DynamicComponent Type="dispatchDialog" Parameters="DispatchDialogParameters" />
     }
     else
     {

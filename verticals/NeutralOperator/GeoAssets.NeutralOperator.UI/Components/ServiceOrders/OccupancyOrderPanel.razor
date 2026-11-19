@@ -1,0 +1,28 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Workflow.Orders
+@using GeoAssets.Workflow.Rules
+@inject IServiceOrderRepository Repository
+@inject ServiceOrderRules Rules
+@inject OrderTypeRegistry OrderTypes
+@inject TimeProvider Clock
+
+@if (Commits)
+{
+    <h6 class="order-section-title">@L["occupancy.targets.title"]</h6>
+
+    @if (CanApprove)
+    {
+        <div class="order-actions">
+            <button class="btn btn-primary btn-sm" disabled="@_approving" aria-busy="@(_approving ? "true" : "false")" @onclick="Approve">
+                @(_approving ? L["orderApproval.approving"] : L["orderApproval.approve"])
+            </button>
+        </div>
+    }
+
+    @if (_approvalErrorKey is not null)
+    {
+        <div class="alert alert-danger py-2 small" role="alert">@L[_approvalErrorKey]</div>
+    }
+
+    <OrderTargetOccupancyPanel Order="Order" Principal="Principal" CanEdit="CanEdit" CanOpenOccupancy="CanOpenOccupancy" />
+}

@@ -1,5 +1,5 @@
 using GeoAssets.IpBilling.Oficio;
-using GeoAssets.Shared.Components.IpBilling;
+using GeoAssets.IpBilling.UI.Components;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Components.IpBilling;

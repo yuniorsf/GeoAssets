@@ -1,7 +1,3 @@
-using GeoAssets.Shared.Services.Occupancy;
-using GeoAssets.Shared.Services.SharedUse;
-using GeoAssets.NeutralOperator.Application.SharedUse;
-using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Components;
@@ -17,8 +13,9 @@ public partial class ServiceOrderDetail
 
     private bool _dispatchDialogVisible;
     private string _noteText = string.Empty;
-    private bool _approving;
-    private string? _approvalErrorKey;
+
+    /// <summary>The order's type; null when the client does not know it.</summary>
+    private OrderType? OrderType => Order is null ? null : OrderTypes.Find(Order.OrderTypeId);
 
     private bool CanDispatch    => Order is not null && Rules.Evaluate(Principal, OrderAction.Dispatch, Order).Allowed;
     // XD01-333: assigning goes through the whole-order update, where a recipient of the order's dispatch never changes the assignee.
@@ -43,32 +40,41 @@ public partial class ServiceOrderDetail
 
     /// <summary>The status accepting the order moves it to from its current one; null when its type has no such move.</summary>
     private string? AcceptedStatus => Order is null ? null
-        : ServiceOrderTransitions.TransitionsFor(OrderTypes.Find(Order.OrderTypeId), OrderAction.Accept)
-            .FirstOrDefault(t => string.Equals(t.FromStateKey, Order.Status, StringComparison.Ordinal))?.ToStateKey;
+        : ServiceOrderTransitions.StatusAfter(OrderType, OrderAction.Accept, Order.Status);
 
-    /// <summary>Approving an order with targets commits the occupancy staged on its poles; only the pole owner may (XD01-318).</summary>
-    private bool CanApprove     => Order is not null && OrderApprovalState.CanApprove(OrderTypes.Find(Order.OrderTypeId), Order, Principal, Rules);
-
-    /// <summary>Only orders whose type declares a target policy have targets, and so poles to edit the occupancy of (XD01-315).</summary>
-    // XD01-361: the occupancy panel belongs to order types that commit occupancy, not to every targeted type.
-    private bool HasTargets     => Order is not null && OccupancyApproval.Commits(OrderTypes.Find(Order.OrderTypeId));
-
-    /// <summary>An order whose type fans out to its poles' occupants is dispatched through the shared-use dialog (XD01-316).</summary>
-    private bool IsFanOut       => Order is not null && SharedUseDispatchDialogState.IsFanOut(OrderTypes.Find(Order.OrderTypeId));
-
-    /// <summary>The viewer reaches the order only because it was dispatched to it: its poles' occupancy is not shown (XD01-316).</summary>
+    /// <summary>The viewer reaches the order only because it was dispatched to it (XD01-316).</summary>
     private bool IsRecipientOnly => Order is not null && Rules.IsDispatchRecipientOnly(Principal, Order);
 
     /// <summary>
-    /// Whether the viewer may record the work on the order's targets: what it may annotate, and — for
-    /// a recipient of the order's dispatch — only when the order's type lets a recipient execute it (XD01-333).
+    /// What every panel a vertical contributes for the order's type receives (XD01-378) — see
+    /// <see cref="Services.OrderDetail.IOrderDetailPanelRegistry"/>.
     /// </summary>
-    private bool CanRecordTargetWork => Order is not null && Rules.EvaluateTargetWrite(Principal, Order, OrderTargetWrite.RecordWork).Allowed;
+    private Dictionary<string, object?> PanelParameters => new(StringComparer.Ordinal)
+    {
+        ["Order"] = Order,
+        ["Principal"] = Principal,
+        ["OnChanged"] = OnChanged,
+    };
+
+    /// <summary>
+    /// What the dispatch dialog a vertical contributes for the order's type receives (XD01-378) —
+    /// see <see cref="Services.OrderDetail.IOrderDetailPanelRegistry"/>.
+    /// </summary>
+    private Dictionary<string, object?> DispatchDialogParameters => new(StringComparer.Ordinal)
+    {
+        ["Visible"] = _dispatchDialogVisible,
+        ["Order"] = Order,
+        ["Principal"] = Principal,
+        ["OnDispatched"] = EventCallback.Factory.Create(this, OnDispatched),
+        ["OnCancel"] = EventCallback.Factory.Create(this, CloseDispatchDialog),
+    };
 
     private void OpenDispatchDialog() => _dispatchDialogVisible = true;
 
+    private void CloseDispatchDialog() => _dispatchDialogVisible = false;
+
     /// <summary>The dialog stays open on its result; the order behind it is reloaded with its new status and children.</summary>
-    private Task OnSharedUseDispatched(SharedUseDispatchResult result) => OnChanged.InvokeAsync();
+    private Task OnDispatched() => OnChanged.InvokeAsync();
 
     private async Task ConfirmDispatch((string TargetId, DispatchTargetType TargetType, string? Note) result)
     {
@@ -105,26 +111,6 @@ public partial class ServiceOrderDetail
     {
         if (Order is null) return;
         await RecordAction(OrderAction.Complete, ServiceOrderStatus.Completed);
-    }
-
-    private async Task Approve()
-    {
-        if (Order is null) return;
-
-        _approving = true;
-        _approvalErrorKey = null;
-        try
-        {
-            await RecordAction(OrderAction.Approve, OccupancyApproval.ApprovedStatus(OrderTypes.Find(Order.OrderTypeId), Order.Status)!);
-        }
-        catch (Exception ex)
-        {
-            _approvalErrorKey = OrderApprovalState.ErrorKey(ex);
-        }
-        finally
-        {
-            _approving = false;
-        }
     }
 
     private async Task Accept()

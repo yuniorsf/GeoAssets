@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Shared.Services.Scanning;
+using GeoAssets.NeutralOperator.UI.Services.Scanning;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services.Scanning;

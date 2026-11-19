@@ -318,4 +318,60 @@ public class ServiceOrderTransitionsTests
     {
         ServiceOrderTransitions.IsTerminalState(CustomGraphType(), status).Should().BeFalse();
     }
+
+    // ── StatusAfter (XD01-378) ─────────────────────────────────────────────────
+
+    private static OrderType ReviewType() => new()
+    {
+        Id = "review",
+        DisplayName = "Review",
+        States = [new("Review", "Review"), new("Rework", "Rework"), new("Done", "Done", IsSuccess: true), new("Escalated", "Escalated")],
+        Transitions =
+        [
+            new("Review", "Rework", OrderAction.Reject),
+            new("Review", "Done", OrderAction.Approve),
+            new("Review", "Escalated", OrderAction.Approve),
+            new("Rework", "Review", OrderAction.Annotate),
+        ],
+    };
+
+    [Fact]
+    public void StatusAfter_ActionWithATransitionOutOfTheStatus_ReturnsItsTarget()
+    {
+        ServiceOrderTransitions.StatusAfter(ReviewType(), OrderAction.Approve, "Review").Should().Be("Done", "the first matching transition wins");
+        ServiceOrderTransitions.StatusAfter(ReviewType(), OrderAction.Reject, "Review").Should().Be("Rework");
+    }
+
+    [Theory]
+    [InlineData("Rework")]
+    [InlineData("Done")]
+    [InlineData("Nowhere")]
+    [InlineData("review")]
+    public void StatusAfter_ActionWithNoTransitionOutOfTheStatus_ReturnsNull(string from)
+    {
+        ServiceOrderTransitions.StatusAfter(ReviewType(), OrderAction.Approve, from).Should().BeNull();
+    }
+
+    [Fact]
+    public void StatusAfter_ActionTheTypeNeverTags_ReturnsNull()
+    {
+        ServiceOrderTransitions.StatusAfter(ReviewType(), OrderAction.Dispatch, "Review").Should().BeNull();
+    }
+
+    [Fact]
+    public void StatusAfter_NullType_OnlyKnowsTheDefaultCancelMoves()
+    {
+        ServiceOrderTransitions.StatusAfter(null, OrderAction.Approve, ServiceOrderStatus.Draft).Should().BeNull();
+        ServiceOrderTransitions.StatusAfter(null, OrderAction.Cancel, ServiceOrderStatus.Draft).Should().Be(ServiceOrderStatus.Cancelled);
+        ServiceOrderTransitions.StatusAfter(null, OrderAction.Cancel, ServiceOrderStatus.InProgress).Should().BeNull();
+    }
+
+    [Fact]
+    public void StatusAfter_TypeWithoutAGraphOfItsOwn_FollowsTheDefaultCancelMoves()
+    {
+        var plain = new OrderType { Id = "plain", DisplayName = "Plain" };
+
+        ServiceOrderTransitions.StatusAfter(plain, OrderAction.Cancel, ServiceOrderStatus.Pending).Should().Be(ServiceOrderStatus.Cancelled);
+        ServiceOrderTransitions.StatusAfter(plain, OrderAction.Approve, ServiceOrderStatus.Completed).Should().BeNull();
+    }
 }

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- XD01-378 (ADR-001 Phase 5): the NeutralOperator vertical's client UI — the occupancy order panel, the shared-use
+       dispatch dialog, the tenant ISP portal and the field checklists — out of the generic GeoAssets.Shared RCL. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.NeutralOperator.UI</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\apps\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.7" />
+  </ItemGroup>
+
+</Project>

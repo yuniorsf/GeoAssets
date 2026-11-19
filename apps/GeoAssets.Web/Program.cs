@@ -5,6 +5,9 @@ using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.IpBilling.UI.Navigation;
+using GeoAssets.NeutralOperator.UI;
+using GeoAssets.NeutralOperator.UI.Navigation;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.WFS;
 using GeoAssets.Provider.WMS;
@@ -14,6 +17,7 @@ using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
 using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
+using GeoAssets.Shared.Services.OrderDetail;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Theming;
 using GeoAssets.Web;
@@ -23,7 +27,6 @@ using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Map;
 using GeoAssets.Web.Services.Session;
 using GeoAssets.Workflow;
-using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;
@@ -183,9 +186,12 @@ builder.Services.AddGeoAssetsPanelState();
 builder.Services.AddScoped<ProviderConnectionMapRenderer>();
 
 // Left-nav menu (XD01-79/85) — discovers every concrete MenuItemBase in the assembly holding
-// OverviewMenuItem/LayersMenuItem/etc. and assembles them into the MenuRegistry NavMenu.razor
-// builds its tree from.
-builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
+// OverviewMenuItem/LayersMenuItem/etc., and in the vertical UI libraries (XD01-378), and assembles
+// them into the MenuRegistry NavMenu.razor builds its tree from.
+builder.Services.AddGeoAssetsNavigation(
+    typeof(OverviewMenuItem).Assembly,
+    typeof(IspTenantPortalMenuItem).Assembly,
+    typeof(AdminIpBillingMunicipiosMenuItem).Assembly);
 
 // Proxy follows the active pool entry; wrapped by the attribute-schema-validating
 // decorator (XD01-10), then the observable decorator.
@@ -219,12 +225,9 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
 // ── Service Order workflow — REST-backed via GeoAssets.Server (XD01-8). OrderTypes are also
 // loaded from the server below, overlaying the seeded defaults — see AddWorkflowRest's doc
 // comment. InMemory removed as an option (XD01-129) — Rest is the only supported backend.
-builder.Services.AddOrderTypeRegistry(registry =>
-    // Shared pole use (XD01-316): the server seeds these two types in code, so they never come
-    // with the server-persisted overlay loaded below. The client needs their shape — the
-    // fan-out that selects the dispatch dialog, the activities a target lists. Both target the
-    // occupiable-support asset-type role (XD01-368), resolved against the loaded asset types.
-    SharedUseOrderTypes.RegisterAll(registry));
+// XD01-378: the server's order-types route lists the types it registers in code (shared pole use
+// among them) with the persisted ones, so the client registers no vertical's types of its own.
+builder.Services.AddOrderTypeRegistry();
 
 var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
     ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
@@ -236,6 +239,11 @@ builder.Services.AddSingleton<IMapSelectionResolver, RestMapSelectionResolver>()
 
 builder.Services.AddServiceOrderRules();
 builder.Services.AddScoped<WorkflowPrincipalFactory>();
+
+// The order detail's vertical panels and dispatch dialogs (XD01-378) — the NeutralOperator
+// vertical's occupancy panel and shared-use dispatch dialog.
+builder.Services.AddOrderDetailPanels();
+builder.Services.AddNeutralOperatorUi();
 
 // SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
 // (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in

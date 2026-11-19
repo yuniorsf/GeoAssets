@@ -6,12 +6,15 @@ using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.IpBilling.UI.Navigation;
 using GeoAssets.MAUI.Extensions;
 using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.MAUI.Services.Localization;
 using GeoAssets.MAUI.Services.Evidence;
 using GeoAssets.MAUI.Services.FieldWork;
 using GeoAssets.MAUI.Services.Offline;
+using GeoAssets.NeutralOperator.UI;
+using GeoAssets.NeutralOperator.UI.Navigation;
 using GeoAssets.Provider.Rest;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
@@ -21,8 +24,8 @@ using GeoAssets.Shared.Services.Evidence;
 using GeoAssets.Shared.Services.FieldWork;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.Offline;
+using GeoAssets.Shared.Services.OrderDetail;
 using GeoAssets.Workflow;
-using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
@@ -112,10 +115,14 @@ public static class MauiProgram
         builder.Services.AddGeoAssetsPanelState();
         builder.Services.AddScoped<ProviderConnectionMapRenderer>();
 
-        // Left-nav menu (XD01-79/85) — same wiring as apps/GeoAssets.Web/Program.cs. NavMenu
-        // tolerates the absence of IGeoAuthorizationService (not registered here), so this alone
-        // is enough for MAUI to render the same 6 items minus anything permission-gated.
-        builder.Services.AddGeoAssetsNavigation(typeof(OverviewMenuItem).Assembly);
+        // Left-nav menu (XD01-79/85) — same wiring as apps/GeoAssets.Web/Program.cs, the vertical
+        // UI libraries' items included (XD01-378). NavMenu tolerates the absence of
+        // IGeoAuthorizationService (not registered here), so this alone is enough for MAUI to render
+        // the same items minus anything permission-gated.
+        builder.Services.AddGeoAssetsNavigation(
+            typeof(OverviewMenuItem).Assembly,
+            typeof(IspTenantPortalMenuItem).Assembly,
+            typeof(AdminIpBillingMunicipiosMenuItem).Assembly);
     }
 
     /// <summary>
@@ -178,10 +185,11 @@ public static class MauiProgram
     /// </summary>
     private static void AddServiceOrderWorkflow(MauiAppBuilder builder)
     {
-        // Shared pole use (XD01-316): seeded in code on the server, so registered here too —
-        // see the same registration in GeoAssets.Web's Program.cs.
-        builder.Services.AddOrderTypeRegistry(registry =>
-            SharedUseOrderTypes.RegisterAll(registry));
+        // XD01-378: the server's order types, its code-registered shared-use types among them,
+        // are loaded at startup by OrderTypeCatalogLoader (App.xaml.cs) — the client registers no
+        // vertical's types of its own.
+        builder.Services.AddOrderTypeRegistry();
+        builder.Services.AddSingleton<OrderTypeCatalogLoader>();
 
         var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
             ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
@@ -189,6 +197,11 @@ public static class MauiProgram
 
         builder.Services.AddServiceOrderRules();
         builder.Services.AddScoped<WorkflowPrincipalFactory>();
+
+        // The order detail's vertical panels and dispatch dialogs (XD01-378) — same wiring as
+        // apps/GeoAssets.Web/Program.cs.
+        builder.Services.AddOrderDetailPanels();
+        builder.Services.AddNeutralOperatorUi();
     }
 
     private static void AddAssetsAndMap(MauiAppBuilder builder)

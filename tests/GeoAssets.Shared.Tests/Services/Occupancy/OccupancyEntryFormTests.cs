@@ -1,7 +1,7 @@
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
-using GeoAssets.Shared.Services.Occupancy;
+using GeoAssets.NeutralOperator.UI.Services.Occupancy;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services.Occupancy;

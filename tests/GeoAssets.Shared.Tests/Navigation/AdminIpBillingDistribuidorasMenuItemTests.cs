@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Navigation;
-using GeoAssets.Shared.Navigation;
+using GeoAssets.IpBilling.UI.Navigation;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Navigation;

@@ -105,6 +105,26 @@
                 </InputSelect>
             </div>
 
+            @if (HasSchema)
+            {
+                <SchemaDrivenAttributeEditor Schema="@SelectedSchema"
+                                              Attributes="@_attributes"
+                                              Errors="@_attributeErrors" />
+            }
+
+            @if (UnmatchedAttributeErrors.Count > 0)
+            {
+                <div class="attribute-errors">
+                    <strong>@L["form.attributeErrors"]</strong>
+                    <ul>
+                        @foreach (var error in UnmatchedAttributeErrors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                </div>
+            }
+
             @if (_planProblemKey is not null)
             {
                 <p class="occupancy-notice occupancy-notice-error" role="alert">@L[_planProblemKey]</p>

@@ -1,4 +1,4 @@
-using GeoAssets.Shared.Services.Scanning;
+using GeoAssets.NeutralOperator.UI.Services.Scanning;
 using Microsoft.Maui.Media;
 using SkiaSharp;
 using ZXing;
