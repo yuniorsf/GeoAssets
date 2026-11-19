@@ -3,7 +3,7 @@
 #
 # Deliberately the same shape as apps/GeoAssets.Server/Dockerfile (XD01-215's "Zero Code
 # Branching Invariant": a Tier-2 dedicated silo and the shared multi-tenant tier run the exact
-# same image — only the ConnectionStrings__GeoAssets/AzureAdCiam__* environment variables at
+# same image — only the ConnectionStrings__FieldService/AzureAdCiam__* environment variables at
 # deploy time differ).
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH

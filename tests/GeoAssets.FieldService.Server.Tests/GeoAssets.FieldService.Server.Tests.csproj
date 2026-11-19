@@ -22,6 +22,9 @@
          known high-severity advisory (GHSA-2m69-gcr7-jv3q). Force the patched line directly. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.7" />
+    <!-- XD01-386: boots the real Program.cs (WebApplicationFactory) to prove the host starts with no
+         core asset database configured and resolves its asset-read ports to the GeoCore adapter. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
     <!-- Real Postgres instance for FieldServiceMigrationChainTests: the migration chain this
          host carries for ServiceOrderDbContext can only be executed against a real Postgres
          engine (every other test here builds its schema with SQLite's EnsureCreated, which

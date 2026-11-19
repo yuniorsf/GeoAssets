@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
@@ -50,7 +51,10 @@ public sealed class FieldWorkTransitionApiTests : IAsyncLifetime, IDisposable
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly TestAssetProvider _assetProvider = new();
+    private readonly FakeAssetProximityQuery _proximityQuery;
     private TestServer _server = null!;
+
+    public FieldWorkTransitionApiTests() => _proximityQuery = new FakeAssetProximityQuery(_assetProvider);
 
     public async Task InitializeAsync()
     {
@@ -98,6 +102,7 @@ public sealed class FieldWorkTransitionApiTests : IAsyncLifetime, IDisposable
                         .UseSqlite(_connection)
                         .ReplaceService<IModelCustomizer, RowVersionDefaultModelCustomizer>());
                     services.AddSingleton<IAssetProvider>(_assetProvider);
+                    services.AddSingleton<IAssetProximityQuery>(_proximityQuery);
                     services.AddScoped<IServiceOrderRepository>(sp =>
                         new ValidatingServiceOrderRepository(
                             new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>(), sp.GetRequiredService<IAssetProvider>(), sp.GetRequiredService<OrderTypeRegistry>()),
@@ -215,6 +220,47 @@ public sealed class FieldWorkTransitionApiTests : IAsyncLifetime, IDisposable
             new Request(FieldWorkStatus.OnSite, order.RowVersion, DeviceLongitude: AssetLocation.Longitude, DeviceLatitude: AssetLocation.Latitude + 1));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GeofenceGuardedEdge_CoreUnavailable_Returns503ProblemAndFailsClosed()
+    {
+        _assetProvider.Add(new GeoFeature { Id = "asset-1", Geometry = AssetLocation });
+        var order = await SeedOrderAsync(TenantA, "order-1", FieldWorkStatus.EnRoute, targetFeatureId: "asset-1");
+        _proximityQuery.Failure = new GeoCoreUnavailableException("core is down");
+
+        using var client = CreateClient(TenantA);
+        var response = await client.PostAsJsonAsync(TransitionUri("order-1"),
+            new Request(FieldWorkStatus.OnSite, order.RowVersion, DeviceLongitude: AssetLocation.Longitude, DeviceLatitude: AssetLocation.Latitude));
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        problem.RootElement.GetProperty("type").GetString().Should().Be(GeoCoreUnavailableException.ProblemCode);
+        problem.RootElement.GetProperty("code").GetString().Should().Be("geocore.unavailable");
+        problem.RootElement.GetProperty("status").GetInt32().Should().Be(503);
+        _proximityQuery.Calls.Should().Be(1);
+
+        using var scope = _server.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IServiceOrderRepository>();
+        var reloaded = await repo.GetByIdAsync("order-1");
+        reloaded!.Status.Should().Be(FieldWorkStatus.EnRoute, "the arrival must be refused, never silently allowed, while the core is unreachable");
+    }
+
+    [Fact]
+    public async Task GeofenceGuardedEdge_CoreUnavailableThenRecovers_SucceedsOnRetry()
+    {
+        _assetProvider.Add(new GeoFeature { Id = "asset-1", Geometry = AssetLocation });
+        var order = await SeedOrderAsync(TenantA, "order-1", FieldWorkStatus.EnRoute, targetFeatureId: "asset-1");
+        var request = new Request(FieldWorkStatus.OnSite, order.RowVersion, DeviceLongitude: AssetLocation.Longitude, DeviceLatitude: AssetLocation.Latitude);
+        using var client = CreateClient(TenantA);
+
+        _proximityQuery.Failure = new GeoCoreUnavailableException();
+        var failed = await client.PostAsJsonAsync(TransitionUri("order-1"), request);
+        _proximityQuery.Failure = null;
+        var retried = await client.PostAsJsonAsync(TransitionUri("order-1"), request);
+
+        failed.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        retried.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

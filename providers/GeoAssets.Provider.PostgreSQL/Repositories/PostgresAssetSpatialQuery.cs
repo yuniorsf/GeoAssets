@@ -2,9 +2,9 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Entities;
-using GeoAssets.Provider.PostgreSQL.Interceptors;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Provider.PostgreSQL.Repositories;

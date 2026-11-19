@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace GeoAssets.Provider.PostgreSQL;
+namespace GeoAssets.Persistence.Postgres;
 
 /// <summary>
 /// Connection-string helpers for the shared PostgreSQL tier's "noisy neighbor" mitigations

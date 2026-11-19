@@ -3,6 +3,8 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.FieldService.FieldWork;
+using GeoAssets.Integrations.Scada;
 
 namespace GeoAssets.Workflow.Tests;
 
@@ -11,9 +13,11 @@ namespace GeoAssets.Workflow.Tests;
 /// general-purpose <c>InMemoryAssetProvider</c> (removed in XD01-131) as this project's fixture
 /// for "a real working store", used wherever a test needs genuine add/query/topology behavior
 /// rather than a stub. Topology queries delegate to the real <see cref="TopoGraph"/> static
-/// helper (unaffected by the removal), the same way the deleted class did.
+/// helper (unaffected by the removal), the same way the deleted class did. Also answers the
+/// narrow asset-read ports (XD01-386) in process, so a test hands the same store to a guard or
+/// service that now depends on a port instead of <see cref="IAssetProvider"/>.
 /// </summary>
-internal sealed class TestAssetProvider : IAssetProvider
+internal sealed class TestAssetProvider : IAssetProvider, IAssetProximityQuery, IAssetTopologyQuery
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
@@ -189,4 +193,18 @@ internal sealed class TestAssetProvider : IAssetProvider
     public bool HasCycles() => TopoGraph.HasCycles(_features.Values);
 
     public IReadOnlyList<GeoFeature> TopologicalSort() => TopoGraph.TopologicalSort(_features.Values);
+
+    // ── Narrow asset-read ports (XD01-386) ────────────────────────────────────
+
+    Task<bool> IAssetProximityQuery.IsWithinDistanceAsync(string featureId, GeoPoint point, double toleranceMeters, CancellationToken ct) =>
+        ((IAssetProvider)this).IsWithinDistanceAsync(featureId, point, toleranceMeters);
+
+    Task<GeoFeature?> IAssetTopologyQuery.GetFeatureAsync(string id, CancellationToken ct) =>
+        Task.FromResult(GetById(id));
+
+    Task<IReadOnlyList<GeoFeature>> IAssetTopologyQuery.GetDescendantsAsync(string id, string edgeKind, CancellationToken ct) =>
+        Task.FromResult(((IAssetProvider)this).GetDescendants(id, edgeKind));
+
+    Task<IReadOnlyList<GeoFeature>> IAssetTopologyQuery.GetFeaturesByAssetTypeAsync(string assetTypeId, CancellationToken ct) =>
+        Task.FromResult(GetByAssetType(assetTypeId));
 }

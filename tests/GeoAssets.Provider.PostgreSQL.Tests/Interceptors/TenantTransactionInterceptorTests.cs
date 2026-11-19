@@ -1,6 +1,6 @@
 using FluentAssertions;
+using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Provider.PostgreSQL.Data;
-using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Provider.PostgreSQL.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;

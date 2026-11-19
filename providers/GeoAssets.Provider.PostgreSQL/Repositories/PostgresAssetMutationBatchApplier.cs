@@ -2,8 +2,8 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
+using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Provider.PostgreSQL.Data;
-using GeoAssets.Provider.PostgreSQL.Interceptors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 

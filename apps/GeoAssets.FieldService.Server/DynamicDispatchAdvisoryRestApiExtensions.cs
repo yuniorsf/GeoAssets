@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Agents.Dispatch;
 
 namespace GeoAssets.FieldService.Server;
@@ -19,7 +20,15 @@ internal static class DynamicDispatchAdvisoryRestApiExtensions
             DynamicCrewDispatchAdvisorService advisor,
             CancellationToken ct) =>
         {
-            var result = await advisor.GenerateAdvisoryPlanAsync(ct: ct).ConfigureAwait(false);
+            DynamicDispatchAdvisoryResult result;
+            try
+            {
+                result = await advisor.GenerateAdvisoryPlanAsync(ct: ct).ConfigureAwait(false);
+            }
+            catch (GeoCoreUnavailableException ex)
+            {
+                return GeoCoreUnavailableProblem.From(ex);
+            }
 
             return Results.Ok(new DynamicDispatchAdvisoryResponse(
                 [.. result.SuggestedItineraries.Select(i => new DynamicDispatchItineraryDto(
@@ -33,6 +42,7 @@ internal static class DynamicDispatchAdvisoryRestApiExtensions
                 result.OptimizedDistanceMeters,
                 result.BaselineDistanceMeters));
         })
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
         .WithName("DynamicDispatchAdvisoryPlan")
         .WithSummary("Previews a yield-ranked, VRPTW-routed dispatch suggestion for open service orders — advisory only, never auto-dispatches.");
 

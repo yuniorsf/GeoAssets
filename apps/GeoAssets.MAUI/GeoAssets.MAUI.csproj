@@ -24,6 +24,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.51" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.51" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.7" />
     <!-- MSAL.NET public-client interactive/silent token acquisition (XD01-52) — version pinned
          to match apps/GeoAssets.Server/GeoAssets.Server.csproj's existing reference. -->
     <PackageReference Include="Microsoft.Identity.Client" Version="4.87.0" />
@@ -50,7 +51,6 @@
     <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.UI\GeoAssets.NeutralOperator.UI.csproj" />
     <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.UI\GeoAssets.IpBilling.UI.csproj" />
-    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
   </ItemGroup>

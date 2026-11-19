@@ -3,7 +3,7 @@ using GeoAssets.Core.Interfaces;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 
-namespace GeoAssets.Provider.PostgreSQL.Interceptors;
+namespace GeoAssets.Persistence.Postgres.Interceptors;
 
 /// <summary>
 /// Companion to <see cref="TenantSessionInterceptor"/>: re-stamps the current tenant's

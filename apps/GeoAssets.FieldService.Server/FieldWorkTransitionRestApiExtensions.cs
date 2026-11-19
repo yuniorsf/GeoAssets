@@ -25,6 +25,10 @@ namespace GeoAssets.FieldService.Server;
 /// adjudication respectively, neither of which this generic crew-side endpoint should be able to
 /// produce as a side effect of an ordinary structurally-legal transition.
 ///
+/// Core outage (XD01-386): the geofence is checked against the core's API; when the core can't be
+/// reached the arrival is refused (fail closed, never allowed) with a <c>503</c>
+/// <c>geocore.unavailable</c> problem so the crew retries.
+///
 /// Tenant boundary: same "cross-tenant id looks like 404, not 403" convention as
 /// <see cref="FieldWorkInspectionRestApiExtensions"/>/<see cref="FieldServiceSyncRestApiExtensions"/>.
 ///
@@ -50,7 +54,8 @@ internal static class FieldWorkTransitionRestApiExtensions
         .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status404NotFound)
         .Produces(StatusCodes.Status409Conflict)
-        .Produces(StatusCodes.Status500InternalServerError);
+        .Produces(StatusCodes.Status500InternalServerError)
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return routes;
     }
@@ -118,6 +123,10 @@ internal static class FieldWorkTransitionRestApiExtensions
         catch (KeyNotFoundException)
         {
             return Results.NotFound();
+        }
+        catch (GeoCoreUnavailableException ex)
+        {
+            return GeoCoreUnavailableProblem.From(ex);
         }
     }
 

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Workflow.Agents.Dispatch;
@@ -219,5 +220,75 @@ public class DynamicCrewDispatchAdvisorServiceTests
 
         result.RankedOrderIds.Should().Equal("order-1");
         result.UnassignedOrderIds.Should().BeEmpty();
+    }
+
+    // ── Reads through the IDispatchAssetQuery port (XD01-386) ──────────────────
+
+    private static DynamicCrewDispatchAdvisorService CreateOver(IDispatchAssetQuery query, SnapshottingServiceOrderRepository orders, DateTimeOffset now)
+    {
+        var catalog = new FakeUsCatalogRepository();
+        catalog.Seed(CatalogItem("US-EL-014", baseUsFactor: 10m));
+        return new DynamicCrewDispatchAdvisorService(
+            query, orders, new ClarkeWrightVrptwRoutingEngine(), new OrderRemunerationCalculator(catalog), new FakeTimeProvider(now));
+    }
+
+    [Fact]
+    public async Task GenerateAdvisoryPlanAsync_OrderCarryingOnlyAFeatureId_ResolvesItsLocationThroughThePort()
+    {
+        var now = new DateTimeOffset(2026, 11, 10, 8, 0, 0, TimeSpan.Zero);
+        var assets = new TestAssetProvider();
+        assets.Add(CrewFeature("crew-1", new GeoPoint(-46.00, -23.00)));
+        assets.Add(PoleFeature("pole-1", new GeoPoint(-46.01, -23.01)));
+        var orders = new SnapshottingServiceOrderRepository();
+        var order = DraftOrder("order-1", PoleFeature("pole-1", new GeoPoint(-46.01, -23.01)));
+        order.Features.Clear();
+        order.FeatureIds = ["pole-1"];
+        await orders.AddAsync(order);
+        var service = CreateOver(assets, orders, now);
+
+        var result = await service.GenerateAdvisoryPlanAsync();
+
+        result.RankedOrderIds.Should().Equal("order-1");
+        result.SkippedNoLocationOrderIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GenerateAdvisoryPlanAsync_CrewRosterUnavailable_PropagatesGeoCoreUnavailableAndProducesNoPlan()
+    {
+        var now = new DateTimeOffset(2026, 11, 10, 8, 0, 0, TimeSpan.Zero);
+        var orders = new SnapshottingServiceOrderRepository();
+        await orders.AddAsync(DraftOrder("order-1", PoleFeature("pole-1", new GeoPoint(-46.01, -23.01))));
+        var service = CreateOver(new UnavailableDispatchAssetQuery(), orders, now);
+
+        var act = () => service.GenerateAdvisoryPlanAsync();
+
+        await act.Should().ThrowAsync<GeoCoreUnavailableException>();
+    }
+
+    [Fact]
+    public async Task GenerateAdvisoryPlanAsync_OrderFeatureLookupUnavailable_PropagatesGeoCoreUnavailable()
+    {
+        var now = new DateTimeOffset(2026, 11, 10, 8, 0, 0, TimeSpan.Zero);
+        var orders = new SnapshottingServiceOrderRepository();
+        var order = DraftOrder("order-1", PoleFeature("pole-1", new GeoPoint(-46.01, -23.01)));
+        order.Features.Clear();
+        order.FeatureIds = ["pole-1"];
+        await orders.AddAsync(order);
+        var service = CreateOver(new UnavailableDispatchAssetQuery(failRoster: false), orders, now);
+
+        var act = () => service.GenerateAdvisoryPlanAsync();
+
+        await act.Should().ThrowAsync<GeoCoreUnavailableException>();
+    }
+
+    private sealed class UnavailableDispatchAssetQuery(bool failRoster = true) : IDispatchAssetQuery
+    {
+        public Task<GeoFeature?> GetFeatureAsync(string id, CancellationToken ct) =>
+            Task.FromException<GeoFeature?>(new GeoCoreUnavailableException("core down"));
+
+        public Task<IReadOnlyList<GeoFeature>> GetFeaturesByAssetTypeAsync(string assetTypeId, CancellationToken ct) =>
+            failRoster
+                ? Task.FromException<IReadOnlyList<GeoFeature>>(new GeoCoreUnavailableException("core down"))
+                : Task.FromResult<IReadOnlyList<GeoFeature>>([]);
     }
 }

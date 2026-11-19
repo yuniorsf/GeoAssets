@@ -214,6 +214,11 @@ app.UseGeoAssetsObservability();
 //            GET/POST /layer-rules (GET takes optional ?assetTypeId=), DELETE /layer-rules/{id}
 app.MapGeoAssetsApi();
 
+// Organization-scoped feature reads for trusted service callers (XD01-386) — a vertical host's
+// service principal names the organization it reads on behalf of; see
+// OrganizationScopedFeaturesRestApiExtensions.
+app.MapOrganizationScopedFeaturesApi();
+
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
 app.MapServiceOrdersApi();

@@ -1,4 +1,4 @@
-using GeoAssets.Provider.PostgreSQL.Interceptors;
+using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 
