@@ -16,5 +16,28 @@ message OrderStateChangedEventProto {
   optional string correlation_id = 7;
   map<string, string> metadata = 8;
   bool has_metadata = 9;
+  // XD01-379: the vertical that owns the order; absent means an in-process order of the kernel.
+  optional string vertical_id = 10;
+  // XD01-379: whether new_status is terminal, as the publishing vertical decides it; absent means "not said".
+  optional bool is_terminal = 11;
+  // XD01-379: the organization that owns the order (GUID, "D" format); absent means "not said".
+  optional string organization_id = 12;
+}
+
+// XD01-379: one target named by a global-target-ledger event.
+message TargetLedgerEventItemProto {
+  string target_id = 1;
+  string feature_id = 2;
+}
+
+// XD01-379: the payload of geoassets.targets.targets-reserved.v1, -released.v1 and -committed.v1 alike; the
+// envelope's message type says which of the three it is.
+message TargetLedgerEventProto {
+  string vertical_id = 1;
+  string order_id = 2;
+  string organization_id = 3;
+  repeated TargetLedgerEventItemProto targets = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+  optional string performed_by = 6;
 }
 

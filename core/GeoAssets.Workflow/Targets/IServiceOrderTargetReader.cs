@@ -72,7 +72,10 @@ public interface IServiceOrderTargetReader
     /// (feature, holding order) pair, in no guaranteed order.
     /// <list type="bullet">
     /// <item><description>
-    /// Targets of <paramref name="excludingOrderId"/> itself are never returned.
+    /// Targets of <paramref name="excludingOrderId"/> itself are never returned. Every member of this reader addresses
+    /// in-process orders (<see cref="TargetLedger.KernelVerticalId"/>); a remote vertical's order that shares the id
+    /// is a different order, so its targets ARE returned here, as are any other remote vertical's open targets
+    /// (XD01-379: exclusivity holds across verticals), each with its <see cref="OrderTargetUsage.VerticalId"/>.
     /// </description></item>
     /// <item><description>
     /// Released targets are never returned. A target is released once its order has reached a

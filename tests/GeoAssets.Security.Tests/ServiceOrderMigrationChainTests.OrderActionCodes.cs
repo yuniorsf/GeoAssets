@@ -223,6 +223,11 @@ public partial class ServiceOrderMigrationChainTests
         await migrator.MigrateAsync(migration);
         (await QueryAsync(db, """SELECT "ActionCode" AS "Value" FROM "OrderActionLogs" ORDER BY "Id" """))
             .Should().Equal(HistoricalCodes.Append("Annotate"));
+
+        // Migrated up to this migration only: what is pending is exactly the migrations that come after it, however
+        // many later ones the chain has grown; applying them leaves nothing pending.
+        (await db.Database.GetPendingMigrationsAsync()).Should().Equal(chain.Skip(chain.IndexOf(migration) + 1));
+        await db.Database.MigrateAsync();
         (await db.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
     }
 }

@@ -36,6 +36,8 @@
          histories are held to the same assertions. A link, not a project reference: neither
          suite can reference the other's host without loading two Program classes. -->
     <Compile Include="..\GeoAssets.FieldService.Server.Tests\ServiceOrderRowVersionContract.cs" Link="ServiceOrderRowVersionContract.cs" />
+    <!-- XD01-379: the AddTargetLedgerVertical migration contract is likewise one body run against both histories. -->
+    <Compile Include="..\GeoAssets.FieldService.Server.Tests\TargetLedgerMigrationContract.cs" Link="TargetLedgerMigrationContract.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -53,6 +55,8 @@
          misconfigured RLS migration fails this suite loudly (XD01-204's AC) instead of being
          silently reapplied by the test itself. -->
     <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
+    <!-- XD01-379: the ledger end-to-end suite builds the service over test doubles of the selection's spatial query. -->
+    <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
   </ItemGroup>
 
 </Project>

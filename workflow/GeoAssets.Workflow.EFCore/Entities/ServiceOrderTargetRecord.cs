@@ -10,8 +10,30 @@ internal sealed class ServiceOrderTargetRecord
 {
     public string Id { get; set; } = string.Empty;
 
-    /// <summary>FK to the owning <see cref="ServiceOrderRecord"/>; its targets are deleted with it.</summary>
+    /// <summary>The owning order's id within <see cref="VerticalId"/>.</summary>
     public string ServiceOrderId { get; set; } = string.Empty;
+
+    /// <summary>The vertical that owns <see cref="ServiceOrderId"/> (XD01-379); <c>kernel</c> for an in-process order.</summary>
+    public string VerticalId { get; set; } = Targets.TargetLedger.KernelVerticalId;
+
+    /// <summary>
+    /// FK to the owning <see cref="ServiceOrderRecord"/>, whose targets are deleted with it: <see cref="ServiceOrderId"/>
+    /// for a <c>kernel</c> target, null for a remote vertical's (XD01-379) — whose order has no row there. A check
+    /// constraint keeps the two columns in step.
+    /// </summary>
+    public string? KernelOrderId { get; set; }
+
+    /// <summary>
+    /// The owning order's type, for a remote vertical's order only (null for <c>kernel</c>, whose type is its order's):
+    /// what the ledger's global usage search reports without holding the order.
+    /// </summary>
+    public string? OrderTypeId { get; set; }
+
+    /// <summary>
+    /// <see cref="Targets.OrderTargetExclusivity"/> (numeric) that the remote order's type declared when the target was
+    /// reserved; null for <c>kernel</c>, whose exclusivity is read from its order type when it is needed.
+    /// </summary>
+    public int? Exclusivity { get; set; }
 
     public string FeatureId { get; set; } = string.Empty;
     public string AssetTypeId { get; set; } = string.Empty;

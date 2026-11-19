@@ -46,7 +46,7 @@ public sealed class ServiceOrderTargetModelTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public void Indexes_AreUniqueOrderFeature_PartialOpenFeature_OrderStatus_AndOrganization(bool postgres)
+    public void Indexes_AreUniqueVerticalOrderFeature_PartialOpenFeature_OrderStatus_Organization_AndKernelOrder(bool postgres)
     {
         var indexes = Target(postgres).GetIndexes()
             .Select(index => (Columns: string.Join(',', index.Properties.Select(p => p.Name)), index.IsUnique, Filter: index.GetFilter()))
@@ -54,23 +54,24 @@ public sealed class ServiceOrderTargetModelTests : IDisposable
 
         indexes.Should().BeEquivalentTo(
         [
-            ("ServiceOrderId,FeatureId", true, (string?)null),
+            ("VerticalId,ServiceOrderId,FeatureId", true, (string?)null),
             ("FeatureId", false, ServiceOrderTargetRecordConfiguration.OpenTargetFilter),
             ("ServiceOrderId,Status", false, null),
             ("OrganizationId", false, null),
+            ("KernelOrderId", false, null),
         ]);
         ServiceOrderTargetRecordConfiguration.OpenTargetFilter.Should().Be("\"ReleasedAt\" IS NULL");
     }
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public void ForeignKey_PointsAtTheOrder_Required_WithCascadeDelete(bool postgres)
+    public void ForeignKey_PointsAtTheOrderThroughKernelOrderId_Optional_WithCascadeDelete(bool postgres)
     {
         var foreignKey = Target(postgres).GetForeignKeys().Should().ContainSingle().Subject;
 
         foreignKey.PrincipalEntityType.ClrType.Should().Be<ServiceOrderRecord>();
-        foreignKey.Properties.Select(p => p.Name).Should().Equal(nameof(ServiceOrderTargetRecord.ServiceOrderId));
-        foreignKey.IsRequired.Should().BeTrue();
+        foreignKey.Properties.Select(p => p.Name).Should().Equal(nameof(ServiceOrderTargetRecord.KernelOrderId));
+        foreignKey.IsRequired.Should().BeFalse("a remote vertical's target has no order row here");
         foreignKey.DeleteBehavior.Should().Be(DeleteBehavior.Cascade);
     }
 
@@ -85,6 +86,10 @@ public sealed class ServiceOrderTargetModelTests : IDisposable
         {
             ["Id"] = (36, false),
             ["ServiceOrderId"] = (36, false),
+            ["VerticalId"] = (64, false),
+            ["KernelOrderId"] = (36, true),
+            ["OrderTypeId"] = (64, true),
+            ["Exclusivity"] = (null, true),
             ["FeatureId"] = (64, false),
             ["AssetTypeId"] = (64, false),
             ["Alias"] = (256, true),

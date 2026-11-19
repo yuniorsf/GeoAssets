@@ -6,16 +6,25 @@ namespace GeoAssets.Workflow.Persistence;
 
 /// <summary>
 /// Converts between the domain <see cref="ServiceOrderTarget"/> and the EF entity
-/// <see cref="ServiceOrderTargetRecord"/>. <see cref="ServiceOrderTargetRecord.ReleasedAt"/> has
-/// no domain counterpart: <see cref="ToRecord"/> takes it as an argument and
-/// <see cref="ToDomain"/> drops it.
+/// <see cref="ServiceOrderTargetRecord"/>. <see cref="ServiceOrderTargetRecord.ReleasedAt"/>, and the
+/// ledger's <see cref="ServiceOrderTargetRecord.OrderTypeId"/> and <see cref="ServiceOrderTargetRecord.Exclusivity"/>
+/// (XD01-379), have no domain counterpart: <see cref="ToRecord"/> takes them as arguments and
+/// <see cref="ToDomain"/> drops them.
 /// </summary>
 internal static class ServiceOrderTargetMapper
 {
-    public static ServiceOrderTargetRecord ToRecord(ServiceOrderTarget target, DateTime? releasedAt = null) => new()
+    public static ServiceOrderTargetRecord ToRecord(
+        ServiceOrderTarget target,
+        DateTime? releasedAt = null,
+        string? orderTypeId = null,
+        OrderTargetExclusivity? exclusivity = null) => new()
     {
         Id = target.Id,
         ServiceOrderId = target.OrderId,
+        VerticalId = target.VerticalId,
+        KernelOrderId = TargetLedger.IsKernel(target.VerticalId) ? target.OrderId : null,
+        OrderTypeId = orderTypeId,
+        Exclusivity = exclusivity is { } level ? (int)level : null,
         FeatureId = target.FeatureId,
         AssetTypeId = target.AssetTypeId,
         Alias = target.Alias,
@@ -36,6 +45,7 @@ internal static class ServiceOrderTargetMapper
     {
         Id = record.Id,
         OrderId = record.ServiceOrderId,
+        VerticalId = record.VerticalId,
         FeatureId = record.FeatureId,
         AssetTypeId = record.AssetTypeId,
         Alias = record.Alias,

@@ -47,6 +47,35 @@ public static class TargetConflictEvaluator
         IReadOnlyCollection<OrderTargetUsage> usages)
     {
         ArgumentNullException.ThrowIfNull(order);
+
+        return Evaluate(new OrderIdentity(TargetLedger.KernelVerticalId, order.Id, order.ParentOrderId), ownExclusivity, featureIds, usages);
+    }
+
+    /// <summary>
+    /// <see cref="Evaluate(IServiceOrder, OrderTargetExclusivity, IReadOnlyCollection{string}, IReadOnlyCollection{OrderTargetUsage})"/>
+    /// for an order of the global target ledger (XD01-379), which may belong to a remote vertical: the kernel holds no
+    /// <see cref="IServiceOrder"/> for it, and a remote order has no family the kernel knows of. A usage counts as the
+    /// order itself only when it names the same <see cref="OrderTargetUsage.VerticalId"/> and order id; every usage of
+    /// another vertical counts, whatever its order id.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">A reference argument is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">As the in-process overload.</exception>
+    public static IReadOnlyDictionary<string, OrderTargetConflictLevel> Evaluate(
+        TargetLedgerOrder order,
+        IReadOnlyCollection<string> featureIds,
+        IReadOnlyCollection<OrderTargetUsage> usages)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+
+        return Evaluate(new OrderIdentity(order.VerticalId, order.OrderId, ParentOrderId: null), order.Policy.Exclusivity, featureIds, usages);
+    }
+
+    private static Dictionary<string, OrderTargetConflictLevel> Evaluate(
+        OrderIdentity order,
+        OrderTargetExclusivity ownExclusivity,
+        IReadOnlyCollection<string> featureIds,
+        IReadOnlyCollection<OrderTargetUsage> usages)
+    {
         ArgumentNullException.ThrowIfNull(featureIds);
         ArgumentNullException.ThrowIfNull(usages);
 
@@ -69,8 +98,15 @@ public static class TargetConflictEvaluator
         return levels;
     }
 
-    private static bool IsOwnOrSameFamily(IServiceOrder order, OrderTargetUsage usage)
+    /// <summary>
+    /// Whether <paramref name="usage"/> is held by <paramref name="order"/> itself or by its family. Orders of different
+    /// verticals are never one family, whatever their ids.
+    /// </summary>
+    internal static bool IsOwnOrSameFamily(OrderIdentity order, OrderTargetUsage usage)
     {
+        ArgumentNullException.ThrowIfNull(usage);
+
+        if (!SameId(usage.VerticalId, order.VerticalId)) return false;
         if (SameId(usage.OrderId, order.Id)) return true;                              // the order itself
         if (order.ParentOrderId is { } parentId && SameId(usage.OrderId, parentId)) return true; // its parent
         if (usage.ParentOrderId is not { } usageParentId) return false;
@@ -78,6 +114,9 @@ public static class TargetConflictEvaluator
         return SameId(usageParentId, order.Id)                                          // its child
             || (order.ParentOrderId is { } ownParentId && SameId(usageParentId, ownParentId)); // a sibling
     }
+
+    /// <summary>Who an order is, for telling its own and its family's usages from the others'.</summary>
+    internal readonly record struct OrderIdentity(string VerticalId, string Id, string? ParentOrderId);
 
     private static bool SameId(string left, string right) => string.Equals(left, right, StringComparison.Ordinal);
 

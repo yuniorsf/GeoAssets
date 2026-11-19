@@ -25,6 +25,11 @@ namespace GeoAssets.Workflow.Persistence;
 /// order (the caller's own organization when that order does not exist yet). On PostgreSQL the
 /// row-level-security policy on the table is the backstop for all of it.</para>
 ///
+/// <para><b>Vertical.</b> Every member addresses in-process orders: the rows of
+/// <see cref="TargetLedger.KernelVerticalId"/> (XD01-379). A remote vertical's rows — the global target ledger's,
+/// written by <see cref="EFTargetLedgerStore"/> — are never read, changed or removed here, even when their order id
+/// matches, except that <see cref="FindOpenUsagesAsync"/> reports them: exclusivity holds across verticals.</para>
+///
 /// <para><b>Writes bypass the change tracker</b> (one <c>INSERT … ON CONFLICT DO NOTHING</c>,
 /// <c>ExecuteUpdate</c>, <c>ExecuteDelete</c>), so each is atomic in the database rather than a
 /// read-then-save: two connections adding the same feature both succeed with one row stored,
@@ -37,7 +42,7 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
     /// <summary>How many ids go into one <c>IN (…)</c> list before a lookup or delete is split.</summary>
     internal const int IdChunkSize = 1000;
 
-    /// <summary>How many rows go into one insert statement (16 parameters each).</summary>
+    /// <summary>How many rows go into one insert statement (20 parameters each).</summary>
     internal const int InsertRowsPerStatement = 100;
 
     /// <summary>Every mapped column of <see cref="ServiceOrderTargetRecord"/>, with how to read its value.</summary>
@@ -45,6 +50,10 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
     [
         (nameof(ServiceOrderTargetRecord.Id), r => r.Id),
         (nameof(ServiceOrderTargetRecord.ServiceOrderId), r => r.ServiceOrderId),
+        (nameof(ServiceOrderTargetRecord.VerticalId), r => r.VerticalId),
+        (nameof(ServiceOrderTargetRecord.KernelOrderId), r => r.KernelOrderId),
+        (nameof(ServiceOrderTargetRecord.OrderTypeId), r => r.OrderTypeId),
+        (nameof(ServiceOrderTargetRecord.Exclusivity), r => r.Exclusivity),
         (nameof(ServiceOrderTargetRecord.FeatureId), r => r.FeatureId),
         (nameof(ServiceOrderTargetRecord.AssetTypeId), r => r.AssetTypeId),
         (nameof(ServiceOrderTargetRecord.Alias), r => r.Alias),
@@ -162,25 +171,58 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
         var usages = new List<OrderTargetUsage>();
         foreach (var chunk in wanted.Chunk(IdChunkSize))
         {
-            var rows = await (
-                from target in candidates.AsNoTracking()
-                join order in _db.ServiceOrders on target.ServiceOrderId equals order.Id
-                where chunk.Contains(target.FeatureId)
-                    && target.ReleasedAt == null
-                    && target.ServiceOrderId != excludingOrderId
-                select new { target.FeatureId, order.Id, order.OrderTypeId, order.Status, order.ParentOrderId })
-                .ToListAsync(ct).ConfigureAwait(false);
-
-            usages.AddRange(rows.Select(row => new OrderTargetUsage(
-                row.FeatureId,
-                row.Id,
-                row.OrderTypeId,
-                row.Status,
-                row.ParentOrderId,
-                _orderTypeRegistry?.Find(row.OrderTypeId)?.TargetPolicy?.Exclusivity ?? OrderTargetExclusivity.None)));
+            usages.AddRange(await KernelUsagesAsync(candidates, chunk, excludingOrderId, ct).ConfigureAwait(false));
+            usages.AddRange(await LedgerUsagesAsync(candidates, chunk, ct).ConfigureAwait(false));
         }
 
         return usages;
+    }
+
+    /// <summary>Open usages of in-process orders (the kernel's), joined with their orders, except <paramref name="excludingOrderId"/>'s.</summary>
+    private async Task<IEnumerable<OrderTargetUsage>> KernelUsagesAsync(
+        IQueryable<ServiceOrderTargetRecord> candidates, string[] chunk, string excludingOrderId, CancellationToken ct)
+    {
+        var kernel = TargetLedger.KernelVerticalId;
+        var rows = await (
+            from target in candidates.AsNoTracking()
+            join order in _db.ServiceOrders on target.ServiceOrderId equals order.Id
+            where chunk.Contains(target.FeatureId)
+                && target.VerticalId == kernel
+                && target.ReleasedAt == null
+                && target.ServiceOrderId != excludingOrderId
+            select new { target.FeatureId, order.Id, order.OrderTypeId, order.Status, order.ParentOrderId })
+            .ToListAsync(ct).ConfigureAwait(false);
+
+        return rows.Select(row => new OrderTargetUsage(
+            row.FeatureId,
+            row.Id,
+            row.OrderTypeId,
+            row.Status,
+            row.ParentOrderId,
+            _orderTypeRegistry?.Find(row.OrderTypeId)?.TargetPolicy?.Exclusivity ?? OrderTargetExclusivity.None));
+    }
+
+    /// <summary>
+    /// Open usages of remote verticals' orders (XD01-379), which have no order row to join: their type and exclusivity
+    /// are the ones stored with the target when it was reserved.
+    /// </summary>
+    private static async Task<IEnumerable<OrderTargetUsage>> LedgerUsagesAsync(
+        IQueryable<ServiceOrderTargetRecord> candidates, string[] chunk, CancellationToken ct)
+    {
+        var kernel = TargetLedger.KernelVerticalId;
+        var rows = await candidates.AsNoTracking()
+            .Where(t => chunk.Contains(t.FeatureId) && t.VerticalId != kernel && t.ReleasedAt == null)
+            .Select(t => new { t.FeatureId, t.ServiceOrderId, t.OrderTypeId, t.Exclusivity, t.VerticalId })
+            .ToListAsync(ct).ConfigureAwait(false);
+
+        return rows.Select(row => new OrderTargetUsage(
+            row.FeatureId,
+            row.ServiceOrderId,
+            row.OrderTypeId ?? string.Empty,
+            string.Empty,
+            null,
+            EFTargetLedgerStore.ToExclusivity(row.Exclusivity),
+            row.VerticalId));
     }
 
     public async Task<OrderTargetExtent?> GetExtentAsync(string orderId, CancellationToken ct)
@@ -215,7 +257,9 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
 
         if (targets.Count == 0) return 0;
 
-        if (targets.Any(target => target is null || !string.Equals(target.OrderId, orderId, StringComparison.Ordinal)))
+        if (targets.Any(target => target is null
+                || !string.Equals(target.OrderId, orderId, StringComparison.Ordinal)
+                || !TargetLedger.IsKernel(target.VerticalId)))
             throw new ArgumentException($"Every target must belong to ServiceOrder '{orderId}'.", nameof(targets));
 
         var order = await _db.ServiceOrders.IgnoreQueryFilters()
@@ -259,7 +303,7 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
         // One compare-and-swap statement: it changes the row only while the row still carries
         // the version the caller read, so of two writers holding the same version one updates a
         // row and the other updates none — on any number of connections.
-        var updated = await _db.ServiceOrderTargets.IgnoreQueryFilters()
+        var updated = await KernelTargets()
             .Where(t => t.Id == targetId && t.ServiceOrderId == orderId && t.Version == expectedVersion)
             .ExecuteUpdateAsync(
                 setters => setters
@@ -272,7 +316,7 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
 
         if (updated > 0) return;
 
-        var exists = await _db.ServiceOrderTargets.IgnoreQueryFilters()
+        var exists = await KernelTargets()
             .AnyAsync(t => t.Id == targetId && t.ServiceOrderId == orderId, ct).ConfigureAwait(false);
 
         if (!exists)
@@ -293,7 +337,7 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
         var removed = 0;
         foreach (var chunk in ids.Chunk(IdChunkSize))
         {
-            removed += await _db.ServiceOrderTargets.IgnoreQueryFilters()
+            removed += await KernelTargets()
                 .Where(t => t.ServiceOrderId == orderId && chunk.Contains(t.Id))
                 .ExecuteDeleteAsync(ct).ConfigureAwait(false);
         }
@@ -304,7 +348,14 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private IQueryable<ServiceOrderTargetRecord> TargetsOf(string orderId) =>
-        _db.ServiceOrderTargets.IgnoreQueryFilters().AsNoTracking().Where(t => t.ServiceOrderId == orderId);
+        KernelTargets().AsNoTracking().Where(t => t.ServiceOrderId == orderId);
+
+    /// <summary>Every in-process order's target, unfiltered by tenant (see the class remarks).</summary>
+    private IQueryable<ServiceOrderTargetRecord> KernelTargets()
+    {
+        var kernel = TargetLedger.KernelVerticalId;
+        return _db.ServiceOrderTargets.IgnoreQueryFilters().Where(t => t.VerticalId == kernel);
+    }
 
     /// <summary>
     /// The total order of the reader contract: the resolved key in the requested direction, then
@@ -353,53 +404,65 @@ public sealed class EFServiceOrderTargetRepository : IServiceOrderTargetReader, 
     }
 
     /// <summary>
-    /// One <c>INSERT … VALUES (…), (…) ON CONFLICT (order, feature) DO NOTHING</c> per batch.
-    /// Table and column names come from the EF model and every value travels as a parameter
-    /// typed by that column's own mapping, so the statement cannot drift from the schema.
+    /// One <c>INSERT … VALUES (…), (…) ON CONFLICT (vertical, order, feature) DO NOTHING</c> per batch.
     /// </summary>
     private async Task<int> InsertBatchesAsync(List<ServiceOrderTargetRecord[]> batches, CancellationToken ct)
     {
-        var entityType = _db.Model.FindEntityType(typeof(ServiceOrderTargetRecord))
+        var inserted = 0;
+        foreach (var batch in batches)
+        {
+            var (sql, parameters) = BuildInsertIfAbsent(_db, batch, returningAll: false);
+            inserted += await _db.Database.ExecuteSqlRawAsync(sql, parameters, ct).ConfigureAwait(false);
+        }
+
+        return inserted;
+    }
+
+    /// <summary>
+    /// The statement inserting <paramref name="batch"/> and skipping any row whose (vertical, order, feature) is already
+    /// stored, optionally followed by <c>RETURNING *</c> (<paramref name="returningAll"/>) — the inserted rows only, on
+    /// PostgreSQL and SQLite alike. Table and column names come from the EF model and every value travels as a
+    /// parameter typed by that column's own mapping, so the statement cannot drift from the schema.
+    /// </summary>
+    internal static (string Sql, List<object> Parameters) BuildInsertIfAbsent(
+        ServiceOrderDbContext db, ServiceOrderTargetRecord[] batch, bool returningAll)
+    {
+        var entityType = db.Model.FindEntityType(typeof(ServiceOrderTargetRecord))
             ?? throw new InvalidOperationException($"{nameof(ServiceOrderTargetRecord)} is not part of the model.");
         var table = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
-        var sql = _db.GetService<ISqlGenerationHelper>();
+        var sql = db.GetService<ISqlGenerationHelper>();
         var columns = InsertColumns.Select(column => entityType.GetProperty(column.Property)).ToList();
 
         string Column(IProperty property) => sql.DelimitIdentifier(property.GetColumnName(table)!);
+        string Named(string property) => Column(entityType.GetProperty(property));
 
-        var head = $"INSERT INTO {sql.DelimitIdentifier(table.Name, table.Schema)} ({string.Join(", ", columns.Select(Column))}) VALUES ";
-        var tail =
-            $" ON CONFLICT ({Column(entityType.GetProperty(nameof(ServiceOrderTargetRecord.ServiceOrderId)))}, " +
-            $"{Column(entityType.GetProperty(nameof(ServiceOrderTargetRecord.FeatureId)))}) DO NOTHING";
+        var statement = new StringBuilder(
+            $"INSERT INTO {sql.DelimitIdentifier(table.Name, table.Schema)} ({string.Join(", ", columns.Select(Column))}) VALUES ");
 
         // Only a factory for provider-typed parameters; it is never executed.
-        var parameterFactory = _db.Database.GetDbConnection().CreateCommand();
-        await using (parameterFactory.ConfigureAwait(false))
+        using var parameterFactory = db.Database.GetDbConnection().CreateCommand();
+        var parameters = new List<object>(batch.Length * columns.Count);
+        for (var row = 0; row < batch.Length; row++)
         {
-            var inserted = 0;
-            foreach (var batch in batches)
+            statement.Append(row == 0 ? "(" : ", (");
+            for (var column = 0; column < columns.Count; column++)
             {
-                var statement = new StringBuilder(head);
-                var parameters = new List<object>(batch.Length * columns.Count);
-                for (var row = 0; row < batch.Length; row++)
-                {
-                    statement.Append(row == 0 ? "(" : ", (");
-                    for (var column = 0; column < columns.Count; column++)
-                    {
-                        var name = sql.GenerateParameterName(string.Create(CultureInfo.InvariantCulture, $"t{row}_{column}"));
-                        var value = InsertColumns[column].Value(batch[row]);
-                        parameters.Add(columns[column].GetRelationalTypeMapping().CreateParameter(parameterFactory, name, value, columns[column].IsNullable));
-                        statement.Append(column == 0 ? string.Empty : ", ").Append(name);
-                    }
-
-                    statement.Append(')');
-                }
-
-                statement.Append(tail);
-                inserted += await _db.Database.ExecuteSqlRawAsync(statement.ToString(), parameters, ct).ConfigureAwait(false);
+                var name = sql.GenerateParameterName(string.Create(CultureInfo.InvariantCulture, $"t{row}_{column}"));
+                var value = InsertColumns[column].Value(batch[row]);
+                parameters.Add(columns[column].GetRelationalTypeMapping().CreateParameter(parameterFactory, name, value, columns[column].IsNullable));
+                statement.Append(column == 0 ? string.Empty : ", ").Append(name);
             }
 
-            return inserted;
+            statement.Append(')');
         }
+
+        statement.Append(" ON CONFLICT (")
+            .Append(Named(nameof(ServiceOrderTargetRecord.VerticalId))).Append(", ")
+            .Append(Named(nameof(ServiceOrderTargetRecord.ServiceOrderId))).Append(", ")
+            .Append(Named(nameof(ServiceOrderTargetRecord.FeatureId))).Append(") DO NOTHING");
+        if (returningAll)
+            statement.Append(" RETURNING *");
+
+        return (statement.ToString(), parameters);
     }
 }
