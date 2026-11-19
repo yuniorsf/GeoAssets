@@ -1,6 +1,6 @@
 using System.Globalization;
 using FluentAssertions;
-using GeoAssets.Core.Isp;
+using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.FieldWork;

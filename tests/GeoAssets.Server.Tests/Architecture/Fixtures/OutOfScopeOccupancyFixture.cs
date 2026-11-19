@@ -1,4 +1,4 @@
-namespace GeoAssets.Workflow.Occupancy;
+namespace GeoAssets.NeutralOperator.Application.Occupancy;
 
 internal sealed class OutOfScopeOccupancyFixture
 {

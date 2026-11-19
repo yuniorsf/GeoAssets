@@ -12,14 +12,14 @@ internal static class KernelReferenceRatchet
         "GeoAssets.Provider",
         "GeoAssets.Domain",
         "GeoAssets.IpBilling",
-        "GeoAssets.Core.Isp",
+        "GeoAssets.NeutralOperator.Domain",
         "GeoAssets.Core.Bdgd",
         "GeoAssets.Workflow.Contractors",
         "GeoAssets.Workflow.Erp",
         "GeoAssets.Workflow.FieldWork",
         "GeoAssets.Workflow.Infrastructure",
-        "GeoAssets.Workflow.Isp",
-        "GeoAssets.Workflow.Occupancy",
+        "GeoAssets.NeutralOperator.Application",
+        "GeoAssets.NeutralOperator.Application.Occupancy",
         "GeoAssets.Workflow.Scada",
         "GeoAssets.Workflow.SlaGuard",
     ];
@@ -40,7 +40,7 @@ internal static class KernelReferenceRatchet
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["Program"] = "XD01-345 (P1) — XD01-358/XD01-359 reduce Program.cs to kernel wiring + module bootstrap",
-            ["GeoAssets.Server.GeoAssetsRestApiExtensions"] = "XD01-345 (P1) — NeutralOperator GIS export route (Core.Isp.NeutralOperator.GisExport); not yet in any child ticket's scope",
+            ["GeoAssets.Server.GeoAssetsRestApiExtensions"] = "XD01-345 (P1) — NeutralOperator GIS export route (NeutralOperator.Domain.GisExport); not yet in any child ticket's scope",
         };
 
     public static bool IsKernelType(Type type)

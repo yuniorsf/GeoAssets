@@ -1,8 +1,8 @@
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Registry;
 using GeoAssets.Hosting.Abstractions;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;

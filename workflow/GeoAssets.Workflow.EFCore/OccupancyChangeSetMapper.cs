@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.Persistence.Entities;
 
 namespace GeoAssets.Workflow.Persistence;

@@ -12,7 +12,7 @@ using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Registry;
 using Microsoft.AspNetCore.Authentication;

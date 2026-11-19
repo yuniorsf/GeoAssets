@@ -1,6 +1,6 @@
 using GeoAssets.Shared.Services;
 using GeoAssets.Web.Services.Isp.Rest;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

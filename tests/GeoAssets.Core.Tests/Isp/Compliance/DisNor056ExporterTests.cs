@@ -2,7 +2,7 @@ using System.Text;
 using FluentAssertions;
 using GeoAssets.Core.Bdgd;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using Xunit;

@@ -1,4 +1,4 @@
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

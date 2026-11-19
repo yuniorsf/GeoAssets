@@ -5,7 +5,7 @@ namespace GeoAssets.Workflow.FieldWork;
 /// <summary>
 /// A candidate CTO's location and splitter-port occupancy, as consulted by
 /// <see cref="NearestAvailableCtoAssigner"/>. A thin, repository-agnostic projection of a CTO
-/// <c>GeoFeature</c> (see <c>GeoAssets.Core.Isp.IspAssetTypes.Cto</c>) — callers build this from
+/// <c>GeoFeature</c> (see <c>GeoAssets.NeutralOperator.Domain.IspAssetTypes.Cto</c>) — callers build this from
 /// whatever asset-provider query they already have.
 /// </summary>
 /// <param name="CtoFeatureId">The CTO's <c>GeoFeature.Id</c>.</param>

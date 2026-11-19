@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Isp.NeutralOperator.Leasing.Settlement;
+using GeoAssets.NeutralOperator.Application.Leasing.Settlement;
 
 namespace GeoAssets.FieldService.Server;
 

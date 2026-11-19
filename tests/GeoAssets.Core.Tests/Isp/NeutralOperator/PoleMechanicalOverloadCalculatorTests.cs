@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Domain;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Isp.NeutralOperator;

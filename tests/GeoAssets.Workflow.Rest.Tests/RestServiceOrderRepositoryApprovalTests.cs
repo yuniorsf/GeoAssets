@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Services;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

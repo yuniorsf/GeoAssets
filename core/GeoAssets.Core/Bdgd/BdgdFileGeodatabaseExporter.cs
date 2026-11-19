@@ -11,7 +11,7 @@ namespace GeoAssets.Core.Bdgd;
 /// feature reprojected from this codebase's WGS84 storage CRS into SIRGAS 2000 UTM. Depends only
 /// on <see cref="IFileGeodatabaseExportService"/> (the interface Core already owns), never the
 /// concrete GDAL-backed provider, so Onion layering stays intact — same shape as
-/// <see cref="GeoAssets.Core.Isp.Compliance.DisNor056Exporter"/>'s relationship to
+/// <c>GeoAssets.NeutralOperator.Domain.Compliance.DisNor056Exporter</c>'s relationship to
 /// <see cref="IShapefileExportService"/>.
 ///
 /// All 5 BDGD layers are either Point (PONNOT/UNTRD/UNREMT/UC) or LineString (SEGCON) per

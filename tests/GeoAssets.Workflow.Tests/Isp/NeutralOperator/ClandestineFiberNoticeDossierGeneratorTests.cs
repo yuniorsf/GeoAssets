@@ -1,8 +1,8 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Evidence;
+using GeoAssets.NeutralOperator.Domain.Evidence;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Isp.NeutralOperator;

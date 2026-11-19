@@ -1,8 +1,8 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Shared.Services.Occupancy;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services.Occupancy;

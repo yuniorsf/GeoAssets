@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 using static GeoAssets.Server.Tests.OrderTargetsApiAssertions;

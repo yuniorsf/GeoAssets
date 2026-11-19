@@ -67,7 +67,7 @@ public enum OrderActionType
     /// a pending request, not accusing an already-installed occupant of an irregularity) or
     /// <see cref="Annotate"/> (which carries no state-transition semantics).
     /// </summary>
-    [Obsolete("A vertical's verb (XD01-366): use NeutralOperatorActions.FlagClandestine (GeoAssets.Workflow.Isp.NeutralOperator). Kept only so its number stays reserved.")]
+    [Obsolete("A vertical's verb (XD01-366): use NeutralOperatorActions.FlagClandestine (GeoAssets.NeutralOperator.Application). Kept only so its number stays reserved.")]
     FlagClandestine,
 
     /// <summary>
@@ -77,6 +77,6 @@ public enum OrderActionType
     /// irregularity"): a dispute means "I'm contesting that this was ever an irregularity,"
     /// moving the order into a reviewable state rather than closing it.
     /// </summary>
-    [Obsolete("A vertical's verb (XD01-366): use NeutralOperatorActions.Dispute (GeoAssets.Workflow.Isp.NeutralOperator). Kept only so its number stays reserved.")]
+    [Obsolete("A vertical's verb (XD01-366): use NeutralOperatorActions.Dispute (GeoAssets.NeutralOperator.Application). Kept only so its number stays reserved.")]
     Dispute,
 }

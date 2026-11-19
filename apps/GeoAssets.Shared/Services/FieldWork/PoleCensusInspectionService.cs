@@ -1,7 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.FieldWork;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Shared.Services.FieldWork;

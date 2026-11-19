@@ -1,7 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.FieldWork;
-using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.NeutralOperator.Application.Bss;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.FieldService.Server;

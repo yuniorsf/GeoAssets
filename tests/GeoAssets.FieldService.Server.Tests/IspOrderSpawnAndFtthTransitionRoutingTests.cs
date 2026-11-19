@@ -9,7 +9,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.FieldWork;
-using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.NeutralOperator.Application.Bss;
 using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;

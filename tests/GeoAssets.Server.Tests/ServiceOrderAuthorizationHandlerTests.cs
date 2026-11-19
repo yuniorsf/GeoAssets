@@ -3,7 +3,7 @@ using FluentAssertions;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Authorization;

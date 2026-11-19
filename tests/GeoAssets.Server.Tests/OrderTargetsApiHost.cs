@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
@@ -10,8 +10,8 @@ using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using GeoAssets.Workflow.TestKit;

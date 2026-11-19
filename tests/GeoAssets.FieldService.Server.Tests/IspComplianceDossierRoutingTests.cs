@@ -6,7 +6,7 @@ using System.Text.Encodings.Web;
 using FluentAssertions;
 using GeoAssets.Core.Bdgd;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;

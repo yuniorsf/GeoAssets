@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using GeoAssets.Shared.Services.SharedUse;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Xunit;

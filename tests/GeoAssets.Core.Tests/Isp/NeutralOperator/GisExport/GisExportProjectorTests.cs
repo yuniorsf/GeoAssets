@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.GisExport;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.GisExport;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using Xunit;

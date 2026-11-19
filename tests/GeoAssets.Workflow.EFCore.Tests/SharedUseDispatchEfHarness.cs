@@ -1,5 +1,5 @@
 using GeoAssets.Core.Messaging;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Notifications;
 using GeoAssets.Workflow.Orders;

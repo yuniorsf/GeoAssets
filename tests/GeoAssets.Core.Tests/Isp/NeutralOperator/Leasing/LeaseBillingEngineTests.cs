@@ -1,6 +1,6 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.Leasing;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.Leasing;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Isp.NeutralOperator.Leasing;

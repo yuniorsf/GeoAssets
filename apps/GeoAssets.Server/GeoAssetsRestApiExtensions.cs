@@ -1,6 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.NeutralOperator.GisExport;
+using GeoAssets.NeutralOperator.Domain.GisExport;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;

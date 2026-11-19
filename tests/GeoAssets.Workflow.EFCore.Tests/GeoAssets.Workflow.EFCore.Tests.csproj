@@ -35,6 +35,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Domain\GeoAssets.NeutralOperator.Domain.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />

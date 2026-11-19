@@ -1,5 +1,5 @@
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.Persistence.Entities;
 
 namespace GeoAssets.Workflow.Persistence;

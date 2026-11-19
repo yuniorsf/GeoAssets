@@ -1,11 +1,11 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;

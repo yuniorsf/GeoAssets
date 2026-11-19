@@ -23,7 +23,7 @@ using GeoAssets.Web.Services.Identity;
 using GeoAssets.Web.Services.Map;
 using GeoAssets.Web.Services.Session;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Web;

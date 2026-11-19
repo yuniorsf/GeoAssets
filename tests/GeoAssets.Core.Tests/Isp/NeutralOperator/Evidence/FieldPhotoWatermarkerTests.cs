@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Evidence;
+using GeoAssets.NeutralOperator.Domain.Evidence;
 using ImageMagick;
 using Xunit;
 

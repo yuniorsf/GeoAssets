@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.NeutralOperator.Application.Bss;
 
 namespace GeoAssets.FieldService.Server;
 

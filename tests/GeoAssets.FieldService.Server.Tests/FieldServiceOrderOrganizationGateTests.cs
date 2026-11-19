@@ -10,7 +10,7 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Workflow.Contractors;
 using GeoAssets.Workflow.Contractors.Governance;
 using GeoAssets.Workflow.FieldWork;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;

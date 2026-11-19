@@ -11,4 +11,11 @@ namespace GeoAssets.Workflow.Targets;
 /// <param name="PartyKind">Which party each child order is addressed to.</param>
 public sealed record OrderTargetFanOutPolicy(
     string ChildOrderTypeId,
-    OrderTargetFanOutPartyKind PartyKind = OrderTargetFanOutPartyKind.OccupantOrganization);
+    OrderTargetFanOutPartyKind PartyKind = OrderTargetFanOutPartyKind.OccupantOrganization)
+{
+    /// <summary>
+    /// Attribute of a fanned-out child order holding the organization it was created for, as canonical GUID text — the
+    /// engine's, so it can reserve it from recipients' edits (XD01-375; formerly owned by the shared-use dispatch).
+    /// </summary>
+    public const string PartyOrganizationAttribute = "fanOutPartyOrganizationId";
+}

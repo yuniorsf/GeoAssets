@@ -1,6 +1,7 @@
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

@@ -10,7 +10,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow.Messaging.Protobuf;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

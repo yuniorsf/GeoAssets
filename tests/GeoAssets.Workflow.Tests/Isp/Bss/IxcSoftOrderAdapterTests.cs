@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Workflow.FieldWork;
-using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.NeutralOperator.Application.Bss;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

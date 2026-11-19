@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

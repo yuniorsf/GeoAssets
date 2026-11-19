@@ -1,5 +1,5 @@
 using System.Globalization;
-using GeoAssets.Core.Isp;
+using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 

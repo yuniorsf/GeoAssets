@@ -1,7 +1,7 @@
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Workflow.Messaging.Protobuf;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;

@@ -1,4 +1,4 @@
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Models;
 
 namespace GeoAssets.Tools.SharedUseImport.Tests;

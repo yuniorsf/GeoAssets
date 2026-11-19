@@ -1,13 +1,13 @@
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.NeutralOperator;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Server;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Rules;

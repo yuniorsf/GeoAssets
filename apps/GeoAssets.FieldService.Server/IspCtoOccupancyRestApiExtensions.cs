@@ -1,5 +1,5 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp;
+using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authentication;

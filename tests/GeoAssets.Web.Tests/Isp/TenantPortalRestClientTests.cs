@@ -7,7 +7,7 @@ using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Services;
 using GeoAssets.Web.Services.Isp.Rest;
 using GeoAssets.Web.Tests.Identity;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;

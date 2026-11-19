@@ -1,11 +1,11 @@
 using System.Text.RegularExpressions;
 using FluentAssertions;
-using GeoAssets.Core.Isp;
+using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Models;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Server.Tests.Architecture.Fixtures;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

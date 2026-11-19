@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using GeoAssets.Workflow.TestKit;

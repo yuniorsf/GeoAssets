@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using GeoAssets.Workflow.Isp.Bss;
+using GeoAssets.NeutralOperator.Application.Bss;
 using Microsoft.Extensions.Configuration;
 
 namespace GeoAssets.FieldService.Server;

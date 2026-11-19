@@ -16,7 +16,7 @@ public static class ServiceOrderRecipientEdit
     /// Attributes a recipient may not set, change or remove: the scope a cross-organization grant
     /// is matched against, and the occupant a shared-use notice was fanned out to.
     /// </summary>
-    public static IReadOnlyList<string> ReservedAttributeKeys { get; } = ["scopeId", Isp.NeutralOperator.SharedUse.SharedUseDispatchPlanner.PartyOrganizationAttribute];
+    public static IReadOnlyList<string> ReservedAttributeKeys { get; } = ["scopeId", Targets.OrderTargetFanOutPolicy.PartyOrganizationAttribute];
 
     /// <summary>
     /// The names of the fields <paramref name="replacement"/> changes that a recipient may not,

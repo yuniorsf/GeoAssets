@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Isp.Compliance;
+using GeoAssets.NeutralOperator.Domain.Compliance;
 using GeoAssets.Core.Models;
 
 namespace GeoAssets.FieldService.Server;
@@ -9,7 +9,7 @@ namespace GeoAssets.FieldService.Server;
 /// Concessionaire compliance dossier exporter (XD01-284), built on XD01-279's ISP vertical host
 /// scaffolding. The thin HTTP façade over <see cref="DossierExporterRegistry"/> and
 /// whichever <see cref="IDossierExporter"/> it resolves — all the real format logic
-/// lives in <c>GeoAssets.Core.Isp.Compliance</c>.
+/// lives in <c>GeoAssets.NeutralOperator.Domain.Compliance</c>.
 /// </summary>
 internal static class IspComplianceDossierRestApiExtensions
 {

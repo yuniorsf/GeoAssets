@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.TestKit;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;

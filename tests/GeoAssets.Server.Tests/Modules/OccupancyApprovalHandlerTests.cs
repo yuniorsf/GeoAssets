@@ -1,7 +1,7 @@
 using FluentAssertions;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Server.Modules.NeutralOperator;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;

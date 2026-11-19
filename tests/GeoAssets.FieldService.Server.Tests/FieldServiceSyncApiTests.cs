@@ -8,7 +8,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
-using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;

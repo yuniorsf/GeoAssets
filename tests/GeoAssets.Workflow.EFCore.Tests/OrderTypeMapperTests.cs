@@ -230,7 +230,7 @@ public class OrderTypeMapperTests
     [Fact]
     public void RecipientActions_OfTheNotice_AreOneGrantRowPerAction_PlusOneRowPerMoveItMakes()
     {
-        var notice = GeoAssets.Workflow.Isp.NeutralOperator.SharedUse.SharedUseOrderTypes.CreateOccupantNotice();
+        var notice = GeoAssets.NeutralOperator.Application.SharedUse.SharedUseOrderTypes.CreateOccupantNotice();
 
         OrderTypeMapper.ToRecipientActionRecords(notice)
             .Select(r => (r.OrderTypeId, r.Action, r.FromStateKey, r.ToStateKey))

@@ -1,8 +1,8 @@
 using System.Text.Json;
-using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
+using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Services;
-using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
-using GeoAssets.Workflow.Occupancy;
+using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
