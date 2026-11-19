@@ -16,8 +16,6 @@ public static class WfsServiceExtensions
     {
         services.AddHttpClient();
         services.AddSingleton<WfsProviderFactory>();
-        services.AddSingleton<IExternalProviderFactory>(
-            sp => sp.GetRequiredService<WfsProviderFactory>());
         services.AddSingleton<IProviderPlugin, WfsProviderPlugin>();
         return services;
     }

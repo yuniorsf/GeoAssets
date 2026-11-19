@@ -14,8 +14,7 @@ public static class PostgresSpatialQueryServiceExtensions
     /// Registers <see cref="PostgresAssetSpatialQuery"/> as the host's <see cref="IAssetSpatialQuery"/>
     /// (replacing any earlier registration of that port), so area/attribute selection is pushed
     /// down to PostGIS instead of scanning <c>PostgresAssetProvider</c>'s in-memory cache. Call it
-    /// next to <see cref="PostgresServiceExtensions.AddWarmedPostgresAssetProviderAsync"/>, with the
-    /// same connection string.
+    /// with the connection string of the host's PostgreSQL asset catalog.
     ///
     /// Scoped, so each request's own <see cref="ITenantContext"/> drives its tenant scoping; a host
     /// that registers no <see cref="ITenantContext"/> gets <see cref="NullTenantContext"/>, i.e.

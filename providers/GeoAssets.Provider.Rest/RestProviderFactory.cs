@@ -4,20 +4,18 @@ using Microsoft.Extensions.Http;
 namespace GeoAssets.Provider.Rest;
 
 /// <summary>
-/// <see cref="IAsyncProviderFactory"/> that creates a <see cref="RestAssetProvider"/>
+/// Creates a <see cref="RestAssetProvider"/>
 /// connecting to a remote GeoAssets REST API.
 ///
 /// The connection string must be the API base URL, e.g.
 /// <c>http://localhost:5000/api/geoassets</c>.
 /// The factory loads the full dataset from the server on creation.
 /// </summary>
-public sealed class RestProviderFactory : IAsyncProviderFactory
+public sealed class RestProviderFactory
 {
     private readonly IHttpClientFactory _httpFactory;
 
     public RestProviderFactory(IHttpClientFactory httpFactory) => _httpFactory = httpFactory;
-
-    public string ProviderName => "REST";
 
     /// <summary>Creates a provider without loading initial data. Prefer <see cref="CreateAsync"/>.</summary>
     public IAssetProvider Create(string connectionString)

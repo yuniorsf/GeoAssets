@@ -6,6 +6,7 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Projects;
 using GeoAssets.Server;
+using GeoAssets.Server.Catalogs;
 using GeoAssets.Server.Modules.IpBillingBridge;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Server.Modules.PostgresSpatial;
@@ -98,9 +99,14 @@ builder.Services.AddObservableOrderTargetSelection();
 // WorkflowMessagingHostExtensions.AddServerWorkflowMessaging for what happens to messages until then.
 builder.Services.AddServerWorkflowMessaging(builder.Configuration);
 
+// ── Asset catalogs (XD01-371, ADR-001 Phase 4) — the named catalogs of GeoAssets:Providers, each built by the provider
+// plugin it names once the host is built (InitializeCatalogPoolAsync below); the "primary" one is the host's
+// IAssetProvider. Registered before the modules: they contribute the plugins, and may scope that IAssetProvider.
+builder.Services.AddServerCatalogPool(builder.Configuration);
+
 // ── Modules (XD01-358/XD01-359, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in that
 // order; with none the kernel boots on its own (invariant I5).
-//   PostgresSpatialModule: the PostgreSQL/PostGIS asset store, organization catalogs, WMS.
+//   PostgresSpatialModule: the "postgres" provider plugin, organization catalogs, WMS.
 //   NeutralOperatorModule: shared-use dispatch, pole occupancy staging and commit, the in-process
 //     asset-mutation apply, clandestine attachments and the ISP tenant portal.
 //   IpBillingBridgeModule: the município↔Prefeitura grant provisioning for IP billing.
@@ -163,6 +169,9 @@ builder.Services.AddCors(opts =>
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+// Build the asset catalogs (migrating and warming the Postgres one) before anything reads assets.
+await app.Services.InitializeCatalogPoolAsync().ConfigureAwait(false);
 
 // Overlay any DB-persisted OrderTypes on top of the seeded defaults.
 await app.Services.LoadRegistryFromDbAsync().ConfigureAwait(false);

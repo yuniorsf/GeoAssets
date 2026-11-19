@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Hosting.Abstractions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,16 @@ public sealed class KernelOnlyHostTests
         (await client.GetAsync(new Uri("/healthz", UriKind.Relative))).StatusCode.Should().Be(HttpStatusCode.OK);
         (await client.GetAsync(new Uri("/api/geoassets/features", UriKind.Relative))).StatusCode.Should().Be(HttpStatusCode.OK);
         (await client.GetAsync(new Uri("/api/workflow/order-types", UriKind.Relative))).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task KernelOnly_CatalogPool_SkipsTheUnregisteredPostgresCatalog()
+    {
+        var factory = await ServerHostFixture.GetKernelOnlyFactoryAsync();
+        using var client = factory.CreateClient();
+
+        factory.Services.GetRequiredService<ICatalogPool>().CatalogIds.Should().BeEmpty();
+        (await client.GetAsync(new Uri("/healthz", UriKind.Relative))).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

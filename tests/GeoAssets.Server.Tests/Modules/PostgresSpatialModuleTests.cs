@@ -1,4 +1,6 @@
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
+using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Server.Modules.PostgresSpatial;
 using GeoAssets.Server.Tests.Routing;
@@ -40,13 +42,28 @@ public sealed class PostgresSpatialModuleTests
     }
 
     [Fact]
-    public Task ConfigureServicesAsync_WithoutConnectionString_Throws()
+    public void ConfigureServices_WithoutConnectionString_Throws()
     {
         var configuration = new ConfigurationBuilder().Build();
 
-        var act = async () => await new PostgresSpatialModule().ConfigureServicesAsync(new ServiceCollection(), configuration, CancellationToken.None);
+        var act = () => new PostgresSpatialModule().ConfigureServices(new ServiceCollection(), configuration);
 
-        return act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*postgres-spatial*GeoAssets*connection string*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*postgres-spatial*GeoAssets*connection string*");
+    }
+
+    [Fact]
+    public void ConfigureServices_RegistersThePostgresProviderPlugin()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["ConnectionStrings:GeoAssets"] = "Host=localhost;Database=unused" })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAssetProvider>(new TestAssetProvider());
+
+        new PostgresSpatialModule().ConfigureServices(services, configuration);
+
+        services.Where(d => d.ServiceType == typeof(IProviderPlugin)).Should().ContainSingle()
+            .Which.ImplementationType.Should().Be<PostgresProviderPlugin>();
     }
 
     [Fact]

@@ -116,7 +116,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 ## PostgreSQL Provider
 
 - Register with `builder.Services.AddGeoAssetsPostgres()` (server-side hosts only — not Blazor WASM)
-- `IExternalProviderFactory` (Core) — discoverable; `ProviderPoolPanel` renders entries managed in `IProviderPool`
+- `PostgresProviderPlugin` (`IProviderPlugin`, id `postgres`) — `GeoAssets.Server`'s `ICatalogPool` builds the named catalogs of `GeoAssets:Providers` with it at startup (XD01-371); the `primary` catalog is the host's `IAssetProvider`. `ProviderPoolPanel` (client) renders entries managed in `IProviderPool`
 - NTS bridge: write `feature.Geometry?.NtsGeometry` → `GeoEntityRow.Geom`; read `GeoGeometry.FromNts(row.Geom)` → `GeoFeature.Geometry`
 - Key files: `Data/GeoAssetsDbContext.cs`, `Entities/GeoEntityRow.cs`, `Repositories/PostgresAssetProvider.cs`, `PostgresProviderFactory.cs`
 

@@ -18,7 +18,7 @@ namespace GeoAssets.Provider.WFS;
 /// https://my-server.com/wfs|geoassets:feature|5000
 /// </code>
 /// </summary>
-public sealed class WfsProviderFactory : IAsyncProviderFactory
+public sealed class WfsProviderFactory
 {
     private const string DefaultTypeName   = "geoassets:feature";
     private const int    DefaultMaxFeatures = 10_000;
@@ -33,8 +33,6 @@ public sealed class WfsProviderFactory : IAsyncProviderFactory
         _httpFactory    = httpFactory;
         _providerLogger = providerLogger;
     }
-
-    public string ProviderName => "WFS";
 
     /// <summary>Creates a provider without loading initial data. Prefer <see cref="CreateAsync"/>.</summary>
     public IAssetProvider Create(string connectionString)

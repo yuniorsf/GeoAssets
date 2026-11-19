@@ -14,12 +14,13 @@ namespace GeoAssets.Server;
 ///
 /// Typical host setup:
 /// <code>
-/// builder.Services.AddGeoAssetsPostgres();
-/// await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString);
+/// builder.Services.AddServerCatalogPool(builder.Configuration); // GeoAssets:Providers (XD01-371)
+/// var app = builder.Build();
+/// await app.Services.InitializeCatalogPoolAsync();
 /// app.MapGeoAssetsApi();
 /// </code>
-/// (pre-warms the provider's cache before the host starts serving requests — XD01-173;
-/// see <c>PostgresServiceExtensions.AddWarmedPostgresAssetProviderAsync</c>'s own doc comment)
+/// (the catalogs are built and pre-warmed before the host starts serving requests — XD01-173;
+/// see <c>CatalogPool</c>'s own doc comment)
 ///
 /// CORS: add <c>builder.Services.AddCors()</c> and <c>app.UseCors()</c> on the host
 /// when the Blazor WASM client is served from a different origin.
