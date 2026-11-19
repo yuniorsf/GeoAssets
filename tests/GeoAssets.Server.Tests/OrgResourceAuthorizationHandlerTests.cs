@@ -246,6 +246,23 @@ public class OrgResourceAuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task Grant_ResourceTypeAndActionDifferingInCase_Succeeds()
+    {
+        // XD01-364: the grant matcher is shared with the workflow's service-order grant rule, which compares both ignoring
+        // case; this handler used to compare them ordinally.
+        var granteeOrgId = Guid.NewGuid();
+        var resourceOrgId = Guid.NewGuid();
+        var resource = new AssetType { OrganizationId = resourceOrgId };
+        var grant = Grant(granteeOrgId, resourceOrgId, ["FEATURES:EDIT"], resourceType: nameof(AssetType).ToUpperInvariant());
+        var handler = Sut(["features:edit"], userOrganizationId: granteeOrgId, grants: [grant]);
+        var context = Context(new OrgResourceRequirement("features:edit"), resource);
+
+        await handler.HandleAsync(context);
+
+        context.HasSucceeded.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleRequirementAsync_GrantMissingRequestedAction_DoesNotSucceed()
     {
         // Non-leakage: a grant for "features:read" must not also unlock "features:edit".

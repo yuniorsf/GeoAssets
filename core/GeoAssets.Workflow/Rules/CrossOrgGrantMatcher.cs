@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.Rules;
@@ -33,7 +34,7 @@ internal static class CrossOrgGrantMatcher
         var actionCode = $"{ServiceOrderActionPrefix}{action}";
 
         return Applying(principal, order, utcNow)
-            .Any(g => g.AllowedActions.Contains(actionCode, StringComparer.OrdinalIgnoreCase));
+            .Any(g => OrganizationGrantMatching.AllowsAction(g.AllowedActions, actionCode));
     }
 
     /// <summary>True when a grant applying to the order lists at least one service-order action.</summary>
@@ -48,9 +49,9 @@ internal static class CrossOrgGrantMatcher
 
         return principal.OrgGrants.Where(g =>
             g.ResourceOrganizationId.Equals(resourceOrganizationId, StringComparison.OrdinalIgnoreCase) &&
-            (g.ResourceType is null || g.ResourceType.Equals(nameof(ServiceOrder), StringComparison.OrdinalIgnoreCase)) &&
+            OrganizationGrantMatching.CoversResourceType(g.ResourceType, nameof(ServiceOrder)) &&
             (g.RequiredRole is null || principal.HasRole(g.RequiredRole)) &&
-            (g.ScopeId is null || string.Equals(g.ScopeId, orderScopeId, StringComparison.Ordinal)) &&
+            OrganizationGrantMatching.CoversScope(g.ScopeId, orderScopeId) &&
             (g.ExpiresAt is not { } expiresAt || expiresAt > utcNow));
     }
 }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Authorization;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
@@ -9,19 +10,21 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 /// <summary>
 /// Maps the tenant ISP self-service portal's REST surface (XD01-269) at
 /// <c>/api/isp/tenant-portal</c> — attachment-request submission/listing and clandestine-flag
-/// disputing, both scoped by the caller's own <c>OrganizationId</c>
-/// (<see cref="ITenantContext"/>/<see cref="IOrgOwnedResource"/>), the same real multi-tenant
-/// isolation boundary <see cref="OrgResourceAuthorizationHandler"/> enforces elsewhere in this
-/// codebase (XD01-21) — not a bespoke isolation mechanism invented for this ticket.
+/// disputing, both scoped by the caller's own <c>OrganizationId</c> (<see cref="ITenantContext"/>).
 ///
 /// "Poles flagged for regularization affecting them" and "dispute submissions" both operate on
-/// the existing clandestine-notice <c>ServiceOrder</c>s from XD01-263 — <see cref="ClandestineAttachmentOrderTypes"/>
-/// orders were never actually wired into any host's <c>OrderTypeRegistry</c> before this ticket
-/// (see <c>Program.cs</c>'s registration comment); this is the first REST surface over them.
+/// the existing clandestine-notice <c>ServiceOrder</c>s from XD01-263 (<see cref="ClandestineAttachmentOrderTypes"/>).
 /// "Attachment requests" are modeled as their own new <c>ServiceOrder</c> type
 /// (<see cref="TenantAttachmentRequestOrderTypes"/>) rather than a bespoke aggregate, for the
 /// same reason every other order type in this epic is: optimistic concurrency, an audit trail,
 /// and real org-scoped isolation "for free."
+///
+/// <para><b>One decision point (XD01-364, ADR-001 smell H).</b> Every route here decides with <c>ServiceOrderRules</c>,
+/// exactly as <c>/api/workflow</c> does: submitting checks the type's creation policies
+/// (<see cref="ServiceOrderCreateRequirement"/>); reading keeps only the orders whose organization gate the caller passes
+/// (another organization's order is a 404, as an unknown id is); disputing evaluates the <c>Dispute</c> entry
+/// (<see cref="ServiceOrderActionRequirement"/>) and is then performed by the module's order action handler — the same
+/// one <c>POST /service-orders/{id}/actions</c> reaches. The route permissions stay as the first, coarse check.</para>
 /// </summary>
 public static class IspTenantPortalRestApiExtensions
 {
@@ -47,34 +50,41 @@ public static class IspTenantPortalRestApiExtensions
             IServiceOrderRepository orders,
             ITenantContext tenant,
             TimeProvider timeProvider,
+            IAuthorizationService authz,
             HttpContext http) =>
         {
+            var allowed = await authz.AuthorizeAsync(
+                http.User, resource: null, new ServiceOrderCreateRequirement(TenantAttachmentRequestOrderTypes.AttachmentRequestId))
+                .ConfigureAwait(false);
+            if (!allowed.Succeeded) return ServiceOrderRouteAccess.Refusal(allowed);
+
             var order = BuildAttachmentRequestOrder(body, tenant, timeProvider, http);
-            await orders.AddAsync(order).ConfigureAwait(false);
+            await orders.AddAsync(order, http.RequestAborted).ConfigureAwait(false);
             return Results.Created($"{prefix}/attachment-requests/{order.Id}", order);
         }).RequireAuthorization(WritePermission);
 
         routes.MapGet($"{prefix}/attachment-requests", async (
-            IServiceOrderRepository orders, ITenantContext tenant) =>
+            IServiceOrderRepository orders, ITenantContext tenant, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
         {
-            var mine = await orders.GetByOrderTypeAsync(TenantAttachmentRequestOrderTypes.AttachmentRequestId)
+            var mine = await orders.GetByOrderTypeAsync(TenantAttachmentRequestOrderTypes.AttachmentRequestId, ct)
                 .ConfigureAwait(false);
-            return Results.Json(mine.Where(o => o.OrganizationId == tenant.CurrentOrganizationId).ToList(), opts);
+            var readable = await ServiceOrderRouteAccess.KeepReadableAsync(
+                [.. mine.Where(o => o.OrganizationId == tenant.CurrentOrganizationId)], rules, principalFactory, ct)
+                .ConfigureAwait(false);
+            return Results.Json(readable, opts);
         }).RequireAuthorization(ReadPermission);
 
         routes.MapGet($"{prefix}/attachment-requests/{{id}}", async (
-            string id, IServiceOrderRepository orders, IAuthorizationService authz, HttpContext http) =>
+            string id, IServiceOrderRepository orders, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
         {
-            var order = await orders.GetByIdAsync(id).ConfigureAwait(false);
-            if (order is null) return Results.NotFound();
-
-            var result = await authz.AuthorizeAsync(http.User, order, new OrgResourceRequirement(ReadPermission))
+            var order = await ServiceOrderRouteAccess.FindReadableAsync(id, orders, rules, principalFactory, ct)
                 .ConfigureAwait(false);
-            if (!result.Succeeded)
-                return Results.Json(new { reason = "Not authorized to read this attachment request." },
-                    statusCode: StatusCodes.Status403Forbidden);
-
-            return Results.Json(order, opts);
+            return order is not null
+                && string.Equals(order.OrderTypeId, TenantAttachmentRequestOrderTypes.AttachmentRequestId, StringComparison.Ordinal)
+                    ? Results.Json(order, opts)
+                    : Results.NotFound();
         }).RequireAuthorization(ReadPermission);
     }
 
@@ -98,51 +108,63 @@ public static class IspTenantPortalRestApiExtensions
     private static void MapFlaggedNotices(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
         routes.MapGet($"{prefix}/flagged-notices", async (
-            IClandestineAttachmentService clandestine, ITenantContext tenant) =>
+            IClandestineAttachmentService clandestine, ITenantContext tenant, ServiceOrderRules rules,
+            ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
         {
-            var flagged = await clandestine.GetActiveFlaggedForOrganizationAsync(tenant.CurrentOrganizationId)
+            var flagged = await clandestine.GetActiveFlaggedForOrganizationAsync(tenant.CurrentOrganizationId, ct)
                 .ConfigureAwait(false);
-            return Results.Json(flagged, opts);
+            var readable = await ServiceOrderRouteAccess.KeepReadableAsync(flagged, rules, principalFactory, ct)
+                .ConfigureAwait(false);
+            return Results.Json(readable, opts);
         }).RequireAuthorization(ReadPermission);
 
         routes.MapPost($"{prefix}/flagged-notices/{{id}}/dispute", async (
             string id,
             SubmitDisputeRequest body,
             IServiceOrderRepository orders,
-            IClandestineAttachmentService clandestine,
+            OrderTypeRegistry orderTypes,
+            IEnumerable<IOrderActionHandler> handlers,
+            ServerWorkflowPrincipalFactory principalFactory,
             IAuthorizationService authz,
-            HttpContext http) => await HandleDisputeAsync(id, body, orders, clandestine, authz, http, opts)
-                .ConfigureAwait(false))
-            .RequireAuthorization(WritePermission);
+            TimeProvider timeProvider,
+            HttpContext http) =>
+        {
+            var order = await orders.GetByIdAsync(id, http.RequestAborted).ConfigureAwait(false);
+            if (order is null || orderTypes.Find(order.OrderTypeId) is not { Id: ClandestineAttachmentOrderTypes.ClandestineNoticeId } orderType)
+                return Results.NotFound();
+
+            var entry = new OrderActionLog(
+                OrderActionType.Dispute,
+                http.User.Identity?.Name ?? "unknown",
+                timeProvider.GetUtcNow().UtcDateTime,
+                Comment: body.EvidenceReference,
+                ResultingStatus: ClandestineAttachmentWorkflowGraph.Disputed);
+
+            var allowed = await authz.AuthorizeAsync(http.User, order, new ServiceOrderActionRequirement(entry)).ConfigureAwait(false);
+            if (!allowed.Succeeded) return ServiceOrderRouteAccess.Refusal(allowed);
+
+            var outcome = await PerformAsync(
+                new OrderActionHandlerRegistry(handlers), order, orderType, entry, principalFactory, http.RequestAborted)
+                .ConfigureAwait(false);
+            if (outcome.Kind != OrderActionOutcomeKind.Applied) return OrderActionResults.ToResult(outcome);
+
+            var disputed = await orders.GetByIdAsync(id, http.RequestAborted).ConfigureAwait(false);
+            return disputed is null ? Results.NotFound() : Results.Json(ClandestineAttachmentService.DescribeFlag(disputed), opts);
+        }).RequireAuthorization(WritePermission);
     }
 
-    private static async Task<IResult> HandleDisputeAsync(
-        string id,
-        SubmitDisputeRequest body,
-        IServiceOrderRepository orders,
-        IClandestineAttachmentService clandestine,
-        IAuthorizationService authz,
-        HttpContext http,
-        JsonSerializerOptions opts)
+    /// <summary>
+    /// Performs an action the rule chain already allowed with the module handler that claims it — the same one
+    /// <c>POST /service-orders/{id}/actions</c> reaches.
+    /// </summary>
+    private static async Task<OrderActionOutcome> PerformAsync(
+        OrderActionHandlerRegistry handlers, IServiceOrder order, OrderType orderType, OrderActionLog entry,
+        ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct)
     {
-        var order = await orders.GetByIdAsync(id).ConfigureAwait(false);
-        if (order is null) return Results.NotFound();
+        var handler = handlers.Find(orderType, entry)
+            ?? throw new InvalidOperationException($"No order action handler performs '{entry.Action}' on '{orderType.Id}' orders.");
 
-        var result = await authz.AuthorizeAsync(http.User, order, new OrgResourceRequirement(WritePermission))
-            .ConfigureAwait(false);
-        if (!result.Succeeded)
-            return Results.Json(new { reason = "Not authorized to dispute this notice." },
-                statusCode: StatusCodes.Status403Forbidden);
-
-        try
-        {
-            var disputeResult = await clandestine.DisputeAsync(
-                id, body.EvidenceReference, http.User.Identity?.Name).ConfigureAwait(false);
-            return Results.Json(disputeResult, opts);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Results.Json(new { reason = ex.Message }, statusCode: StatusCodes.Status400BadRequest);
-        }
+        var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
+        return await handler.HandleAsync(new OrderActionContext(order, orderType, entry, principal), ct).ConfigureAwait(false);
     }
 }

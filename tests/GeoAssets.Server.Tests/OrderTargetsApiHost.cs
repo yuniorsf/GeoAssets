@@ -10,6 +10,7 @@ using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow;
+using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
@@ -69,6 +70,11 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         ["occupant-admin"] = new(new Guid("00000000-0000-4000-8000-0000000003c3"), OrgC, ["Administrator"], ["serviceorders:read"]),
         ["crew-b"] = new(new Guid("00000000-0000-4000-8000-0000000003b1"), OrgB, ["Crew"], ["serviceorders:read"]),
         ["supervisor-b"] = new(new Guid("00000000-0000-4000-8000-0000000003b2"), OrgB, ["Supervisor"], ["serviceorders:read"]),
+        // XD01-364: the retail ISPs of organizations A and B (the seeded IspTenant role holds these two permissions), and a
+        // member of A with the create permission only — the user the permission-based check used to let dispute a notice.
+        ["tenant-a"] = new(new Guid("00000000-0000-4000-8000-000000000364"), OrgA, ["IspTenant"], ["serviceorders:read", "serviceorders:create"]),
+        ["tenant-b"] = new(new Guid("00000000-0000-4000-8000-000000000365"), OrgB, ["IspTenant"], ["serviceorders:read", "serviceorders:create"]),
+        ["create-only-a"] = new(new Guid("00000000-0000-4000-8000-000000000366"), OrgA, [], ["serviceorders:read", "serviceorders:create"]),
     };
 
     private readonly IHost _host;
@@ -85,6 +91,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         Occupancy = host.Services.GetRequiredService<InMemoryPoleOccupancyStore>();
         ChangeSets = host.Services.GetRequiredService<InMemoryOccupancyChangeSetStore>();
         Outbox = host.Services.GetRequiredService<RecordingOutboxWriter>();
+        Clock = (FakeTimeProvider)host.Services.GetRequiredService<TimeProvider>();
     }
 
     public TestServer Server { get; }
@@ -106,19 +113,28 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
     /// <summary>What the shared-use dispatch staged on the outbox (XD01-316).</summary>
     public RecordingOutboxWriter Outbox { get; }
 
+    /// <summary>The host's clock, for a fact that needs time to pass (XD01-364).</summary>
+    public FakeTimeProvider Clock { get; }
+
     public static async Task<OrderTargetsApiHost> StartAsync(
         Action<OrderTargetSelectionOptions>? configure = null,
         IAssetSpatialQuery? spatialQuery = null,
         Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders = null,
         bool mapOrderRoutes = false,
         bool mapOccupancyRoutes = false,
-        bool mapSharedUseRoutes = false)
+        bool mapSharedUseRoutes = false,
+        bool mapIspPortalRoutes = false,
+        Action<IServiceCollection>? configureServices = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();
-                webHost.ConfigureServices(services => ConfigureServices(services, configure, spatialQuery, decorateOrders));
+                webHost.ConfigureServices(services =>
+                {
+                    ConfigureServices(services, configure, spatialQuery, decorateOrders, mapIspPortalRoutes);
+                    configureServices?.Invoke(services);
+                });
                 webHost.Configure(app =>
                 {
                     app.Use(async (context, next) =>
@@ -144,6 +160,8 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
                         if (mapOccupancyRoutes) endpoints.MapServiceOrderOccupancyApi();
                         // XD01-316: on request, the shared-use dispatch routes.
                         if (mapSharedUseRoutes) endpoints.MapSharedUseDispatchApi();
+                        // XD01-364: on request, the ISP tenant portal over the same identities, orders and rules.
+                        if (mapIspPortalRoutes) endpoints.MapIspTenantPortalApi();
                     });
                 });
             })
@@ -156,13 +174,14 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         IServiceCollection services,
         Action<OrderTargetSelectionOptions>? configure,
         IAssetSpatialQuery? spatialQuery,
-        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders)
+        Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders,
+        bool ispPortal)
     {
         services.AddRouting();
         services.AddHttpContextAccessor();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
 
-        services.AddOrderTypeRegistry(RegisterOrderTypes);
+        services.AddOrderTypeRegistry(registry => RegisterOrderTypes(registry, ispPortal));
         services.AddSingleton<IOrderTypeRepository, FakeOrderTypeRepository>();
         services.AddSingleton<FakeServiceOrderRepository>();
         services.AddSingleton<IServiceOrderRepository>(sp =>
@@ -183,6 +202,15 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
 
         services.AddServiceOrderRules();
         services.AddScoped<ServerWorkflowPrincipalFactory>();
+        if (ispPortal)
+        {
+            // The NeutralOperator module's wiring (XD01-364): the notice's action handler and the requirements that
+            // answer the portal's routes.
+            services.AddServiceOrderAuthorization();
+            services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
+            services.AddScoped<IOrderActionHandler, ClandestineNoticeActionHandler>();
+        }
+
         services.AddFeatureSelection();
         services.AddOrderTargets(configure);
 
@@ -229,8 +257,14 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<IOrganizationGrantRepository>(sp => sp.GetRequiredService<TestOrganizationGrantRepository>());
     }
 
-    private static void RegisterOrderTypes(OrderTypeRegistry registry)
+    private static void RegisterOrderTypes(OrderTypeRegistry registry, bool ispPortal)
     {
+        if (ispPortal)
+        {
+            ClandestineAttachmentOrderTypes.RegisterAll(registry);
+            TenantAttachmentRequestOrderTypes.RegisterAll(registry);
+        }
+
         registry.Register(SurveyType(PoleSurvey, selectionLimit: null, OrderTargetExclusivity.None));
         registry.Register(SurveyType(LimitedSurvey, selectionLimit: 2, OrderTargetExclusivity.None));
         registry.Register(SurveyType(BlockingSurvey, selectionLimit: null, OrderTargetExclusivity.BlockOnOverlap));

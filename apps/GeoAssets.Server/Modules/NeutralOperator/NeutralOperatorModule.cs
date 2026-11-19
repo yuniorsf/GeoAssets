@@ -1,5 +1,6 @@
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Workflow.Isp.NeutralOperator;
+using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Server.Modules.NeutralOperator;
 
@@ -48,8 +49,10 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         // catalog by an in-process outbox relay (XD01-337); every other message stays pending.
         services.AddServerInProcessAssetMutationApply(configuration, connectionString);
 
-        // IClandestineAttachmentService (XD01-263), backed by the host's IServiceOrderRepository.
+        // IClandestineAttachmentService (XD01-263), backed by the host's IServiceOrderRepository — performed only by
+        // ClandestineNoticeActionHandler, after the rule chain allowed the action (XD01-364).
         services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
+        services.AddScoped<IOrderActionHandler, ClandestineNoticeActionHandler>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)

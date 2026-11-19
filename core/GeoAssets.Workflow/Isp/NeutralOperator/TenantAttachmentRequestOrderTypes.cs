@@ -10,6 +10,8 @@ namespace GeoAssets.Workflow.Isp.NeutralOperator;
 /// via <c>IServiceOrder.OrganizationId</c> (<see cref="GeoAssets.Core.Interfaces.IOrgOwnedResource"/>)
 /// "for free," exactly the reasoning the epic's own architecture notes give for Levantamento/
 /// Fiscalização/Ofício.
+/// Only an <see cref="IspRoles.Tenant"/> may submit one (XD01-364, <see cref="OrderType.CreationPolicies"/>); a recipient
+/// of its dispatch only reads and comments on it.
 /// </summary>
 public static class TenantAttachmentRequestOrderTypes
 {
@@ -23,6 +25,8 @@ public static class TenantAttachmentRequestOrderTypes
         InitialStateKey = TenantAttachmentRequestWorkflowGraph.Submitted,
         States = TenantAttachmentRequestWorkflowGraph.States(),
         Transitions = TenantAttachmentRequestWorkflowGraph.Transitions(),
+        CreationPolicies = [new(PolicyKind.Role, IspRoles.Tenant)],
+        RecipientAccess = OrderRecipientAccess.Inform,
     };
 
     public static void RegisterAll(OrderTypeRegistry registry)
