@@ -14,8 +14,8 @@ namespace GeoAssets.Workflow.Occupancy;
 ///   <item><description>a null argument → <see cref="ArgumentNullException"/>; a blank id →
 ///   <see cref="ArgumentException"/>; paging out of range → <see cref="ArgumentOutOfRangeException"/>;</description></item>
 ///   <item><description>an unknown order → <see cref="KeyNotFoundException"/>;</description></item>
-///   <item><description>the order rules — <see cref="Orders.OrderActionType.View"/> to read,
-///   <see cref="Orders.OrderActionType.Annotate"/> to stage or discard — refuse the principal →
+///   <item><description>the order rules — <see cref="Orders.OrderAction.View"/> to read,
+///   <see cref="Orders.OrderAction.Annotate"/> to stage or discard — refuse the principal →
 ///   <see cref="OrderActionDeniedException"/> carrying the verdict (a principal outside the
 ///   order's organization gets the verdict a host reports as "no such order");</description></item>
 ///   <item><description><b>owner only:</b> a principal who passed the rules without being a

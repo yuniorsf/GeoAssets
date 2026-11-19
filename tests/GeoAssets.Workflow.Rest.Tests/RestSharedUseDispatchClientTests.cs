@@ -273,7 +273,7 @@ public sealed class RestSharedUseDispatchClientTests
 
         (await notFound.Should().ThrowAsync<KeyNotFoundException>()).Which.Should().NotBeOfType<OrderTypeNotRegisteredException>();
         var refusal = (await denied.Should().ThrowAsync<OrderActionDeniedException>()).Which;
-        refusal.Action.Should().Be(OrderActionType.Dispatch);
+        refusal.Action.Should().Be(OrderAction.Dispatch);
         refusal.Evaluation!.Reason.Should().Be("owner only");
         (await state.Should().ThrowAsync<InvalidServiceOrderTransitionException>()).Which.From.Should().Be("Completed");
         (await stale.Should().ThrowAsync<ServiceOrderConcurrencyException>()).Which.OrderId.Should().Be("ord-1");

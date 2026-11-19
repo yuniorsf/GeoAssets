@@ -28,7 +28,8 @@ internal static class OrderTypeMapper
             .Select(p => new OrderActionPermissionRecord
             {
                 OrderTypeId  = t.Id,
-                Action       = (int)p.Action,
+                Action       = StoredOrderAction.NumberOf(p.Action),
+                ActionCode   = StoredOrderAction.CodeOf(p.Action),
                 Kind         = (int)p.Kind,
                 Value        = p.Value,
                 FromStateKey = p.FromStateKey,
@@ -47,7 +48,8 @@ internal static class OrderTypeMapper
                 OrderTypeId   = t.Id,
                 FromStateKey  = x.FromStateKey,
                 ToStateKey    = x.ToStateKey,
-                TriggerAction = x.TriggerAction.HasValue ? (int)x.TriggerAction.Value : null,
+                TriggerAction = x.TriggerAction is { } trigger ? StoredOrderAction.NumberOf(trigger) : null,
+                TriggerActionCode = x.TriggerAction is { } code ? StoredOrderAction.CodeOf(code) : null,
             }).ToList(),
     };
 
@@ -61,11 +63,17 @@ internal static class OrderTypeMapper
     [
         .. t.RecipientActions.Distinct().SelectMany(action => (IEnumerable<OrderTypeRecipientActionRecord>)
         [
-            new() { OrderTypeId = t.Id, Action = (int)action },
+            new()
+            {
+                OrderTypeId = t.Id,
+                Action      = StoredOrderAction.NumberOf(action),
+                ActionCode  = StoredOrderAction.CodeOf(action),
+            },
             .. ServiceOrderTransitions.TransitionsFor(t, action).Select(x => new OrderTypeRecipientActionRecord
             {
                 OrderTypeId  = t.Id,
-                Action       = (int)action,
+                Action       = StoredOrderAction.NumberOf(action),
+                ActionCode   = StoredOrderAction.CodeOf(action),
                 FromStateKey = x.FromStateKey,
                 ToStateKey   = x.ToStateKey,
             }),
@@ -92,7 +100,8 @@ internal static class OrderTypeMapper
             .Select(p => new OrderCreationPolicy((PolicyKind)p.Kind, p.Value))
             .ToList(),
         ActionPermissions = r.ActionPermissions
-            .Select(p => new OrderActionPermission((OrderActionType)p.Action, (PolicyKind)p.Kind, p.Value, p.FromStateKey))
+            .Select(p => new OrderActionPermission(
+                StoredOrderAction.Read(p.Action, p.ActionCode), (PolicyKind)p.Kind, p.Value, p.FromStateKey))
             .ToList(),
         States = r.States
             .Select(s => new WorkflowState(s.Key, s.DisplayName, s.IsSuccess))
@@ -101,7 +110,9 @@ internal static class OrderTypeMapper
             .Select(x => new WorkflowTransition(
                 x.FromStateKey,
                 x.ToStateKey,
-                x.TriggerAction.HasValue ? (OrderActionType)x.TriggerAction.Value : null))
+                x.TriggerAction is null && x.TriggerActionCode is null
+                    ? null
+                    : StoredOrderAction.Read(x.TriggerAction, x.TriggerActionCode)))
             .ToList(),
     };
 
@@ -114,15 +125,15 @@ internal static class OrderTypeMapper
         Enum.IsDefined((OrderRecipientAccess)stored) ? (OrderRecipientAccess)stored : OrderRecipientAccess.Inform;
 
     /// <summary>
-    /// The distinct actions of <paramref name="stored"/>, in the order they were written; a number
-    /// outside <see cref="OrderActionType"/> (written by hand) is dropped — never more than stored.
+    /// The distinct actions of <paramref name="stored"/>, in the order they were written; a row with
+    /// neither a code nor a known number (written by hand) is dropped — never more than stored.
     /// </summary>
-    public static List<OrderActionType> RecipientActionsFrom(IEnumerable<OrderTypeRecipientActionRecord> stored) =>
+    public static List<OrderAction> RecipientActionsFrom(IEnumerable<OrderTypeRecipientActionRecord> stored) =>
     [
         .. stored
             .OrderBy(a => a.Id)
-            .Select(a => (OrderActionType)a.Action)
-            .Where(action => Enum.IsDefined(action))
+            .Select(a => StoredOrderAction.TryRead(a.Action, a.ActionCode, out var action) ? action : default)
+            .Where(action => !action.IsEmpty)
             .Distinct(),
     ];
 

@@ -251,6 +251,44 @@ public class OrderTypeTargetPolicyEndpointTests
         afterReplace!.RecipientActions.Should().Equal(OrderActionType.Accept, OrderActionType.Annotate);
     }
 
+    [Fact]
+    public async Task OrderTypes_PostAndGet_NewVerb_RoundTripsAsString()
+    {
+        var survey = new OrderAction("Survey");
+        using var server = await BuildServerAsync();
+        using var client = server.CreateClient();
+
+        var created = await client.PostAsJsonAsync(
+            OrderTypesUri,
+            new OrderType
+            {
+                Id = "pole-inspection",
+                DisplayName = "Pole inspection",
+                RecipientActions = [survey, OrderAction.Accept],
+                ActionPermissions = [new(survey, PolicyKind.Permission, "survey:run"), new(OrderAction.Approve, PolicyKind.Role, "Supervisor")],
+                States = [new("Pending", "Pending"), new("Surveyed", "Surveyed", IsSuccess: true)],
+                Transitions = [new("Pending", "Surveyed", survey), new("Surveyed", "Surveyed", OrderAction.Complete)],
+            },
+            ClientOptions);
+        var json = await client.GetStringAsync(PoleInspectionUri);
+        var stored = await client.GetFromJsonAsync<OrderType>(PoleInspectionUri, ClientOptions);
+
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        root.GetProperty("recipientActions").EnumerateArray().Select(e => e.ToString()).Should().Equal("Survey", "4");
+        root.GetProperty("recipientActions")[0].ValueKind.Should().Be(JsonValueKind.String);
+        root.GetProperty("recipientActions")[1].ValueKind.Should().Be(JsonValueKind.Number, "a historical action is still the number it always was");
+        var permissions = root.GetProperty("actionPermissions").EnumerateArray().Select(p => p.GetProperty("action")).ToList();
+        permissions.Select(a => a.ValueKind).Should().Equal(JsonValueKind.String, JsonValueKind.Number);
+        permissions.Select(a => a.ToString()).Should().Equal("Survey", "1");
+        var triggers = root.GetProperty("transitions").EnumerateArray().Select(t => t.GetProperty("triggerAction")).ToList();
+        triggers.Select(a => a.ToString()).Should().Equal("Survey", "7");
+        stored!.RecipientActions.Should().Equal(survey, OrderAction.Accept);
+        stored.ActionPermissions.Select(p => p.Action).Should().Equal(survey, OrderAction.Approve);
+        stored.Transitions.Select(t => t.TriggerAction).Should().Equal(survey, OrderAction.Complete);
+    }
+
     [Theory]
     [InlineData("POST", 99)]
     [InlineData("POST", -1)]

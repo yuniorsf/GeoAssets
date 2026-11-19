@@ -97,7 +97,7 @@ public sealed class RestServiceOrderTargetRepositoryTests
         var broken = new BodyRecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
 
         (await FluentActions.Invoking(() => Sut(denied).GetPageAsync(new OrderTargetQuery("ord-1"), CancellationToken.None))
-            .Should().ThrowAsync<GeoAssets.Workflow.Rules.OrderActionDeniedException>()).Which.Action.Should().Be(OrderActionType.View);
+            .Should().ThrowAsync<GeoAssets.Workflow.Rules.OrderActionDeniedException>()).Which.Action.Should().Be(OrderAction.View);
         await FluentActions.Invoking(() => Sut(broken).GetPageAsync(new OrderTargetQuery("ord-1"), CancellationToken.None))
             .Should().ThrowAsync<HttpRequestException>();
     }

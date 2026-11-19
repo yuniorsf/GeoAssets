@@ -20,19 +20,19 @@ public partial class ServiceOrderDetail
     private bool _approving;
     private string? _approvalErrorKey;
 
-    private bool CanDispatch    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Dispatch, Order).Allowed;
+    private bool CanDispatch    => Order is not null && Rules.Evaluate(Principal, OrderAction.Dispatch, Order).Allowed;
     // XD01-333: assigning goes through the whole-order update, where a recipient of the order's dispatch never changes the assignee.
     private bool CanAssignToMe  => Order is not null && !string.Equals(Order.AssignedTo, Principal.UserId, StringComparison.Ordinal)
-                                    && Rules.Evaluate(Principal, OrderActionType.Assign, Order).Allowed && !IsRecipientOnly;
+                                    && Rules.Evaluate(Principal, OrderAction.Assign, Order).Allowed && !IsRecipientOnly;
     private bool CanStart       => Order is not null && string.Equals(Order.Status, ServiceOrderStatus.Pending, StringComparison.Ordinal)
-                                    && Rules.Evaluate(Principal, OrderActionType.Execute, Order).Allowed;
+                                    && Rules.Evaluate(Principal, OrderAction.Execute, Order).Allowed;
     private bool CanComplete    => Order is not null && string.Equals(Order.Status, ServiceOrderStatus.InProgress, StringComparison.Ordinal)
-                                    && Rules.Evaluate(Principal, OrderActionType.Complete, Order).Allowed;
+                                    && Rules.Evaluate(Principal, OrderAction.Complete, Order).Allowed;
     private bool CanCancel      => Order is not null
                                     && Order.Status is ServiceOrderStatus.Draft or ServiceOrderStatus.Pending
                                                     or ServiceOrderStatus.InProgress or ServiceOrderStatus.OnHold
-                                    && Rules.Evaluate(Principal, OrderActionType.Cancel, Order).Allowed;
-    private bool CanAnnotate    => Order is not null && Rules.Evaluate(Principal, OrderActionType.Annotate, Order).Allowed;
+                                    && Rules.Evaluate(Principal, OrderAction.Cancel, Order).Allowed;
+    private bool CanAnnotate    => Order is not null && Rules.Evaluate(Principal, OrderAction.Annotate, Order).Allowed;
 
     /// <summary>
     /// A recipient of the order's dispatch accepts it along its type's accept transition, when the
@@ -43,7 +43,7 @@ public partial class ServiceOrderDetail
 
     /// <summary>The status accepting the order moves it to from its current one; null when its type has no such move.</summary>
     private string? AcceptedStatus => Order is null ? null
-        : ServiceOrderTransitions.TransitionsFor(OrderTypes.Find(Order.OrderTypeId), OrderActionType.Accept)
+        : ServiceOrderTransitions.TransitionsFor(OrderTypes.Find(Order.OrderTypeId), OrderAction.Accept)
             .FirstOrDefault(t => string.Equals(t.FromStateKey, Order.Status, StringComparison.Ordinal))?.ToStateKey;
 
     /// <summary>Approving an order with targets commits the occupancy staged on its poles; only the pole owner may (XD01-318).</summary>
@@ -78,7 +78,7 @@ public partial class ServiceOrderDetail
             new OrderDispatch(result.TargetId, result.TargetType, Principal.UserId, Clock.GetUtcNow().UtcDateTime, result.Note));
 
         await Repository.AppendActionAsync(Order.Id, new OrderActionLog(
-            Action: OrderActionType.Dispatch,
+            Action: OrderAction.Dispatch,
             PerformedBy: Principal.UserId,
             PerformedAt: Clock.GetUtcNow().UtcDateTime,
             Comment: result.Note,
@@ -98,13 +98,13 @@ public partial class ServiceOrderDetail
     private async Task Start()
     {
         if (Order is null) return;
-        await RecordAction(OrderActionType.Execute, ServiceOrderStatus.InProgress);
+        await RecordAction(OrderAction.Execute, ServiceOrderStatus.InProgress);
     }
 
     private async Task Complete()
     {
         if (Order is null) return;
-        await RecordAction(OrderActionType.Complete, ServiceOrderStatus.Completed);
+        await RecordAction(OrderAction.Complete, ServiceOrderStatus.Completed);
     }
 
     private async Task Approve()
@@ -115,7 +115,7 @@ public partial class ServiceOrderDetail
         _approvalErrorKey = null;
         try
         {
-            await RecordAction(OrderActionType.Approve, OccupancyApproval.ApprovedStatus(OrderTypes.Find(Order.OrderTypeId), Order.Status)!);
+            await RecordAction(OrderAction.Approve, OccupancyApproval.ApprovedStatus(OrderTypes.Find(Order.OrderTypeId), Order.Status)!);
         }
         catch (Exception ex)
         {
@@ -135,7 +135,7 @@ public partial class ServiceOrderDetail
     }
 
     private OrderActionLog AcceptEntry(string acceptedStatus) => new(
-        Action: OrderActionType.Accept,
+        Action: OrderAction.Accept,
         PerformedBy: Principal.UserId,
         PerformedAt: Clock.GetUtcNow().UtcDateTime,
         ResultingStatus: acceptedStatus);
@@ -143,7 +143,7 @@ public partial class ServiceOrderDetail
     private async Task CancelOrder()
     {
         if (Order is null) return;
-        await RecordAction(OrderActionType.Cancel, ServiceOrderStatus.Cancelled);
+        await RecordAction(OrderAction.Cancel, ServiceOrderStatus.Cancelled);
     }
 
     private async Task AddAnnotation()
@@ -151,7 +151,7 @@ public partial class ServiceOrderDetail
         if (Order is null || string.IsNullOrWhiteSpace(_noteText)) return;
 
         await Repository.AppendActionAsync(Order.Id, new OrderActionLog(
-            Action: OrderActionType.Annotate,
+            Action: OrderAction.Annotate,
             PerformedBy: Principal.UserId,
             PerformedAt: Clock.GetUtcNow().UtcDateTime,
             Comment: _noteText));
@@ -160,7 +160,7 @@ public partial class ServiceOrderDetail
         await OnChanged.InvokeAsync();
     }
 
-    private async Task RecordAction(OrderActionType action, string resultingStatus)
+    private async Task RecordAction(OrderAction action, string resultingStatus)
     {
         if (Order is null) return;
 

@@ -192,7 +192,7 @@ public sealed class ServiceOrderRecipientActionsTests
         var verdict = Rules().EvaluateAppend(Principal("recipient", "administrator"), Order(), Entry(action, resultingStatus));
 
         verdict.Allowed.Should().BeFalse();
-        verdict.Action.Should().Be(action);
+        verdict.Action.Should().Be((OrderAction)action);
         verdict.Code.Should().Be(RuleDenialCode.DeniedByRecipientAccess);
         verdict.Reason.Should().Be(ServiceOrderRules.RecipientActionTransitionIsFixedReason);
     }

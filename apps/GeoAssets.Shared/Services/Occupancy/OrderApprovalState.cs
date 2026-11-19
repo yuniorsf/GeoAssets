@@ -16,7 +16,7 @@ public static class OrderApprovalState
     /// True when <paramref name="principal"/> may approve <paramref name="order"/> here: its type
     /// commits staged occupancy on approval, its status has an approval transition, the caller is
     /// of the order's organization — only the pole owner commits its occupancy — and the rules
-    /// allow <see cref="OrderActionType.Approve"/>.
+    /// allow <see cref="OrderAction.Approve"/>.
     /// </summary>
     public static bool CanApprove(OrderType? orderType, IServiceOrder order, WorkflowPrincipal principal, ServiceOrderRules rules)
     {
@@ -28,7 +28,7 @@ public static class OrderApprovalState
             && OccupancyApproval.ApprovedStatus(orderType, order.Status) is not null
             && Guid.TryParse(principal.OrganizationId, out var organizationId)
             && organizationId == order.OrganizationId
-            && rules.Evaluate(principal, OrderActionType.Approve, order).Allowed;
+            && rules.Evaluate(principal, OrderAction.Approve, order).Allowed;
     }
 
     /// <summary>The key for a failed approval, most specific first.</summary>

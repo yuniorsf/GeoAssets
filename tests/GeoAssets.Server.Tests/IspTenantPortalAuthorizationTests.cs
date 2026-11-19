@@ -23,7 +23,7 @@ public sealed class IspTenantPortalAuthorizationTests
 
     /// <summary>What the portal posts to dispute a notice: the evidence as the comment, and the Disputed status.</summary>
     private static Task<HttpResponseMessage> DisputeAsync(HttpClient client, string id = NoticeId) =>
-        client.PostJsonAsync($"service-orders/{id}/actions", Action(OrderActionType.Dispute, Evidence, ClandestineAttachmentWorkflowGraph.Disputed));
+        client.PostJsonAsync($"service-orders/{id}/actions", Action(NeutralOperatorActions.Dispute, Evidence, ClandestineAttachmentWorkflowGraph.Disputed));
 
     /// <summary>What the portal posts to submit an attachment request.</summary>
     private static Task<HttpResponseMessage> SubmitAsync(HttpClient client) =>
@@ -36,9 +36,9 @@ public sealed class IspTenantPortalAuthorizationTests
             attributes = new Dictionary<string, string>(StringComparer.Ordinal) { [TenantAttachmentRequestOrderTypes.PoleFeatureIdAttribute] = "pole-123" },
         });
 
-    private static object Action(OrderActionType action, string? comment = null, string? resultingStatus = null) => new
+    private static object Action(OrderAction action, string? comment = null, string? resultingStatus = null) => new
     {
-        action = (int)action,
+        action,
         performedBy = "whoever-the-body-says",
         performedAt = OrderTargetsApiHost.Now.UtcDateTime,
         comment,
@@ -168,17 +168,17 @@ public sealed class IspTenantPortalAuthorizationTests
     // ── The generic action route ──────────────────────────────────────────────
 
     [Theory]
-    [InlineData(OrderActionType.FlagClandestine, ClandestineAttachmentWorkflowGraph.Active, ClandestineAttachmentWorkflowGraph.CaboARevelia)]
-    [InlineData(OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.CaboARevelia, ClandestineAttachmentWorkflowGraph.Regularized)]
+    [InlineData("FlagClandestine", ClandestineAttachmentWorkflowGraph.Active, ClandestineAttachmentWorkflowGraph.CaboARevelia)]
+    [InlineData("Approve", ClandestineAttachmentWorkflowGraph.CaboARevelia, ClandestineAttachmentWorkflowGraph.Regularized)]
     public async Task ActionsRoute_DispatchedRecipient_CannotFlagOutsideRecipientActions(
-        OrderActionType action, string status, string resultingStatus)
+        string action, string status, string resultingStatus)
     {
         await using var host = await StartAsync();
         await SeedNoticeAsync(host, flagged: !string.Equals(status, ClandestineAttachmentWorkflowGraph.Active, StringComparison.Ordinal));
         await DispatchToOrgBAsync(host);
         using var client = host.ClientFor("supervisor-b");
 
-        var response = await client.PostJsonAsync($"service-orders/{NoticeId}/actions", Action(action, "go", resultingStatus));
+        var response = await client.PostJsonAsync($"service-orders/{NoticeId}/actions", Action(new OrderAction(action), "go", resultingStatus));
 
         response.IsSuccessStatusCode.Should().BeFalse("a recipient acts only within the type's RecipientActions, and Dispute is the only one");
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
@@ -194,7 +194,7 @@ public sealed class IspTenantPortalAuthorizationTests
 
         var response = await client.PostJsonAsync(
             $"service-orders/{NoticeId}/actions",
-            Action(OrderActionType.Dispute, "evidence", ClandestineAttachmentWorkflowGraph.Disputed));
+            Action(NeutralOperatorActions.Dispute, "evidence", ClandestineAttachmentWorkflowGraph.Disputed));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
         var notice = (await host.Orders.GetByIdAsync(NoticeId))!;
@@ -213,7 +213,7 @@ public sealed class IspTenantPortalAuthorizationTests
 
         var response = await client.PostJsonAsync(
             $"service-orders/{NoticeId}/actions",
-            Action(OrderActionType.Dispute, comment: null, ClandestineAttachmentWorkflowGraph.Disputed));
+            Action(NeutralOperatorActions.Dispute, comment: null, ClandestineAttachmentWorkflowGraph.Disputed));
 
         await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "clandestine.evidence-required");
         (await StatusOfAsync(host)).Should().Be(ClandestineAttachmentWorkflowGraph.CaboARevelia);

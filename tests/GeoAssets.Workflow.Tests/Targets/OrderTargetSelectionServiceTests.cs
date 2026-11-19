@@ -389,7 +389,7 @@ public sealed class OrderTargetSelectionServiceTests
         order.SelectionSpec.Parameters.Should().ContainKey(PolygonFenceSelectionStrategy.RingsParameter);
 
         var entry = order.ActionLog.Should().ContainSingle().Subject;
-        entry.Action.Should().Be(OrderActionType.Annotate);
+        entry.Action.Should().Be(OrderAction.Annotate);
         entry.PerformedBy.Should().Be(Admin.UserId);
         entry.ResultingStatus.Should().BeNull();
         entry.Comment.Should().Be(

@@ -53,9 +53,9 @@ internal sealed class SelectionServiceFixture : IDisposable
 
         Rules = new ServiceOrderRules(
             OrderTypes,
-            roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.OrdinalIgnoreCase)
+            roleGrants: new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Viewer"] = new HashSet<OrderActionType> { OrderActionType.View },
+                ["Viewer"] = new HashSet<OrderAction> { OrderActionType.View },
             });
 
         Store = new InMemoryServiceOrderTargetStore(Orders, OrderTypes);

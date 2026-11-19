@@ -6,8 +6,11 @@ internal sealed class OrderActionPermissionRecord
     public int    Id          { get; set; }
     public string OrderTypeId { get; set; } = string.Empty;
 
-    /// <summary><see cref="Orders.OrderActionType"/> stored as int.</summary>
-    public int    Action { get; set; }
+    /// <summary>The action's historical number (XD01-366: null for an action that has none — see <c>StoredOrderAction</c>).</summary>
+    public int?   Action { get; set; }
+
+    /// <summary>The action's code (XD01-366); null only on a row written before the column existed.</summary>
+    public string? ActionCode { get; set; }
 
     /// <summary><see cref="Orders.PolicyKind"/> stored as int.</summary>
     public int    Kind  { get; set; }

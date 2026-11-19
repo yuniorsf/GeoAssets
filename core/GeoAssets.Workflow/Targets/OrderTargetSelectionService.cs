@@ -73,7 +73,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(principal);
 
-        var plan = await PlanAsync(request, principal, OrderActionType.View, ct).ConfigureAwait(false);
+        var plan = await PlanAsync(request, principal, OrderAction.View, ct).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var skip = (long)(request.Page - 1) * request.PageSize;
@@ -101,7 +101,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(principal);
 
-        var plan = await PlanAsync(request, principal, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        var plan = await PlanAsync(request, principal, OrderAction.Annotate, ct).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var targets = plan.Kept.Select(f => ToTarget(plan, f, principal, now)).ToList();
 
@@ -135,7 +135,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
 
         await _orders.AppendActionAsync(
             plan.Order.Id,
-            new OrderActionLog(OrderActionType.Annotate, principal.UserId, now, Summary(plan.Spec.StrategyId, result))
+            new OrderActionLog(OrderAction.Annotate, principal.UserId, now, Summary(plan.Spec.StrategyId, result))
             {
                 ActorKind = principal.Kind,
             },
@@ -147,7 +147,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
     // ── Shared by preview and apply ───────────────────────────────────────────
 
     private async Task<SelectionPlan> PlanAsync(
-        TargetSelectionRequest request, WorkflowPrincipal principal, OrderActionType action, CancellationToken ct)
+        TargetSelectionRequest request, WorkflowPrincipal principal, OrderAction action, CancellationToken ct)
     {
         var (order, policy) = await AuthorizeAsync(request, principal, action, ct).ConfigureAwait(false);
 
@@ -170,7 +170,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
             var remaining = Math.Max(0, limit - held.Count);
             if (eligible.Count > remaining)
             {
-                if (action == OrderActionType.Annotate && !request.AcceptTruncation)
+                if (action == OrderAction.Annotate && !request.AcceptTruncation)
                     throw new SelectionLimitExceededException(limit, held.Count, eligible.Count);
 
                 kept = eligible.GetRange(0, remaining);
@@ -201,7 +201,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
     /// Nothing of the target store is touched here.
     /// </summary>
     private async Task<(IServiceOrder Order, OrderTargetPolicy Policy)> AuthorizeAsync(
-        TargetSelectionRequest request, WorkflowPrincipal principal, OrderActionType action, CancellationToken ct)
+        TargetSelectionRequest request, WorkflowPrincipal principal, OrderAction action, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.OrderId, nameof(request));
         ArgumentException.ThrowIfNullOrWhiteSpace(request.StrategyId, nameof(request));
@@ -210,7 +210,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
             ?? throw new KeyNotFoundException($"ServiceOrder '{request.OrderId}' not found.");
 
         // XD01-316/333: applying a selection adds targets, which a recipient of the order's dispatch never may.
-        var verdict = action == OrderActionType.Annotate
+        var verdict = action == OrderAction.Annotate
             ? _rules.EvaluateTargetWrite(principal, order, OrderTargetWrite.AddOrRemove)
             : _rules.Evaluate(principal, action, order);
         if (!verdict.Allowed)
@@ -225,7 +225,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         if (!_selector.HasStrategy(request.StrategyId))
             throw new KeyNotFoundException($"Selection strategy '{request.StrategyId}' not found.");
 
-        if (action == OrderActionType.Annotate && ServiceOrderTransitions.IsTerminalState(orderType, order.Status))
+        if (action == OrderAction.Annotate && ServiceOrderTransitions.IsTerminalState(orderType, order.Status))
             throw new InvalidServiceOrderTransitionException(order.Status, order.Status);
 
         return (order, policy);

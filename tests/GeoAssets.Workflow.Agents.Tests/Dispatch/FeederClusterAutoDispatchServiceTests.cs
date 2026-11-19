@@ -21,9 +21,9 @@ public class FeederClusterAutoDispatchServiceTests
     private const string PlumbingCrewId = "crew-plumbing";
 
     private static ServiceOrderRules Rules() => new(
-        roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        roleGrants: new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["AutomationAgent"] = new HashSet<OrderActionType> { OrderActionType.Dispatch },
+            ["AutomationAgent"] = new HashSet<OrderAction> { OrderActionType.Dispatch },
         });
 
     private static ConfiguredAgentIdentityProvider AgentIdentity()

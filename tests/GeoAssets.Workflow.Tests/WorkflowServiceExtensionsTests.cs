@@ -47,7 +47,7 @@ public class WorkflowServiceExtensionsTests
         var services = new ServiceCollection();
         services.AddServiceOrderRules(o =>
         {
-            o.RoleGrants["AutomationAgent"] = new HashSet<OrderActionType> { OrderActionType.Dispatch };
+            o.RoleGrants["AutomationAgent"] = new HashSet<OrderAction> { OrderActionType.Dispatch };
         });
         using var sp = services.BuildServiceProvider();
 
@@ -69,7 +69,7 @@ public class WorkflowServiceExtensionsTests
         var services = new ServiceCollection();
         services.AddServiceOrderRules(o =>
         {
-            o.RecipientRoleGrants["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign };
+            o.RecipientRoleGrants["FieldTechnician"] = new HashSet<OrderAction> { OrderActionType.Assign };
         });
         using var sp = services.BuildServiceProvider();
 
@@ -90,7 +90,7 @@ public class WorkflowServiceExtensionsTests
     {
         public string Name => name;
 
-        public bool? Evaluate(OrderActionType action, RuleEvaluationContext context)
+        public bool? Evaluate(OrderAction action, RuleEvaluationContext context)
         {
             log?.Add(name);
             return verdict;

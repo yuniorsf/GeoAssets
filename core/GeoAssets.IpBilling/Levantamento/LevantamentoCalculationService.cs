@@ -153,7 +153,7 @@ public sealed class LevantamentoCalculationService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Calculate,
+                IpBillingActions.Calculate,
                 performedBy ?? "system",
                 now,
                 $"Calculated {totalKwh.ToString("F4", CultureInfo.InvariantCulture)} kWh across {transformerLines.Count} transformer(s)",
@@ -316,7 +316,7 @@ public sealed class LevantamentoCalculationService(
             await orderRepository.AppendActionAsync(
                 serviceOrderId,
                 new OrderActionLog(
-                    OrderActionType.Validate,
+                    IpBillingActions.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
                     $"Validated and posted (Set) to Faturamento {competencia}",

@@ -110,7 +110,7 @@ public sealed class OrderTargetSelectionServiceGuardTests
 
         var denied = (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which;
         denied.Evaluation!.Allowed.Should().BeFalse();
-        denied.Action.Should().Be(OrderActionType.View);
+        denied.Action.Should().Be(OrderAction.View);
         denied.OrderId.Should().Be(OrderId);
         store.Calls.Should().Be(0);
         fixture.Query.Calls.Should().Be(0);
@@ -126,7 +126,7 @@ public sealed class OrderTargetSelectionServiceGuardTests
 
         var act = () => sut.ApplyAsync(FenceRequest(), Viewer, CancellationToken.None);
 
-        (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderActionType.Annotate);
+        (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderAction.Annotate);
         store.Calls.Should().Be(0);
         order.SelectionSpec.Should().BeNull();
         order.ActionLog.Should().BeEmpty();

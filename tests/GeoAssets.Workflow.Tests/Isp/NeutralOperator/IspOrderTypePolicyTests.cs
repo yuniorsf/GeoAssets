@@ -44,20 +44,20 @@ public sealed class IspOrderTypePolicyTests
     {
         var notice = ClandestineAttachmentOrderTypes.CreateClandestineNotice();
 
-        notice.ActionPermissions.Where(p => p.Action == OrderActionType.Dispute)
-            .Should().ContainSingle().Which.Should().Be(new OrderActionPermission(OrderActionType.Dispute, PolicyKind.Role, IspRoles.Tenant));
-        notice.RecipientActions.Should().Equal(OrderActionType.Dispute);
+        notice.ActionPermissions.Where(p => p.Action == NeutralOperatorActions.Dispute)
+            .Should().ContainSingle().Which.Should().Be(new OrderActionPermission(NeutralOperatorActions.Dispute, PolicyKind.Role, IspRoles.Tenant));
+        notice.RecipientActions.Should().Equal(NeutralOperatorActions.Dispute);
         notice.RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
         notice.CreationPolicies.Should().BeEquivalentTo(
             [new OrderCreationPolicy(PolicyKind.Role, IspRoles.Supervisor), new OrderCreationPolicy(PolicyKind.Role, IspRoles.Administrator)]);
     }
 
     [Theory]
-    [InlineData(OrderActionType.FlagClandestine)]
-    [InlineData(OrderActionType.Approve)]
-    [InlineData(OrderActionType.Reject)]
-    public void ClandestineNotice_StaffActions_AreOpenToSupervisorAndAdministratorOnly(OrderActionType action) =>
-        ClandestineAttachmentOrderTypes.CreateClandestineNotice().ActionPermissions.Where(p => p.Action == action)
+    [InlineData("FlagClandestine")]
+    [InlineData("Approve")]
+    [InlineData("Reject")]
+    public void ClandestineNotice_StaffActions_AreOpenToSupervisorAndAdministratorOnly(string action) =>
+        ClandestineAttachmentOrderTypes.CreateClandestineNotice().ActionPermissions.Where(p => p.Action == new OrderAction(action))
             .Select(p => (p.Kind, p.Value))
             .Should().BeEquivalentTo([(PolicyKind.Role, IspRoles.Supervisor), (PolicyKind.Role, IspRoles.Administrator)]);
 
@@ -82,33 +82,33 @@ public sealed class IspOrderTypePolicyTests
 
     [Fact]
     public void Dispute_IspTenantMember_IsAllowed() =>
-        Rules().Evaluate(Member(IspRoles.Tenant), OrderActionType.Dispute, Notice()).Allowed.Should().BeTrue();
+        Rules().Evaluate(Member(IspRoles.Tenant), NeutralOperatorActions.Dispute, Notice()).Allowed.Should().BeTrue();
 
     [Fact]
     public void Dispute_MemberWithOnlySupervisor_IsDeniedByTheActionPermissionRule()
     {
-        var verdict = Rules().Evaluate(Member(IspRoles.Supervisor), OrderActionType.Dispute, Notice());
+        var verdict = Rules().Evaluate(Member(IspRoles.Supervisor), NeutralOperatorActions.Dispute, Notice());
 
         verdict.Allowed.Should().BeFalse();
         verdict.Reason.Should().Be("Denied by rule 'OrderTypeActionPermissionRule'.");
     }
 
     [Theory]
-    [InlineData(IspRoles.Supervisor, OrderActionType.Approve)]
-    [InlineData(IspRoles.Supervisor, OrderActionType.Reject)]
-    [InlineData(IspRoles.Supervisor, OrderActionType.FlagClandestine)]
-    [InlineData(IspRoles.Administrator, OrderActionType.Approve)]
-    [InlineData(IspRoles.Administrator, OrderActionType.Reject)]
-    [InlineData(IspRoles.Administrator, OrderActionType.FlagClandestine)]
-    public void StaffActions_Supervisor_AndAdministrator_AreAllowed(string role, OrderActionType action) =>
-        Rules().Evaluate(Member(role), action, Notice()).Allowed.Should().BeTrue();
+    [InlineData(IspRoles.Supervisor, "Approve")]
+    [InlineData(IspRoles.Supervisor, "Reject")]
+    [InlineData(IspRoles.Supervisor, "FlagClandestine")]
+    [InlineData(IspRoles.Administrator, "Approve")]
+    [InlineData(IspRoles.Administrator, "Reject")]
+    [InlineData(IspRoles.Administrator, "FlagClandestine")]
+    public void StaffActions_Supervisor_AndAdministrator_AreAllowed(string role, string action) =>
+        Rules().Evaluate(Member(role), new OrderAction(action), Notice()).Allowed.Should().BeTrue();
 
     [Theory]
-    [InlineData(OrderActionType.Approve)]
-    [InlineData(OrderActionType.Reject)]
-    [InlineData(OrderActionType.FlagClandestine)]
-    public void StaffActions_IspTenantMember_AreDenied(OrderActionType action) =>
-        Rules().Evaluate(Member(IspRoles.Tenant), action, Notice()).Allowed.Should().BeFalse();
+    [InlineData("Approve")]
+    [InlineData("Reject")]
+    [InlineData("FlagClandestine")]
+    public void StaffActions_IspTenantMember_AreDenied(string action) =>
+        Rules().Evaluate(Member(IspRoles.Tenant), new OrderAction(action), Notice()).Allowed.Should().BeFalse();
 
     [Fact]
     public void CanCreate_AttachmentRequest_IspTenantMayAndSupervisorMayNot()
@@ -140,9 +140,9 @@ public sealed class IspOrderTypePolicyTests
         var rules = Rules();
 
         var along = rules.EvaluateAppend(
-            principal, order, new OrderActionLog(OrderActionType.Dispute, "user-2", Now.UtcDateTime, "evidence", ClandestineAttachmentWorkflowGraph.Disputed));
+            principal, order, new OrderActionLog(NeutralOperatorActions.Dispute, "user-2", Now.UtcDateTime, "evidence", ClandestineAttachmentWorkflowGraph.Disputed));
         var off = rules.EvaluateAppend(
-            principal, order, new OrderActionLog(OrderActionType.Dispute, "user-2", Now.UtcDateTime, "evidence", ClandestineAttachmentWorkflowGraph.Regularized));
+            principal, order, new OrderActionLog(NeutralOperatorActions.Dispute, "user-2", Now.UtcDateTime, "evidence", ClandestineAttachmentWorkflowGraph.Regularized));
 
         along.Allowed.Should().BeTrue();
         off.Allowed.Should().BeFalse();

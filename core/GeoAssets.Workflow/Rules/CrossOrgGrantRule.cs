@@ -26,6 +26,6 @@ internal sealed class CrossOrgGrantRule(TimeProvider timeProvider) : IServiceOrd
 {
     public string Name => "CrossOrgGrantRule";
 
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx) =>
+    public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx) =>
         CrossOrgGrantMatcher.CoversAction(ctx.Principal, action, ctx.Order, timeProvider.GetUtcNow().UtcDateTime) ? true : null;
 }

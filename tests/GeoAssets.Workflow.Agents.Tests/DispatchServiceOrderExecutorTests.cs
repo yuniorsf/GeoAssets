@@ -23,9 +23,9 @@ public class DispatchServiceOrderExecutorTests
         }));
 
     private static ServiceOrderRules GrantingRules() => new(
-        roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        roleGrants: new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["AutomationAgent"] = new HashSet<OrderActionType> { OrderActionType.Dispatch }
+            ["AutomationAgent"] = new HashSet<OrderAction> { OrderActionType.Dispatch }
         });
 
     private static DispatchServiceOrderExecutor Executor(

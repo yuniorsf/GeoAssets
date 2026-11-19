@@ -258,7 +258,7 @@ public sealed class ServiceOrderTargetSelectionEndpointTests
         var order = (ServiceOrder)(await host.Orders.GetByIdAsync("ord-1"))!;
         order.SelectionSpec!.StrategyId.Should().Be("polygon-fence");
         order.ActionLog.Should().ContainSingle().Which.Should().BeEquivalentTo(
-            new { Action = OrderActionType.Annotate, PerformedBy = admin.UserId.ToString(), PerformedAt = OrderTargetsApiHost.Now.UtcDateTime });
+            new { Action = OrderAction.Annotate, PerformedBy = admin.UserId.ToString(), PerformedAt = OrderTargetsApiHost.Now.UtcDateTime });
     }
 
     [Fact]

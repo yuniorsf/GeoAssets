@@ -1678,7 +1678,7 @@ public sealed class IpBillingServerIntegrationTests
 
         public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default)
         {
-            if (FaultArmed && !_hasThrown && entry.Action == OrderActionType.Validate)
+            if (FaultArmed && !_hasThrown && entry.Action == IpBillingActions.Validate)
             {
                 _hasThrown = true;
                 throw new InvalidOperationException("Simulated crash after the Faturamento ledger write, before the ServiceOrder's Validado transition.");

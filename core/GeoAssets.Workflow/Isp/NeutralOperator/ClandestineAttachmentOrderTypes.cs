@@ -28,16 +28,16 @@ public static class ClandestineAttachmentOrderTypes
         ],
         ActionPermissions =
         [
-            new(OrderActionType.Dispute, PolicyKind.Role, IspRoles.Tenant),
-            new(OrderActionType.FlagClandestine, PolicyKind.Role, IspRoles.Supervisor),
-            new(OrderActionType.FlagClandestine, PolicyKind.Role, IspRoles.Administrator),
-            new(OrderActionType.Approve, PolicyKind.Role, IspRoles.Supervisor),
-            new(OrderActionType.Approve, PolicyKind.Role, IspRoles.Administrator),
-            new(OrderActionType.Reject, PolicyKind.Role, IspRoles.Supervisor),
-            new(OrderActionType.Reject, PolicyKind.Role, IspRoles.Administrator),
+            new(NeutralOperatorActions.Dispute, PolicyKind.Role, IspRoles.Tenant),
+            new(NeutralOperatorActions.FlagClandestine, PolicyKind.Role, IspRoles.Supervisor),
+            new(NeutralOperatorActions.FlagClandestine, PolicyKind.Role, IspRoles.Administrator),
+            new(OrderAction.Approve, PolicyKind.Role, IspRoles.Supervisor),
+            new(OrderAction.Approve, PolicyKind.Role, IspRoles.Administrator),
+            new(OrderAction.Reject, PolicyKind.Role, IspRoles.Supervisor),
+            new(OrderAction.Reject, PolicyKind.Role, IspRoles.Administrator),
         ],
         RecipientAccess = OrderRecipientAccess.Inform,
-        RecipientActions = [OrderActionType.Dispute],
+        RecipientActions = [NeutralOperatorActions.Dispute],
     };
 
     public static void RegisterAll(OrderTypeRegistry registry)

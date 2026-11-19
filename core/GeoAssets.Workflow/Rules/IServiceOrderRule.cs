@@ -18,5 +18,5 @@ public interface IServiceOrderRule
     /// <summary>Optional name for diagnostics.</summary>
     string Name { get; }
 
-    bool? Evaluate(OrderActionType action, RuleEvaluationContext context);
+    bool? Evaluate(OrderAction action, RuleEvaluationContext context);
 }

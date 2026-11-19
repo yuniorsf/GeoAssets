@@ -13,7 +13,7 @@ public sealed class ServiceOrderRulesOptions
     /// <summary>
     /// Overrides the built-in role → allowed-actions defaults. Leave empty to keep them.
     /// </summary>
-    public Dictionary<string, IReadOnlySet<OrderActionType>> RoleGrants { get; } = [];
+    public Dictionary<string, IReadOnlySet<OrderAction>> RoleGrants { get; } = [];
 
     /// <summary>
     /// Overrides the built-in unrestricted-role defaults (role names granted every
@@ -29,7 +29,7 @@ public sealed class ServiceOrderRulesOptions
     /// (none — a recipient without a configured role grant still only gets
     /// View/Annotate/Accept).
     /// </summary>
-    public Dictionary<string, IReadOnlySet<OrderActionType>> RecipientRoleGrants { get; } = [];
+    public Dictionary<string, IReadOnlySet<OrderAction>> RecipientRoleGrants { get; } = [];
 
     /// <summary>
     /// What the organization gate (XD01-332) does with an order that has no organization

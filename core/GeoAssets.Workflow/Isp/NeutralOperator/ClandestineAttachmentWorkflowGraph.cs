@@ -39,10 +39,10 @@ public static class ClandestineAttachmentWorkflowGraph
     /// <summary>Fresh, independently-mutable copy each call.</summary>
     public static List<WorkflowTransition> Transitions() =>
     [
-        new WorkflowTransition(Active,       CaboARevelia, OrderActionType.FlagClandestine),
-        new WorkflowTransition(CaboARevelia, Regularized,  OrderActionType.Approve),
-        new WorkflowTransition(CaboARevelia, Disputed,     OrderActionType.Dispute),
-        new WorkflowTransition(Disputed,     Regularized,  OrderActionType.Approve),
-        new WorkflowTransition(Disputed,     CaboARevelia, OrderActionType.Reject),
+        new WorkflowTransition(Active,       CaboARevelia, NeutralOperatorActions.FlagClandestine),
+        new WorkflowTransition(CaboARevelia, Regularized,  OrderAction.Approve),
+        new WorkflowTransition(CaboARevelia, Disputed,     NeutralOperatorActions.Dispute),
+        new WorkflowTransition(Disputed,     Regularized,  OrderAction.Approve),
+        new WorkflowTransition(Disputed,     CaboARevelia, OrderAction.Reject),
     ];
 }

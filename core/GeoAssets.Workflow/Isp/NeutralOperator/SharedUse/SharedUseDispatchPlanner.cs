@@ -52,7 +52,7 @@ public static class SharedUseDispatchPlanner
     /// <summary>
     /// The status the parent has once dispatched from <paramref name="status"/>. A type with its
     /// own workflow graph follows the transition its graph tags with
-    /// <see cref="OrderActionType.Dispatch"/>; a type without one moves a draft to pending and
+    /// <see cref="OrderAction.Dispatch"/>; a type without one moves a draft to pending and
     /// leaves a pending order where it is, so an order can be dispatched again after poles were added.
     /// </summary>
     /// <exception cref="InvalidServiceOrderTransitionException">No dispatch is possible from <paramref name="status"/>.</exception>
@@ -64,7 +64,7 @@ public static class SharedUseDispatchPlanner
         if (orderType.States.Count > 0)
         {
             var transition = orderType.Transitions.FirstOrDefault(t =>
-                string.Equals(t.FromStateKey, status, StringComparison.Ordinal) && t.TriggerAction == OrderActionType.Dispatch);
+                string.Equals(t.FromStateKey, status, StringComparison.Ordinal) && t.TriggerAction == OrderAction.Dispatch);
             return transition?.ToStateKey ?? throw new InvalidServiceOrderTransitionException(status, status);
         }
 

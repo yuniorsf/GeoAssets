@@ -66,7 +66,7 @@ public sealed class IpBillingCalculationService(
         await orderRepository.AppendActionAsync(
             orderId,
             new OrderActionLog(
-                OrderActionType.Calculate,
+                IpBillingActions.Calculate,
                 request?.PerformedBy ?? "system",
                 now,
                 $"Calculated {totalKwh.ToString("F4", CultureInfo.InvariantCulture)} kWh",
@@ -127,7 +127,7 @@ public sealed class IpBillingCalculationService(
             await orderRepository.AppendActionAsync(
                 orderId,
                 new OrderActionLog(
-                    OrderActionType.Validate,
+                    IpBillingActions.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
                     $"Validated and posted ({mode}) to Faturamento {competencia}",

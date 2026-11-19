@@ -100,7 +100,7 @@ public sealed class RestSharedUseDispatchClient(HttpClient http) : ISharedUseDis
         var problem = await WorkflowProblemTranslator.ReadAsync(response, ct).ConfigureAwait(false);
         if (problem is { Code: WorkflowProblemCodes.OrderTypeNotFound })
             throw new OrderTypeNotRegisteredException(problem.String("orderTypeId") ?? string.Empty, problem.Detail);
-        if (problem is not null && WorkflowProblemTranslator.ToException(problem, orderId, OrderActionType.Dispatch) is { } translated)
+        if (problem is not null && WorkflowProblemTranslator.ToException(problem, orderId, OrderAction.Dispatch) is { } translated)
             throw translated;
 
         response.EnsureSuccessStatusCode();

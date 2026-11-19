@@ -6,6 +6,7 @@ using GeoAssets.IpBilling.Calculation;
 using GeoAssets.IpBilling.Oficio;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Tests.Calculation;
+using GeoAssets.IpBilling.Workflow;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 
@@ -423,7 +424,7 @@ public class OficioCalculationServiceTests
         order.Status.Should().Be("Validado");
         (await sut.OficioRepo.GetHeaderAsync("order-1"))!.IsValidated.Should().BeTrue();
         var action = sut.OrderRepo.AppendedActions.Should().ContainSingle().Which;
-        action.Action.Should().Be(OrderActionType.Validate);
+        action.Action.Should().Be(IpBillingActions.Validate);
         action.PerformedBy.Should().Be("ana");
         action.ResultingStatus.Should().Be("Validado");
         action.Comment.Should().Contain("Validated Ofício (Agregado=10, Retroativo=10)")

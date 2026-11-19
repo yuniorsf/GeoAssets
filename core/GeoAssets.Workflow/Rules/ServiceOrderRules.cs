@@ -36,7 +36,7 @@ namespace GeoAssets.Workflow.Rules;
 ///       .AddCreationRule(new MyCustomCreationRule());
 ///
 ///   bool canCreate = rules.CanCreate(principal, orderType);
-///   var  result    = rules.Evaluate(principal, OrderActionType.Approve, order);
+///   var  result    = rules.Evaluate(principal, OrderAction.Approve, order);
 /// </code>
 /// </summary>
 public sealed partial class ServiceOrderRules
@@ -80,9 +80,9 @@ public sealed partial class ServiceOrderRules
     /// </param>
     public ServiceOrderRules(
         OrderTypeRegistry? orderTypeRegistry = null,
-        IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null,
+        IReadOnlyDictionary<string, IReadOnlySet<OrderAction>>? roleGrants = null,
         IReadOnlySet<string>? unrestrictedRoles = null,
-        IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? recipientRoleGrants = null,
+        IReadOnlyDictionary<string, IReadOnlySet<OrderAction>>? recipientRoleGrants = null,
         bool allowOrdersWithoutOrganization = true,
         TimeProvider? timeProvider = null)
     {
@@ -155,7 +155,7 @@ public sealed partial class ServiceOrderRules
 
     /// <summary>Returns true if the principal can view the order.</summary>
     public bool CanView(WorkflowPrincipal principal, IServiceOrder order)
-        => Evaluate(principal, OrderActionType.View, order).Allowed;
+        => Evaluate(principal, OrderAction.View, order).Allowed;
 
     // ── Generic action gate ───────────────────────────────────────────────────
 
@@ -168,7 +168,7 @@ public sealed partial class ServiceOrderRules
     /// </summary>
     public RuleEvaluationResult Evaluate(
         WorkflowPrincipal principal,
-        OrderActionType   action,
+        OrderAction   action,
         IServiceOrder     order)
     {
         ArgumentNullException.ThrowIfNull(principal);
@@ -209,7 +209,7 @@ public sealed partial class ServiceOrderRules
     /// </summary>
     internal RuleEvaluationResult EvaluateRuleChainOnly(
         WorkflowPrincipal principal,
-        OrderActionType   action,
+        OrderAction   action,
         IServiceOrder     order)
     {
         ArgumentNullException.ThrowIfNull(principal);
@@ -219,10 +219,10 @@ public sealed partial class ServiceOrderRules
         return EvaluateChain(action, new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order)));
     }
 
-    private static RuleEvaluationResult Anonymous(OrderActionType action) =>
+    private static RuleEvaluationResult Anonymous(OrderAction action) =>
         RuleEvaluationResult.Deny(action, "Anonymous users cannot act on orders.", RuleDenialCode.Anonymous);
 
-    private RuleEvaluationResult EvaluateChain(OrderActionType action, RuleEvaluationContext context)
+    private RuleEvaluationResult EvaluateChain(OrderAction action, RuleEvaluationContext context)
     {
         bool anyAllow = false;
         foreach (var rule in _rules)
@@ -309,21 +309,16 @@ file sealed class CreatorRule(OrderTypeRegistry? orderTypeRegistry = null) : ISe
 {
     public string Name => "CreatorRule";
 
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx)
     {
         if (!ctx.Is(OrderUserRelationship.Creator)) return null;
 
-        return action switch
-        {
-            OrderActionType.View     => true,
-            OrderActionType.Annotate => true,
-            OrderActionType.Cancel   => ServiceOrderTransitions.HasTransitionFor(
-                                            orderTypeRegistry?.Find(ctx.Order.OrderTypeId),
-                                            ctx.Order.Status,
-                                            OrderActionType.Cancel)
-                                        ? true : null,
-            _ => null,
-        };
+        if (action == OrderAction.View || action == OrderAction.Annotate) return true;
+        if (action != OrderAction.Cancel) return null;
+
+        return ServiceOrderTransitions.HasTransitionFor(
+                   orderTypeRegistry?.Find(ctx.Order.OrderTypeId), ctx.Order.Status, OrderAction.Cancel)
+            ? true : null;
     }
 }
 
@@ -334,18 +329,13 @@ file sealed class AssigneeRule : IServiceOrderRule
 {
     public string Name => "AssigneeRule";
 
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx)
     {
         if (!ctx.Is(OrderUserRelationship.Assignee)) return null;
 
-        return action switch
-        {
-            OrderActionType.View     => true,
-            OrderActionType.Execute  => true,
-            OrderActionType.Complete => true,
-            OrderActionType.Annotate => true,
-            _ => null,
-        };
+        return action == OrderAction.View || action == OrderAction.Execute
+            || action == OrderAction.Complete || action == OrderAction.Annotate
+            ? true : null;
     }
 }
 
@@ -355,8 +345,8 @@ file sealed class AssigneeRule : IServiceOrderRule
 /// "accept" being how any qualifying member of a dispatched-to group/org claims an
 /// order that wasn't addressed to a pre-named individual.
 ///
-/// Broader actions (<see cref="OrderActionType.Assign"/>, <see cref="OrderActionType.Dispatch"/>,
-/// <see cref="OrderActionType.Execute"/>, <see cref="OrderActionType.Reject"/>, or any other
+/// Broader actions (<see cref="OrderAction.Assign"/>, <see cref="OrderAction.Dispatch"/>,
+/// <see cref="OrderAction.Execute"/>, <see cref="OrderAction.Reject"/>, or any other
 /// action a host chooses to configure) require *also* holding a paired role — set via
 /// <paramref name="roleGrants"/> — expressing "(is a recipient of this dispatch) AND (has role X)."
 /// This is deliberately narrower than <see cref="RoleBasedActionRule"/>'s global role grants:
@@ -364,24 +354,19 @@ file sealed class AssigneeRule : IServiceOrderRule
 /// not on every order in the system.
 /// </summary>
 file sealed class DispatchRecipientRule(
-    IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null) : IServiceOrderRule
+    IReadOnlyDictionary<string, IReadOnlySet<OrderAction>>? roleGrants = null) : IServiceOrderRule
 {
     public string Name => "DispatchRecipientRule";
 
-    private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> _roleGrants =
-        roleGrants ?? new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal);
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderAction>> _roleGrants =
+        roleGrants ?? new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal);
 
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx)
     {
         if ((ctx.Relationship & OrderOrganizationGate.RecipientFlags) == OrderUserRelationship.None) return null;
 
-        switch (action)
-        {
-            case OrderActionType.View:
-            case OrderActionType.Annotate:
-            case OrderActionType.Accept:
-                return true;
-        }
+        if (action == OrderAction.View || action == OrderAction.Annotate || action == OrderAction.Accept)
+            return true;
 
         foreach (var (role, actions) in _roleGrants)
         {
@@ -398,7 +383,7 @@ file sealed class DispatchRecipientRule(
 /// mapping is data (not a hardcoded switch), so a host can narrow, extend, or replace
 /// it entirely via the <c>roleGrants</c>/<c>unrestrictedRoles</c> parameters on
 /// <see cref="ServiceOrderRules"/>'s constructor — without editing this class — e.g. to
-/// stop granting Supervisors <see cref="OrderActionType.Reject"/>, or to add a new tier.
+/// stop granting Supervisors <see cref="OrderAction.Reject"/>, or to add a new tier.
 ///
 /// Roles in <paramref name="unrestrictedRoles"/> (default: "Administrator") grant every
 /// action. Every other entry in <paramref name="roleGrants"/> (default: "Supervisor" →
@@ -406,31 +391,31 @@ file sealed class DispatchRecipientRule(
 /// A principal with no matching role abstains, same as every other built-in rule.
 /// </summary>
 file sealed class RoleBasedActionRule(
-    IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>>? roleGrants = null,
+    IReadOnlyDictionary<string, IReadOnlySet<OrderAction>>? roleGrants = null,
     IReadOnlySet<string>? unrestrictedRoles = null) : IServiceOrderRule
 {
-    public static readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> DefaultRoleGrants =
-        new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.OrdinalIgnoreCase)
+    public static readonly IReadOnlyDictionary<string, IReadOnlySet<OrderAction>> DefaultRoleGrants =
+        new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Supervisor"] = new HashSet<OrderActionType>
+            ["Supervisor"] = new HashSet<OrderAction>
             {
-                OrderActionType.View, OrderActionType.Approve, OrderActionType.Reject,
-                OrderActionType.Assign, OrderActionType.Dispatch, OrderActionType.Cancel,
-                OrderActionType.Annotate,
+                OrderAction.View, OrderAction.Approve, OrderAction.Reject,
+                OrderAction.Assign, OrderAction.Dispatch, OrderAction.Cancel,
+                OrderAction.Annotate,
             },
         };
 
     public static readonly IReadOnlySet<string> DefaultUnrestrictedRoles =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Administrator" };
 
-    private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderActionType>> _roleGrants =
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<OrderAction>> _roleGrants =
         roleGrants ?? DefaultRoleGrants;
     private readonly IReadOnlySet<string> _unrestrictedRoles =
         unrestrictedRoles ?? DefaultUnrestrictedRoles;
 
     public string Name => "RoleBasedActionRule";
 
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx)
     {
         if (_unrestrictedRoles.Any(ctx.Principal.HasRole))
             return true;
@@ -460,7 +445,7 @@ file sealed class OrderTypeActionPermissionRule(OrderTypeRegistry? registry) : I
 {
     public string Name => "OrderTypeActionPermissionRule";
 
-    public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx)
+    public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx)
     {
         var orderType = registry?.Find(ctx.Order.OrderTypeId);
         if (orderType is null) return null;

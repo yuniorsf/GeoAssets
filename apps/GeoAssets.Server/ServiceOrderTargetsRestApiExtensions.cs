@@ -29,7 +29,7 @@ namespace GeoAssets.Server;
 /// URL or the body. Reads require <c>serviceorders:read</c> and, because the target store's
 /// per-order members ignore the tenant filter, an explicit check that the caller may see that
 /// order (see <see cref="OrderTargetEndpointSupport.ForReadAsync"/>). Edits evaluate
-/// <see cref="ServiceOrderRules"/> for <see cref="OrderActionType.Annotate"/>. The selection
+/// <see cref="ServiceOrderRules"/> for <see cref="OrderAction.Annotate"/>. The selection
 /// routes leave the rule check to <see cref="IOrderTargetSelectionService"/> (View for preview,
 /// Annotate for apply), which runs it before touching any target.</para>
 ///

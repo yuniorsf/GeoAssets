@@ -162,7 +162,7 @@ public sealed class OficioCalculationService(
             await orderRepository.AppendActionAsync(
                 serviceOrderId,
                 new OrderActionLog(
-                    OrderActionType.Validate,
+                    IpBillingActions.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
                     $"Validated Ofício (Agregado={totalAgregado}, Retroativo={totalRetroativo}); {DescribePosting(posting, competencia)}",
@@ -231,7 +231,7 @@ public sealed class OficioCalculationService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Annotate,
+                OrderAction.Annotate,
                 performedBy ?? "system",
                 now,
                 $"Ofício número '{previousNumero}' superseded — released for reassignment to a corrective upload."),
@@ -285,7 +285,7 @@ public sealed class OficioCalculationService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Calculate,
+                IpBillingActions.Calculate,
                 performedBy ?? "system",
                 now,
                 $"Calculated Agregado={totalAgregado}, Retroativo={totalRetroativo} across {lines.Count} line(s)",

@@ -106,7 +106,7 @@ public sealed class ServiceOrderAuthorizationHandlerTests
     [Fact]
     public async Task Action_AllowedByTheRuleChain_Succeeds()
     {
-        var context = Context(new ServiceOrderActionRequirement(OrderActionType.Dispute), Notice());
+        var context = Context(new ServiceOrderActionRequirement(NeutralOperatorActions.Dispute), Notice());
 
         await ActionHandler(OrgA, IspRoles.Tenant).HandleAsync(context);
 
@@ -117,7 +117,7 @@ public sealed class ServiceOrderAuthorizationHandlerTests
     [Fact]
     public async Task Action_DeniedByTheRuleChain_FailsWithAReasonCarryingTheVerdict()
     {
-        var requirement = new ServiceOrderActionRequirement(OrderActionType.Dispute);
+        var requirement = new ServiceOrderActionRequirement(NeutralOperatorActions.Dispute);
         var context = Context(requirement, Notice());
 
         await ActionHandler(OrgA, IspRoles.Supervisor).HandleAsync(context);
@@ -127,7 +127,7 @@ public sealed class ServiceOrderAuthorizationHandlerTests
         var reason = SingleReason(context);
         reason.Verdict.Should().NotBeNull();
         reason.Verdict!.Allowed.Should().BeFalse();
-        reason.Verdict.Action.Should().Be(OrderActionType.Dispute);
+        reason.Verdict.Action.Should().Be(NeutralOperatorActions.Dispute);
         reason.Verdict.Code.Should().Be(RuleDenialCode.DeniedByRule);
         reason.Message.Should().Be(reason.Verdict.Reason);
     }
@@ -135,7 +135,7 @@ public sealed class ServiceOrderAuthorizationHandlerTests
     [Fact]
     public async Task Action_CallerOutsideTheOrdersOrganization_FailsWithAnOutsideOrganizationVerdict()
     {
-        var context = Context(new ServiceOrderActionRequirement(OrderActionType.Dispute), Notice());
+        var context = Context(new ServiceOrderActionRequirement(NeutralOperatorActions.Dispute), Notice());
 
         await ActionHandler(OrgB, IspRoles.Tenant).HandleAsync(context);
 
@@ -147,12 +147,12 @@ public sealed class ServiceOrderAuthorizationHandlerTests
     public async Task Action_FromAnEntry_IsEvaluatedAsAnAppend_SoARecipientMovesOnlyAlongItsTransition()
     {
         var order = Notice(dispatchedToOrgB: true);
-        var bare = Context(new ServiceOrderActionRequirement(OrderActionType.Dispute), order);
+        var bare = Context(new ServiceOrderActionRequirement(NeutralOperatorActions.Dispute), order);
         var along = Context(
-            new ServiceOrderActionRequirement(new OrderActionLog(OrderActionType.Dispute, "u", At, "evidence", ClandestineAttachmentWorkflowGraph.Disputed)),
+            new ServiceOrderActionRequirement(new OrderActionLog(NeutralOperatorActions.Dispute, "u", At, "evidence", ClandestineAttachmentWorkflowGraph.Disputed)),
             order);
         var off = Context(
-            new ServiceOrderActionRequirement(new OrderActionLog(OrderActionType.Dispute, "u", At, "evidence", ClandestineAttachmentWorkflowGraph.Regularized)),
+            new ServiceOrderActionRequirement(new OrderActionLog(NeutralOperatorActions.Dispute, "u", At, "evidence", ClandestineAttachmentWorkflowGraph.Regularized)),
             order);
         var recipient = ActionHandler(OrgB, IspRoles.Tenant);
 

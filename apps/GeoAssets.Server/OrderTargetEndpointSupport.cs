@@ -23,7 +23,7 @@ internal static class OrderTargetEndpointSupport
     /// <summary>
     /// Loads the order and checks the caller may read it: a member of the order's own
     /// organization (what the tenant filter of the order list already shows them), or anyone
-    /// the order rules grant <see cref="OrderActionType.View"/> — which is how a
+    /// the order rules grant <see cref="OrderAction.View"/> — which is how a
     /// cross-organization grantee or a dispatch recipient gets in. The target store itself
     /// checks nothing. A caller the organization gate refuses (XD01-332) gets the same
     /// <c>orders.not-found</c> as for an order that does not exist.
@@ -39,7 +39,7 @@ internal static class OrderTargetEndpointSupport
         if (IsMemberOfOwningOrganization(principal, order) && rules.PassesOrganizationGate(principal, order))
             return new OrderAccess(order, principal, null);
 
-        var verdict = rules.Evaluate(principal, OrderActionType.View, order);
+        var verdict = rules.Evaluate(principal, OrderAction.View, order);
         return verdict.Allowed
             ? new OrderAccess(order, principal, null)
             : new OrderAccess(null, null, WorkflowProblemResults.Refused(orderId, verdict));
@@ -48,7 +48,7 @@ internal static class OrderTargetEndpointSupport
     /// <summary>
     /// Loads the order and checks the caller may make a change of kind <paramref name="write"/>
     /// to its targets (<see cref="ServiceOrderRules.EvaluateTargetWrite"/>): the order rules must
-    /// grant it <see cref="OrderActionType.Annotate"/>, and a recipient of the order's dispatch
+    /// grant it <see cref="OrderAction.Annotate"/>, and a recipient of the order's dispatch
     /// records work only on an order whose type allows it and never adds or removes a target
     /// (XD01-316/333). Refused as <see cref="ForReadAsync"/> refuses.
     /// </summary>

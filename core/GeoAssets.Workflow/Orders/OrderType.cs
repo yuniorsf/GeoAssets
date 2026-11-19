@@ -94,7 +94,7 @@ public sealed class OrderType
     /// (<see cref="ServiceOrderTransitions.TransitionsFor"/>); one with no such transition leaves
     /// the status as it is. Empty (the default) adds nothing.
     /// </summary>
-    public List<OrderActionType> RecipientActions { get; init; } = [];
+    public List<OrderAction> RecipientActions { get; init; } = [];
 
     /// <summary>
     /// What a module lets orders of this type do beyond the generic workflow (XD01-361), as opaque, module-owned names —

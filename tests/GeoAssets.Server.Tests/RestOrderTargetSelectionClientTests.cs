@@ -104,10 +104,10 @@ public sealed class RestOrderTargetSelectionClientTests
         var apply = () => sut.ApplyAsync(FenceRequest(), ClaimedAdministrator, CancellationToken.None);
 
         var deniedView = (await preview.Should().ThrowAsync<OrderActionDeniedException>()).Which;
-        deniedView.Action.Should().Be(OrderActionType.View);
+        deniedView.Action.Should().Be(OrderAction.View);
         deniedView.OrderId.Should().Be("ord-1");
         deniedView.Evaluation!.Reason.Should().Be("No rule granted this action.");
-        (await apply.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderActionType.Annotate);
+        (await apply.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderAction.Annotate);
         host.Store.Snapshot().Should().BeEmpty();
     }
 

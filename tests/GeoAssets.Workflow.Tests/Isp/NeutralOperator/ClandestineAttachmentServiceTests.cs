@@ -38,7 +38,7 @@ public class ClandestineAttachmentServiceTests
 
         var reloaded = await repo.GetByIdAsync(order.Id);
         reloaded!.Status.Should().Be(ClandestineAttachmentWorkflowGraph.CaboARevelia);
-        reloaded.ActionLog.Should().ContainSingle(a => a.Action == OrderActionType.FlagClandestine);
+        reloaded.ActionLog.Should().ContainSingle(a => a.Action == NeutralOperatorActions.FlagClandestine);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class ClandestineAttachmentServiceTests
         var reloaded = await repo.GetByIdAsync(order.Id);
         reloaded!.Status.Should().Be(ClandestineAttachmentWorkflowGraph.Disputed);
         reloaded.Attributes[ClandestineAttachmentService.AttrDisputeEvidenceReference].Should().Be("receipt-digest-abc123");
-        reloaded.ActionLog.Should().ContainSingle(a => a.Action == OrderActionType.Dispute);
+        reloaded.ActionLog.Should().ContainSingle(a => a.Action == NeutralOperatorActions.Dispute);
     }
 
     [Fact]

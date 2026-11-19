@@ -318,15 +318,15 @@ public static class WorkflowServiceExtensions
 
     private static List<WorkflowTransition> DefaultWorkflowTransitions() =>
     [
-        new(ServiceOrderStatus.Draft,      ServiceOrderStatus.Pending,    OrderActionType.Dispatch),
-        new(ServiceOrderStatus.Draft,      ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
-        new(ServiceOrderStatus.Pending,    ServiceOrderStatus.InProgress, OrderActionType.Execute),
-        new(ServiceOrderStatus.Pending,    ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+        new(ServiceOrderStatus.Draft,      ServiceOrderStatus.Pending,    OrderAction.Dispatch),
+        new(ServiceOrderStatus.Draft,      ServiceOrderStatus.Cancelled,  OrderAction.Cancel),
+        new(ServiceOrderStatus.Pending,    ServiceOrderStatus.InProgress, OrderAction.Execute),
+        new(ServiceOrderStatus.Pending,    ServiceOrderStatus.Cancelled,  OrderAction.Cancel),
         new(ServiceOrderStatus.InProgress, ServiceOrderStatus.OnHold),
-        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed,  OrderActionType.Complete),
-        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed,  OrderAction.Complete),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Cancelled,  OrderAction.Cancel),
         new(ServiceOrderStatus.OnHold,     ServiceOrderStatus.InProgress),
-        new(ServiceOrderStatus.OnHold,     ServiceOrderStatus.Cancelled,  OrderActionType.Cancel),
+        new(ServiceOrderStatus.OnHold,     ServiceOrderStatus.Cancelled,  OrderAction.Cancel),
     ];
 
     private static void SeedDefaultOrderTypes(OrderTypeRegistry registry)

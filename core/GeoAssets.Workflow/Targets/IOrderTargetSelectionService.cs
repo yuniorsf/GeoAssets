@@ -24,7 +24,7 @@ public interface IOrderTargetSelectionService
 {
     /// <summary>
     /// Reports what applying <paramref name="request"/> would do, and writes nothing. Requires
-    /// <see cref="Orders.OrderActionType.View"/> on the order. A selection that does not fit
+    /// <see cref="Orders.OrderAction.View"/> on the order. A selection that does not fit
     /// under the selection limit is reported through
     /// <see cref="TargetSelectionPreview.TruncatedByLimit"/>, not rejected.
     /// </summary>
@@ -32,8 +32,8 @@ public interface IOrderTargetSelectionService
 
     /// <summary>
     /// Adds the selected features to the order as targets, records the selection on the order
-    /// and appends one <see cref="Orders.OrderActionType.Annotate"/> action-log entry carrying
-    /// the counts. Requires <see cref="Orders.OrderActionType.Annotate"/> on the order.
+    /// and appends one <see cref="Orders.OrderAction.Annotate"/> action-log entry carrying
+    /// the counts. Requires <see cref="Orders.OrderAction.Annotate"/> on the order.
     /// <list type="bullet">
     /// <item><description>
     /// An order in a terminal state throws

@@ -33,9 +33,9 @@ public static class IpBillingWorkflowGraph
     /// <summary>Fresh, independently-mutable copy each call — see <see cref="States"/>.</summary>
     public static List<WorkflowTransition> Transitions() =>
     [
-        new WorkflowTransition(Carregado, Calculado, OrderActionType.Calculate),
-        new WorkflowTransition(Calculado, Validado,  OrderActionType.Validate),
-        new WorkflowTransition(Carregado, Cancelado, OrderActionType.Cancel),
-        new WorkflowTransition(Calculado, Cancelado, OrderActionType.Cancel),
+        new WorkflowTransition(Carregado, Calculado, IpBillingActions.Calculate),
+        new WorkflowTransition(Calculado, Validado,  IpBillingActions.Validate),
+        new WorkflowTransition(Carregado, Cancelado, OrderAction.Cancel),
+        new WorkflowTransition(Calculado, Cancelado, OrderAction.Cancel),
     ];
 }

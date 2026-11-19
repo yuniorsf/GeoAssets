@@ -101,7 +101,8 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
             .Select(p => new Entities.OrderActionPermissionRecord
             {
                 OrderTypeId  = orderType.Id,
-                Action       = (int)p.Action,
+                Action       = StoredOrderAction.NumberOf(p.Action),
+                ActionCode   = StoredOrderAction.CodeOf(p.Action),
                 Kind         = (int)p.Kind,
                 Value        = p.Value,
                 FromStateKey = p.FromStateKey,
@@ -122,7 +123,8 @@ public sealed class EFOrderTypeRepository(ServiceOrderDbContext db) : IOrderType
                 OrderTypeId   = orderType.Id,
                 FromStateKey  = x.FromStateKey,
                 ToStateKey    = x.ToStateKey,
-                TriggerAction = x.TriggerAction.HasValue ? (int)x.TriggerAction.Value : null,
+                TriggerAction = x.TriggerAction is { } trigger ? StoredOrderAction.NumberOf(trigger) : null,
+                TriggerActionCode = x.TriggerAction is { } code ? StoredOrderAction.CodeOf(code) : null,
             }).ToList();
     }
 

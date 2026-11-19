@@ -18,7 +18,8 @@ public sealed class OrderActionHandlerRegistry(IEnumerable<IOrderActionHandler> 
 
     /// <summary>
     /// Throws <see cref="InvalidOperationException"/> naming the order type, the action and both handlers when more than one
-    /// handler claims an action of <see cref="OrderActionType"/> on one of <paramref name="orderTypes"/>.
+    /// handler claims the same action on one of <paramref name="orderTypes"/> — every action the type can be asked for: the
+    /// generic verbs, every historical action number, and the actions its transitions, permissions and recipients name.
     /// </summary>
     public void EnsureUnambiguous(IEnumerable<OrderType> orderTypes)
     {
@@ -31,7 +32,7 @@ public sealed class OrderActionHandlerRegistry(IEnumerable<IOrderActionHandler> 
 
         foreach (var orderType in orderTypes)
         {
-            foreach (var action in Enum.GetValues<OrderActionType>())
+            foreach (var action in ActionsOf(orderType))
             {
                 var probe = new OrderActionLog(action, string.Empty, DateTime.UnixEpoch);
                 var claimants = _handlers.Where(handler => handler.CanHandle(orderType, probe)).Take(2).ToArray();
@@ -43,4 +44,13 @@ public sealed class OrderActionHandlerRegistry(IEnumerable<IOrderActionHandler> 
             }
         }
     }
+
+    /// <summary>The actions <paramref name="orderType"/> can be asked for (XD01-366: the vocabulary is open, so it is derived).</summary>
+    private static IEnumerable<OrderAction> ActionsOf(OrderType orderType) =>
+        OrderAction.Generic
+            .Concat(OrderActionAliases.All.Select(a => a.Action))
+            .Concat(orderType.Transitions.Where(t => t.TriggerAction is not null).Select(t => t.TriggerAction!.Value))
+            .Concat(orderType.ActionPermissions.Select(p => p.Action))
+            .Concat(orderType.RecipientActions)
+            .Distinct();
 }

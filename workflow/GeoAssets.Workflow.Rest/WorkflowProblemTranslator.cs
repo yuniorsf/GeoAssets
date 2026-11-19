@@ -28,7 +28,7 @@ internal static class WorkflowProblemTranslator
     /// <param name="action">The action the call needed, reported on a denial.</param>
     /// <param name="ct">Cancels reading the problem body.</param>
     public static async Task ThrowIfFailedAsync(
-        HttpResponseMessage response, string? orderId, OrderActionType action, CancellationToken ct)
+        HttpResponseMessage response, string? orderId, OrderAction action, CancellationToken ct)
     {
         if (response.IsSuccessStatusCode) return;
 
@@ -71,7 +71,7 @@ internal static class WorkflowProblemTranslator
     }
 
     /// <summary>The exception for a problem; null for a code this client does not know.</summary>
-    public static Exception? ToException(WorkflowProblem problem, string? orderId, OrderActionType action) => problem.Code switch
+    public static Exception? ToException(WorkflowProblem problem, string? orderId, OrderAction action) => problem.Code switch
     {
         WorkflowProblemCodes.ValidationFailed => InvalidRequest(problem.Detail),
         WorkflowProblemCodes.InvalidSelectionParameters => InvalidParameters(problem),

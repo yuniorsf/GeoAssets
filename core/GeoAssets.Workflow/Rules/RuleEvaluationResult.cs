@@ -7,7 +7,7 @@ namespace GeoAssets.Workflow.Rules;
 /// </summary>
 public sealed record RuleEvaluationResult(
     bool               Allowed,
-    OrderActionType    Action,
+    OrderAction    Action,
     string             Reason
 )
 {
@@ -22,12 +22,12 @@ public sealed record RuleEvaluationResult(
     /// </summary>
     public bool IsOutsideOrganization => Code == RuleDenialCode.OutsideOrganization;
 
-    public static RuleEvaluationResult Allow(OrderActionType action, string reason)
+    public static RuleEvaluationResult Allow(OrderAction action, string reason)
         => new(true,  action, reason);
 
-    public static RuleEvaluationResult Deny(OrderActionType action, string reason)
+    public static RuleEvaluationResult Deny(OrderAction action, string reason)
         => new(false, action, reason) { Code = RuleDenialCode.DeniedByRule };
 
-    public static RuleEvaluationResult Deny(OrderActionType action, string reason, RuleDenialCode code)
+    public static RuleEvaluationResult Deny(OrderAction action, string reason, RuleDenialCode code)
         => new(false, action, reason) { Code = code };
 }

@@ -132,7 +132,7 @@ public sealed class IspTenantPortalGenericRoutesTests
             "service-orders/competitors-notice/actions",
             new
             {
-                action = (int)OrderActionType.Dispute,
+                action = OrderActionAliases.NumberOf(NeutralOperatorActions.Dispute),
                 performedBy = "whoever-the-body-says",
                 performedAt = OrderTargetsApiHost.Now.UtcDateTime,
                 comment = Evidence,
@@ -237,7 +237,7 @@ public sealed class IspTenantPortalGenericRoutesTests
             "service-orders/notice-1/actions",
             new
             {
-                action = (int)OrderActionType.FlagClandestine,
+                action = OrderActionAliases.NumberOf(NeutralOperatorActions.FlagClandestine),
                 performedBy = "supervisor",
                 performedAt = OrderTargetsApiHost.Now.UtcDateTime,
                 comment = "found on pole",
@@ -253,7 +253,7 @@ public sealed class IspTenantPortalGenericRoutesTests
             "service-orders/notice-1/actions",
             new
             {
-                action = (int)OrderActionType.Dispute,
+                action = OrderActionAliases.NumberOf(NeutralOperatorActions.Dispute),
                 performedBy = "tenant",
                 performedAt = OrderTargetsApiHost.Now.UtcDateTime,
                 comment = Evidence,

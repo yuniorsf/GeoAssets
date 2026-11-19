@@ -7,10 +7,10 @@ namespace GeoAssets.Workflow.Orders;
 /// <param name="FromStateKey">Source state key.</param>
 /// <param name="ToStateKey">Destination state key.</param>
 /// <param name="TriggerAction">
-/// The <see cref="OrderActionType"/> that normally drives this edge, when there is
-/// one unambiguous action for it (e.g. <see cref="OrderActionType.Cancel"/> for a
+/// The <see cref="OrderAction"/> that normally drives this edge, when there is
+/// one unambiguous action for it (e.g. <see cref="OrderAction.Cancel"/> for a
 /// move to a cancelled state). Null when no single action maps to this edge (e.g.
 /// suspend/resume edges with no dedicated action today) — the edge is still legal,
 /// it's just not derivable from an action alone.
 /// </param>
-public sealed record WorkflowTransition(string FromStateKey, string ToStateKey, OrderActionType? TriggerAction = null);
+public sealed record WorkflowTransition(string FromStateKey, string ToStateKey, OrderAction? TriggerAction = null);

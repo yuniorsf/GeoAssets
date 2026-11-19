@@ -154,7 +154,7 @@ public sealed class FiscalizacaoCalculationService(
             await orderRepository.AppendActionAsync(
                 serviceOrderId,
                 new OrderActionLog(
-                    OrderActionType.Validate,
+                    IpBillingActions.Validate,
                     performedBy ?? "system",
                     now.UtcDateTime,
                     $"Validated Fiscalização (Agregado={totalAgregado}, Retroativo={totalRetroativo}); {DescribePosting(posting, competencia)}",
@@ -237,7 +237,7 @@ public sealed class FiscalizacaoCalculationService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Calculate,
+                IpBillingActions.Calculate,
                 performedBy ?? "system",
                 now,
                 $"Calculated Agregado={totalAgregado}, Retroativo={totalRetroativo} across {lines.Count} line(s)",

@@ -269,8 +269,12 @@ namespace GeoAssets.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("Action")
+                    b.Property<int?>("Action")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ActionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("ActorKind")
                         .HasColumnType("integer");
@@ -319,8 +323,12 @@ namespace GeoAssets.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("Action")
+                    b.Property<int?>("Action")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ActionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("FromStateKey")
                         .HasMaxLength(64)
@@ -431,8 +439,12 @@ namespace GeoAssets.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("Action")
+                    b.Property<int?>("Action")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ActionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("FromStateKey")
                         .HasMaxLength(64)
@@ -550,6 +562,10 @@ namespace GeoAssets.Server.Migrations
 
                     b.Property<int?>("TriggerAction")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TriggerActionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.HasKey("Id");
 

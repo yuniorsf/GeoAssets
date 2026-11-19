@@ -240,7 +240,7 @@ public abstract partial class SharedUseDispatchContractTests
         var dispatch = () => harness.Service.DispatchAsync("ord-1", [], member, CancellationToken.None);
         var preview = () => harness.Plans.PreviewAsync("ord-1", 1, 50, member, CancellationToken.None);
 
-        (await dispatch.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderActionType.Dispatch);
+        (await dispatch.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderAction.Dispatch);
         await preview.Should().ThrowAsync<OrderActionDeniedException>();
         await AssertNothingWasDispatchedAsync(harness, "ord-1");
     }

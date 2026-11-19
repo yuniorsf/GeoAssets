@@ -15,6 +15,7 @@ internal sealed class OrderTypeTransitionRecordConfiguration : IEntityTypeConfig
         b.Property(t => t.OrderTypeId).IsRequired().HasMaxLength(128);
         b.Property(t => t.FromStateKey).IsRequired().HasMaxLength(64);
         b.Property(t => t.ToStateKey).IsRequired().HasMaxLength(64);
+        b.Property(t => t.TriggerActionCode).HasMaxLength(StoredOrderAction.CodeMaxLength);
 
         b.HasIndex(t => new { t.OrderTypeId, t.FromStateKey });
     }

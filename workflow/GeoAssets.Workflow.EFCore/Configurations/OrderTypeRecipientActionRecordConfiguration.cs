@@ -15,6 +15,7 @@ internal sealed class OrderTypeRecipientActionRecordConfiguration : IEntityTypeC
         b.Property(a => a.OrderTypeId).IsRequired().HasMaxLength(128);
         b.Property(a => a.FromStateKey).HasMaxLength(64);
         b.Property(a => a.ToStateKey).HasMaxLength(64);
+        b.Property(a => a.ActionCode).HasMaxLength(StoredOrderAction.CodeMaxLength);
 
         b.HasIndex(a => new { a.OrderTypeId, a.Action });
     }

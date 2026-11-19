@@ -180,7 +180,7 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
                 if (await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None).ConfigureAwait(false) is
                     { Code: OccupancyProblemCodes.ConcurrentModification } conflict)
                 {
-                    throw WorkflowProblemTranslator.ToException(conflict, orderId, OrderActionType.Approve)!;
+                    throw WorkflowProblemTranslator.ToException(conflict, orderId, OrderAction.Approve)!;
                 }
 
                 throw new ServiceOrderConcurrencyException(orderId);

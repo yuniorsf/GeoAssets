@@ -14,7 +14,7 @@ namespace GeoAssets.Web.Services.Isp.Rest;
 ///   <item>submit → <c>POST service-orders</c> (the type's creation policies and attribute schema apply);</item>
 ///   <item>my requests → <c>GET service-orders/by-order-type/{attachment request}</c>;</item>
 ///   <item>flagged notices → <c>GET service-orders/by-order-type/{clandestine notice}?status=CaboARevelia</c>;</item>
-///   <item>dispute → <c>POST service-orders/{id}/actions</c> with <see cref="OrderActionType.Dispute"/>, the evidence
+///   <item>dispute → <c>POST service-orders/{id}/actions</c> with <see cref="NeutralOperatorActions.Dispute"/>, the evidence
 ///   reference as the comment and <see cref="ClandestineAttachmentWorkflowGraph.Disputed"/> as the resulting status.</item>
 /// </list>
 /// The server reads and lists only what the caller's organization gate admits.
@@ -58,7 +58,7 @@ internal sealed class TenantPortalRestClient(
     {
         var principal = await principals.CreateAsync(ct).ConfigureAwait(false);
         var entry = new OrderActionLog(
-            OrderActionType.Dispute,
+            NeutralOperatorActions.Dispute,
             principal.UserId,
             timeProvider.GetUtcNow().UtcDateTime,
             Comment: evidenceReference,
