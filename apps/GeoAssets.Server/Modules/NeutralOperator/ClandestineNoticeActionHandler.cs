@@ -9,23 +9,25 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 /// <c>POST /service-orders/{id}/actions</c>, or the tenant portal's dispute route, which evaluates the same requirement —
 /// and performed by <see cref="IClandestineAttachmentService"/>, which stamps the notice's deadlines.
 /// <list type="bullet">
-///   <item><see cref="OrderActionType.FlagClandestine"/>: Active → CaboARevelia (flag).</item>
-///   <item><see cref="OrderActionType.Dispute"/>: CaboARevelia → Disputed; the entry's comment is the evidence reference.</item>
-///   <item><see cref="OrderActionType.Approve"/>: CaboARevelia → Regularized (regularize, within the window), or
+///   <item><see cref="NeutralOperatorActions.FlagClandestine"/>: Active → CaboARevelia (flag).</item>
+///   <item><see cref="NeutralOperatorActions.Dispute"/>: CaboARevelia → Disputed; the entry's comment is the evidence reference.</item>
+///   <item><see cref="OrderAction.Approve"/>: CaboARevelia → Regularized (regularize, within the window), or
 ///   Disputed → Regularized (dispute upheld).</item>
-///   <item><see cref="OrderActionType.Reject"/>: Disputed → CaboARevelia (dispute rejected).</item>
+///   <item><see cref="OrderAction.Reject"/>: Disputed → CaboARevelia (dispute rejected).</item>
 /// </list>
 /// The entry's performer and instant are not used: the action is logged as the caller, at the service's clock.
 /// </summary>
 public sealed class ClandestineNoticeActionHandler(IClandestineAttachmentService notices) : IOrderActionHandler
 {
+    private static readonly OrderAction[] HandledActions =
+        [NeutralOperatorActions.FlagClandestine, NeutralOperatorActions.Dispute, OrderAction.Approve, OrderAction.Reject];
+
     public bool CanHandle(OrderType? orderType, OrderActionLog entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
         return string.Equals(orderType?.Id, ClandestineAttachmentOrderTypes.ClandestineNoticeId, StringComparison.Ordinal)
-            && entry.Action is OrderActionType.FlagClandestine or OrderActionType.Dispute
-                or OrderActionType.Approve or OrderActionType.Reject;
+            && HandledActions.Contains(entry.Action);
     }
 
     public async Task<OrderActionOutcome> HandleAsync(OrderActionContext context, CancellationToken cancellationToken)
@@ -37,7 +39,7 @@ public sealed class ClandestineNoticeActionHandler(IClandestineAttachmentService
         if (target is null || (entry.ResultingStatus is { } requested && !string.Equals(requested, target, StringComparison.Ordinal)))
             return OrderActionOutcome.InvalidTransition(order.Status, entry.ResultingStatus ?? target);
 
-        if (entry.Action == OrderActionType.Dispute && string.IsNullOrWhiteSpace(entry.Comment))
+        if (entry.Action == NeutralOperatorActions.Dispute && string.IsNullOrWhiteSpace(entry.Comment))
         {
             return OrderActionOutcome.Problem(
                 StatusCodes.Status400BadRequest, ClandestineProblemCodes.EvidenceRequired,
@@ -56,25 +58,35 @@ public sealed class ClandestineNoticeActionHandler(IClandestineAttachmentService
     }
 
     /// <summary>Where <paramref name="action"/> takes a notice in <paramref name="status"/>; null when it takes it nowhere.</summary>
-    internal static string? TargetStatus(OrderActionType action, string status) => (action, status) switch
+    internal static string? TargetStatus(OrderAction action, string status)
     {
-        (OrderActionType.FlagClandestine, ClandestineAttachmentWorkflowGraph.Active) => ClandestineAttachmentWorkflowGraph.CaboARevelia,
-        (OrderActionType.Dispute, ClandestineAttachmentWorkflowGraph.CaboARevelia) => ClandestineAttachmentWorkflowGraph.Disputed,
-        (OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.CaboARevelia) => ClandestineAttachmentWorkflowGraph.Regularized,
-        (OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.Disputed) => ClandestineAttachmentWorkflowGraph.Regularized,
-        (OrderActionType.Reject, ClandestineAttachmentWorkflowGraph.Disputed) => ClandestineAttachmentWorkflowGraph.CaboARevelia,
-        _ => null,
-    };
-
-    private Task<ClandestineFlagResult> PerformAsync(IServiceOrder order, OrderActionLog entry, string performedBy, CancellationToken ct) =>
-        (entry.Action, order.Status) switch
+        if (action == NeutralOperatorActions.FlagClandestine)
+            return Is(status, ClandestineAttachmentWorkflowGraph.Active) ? ClandestineAttachmentWorkflowGraph.CaboARevelia : null;
+        if (action == NeutralOperatorActions.Dispute)
+            return Is(status, ClandestineAttachmentWorkflowGraph.CaboARevelia) ? ClandestineAttachmentWorkflowGraph.Disputed : null;
+        if (action == OrderAction.Approve)
         {
-            (OrderActionType.FlagClandestine, _) => notices.FlagAsync(order.Id, performedBy, ct),
-            (OrderActionType.Dispute, _) => notices.DisputeAsync(order.Id, entry.Comment!, performedBy, ct),
-            (OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.CaboARevelia) => notices.RegularizeAsync(order.Id, performedBy, ct),
-            (OrderActionType.Approve, _) => notices.ResolveDisputeAsync(order.Id, upheld: true, performedBy, ct),
-            _ => notices.ResolveDisputeAsync(order.Id, upheld: false, performedBy, ct),
-        };
+            return Is(status, ClandestineAttachmentWorkflowGraph.CaboARevelia) || Is(status, ClandestineAttachmentWorkflowGraph.Disputed)
+                ? ClandestineAttachmentWorkflowGraph.Regularized
+                : null;
+        }
+
+        return action == OrderAction.Reject && Is(status, ClandestineAttachmentWorkflowGraph.Disputed)
+            ? ClandestineAttachmentWorkflowGraph.CaboARevelia
+            : null;
+    }
+
+    private static bool Is(string status, string state) => string.Equals(status, state, StringComparison.Ordinal);
+
+    private Task<ClandestineFlagResult> PerformAsync(IServiceOrder order, OrderActionLog entry, string performedBy, CancellationToken ct)
+    {
+        if (entry.Action == NeutralOperatorActions.FlagClandestine) return notices.FlagAsync(order.Id, performedBy, ct);
+        if (entry.Action == NeutralOperatorActions.Dispute) return notices.DisputeAsync(order.Id, entry.Comment!, performedBy, ct);
+        if (entry.Action == OrderAction.Approve && Is(order.Status, ClandestineAttachmentWorkflowGraph.CaboARevelia))
+            return notices.RegularizeAsync(order.Id, performedBy, ct);
+
+        return notices.ResolveDisputeAsync(order.Id, upheld: entry.Action == OrderAction.Approve, performedBy, ct);
+    }
 
     /// <summary>The outcome for what the service threw; null for anything that is not a client-facing failure.</summary>
     internal static OrderActionOutcome? FromException(Exception exception, string from, string to) => exception switch

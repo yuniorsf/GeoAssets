@@ -9,4 +9,4 @@ namespace GeoAssets.Workflow.Orders;
 /// applies regardless of state, matching every permission's behavior before this
 /// parameter existed.
 /// </param>
-public sealed record OrderActionPermission(OrderActionType Action, PolicyKind Kind, string Value, string? FromStateKey = null);
+public sealed record OrderActionPermission(OrderAction Action, PolicyKind Kind, string Value, string? FromStateKey = null);

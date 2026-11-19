@@ -35,7 +35,7 @@ public static class FtthDropInstallWorkflowGraph
         new(FtthDropInstallStatus.DropLaunch, FtthDropInstallStatus.TagAffixed),
         new(FtthDropInstallStatus.TagAffixed, FtthDropInstallStatus.PtoPower),
         new(FtthDropInstallStatus.PtoPower, FtthDropInstallStatus.OntProvisioned),
-        new(FtthDropInstallStatus.OntProvisioned, FtthDropInstallStatus.Activated, OrderActionType.Complete),
+        new(FtthDropInstallStatus.OntProvisioned, FtthDropInstallStatus.Activated, OrderAction.Complete),
     ];
 
     public const string InitialStateKey = FtthDropInstallStatus.CrmSale;

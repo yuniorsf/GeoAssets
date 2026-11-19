@@ -6,6 +6,7 @@ using GeoAssets.IpBilling.Fiscalizacao;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Tests.Calculation;
+using GeoAssets.IpBilling.Workflow;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 
@@ -320,7 +321,7 @@ public class FiscalizacaoCalculationServiceTests
         order.Status.Should().Be("Validado");
         (await sut.FiscalizacaoRepo.GetHeaderAsync("order-1"))!.IsValidated.Should().BeTrue();
         var action = sut.OrderRepo.AppendedActions.Should().ContainSingle().Which;
-        action.Action.Should().Be(OrderActionType.Validate);
+        action.Action.Should().Be(IpBillingActions.Validate);
         action.PerformedBy.Should().Be("ana");
         action.ResultingStatus.Should().Be("Validado");
         action.Comment.Should().Contain("Validated Fiscalização (Agregado=10, Retroativo=10)")

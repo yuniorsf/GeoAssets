@@ -138,7 +138,7 @@ public sealed class RestOrderOccupancyStagingClientTests
         await ((Func<Task>)(() => outsider.GetAsync("ord-1", Target, Claimed, CancellationToken.None)))
             .Should().ThrowExactlyAsync<KeyNotFoundException>("outside the organization gate an order does not exist");
         (await ((Func<Task>)(() => reader.StageAsync("ord-1", Target, ok, Claimed, CancellationToken.None))).Should().ThrowExactlyAsync<OrderActionDeniedException>())
-            .Which.Action.Should().Be(OrderActionType.Annotate);
+            .Which.Action.Should().Be(OrderAction.Annotate);
 
         host.Grants.Active.Add(new()
         {

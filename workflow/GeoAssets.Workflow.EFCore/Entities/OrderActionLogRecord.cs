@@ -5,7 +5,11 @@ internal sealed class OrderActionLogRecord
 {
     public int    Id             { get; set; }
     public string ServiceOrderId { get; set; } = string.Empty;
-    public int    Action         { get; set; }   // OrderActionType enum stored as int
+    /// <summary>The action's historical number (XD01-366: null for an action that has none — see <c>StoredOrderAction</c>).</summary>
+    public int?   Action         { get; set; }
+
+    /// <summary>The action's code (XD01-366); null only on a row written before the column existed.</summary>
+    public string? ActionCode    { get; set; }
     public string PerformedBy    { get; set; } = string.Empty;
     public DateTime PerformedAt  { get; set; }
     public string?  Comment      { get; set; }

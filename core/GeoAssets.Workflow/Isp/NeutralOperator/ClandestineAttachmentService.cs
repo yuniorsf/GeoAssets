@@ -48,7 +48,7 @@ public sealed class ClandestineAttachmentService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.FlagClandestine,
+                NeutralOperatorActions.FlagClandestine,
                 performedBy ?? "system",
                 now.UtcDateTime,
                 $"Flagged as cabo à revelia; regularization deadline {deadline:O}",
@@ -77,7 +77,7 @@ public sealed class ClandestineAttachmentService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Approve,
+                OrderAction.Approve,
                 performedBy ?? "system",
                 now.UtcDateTime,
                 "Regularized within the 30-day statutory window",
@@ -110,7 +110,7 @@ public sealed class ClandestineAttachmentService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Dispute,
+                NeutralOperatorActions.Dispute,
                 performedBy ?? "system",
                 now.UtcDateTime,
                 $"Disputed with evidence reference '{evidenceReference}'; mediation deadline {mediationDeadline:O}",
@@ -139,8 +139,8 @@ public sealed class ClandestineAttachmentService(
         // call picks it straight back up, which is "the cleanup-drive path" this ticket's AC
         // refers to; no separate re-routing is needed since that transition already existed.
         var (action, resultingStatus, comment) = upheld
-            ? (OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.Regularized, "Dispute upheld — attachment regularized")
-            : (OrderActionType.Reject, ClandestineAttachmentWorkflowGraph.CaboARevelia, "Dispute rejected — reverted to cabo à revelia");
+            ? (OrderAction.Approve, ClandestineAttachmentWorkflowGraph.Regularized, "Dispute upheld — attachment regularized")
+            : (OrderAction.Reject, ClandestineAttachmentWorkflowGraph.CaboARevelia, "Dispute rejected — reverted to cabo à revelia");
 
         await orderRepository.AppendActionAsync(
             serviceOrderId,

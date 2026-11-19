@@ -62,9 +62,9 @@ public class EmergencyRepairAgentWorkflowTests
     public async Task FullyAgentGranted_DrivesOrderFromDraftToPending()
     {
         var rules = new ServiceOrderRules(
-            roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+            roleGrants: new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
             {
-                ["AutomationAgent"] = new HashSet<OrderActionType> { OrderActionType.Dispatch }
+                ["AutomationAgent"] = new HashSet<OrderAction> { OrderActionType.Dispatch }
             });
 
         var (order, _) = await RunWorkflowAsync(rules);

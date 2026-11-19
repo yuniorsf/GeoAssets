@@ -250,7 +250,8 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
         _db.OrderActionLogs.Add(new OrderActionLogRecord
         {
             ServiceOrderId = orderId,
-            Action = (int)entry.Action,
+            Action = StoredOrderAction.NumberOf(entry.Action),
+            ActionCode = StoredOrderAction.CodeOf(entry.Action),
             PerformedBy = entry.PerformedBy,
             PerformedAt = entry.PerformedAt,
             Comment = entry.Comment,

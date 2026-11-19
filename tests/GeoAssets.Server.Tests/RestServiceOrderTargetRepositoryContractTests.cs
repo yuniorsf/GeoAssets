@@ -169,7 +169,7 @@ public sealed class RestServiceOrderTargetRepositoryContractTests : ServiceOrder
         var remove = () => rest.RemoveAsync("ord-1", [stored.Id], CancellationToken.None);
 
         (await update.Should().ThrowAsync<GeoAssets.Workflow.Rules.OrderActionDeniedException>())
-            .Which.Action.Should().Be(GeoAssets.Workflow.Orders.OrderActionType.Annotate);
+            .Which.Action.Should().Be(GeoAssets.Workflow.Orders.OrderAction.Annotate);
         await remove.Should().ThrowAsync<GeoAssets.Workflow.Rules.OrderActionDeniedException>();
         host.Store.Snapshot().Should().ContainSingle();
     }

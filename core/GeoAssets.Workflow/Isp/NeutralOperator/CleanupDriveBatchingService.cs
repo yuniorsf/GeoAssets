@@ -113,7 +113,7 @@ public sealed class CleanupDriveBatchingService(
         await orderRepository.AppendActionAsync(
             order.Id,
             new OrderActionLog(
-                OrderActionType.Dispatch,
+                OrderAction.Dispatch,
                 performedBy,
                 now.UtcDateTime,
                 $"Dispatched cleanup-drive cut order for {poleFeatureIds.Length} pole(s)",
@@ -160,7 +160,7 @@ public sealed class CleanupDriveBatchingService(
         await orderRepository.AppendActionAsync(
             serviceOrderId,
             new OrderActionLog(
-                OrderActionType.Complete,
+                OrderAction.Complete,
                 performedBy ?? "system",
                 now.UtcDateTime,
                 $"Completed; released {releases.Count} pole slot(s) back to ActiveReservation",

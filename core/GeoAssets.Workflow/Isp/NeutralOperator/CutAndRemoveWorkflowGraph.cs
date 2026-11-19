@@ -25,7 +25,7 @@ public static class CutAndRemoveWorkflowGraph
     /// <summary>Fresh, independently-mutable copy each call.</summary>
     public static List<WorkflowTransition> Transitions() =>
     [
-        new WorkflowTransition(Open,       Dispatched, OrderActionType.Dispatch),
-        new WorkflowTransition(Dispatched, Completed,  OrderActionType.Complete),
+        new WorkflowTransition(Open,       Dispatched, OrderAction.Dispatch),
+        new WorkflowTransition(Dispatched, Completed,  OrderAction.Complete),
     ];
 }

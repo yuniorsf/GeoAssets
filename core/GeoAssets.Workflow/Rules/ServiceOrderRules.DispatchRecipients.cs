@@ -72,7 +72,7 @@ public sealed partial class ServiceOrderRules
     /// The <see cref="OrderType.RecipientActions"/> of <paramref name="order"/>'s type (XD01-336),
     /// or none when no registry was given or the type is not registered.
     /// </summary>
-    public IReadOnlyList<OrderActionType> RecipientActionsOf(IServiceOrder order)
+    public IReadOnlyList<OrderAction> RecipientActionsOf(IServiceOrder order)
     {
         ArgumentNullException.ThrowIfNull(order);
 
@@ -119,42 +119,42 @@ public sealed partial class ServiceOrderRules
     /// <summary>
     /// Whether <paramref name="principal"/> may make a change of kind <paramref name="write"/> to
     /// the targets of <paramref name="order"/>. The rule chain must allow it
-    /// <see cref="OrderActionType.Annotate"/> (refused as <see cref="Evaluate"/> refuses, the
+    /// <see cref="OrderAction.Annotate"/> (refused as <see cref="Evaluate"/> refuses, the
     /// organization gate included); then, for a principal that reaches the order only as a
     /// recipient of its dispatch, recording work needs a type of at least
     /// <see cref="OrderRecipientAccess.Execute"/>, and adding or removing targets is never
     /// allowed — the targets are the owning organization's assets. Refused with
     /// <see cref="RecipientTargetsAreReadOnlyReason"/> and
     /// <see cref="RuleDenialCode.DeniedByRecipientAccess"/>. Members and grantees: exactly
-    /// <see cref="Evaluate"/> for <see cref="OrderActionType.Annotate"/>.
+    /// <see cref="Evaluate"/> for <see cref="OrderAction.Annotate"/>.
     /// </summary>
     public RuleEvaluationResult EvaluateTargetWrite(WorkflowPrincipal principal, IServiceOrder order, OrderTargetWrite write)
     {
         ArgumentNullException.ThrowIfNull(principal);
         ArgumentNullException.ThrowIfNull(order);
         if (string.IsNullOrEmpty(principal.UserId))
-            return Anonymous(OrderActionType.Annotate);
+            return Anonymous(OrderAction.Annotate);
 
         var context = new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order));
         if (!OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, _timeProvider.GetUtcNow().UtcDateTime))
         {
             return RuleEvaluationResult.Deny(
-                OrderActionType.Annotate, "The order is outside the principal's organization.", RuleDenialCode.OutsideOrganization);
+                OrderAction.Annotate, "The order is outside the principal's organization.", RuleDenialCode.OutsideOrganization);
         }
 
-        var verdict = EvaluateChain(OrderActionType.Annotate, context);
+        var verdict = EvaluateChain(OrderAction.Annotate, context);
         if (!verdict.Allowed || !IsRecipientOnly(context)) return verdict;
 
         return write == OrderTargetWrite.RecordWork && RecipientAccessOf(order) >= OrderRecipientAccess.Execute
             ? verdict
             : RuleEvaluationResult.Deny(
-                OrderActionType.Annotate, RecipientTargetsAreReadOnlyReason, RuleDenialCode.DeniedByRecipientAccess);
+                OrderAction.Annotate, RecipientTargetsAreReadOnlyReason, RuleDenialCode.DeniedByRecipientAccess);
     }
 
     /// <summary>
     /// Whether <paramref name="principal"/> may replace <paramref name="stored"/> with
     /// <paramref name="replacement"/> through the whole-order update: <see cref="Evaluate"/> for
-    /// <see cref="OrderActionType.Annotate"/>, and then, for a principal that reaches the order only
+    /// <see cref="OrderAction.Annotate"/>, and then, for a principal that reaches the order only
     /// as a recipient of its dispatch, an <see cref="OrderRecipientAccess.Edit"/> type — a type that
     /// only lets a recipient annotate (<see cref="OrderType.RecipientActions"/>) lets it comment,
     /// not rewrite the order (refused with <see cref="RecipientOrderIsReadOnlyReason"/>) — and a
@@ -167,31 +167,31 @@ public sealed partial class ServiceOrderRules
     {
         ArgumentNullException.ThrowIfNull(replacement);
 
-        var verdict = Evaluate(principal, OrderActionType.Annotate, stored);
+        var verdict = Evaluate(principal, OrderAction.Annotate, stored);
         if (!verdict.Allowed || !IsDispatchRecipientOnly(principal, stored)) return verdict;
 
         if (RecipientAccessOf(stored) != OrderRecipientAccess.Edit)
         {
             return RuleEvaluationResult.Deny(
-                OrderActionType.Annotate, RecipientOrderIsReadOnlyReason, RuleDenialCode.DeniedByRecipientAccess);
+                OrderAction.Annotate, RecipientOrderIsReadOnlyReason, RuleDenialCode.DeniedByRecipientAccess);
         }
 
         return ServiceOrderRecipientEdit.FixedFieldsChanged(stored, replacement).Count == 0
             ? verdict
             : RuleEvaluationResult.Deny(
-                OrderActionType.Annotate, RecipientOrderFieldsAreFixedReason, RuleDenialCode.DeniedByRecipientAccess);
+                OrderAction.Annotate, RecipientOrderFieldsAreFixedReason, RuleDenialCode.DeniedByRecipientAccess);
     }
 
     /// <summary>
     /// <paramref name="verdict"/> of the rule chain, held to the order type's recipient access when
     /// the principal reaches the order only as a recipient of its dispatch: below
     /// <see cref="OrderRecipientAccess.Edit"/> such a recipient keeps
-    /// <see cref="OrderActionType.View"/> and the type's <see cref="OrderType.RecipientActions"/>
+    /// <see cref="OrderAction.View"/> and the type's <see cref="OrderType.RecipientActions"/>
     /// (XD01-336), and nothing else.
     /// </summary>
     private RuleEvaluationResult LimitToRecipientAccess(RuleEvaluationResult verdict, RuleEvaluationContext context)
     {
-        if (!verdict.Allowed || verdict.Action == OrderActionType.View || !IsRecipientOnly(context)) return verdict;
+        if (!verdict.Allowed || verdict.Action == OrderAction.View || !IsRecipientOnly(context)) return verdict;
 
         return RecipientAccessOf(context.Order) == OrderRecipientAccess.Edit
             || RecipientActionsOf(context.Order).Contains(verdict.Action)

@@ -28,7 +28,7 @@ public sealed class OrderTargetSelectionRecipientTests
         var act = () => fixture.Sut.ApplyAsync(SelectionServiceFixture.FenceRequest(), Recipient, CancellationToken.None);
 
         var denied = (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which;
-        denied.Action.Should().Be(OrderActionType.Annotate);
+        denied.Action.Should().Be(OrderAction.Annotate);
         denied.Evaluation!.Reason.Should().Be(ServiceOrderRules.RecipientTargetsAreReadOnlyReason);
         denied.Evaluation.IsOutsideOrganization.Should().BeFalse();
         fixture.StoredFor().Should().BeEmpty();

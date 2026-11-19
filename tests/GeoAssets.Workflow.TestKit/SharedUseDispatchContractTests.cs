@@ -229,7 +229,7 @@ public abstract partial class SharedUseDispatchContractTests
         parent.OrganizationId.Should().Be(harness.OwnerOrganizationId);
         parent.Dispatches.Should().BeEmpty("the parent is dispatched through its children, not to anyone itself");
         var entry = parent.ActionLog.Should().ContainSingle().Subject;
-        entry.Action.Should().Be(OrderActionType.Dispatch);
+        entry.Action.Should().Be(OrderAction.Dispatch);
         entry.PerformedBy.Should().Be("dispatcher-1");
         entry.Comment.Should().Contain("2");
         (await PolesOfAsync(harness, "ord-1")).Should().Equal("pole-1", "pole-2");

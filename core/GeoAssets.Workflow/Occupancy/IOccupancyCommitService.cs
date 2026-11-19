@@ -12,7 +12,7 @@ public interface IOccupancyCommitService
     /// Approves <paramref name="orderId"/> on behalf of <paramref name="principal"/>: every staged
     /// set on a target still to be worked is applied to its pole, the sets are marked committed,
     /// sets on skipped or not-executable targets are discarded, the order moves along its
-    /// <see cref="Orders.OrderActionType.Approve"/> transition and the approval is logged, and
+    /// <see cref="Orders.OrderAction.Approve"/> transition and the approval is logged, and
     /// one asset mutation batch refreshing the written poles' occupancy attributes is staged on
     /// the outbox. All of it is stored, or none of it.
     /// </summary>
@@ -20,7 +20,7 @@ public interface IOccupancyCommitService
     /// <exception cref="ArgumentNullException"><paramref name="principal"/> is null.</exception>
     /// <exception cref="KeyNotFoundException">The order does not exist, or its type is not registered.</exception>
     /// <exception cref="OrderActionDeniedException">
-    /// The rules refuse <see cref="Orders.OrderActionType.Approve"/> (a caller outside the
+    /// The rules refuse <see cref="Orders.OrderAction.Approve"/> (a caller outside the
     /// organization gate included), or the caller is not of the order's organization: only the
     /// pole owner commits its occupancy.
     /// </exception>

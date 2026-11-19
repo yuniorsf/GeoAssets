@@ -61,15 +61,15 @@ public static class ServiceOrderTransitions
     /// <paramref name="from"/> in <paramref name="orderType"/>'s graph. For order types
     /// with no custom graph (or none supplied), preserves the historical
     /// self-cancel-only-from-Draft-or-Pending behavior for
-    /// <see cref="OrderActionType.Cancel"/> — the global default graph has no
+    /// <see cref="OrderAction.Cancel"/> — the global default graph has no
     /// per-edge action tagging to derive this from generically.
     /// </summary>
-    public static bool HasTransitionFor(OrderType? orderType, string from, OrderActionType action)
+    public static bool HasTransitionFor(OrderType? orderType, string from, OrderAction action)
     {
         if (orderType is { States.Count: > 0 })
             return orderType.Transitions.Any(t => string.Equals(t.FromStateKey, from, StringComparison.Ordinal) && t.TriggerAction == action);
 
-        return action == OrderActionType.Cancel
+        return action == OrderAction.Cancel
             && from is ServiceOrderStatus.Draft or ServiceOrderStatus.Pending;
     }
 
@@ -77,19 +77,19 @@ public static class ServiceOrderTransitions
     /// The transitions tagged with <paramref name="action"/> in <paramref name="orderType"/>'s
     /// graph — the moves that action makes. For order types with no custom graph (or none
     /// supplied) the only tagged moves are those of <see cref="HasTransitionFor"/>: a
-    /// <see cref="OrderActionType.Cancel"/> from <see cref="ServiceOrderStatus.Draft"/> or
+    /// <see cref="OrderAction.Cancel"/> from <see cref="ServiceOrderStatus.Draft"/> or
     /// <see cref="ServiceOrderStatus.Pending"/> to <see cref="ServiceOrderStatus.Cancelled"/>.
     /// </summary>
-    public static IReadOnlyList<WorkflowTransition> TransitionsFor(OrderType? orderType, OrderActionType action)
+    public static IReadOnlyList<WorkflowTransition> TransitionsFor(OrderType? orderType, OrderAction action)
     {
         if (orderType is { States.Count: > 0 })
             return [.. orderType.Transitions.Where(t => t.TriggerAction == action)];
 
-        return action == OrderActionType.Cancel
+        return action == OrderAction.Cancel
             ?
             [
-                new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
-                new(ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+                new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
+                new(ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
             ]
             : [];
     }

@@ -4,7 +4,7 @@ namespace GeoAssets.Workflow.Orders;
 /// Immutable audit record of an action performed on a service order.
 /// </summary>
 public sealed record OrderActionLog(
-    OrderActionType Action,
+    OrderAction     Action,
     string          PerformedBy,
     DateTime        PerformedAt,
     string?         Comment         = null,

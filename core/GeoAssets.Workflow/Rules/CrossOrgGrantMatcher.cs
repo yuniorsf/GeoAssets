@@ -28,7 +28,7 @@ internal static class CrossOrgGrantMatcher
     private const string ServiceOrderActionPrefix = "serviceorders:";
 
     /// <summary>True when a grant applying to the order lists <paramref name="action"/>.</summary>
-    public static bool CoversAction(WorkflowPrincipal principal, OrderActionType action, IServiceOrder order, DateTime utcNow)
+    public static bool CoversAction(WorkflowPrincipal principal, OrderAction action, IServiceOrder order, DateTime utcNow)
     {
         // Compared ignoring case below, so the code needs no lowercasing here.
         var actionCode = $"{ServiceOrderActionPrefix}{action}";

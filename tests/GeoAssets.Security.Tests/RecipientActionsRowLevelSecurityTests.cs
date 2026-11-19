@@ -221,6 +221,112 @@ public sealed class RecipientActionsRowLevelSecurityTests
         (await GrantedAsync(connection, Notice)).Should().Be("false:false:false:false", "the owner is not a recipient; its own policies let it write");
     }
 
+    // ── The action codes (XD01-366) ───────────────────────────────────────────
+
+    private const string NumberOnlyGrantType = "rlsx-number-only";
+    private const string NumberOnlyGrantOrder = "rx-number-only";
+    private const string NewVerbType = "rlsx-new-verb";
+    private const string NewVerbOrder = "rx-new-verb";
+
+    private const string InsertCodedLogSql =
+        """
+        INSERT INTO "OrderActionLogs" ("ServiceOrderId", "Action", "ActionCode", "PerformedBy", "PerformedAt", "Comment", "ActorKind")
+        VALUES (@order, @action, @code, 'tester', now(), 'a comment', 0)
+        """;
+
+    private const string InsertCodeOnlyLogSql =
+        """
+        INSERT INTO "OrderActionLogs" ("ServiceOrderId", "Action", "ActionCode", "PerformedBy", "PerformedAt", "Comment", "ActorKind")
+        VALUES (@order, NULL, @code, 'tester', now(), 'a comment', 0)
+        """;
+
+    [Fact]
+    public async Task RecipientInsertPolicy_CodedEntry_IsGrantedByTheSameCode()
+    {
+        await SeedAsync();
+        await using var connection = await RecipientAsync();
+
+        (await TryExecuteAsync(connection, InsertCodedLogSql, ("order", Notice), ("action", Annotate), ("code", "Annotate"))).Should().Be(1);
+        (await TryExecuteAsync(connection, InsertCodedLogSql, ("order", Notice), ("action", Accept), ("code", "Accept"))).Should().Be(1);
+        (await TryExecuteAsync(connection, InsertCodedLogSql, ("order", Notice), ("action", Cancel), ("code", "Cancel")))
+            .Should().Be(0, "a code the type does not grant is refused");
+    }
+
+    [Fact]
+    public async Task RecipientInsertPolicy_CodedEntry_IsNotGrantedByANumberOnlyGrant()
+    {
+        await SeedAsync();
+        await SeedGrantAsync(NumberOnlyGrantType, NumberOnlyGrantOrder, number: Annotate, code: null);
+        await using var connection = await RecipientAsync();
+
+        (await TryExecuteAsync(connection, InsertCodedLogSql, ("order", NumberOnlyGrantOrder), ("action", Annotate), ("code", "Annotate")))
+            .Should().Be(0, "strict: an entry that carries a code is granted only by a grant with that code");
+        (await TryExecuteAsync(connection, InsertLogSql, ("order", NumberOnlyGrantOrder), ("action", Annotate)))
+            .Should().Be(1, "the same grant still admits an entry with no code, by number");
+    }
+
+    [Fact]
+    public async Task RecipientInsertPolicy_CodedEntry_ANumberAndACodeCannotBeMixedToPassAGrant()
+    {
+        await SeedAsync();
+        await using var connection = await RecipientAsync();
+
+        (await TryExecuteAsync(connection, InsertCodedLogSql, ("order", Notice), ("action", Annotate), ("code", "Cancel")))
+            .Should().Be(0, "the code governs: a granted number does not carry a code that is not granted");
+        (await TryExecuteAsync(connection, InsertCodedLogSql, ("order", Notice), ("action", Cancel), ("code", "Annotate")))
+            .Should().Be(1, "and the code alone is enough, whatever number rides with it");
+    }
+
+    [Fact]
+    public async Task RecipientInsertPolicy_UncodedEntry_IsGrantedByNumber()
+    {
+        await SeedAsync();
+        await using var connection = await RecipientAsync();
+
+        (await TryExecuteAsync(connection, InsertLogSql, ("order", Notice), ("action", Annotate))).Should().Be(1);
+        (await TryExecuteAsync(connection, InsertLogSql, ("order", Notice), ("action", Accept))).Should().Be(1);
+        (await TryExecuteAsync(connection, InsertLogSql, ("order", Notice), ("action", Cancel))).Should().Be(0);
+        (await GrantedAsync(connection, Notice)).Should().Be("true:true:true:false", "the two-argument function an older writer calls still answers");
+    }
+
+    [Fact]
+    public async Task RecipientInsertPolicy_ANewVerb_IsGrantedOnlyByAGrantOfItsCode()
+    {
+        await SeedAsync();
+        await SeedGrantAsync(NewVerbType, NewVerbOrder, number: null, code: "Survey");
+        await using var connection = await RecipientAsync();
+
+        (await TryExecuteAsync(connection, InsertCodeOnlyLogSql, ("order", NewVerbOrder), ("code", "Survey"))).Should().Be(1);
+        (await TryExecuteAsync(connection, InsertCodeOnlyLogSql, ("order", NewVerbOrder), ("code", "Inspect")))
+            .Should().Be(0, "another new verb is not granted");
+        (await TryExecuteAsync(connection, InsertCodeOnlyLogSql, ("order", Notice), ("code", "Survey")))
+            .Should().Be(0, "nor is the verb on a type that does not grant it");
+    }
+
+    /// <summary>
+    /// As the table owner: an order of <paramref name="typeId"/> dispatched to the occupant organization, and the one recipient
+    /// action row the type grants — <paramref name="number"/> and <paramref name="code"/> as given, either may be absent.
+    /// </summary>
+    private static async Task SeedGrantAsync(string typeId, string orderId, int? number, string? code)
+    {
+        await using var owner = await OpenOwnerAsync();
+        await ExecuteAsync(owner,
+            """
+            DELETE FROM "OrderTypeRecipientActions" WHERE "OrderTypeId" = @type;
+            INSERT INTO "OrderTypeRecipientActions" ("OrderTypeId", "Action", "ActionCode") VALUES (@type, @number, @code);
+            """,
+            ("type", typeId),
+            ("number", number is { } n ? n : DBNull.Value),
+            ("code", code is null ? DBNull.Value : code));
+        await InsertOrderAsync(owner, orderId, Owner, typeId);
+        await ExecuteAsync(owner,
+            """
+            INSERT INTO "OrderDispatches" ("ServiceOrderId", "TargetId", "TargetType", "DispatchedBy", "DispatchedAt", "ActorKind")
+            VALUES (@order, @target, 2, 'tester', now(), 0)
+            """,
+            ("order", orderId), ("target", Occupant.ToString("D")));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private const string InsertLogSql =

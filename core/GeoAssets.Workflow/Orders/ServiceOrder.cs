@@ -145,7 +145,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
         };
         Dispatches.Add(dispatch);
         ActionLog.Add(new OrderActionLog(
-            Action: OrderActionType.Dispatch,
+            Action: OrderAction.Dispatch,
             PerformedBy: dispatchedBy,
             PerformedAt: dispatch.DispatchedAt,
             Comment: note)
@@ -159,7 +159,7 @@ public sealed class ServiceOrder : IServiceOrder, IScopeableResource
 
     /// <summary>Records a performed action in the audit log and optionally transitions status.</summary>
     public ServiceOrder RecordAction(
-        OrderActionType action,
+        OrderAction action,
         string performedBy,
         TimeProvider timeProvider,
         string? comment = null,

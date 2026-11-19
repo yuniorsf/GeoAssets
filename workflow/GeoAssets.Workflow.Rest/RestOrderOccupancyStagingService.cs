@@ -30,7 +30,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
         Check(orderId, targetId, principal, ct);
 
         using var response = await http.GetAsync(TargetRoute(orderId, targetId, "occupancy"), ct).ConfigureAwait(false);
-        await ThrowIfFailedAsync(response, orderId, targetId, OrderActionType.View, ct).ConfigureAwait(false);
+        await ThrowIfFailedAsync(response, orderId, targetId, OrderAction.View, ct).ConfigureAwait(false);
 
         return await ReadAsync<TargetOccupancyView>(response, ct).ConfigureAwait(false);
     }
@@ -51,7 +51,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
             UriKind.Relative);
 
         using var response = await http.GetAsync(uri, ct).ConfigureAwait(false);
-        await ThrowIfFailedAsync(response, orderId, targetId: null, OrderActionType.View, ct).ConfigureAwait(false);
+        await ThrowIfFailedAsync(response, orderId, targetId: null, OrderAction.View, ct).ConfigureAwait(false);
 
         var envelope = await ReadAsync<PagedEnvelope<OccupancyChangeSetView>>(response, ct).ConfigureAwait(false);
         return new PagedResult<OccupancyChangeSetView> { Items = envelope.Items ?? [], TotalCount = envelope.TotalCount };
@@ -66,7 +66,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
         using var response = await http
             .PutAsJsonAsync(TargetRoute(orderId, targetId, "occupancy-changes"), new { changes }, _opts, ct)
             .ConfigureAwait(false);
-        await ThrowIfFailedAsync(response, orderId, targetId, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        await ThrowIfFailedAsync(response, orderId, targetId, OrderAction.Annotate, ct).ConfigureAwait(false);
 
         return await ReadAsync<TargetOccupancyView>(response, ct).ConfigureAwait(false);
     }
@@ -76,7 +76,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
         Check(orderId, targetId, principal, ct);
 
         using var response = await http.DeleteAsync(TargetRoute(orderId, targetId, "occupancy-changes"), ct).ConfigureAwait(false);
-        await ThrowIfFailedAsync(response, orderId, targetId, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        await ThrowIfFailedAsync(response, orderId, targetId, OrderAction.Annotate, ct).ConfigureAwait(false);
 
         return (await ReadAsync<DiscardedEnvelope>(response, ct).ConfigureAwait(false)).Discarded > 0;
     }
@@ -89,7 +89,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
 
         var uri = new Uri($"service-orders/{Uri.EscapeDataString(orderId)}/occupancy-changes", UriKind.Relative);
         using var response = await http.DeleteAsync(uri, ct).ConfigureAwait(false);
-        await ThrowIfFailedAsync(response, orderId, targetId: null, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        await ThrowIfFailedAsync(response, orderId, targetId: null, OrderAction.Annotate, ct).ConfigureAwait(false);
 
         return (await ReadAsync<DiscardedEnvelope>(response, ct).ConfigureAwait(false)).Discarded;
     }
@@ -111,7 +111,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
     /// shared translation only says "not found".
     /// </summary>
     private static async Task ThrowIfFailedAsync(
-        HttpResponseMessage response, string orderId, string? targetId, OrderActionType action, CancellationToken ct)
+        HttpResponseMessage response, string orderId, string? targetId, OrderAction action, CancellationToken ct)
     {
         if (response.IsSuccessStatusCode) return;
 

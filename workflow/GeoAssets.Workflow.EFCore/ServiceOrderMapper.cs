@@ -78,7 +78,8 @@ internal static class ServiceOrderMapper
 
     private static OrderActionLogRecord ToActionLogRecord(OrderActionLog a) => new()
     {
-        Action            = (int)a.Action,
+        Action            = StoredOrderAction.NumberOf(a.Action),
+        ActionCode        = StoredOrderAction.CodeOf(a.Action),
         PerformedBy       = a.PerformedBy,
         PerformedAt       = a.PerformedAt,
         Comment           = a.Comment,
@@ -181,7 +182,7 @@ internal static class ServiceOrderMapper
         records
             .OrderBy(a => a.PerformedAt)
             .Select(a => new OrderActionLog(
-                (OrderActionType)a.Action,
+                StoredOrderAction.Read(a.Action, a.ActionCode),
                 a.PerformedBy,
                 a.PerformedAt,
                 a.Comment,

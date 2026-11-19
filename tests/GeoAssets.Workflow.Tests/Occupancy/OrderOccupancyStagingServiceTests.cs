@@ -117,7 +117,7 @@ public sealed class OrderOccupancyStagingServiceTests
 
         var denied = (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which;
         denied.Evaluation!.IsOutsideOrganization.Should().BeFalse();
-        denied.Action.Should().Be(writes ? OrderActionType.Annotate : OrderActionType.View);
+        denied.Action.Should().Be(writes ? OrderAction.Annotate : OrderAction.View);
     }
 
     [Theory]
@@ -131,7 +131,7 @@ public sealed class OrderOccupancyStagingServiceTests
         var act = () => run(fixture.Sut, OrderId, TargetId(), Viewer, CancellationToken.None);
 
         if (writes)
-            (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderActionType.Annotate);
+            (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderAction.Annotate);
         else
             await act.Should().NotThrowAsync();
         fixture.ChangeSets.Snapshot().Should().BeEmpty();
@@ -154,7 +154,7 @@ public sealed class OrderOccupancyStagingServiceTests
         var denied = (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which;
         denied.Evaluation!.IsOutsideOrganization.Should().BeFalse("the grantee can see the order; it is refused the occupancy, not the order");
         denied.Evaluation.Reason.Should().Be(OrderOccupancyStagingService.OwnerOnlyReason);
-        denied.Action.Should().Be(action);
+        denied.Action.Should().Be((OrderAction)action);
     }
 
     // ── The target ────────────────────────────────────────────────────────────

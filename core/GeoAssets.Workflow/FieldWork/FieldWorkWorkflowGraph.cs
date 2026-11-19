@@ -51,35 +51,35 @@ public static class FieldWorkWorkflowGraph
     public static readonly IReadOnlyList<WorkflowTransition> Transitions =
     [
         new(FieldWorkStatus.Draft, FieldWorkStatus.Pending),
-        new(FieldWorkStatus.Draft, FieldWorkStatus.Cancelled, OrderActionType.Cancel),
+        new(FieldWorkStatus.Draft, FieldWorkStatus.Cancelled, OrderAction.Cancel),
 
         new(FieldWorkStatus.Pending, FieldWorkStatus.Scheduled),
-        new(FieldWorkStatus.Pending, FieldWorkStatus.Cancelled, OrderActionType.Cancel),
+        new(FieldWorkStatus.Pending, FieldWorkStatus.Cancelled, OrderAction.Cancel),
 
-        new(FieldWorkStatus.Scheduled, FieldWorkStatus.Dispatched, OrderActionType.Dispatch),
-        new(FieldWorkStatus.Scheduled, FieldWorkStatus.Cancelled, OrderActionType.Cancel),
+        new(FieldWorkStatus.Scheduled, FieldWorkStatus.Dispatched, OrderAction.Dispatch),
+        new(FieldWorkStatus.Scheduled, FieldWorkStatus.Cancelled, OrderAction.Cancel),
 
-        new(FieldWorkStatus.Dispatched, FieldWorkStatus.EnRoute, OrderActionType.Accept),
-        new(FieldWorkStatus.Dispatched, FieldWorkStatus.Cancelled, OrderActionType.Cancel),
+        new(FieldWorkStatus.Dispatched, FieldWorkStatus.EnRoute, OrderAction.Accept),
+        new(FieldWorkStatus.Dispatched, FieldWorkStatus.Cancelled, OrderAction.Cancel),
 
         new(FieldWorkStatus.EnRoute, FieldWorkStatus.OnSite),
-        new(FieldWorkStatus.EnRoute, FieldWorkStatus.Cancelled, OrderActionType.Cancel),
+        new(FieldWorkStatus.EnRoute, FieldWorkStatus.Cancelled, OrderAction.Cancel),
 
-        new(FieldWorkStatus.OnSite, FieldWorkStatus.InProgress, OrderActionType.Execute),
+        new(FieldWorkStatus.OnSite, FieldWorkStatus.InProgress, OrderAction.Execute),
 
         new(FieldWorkStatus.InProgress, FieldWorkStatus.Suspended),
         new(FieldWorkStatus.Suspended, FieldWorkStatus.InProgress),
-        new(FieldWorkStatus.InProgress, FieldWorkStatus.Completed, OrderActionType.Complete),
+        new(FieldWorkStatus.InProgress, FieldWorkStatus.Completed, OrderAction.Complete),
 
-        new(FieldWorkStatus.Completed, FieldWorkStatus.Inspected, OrderActionType.Approve),
-        new(FieldWorkStatus.Completed, FieldWorkStatus.ConflictReview, OrderActionType.Reject),
+        new(FieldWorkStatus.Completed, FieldWorkStatus.Inspected, OrderAction.Approve),
+        new(FieldWorkStatus.Completed, FieldWorkStatus.ConflictReview, OrderAction.Reject),
 
         // Adjudication (XD01-223): a human reviewer resolves a ConflictReview case either way —
         // Approve confirms the disputed work actually happened as claimed (same action tag as
         // Completed's own Inspected edge, since it's the same kind of decision); Reject bounces
         // it back to Pending for rescheduling/redo, same destination a fresh order starts from.
-        new(FieldWorkStatus.ConflictReview, FieldWorkStatus.Inspected, OrderActionType.Approve),
-        new(FieldWorkStatus.ConflictReview, FieldWorkStatus.Pending, OrderActionType.Reject),
+        new(FieldWorkStatus.ConflictReview, FieldWorkStatus.Inspected, OrderAction.Approve),
+        new(FieldWorkStatus.ConflictReview, FieldWorkStatus.Pending, OrderAction.Reject),
     ];
 
     public const string InitialStateKey = FieldWorkStatus.Draft;

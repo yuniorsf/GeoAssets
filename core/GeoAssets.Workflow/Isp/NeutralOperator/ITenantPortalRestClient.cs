@@ -19,6 +19,6 @@ public interface ITenantPortalRestClient
     /// <summary>The clandestine notices in <see cref="ClandestineAttachmentWorkflowGraph.CaboARevelia"/> the caller may read.</summary>
     Task<IReadOnlyList<ServiceOrder>> GetFlaggedNoticesAsync(CancellationToken ct = default);
 
-    /// <summary>Disputes a flagged notice: the <see cref="OrderActionType.Dispute"/> action, with the evidence reference as its comment.</summary>
+    /// <summary>Disputes a flagged notice: the <see cref="NeutralOperatorActions.Dispute"/> action, with the evidence reference as its comment.</summary>
     Task SubmitDisputeAsync(string serviceOrderId, string evidenceReference, CancellationToken ct = default);
 }

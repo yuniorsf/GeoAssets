@@ -70,7 +70,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
     public async Task<TargetOccupancyView> GetAsync(string orderId, string targetId, WorkflowPrincipal principal, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
-        await AuthorizeAsync(orderId, principal, OrderActionType.View, ct).ConfigureAwait(false);
+        await AuthorizeAsync(orderId, principal, OrderAction.View, ct).ConfigureAwait(false);
         var target = await PoleTargetAsync(orderId, targetId, ct).ConfigureAwait(false);
 
         return await ViewAsync(target, ct).ConfigureAwait(false);
@@ -81,7 +81,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
         var query = new OccupancyChangeSetQuery(orderId, page, pageSize, status);
-        await AuthorizeAsync(orderId, principal, OrderActionType.View, ct).ConfigureAwait(false);
+        await AuthorizeAsync(orderId, principal, OrderAction.View, ct).ConfigureAwait(false);
 
         var result = await _changeSets.GetPageAsync(query, ct).ConfigureAwait(false);
         return new PagedResult<OccupancyChangeSetView>
@@ -96,7 +96,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
         ArgumentNullException.ThrowIfNull(changes);
-        var order = await AuthorizeAsync(orderId, principal, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        var order = await AuthorizeAsync(orderId, principal, OrderAction.Annotate, ct).ConfigureAwait(false);
 
         if (ServiceOrderTransitions.IsTerminalState(_orderTypes.Find(order.OrderTypeId), order.Status))
             throw new InvalidServiceOrderTransitionException(order.Status, order.Status);
@@ -115,7 +115,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
     public async Task<bool> DiscardAsync(string orderId, string targetId, WorkflowPrincipal principal, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
-        await AuthorizeAsync(orderId, principal, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        await AuthorizeAsync(orderId, principal, OrderAction.Annotate, ct).ConfigureAwait(false);
         await PoleTargetAsync(orderId, targetId, ct).ConfigureAwait(false);
 
         return await _changeSetWriter.DiscardAsync(orderId, targetId, ct).ConfigureAwait(false);
@@ -123,7 +123,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
 
     public async Task<int> DiscardAllAsync(string orderId, WorkflowPrincipal principal, CancellationToken ct)
     {
-        await AuthorizeAsync(orderId, principal, OrderActionType.Annotate, ct).ConfigureAwait(false);
+        await AuthorizeAsync(orderId, principal, OrderAction.Annotate, ct).ConfigureAwait(false);
 
         return await _changeSetWriter.DiscardAllAsync(orderId, ct).ConfigureAwait(false);
     }
@@ -131,7 +131,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>The order, once the rules allowed <paramref name="action"/> and the principal is one of the pole owner's own.</summary>
-    private async Task<IServiceOrder> AuthorizeAsync(string orderId, WorkflowPrincipal principal, OrderActionType action, CancellationToken ct)
+    private async Task<IServiceOrder> AuthorizeAsync(string orderId, WorkflowPrincipal principal, OrderAction action, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
         ArgumentNullException.ThrowIfNull(principal);

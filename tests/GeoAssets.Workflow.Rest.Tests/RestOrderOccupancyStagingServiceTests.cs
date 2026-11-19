@@ -284,8 +284,8 @@ public sealed class RestOrderOccupancyStagingServiceTests
         var write = () => Sut(Failing(HttpStatusCode.Forbidden, WorkflowProblemCodes.Denied, "\"reason\": \"Owner only.\"")).DiscardAsync("ord-1", "tgt-1", Principal, CancellationToken.None);
 
         (await read.Should().ThrowExactlyAsync<OrderActionDeniedException>()).Which.Evaluation.Should().Be(RuleEvaluationResult.Deny(OrderActionType.View, "Owner only."));
-        (await list.Should().ThrowExactlyAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderActionType.View);
-        (await write.Should().ThrowExactlyAsync<OrderActionDeniedException>()).Which.Should().BeEquivalentTo(new { OrderId = "ord-1", Action = (OrderActionType?)OrderActionType.Annotate });
+        (await list.Should().ThrowExactlyAsync<OrderActionDeniedException>()).Which.Action.Should().Be(OrderAction.View);
+        (await write.Should().ThrowExactlyAsync<OrderActionDeniedException>()).Which.Should().BeEquivalentTo(new { OrderId = "ord-1", Action = (OrderAction?)OrderAction.Annotate });
     }
 
     [Fact]

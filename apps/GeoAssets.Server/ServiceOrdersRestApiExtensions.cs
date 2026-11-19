@@ -22,9 +22,9 @@ namespace GeoAssets.Server;
 ///
 /// Every write endpoint on an existing order is gated by <see cref="ServiceOrderRules"/>
 /// (XD01-16) — the same deny-overrides engine the Blazor client already evaluates — via
-/// <c>OrderActionType</c>: dispatch → <c>Dispatch</c>; the action log endpoint → the action
+/// <c>OrderAction</c>: dispatch → <c>Dispatch</c>; the action log endpoint → the action
 /// the caller is actually logging; create → <c>CanCreate</c>. <c>PUT</c> (a whole-order
-/// replace with no single corresponding <c>OrderActionType</c>) and <c>DELETE</c> (a hard
+/// replace with no single corresponding <c>OrderAction</c>) and <c>DELETE</c> (a hard
 /// delete, likewise unnamed in the enum) reuse <c>Annotate</c> and <c>Cancel</c> respectively
 /// as the closest existing verb — see the deny-reason "reason" field returned on 403 for
 /// exactly which rule declined. Order Type CRUD is unchanged/ungated: that's configuration
@@ -302,7 +302,7 @@ public static class ServiceOrdersRestApiExtensions
             if (order is null) return Results.NotFound();
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
-            var verdict = rules.Evaluate(principal, OrderActionType.Dispatch, order);
+            var verdict = rules.Evaluate(principal, OrderAction.Dispatch, order);
             if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             try
@@ -385,7 +385,7 @@ public static class ServiceOrdersRestApiExtensions
             if (order is null) return Results.NotFound();
 
             var principal = await principalFactory.CreateAsync().ConfigureAwait(false);
-            var verdict = rules.Evaluate(principal, OrderActionType.Cancel, order);
+            var verdict = rules.Evaluate(principal, OrderAction.Cancel, order);
             if (!verdict.Allowed) return ServiceOrderRouteAccess.Refusal(verdict);
 
             await repo.DeleteAsync(id).ConfigureAwait(false);
@@ -408,8 +408,8 @@ public static class ServiceOrdersRestApiExtensions
 
         routes.MapPost($"{prefix}/order-types", async (HttpRequest req, IOrderTypeRepository repo) =>
         {
-            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
-            if (orderType is null) return Results.BadRequest("Invalid order type.");
+            var (orderType, unreadable) = await ReadOrderTypeAsync(req, opts).ConfigureAwait(false);
+            if (orderType is null) return unreadable!;
             if (OrderTypeProblem(orderType) is { } problem) return problem;
             await repo.AddAsync(orderType).ConfigureAwait(false);
             await repo.SaveChangesAsync().ConfigureAwait(false);
@@ -418,8 +418,8 @@ public static class ServiceOrdersRestApiExtensions
 
         routes.MapPut($"{prefix}/order-types/{{id}}", async (string id, HttpRequest req, IOrderTypeRepository repo) =>
         {
-            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
-            if (orderType is null) return Results.BadRequest("Invalid order type.");
+            var (orderType, unreadable) = await ReadOrderTypeAsync(req, opts).ConfigureAwait(false);
+            if (orderType is null) return unreadable!;
             if (!string.Equals(orderType.Id, id, StringComparison.Ordinal)) return Results.BadRequest("Route id does not match body id.");
             if (OrderTypeProblem(orderType) is { } problem) return problem;
             if (await repo.GetByIdAsync(id).ConfigureAwait(false) is null) return Results.NotFound();
@@ -459,11 +459,27 @@ public static class ServiceOrdersRestApiExtensions
     /// <summary>
     /// Rejects an order type whose <see cref="OrderType.RecipientAccess"/> is not one of the
     /// enumeration's values (XD01-333), whose <see cref="OrderType.RecipientActions"/> name an
-    /// action outside <see cref="OrderActionType"/> (XD01-336), or whose <see cref="OrderType.TargetPolicy"/> breaks its
+    /// action outside <see cref="OrderAction"/> (XD01-336), or whose <see cref="OrderType.TargetPolicy"/> breaks its
     /// own invariants, before it is stored: <see cref="OrderTypeRegistry"/> validates the same
     /// policy when it loads order types at startup, so a stored invalid policy would stop the host
     /// from starting. Returns null when the type can be stored.
     /// </summary>
+    /// <summary>The order type in the request body, or the 400 that answers a body that is not one.</summary>
+    private static async Task<(OrderType? OrderType, IResult? Problem)> ReadOrderTypeAsync(HttpRequest req, JsonSerializerOptions opts)
+    {
+        try
+        {
+            var orderType = await JsonSerializer.DeserializeAsync<OrderType>(req.Body, opts).ConfigureAwait(false);
+            return orderType is null ? (null, Results.BadRequest("Invalid order type.")) : (orderType, null);
+        }
+        catch (JsonException ex) when (ex.Path?.StartsWith("$.recipientActions", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            // XD01-366: an order action that is neither a code nor a historical number is refused while reading
+            // (OrderActionJsonConverter) — answered as the check below answered an undefined enumeration value.
+            return (null, Results.BadRequest(new { errors = UndefinedRecipientActionError }));
+        }
+    }
+
     private static IResult? OrderTypeProblem(OrderType orderType)
     {
         if (!Enum.IsDefined(orderType.RecipientAccess))
@@ -475,7 +491,7 @@ public static class ServiceOrdersRestApiExtensions
             });
         }
 
-        if (orderType.RecipientActions.Any(action => !Enum.IsDefined(action)))
+        if (orderType.RecipientActions.Any(action => action.IsEmpty))
         {
             return Results.BadRequest(new
             {

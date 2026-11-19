@@ -14,7 +14,7 @@ namespace GeoAssets.Server;
 public sealed class ServiceOrderActionRequirement : IAuthorizationRequirement
 {
     /// <summary>The bare action, evaluated as <c>ServiceOrderRules.Evaluate</c> does.</summary>
-    public ServiceOrderActionRequirement(OrderActionType action) => Action = action;
+    public ServiceOrderActionRequirement(OrderAction action) => Action = action;
 
     /// <summary>
     /// The action-log entry the caller is about to append, evaluated as <c>ServiceOrderRules.EvaluateAppend</c> does — so a
@@ -27,7 +27,7 @@ public sealed class ServiceOrderActionRequirement : IAuthorizationRequirement
         Entry = entry;
     }
 
-    public OrderActionType Action { get; }
+    public OrderAction Action { get; }
 
     /// <summary>The entry to append, when the requirement was built from one.</summary>
     public OrderActionLog? Entry { get; }

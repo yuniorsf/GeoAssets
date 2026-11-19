@@ -9,7 +9,7 @@ namespace GeoAssets.Workflow.Orders;
 /// else (<see cref="Rules.ServiceOrderRules.IsDispatchRecipientOnly"/>): a member of the order's
 /// organization and a cross-organization grantee are never limited by it. It is a ceiling, never
 /// a grant: the rule chain still has to allow the action, so a recipient whose role lacks
-/// <see cref="OrderActionType.Annotate"/> records no work even on an <see cref="Execute"/> order.
+/// <see cref="OrderAction.Annotate"/> records no work even on an <see cref="Execute"/> order.
 ///
 /// The numeric values are stored (<c>"OrderTypes"."RecipientAccess"</c>) and compared by the
 /// row-level security functions of both <c>ServiceOrderDbContext</c> histories, so they are

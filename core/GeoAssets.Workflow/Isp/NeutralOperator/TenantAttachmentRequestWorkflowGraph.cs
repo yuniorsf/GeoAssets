@@ -27,7 +27,7 @@ public static class TenantAttachmentRequestWorkflowGraph
     /// <summary>Fresh, independently-mutable copy each call.</summary>
     public static List<WorkflowTransition> Transitions() =>
     [
-        new WorkflowTransition(Submitted, Approved, OrderActionType.Approve),
-        new WorkflowTransition(Submitted, Rejected, OrderActionType.Reject),
+        new WorkflowTransition(Submitted, Approved, OrderAction.Approve),
+        new WorkflowTransition(Submitted, Rejected, OrderAction.Reject),
     ];
 }

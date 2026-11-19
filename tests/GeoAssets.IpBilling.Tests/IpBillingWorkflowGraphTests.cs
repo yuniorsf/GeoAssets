@@ -30,12 +30,12 @@ public class IpBillingWorkflowGraphTests
         transitions.Should().ContainSingle(t =>
             t.FromStateKey == IpBillingWorkflowGraph.Carregado &&
             t.ToStateKey == IpBillingWorkflowGraph.Calculado &&
-            t.TriggerAction == OrderActionType.Calculate);
+            t.TriggerAction == IpBillingActions.Calculate);
 
         transitions.Should().ContainSingle(t =>
             t.FromStateKey == IpBillingWorkflowGraph.Calculado &&
             t.ToStateKey == IpBillingWorkflowGraph.Validado &&
-            t.TriggerAction == OrderActionType.Validate);
+            t.TriggerAction == IpBillingActions.Validate);
     }
 
     [Fact]

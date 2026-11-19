@@ -16,7 +16,7 @@ namespace GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 ///
 /// <para><b>Order of checks, every member:</b> arguments; unknown order
 /// (<see cref="KeyNotFoundException"/>); <see cref="ServiceOrderRules"/> for
-/// <see cref="OrderActionType.Dispatch"/> (a caller outside the organization gate is refused
+/// <see cref="OrderAction.Dispatch"/> (a caller outside the organization gate is refused
 /// there); <b>owner only</b> — a caller the rules allowed whose organization is not the order's
 /// is refused too, because the occupancy the plan is made from belongs to the pole owner and its
 /// store answers no other organization; the order's type and its fan-out; the dispatch
@@ -196,7 +196,7 @@ public sealed class SharedUseDispatchService : ISharedUseDispatchService, IShare
             await _orders.AppendActionAsync(
                 parent.Id,
                 new OrderActionLog(
-                    OrderActionType.Dispatch, principal.UserId, plan.PlannedAt.UtcDateTime,
+                    OrderAction.Dispatch, principal.UserId, plan.PlannedAt.UtcDateTime,
                     $"Shared-use dispatch: {created} occupant order(s) created.")
                 {
                     ActorKind = principal.Kind,
@@ -280,12 +280,12 @@ public sealed class SharedUseDispatchService : ISharedUseDispatchService, IShare
         var order = await _orders.GetByIdAsync(orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Service order '{orderId}' not found.");
 
-        var verdict = _rules.Evaluate(principal, OrderActionType.Dispatch, order);
+        var verdict = _rules.Evaluate(principal, OrderAction.Dispatch, order);
         if (!verdict.Allowed)
             throw new OrderActionDeniedException(orderId, verdict);
 
         if (!Guid.TryParse(principal.OrganizationId, out var organizationId) || organizationId != order.OrganizationId)
-            throw new OrderActionDeniedException(orderId, RuleEvaluationResult.Deny(OrderActionType.Dispatch, OwnerOnlyReason));
+            throw new OrderActionDeniedException(orderId, RuleEvaluationResult.Deny(OrderAction.Dispatch, OwnerOnlyReason));
 
         return order;
     }

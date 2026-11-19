@@ -34,7 +34,7 @@ public sealed class RestMapSelectionClient(HttpClient http)
 
         using var response = await http.PostAsJsonAsync(
             new Uri("selection/resolve", UriKind.Relative), new { strategyId, parameters }, _opts, ct).ConfigureAwait(false);
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId: null, OrderActionType.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId: null, OrderAction.View, ct).ConfigureAwait(false);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(_opts, ct).ConfigureAwait(false);
         return body.ValueKind == JsonValueKind.Object && body.TryGetProperty("featureIds", out var ids) && ids.ValueKind == JsonValueKind.Array

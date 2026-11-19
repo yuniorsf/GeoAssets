@@ -24,7 +24,7 @@ public interface ISharedUseDispatchService
     /// The order's <see cref="IServiceOrder.RowVersion"/> as the caller last read it; empty for
     /// "no precondition", as for <see cref="IServiceOrderWriter.UpdateAsync"/>.
     /// </param>
-    /// <param name="principal">The caller: must be allowed <see cref="OrderActionType.Dispatch"/> and belong to the order's organization.</param>
+    /// <param name="principal">The caller: must be allowed <see cref="OrderAction.Dispatch"/> and belong to the order's organization.</param>
     /// <exception cref="KeyNotFoundException">No such order; or its type, or the child type it fans out into, is not registered (<see cref="OrderTypeNotRegisteredException"/>).</exception>
     /// <exception cref="OrderActionDeniedException">The rules refuse the dispatch, or the caller is not of the order's organization.</exception>
     /// <exception cref="OrderTypeHasNoFanOutException">The order's type declares no fan-out.</exception>

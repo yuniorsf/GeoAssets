@@ -125,7 +125,7 @@ public sealed class RestSharedUseDispatchClientAgainstServerTests
         var act = () => sut.DispatchAsync(Order, [], Claimed, CancellationToken.None);
 
         var denied = (await act.Should().ThrowAsync<OrderActionDeniedException>()).Which;
-        denied.Action.Should().Be(OrderActionType.Dispatch);
+        denied.Action.Should().Be(OrderAction.Dispatch);
         denied.OrderId.Should().Be(Order);
         denied.Evaluation!.Reason.Should().NotBeNullOrWhiteSpace();
     }

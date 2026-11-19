@@ -143,6 +143,24 @@ public sealed class OrderActionHandlerEndpointTests
             $"/api/workflow/service-orders/{orderId}/actions",
             new OrderActionLog(OrderActionType.Complete, caller.ToString(), new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc)));
 
+    [Theory]
+    [InlineData("9")]
+    [InlineData("\"Annotate\"")]
+    public async Task Actions_Route_AcceptsActionAsNumberOrString(string action)
+    {
+        var caller = Guid.NewGuid();
+        var (server, repo, _) = await BuildServerAsync(caller);
+        var order = await SeedAsync(repo, caller);
+        using var client = server.CreateClient();
+        using var body = new StringContent(
+            $$"""{"action":{{action}},"performedBy":"{{caller}}","performedAt":"2026-01-15T00:00:00Z"}""", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(new Uri($"/api/workflow/service-orders/{order.Id}/actions", UriKind.Relative), body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await repo.GetByIdAsync(order.Id))!.ActionLog.Should().ContainSingle().Which.Action.Should().Be(OrderAction.Annotate);
+    }
+
     [Fact]
     public async Task Actions_NoHandler_AppendsByDefault()
     {
@@ -157,7 +175,7 @@ public sealed class OrderActionHandlerEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         spy.AppendActionCalls.Should().Be(1);
         other.Calls.Should().BeEmpty();
-        (await repo.GetByIdAsync(order.Id))!.ActionLog.Should().ContainSingle().Which.Action.Should().Be(OrderActionType.Complete);
+        (await repo.GetByIdAsync(order.Id))!.ActionLog.Should().ContainSingle().Which.Action.Should().Be(OrderAction.Complete);
     }
 
     [Fact]
@@ -175,7 +193,7 @@ public sealed class OrderActionHandlerEndpointTests
         var call = handler.Calls.Should().ContainSingle().Subject;
         call.Order.Id.Should().Be(order.Id);
         call.OrderType.Id.Should().Be(OrderTypeId);
-        call.Entry.Action.Should().Be(OrderActionType.Complete);
+        call.Entry.Action.Should().Be(OrderAction.Complete);
         call.Principal.UserId.Should().Be(caller.ToString());
         spy.AppendActionCalls.Should().Be(0);
         (await repo.GetByIdAsync(order.Id))!.ActionLog.Should().BeEmpty();

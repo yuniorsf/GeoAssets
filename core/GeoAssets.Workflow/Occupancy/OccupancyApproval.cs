@@ -21,13 +21,13 @@ public static class OccupancyApproval
     /// <summary>
     /// The status an approval moves an order of <paramref name="orderType"/> in
     /// <paramref name="status"/> to: the target of the type's transition tagged
-    /// <see cref="OrderActionType.Approve"/> out of <paramref name="status"/>; null when the type
+    /// <see cref="OrderAction.Approve"/> out of <paramref name="status"/>; null when the type
     /// has no such transition (or no graph of its own).
     /// </summary>
     public static string? ApprovedStatus(OrderType? orderType, string status) =>
         orderType is { States.Count: > 0 }
             ? orderType.Transitions.FirstOrDefault(t =>
-                t.TriggerAction == OrderActionType.Approve
+                t.TriggerAction == OrderAction.Approve
                 && string.Equals(t.FromStateKey, status, StringComparison.Ordinal))?.ToStateKey
             : null;
 }

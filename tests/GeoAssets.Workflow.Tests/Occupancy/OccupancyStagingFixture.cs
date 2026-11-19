@@ -57,9 +57,9 @@ internal sealed class OccupancyStagingFixture
         });
         Rules = new ServiceOrderRules(
             OrderTypes,
-            roleGrants: new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.OrdinalIgnoreCase)
+            roleGrants: new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Viewer"] = new HashSet<OrderActionType> { OrderActionType.View },
+                ["Viewer"] = new HashSet<OrderAction> { OrderActionType.View },
             });
 
         var tenant = new FixedTenant(OrgA);

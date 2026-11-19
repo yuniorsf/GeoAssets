@@ -231,4 +231,56 @@ public class OrderTypeMapperTests
             .Should().Equal(OrderActionType.Accept, OrderActionType.Annotate);
         OrderTypeMapper.ToDomain(new OrderTypeRecord { Id = "notice", DisplayName = "Notice" }).RecipientActions.Should().BeEmpty();
     }
+
+    [Fact]
+    public void RecipientActionsFrom_ACodeOnlyRow_ReadsTheNewVerb_ARowWithBoth_PrefersTheCode()
+    {
+        var stored = new List<OrderTypeRecipientActionRecord>
+        {
+            new() { Id = 1, OrderTypeId = "notice", Action = null, ActionCode = "Survey" },
+            new() { Id = 2, OrderTypeId = "notice", Action = 9, ActionCode = "Annotate" },
+            new() { Id = 3, OrderTypeId = "notice", Action = 1, ActionCode = "Survey" },
+        };
+
+        OrderTypeMapper.RecipientActionsFrom(stored).Should().Equal(new OrderAction("Survey"), OrderAction.Annotate);
+    }
+
+    [Fact]
+    public void RecipientActionsFrom_ANumberOnlyRow_WrittenBeforeTheMigration_ReadsByNumber()
+    {
+        var stored = new List<OrderTypeRecipientActionRecord>
+        {
+            new() { Id = 1, OrderTypeId = "notice", Action = 13, ActionCode = null },
+            new() { Id = 2, OrderTypeId = "notice", Action = 4, ActionCode = null },
+        };
+
+        OrderTypeMapper.RecipientActionsFrom(stored).Should().Equal(OrderActionAliases.FromNumber(13), OrderAction.Accept);
+    }
+
+    [Fact]
+    public void RecipientActionsFrom_ARowWithNeitherACodeNorAKnownNumber_IsDropped()
+    {
+        var stored = new List<OrderTypeRecipientActionRecord>
+        {
+            new() { Id = 1, OrderTypeId = "notice", Action = null, ActionCode = null },
+            new() { Id = 2, OrderTypeId = "notice", Action = 99, ActionCode = null },
+            new() { Id = 3, OrderTypeId = "notice", Action = null, ActionCode = "  " },
+            new() { Id = 4, OrderTypeId = "notice", Action = 4, ActionCode = null },
+        };
+
+        OrderTypeMapper.RecipientActionsFrom(stored).Should().Equal(OrderAction.Accept);
+    }
+
+    [Fact]
+    public void ToRecipientActionRecords_AHistoricalAction_WritesItsNumberAndCode_ANewVerb_OnlyItsCode()
+    {
+        var records = OrderTypeMapper.ToRecipientActionRecords(new OrderType
+        {
+            Id = "t",
+            DisplayName = "T",
+            RecipientActions = [OrderAction.Annotate, new OrderAction("Survey")],
+        });
+
+        records.Select(r => (r.Action, r.ActionCode)).Should().Equal(((int?)9, (string?)"Annotate"), ((int?)null, (string?)"Survey"));
+    }
 }

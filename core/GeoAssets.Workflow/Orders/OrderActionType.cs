@@ -1,6 +1,10 @@
 namespace GeoAssets.Workflow.Orders;
 
-/// <summary>All actions that can be attempted on a service order.</summary>
+/// <summary>
+/// The closed action enumeration (pre-XD01-366). Superseded by the open <see cref="OrderAction"/> vocabulary, to which every
+/// value converts implicitly with its historical number kept (<see cref="OrderActionAliases"/>). The generic members stay
+/// usable; the vertical verbs are obsolete — each vertical now declares its own <see cref="OrderAction"/>.
+/// </summary>
 public enum OrderActionType
 {
     /// <summary>Read/open the order.</summary>
@@ -44,6 +48,7 @@ public enum OrderActionType
     /// ("Execute field work recorded on the order") reads misleadingly for a non-dispatched
     /// spreadsheet-upload workflow with no field work step.
     /// </summary>
+    [Obsolete("A vertical's verb (XD01-366): use IpBillingActions.Calculate (GeoAssets.IpBilling.Workflow). Kept only so its number stays reserved.")]
     Calculate,
 
     /// <summary>
@@ -52,6 +57,7 @@ public enum OrderActionType
     /// comment ("Mark the order as completed") implies the generic terminal-success state
     /// rather than this workflow's own explicit validation step.
     /// </summary>
+    [Obsolete("A vertical's verb (XD01-366): use IpBillingActions.Validate (GeoAssets.IpBilling.Workflow). Kept only so its number stays reserved.")]
     Validate,
 
     /// <summary>
@@ -61,6 +67,7 @@ public enum OrderActionType
     /// a pending request, not accusing an already-installed occupant of an irregularity) or
     /// <see cref="Annotate"/> (which carries no state-transition semantics).
     /// </summary>
+    [Obsolete("A vertical's verb (XD01-366): use NeutralOperatorActions.FlagClandestine (GeoAssets.Workflow.Isp.NeutralOperator). Kept only so its number stays reserved.")]
     FlagClandestine,
 
     /// <summary>
@@ -70,5 +77,6 @@ public enum OrderActionType
     /// irregularity"): a dispute means "I'm contesting that this was ever an irregularity,"
     /// moving the order into a reviewable state rather than closing it.
     /// </summary>
+    [Obsolete("A vertical's verb (XD01-366): use NeutralOperatorActions.Dispute (GeoAssets.Workflow.Isp.NeutralOperator). Kept only so its number stays reserved.")]
     Dispute,
 }

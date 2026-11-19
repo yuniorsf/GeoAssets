@@ -8,7 +8,7 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 /// <summary>
 /// The approval branch of <c>POST /service-orders/{id}/actions</c> (XD01-318), as the NeutralOperator module's
 /// <see cref="IOrderActionHandler"/> (XD01-360; it was a special case inside the generic route). An
-/// <see cref="OrderActionType.Approve"/> on an order whose type declares a target policy is not a plain status write: it goes
+/// <see cref="OrderAction.Approve"/> on an order whose type declares a target policy is not a plain status write: it goes
 /// to <see cref="IOccupancyCommitService"/>, which commits the occupancy staged on the order's poles in the same unit as the
 /// transition. The outcomes keep the action route's own dialect — applied, not found, denied, invalid transition, changed
 /// meanwhile — plus one problem, 409 <c>occupancy.concurrent-modification</c> with the poles whose occupancy changed after
@@ -20,7 +20,7 @@ public sealed class OccupancyApprovalHandler(IOccupancyCommitService commits) : 
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return entry.Action == OrderActionType.Approve && OccupancyApproval.Commits(orderType);
+        return entry.Action == OrderAction.Approve && OccupancyApproval.Commits(orderType);
     }
 
     /// <summary>

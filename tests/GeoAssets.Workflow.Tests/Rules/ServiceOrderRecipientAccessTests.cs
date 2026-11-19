@@ -222,7 +222,7 @@ public sealed class ServiceOrderRecipientAccessTests
 
             var verdict = rules.Evaluate(administrator, action, order);
             verdict.Allowed.Should().BeFalse("{0}", action);
-            verdict.Action.Should().Be(action);
+            verdict.Action.Should().Be((OrderAction)action);
             verdict.Code.Should().Be(RuleDenialCode.DeniedByRecipientAccess);
             verdict.Reason.Should().Be(ServiceOrderRules.RecipientOrderIsReadOnlyReason);
             verdict.IsOutsideOrganization.Should().BeFalse();
@@ -250,7 +250,7 @@ public sealed class ServiceOrderRecipientAccessTests
         var verdict = Rules().EvaluateTargetWrite(Principal("recipient", "supervisor"), Order(TypeId(level)), write);
 
         verdict.Allowed.Should().BeFalse();
-        verdict.Action.Should().Be(OrderActionType.Annotate);
+        verdict.Action.Should().Be(OrderAction.Annotate);
         verdict.Code.Should().Be(RuleDenialCode.DeniedByRecipientAccess);
         verdict.Reason.Should().Be(ServiceOrderRules.RecipientTargetsAreReadOnlyReason);
     }

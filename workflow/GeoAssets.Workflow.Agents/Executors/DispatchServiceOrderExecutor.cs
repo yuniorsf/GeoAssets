@@ -10,7 +10,7 @@ namespace GeoAssets.Workflow.Agents.Executors;
 /// <summary>
 /// Dispatches and activates (Draft → Pending) a just-created order, on behalf of the same
 /// agent actor that created it — but only if <see cref="ServiceOrderRules.Evaluate"/> grants
-/// that actor the <see cref="OrderActionType.Dispatch"/> action for this order.
+/// that actor the <see cref="OrderAction.Dispatch"/> action for this order.
 ///
 /// When it does not (e.g. this <c>OrderType</c>'s configuration withholds Dispatch from the
 /// agent's role), this executor leaves the order in <see cref="ServiceOrderStatus.Draft"/>
@@ -39,7 +39,7 @@ public sealed partial class DispatchServiceOrderExecutor(
         var principal = identity.Resolve(message.AgentId);
         var order     = message.Order;
 
-        var decision = rules.Evaluate(principal, OrderActionType.Dispatch, order);
+        var decision = rules.Evaluate(principal, OrderAction.Dispatch, order);
         span?.AddTag("decision.allowed", decision.Allowed);
 
         if (!decision.Allowed)
@@ -83,7 +83,7 @@ public sealed partial class DispatchServiceOrderExecutor(
         await repository.AppendActionAsync(
             order.Id,
             new OrderActionLog(
-                OrderActionType.Dispatch,
+                OrderAction.Dispatch,
                 message.AgentId,
                 dispatchedAt,
                 ResultingStatus: ServiceOrderStatus.Pending)

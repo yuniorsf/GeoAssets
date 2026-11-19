@@ -97,7 +97,7 @@ public static class SharedUseOrderTypes
         // pole owner (XD01-315/318).
         RecipientAccess = OrderRecipientAccess.Inform,
         // XD01-336: the occupant accepts the notice and comments on it, and cancels nothing.
-        RecipientActions = [OrderActionType.Accept, OrderActionType.Annotate],
+        RecipientActions = [OrderAction.Accept, OrderAction.Annotate],
         States = States(),
         Transitions = NoticeTransitions(),
         // Approving it commits the occupancy staged on its poles (XD01-361).
@@ -166,19 +166,19 @@ public static class SharedUseOrderTypes
     /// </summary>
     private static List<WorkflowTransition> NoticeTransitions() =>
     [
-        new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderActionType.Accept),
+        new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderAction.Accept),
         .. WorkTransitions(),
     ];
 
     private static List<WorkflowTransition> WorkTransitions() =>
     [
-        new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderActionType.Execute),
-        new(ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+        new(ServiceOrderStatus.Pending, ServiceOrderStatus.InProgress, OrderAction.Execute),
+        new(ServiceOrderStatus.Pending, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
         new(ServiceOrderStatus.InProgress, ServiceOrderStatus.OnHold),
-        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed, OrderActionType.Complete),
-        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Completed, OrderAction.Complete),
+        new(ServiceOrderStatus.InProgress, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
         new(ServiceOrderStatus.OnHold, ServiceOrderStatus.InProgress),
-        new(ServiceOrderStatus.OnHold, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+        new(ServiceOrderStatus.OnHold, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
     ];
 
     /// <summary>
@@ -190,12 +190,12 @@ public static class SharedUseOrderTypes
     /// </summary>
     private static List<WorkflowTransition> PoleWorkTransitions() =>
     [
-        new(ServiceOrderStatus.Draft, ServiceOrderStatus.Pending, OrderActionType.Dispatch),
-        new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
-        new(ServiceOrderStatus.Pending, ServiceOrderStatus.Pending, OrderActionType.Dispatch),
+        new(ServiceOrderStatus.Draft, ServiceOrderStatus.Pending, OrderAction.Dispatch),
+        new(ServiceOrderStatus.Draft, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
+        new(ServiceOrderStatus.Pending, ServiceOrderStatus.Pending, OrderAction.Dispatch),
         .. WorkTransitions(),
-        new(ServiceOrderStatus.Completed, ApprovedStateKey, OrderActionType.Approve),
-        new(ServiceOrderStatus.Completed, ServiceOrderStatus.InProgress, OrderActionType.Reject),
-        new(ServiceOrderStatus.Completed, ServiceOrderStatus.Cancelled, OrderActionType.Cancel),
+        new(ServiceOrderStatus.Completed, ApprovedStateKey, OrderAction.Approve),
+        new(ServiceOrderStatus.Completed, ServiceOrderStatus.InProgress, OrderAction.Reject),
+        new(ServiceOrderStatus.Completed, ServiceOrderStatus.Cancelled, OrderAction.Cancel),
     ];
 }

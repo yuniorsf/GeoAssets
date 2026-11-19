@@ -58,7 +58,7 @@ public sealed class ClandestineNoticeActionHandlerTests
             throw new NotSupportedException();
     }
 
-    private static OrderActionLog Entry(OrderActionType action, string? comment = null, string? resultingStatus = null) =>
+    private static OrderActionLog Entry(OrderAction action, string? comment = null, string? resultingStatus = null) =>
         new(action, "whoever-the-body-says", At, comment, resultingStatus);
 
     private static OrderActionContext Context(string status, OrderActionLog entry) => new(
@@ -78,14 +78,14 @@ public sealed class ClandestineNoticeActionHandlerTests
     }
 
     [Theory]
-    [InlineData(OrderActionType.FlagClandestine, true)]
-    [InlineData(OrderActionType.Dispute, true)]
-    [InlineData(OrderActionType.Approve, true)]
-    [InlineData(OrderActionType.Reject, true)]
-    [InlineData(OrderActionType.Annotate, false)]
-    [InlineData(OrderActionType.Cancel, false)]
-    public void CanHandle_NoticeType_ClaimsOnlyTheFourClandestineActions(OrderActionType action, bool expected) =>
-        new ClandestineNoticeActionHandler(new FakeNoticeService()).CanHandle(Notice, Entry(action)).Should().Be(expected);
+    [InlineData("FlagClandestine", true)]
+    [InlineData("Dispute", true)]
+    [InlineData("Approve", true)]
+    [InlineData("Reject", true)]
+    [InlineData("Annotate", false)]
+    [InlineData("Cancel", false)]
+    public void CanHandle_NoticeType_ClaimsOnlyTheFourClandestineActions(string action, bool expected) =>
+        new ClandestineNoticeActionHandler(new FakeNoticeService()).CanHandle(Notice, Entry(new OrderAction(action))).Should().Be(expected);
 
     [Fact]
     public void CanHandle_AnotherOrderType_ClaimsNothing()
@@ -110,39 +110,39 @@ public sealed class ClandestineNoticeActionHandlerTests
     }
 
     [Theory]
-    [InlineData(OrderActionType.FlagClandestine, ClandestineAttachmentWorkflowGraph.Active, null, "Flag|" + UserId)]
-    [InlineData(OrderActionType.FlagClandestine, ClandestineAttachmentWorkflowGraph.Active, ClandestineAttachmentWorkflowGraph.CaboARevelia, "Flag|" + UserId)]
-    [InlineData(OrderActionType.Dispute, ClandestineAttachmentWorkflowGraph.CaboARevelia, ClandestineAttachmentWorkflowGraph.Disputed, "Dispute:evidence|" + UserId)]
-    [InlineData(OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.CaboARevelia, ClandestineAttachmentWorkflowGraph.Regularized, "Regularize|" + UserId)]
-    [InlineData(OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.Disputed, ClandestineAttachmentWorkflowGraph.Regularized, "Resolve:True|" + UserId)]
-    [InlineData(OrderActionType.Reject, ClandestineAttachmentWorkflowGraph.Disputed, ClandestineAttachmentWorkflowGraph.CaboARevelia, "Resolve:False|" + UserId)]
-    [InlineData(OrderActionType.Reject, ClandestineAttachmentWorkflowGraph.Disputed, null, "Resolve:False|" + UserId)]
+    [InlineData("FlagClandestine", ClandestineAttachmentWorkflowGraph.Active, null, "Flag|" + UserId)]
+    [InlineData("FlagClandestine", ClandestineAttachmentWorkflowGraph.Active, ClandestineAttachmentWorkflowGraph.CaboARevelia, "Flag|" + UserId)]
+    [InlineData("Dispute", ClandestineAttachmentWorkflowGraph.CaboARevelia, ClandestineAttachmentWorkflowGraph.Disputed, "Dispute:evidence|" + UserId)]
+    [InlineData("Approve", ClandestineAttachmentWorkflowGraph.CaboARevelia, ClandestineAttachmentWorkflowGraph.Regularized, "Regularize|" + UserId)]
+    [InlineData("Approve", ClandestineAttachmentWorkflowGraph.Disputed, ClandestineAttachmentWorkflowGraph.Regularized, "Resolve:True|" + UserId)]
+    [InlineData("Reject", ClandestineAttachmentWorkflowGraph.Disputed, ClandestineAttachmentWorkflowGraph.CaboARevelia, "Resolve:False|" + UserId)]
+    [InlineData("Reject", ClandestineAttachmentWorkflowGraph.Disputed, null, "Resolve:False|" + UserId)]
     public async Task HandleAsync_ActionAlongItsTransition_CallsTheServiceAsTheCaller_AndApplies(
-        OrderActionType action, string status, string? resultingStatus, string expectedCall)
+        string action, string status, string? resultingStatus, string expectedCall)
     {
         var service = new FakeNoticeService();
 
         var outcome = await new ClandestineNoticeActionHandler(service).HandleAsync(
-            Context(status, Entry(action, "evidence", resultingStatus)), CancellationToken.None);
+            Context(status, Entry(new OrderAction(action), "evidence", resultingStatus)), CancellationToken.None);
 
         outcome.Should().BeSameAs(OrderActionOutcome.Applied);
         service.Calls.Should().Equal(expectedCall);
     }
 
     [Theory]
-    [InlineData(OrderActionType.FlagClandestine, ClandestineAttachmentWorkflowGraph.CaboARevelia)]
-    [InlineData(OrderActionType.Dispute, ClandestineAttachmentWorkflowGraph.Active)]
-    [InlineData(OrderActionType.Dispute, ClandestineAttachmentWorkflowGraph.Disputed)]
-    [InlineData(OrderActionType.Approve, ClandestineAttachmentWorkflowGraph.Active)]
-    [InlineData(OrderActionType.Reject, ClandestineAttachmentWorkflowGraph.CaboARevelia)]
-    [InlineData(OrderActionType.Annotate, ClandestineAttachmentWorkflowGraph.CaboARevelia)]
+    [InlineData("FlagClandestine", ClandestineAttachmentWorkflowGraph.CaboARevelia)]
+    [InlineData("Dispute", ClandestineAttachmentWorkflowGraph.Active)]
+    [InlineData("Dispute", ClandestineAttachmentWorkflowGraph.Disputed)]
+    [InlineData("Approve", ClandestineAttachmentWorkflowGraph.Active)]
+    [InlineData("Reject", ClandestineAttachmentWorkflowGraph.CaboARevelia)]
+    [InlineData("Annotate", ClandestineAttachmentWorkflowGraph.CaboARevelia)]
     public async Task HandleAsync_ActionThatTakesTheNoticeNowhere_IsAnInvalidTransition_AndCallsNothing(
-        OrderActionType action, string status)
+        string action, string status)
     {
         var service = new FakeNoticeService();
 
         var outcome = await new ClandestineNoticeActionHandler(service).HandleAsync(
-            Context(status, Entry(action, "evidence", "Anywhere")), CancellationToken.None);
+            Context(status, Entry(new OrderAction(action), "evidence", "Anywhere")), CancellationToken.None);
 
         outcome.Should().BeEquivalentTo(OrderActionOutcome.InvalidTransition(status, "Anywhere"));
         service.Calls.Should().BeEmpty();
@@ -184,7 +184,7 @@ public sealed class ClandestineNoticeActionHandlerTests
         var service = new FakeNoticeService();
 
         var outcome = await new ClandestineNoticeActionHandler(service).HandleAsync(
-            Context(ClandestineAttachmentWorkflowGraph.CaboARevelia, Entry(OrderActionType.Dispute, comment)), CancellationToken.None);
+            Context(ClandestineAttachmentWorkflowGraph.CaboARevelia, Entry(NeutralOperatorActions.Dispute, comment)), CancellationToken.None);
 
         outcome.Kind.Should().Be(OrderActionOutcomeKind.Problem);
         outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);

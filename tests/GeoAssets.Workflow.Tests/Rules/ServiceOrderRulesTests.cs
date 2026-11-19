@@ -37,10 +37,10 @@ public class ServiceOrderRulesTests
         public bool? Evaluate(WorkflowPrincipal principal, OrderType orderType) => fn(principal, orderType);
     }
 
-    private sealed class DelegateRule(Func<OrderActionType, RuleEvaluationContext, bool?> fn) : IServiceOrderRule
+    private sealed class DelegateRule(Func<OrderAction, RuleEvaluationContext, bool?> fn) : IServiceOrderRule
     {
         public string Name => "DelegateRule";
-        public bool? Evaluate(OrderActionType action, RuleEvaluationContext ctx) => fn(action, ctx);
+        public bool? Evaluate(OrderAction action, RuleEvaluationContext ctx) => fn(action, ctx);
     }
 
     // ── CanCreate ──────────────────────────────────────────────────────────────
@@ -395,9 +395,9 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_OrgRecipientWithGrantedRole_CanPerformConfiguredAction()
     {
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+            ["FieldTechnician"] = new HashSet<OrderAction> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
         var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
@@ -409,9 +409,9 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_OrgRecipientWithoutGrantedRole_CannotPerformConfiguredAction()
     {
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+            ["FieldTechnician"] = new HashSet<OrderAction> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
         var order = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
@@ -426,9 +426,9 @@ public class ServiceOrderRulesTests
         // Proves the grant is scoped to orders actually dispatched to the principal —
         // holding the role alone (without the relationship) must not be enough, otherwise
         // this degrades into the same over-broad global grant RoleBasedActionRule already offers.
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+            ["FieldTechnician"] = new HashSet<OrderAction> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
         var order = Order(); // never dispatched to anyone
@@ -440,9 +440,9 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_RecipientGrantOnOneOrder_DoesNotLeakToOrderNotDispatchedToPrincipal()
     {
-        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var recipientGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["FieldTechnician"] = new HashSet<OrderActionType> { OrderActionType.Assign },
+            ["FieldTechnician"] = new HashSet<OrderAction> { OrderActionType.Assign },
         };
         var rules = new ServiceOrderRules(recipientRoleGrants: recipientGrants);
         var dispatchedOrder    = Order().DispatchTo("org-1", DispatchTargetType.Organization, "supervisor-1", TimeProvider.System);
@@ -640,9 +640,9 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_NarrowedSupervisorGrants_NoLongerAllowsRemovedAction()
     {
-        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["Supervisor"] = new HashSet<OrderActionType>
+            ["Supervisor"] = new HashSet<OrderAction>
             {
                 OrderActionType.View, OrderActionType.Approve, OrderActionType.Assign,
                 OrderActionType.Dispatch, OrderActionType.Cancel, OrderActionType.Annotate,
@@ -657,9 +657,9 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_NarrowedSupervisorGrants_StillAllowsRetainedAction()
     {
-        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var narrowedGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["Supervisor"] = new HashSet<OrderActionType> { OrderActionType.Approve },
+            ["Supervisor"] = new HashSet<OrderAction> { OrderActionType.Approve },
         };
         var rules = new ServiceOrderRules(roleGrants: narrowedGrants);
 
@@ -670,9 +670,9 @@ public class ServiceOrderRulesTests
     [Fact]
     public void Evaluate_CustomRoleTier_GrantsItsConfiguredActions()
     {
-        var customGrants = new Dictionary<string, IReadOnlySet<OrderActionType>>(StringComparer.Ordinal)
+        var customGrants = new Dictionary<string, IReadOnlySet<OrderAction>>(StringComparer.Ordinal)
         {
-            ["RegionalManager"] = new HashSet<OrderActionType> { OrderActionType.Approve },
+            ["RegionalManager"] = new HashSet<OrderAction> { OrderActionType.Approve },
         };
         var rules = new ServiceOrderRules(roleGrants: customGrants);
 

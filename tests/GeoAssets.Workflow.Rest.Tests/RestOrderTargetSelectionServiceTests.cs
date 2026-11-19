@@ -101,8 +101,8 @@ public sealed class RestOrderTargetSelectionServiceTests
         var preview = () => sut.PreviewAsync(Request(), Principal, CancellationToken.None);
         var apply = () => sut.ApplyAsync(Request(), Principal, CancellationToken.None);
 
-        (await preview.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(Orders.OrderActionType.View);
-        (await apply.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(Orders.OrderActionType.Annotate);
+        (await preview.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(Orders.OrderAction.View);
+        (await apply.Should().ThrowAsync<OrderActionDeniedException>()).Which.Action.Should().Be(Orders.OrderAction.Annotate);
     }
 
     [Fact]

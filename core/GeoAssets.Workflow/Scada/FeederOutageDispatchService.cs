@@ -90,7 +90,7 @@ public sealed class FeederOutageDispatchService(
         await orderRepository.AppendActionAsync(
             orderId,
             new OrderActionLog(
-                OrderActionType.Dispatch,
+                OrderAction.Dispatch,
                 actor,
                 now.UtcDateTime,
                 dispatchedCrewId is not null

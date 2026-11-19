@@ -37,7 +37,7 @@ public sealed class OrderActionDeniedException : Exception
     }
 
     /// <summary>The action that was refused, when a verdict is attached.</summary>
-    public OrderActionType? Action => Evaluation?.Action;
+    public OrderAction? Action => Evaluation?.Action;
 
     private static string MessageFor(RuleEvaluationResult evaluation)
     {

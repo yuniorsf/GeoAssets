@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.Extensions.DependencyInjection;
@@ -171,7 +172,7 @@ public class ServiceOrderOrganizationGateTests
             verdict.Allowed.Should().BeFalse("{0} as [{1}] ({2}) must not {3}", relation, string.Join(",", roles), tie, action);
             verdict.Code.Should().Be(RuleDenialCode.OutsideOrganization);
             verdict.IsOutsideOrganization.Should().BeTrue();
-            verdict.Action.Should().Be(action);
+            verdict.Action.Should().Be((OrderAction)action);
         }
     }
 
@@ -420,7 +421,7 @@ public class ServiceOrderOrganizationGateTests
 
         rules.Evaluate(administrator, OrderActionType.View, order).Code.Should().Be(RuleDenialCode.None);
         rules.Evaluate(WorkflowPrincipal.Anonymous, OrderActionType.View, order).Code.Should().Be(RuleDenialCode.Anonymous);
-        rules.Evaluate(administrator, OrderActionType.Dispute, order).Code.Should().Be(RuleDenialCode.DeniedByRule);
+        rules.Evaluate(administrator, NeutralOperatorActions.Dispute, order).Code.Should().Be(RuleDenialCode.DeniedByRule);
         rules.Evaluate(Principal(Relation.SameOrganization, []), OrderActionType.View, order).Code.Should().Be(RuleDenialCode.NoRuleGranted);
         rules.Evaluate(Principal(Relation.OtherOrganizationNoGrant, ["Administrator"]), OrderActionType.View, order)
             .Code.Should().Be(RuleDenialCode.OutsideOrganization);
@@ -448,15 +449,15 @@ public class ServiceOrderOrganizationGateTests
     {
         public string Name => nameof(DenyDispute);
 
-        public bool? Evaluate(OrderActionType action, RuleEvaluationContext context) =>
-            action == OrderActionType.Dispute ? false : null;
+        public bool? Evaluate(OrderAction action, RuleEvaluationContext context) =>
+            action == NeutralOperatorActions.Dispute ? false : null;
     }
 
     private sealed class CountingAllowRule(Action onEvaluate) : IServiceOrderRule
     {
         public string Name => nameof(CountingAllowRule);
 
-        public bool? Evaluate(OrderActionType action, RuleEvaluationContext context)
+        public bool? Evaluate(OrderAction action, RuleEvaluationContext context)
         {
             onEvaluate();
             return true;

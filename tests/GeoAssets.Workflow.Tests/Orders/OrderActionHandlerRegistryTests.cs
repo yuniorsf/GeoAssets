@@ -11,7 +11,7 @@ public sealed class OrderActionHandlerRegistryTests
 
     private static OrderActionLog Entry(OrderActionType action) => new(action, "user", DateTime.UnixEpoch);
 
-    private abstract class ClaimingHandler(Func<OrderType?, OrderActionType, bool> claims) : IOrderActionHandler
+    private abstract class ClaimingHandler(Func<OrderType?, OrderAction, bool> claims) : IOrderActionHandler
     {
         public int Probes { get; private set; }
 
@@ -25,9 +25,9 @@ public sealed class OrderActionHandlerRegistryTests
             Task.FromResult(OrderActionOutcome.Applied);
     }
 
-    private sealed class FirstHandler(Func<OrderType?, OrderActionType, bool> claims) : ClaimingHandler(claims);
+    private sealed class FirstHandler(Func<OrderType?, OrderAction, bool> claims) : ClaimingHandler(claims);
 
-    private sealed class SecondHandler(Func<OrderType?, OrderActionType, bool> claims) : ClaimingHandler(claims);
+    private sealed class SecondHandler(Func<OrderType?, OrderAction, bool> claims) : ClaimingHandler(claims);
 
     [Fact]
     public void Find_NoHandlers_ReturnsNull()

@@ -210,7 +210,7 @@ public sealed class TenantPortalRestClientTests
 
         // GeoJsonSerializer.Options has no enum converter, so the action travels as its number.
         var body = await BodyOfAsync(handler.Requests.Single());
-        body.GetProperty("action").GetInt32().Should().Be((int)OrderActionType.Dispute);
+        body.GetProperty("action").GetInt32().Should().Be(OrderActionAliases.NumberOf(NeutralOperatorActions.Dispute));
         body.GetProperty("comment").GetString().Should().Be("receipt-digest-abc123");
         body.GetProperty("resultingStatus").GetString().Should().Be("Disputed");
         body.GetProperty("performedBy").GetString().Should().Be(UserId.ToString());

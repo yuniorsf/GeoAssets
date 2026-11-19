@@ -15,7 +15,7 @@ namespace GeoAssets.Workflow.Occupancy;
 /// (XD01-318), on ports only, with the writes in one <see cref="IWorkflowUnitOfWork"/>.
 ///
 /// <para><b>Order of checks:</b> arguments; unknown order (<see cref="KeyNotFoundException"/>);
-/// <see cref="ServiceOrderRules"/> for <see cref="OrderActionType.Approve"/> (a caller outside the
+/// <see cref="ServiceOrderRules"/> for <see cref="OrderAction.Approve"/> (a caller outside the
 /// organization gate is refused there); <b>owner only</b> — a caller the rules allowed whose
 /// organization is not the order's (a grantee, a dispatch recipient) is refused too, because only
 /// the pole owner writes its occupancy and the occupancy stores answer no other organization; the
@@ -168,12 +168,12 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         var order = await _orders.GetByIdAsync(orderId, ct).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Service order '{orderId}' not found.");
 
-        var verdict = _rules.Evaluate(principal, OrderActionType.Approve, order);
+        var verdict = _rules.Evaluate(principal, OrderAction.Approve, order);
         if (!verdict.Allowed)
             throw new OrderActionDeniedException(orderId, verdict);
 
         if (!Guid.TryParse(principal.OrganizationId, out var organizationId) || organizationId != order.OrganizationId)
-            throw new OrderActionDeniedException(orderId, RuleEvaluationResult.Deny(OrderActionType.Approve, OwnerOnlyReason));
+            throw new OrderActionDeniedException(orderId, RuleEvaluationResult.Deny(OrderAction.Approve, OwnerOnlyReason));
 
         return order;
     }
@@ -294,7 +294,7 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         await _orders.AppendActionAsync(
             order.Id,
             new OrderActionLog(
-                OrderActionType.Approve, principal.UserId, now.UtcDateTime,
+                OrderAction.Approve, principal.UserId, now.UtcDateTime,
                 $"Approved: {plan.Commits.Count} occupancy change set(s) committed.", approvedStatus)
             {
                 ActorKind = principal.Kind,
