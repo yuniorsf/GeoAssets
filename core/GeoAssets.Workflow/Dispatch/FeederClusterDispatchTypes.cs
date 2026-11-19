@@ -3,7 +3,7 @@ namespace GeoAssets.Workflow.Dispatch;
 /// <summary>
 /// Well-known constants for the feeder/pressure-zone clustering + VRPTW crew-dispatch path
 /// (XD01-240), following the same "plain string constant, no central registry" convention as
-/// <c>GeoAssets.Workflow.Scada.ScadaOutageOrderTypes</c> (XD01-239).
+/// <c>GeoAssets.Integrations.Scada.ScadaOutageOrderTypes</c> (XD01-239).
 /// </summary>
 public static class FeederClusterDispatchTypes
 {

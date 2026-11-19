@@ -2,7 +2,7 @@ namespace GeoAssets.Workflow.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>field_manhole_audits</c> table (XD01-265). Kept separate
-/// from the domain <see cref="GeoAssets.Workflow.Infrastructure.ManholeAudit"/> so the domain
+/// from the domain <see cref="GeoAssets.FieldService.Infrastructure.ManholeAudit"/> so the domain
 /// model stays free of EF annotations — same split as <see cref="ContractorUsPostingRecord"/>.
 /// <see cref="SubDuctsJson"/>/<see cref="Nr33ChecklistAttributesJson"/> are JSON text, same
 /// convention as <see cref="ServiceOrderRecord.AttributesJson"/>.

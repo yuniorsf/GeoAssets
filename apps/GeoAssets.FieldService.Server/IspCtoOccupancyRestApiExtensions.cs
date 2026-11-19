@@ -4,7 +4,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 
 namespace GeoAssets.FieldService.Server;
 

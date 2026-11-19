@@ -1,7 +1,7 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.Contractors.Governance;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.Contractors;
+using GeoAssets.FieldService.Contractors.Governance;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.FieldService.Server;

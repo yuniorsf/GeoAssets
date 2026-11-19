@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Infrastructure;
+using GeoAssets.FieldService.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Workflow.Persistence;

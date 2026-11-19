@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Infrastructure;
+using GeoAssets.FieldService.Infrastructure;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

@@ -1,7 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Services.FieldWork;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Erp.Sienge;
+using GeoAssets.Integrations.Erp.Sienge;
 
 namespace GeoAssets.FieldService.Server;
 

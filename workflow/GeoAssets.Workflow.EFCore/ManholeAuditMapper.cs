@@ -1,5 +1,5 @@
 using System.Text.Json;
-using GeoAssets.Workflow.Infrastructure;
+using GeoAssets.FieldService.Infrastructure;
 using GeoAssets.Workflow.Persistence.Entities;
 
 namespace GeoAssets.Workflow.Persistence;

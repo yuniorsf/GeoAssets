@@ -6,7 +6,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;

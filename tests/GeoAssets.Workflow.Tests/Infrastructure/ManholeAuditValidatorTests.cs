@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Infrastructure;
+using GeoAssets.FieldService.Infrastructure;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Infrastructure;

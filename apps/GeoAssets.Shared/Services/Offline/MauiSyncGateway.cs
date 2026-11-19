@@ -1,6 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Shared.Services.Offline;

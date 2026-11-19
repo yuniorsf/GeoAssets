@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.NeutralOperator.Domain\GeoAssets.NeutralOperator.Domain.csproj" />
     <ProjectReference Include="..\..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="..\..\FieldService\GeoAssets.FieldService.Application\GeoAssets.FieldService.Application.csproj" />
   </ItemGroup>
 
 </Project>

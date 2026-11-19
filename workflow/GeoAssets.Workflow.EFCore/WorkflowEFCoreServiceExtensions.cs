@@ -3,7 +3,7 @@ using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;

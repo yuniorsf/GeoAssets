@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-376 (ADR-001 Phase 5): ERP adapters (SAP PM, SAP WeBuy, Sienge, Totvs Protheus) moved out of the generic GeoAssets.Workflow engine. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Integrations.Erp</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FieldService\GeoAssets.FieldService.Application\GeoAssets.FieldService.Application.csproj" />
+    <ProjectReference Include="..\..\..\core\GeoAssets.Workflow.SlaGuard\GeoAssets.Workflow.SlaGuard.csproj" />
+  </ItemGroup>
+
+</Project>

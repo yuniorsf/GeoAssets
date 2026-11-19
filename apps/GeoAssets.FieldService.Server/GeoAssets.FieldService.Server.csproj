@@ -61,6 +61,9 @@
     <!-- ANEEL BDGD File Geodatabase export (XD01-225) needs IFileGeodatabaseExportService's
          GDAL-backed concrete implementation. -->
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.FileGeodatabase\GeoAssets.Provider.FileGeodatabase.csproj" />
+    <ProjectReference Include="..\..\verticals\Integrations\GeoAssets.Integrations.Erp\GeoAssets.Integrations.Erp.csproj" />
+    <ProjectReference Include="..\..\verticals\Integrations\GeoAssets.Integrations.Scada\GeoAssets.Integrations.Scada.csproj" />
+    <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Application\GeoAssets.FieldService.Application.csproj" />
   </ItemGroup>
 
 </Project>

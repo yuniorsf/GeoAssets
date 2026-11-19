@@ -1,6 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

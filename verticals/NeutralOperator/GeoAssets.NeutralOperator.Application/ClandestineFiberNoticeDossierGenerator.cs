@@ -23,7 +23,7 @@ namespace GeoAssets.NeutralOperator.Application;
 /// deliberate verification XD01-261 did for its own dependency, which this ticket did not
 /// re-run. Following the established precedent instead
 /// (<see cref="GeoAssets.NeutralOperator.Domain.Compliance.PoleAudit.PoleLegalDefenseDossierGenerator"/>,
-/// <see cref="GeoAssets.Workflow.Contractors.EspelhoDeMedicaoDossierGenerator"/>): the document
+/// <see cref="GeoAssets.FieldService.Contractors.EspelhoDeMedicaoDossierGenerator"/>): the document
 /// itself is plain text, deterministic and easy to test; the host layer decides how to package
 /// it (e.g. alongside the sealed photo as a zip). "The watermarked photo" is referenced by its
 /// XD01-261 HMAC digest and capture metadata rather than embedded as binary image data in a text

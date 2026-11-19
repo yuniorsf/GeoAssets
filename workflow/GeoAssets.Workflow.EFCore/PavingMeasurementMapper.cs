@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Persistence.Entities;
 
 namespace GeoAssets.Workflow.Persistence;

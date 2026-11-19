@@ -1,6 +1,6 @@
 using GeoAssets.Workflow.Agents.Dispatch;
 using GeoAssets.Workflow.Agents.Identity;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Dispatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

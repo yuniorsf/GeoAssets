@@ -1,5 +1,6 @@
+using GeoAssets.FieldService.FieldWork;
 using FluentAssertions;
-using GeoAssets.Workflow.Erp.Totvs;
+using GeoAssets.Integrations.Erp.Totvs;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 

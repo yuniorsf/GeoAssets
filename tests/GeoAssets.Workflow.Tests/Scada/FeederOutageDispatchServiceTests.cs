@@ -2,7 +2,7 @@ using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Workflow.Orders;
-using GeoAssets.Workflow.Scada;
+using GeoAssets.Integrations.Scada;
 using GeoAssets.Workflow.Tests.Orders;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;

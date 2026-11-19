@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Erp.Sienge;
+using GeoAssets.Integrations.Erp.Sienge;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Erp.Sienge;

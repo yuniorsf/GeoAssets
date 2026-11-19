@@ -1,5 +1,5 @@
-using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.Erp.Sienge;
+using GeoAssets.FieldService.Contractors;
+using GeoAssets.Integrations.Erp.Sienge;
 
 namespace GeoAssets.FieldService.Server;
 

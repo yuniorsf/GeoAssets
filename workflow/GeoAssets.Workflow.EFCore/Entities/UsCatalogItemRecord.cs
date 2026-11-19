@@ -2,7 +2,7 @@ namespace GeoAssets.Workflow.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>UsCatalogItems</c> table. Kept separate from the domain
-/// <see cref="GeoAssets.Workflow.Contractors.UsCatalogItem"/> so the domain model stays free of
+/// <see cref="GeoAssets.FieldService.Contractors.UsCatalogItem"/> so the domain model stays free of
 /// EF annotations — same split as <see cref="ContractorUsLedgerEntryRecord"/>.
 /// </summary>
 internal sealed class UsCatalogItemRecord

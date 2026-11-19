@@ -2,7 +2,7 @@ namespace GeoAssets.Workflow.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>ContractorUsLedgerEntries</c> table. Kept separate from
-/// the domain <see cref="GeoAssets.Workflow.Contractors.ContractorUsLedgerEntry"/> so the
+/// the domain <see cref="GeoAssets.FieldService.Contractors.ContractorUsLedgerEntry"/> so the
 /// domain model stays free of EF annotations. Photo proof is stored as JSON text, the same
 /// convention as <see cref="ServiceOrderRecord.AttributesJson"/>/<see cref="ServiceOrderRecord.FeatureIdsJson"/>.
 /// </summary>

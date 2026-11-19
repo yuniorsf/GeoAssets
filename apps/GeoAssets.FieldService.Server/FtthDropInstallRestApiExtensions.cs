@@ -1,6 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.NeutralOperator.Application.Bss;
 using GeoAssets.Workflow.Orders;
 

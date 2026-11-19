@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using GeoAssets.Workflow.Contractors.Governance;
+using GeoAssets.FieldService.Contractors.Governance;
 using Microsoft.Extensions.Configuration;
 
 namespace GeoAssets.FieldService.Server;

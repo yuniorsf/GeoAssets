@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.NeutralOperator.Application.Bss;
 using GeoAssets.Workflow.Orders;
 using Xunit;

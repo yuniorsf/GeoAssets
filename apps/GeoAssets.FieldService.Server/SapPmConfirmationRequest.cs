@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Erp.Sap;
+using GeoAssets.Integrations.Erp.Sap;
 
 namespace GeoAssets.FieldService.Server;
 

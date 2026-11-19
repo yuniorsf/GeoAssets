@@ -1,5 +1,5 @@
-using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.Erp.Totvs;
+using GeoAssets.FieldService.Contractors;
+using GeoAssets.Integrations.Erp.Totvs;
 
 namespace GeoAssets.FieldService.Server;
 
