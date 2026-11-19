@@ -41,7 +41,6 @@ internal static class KernelReferenceRatchet
         {
             ["Program"] = "XD01-345 (P1) — XD01-358/XD01-359 reduce Program.cs to kernel wiring + module bootstrap",
             ["GeoAssets.Server.GeoAssetsRestApiExtensions"] = "XD01-345 (P1) — NeutralOperator GIS export route (Core.Isp.NeutralOperator.GisExport); not yet in any child ticket's scope",
-            ["GeoAssets.Server.InProcessAssetMutationHostExtensions"] = "XD01-348 (P4) — XD01-374 makes the applier and applied-batch store provider-owned",
         };
 
     public static bool IsKernelType(Type type)

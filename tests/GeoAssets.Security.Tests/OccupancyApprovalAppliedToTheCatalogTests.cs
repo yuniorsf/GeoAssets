@@ -9,6 +9,7 @@ using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
@@ -198,7 +199,8 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         services.AddServerOrderOccupancyStaging(configuration);
         services.AddServerWorkflowMessaging(configuration);
         services.AddServerOccupancyCommit();
-        services.AddServerInProcessAssetMutationApply(configuration, catalogConnectionString);
+        services.AddPostgresAssetMutationBatchApplier(catalogConnectionString);
+        services.AddServerInProcessAssetMutationApply(configuration);
         if (maxAttempts is { } attempts)
             services.Configure<OutboxRelayOptions>(o => o.MaxAttempts = attempts);
 

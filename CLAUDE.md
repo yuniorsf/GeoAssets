@@ -119,6 +119,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 - `PostgresProviderPlugin` (`IProviderPlugin`, id `postgres`) — `GeoAssets.Server`'s `ICatalogPool` builds the named catalogs of `GeoAssets:Providers` with it at startup (XD01-371); the `primary` catalog is the host's `IAssetProvider`. `ProviderPoolPanel` (client) renders entries managed in `IProviderPool`
 - NTS bridge: write `feature.Geometry?.NtsGeometry` → `GeoEntityRow.Geom`; read `GeoGeometry.FromNts(row.Geom)` → `GeoFeature.Geometry`
 - Key files: `Data/GeoAssetsDbContext.cs`, `Entities/GeoEntityRow.cs`, `Repositories/PostgresAssetProvider.cs`, `PostgresProviderFactory.cs`
+- Migrations (`GeoAssetsDbContext`): run `dotnet ef` with the provider as both projects, e.g. `dotnet ef migrations add <Name> --project providers/GeoAssets.Provider.PostgreSQL --startup-project providers/GeoAssets.Provider.PostgreSQL --context GeoAssetsDbContext` — its design-time `Data/GeoAssetsDbContextFactory.cs` reads `ConnectionStrings__GeoAssets` (XD01-374). Strip the generated `#pragma warning disable 612, 618` lines from the designer and snapshot.
 
 ## Context Menu
 
