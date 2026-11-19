@@ -30,6 +30,7 @@ internal static class ServerHostFixture
     private static string? _connectionString;
     private static WebApplicationFactory<HttpTenantContext>? _factory;
     private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorDisabledFactory;
+    private static WebApplicationFactory<HttpTenantContext>? _ipBillingBridgeDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
     private static WebApplicationFactory<HttpTenantContext>? _secondCatalogFactory;
 
@@ -59,6 +60,25 @@ internal static class ServerHostFixture
             _neutralOperatorDisabledFactory ??= CreateFactory(
                 await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [1]);
             return _neutralOperatorDisabledFactory.Services;
+        }
+        finally
+        {
+            StartLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// The same host on the same database, with <c>GeoAssets:Modules:2</c> (ip-billing-bridge) blanked (XD01-377): what the
+    /// host registers and seeds without the IP-billing vertical.
+    /// </summary>
+    public static async Task<IServiceProvider> GetIpBillingBridgeDisabledServicesAsync()
+    {
+        await StartLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _ipBillingBridgeDisabledFactory ??= CreateFactory(
+                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [2]);
+            return _ipBillingBridgeDisabledFactory.Services;
         }
         finally
         {

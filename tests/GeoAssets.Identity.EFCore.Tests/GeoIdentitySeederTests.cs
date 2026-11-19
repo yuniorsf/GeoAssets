@@ -29,8 +29,8 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(35);
-        (await db.Roles.CountAsync()).Should().Be(5);
+        (await db.Permissions.CountAsync()).Should().Be(28);
+        (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
 
@@ -98,29 +98,11 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(35);
-        (await db.Roles.CountAsync()).Should().Be(5);
+        (await db.Permissions.CountAsync()).Should().Be(28);
+        (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
             .Should().Be(28);
-    }
-
-    [Fact]
-    public async Task SeedAsync_IspTenantRole_ExistsWithExactlyServiceOrdersReadAndCreate()
-    {
-        using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        using var db = NewContext(connection);
-        await db.Database.EnsureCreatedAsync();
-
-        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
-
-        (await db.Roles.AnyAsync(r => r.Id == GeoIdentitySeeder.IspTenantRoleId && r.Name == "IspTenant")).Should().BeTrue();
-        var codes = await db.RolePermissions
-            .Where(rp => rp.RoleId == GeoIdentitySeeder.IspTenantRoleId)
-            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
-            .ToListAsync();
-        codes.Should().BeEquivalentTo(["serviceorders:read", "serviceorders:create"]);
     }
 
     [Fact]
@@ -318,7 +300,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var permissions = await db.Permissions.ToListAsync();
-        permissions.Should().HaveCount(35);
+        permissions.Should().HaveCount(28);
         foreach (var permission in permissions)
         {
             permission.Description.Should().StartWith("permissions.",
@@ -326,29 +308,6 @@ public class GeoIdentitySeederTests
             permission.Description.Should().NotContainAny([" ", "á", "é", "í", "ó", "ú", "ñ"],
                 $"'{permission.Code}' description should be a key, not literal (possibly Spanish) text");
         }
-    }
-
-    // ── XD01-176: ip-billing:* permissions ───────────────────────────────────
-
-    private static readonly string[] IpBillingPermissionCodes =
-    [
-        "ip-billing:read", "ip-billing:upload", "ip-billing:calculate", "ip-billing:validate",
-        "ip-billing:ledger-manual", "ip-billing:ledger-recarga", "ip-billing:reference-manage"
-    ];
-
-    [Fact]
-    public async Task SeedAsync_IpBillingPermissions_AllSevenCodesExist()
-    {
-        using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        using var db = NewContext(connection);
-        await db.Database.EnsureCreatedAsync();
-
-        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
-
-        var seededCodes = await db.Permissions.Select(p => p.Code).ToListAsync();
-
-        seededCodes.Should().Contain(IpBillingPermissionCodes);
     }
 
     // ── XD01-369: registry:manage ────────────────────────────────────────────

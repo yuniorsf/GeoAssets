@@ -1,4 +1,4 @@
-namespace GeoAssets.Identity.Authorization.Services;
+namespace GeoAssets.Server.Modules.IpBillingBridge;
 
 /// <summary>
 /// Payload for <c>POST /api/identity/municipio-grants/sync</c> (XD01-177) — primitive fields
