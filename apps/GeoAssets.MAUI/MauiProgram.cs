@@ -1,3 +1,4 @@
+using GeoAssets.Shared.Services.FeatureActions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Localization;
 using GeoAssets.Core.Navigation;
@@ -161,6 +162,9 @@ public static class MauiProgram
         // XD01-260: pole census's "pole lookup via IGeoCoreClient.GetFeatureByIdAsync" AC —
         // same Core GeoAssets Server this host already talks to for everything else.
         builder.Services.AddGeoCoreRestClient(geoAssetsServerBaseUrl.TrimEnd('/') + "/api/geoassets");
+
+        // The map context menu's feature actions (XD01-370) — the same server, the same token-carrying client.
+        builder.Services.AddFeatureActionsRest(geoAssetsServerBaseUrl);
 
         // Localization stand-in (XD01-24) — see NoOpJsonStringLocalizer's doc comment: MAUI has
         // no real translation loader yet, so LocalizedComponentBase-derived components (Service

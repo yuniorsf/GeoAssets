@@ -56,6 +56,8 @@
                 X="_contextX"
                 Y="_contextY"
                 ShowSave="Selection.Selected?.Id == _contextFeatureId"
+                FeatureId="@_contextFeatureId"
+                OnFeatureAction="ContextMenuFeatureAction"
                 OnEdit="ContextMenuEdit"
                 OnSave="ContextMenuSave"
                 OnDelete="ContextMenuDelete"

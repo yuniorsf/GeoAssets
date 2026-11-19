@@ -1,3 +1,4 @@
+using GeoAssets.Workflow.Registry;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Shared.Components.Assets;
@@ -225,6 +226,16 @@ public partial class MapWorkspace
     {
         _contextVisible = false;
         StateHasChanged();
+    }
+
+    // XD01-370: a kernel feature action opens the generic create form with the clicked feature as the selection and the
+    // action's order type chosen; the form creates the order through the generic service-order routes.
+    private void ContextMenuFeatureAction(FeatureActionDescriptor action)
+    {
+        if (string.IsNullOrEmpty(_contextFeatureId)) return;
+
+        SelectionSet.Replace([_contextFeatureId]);
+        Navigation.NavigateTo(GeoAssets.Shared.Pages.ServiceOrders.CreateFromSelectionForOrderType(action.OrderTypeId));
     }
 
     private void ContextMenuEdit()

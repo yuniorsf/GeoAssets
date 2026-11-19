@@ -1551,6 +1551,8 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 
 .ctx-item:hover            { background: var(--surface-tint-strong); }
 .ctx-item.ctx-danger       { color: var(--danger); }
+.ctx-item.ctx-status       { color: var(--text-secondary); font-style: italic; cursor: default; }
+.ctx-item.ctx-status:hover { background: transparent; }
 .ctx-item.ctx-danger:hover { background: rgba(243,139,168,0.12); }
 
 .ctx-separator {

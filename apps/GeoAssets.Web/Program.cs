@@ -1,3 +1,4 @@
+using GeoAssets.Shared.Services.FeatureActions;
 using Blazored.LocalStorage;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Navigation;
@@ -124,6 +125,10 @@ builder.Services.AddHttpClient("GeoAssetsServer")
             scopes: [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
         return handler;
     });
+
+// The map context menu's feature actions (XD01-370): GET /api/geoassets/features/{id}/actions on GeoAssets.Server,
+// through the token-carrying "GeoAssetsServer" client above.
+builder.Services.AddFeatureActionsRest(geoAssetsServerBaseUrl);
 
 // GeoAssets.IpBilling.Server base URL (XD01-178) — a separate host/origin/CIAM-app-registration
 // from GeoAssets.Server (XD01-177), so it gets its own AuthorizationMessageHandler scoped to its
