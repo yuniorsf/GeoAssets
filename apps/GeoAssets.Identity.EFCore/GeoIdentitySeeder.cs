@@ -63,10 +63,17 @@ public static class GeoIdentitySeeder
 
     private static async Task SeedPermissionsAsync(GeoIdentityDbContext db, CancellationToken ct)
     {
-        // XD01-156: Description stores an i18n key (resolved via IJsonStringLocalizer in the
-        // UI, see PermissionList.razor) instead of literal text, so it can render in the
-        // signed-in user's culture. Translations live in wwwroot/i18n/{en,es,pt}.json.
-        var perms = new[]
+        var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct).ConfigureAwait(false);
+        foreach (var perm in SeededPermissions())
+            if (!existingCodes.Contains(perm.Code, StringComparer.Ordinal))
+                db.Permissions.Add(perm);
+    }
+
+    // XD01-156: Description stores an i18n key (resolved via IJsonStringLocalizer in the
+    // UI, see PermissionList.razor) instead of literal text, so it can render in the
+    // signed-in user's culture. Translations live in wwwroot/i18n/{en,es,pt}.json.
+    private static AppPermission[] SeededPermissions() =>
+        new[]
         {
             P("serviceorders:create",   "serviceorders", "create",   "permissions.serviceorders.create"),
             P("serviceorders:read",     "serviceorders", "read",     "permissions.serviceorders.read"),
@@ -116,13 +123,11 @@ public static class GeoIdentitySeeder
             P("ip-billing:ledger-manual",    "ip-billing", "ledger-manual",    "permissions.ipBilling.ledgerManual"),
             P("ip-billing:ledger-recarga",   "ip-billing", "ledger-recarga",   "permissions.ipBilling.ledgerRecarga"),
             P("ip-billing:reference-manage", "ip-billing", "reference-manage", "permissions.ipBilling.referenceManage"),
-        };
 
-        var existingCodes = await db.Permissions.Select(p => p.Code).ToListAsync(ct).ConfigureAwait(false);
-        foreach (var perm in perms)
-            if (!existingCodes.Contains(perm.Code, StringComparer.Ordinal))
-                db.Permissions.Add(perm);
-    }
+            // XD01-369: publishing a vertical's order-type descriptors to the kernel registry — Administrator-only
+            // (a GeoAssets.ServiceCaller service principal satisfies every permission policy anyway).
+            P("registry:manage",             "registry",   "manage",           "permissions.registry.manage"),
+        };
 
     // ── Roles with permission assignments ────────────────────────────────────
 
@@ -136,7 +141,8 @@ public static class GeoIdentitySeeder
             "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read",
             "organizations:read", "organizations:edit", "groups:read", "groups:edit",
             "projects:read", "projects:manage-providers", "projects:manage-asset-types",
-            "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete")
+            "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete",
+            "registry:manage")
             .ConfigureAwait(false);
 
         await AddRoleAsync(db, SupervisorRoleId, "Supervisor",      "Gestión de órdenes y supervisión", isBuiltIn: true, ct,

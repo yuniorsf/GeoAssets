@@ -13,6 +13,7 @@ using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Server.Modules.PostgresSpatial;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Registry;
 using GeoAssets.Workflow.Rules;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -107,6 +108,10 @@ builder.Services.AddServerWorkflowMessaging(builder.Configuration);
 // plugin it names once the host is built (InitializeCatalogPoolAsync below); the "primary" one is the host's
 // IAssetProvider. Registered before the modules: they contribute the plugins, and may scope that IAssetProvider.
 builder.Services.AddServerCatalogPool(builder.Configuration);
+
+// ── Order-type registry (XD01-369) — the verticals' order-type descriptors (feature actions as data); the in-process
+// modules contribute theirs while they are enabled below, remote verticals PUT theirs.
+builder.Services.AddOrderTypeDescriptorRegistry();
 
 // ── Modules (XD01-358/XD01-359, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in that
 // order; with none the kernel boots on its own (invariant I5).
@@ -235,6 +240,9 @@ app.MapOwnOrganizationGrantsApi();
 // native desktop tools). The WMS routes (/wms, /api/geoassets/wms) render from PostGIS and are
 // PostgresSpatialModule's (XD01-359).
 app.MapWfsApi();  // GET /wfs — OGC WFS 2.0
+
+// The order-type registry and the feature actions it resolves (XD01-369) — see OrderTypeRegistryRestApiExtensions.
+app.MapOrderTypeRegistryApi();
 
 // The enabled modules' endpoints, after the kernel's own (XD01-358).
 app.MapGeoAssetsModules();

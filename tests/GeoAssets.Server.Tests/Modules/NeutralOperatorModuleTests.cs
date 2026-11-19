@@ -4,6 +4,7 @@ using GeoAssets.Workflow;
 using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Registry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -58,6 +59,31 @@ public sealed class NeutralOperatorModuleTests
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(IClandestineAttachmentService))
             .Which.ImplementationType.Should().Be<ClandestineAttachmentService>();
+    }
+
+    [Fact]
+    public void ConfigureServices_PublishesTheSharedUseDescriptor_ToTheOrderTypeRegistry()
+    {
+        var services = new ServiceCollection();
+        services.AddOrderTypeRegistry();
+        services.AddOrderTypeDescriptorRegistry();
+
+        new NeutralOperatorModule().ConfigureServices(services, ConfigurationWithConnectionString());
+
+        using var provider = services.BuildServiceProvider();
+        var descriptor = provider.GetRequiredService<IOrderTypeDescriptorRegistry>().GetAll().Should().ContainSingle().Subject;
+        descriptor.SameAs(new OrderTypeDescriptor
+        {
+            VerticalId = "neutral-operator",
+            OrderTypeId = SharedUseOrderTypes.PoleWorkId,
+            DisplayNameKey = "orderTypes.sharedUsePoleWork",
+            ApiBaseRoute = "/api/workflow/service-orders",
+            FeatureActions =
+            [
+                new FeatureActionDescriptor(
+                    "occupiable-support", "create", "featureActions.createSharedUseOrder", SharedUseOrderTypes.PoleWorkId, "/api/workflow/service-orders"),
+            ],
+        }).Should().BeTrue();
     }
 
     [Fact]

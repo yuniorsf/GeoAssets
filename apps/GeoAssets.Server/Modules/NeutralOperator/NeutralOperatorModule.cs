@@ -1,3 +1,6 @@
+using GeoAssets.Workflow.Isp.NeutralOperator.SharedUse;
+using GeoAssets.Workflow.Occupancy;
+using GeoAssets.Workflow.Registry;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Workflow.Isp.NeutralOperator;
 using GeoAssets.Workflow.Orders;
@@ -33,6 +36,10 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
             TenantAttachmentRequestOrderTypes.RegisterAll(registry);
             registry.RegisterSharedUseOrderTypes();
         });
+
+        // Feature actions as data (XD01-369): on any feature whose asset type is an occupiable support, "Create shared-use
+        // order" — published to the kernel's order-type registry exactly as a remote vertical would PUT it.
+        services.AddOrderTypeDescriptors(ModuleId, [SharedUseDescriptor]);
 
         // Staged occupancy changes on an order's targets (XD01-315); a target is a pole when its asset type carries the
         // occupiable-support role (XD01-368) — see OrderOccupancyHostExtensions.
@@ -71,4 +78,22 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         // lists and disputes through the generic /api/workflow service-order routes, where ClandestineNoticeActionHandler
         // performs the dispute after the rule chain allowed it.
     }
+
+    /// <summary>The shared-use pole-work order type as this vertical publishes it to the kernel's registry (XD01-369).</summary>
+    internal static OrderTypeDescriptor SharedUseDescriptor { get; } = new()
+    {
+        VerticalId = ModuleId,
+        OrderTypeId = SharedUseOrderTypes.PoleWorkId,
+        DisplayNameKey = "orderTypes.sharedUsePoleWork",
+        ApiBaseRoute = "/api/workflow/service-orders",
+        FeatureActions =
+        [
+            new FeatureActionDescriptor(
+                OccupancyAssetTypeRoles.OccupiableSupport,
+                "create",
+                "featureActions.createSharedUseOrder",
+                SharedUseOrderTypes.PoleWorkId,
+                "/api/workflow/service-orders"),
+        ],
+    };
 }
