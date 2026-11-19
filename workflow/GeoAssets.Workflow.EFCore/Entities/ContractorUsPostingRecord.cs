@@ -2,7 +2,7 @@ namespace GeoAssets.Workflow.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>field_contractor_us_postings</c> table (XD01-242). Kept
-/// separate from the domain <see cref="GeoAssets.Workflow.Contractors.ContractorUsPosting"/> so
+/// separate from the domain <see cref="GeoAssets.FieldService.Contractors.ContractorUsPosting"/> so
 /// the domain model stays free of EF annotations — same split as
 /// <see cref="ContractorUsLedgerEntryRecord"/>. <see cref="TotalUs"/>/<see cref="TotalBrl"/> are
 /// persisted (not recomputed on read) — a faithful snapshot of the figures actually posted,

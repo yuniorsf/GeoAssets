@@ -1,7 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Shared.Services.FieldWork;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.NeutralOperator.Application;
 using Xunit;
 

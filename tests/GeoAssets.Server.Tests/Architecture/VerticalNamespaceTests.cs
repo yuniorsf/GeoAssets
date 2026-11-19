@@ -51,6 +51,6 @@ public sealed class VerticalNamespaceTests
     public void NeutralOperatorApplication_DependsOnDomainEngineAndCore()
     {
         GeoAssetsReferences(ApplicationAssembly).Should().BeSubsetOf(
-            ["GeoAssets.NeutralOperator.Domain", "GeoAssets.Workflow", "GeoAssets.Core"]);
+            ["GeoAssets.NeutralOperator.Domain", "GeoAssets.Workflow", "GeoAssets.Core", "GeoAssets.FieldService.Application"]);
     }
 }

@@ -14,13 +14,13 @@ internal static class KernelReferenceRatchet
         "GeoAssets.IpBilling",
         "GeoAssets.NeutralOperator.Domain",
         "GeoAssets.Core.Bdgd",
-        "GeoAssets.Workflow.Contractors",
-        "GeoAssets.Workflow.Erp",
-        "GeoAssets.Workflow.FieldWork",
-        "GeoAssets.Workflow.Infrastructure",
+        "GeoAssets.FieldService.Contractors",
+        "GeoAssets.Integrations.Erp",
+        "GeoAssets.FieldService.FieldWork",
+        "GeoAssets.FieldService.Infrastructure",
         "GeoAssets.NeutralOperator.Application",
         "GeoAssets.NeutralOperator.Application.Occupancy",
-        "GeoAssets.Workflow.Scada",
+        "GeoAssets.Integrations.Scada",
         "GeoAssets.Workflow.SlaGuard",
     ];
 

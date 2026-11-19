@@ -10,7 +10,7 @@ namespace GeoAssets.Shared.Services.Offline;
 ///
 /// <see cref="GetBaseSnapshotAsync"/>/<see cref="SaveBaseSnapshotAsync"/> hold the copy as last
 /// known from the server — the "base" snapshot
-/// <see cref="GeoAssets.Workflow.FieldWork.ThreeWayConflictReconciler.Reconcile"/> needs, distinct
+/// <see cref="GeoAssets.FieldService.FieldWork.ThreeWayConflictReconciler.Reconcile"/> needs, distinct
 /// from the device's own in-progress edits returned by <see cref="GetAsync"/>.
 /// </summary>
 public interface ILocalServiceOrderStore

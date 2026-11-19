@@ -3,7 +3,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Erp.Sap;
+using GeoAssets.Integrations.Erp.Sap;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.SlaGuard;
 using Microsoft.Extensions.Time.Testing;

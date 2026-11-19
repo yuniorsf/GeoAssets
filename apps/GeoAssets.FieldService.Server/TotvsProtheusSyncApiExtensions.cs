@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Erp.Totvs;
+using GeoAssets.Integrations.Erp.Totvs;
 
 namespace GeoAssets.FieldService.Server;
 

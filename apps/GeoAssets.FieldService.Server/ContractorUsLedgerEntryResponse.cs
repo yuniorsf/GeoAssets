@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 
 namespace GeoAssets.FieldService.Server;
 

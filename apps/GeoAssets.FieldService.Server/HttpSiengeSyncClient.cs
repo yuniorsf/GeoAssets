@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Json;
-using GeoAssets.Workflow.Erp.Sienge;
+using GeoAssets.Integrations.Erp.Sienge;
 using Microsoft.Extensions.Configuration;
 
 namespace GeoAssets.FieldService.Server;

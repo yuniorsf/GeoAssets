@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-376 (ADR-001 Phase 5): the FieldService vertical — field work (paving, FTTH, CTO, OTDR, safety checklists, technician compliance), contractors (US ledger, remuneration, Espelho de Medição) and infrastructure (manhole audits) — moved out of the generic GeoAssets.Workflow engine. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.FieldService</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <!-- XD01-230: the water-paving sub-order spawn rule reuses TrenchDimensions/PavementReinstatementCalculator rather
+         than duplicating ICERP trench math (moved here from GeoAssets.Workflow with FieldWork, XD01-376). -->
+    <ProjectReference Include="..\..\..\core\GeoAssets.Domain.Sanitation\GeoAssets.Domain.Sanitation.csproj" />
+    <ProjectReference Include="..\..\NeutralOperator\GeoAssets.NeutralOperator.Domain\GeoAssets.NeutralOperator.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using GeoAssets.FieldService.Server;
-using GeoAssets.Workflow.Contractors.Governance;
+using GeoAssets.FieldService.Contractors.Governance;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

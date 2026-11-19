@@ -7,7 +7,7 @@ namespace GeoAssets.Workflow.Agents.Dispatch;
 
 /// <summary>
 /// Groups open orders by their upstream feeder/pressure-zone (XD01-240), using the same
-/// <see cref="TopoGraph"/> traversal <c>GeoAssets.Workflow.Scada.FeederOutageDispatchService</c>
+/// <see cref="TopoGraph"/> traversal <c>GeoAssets.Integrations.Scada.FeederOutageDispatchService</c>
 /// (XD01-239) already relies on for downstream impact, just walked upstream instead:
 /// <see cref="IAssetProvider.GetAncestors(string)"/> finds every feature that can reach an
 /// order's feature, filtered down to ones typed

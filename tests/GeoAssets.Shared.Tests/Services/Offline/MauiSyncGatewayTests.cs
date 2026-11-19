@@ -2,7 +2,7 @@ using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Services.Offline;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;

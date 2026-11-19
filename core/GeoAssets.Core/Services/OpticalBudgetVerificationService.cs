@@ -8,7 +8,7 @@ namespace GeoAssets.Core.Services;
 /// service with no <c>ServiceOrder</c>/workflow dependency — a consumer (e.g. the FTTH
 /// drop-install workflow guard, or the mobile checklist) decides what to do with the result,
 /// including whether to act on <see cref="OpticalBudgetVerificationResult.RequiresUpstreamCtoRepair"/>
-/// (see <c>GeoAssets.Workflow.FieldWork.UpstreamCtoRepairOrderSpawner</c>).
+/// (see <c>GeoAssets.FieldService.FieldWork.UpstreamCtoRepairOrderSpawner</c>).
 /// </summary>
 public static class OpticalBudgetVerificationService
 {

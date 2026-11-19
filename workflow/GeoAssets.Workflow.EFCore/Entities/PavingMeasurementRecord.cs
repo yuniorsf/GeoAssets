@@ -2,7 +2,7 @@ namespace GeoAssets.Workflow.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>field_icerp_paving_measurements</c> table (XD01-291). Kept
-/// separate from the domain <see cref="GeoAssets.Workflow.FieldWork.PavingMeasurement"/> so the
+/// separate from the domain <see cref="GeoAssets.FieldService.FieldWork.PavingMeasurement"/> so the
 /// domain model stays free of EF annotations — same split as <see cref="ContractorUsPostingRecord"/>.
 /// </summary>
 internal sealed class PavingMeasurementRecord

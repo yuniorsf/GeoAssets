@@ -9,7 +9,7 @@ namespace GeoAssets.NeutralOperator.Domain.Evidence;
 /// tamper-evidence digest, independent of the EXIF/watermark burn-in done by
 /// <see cref="FieldPhotoWatermarker"/>. Mirrors the HMACSHA256.HashData(key, data) -&gt;
 /// Convert.ToBase64String(hash) convention already used by
-/// GeoAssets.Workflow.Contractors.EspelhoDeMedicaoDossierGenerator.
+/// GeoAssets.FieldService.Contractors.EspelhoDeMedicaoDossierGenerator.
 /// </summary>
 public static class FieldPhotoEvidenceSealer
 {

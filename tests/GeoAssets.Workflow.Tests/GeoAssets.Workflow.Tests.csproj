@@ -28,6 +28,10 @@
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Domain\GeoAssets.NeutralOperator.Domain.csproj" />
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
     <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
+    <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Application\GeoAssets.FieldService.Application.csproj" />
+    <ProjectReference Include="..\..\verticals\Integrations\GeoAssets.Integrations.Erp\GeoAssets.Integrations.Erp.csproj" />
+    <ProjectReference Include="..\..\verticals\Integrations\GeoAssets.Integrations.Scada\GeoAssets.Integrations.Scada.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow.SlaGuard\GeoAssets.Workflow.SlaGuard.csproj" />
   </ItemGroup>
 
 </Project>

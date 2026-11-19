@@ -3,7 +3,7 @@ using System.Net.Http;
 using System.Text;
 using FluentAssertions;
 using GeoAssets.Shared.Services.Offline;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

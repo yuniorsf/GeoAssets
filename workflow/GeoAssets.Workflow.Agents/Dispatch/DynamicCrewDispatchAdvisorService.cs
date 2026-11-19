@@ -1,7 +1,7 @@
 using System.Globalization;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Dispatch;
 using GeoAssets.Workflow.Orders;
 

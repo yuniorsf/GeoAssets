@@ -1,6 +1,6 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.Contractors.Governance;
+using GeoAssets.FieldService.Contractors;
+using GeoAssets.FieldService.Contractors.Governance;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Contractors.Governance;

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-376 (ADR-001 Phase 5): the regulatory SLA guard as an add-on to the generic engine — cross-vertical (the kernel SLA breach reporting and the ERP order spawner both use it), so it is not owned by one vertical. Namespace unchanged. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Workflow.SlaGuard</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+  </ItemGroup>
+
+</Project>

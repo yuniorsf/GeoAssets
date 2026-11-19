@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Erp.Totvs;
+using GeoAssets.Integrations.Erp.Totvs;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Erp.Totvs;

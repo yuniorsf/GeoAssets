@@ -1,6 +1,6 @@
 using System.Text.Json;
 using GeoAssets.Core.Models.Geometry;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Persistence.Entities;
 
 namespace GeoAssets.Workflow.Persistence;

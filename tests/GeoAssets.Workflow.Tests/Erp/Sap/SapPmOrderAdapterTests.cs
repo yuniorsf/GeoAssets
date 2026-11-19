@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
-using GeoAssets.Workflow.Erp.Sap;
+using GeoAssets.Integrations.Erp.Sap;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.Erp.Sap;

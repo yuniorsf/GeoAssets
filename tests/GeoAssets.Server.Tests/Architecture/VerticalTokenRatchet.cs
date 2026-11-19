@@ -83,7 +83,6 @@ internal static partial class VerticalTokenRatchet
     public static IReadOnlyDictionary<string, string> DomainReferenceAllowlist { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["GeoAssets.Workflow -> GeoAssets.Domain.Sanitation"] = "XD01-349 (P5) — XD01-376 moves FieldWork out of the engine and drops Workflow → Domain.Sanitation",
             ["GeoAssets.Workflow.EFCore -> GeoAssets.Domain.Sanitation"] = "XD01-350 (P6) — XD01-381 moves InspectionCommitService's paving spawn (TrenchDimensions) out of the kernel persistence",
         };
 

@@ -1,8 +1,8 @@
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Services;
-using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.Contractors;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.Persistence;

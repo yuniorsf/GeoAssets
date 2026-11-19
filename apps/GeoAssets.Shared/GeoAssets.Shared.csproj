@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.IpBilling\GeoAssets.IpBilling.csproj" />
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow.SlaGuard\GeoAssets.Workflow.SlaGuard.csproj" />
   </ItemGroup>
 
   <ItemGroup>

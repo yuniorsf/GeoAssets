@@ -3,7 +3,7 @@ using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using Xunit;
 
 namespace GeoAssets.Workflow.Tests.FieldWork;

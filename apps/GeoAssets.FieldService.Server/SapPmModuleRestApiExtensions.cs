@@ -1,6 +1,6 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Workflow.FieldWork;
-using GeoAssets.Workflow.Erp.Sap;
+using GeoAssets.FieldService.FieldWork;
+using GeoAssets.Integrations.Erp.Sap;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.FieldService.Server;

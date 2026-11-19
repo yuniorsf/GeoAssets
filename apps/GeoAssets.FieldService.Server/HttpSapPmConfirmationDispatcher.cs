@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using GeoAssets.Workflow.Erp.Sap;
+using GeoAssets.Integrations.Erp.Sap;
 using Microsoft.Extensions.Configuration;
 
 namespace GeoAssets.FieldService.Server;

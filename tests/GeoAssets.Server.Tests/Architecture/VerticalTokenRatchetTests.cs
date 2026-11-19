@@ -109,11 +109,11 @@ public sealed class VerticalTokenRatchetTests
     }
 
     [Fact]
-    public void FindDomainAssemblyReferences_ReportsWorkflowToDomainSanitation()
+    public void FindDomainAssemblyReferences_EngineAssembly_ReportsNothing()
     {
         var references = VerticalTokenRatchet.FindDomainAssemblyReferences([typeof(OrderTypeRegistry).Assembly]);
 
-        references.Should().ContainKey("GeoAssets.Workflow -> GeoAssets.Domain.Sanitation");
+        references.Should().BeEmpty();
     }
 
     [Fact]

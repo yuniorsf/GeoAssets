@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 

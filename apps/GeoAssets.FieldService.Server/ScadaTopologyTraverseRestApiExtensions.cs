@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Scada;
+using GeoAssets.Integrations.Scada;
 
 namespace GeoAssets.FieldService.Server;
 

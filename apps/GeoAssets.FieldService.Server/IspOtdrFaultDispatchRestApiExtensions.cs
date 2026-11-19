@@ -2,7 +2,7 @@ using System.Diagnostics;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 
 namespace GeoAssets.FieldService.Server;
 

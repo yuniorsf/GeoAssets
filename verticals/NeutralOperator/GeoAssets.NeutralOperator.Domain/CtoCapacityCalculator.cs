@@ -7,7 +7,7 @@ namespace GeoAssets.NeutralOperator.Domain;
 /// <c>GeoFeatureProperties.CustomAttributes</c> dictionary — the "queryable capacity
 /// percentage" XD01-272's AC asks for, derived on demand rather than stored redundantly
 /// alongside the two raw counts (same reasoning as
-/// <c>GeoAssets.Workflow.Infrastructure.ManholeAudit.SubDuctOccupancyPercentage</c>).
+/// <c>GeoAssets.FieldService.Infrastructure.ManholeAudit.SubDuctOccupancyPercentage</c>).
 /// </summary>
 public static class CtoCapacityCalculator
 {

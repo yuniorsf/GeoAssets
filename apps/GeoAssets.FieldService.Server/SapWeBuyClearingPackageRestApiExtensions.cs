@@ -1,6 +1,6 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Workflow.Contractors;
-using GeoAssets.Workflow.Erp.SapWeBuy;
+using GeoAssets.FieldService.Contractors;
+using GeoAssets.Integrations.Erp.SapWeBuy;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.FieldService.Server;

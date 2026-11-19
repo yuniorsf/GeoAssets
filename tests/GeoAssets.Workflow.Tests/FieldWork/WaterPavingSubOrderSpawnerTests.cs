@@ -1,7 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Domain.Sanitation.Icerp;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 

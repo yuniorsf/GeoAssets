@@ -3,7 +3,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Workflow.Agents.Dispatch;
 using GeoAssets.Workflow.Agents.Tests.TestDoubles;
-using GeoAssets.Workflow.Contractors;
+using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Dispatch;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.SlaGuard;

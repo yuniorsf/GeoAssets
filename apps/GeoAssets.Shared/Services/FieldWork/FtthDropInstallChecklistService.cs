@@ -1,7 +1,7 @@
 using System.Globalization;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Services.Scanning;
-using GeoAssets.Workflow.FieldWork;
+using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Shared.Services.FieldWork;
