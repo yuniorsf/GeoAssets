@@ -43,6 +43,7 @@ internal sealed class SnapshottingServiceOrderRepository : IServiceOrderReposito
         ParentOrderId = order.ParentOrderId,
         Attributes    = new Dictionary<string, string>(order.Attributes, StringComparer.Ordinal),
         Features      = [.. order.Features],
+        FeatureIds    = [.. order.FeatureIds],
         SelectionSpec = order.SelectionSpec,
         Dispatches    = [.. order.Dispatches],
         ActionLog     = [.. order.ActionLog],

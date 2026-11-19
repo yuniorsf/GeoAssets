@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Persistence.Postgres;
 using Npgsql;
 using Xunit;
 

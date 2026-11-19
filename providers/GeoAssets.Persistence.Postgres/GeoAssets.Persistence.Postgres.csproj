@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-386: the PostgreSQL persistence plumbing every Postgres-backed host shares (tenant
+       session/transaction interceptors, statement-timeout connection-string helper), split out of
+       GeoAssets.Provider.PostgreSQL so a vertical host can stamp its OWN database's connections
+       without referencing the core asset provider (Invariant 1, Core Database Encapsulation). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Persistence.Postgres</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+  </ItemGroup>
+
+</Project>

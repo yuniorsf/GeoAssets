@@ -1158,10 +1158,12 @@ An architecture review of `apps/GeoAssets.Server` against this document found th
 
 | Invariant | Status | Evidence (ADR-001 Part 2) |
 |---|---|---|
-| 1. Core Database Encapsulation | **Violated** — `apps/GeoAssets.FieldService.Server/Program.cs:72-89` loads the Postgres asset provider and opens `GeoAssetsDbContext` on the core connection string (remediation: XD01-386, which also makes this invariant an architecture test); inside the core, `WmsPostGisRenderer` bypasses `IAssetProvider` (smell E, remediation: XD01-372). | E, P |
+| 1. Core Database Encapsulation | **Holds** for the vertical hosts since XD01-386 (see the 2026-11-19 update below); inside the core, `WmsPostGisRenderer` bypasses `IAssetProvider` (smell E, remediation: XD01-372). | E, P |
 | 2. Workflow Domain Neutrality | **Violated** — `core/GeoAssets.Workflow` contains `Isp/NeutralOperator`, `Occupancy`, `FieldWork`, `Contractors`, `Erp`, `Scada`, `SlaGuard` and references `GeoAssets.Domain.Sanitation`; `ServiceOrderDbContext` declares pole-occupancy, paving, manhole and contractor tables; the generic `/actions` route special-cases occupancy approval. The token-based test (`MessagingArchitectureTests` Invariant02) does not list these terms. | B, C, D, I, J, K, O |
 | 3. Single-DB Commercial Ledger | Holds for `IpBilling.Server` and `FieldService.Server`; the contractor tables are additionally (and needlessly) created in the core database. | I |
 | 4. Offline Life-Safety Precedence | Not assessed by ADR-001. | — |
+
+**Update (2026-11-19, XD01-386) — Invariant 1 holds.** `GeoAssets.FieldService.Server` no longer references `GeoAssets.Provider.PostgreSQL`, registers no `GeoAssetsDbContext` and needs no `ConnectionStrings:GeoAssets`. Its geofence-arrival guard, SCADA outage dispatch and dynamic dispatch advisor read assets through narrow ports (`IAssetProximityQuery`, `IAssetTopologyQuery`, `IDispatchAssetQuery`) answered over the core's API (`IGeoCoreClient`, plus the new service-caller-only `/api/geoassets/organizations/{organizationId}/features/…` routes for organization-scoped reads); the tenant interceptors and statement-timeout helper it still needs for its own `FieldService` database moved to `providers/GeoAssets.Persistence.Postgres`. A core outage fails closed (`503 geocore.unavailable`) or degrades the outage dispatch rather than falling back to the core database.
 
 **Enforcement correction.** §8 names `NetArchTest.Rules`; the repository's architecture tests are reflection-based (`GetReferencedAssemblies`) in `tests/GeoAssets.Server.Tests` and `tests/GeoAssets.Core.Tests`. ADR-001 Phase 0 (XD01-352, XD01-353) extends them into shrink-only *ratchets* that turn invariants 1 and 2 into executable gates.
 

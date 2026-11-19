@@ -17,7 +17,9 @@ multiTenancy:
   mode: Shared
   tenantName: ""   # required when mode=DedicatedSingleTenant — becomes the "tenant" pod label
 
-# The GeoAssets Postgres connection string (maps to ConnectionStrings__GeoAssets). Required.
+# This host's own FieldService Postgres connection string (maps to ConnectionStrings__FieldService).
+# Required. Since XD01-386 the host never opens the core GeoAssets database — core assets are
+# read over the core's API.
 # Supplied directly only for local/dev use — in any real cluster, leave this empty and set
 # existingSecretName instead (see README "Secrets").
 connectionString: ""

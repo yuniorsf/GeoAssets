@@ -32,7 +32,7 @@ helm lint .
 
 helm template my-release . \
   --set image.repository=<repo> --set image.tag=<tag> \
-  --set connectionString="Host=...;Port=5432;Database=geoassets;Username=postgres;Password=..."
+  --set connectionString="Host=...;Port=5432;Database=geoassets_fieldservice;Username=postgres;Password=..."
 ```
 
 Against a real cluster (this repo has no CI/CD job or container registry

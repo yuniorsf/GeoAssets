@@ -9,14 +9,14 @@ using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Persistence.Postgres;
+using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Provider.FileGeodatabase;
-using GeoAssets.Provider.PostgreSQL;
-using GeoAssets.Provider.PostgreSQL.Data;
-using GeoAssets.Provider.PostgreSQL.Interceptors;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Agents;
+using GeoAssets.Workflow.Agents.Dispatch;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.FieldService.Contractors.Governance;
 using GeoAssets.Integrations.Erp.Totvs;
@@ -55,38 +55,18 @@ builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
         () => sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.User));
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 
-// ── PostgreSQL (XD01-199/XD01-203) — GeoAssetsDbContext registered with both tenant
-// interceptors attached via the (IServiceProvider, DbContextOptionsBuilder) overload, so each
-// request's own scoped ITenantContext drives TenantSessionInterceptor/TenantTransactionInterceptor
-// rather than a single process-wide value. ───────────────────────────────────────────────────────
-var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
-    ?? throw new InvalidOperationException(
-        "Connection string 'GeoAssets' not found. " +
-        "Set it in appsettings.json or via the ConnectionStrings__GeoAssets environment variable.");
-
-// IAssetProvider (XD01-295) — the first endpoint on this host to read geo_entity:
-// GeofenceArrivalTransitionGuard.CanArriveAsync needs it to confirm a crew's device-reported GPS
-// position is actually near the order's target asset. Same AddGeoAssetsPostgres +
-// AddWarmedPostgresAssetProvider pair — the provider is built, migrated and warmed right after
-// builder.Build() (WarmPostgresAssetProviderAsync below), before the host serves.
-builder.Services.AddGeoAssetsPostgres();
-builder.Services.AddWarmedPostgresAssetProvider(connectionString);
-
-// "Noisy neighbor" backstop (XD01-214) — complements the gateway's per-OrganizationId rate
-// limiting: even a request the gateway let through can't hold a connection/lock open
-// indefinitely on this shared database. Opt-in via "Postgres:StatementTimeoutMs" — unset (the
-// default) leaves the connection string, and Postgres' own server-level default, untouched.
-var statementTimeoutMs = builder.Configuration.GetValue<int?>("Postgres:StatementTimeoutMs");
-if (statementTimeoutMs is { } timeoutMs)
-    connectionString = PostgresConnectionStringHelper.WithStatementTimeout(connectionString, TimeSpan.FromMilliseconds(timeoutMs));
-
-builder.Services.AddScoped<TenantSessionInterceptor>();
-builder.Services.AddScoped<TenantTransactionInterceptor>();
-builder.Services.AddDbContext<GeoAssetsDbContext>((sp, options) => options
-    .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
-    .AddInterceptors(
-        sp.GetRequiredService<TenantSessionInterceptor>(),
-        sp.GetRequiredService<TenantTransactionInterceptor>()));
+// ── Core asset reads (XD01-386, Invariant 1 — Core Database Encapsulation) — this host never
+// opens the core asset database. The geofence guard, the SCADA outage dispatch and the dynamic
+// dispatch advisor read assets through narrow ports answered by GeoCoreAssetQueryAdapter over
+// IGeoCoreClient (registered with the Core GeoAssets Server bridge below). ─────────────────────
+builder.Services.AddScoped<GeoCoreAssetQueryAdapter>(sp => new GeoCoreAssetQueryAdapter(
+    ResolveGeoCoreClient(sp),
+    sp.GetRequiredService<IOrganizationScopedGeoCoreClient>(),
+    sp.GetRequiredService<ITenantContext>(),
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddScoped<IAssetProximityQuery>(sp => sp.GetRequiredService<GeoCoreAssetQueryAdapter>());
+builder.Services.AddScoped<IAssetTopologyQuery>(sp => sp.GetRequiredService<GeoCoreAssetQueryAdapter>());
+builder.Services.AddScoped<IDispatchAssetQuery>(sp => sp.GetRequiredService<GeoCoreAssetQueryAdapter>());
 
 // ── Contractor US ledger (XD01-207) — ServiceOrderDbContext (ContractorUsLedgerEntries, etc.)
 // (XD01-290) now lives in its OWN "FieldService" database/connection string, with its own
@@ -97,18 +77,33 @@ builder.Services.AddDbContext<GeoAssetsDbContext>((sp, options) => options
 // ServiceOrders' grant-aware RLS exception needing OrganizationGrants, which now lives in a
 // DIFFERENT physical database — is resolved by OrganizationGrantSyncWorker below, mirroring
 // grants into this database's own OrganizationGrantMirror table (see that worker's and the
-// isolation migration's own doc comments for the resulting staleness-window tradeoff). Still
-// shares the same two tenant interceptors as GeoAssetsDbContext above — those are
-// per-ITenantContext, not per-connection. ────────────────────────────────────────────────────
+// isolation migration's own doc comments for the resulting staleness-window tradeoff). Both
+// tenant interceptors are attached via the (IServiceProvider, DbContextOptionsBuilder) overload,
+// so each request's own scoped ITenantContext drives TenantSessionInterceptor/
+// TenantTransactionInterceptor rather than a single process-wide value (XD01-199/XD01-203; since
+// XD01-386 they come from GeoAssets.Persistence.Postgres, not the core asset provider). ────────
 var fieldServiceConnectionString = builder.Configuration.GetConnectionString("FieldService")
     ?? throw new InvalidOperationException(
         "Connection string 'FieldService' not found. " +
         "Set it in appsettings.json or via the ConnectionStrings__FieldService environment variable.");
 
+// "Noisy neighbor" backstop (XD01-214) — complements the gateway's per-OrganizationId rate
+// limiting: even a request the gateway let through can't hold a connection/lock open
+// indefinitely on this database. Opt-in via "Postgres:StatementTimeoutMs" — unset (the default)
+// leaves the connection string, and Postgres' own server-level default, untouched. Applies to
+// this host's own FieldService connection string (XD01-386; it used to apply to the core one,
+// which this host no longer opens).
+var statementTimeoutMs = builder.Configuration.GetValue<int?>("Postgres:StatementTimeoutMs");
+if (statementTimeoutMs is { } timeoutMs)
+    fieldServiceConnectionString = PostgresConnectionStringHelper.WithStatementTimeout(fieldServiceConnectionString, TimeSpan.FromMilliseconds(timeoutMs));
+
+builder.Services.AddScoped<TenantSessionInterceptor>();
+builder.Services.AddScoped<TenantTransactionInterceptor>();
+
 builder.Services.AddSingleton(TimeProvider.System);
 
-// ── Topology-driven SCADA/OMS emergency dispatch (XD01-239) — reuses the pre-warmed
-// IAssetProvider singleton registered above (XD01-295). ─────────────────────────────────────
+// ── Topology-driven SCADA/OMS emergency dispatch (XD01-239) — reads the switch, its downstream
+// segment and the crew roster through IAssetTopologyQuery (GeoCoreAssetQueryAdapter, XD01-386). ──
 builder.Services.AddScoped<IFeederOutageDispatchService, FeederOutageDispatchService>();
 
 // Day-to-day, yield-ranked VRPTW dispatch advisor (XD01-256) — reuses the same ICrewRoutingEngine
@@ -218,6 +213,10 @@ var coreServerBaseUrl = builder.Configuration["GeoCoreServer:BaseUrl"]
         "Set it in appsettings.json or via the GeoCoreServer__BaseUrl environment variable.");
 builder.Services.AddServiceAuthTokenProvider(builder.Configuration);
 builder.Services.AddGeoCoreRestClient(coreServerBaseUrl);
+// The core sees this host's service principal (no organization claim); asset reads made for a
+// request with an organization go through the core's organization-scoped routes instead, so
+// they see exactly what that organization sees (XD01-386, see GeoCoreAssetQueryAdapter).
+builder.Services.AddOrganizationScopedGeoCoreClient(coreServerBaseUrl);
 builder.Services.AddScoped<IIntegrationEventPublisher, GeoCoreBridgeEventPublisher>();
 
 // ── OrganizationGrant sync (XD01-290) — HttpOrganizationGrantSyncClient polls Core's
@@ -352,9 +351,6 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Build, migrate and warm the asset provider before anything reads assets (XD01-173).
-await app.Services.WarmPostgresAssetProviderAsync().ConfigureAwait(false);
-
 app.UseGeoAssetsAuthentication();
 app.UseGeoAssetsObservability();
 
@@ -457,3 +453,10 @@ if (app.Configuration.GetValue("Modules:Isp:Enabled", defaultValue: true))
 }
 
 await app.RunAsync().ConfigureAwait(false);
+
+// IGeoCoreClientResolver when registered — routed to the shard of the request's organization —
+// else the plain IGeoCoreClient (XD01-386).
+static IGeoCoreClient ResolveGeoCoreClient(IServiceProvider sp) =>
+    sp.GetService<IGeoCoreClientResolver>() is { } resolver
+        ? resolver.Resolve(organizationId: sp.GetService<ITenantContext>()?.CurrentOrganizationId ?? Guid.Empty)
+        : sp.GetRequiredService<IGeoCoreClient>();

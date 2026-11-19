@@ -4,8 +4,8 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
+using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Provider.PostgreSQL.Data;
-using GeoAssets.Provider.PostgreSQL.Interceptors;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 

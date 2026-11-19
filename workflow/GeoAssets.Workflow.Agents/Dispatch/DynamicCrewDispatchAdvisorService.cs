@@ -1,5 +1,4 @@
 using System.Globalization;
-using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Dispatch;
@@ -25,9 +24,15 @@ namespace GeoAssets.Workflow.Agents.Dispatch;
 /// estimate, since this codebase has no separate yield-forecasting model. An order with no
 /// planned BoQ attribute predicts at 0 US — it still gets routed, it simply never outranks a
 /// valued order on non-urgent ranking.
+///
+/// Asset reads (an order's located feature, the crew roster) go through the narrow
+/// <see cref="IDispatchAssetQuery"/> port (XD01-386), so a vertical host answers them over the
+/// core's API instead of opening the core asset database. When that source is unreachable the
+/// port's <see cref="Core.Interfaces.GeoCoreUnavailableException"/> propagates — an advisory plan
+/// built on a partial roster would silently mis-route, so none is produced.
 /// </summary>
 public sealed class DynamicCrewDispatchAdvisorService(
-    IAssetProvider assetProvider,
+    IDispatchAssetQuery assetQuery,
     IServiceOrderRepository orderRepository,
     ICrewRoutingEngine routingEngine,
     OrderRemunerationCalculator remunerationCalculator,
@@ -52,8 +57,9 @@ public sealed class DynamicCrewDispatchAdvisorService(
             .Select(o => o.Order.OrderId)
             .ToList();
 
+        var crewRoster = await LoadCrewRosterAsync(ct).ConfigureAwait(false);
         var (itineraries, optimizedDistance, baselineDistance, unassignedIds) =
-            AssignCrews(orderedRanked, LoadCrewRoster(), now);
+            AssignCrews(orderedRanked, crewRoster, now);
 
         return new DynamicDispatchAdvisoryResult(
             itineraries,
@@ -120,7 +126,9 @@ public sealed class DynamicCrewDispatchAdvisorService(
             var featureId = concrete.Features.Count > 0 ? concrete.Features[0].Id : concrete.FeatureIds.FirstOrDefault();
             var feature = featureId is null
                 ? null
-                : concrete.Features.Count > 0 ? concrete.Features[0] : assetProvider.GetById(featureId);
+                : concrete.Features.Count > 0
+                    ? concrete.Features[0]
+                    : await assetQuery.GetFeatureAsync(featureId, ct).ConfigureAwait(false);
 
             if (feature?.Geometry is null)
             {
@@ -168,14 +176,20 @@ public sealed class DynamicCrewDispatchAdvisorService(
         }
     }
 
-    private IReadOnlyList<CrewRosterEntry> LoadCrewRoster() =>
-        [.. assetProvider.GetByAssetType(FeederClusterDispatchTypes.RoutineCrewAssetTypeId)
+    private async Task<IReadOnlyList<CrewRosterEntry>> LoadCrewRosterAsync(CancellationToken ct)
+    {
+        var crews = await assetQuery
+            .GetFeaturesByAssetTypeAsync(FeederClusterDispatchTypes.RoutineCrewAssetTypeId, ct)
+            .ConfigureAwait(false);
+
+        return [.. crews
             .Where(f => f.Geometry is not null)
             .Select(f => new CrewRosterEntry(
                 f.Id,
                 f.Geometry!.Centroid,
                 ParseTags(f.Properties.CustomAttributes.GetValueOrDefault(FeederClusterDispatchTypes.CrewSkillsAttributeKey)),
                 ParseTags(f.Properties.CustomAttributes.GetValueOrDefault(FeederClusterDispatchTypes.CrewEquipmentAttributeKey))))];
+    }
 
     private static DateTimeOffset? ReadSlaDeadline(IReadOnlyDictionary<string, string> attributes) =>
         attributes.TryGetValue(GeoAssets.Workflow.SlaGuard.SlaGuardEngine.DeadlineAttributeKey, out var raw)

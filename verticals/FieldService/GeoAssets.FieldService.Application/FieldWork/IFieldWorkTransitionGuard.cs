@@ -8,8 +8,8 @@ namespace GeoAssets.FieldService.FieldWork;
 /// structurally legal per the graph, but additionally conditioned on something the graph itself
 /// can't express. A pure domain contract with no infrastructure dependency of its own (an
 /// implementation may depend on one, e.g. <see cref="GeofenceArrivalTransitionGuard"/> depends
-/// only on the <see cref="GeoAssets.Core.Interfaces.IAssetProvider"/> abstraction, never a
-/// concrete database): <see cref="CanArriveAsync"/> needs a geofence check (<c>ST_DWithin</c>,
+/// only on the <see cref="IAssetProximityQuery"/> port (XD01-386), never a concrete
+/// database): <see cref="CanArriveAsync"/> needs a geofence check (<c>ST_DWithin</c>,
 /// XD01-221, implemented), <see cref="CanStartWorkAsync"/> needs a signed digital APR safety
 /// checklist (XD01-222, implemented) and Before-stage photo evidence for any gated BoQ item
 /// (XD01-246, implemented), <see cref="CanCompleteAsync"/> needs all required photo-evidence

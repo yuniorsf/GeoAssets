@@ -25,6 +25,8 @@ GET /api/geoassets/features/{id}/actions | policy:features:read
 GET /api/geoassets/features/{id}/topology/neighbors | policy:features:read
 GET /api/geoassets/layer-rules | policy:features:read
 GET /api/geoassets/layers | policy:features:read
+GET /api/geoassets/organizations/{organizationId:guid}/features/{id} | authorize, requirement:RolesAuthorizationRequirement
+GET /api/geoassets/organizations/{organizationId:guid}/features/{id}/descendants | authorize, requirement:RolesAuthorizationRequirement
 GET /api/geoassets/wfs | policy:features:read
 GET /api/geoassets/wms | anonymous
 GET /api/identity/groups | policy:groups:read

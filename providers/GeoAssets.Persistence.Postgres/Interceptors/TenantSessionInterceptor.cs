@@ -3,13 +3,13 @@ using GeoAssets.Core.Interfaces;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 
-namespace GeoAssets.Provider.PostgreSQL.Interceptors;
+namespace GeoAssets.Persistence.Postgres.Interceptors;
 
 /// <summary>
 /// Stamps every opened PostgreSQL connection with the current tenant's organization id as a
 /// session-local setting (<c>app.current_organization_id</c>), which <c>geo_entity</c>'s native
 /// Row-Level Security policy (see the <c>AddGeoEntityRowLevelSecurity</c> migration) reads via
-/// <c>current_setting</c>. This is defense-in-depth underneath <see cref="GeoAssets.Provider.PostgreSQL.Data.GeoAssetsDbContext"/>'s
+/// <c>current_setting</c>. This is defense-in-depth underneath <c>GeoAssets.Provider.PostgreSQL.Data.GeoAssetsDbContext</c>'s
 /// EF Core global query filter: even a raw SQL query or a bug that bypasses the filter still
 /// can't cross tenant boundaries once the database connects as a non-owner role (RLS is a no-op
 /// for the table owner unless/until a follow-up also issues <c>FORCE ROW LEVEL SECURITY</c>).

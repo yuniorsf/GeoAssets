@@ -3,13 +3,15 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
+using GeoAssets.Workflow.Agents.Dispatch;
 
 namespace GeoAssets.Workflow.Agents.Tests.Dispatch;
 
 /// <summary>Minimal in-memory <see cref="IAssetProvider"/> test double for XD01-240's dispatch
 /// tests — same shape as the identically-named fixtures in sibling test projects
-/// (e.g. <c>GeoAssets.Workflow.Tests.TestAssetProvider</c>).</summary>
-internal sealed class TestAssetProvider : IAssetProvider
+/// (e.g. <c>GeoAssets.Workflow.Tests.TestAssetProvider</c>). Also answers
+/// <see cref="IDispatchAssetQuery"/> in process (XD01-386).</summary>
+internal sealed class TestAssetProvider : IAssetProvider, IDispatchAssetQuery
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
 
@@ -116,4 +118,8 @@ internal sealed class TestAssetProvider : IAssetProvider
     public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() => TopoGraph.GetConnectedComponents(_features.Values);
     public bool HasCycles() => TopoGraph.HasCycles(_features.Values);
     public IReadOnlyList<GeoFeature> TopologicalSort() => TopoGraph.TopologicalSort(_features.Values);
+
+    Task<GeoFeature?> IDispatchAssetQuery.GetFeatureAsync(string id, CancellationToken ct) => Task.FromResult(GetById(id));
+    Task<IReadOnlyList<GeoFeature>> IDispatchAssetQuery.GetFeaturesByAssetTypeAsync(string assetTypeId, CancellationToken ct) =>
+        Task.FromResult(GetByAssetType(assetTypeId));
 }

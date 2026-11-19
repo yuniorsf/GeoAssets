@@ -32,12 +32,20 @@ internal static class ScadaTopologyTraverseRestApiExtensions
                 return Results.NotFound($"Switch feature '{request.TrippedSwitchFeatureId}' not found.");
             }
 
+            // No order could be created — the tripped switch itself couldn't be read from the core
+            // (XD01-386). 503 so the OMS retries the alarm instead of treating it as handled.
+            if (result.ServiceOrderId is null)
+                return GeoCoreUnavailableProblem.For(result.DegradedReason ?? "The tripped switch could not be read from the core.");
+
             return Results.Ok(new ScadaTopologyTraverseResponse(
                 result.ServiceOrderId,
                 result.ImpactedFeatureIds,
                 result.CriticalFacilityFeatureIds,
-                result.DispatchedCrewFeatureId));
+                result.DispatchedCrewFeatureId,
+                result.IsDegraded,
+                result.DegradedReason));
         })
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
         .WithName("ScadaTopologyTraverse")
         .WithSummary("Consumes a SCADA breaker-trip alarm: resolves the isolated feeder segment and auto-dispatches an emergency ServiceOrder.");
 
