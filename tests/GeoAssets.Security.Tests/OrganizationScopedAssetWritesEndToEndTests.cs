@@ -363,7 +363,7 @@ public sealed class OrganizationScopedAssetWritesEndToEndTests
         services.AddPostgresOrganizationAssetCatalogs(connectionString);
         services.AddServerOrganizationAssetCatalogs();
         services.AddGeoAssetsDbContextFactory(connectionString);
-        services.AddSingleton<WmsPostGisRenderer>();
+        services.AddPostgresAssetRenderQuery(connectionString);
 
         // The caller and their organization, resolved as Program.cs resolves them.
         services.AddHttpContextAccessor();

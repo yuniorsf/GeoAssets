@@ -1,13 +1,14 @@
-using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
-namespace GeoAssets.Server;
+namespace GeoAssets.Provider.PostgreSQL.Data;
 
 /// <summary>
-/// Design-time factory used exclusively by <c>dotnet ef</c> tooling to generate migrations.
-/// Not referenced at runtime — the production DbContext is created in Program.cs via
-/// <see cref="GeoAssets.Provider.PostgreSQL.PostgresProviderFactory"/>.
+/// Design-time factory used exclusively by <c>dotnet ef</c> tooling to generate migrations — next to the context since
+/// XD01-372, so the Server need not reference this namespace; <c>dotnet ef</c> still runs with the Server as startup
+/// project, whose <c>appsettings.json</c> it reads from the current directory. Not referenced at runtime — the production
+/// DbContext is created by <see cref="PostgresProviderFactory"/>.
 /// </summary>
 internal sealed class GeoAssetsDbContextFactory : IDesignTimeDbContextFactory<GeoAssetsDbContext>
 {

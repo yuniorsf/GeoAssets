@@ -5,6 +5,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
@@ -79,7 +80,7 @@ public class GeoAssetsRestApiExtensionsTests
                     services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
                     services.AddSingleton(provider);
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
-                    services.AddSingleton<WmsPostGisRenderer>();
+                    services.AddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
                 });
                 webHost.Configure(app =>
                 {

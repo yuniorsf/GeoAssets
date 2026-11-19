@@ -5,6 +5,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -1143,7 +1144,7 @@ public sealed class IpBillingServerIntegrationTests
                     services.AddSingleton<IOrganizationGrantRepository, NoOpGrantRepository>();
                     services.AddSingleton(provider);
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NoOpDbContextFactory>();
-                    services.AddSingleton<WmsPostGisRenderer>();
+                    services.AddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
                 });
                 webHost.Configure(app =>
                 {

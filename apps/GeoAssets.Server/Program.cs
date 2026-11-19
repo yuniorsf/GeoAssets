@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
@@ -90,6 +91,9 @@ builder.Services.AddFeatureSelection();
 // The generic IAssetSpatialQuery over IAssetProvider (ADR-001 Part 1.1): what the kernel scans with
 // when no module registers a pushdown; PostgresSpatialModule's PostGIS query, registered later, wins.
 builder.Services.TryAddScoped<IAssetSpatialQuery, AssetProviderSpatialQuery>();
+// The generic IAssetRenderQuery (XD01-372) over the request's IAssetProvider: what WMS renders with when no module
+// registers a pushdown; PostgresSpatialModule's PostGIS render query replaces it.
+builder.Services.TryAddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
 builder.Services.AddOrderTargets();
 builder.Services.AddObservableOrderTargetSelection();
 

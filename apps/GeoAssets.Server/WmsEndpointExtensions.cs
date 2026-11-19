@@ -2,26 +2,27 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using NetTopologySuite.Geometries;
 using SkiaSharp;
-#pragma warning disable CA1416 // SkiaSharp is cross-platform
 
 namespace GeoAssets.Server;
 
 /// <summary>
 /// Maps an OGC WMS 1.1.1 KVP endpoint onto any <see cref="IEndpointRouteBuilder"/>.
 ///
-/// All data access goes through <see cref="WmsPostGisRenderer"/> which opens a
-/// dedicated short-lived <c>GeoAssetsDbContext</c> per request and projects only
-/// the columns the renderer needs (geometry + color).  There is no shared cache,
-/// no topology or custom-attribute JSONB deserialization — just a single
-/// <c>ST_Intersects</c> bbox query straight to PostGIS per tile.
+/// All data access goes through the request's <see cref="IAssetRenderQuery"/> (XD01-372) — the provider's pushdown when
+/// it registers one (PostgreSQL: one <c>ST_Intersects</c> query per tile projecting geometry and style inputs only), the
+/// generic query over the request's <see cref="IAssetProvider"/> otherwise — and the request's catalog for the
+/// capabilities' layers. Both are scoped to the caller's organization: its features plus the shared ones.
 ///
 /// Supported operations:
 /// <list type="bullet">
 ///   <item><term>GetCapabilities</term><description>WMS 1.1.1 service metadata XML.</description></item>
-///   <item><term>GetMap</term><description>PNG raster image rendered with SkiaSharp from PostGIS features.</description></item>
+///   <item><term>GetMap</term><description>PNG raster image rendered with SkiaSharp from the render query's features.</description></item>
 ///   <item><term>GetFeatureInfo</term><description>JSON properties for features at a clicked pixel.</description></item>
 /// </list>
 ///
@@ -50,7 +51,7 @@ public static class WmsEndpointExtensions
         string route = "/wms",
         bool   requireAuthentication = true)
     {
-        var group = routes.MapGet(route, async (HttpRequest req, WmsPostGisRenderer renderer, CancellationToken ct) =>
+        var group = routes.MapGet(route, async (HttpRequest req, IAssetRenderQuery renderer, IAssetProvider catalog, CancellationToken ct) =>
         {
             string Param(string key)
             {
@@ -63,7 +64,7 @@ public static class WmsEndpointExtensions
             {
                 return Param("REQUEST").ToUpperInvariant() switch
                 {
-                    "GETCAPABILITIES" => await HandleGetCapabilitiesAsync(req, renderer, ct).ConfigureAwait(false),
+                    "GETCAPABILITIES" => HandleGetCapabilities(req, catalog),
                     "GETMAP"          => await HandleGetMapAsync(Param, renderer, ct).ConfigureAwait(false),
                     "GETFEATUREINFO"  => await HandleGetFeatureInfoAsync(Param, renderer, ct).ConfigureAwait(false),
                     var op            => Results.BadRequest(
@@ -89,16 +90,15 @@ public static class WmsEndpointExtensions
 
     // ── GetCapabilities ───────────────────────────────────────────────────────
 
-    private static async Task<IResult> HandleGetCapabilitiesAsync(
-        HttpRequest req, WmsPostGisRenderer renderer, CancellationToken ct)
+    private static IResult HandleGetCapabilities(HttpRequest req, IAssetProvider catalog)
     {
         var baseUrl    = $"{req.Scheme}://{req.Host}{req.PathBase}{req.Path}";
-        var assetTypes = await renderer.GetAssetTypesAsync(ct).ConfigureAwait(false);
+        var assetTypes = catalog.GetAssetTypes();
         return Results.Content(BuildCapabilitiesXml(baseUrl, assetTypes), "application/xml; charset=utf-8");
     }
 
     private static string BuildCapabilitiesXml(
-        string wmsUrl, List<AssetTypeInfo> assetTypes)
+        string wmsUrl, IReadOnlyList<AssetType> assetTypes)
     {
         var subLayers = assetTypes.Select(t =>
             new XElement("Layer",
@@ -115,7 +115,7 @@ public static class WmsEndpointExtensions
                 new XElement("Service",
                     new XElement("Name",    "OGC:WMS"),
                     new XElement("Title",   "GeoAssets WMS"),
-                    new XElement("Abstract","OGC WMS 1.1.1 backed by PostGIS"),
+                    new XElement("Abstract","OGC WMS 1.1.1"),
                     new XElement("OnlineResource",
                         new XAttribute(XNamespace.Xmlns + "xlink", "http://www.w3.org/1999/xlink"),
                         new XAttribute("{http://www.w3.org/1999/xlink}href", wmsUrl))),
@@ -163,7 +163,7 @@ public static class WmsEndpointExtensions
     // ── GetMap ────────────────────────────────────────────────────────────────
 
     private static async Task<IResult> HandleGetMapAsync(
-        Func<string, string> param, WmsPostGisRenderer renderer, CancellationToken ct)
+        Func<string, string> param, IAssetRenderQuery renderer, CancellationToken ct)
     {
         if (!TryParseBbox(param("BBOX"), out var minLon, out var minLat, out var maxLon, out var maxLat))
             return Results.BadRequest("Invalid or missing BBOX. Expected: minLon,minLat,maxLon,maxLat");
@@ -181,8 +181,8 @@ public static class WmsEndpointExtensions
             ? layerParam["geoassets:feature:".Length..]
             : null;
 
-        // ── Direct PostGIS query — no cache, only geom + color columns ────────
-        var rows = await renderer.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, assetTypeId, ct).ConfigureAwait(false);
+        var rows = await renderer.GetRenderableAsync(
+            new BoundingBox(minLon, minLat, maxLon, maxLat), new RenderQueryOptions { AssetTypeId = assetTypeId }, ct).ConfigureAwait(false);
 
         var pngBytes = RenderToPng(rows, width, height, minLon, minLat, maxLon, maxLat, transparent);
         return Results.Bytes(pngBytes, "image/png");
@@ -191,7 +191,7 @@ public static class WmsEndpointExtensions
     // ── GetFeatureInfo ────────────────────────────────────────────────────────
 
     private static async Task<IResult> HandleGetFeatureInfoAsync(
-        Func<string, string> param, WmsPostGisRenderer renderer, CancellationToken ct)
+        Func<string, string> param, IAssetRenderQuery renderer, CancellationToken ct)
     {
         if (!TryParseBbox(param("BBOX"), out var minLon, out var minLat, out var maxLon, out var maxLat))
             return Results.BadRequest("Invalid or missing BBOX.");
@@ -207,7 +207,7 @@ public static class WmsEndpointExtensions
         var tolLat   = (maxLat - minLat) * 0.01;
 
         var maxCount = int.TryParse(param("FEATURE_COUNT"), CultureInfo.InvariantCulture, out var fc) ? fc : 1;
-        var rows     = await renderer.GetFeatureInfoAsync(clickLon, clickLat, tolLon, tolLat, maxCount, ct).ConfigureAwait(false);
+        var rows     = await renderer.GetFeatureInfoAsync(BoundingBox.Around(clickLon, clickLat, tolLon, tolLat), maxCount, ct).ConfigureAwait(false);
 
         return Results.Json(new
         {
@@ -225,7 +225,7 @@ public static class WmsEndpointExtensions
     // ── SkiaSharp renderer ────────────────────────────────────────────────────
 
     private static byte[] RenderToPng(
-        List<RenderRow> rows,
+        IReadOnlyList<RenderableFeature> rows,
         int    width,  int    height,
         double minLon, double minLat, double maxLon, double maxLat,
         bool   transparent)
@@ -244,12 +244,12 @@ public static class WmsEndpointExtensions
         static bool IsLinear(string t)    => t is "LineString" or "MultiLineString";
         static bool IsPoint(string t)     => t is "Point" or "MultiPoint";
 
-        foreach (var row in rows.Where(r => IsPolygonal(r.Geom.GeometryType)))
-            DrawGeometry(canvas, row.Geom, SKColor.Parse(row.Color.TrimStart('#')), LonToX, LatToY);
-        foreach (var row in rows.Where(r => IsLinear(r.Geom.GeometryType)))
-            DrawGeometry(canvas, row.Geom, SKColor.Parse(row.Color.TrimStart('#')), LonToX, LatToY);
-        foreach (var row in rows.Where(r => IsPoint(r.Geom.GeometryType)))
-            DrawGeometry(canvas, row.Geom, SKColor.Parse(row.Color.TrimStart('#')), LonToX, LatToY);
+        foreach (var row in rows.Where(r => IsPolygonal(r.Geometry.NtsGeometry.GeometryType)))
+            DrawGeometry(canvas, row.Geometry.NtsGeometry, SKColor.Parse(row.Color.TrimStart('#')), LonToX, LatToY);
+        foreach (var row in rows.Where(r => IsLinear(r.Geometry.NtsGeometry.GeometryType)))
+            DrawGeometry(canvas, row.Geometry.NtsGeometry, SKColor.Parse(row.Color.TrimStart('#')), LonToX, LatToY);
+        foreach (var row in rows.Where(r => IsPoint(r.Geometry.NtsGeometry.GeometryType)))
+            DrawGeometry(canvas, row.Geometry.NtsGeometry, SKColor.Parse(row.Color.TrimStart('#')), LonToX, LatToY);
 
         using var image = SKImage.FromBitmap(bitmap);
         using var data  = image.Encode(SKEncodedImageFormat.Png, 100);

@@ -4,6 +4,7 @@ using System.Security.Claims;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -92,7 +93,7 @@ public class OrgResourceEndpointAuthorizationTests
                     services.AddSingleton<IOrganizationGrantRepository>(new FakeOrganizationGrantRepository(grants ?? []));
                     services.AddSingleton<IAssetProvider>(provider);
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
-                    services.AddSingleton<WmsPostGisRenderer>();
+                    services.AddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
                 });
                 webHost.Configure(app =>
                 {

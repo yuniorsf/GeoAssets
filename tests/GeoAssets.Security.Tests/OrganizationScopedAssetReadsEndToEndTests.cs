@@ -263,7 +263,7 @@ public sealed class OrganizationScopedAssetReadsEndToEndTests
         services.AddPostgresOrganizationAssetCatalogs(connectionString);
         services.AddServerOrganizationAssetCatalogs();
         services.AddGeoAssetsDbContextFactory(connectionString);
-        services.AddSingleton<WmsPostGisRenderer>();
+        services.AddPostgresAssetRenderQuery(connectionString);
 
         // The caller and their organization, resolved as Program.cs resolves them; outside a
         // request (the test arranging the order) the owner's.

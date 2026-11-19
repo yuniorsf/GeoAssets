@@ -1,14 +1,13 @@
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL;
-using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Server.Modules.PostgresSpatial;
 using GeoAssets.Server.Tests.Routing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -26,8 +25,9 @@ public sealed class PostgresSpatialModuleTests
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>(s.Key, s.Value)));
-        builder.Services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
-        builder.Services.AddSingleton<WmsPostGisRenderer>();
+        // The WMS routes resolve both per request; the route inventory only needs them known to the container.
+        builder.Services.AddSingleton<IAssetProvider>(new TestAssetProvider());
+        builder.Services.AddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
         await using var app = builder.Build();
 
         new PostgresSpatialModule().MapEndpoints(app);
