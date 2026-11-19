@@ -13,7 +13,7 @@ namespace GeoAssets.Server.Tests;
 /// rather than a stub. Topology queries delegate to the real <see cref="TopoGraph"/> static
 /// helper (unaffected by the removal), the same way the deleted class did.
 /// </summary>
-internal sealed class TestAssetProvider : IAssetProvider
+internal class TestAssetProvider : IAssetProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
     private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];

@@ -67,10 +67,10 @@ var connectionString = builder.Configuration.GetConnectionString("GeoAssets")
 // IAssetProvider (XD01-295) — the first endpoint on this host to read geo_entity:
 // GeofenceArrivalTransitionGuard.CanArriveAsync needs it to confirm a crew's device-reported GPS
 // position is actually near the order's target asset. Same AddGeoAssetsPostgres +
-// AddWarmedPostgresAssetProviderAsync pair GeoAssets.Server uses for the same reason — see that
-// method's own doc comment for why this must run before builder.Build().
+// AddWarmedPostgresAssetProvider pair — the provider is built, migrated and warmed right after
+// builder.Build() (WarmPostgresAssetProviderAsync below), before the host serves.
 builder.Services.AddGeoAssetsPostgres();
-await builder.Services.AddWarmedPostgresAssetProviderAsync(connectionString).ConfigureAwait(false);
+builder.Services.AddWarmedPostgresAssetProvider(connectionString);
 
 // "Noisy neighbor" backstop (XD01-214) — complements the gateway's per-OrganizationId rate
 // limiting: even a request the gateway let through can't hold a connection/lock open
@@ -351,6 +351,9 @@ builder.Services.AddSingleton<LeaseInvoiceSettlementOrchestrator>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Build, migrate and warm the asset provider before anything reads assets (XD01-173).
+await app.Services.WarmPostgresAssetProviderAsync().ConfigureAwait(false);
 
 app.UseGeoAssetsAuthentication();
 app.UseGeoAssetsObservability();

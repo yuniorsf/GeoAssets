@@ -11,7 +11,6 @@ using GeoAssets.MAUI.Services.Localization;
 using GeoAssets.MAUI.Services.Evidence;
 using GeoAssets.MAUI.Services.FieldWork;
 using GeoAssets.MAUI.Services.Offline;
-using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.Rest;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
@@ -196,7 +195,6 @@ public static class MauiProgram
             sp.GetRequiredService<ILogger<ObservableAssetProvider>>(),
             sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton<FeatureRenderPipeline>();
-        builder.Services.AddGeoAssetsPostgres();
         builder.Services.AddScoped<IStorageService, FileStorageService>();
         builder.Services.AddScoped<INativeFilePicker, MauiNativeFilePicker>();
         builder.Services.Configure<MapInteropOptions>(

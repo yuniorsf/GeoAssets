@@ -21,7 +21,7 @@ public static class PostgresOrganizationCatalogServiceExtensions
     /// <see cref="Guid.Empty"/> or when no <see cref="ITenantContext"/> is registered.
     ///
     /// The singleton <see cref="IAssetProvider"/> already registered (by
-    /// <see cref="PostgresServiceExtensions.AddWarmedPostgresAssetProviderAsync"/>) becomes the shared
+    /// <see cref="PostgresServiceExtensions.AddWarmedPostgresAssetProvider"/>) becomes the shared
     /// catalog: it is moved under <see cref="SharedCatalogKey"/>, still a singleton the container
     /// owns. Each organization's provider uses <paramref name="connectionString"/>, which must be
     /// the shared catalog's database. A <see cref="TimeProvider"/> is added when none is registered.
@@ -38,7 +38,7 @@ public static class PostgresOrganizationCatalogServiceExtensions
         {
             throw new InvalidOperationException(
                 $"{nameof(AddPostgresOrganizationAssetCatalogs)} needs the shared catalog registered first as a singleton {nameof(IAssetProvider)} " +
-                $"(call {nameof(PostgresServiceExtensions.AddWarmedPostgresAssetProviderAsync)} before it).");
+                $"(call {nameof(PostgresServiceExtensions.AddWarmedPostgresAssetProvider)} before it).");
         }
 
         foreach (var descriptor in services.Where(d => d.ServiceType == typeof(IAssetProvider) && !d.IsKeyedService).ToList())

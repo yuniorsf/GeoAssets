@@ -89,7 +89,7 @@ On the client side, boot and persistence are separate concerns. `BootLoaderServi
 
 Map rendering crosses a C#↔JavaScript boundary. `MapContainer.razor` owns the `[JSInvokable]` callbacks (`OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`, `OnViewportChangedFromJs`). `MapInteropService` is the supported C# bridge into Leaflet and delegates to `window.GeoAssets.*` functions in `apps/GeoAssets.Shared/wwwroot/js/geoassets.js`. For viewport refreshes, the map prefers provider methods that return pre-serialized JSON (`GetInBoundsRawJsonAsync` / `GetInBoundsJsonAsync`) to avoid unnecessary WASM-side parse/serialize work.
 
-Provider extensibility has two paths. UI-configurable providers implement `IProviderPlugin` and are collected by `ProviderPluginRegistry` for the boot dialog and connect flow. Infrastructure-backed providers can also expose `IExternalProviderFactory` registrations that produce `IAssetProvider` instances from connection details.
+Provider extensibility goes through `IProviderPlugin`, collected by `ProviderPluginRegistry`: on the client for the boot dialog and connect flow, on `GeoAssets.Server` for the `ICatalogPool` that builds the named catalogs of `GeoAssets:Providers` at startup (e.g. `PostgresProviderPlugin`, XD01-371).
 
 The command/plugin subsystem is separate from the map/provider flow. `GeoPluginContainer` composes built-in command handlers plus external assemblies matching `GeoAssets.Plugin.*.dll`. `GeoCommandPluginScaffolder` takes a `GeoCommandPluginSpec` and deterministically generates a compilable plugin project. The agent orchestration abstractions that can produce those specs live in `core/GeoAssets.Core/Agents`, while Anthropic-backed examples stay under `examples/MultiAgent/`.
 
@@ -101,7 +101,7 @@ The PostgreSQL provider is server-oriented. `AddGeoAssetsPostgres()` registers t
 - In the geometry model, coordinate arrays are the serialized source of truth. NetTopologySuite geometries are derived from those arrays; do not flip the source of truth to NTS objects.
 - Repository/provider events are architectural, not incidental. If you change providers, decorators, or the active-provider proxy, preserve event propagation semantics.
 - Most UI behavior should go through the active `IAssetProvider`, not a concrete provider implementation.
-- Provider discovery is registration-driven. Wire new providers through `IProviderPlugin`, `IExternalProviderFactory`, and the existing registry/factory flow instead of hard-coding UI branches.
+- Provider discovery is registration-driven. Wire new providers through `IProviderPlugin` and the existing registry/factory flow instead of hard-coding UI branches.
 - Only `apps/GeoAssets.Shared/wwwroot/js/geoassets.js` is loaded by the web and MAUI hosts. `mapInterop.js` and `drawInterop.js` are legacy drafts and should not be used as integration points.
 - `apps/GeoAssets.Shared` is the shared UI contract for WebAssembly and MAUI. Prefer changes there over duplicating behavior in host projects.
 - Razor component communication follows the existing pattern: data flows down via `[Parameter]`, actions flow up via `EventCallback<T>`. Every Razor component/page in `GeoAssets.Shared`, `GeoAssets.Web`, and `GeoAssets.MAUI` ships as a markup-only `.razor` file plus a `.razor.cs` code-behind partial class (except `apps/GeoAssets.MAUI/Pages/MauiLogin.razor`; see `CLAUDE.md` § Conventions).

@@ -460,12 +460,13 @@ public sealed class PostgresAssetSpatialQueryTests(PostgresContainerFixture fixt
         services.AddSingleton<Microsoft.Extensions.Logging.ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(TimeProvider.System);
         services.AddGeoAssetsPostgres();
-        await services.AddWarmedPostgresAssetProviderAsync(fixture.ConnectionString);
+        services.AddWarmedPostgresAssetProvider(fixture.ConnectionString);
         services.AddPostgresAssetSpatialQuery(fixture.ConnectionString);
         services.AddScoped<ITenantContext>(_ => new FakeTenantContext(OrgB));
 
         await using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        await provider.WarmPostgresAssetProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var sut = scope.ServiceProvider.GetRequiredService<IAssetSpatialQuery>();
 
@@ -497,7 +498,7 @@ public sealed class PostgresAssetSpatialQueryTests(PostgresContainerFixture fixt
         services.AddSingleton(TimeProvider.System);
 
         services.AddGeoAssetsPostgres();
-        await services.AddWarmedPostgresAssetProviderAsync(fixture.ConnectionString);
+        services.AddWarmedPostgresAssetProvider(fixture.ConnectionString);
         services.AddGeoAssetsDbContextFactory(fixture.ConnectionString);
 
         services.Should().NotContain(d => d.ServiceType == typeof(IAssetSpatialQuery));

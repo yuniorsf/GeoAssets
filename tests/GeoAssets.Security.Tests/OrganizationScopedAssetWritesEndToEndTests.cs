@@ -359,7 +359,7 @@ public sealed class OrganizationScopedAssetWritesEndToEndTests
         // Program.cs's catalog registrations.
         services.AddSingleton(TimeProvider.System);
         services.AddGeoAssetsPostgres();
-        await services.AddWarmedPostgresAssetProviderAsync(connectionString);
+        services.AddWarmedPostgresAssetProvider(connectionString);
         services.AddServerOrganizationAssetCatalogs(connectionString);
         services.AddGeoAssetsDbContextFactory(connectionString);
         services.AddSingleton<WmsPostGisRenderer>();
@@ -378,6 +378,7 @@ public sealed class OrganizationScopedAssetWritesEndToEndTests
         services.AddSingleton<IOrganizationGrantRepository, NoGrants>();
 
         var web = builder.Build();
+        await web.Services.WarmPostgresAssetProviderAsync();
         web.UseGeoAssetsAuthentication();
         web.UseOrganizationAssetCatalogs();
         web.MapGeoAssetsApi();

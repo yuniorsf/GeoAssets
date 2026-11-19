@@ -727,9 +727,11 @@ public class ValidatingAssetProviderTests
     private sealed class AsyncDisposableStubProvider : StubAssetProvider, IAsyncDisposable
     {
         public bool Disposed { get; private set; }
+        public int DisposeCount { get; private set; }
         public ValueTask DisposeAsync()
         {
             Disposed = true;
+            DisposeCount++;
             return ValueTask.CompletedTask;
         }
     }
@@ -738,6 +740,18 @@ public class ValidatingAssetProviderTests
     {
         public bool Disposed { get; private set; }
         public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public async Task DisposeAsync_CalledTwice_DisposesTheInnerProviderOnce()
+    {
+        var inner = new AsyncDisposableStubProvider();
+        var sut = new ValidatingAssetProvider(inner);
+
+        await sut.DisposeAsync();
+        await sut.DisposeAsync();
+
+        inner.DisposeCount.Should().Be(1);
     }
 
     [Fact]

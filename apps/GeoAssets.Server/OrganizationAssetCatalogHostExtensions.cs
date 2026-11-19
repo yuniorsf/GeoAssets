@@ -14,9 +14,9 @@ public static partial class OrganizationAssetCatalogHostExtensions
 {
     /// <summary>
     /// <see cref="PostgresOrganizationCatalogServiceExtensions.AddPostgresOrganizationAssetCatalogs"/>
-    /// on <paramref name="connectionString"/>. Call after
-    /// <see cref="PostgresServiceExtensions.AddWarmedPostgresAssetProviderAsync"/>, whose provider
-    /// becomes the shared catalog.
+    /// on <paramref name="connectionString"/>. Call after the host's singleton <see cref="IAssetProvider"/> is
+    /// registered — the catalog pool's default catalog (<c>AddServerCatalogPool</c>, XD01-371) — which becomes the
+    /// shared catalog.
     /// </summary>
     public static IServiceCollection AddServerOrganizationAssetCatalogs(this IServiceCollection services, string connectionString) =>
         services.AddPostgresOrganizationAssetCatalogs(connectionString);

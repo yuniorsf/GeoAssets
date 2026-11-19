@@ -693,11 +693,12 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(TimeProvider.System);
         services.AddGeoAssetsPostgres();
-        await services.AddWarmedPostgresAssetProviderAsync(fixture.ConnectionString);
+        services.AddWarmedPostgresAssetProvider(fixture.ConnectionString);
         services.AddPostgresOrganizationAssetCatalogs(fixture.ConnectionString);
         var tenant = new SwitchableTenant();
         services.AddScoped<ITenantContext>(_ => tenant);
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        await provider.WarmPostgresAssetProviderAsync();
 
         services.Should().ContainSingle(d => d.ServiceType == typeof(IAssetProvider) && !d.IsKeyedService)
             .Which.Lifetime.Should().Be(ServiceLifetime.Scoped);

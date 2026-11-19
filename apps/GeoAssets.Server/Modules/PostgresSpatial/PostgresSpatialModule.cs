@@ -8,13 +8,13 @@ using Microsoft.EntityFrameworkCore;
 namespace GeoAssets.Server.Modules.PostgresSpatial;
 
 /// <summary>
-/// The PostgreSQL/PostGIS spatial plane as a module of this host (XD01-359, ADR-001 Phase 1): every Postgres-concrete
-/// registration <c>Program.cs</c> made by hand — the warmed asset provider, organization-scoped catalogs and their
-/// middleware, the PostGIS spatial query, the <see cref="GeoAssetsDbContext"/> factory, the applied-batch store and the
-/// WMS renderer with both WMS routes — moved unchanged and in the same order. Without it the kernel boots on whatever
-/// <see cref="IAssetProvider"/> the host registers (invariant I5). Phase 4 replaces it with a provider plugin.
+/// The PostgreSQL/PostGIS spatial plane as a module of this host (XD01-359, ADR-001 Phase 1): the <c>"postgres"</c>
+/// provider plugin the kernel's catalog pool builds the asset store with (XD01-371), organization-scoped catalogs and
+/// their middleware over the pool's default catalog, the PostGIS spatial query, the <see cref="GeoAssetsDbContext"/>
+/// factory, the applied-batch store and the WMS renderer with both WMS routes. Without it the kernel boots on whatever
+/// <see cref="IAssetProvider"/> the host registers (invariant I5).
 /// </summary>
-public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleServiceInitializer, IModuleMiddleware
+public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
 {
     public const string ModuleId = "postgres-spatial";
 
@@ -26,24 +26,17 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleServiceInit
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        services.AddGeoAssetsPostgres();
-    }
-
-    public async Task ConfigureServicesAsync(IServiceCollection services, IConfiguration configuration, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
         var connectionString = configuration.GetConnectionString("GeoAssets")
             ?? throw new InvalidOperationException($"The '{ModuleId}' module needs the 'GeoAssets' connection string.");
 
-        // Pre-warms the IAssetProvider singleton before the host runs — otherwise PostgresAssetProvider's ISyncProvider
-        // marker (XD01-161) would be dishonest: the first GetAll()/GetById() call would block on LoadCacheFromDb (XD01-173).
-        await services.AddWarmedPostgresAssetProviderAsync(connectionString, cancellationToken).ConfigureAwait(false);
+        // The "postgres" provider plugin (XD01-371): the kernel's catalog pool builds the asset store with it, migrated
+        // and pre-warmed before the host serves — PostgresAssetProvider's ISyncProvider marker stays honest (XD01-173).
+        services.AddGeoAssetsPostgres();
 
-        // Organization-scoped asset reads (XD01-338): the warmed provider is the shared catalog, each request's
-        // IAssetProvider is the caller's organization's view.
+        // Organization-scoped asset reads (XD01-338): the pool's default catalog (the host's singleton IAssetProvider)
+        // is the shared catalog, each request's IAssetProvider is the caller's organization's view.
         services.AddServerOrganizationAssetCatalogs(connectionString);
 
         // IAssetSpatialQuery (XD01-307): area/attribute selection pushed down to PostGIS, scoped to the request's tenant.

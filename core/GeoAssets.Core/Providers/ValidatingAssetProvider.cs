@@ -26,11 +26,18 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
 {
     IAssetProvider IProviderDecorator.Inner => inner;
 
+    private int _disposed;
+
     /// <summary>Forwards disposal to <paramref name="inner"/> when it owns disposable resources
     /// (e.g. <c>PostgresAssetProvider</c>'s <c>DbContext</c>) — without this, wrapping a
-    /// disposable provider would silently stop it from being disposed by the DI container.</summary>
+    /// disposable provider would silently stop it from being disposed by the DI container.
+    /// Only the first call forwards: a catalog of the server's catalog pool is disposed both by the
+    /// pool and by the container that handed it out as the request's <see cref="IAssetProvider"/>
+    /// (XD01-371), and <paramref name="inner"/> is released once.</summary>
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
         switch (inner)
         {
             case IAsyncDisposable asyncDisposable: await asyncDisposable.DisposeAsync().ConfigureAwait(false); break;

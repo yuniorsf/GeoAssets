@@ -10,9 +10,10 @@ using Xunit;
 namespace GeoAssets.Provider.PostgreSQL.Tests;
 
 /// <summary>
-/// Exercises <see cref="PostgresServiceExtensions.AddWarmedPostgresAssetProviderAsync"/> — the
-/// exact method <c>GeoAssets.Server/Program.cs</c> calls to pre-warm its <c>IAssetProvider</c>
-/// singleton before <c>app.Run()</c> (XD01-173), so <c>PostgresAssetProvider</c>'s
+/// Exercises <see cref="PostgresServiceExtensions.AddWarmedPostgresAssetProvider"/> and
+/// <see cref="PostgresServiceExtensions.WarmPostgresAssetProviderAsync"/> — the pair
+/// <c>GeoAssets.FieldService.Server/Program.cs</c> uses to pre-warm its <c>IAssetProvider</c>
+/// singleton before <c>app.Run()</c> (XD01-173, XD01-371), so <c>PostgresAssetProvider</c>'s
 /// <see cref="ISyncProvider"/> marker (XD01-161) is actually honest for that deployment. Calls
 /// the real registration method against a plain <see cref="ServiceCollection"/>, not a
 /// reimplementation of its logic — would fail if the method silently fell back to the
@@ -49,7 +50,7 @@ public sealed class PostgresProviderDIWarmupTests(PostgresContainerFixture fixtu
     }
 
     [Fact]
-    public async Task AddWarmedPostgresAssetProviderAsync_RegistersProvider_AlreadyWarmedBeforeFirstGetAll()
+    public async Task AddWarmedPostgresAssetProvider_RegistersProvider_AlreadyWarmedBeforeFirstGetAll()
     {
         await ClearAsync();
         var loggerFactory = new CapturingLoggerFactory();
@@ -59,9 +60,10 @@ public sealed class PostgresProviderDIWarmupTests(PostgresContainerFixture fixtu
         services.AddSingleton<ILoggerFactory>(loggerFactory);
         services.AddSingleton(TimeProvider.System);
         services.AddGeoAssetsPostgres();
-        await services.AddWarmedPostgresAssetProviderAsync(fixture.ConnectionString);
+        services.AddWarmedPostgresAssetProvider(fixture.ConnectionString);
 
         await using var provider = services.BuildServiceProvider();
+        await provider.WarmPostgresAssetProviderAsync();
         var assetProvider = provider.GetRequiredService<IAssetProvider>();
         var result = assetProvider.GetAll();
 
@@ -71,16 +73,17 @@ public sealed class PostgresProviderDIWarmupTests(PostgresContainerFixture fixtu
     }
 
     [Fact]
-    public async Task AddWarmedPostgresAssetProviderAsync_RegistersProvider_WrappedInValidatingAssetProvider()
+    public async Task AddWarmedPostgresAssetProvider_RegistersProvider_WrappedInValidatingAssetProvider()
     {
         await ClearAsync();
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(new CapturingLoggerFactory());
         services.AddSingleton(TimeProvider.System);
         services.AddGeoAssetsPostgres();
-        await services.AddWarmedPostgresAssetProviderAsync(fixture.ConnectionString);
+        services.AddWarmedPostgresAssetProvider(fixture.ConnectionString);
 
         await using var provider = services.BuildServiceProvider();
+        await provider.WarmPostgresAssetProviderAsync();
         var assetProvider = provider.GetRequiredService<IAssetProvider>();
 
         // Same validation wrapper Program.cs applied directly before this ticket.

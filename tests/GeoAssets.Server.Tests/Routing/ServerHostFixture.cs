@@ -1,12 +1,15 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Projects.Persistence;
+using GeoAssets.Server.Catalogs;
+using GeoAssets.Server.Tests.Catalogs;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
 namespace GeoAssets.Server.Tests.Routing;
@@ -28,6 +31,7 @@ internal static class ServerHostFixture
     private static WebApplicationFactory<HttpTenantContext>? _factory;
     private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
+    private static WebApplicationFactory<HttpTenantContext>? _secondCatalogFactory;
 
     public static async Task<IServiceProvider> GetServicesAsync()
     {
@@ -74,7 +78,28 @@ internal static class ServerHostFixture
         {
             _kernelOnlyFactory ??= CreateFactory(
                 await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [0, 1, 2], kernelTestDoubles: true);
+            _ = _kernelOnlyFactory.Services; // start the host inside the lock: every host seeds the same database on startup
             return _kernelOnlyFactory;
+        }
+        finally
+        {
+            StartLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// The same host on the same database with a second catalog, <c>secondary</c>, built by a test-only
+    /// <c>IProviderPlugin</c> (XD01-371): a catalog addressable by id next to the Postgres <c>primary</c>.
+    /// </summary>
+    public static async Task<WebApplicationFactory<HttpTenantContext>> GetSecondCatalogFactoryAsync()
+    {
+        await StartLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _secondCatalogFactory ??= CreateFactory(
+                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [], secondCatalogPlugin: true);
+            _ = _secondCatalogFactory.Services; // start the host inside the lock: every host seeds the same database on startup
+            return _secondCatalogFactory;
         }
         finally
         {
@@ -86,7 +111,7 @@ internal static class ServerHostFixture
         _connectionString ??= await StartDatabaseAsync().ConfigureAwait(false);
 
     private static WebApplicationFactory<HttpTenantContext> CreateFactory(
-        string connectionString, int[] blankedModuleIndexes, bool kernelTestDoubles = false) =>
+        string connectionString, int[] blankedModuleIndexes, bool kernelTestDoubles = false, bool secondCatalogPlugin = false) =>
         new WebApplicationFactory<HttpTenantContext>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Testing");
@@ -94,6 +119,13 @@ internal static class ServerHostFixture
             foreach (var index in blankedModuleIndexes)
             {
                 host.UseSetting($"GeoAssets:Modules:{index}", "");
+            }
+
+            if (secondCatalogPlugin)
+            {
+                host.UseSetting($"{CatalogConfiguration.ProvidersKey}:1:Id", "secondary");
+                host.UseSetting($"{CatalogConfiguration.ProvidersKey}:1:Plugin", TestProviderPlugin.DefaultId);
+                host.ConfigureTestServices(services => services.AddSingleton<IProviderPlugin>(new TestProviderPlugin()));
             }
 
             if (kernelTestDoubles)

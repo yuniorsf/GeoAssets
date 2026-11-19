@@ -17,9 +17,6 @@ public static class RestServiceExtensions
     {
         services.AddHttpClient();
         services.AddSingleton<RestProviderFactory>();
-        // Keep legacy factory registration for any code that still resolves IExternalProviderFactory
-        services.AddSingleton<IExternalProviderFactory>(
-            sp => sp.GetRequiredService<RestProviderFactory>());
         // Plugin registration — discovered by ProviderPluginRegistry and the boot/pool UI
         services.AddSingleton<IProviderPlugin, RestProviderPlugin>();
         return services;

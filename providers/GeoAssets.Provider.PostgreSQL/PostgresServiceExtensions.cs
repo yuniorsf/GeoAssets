@@ -3,71 +3,54 @@ using GeoAssets.Core.Providers;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.Provider.PostgreSQL;
 
 public static class PostgresServiceExtensions
 {
     /// <summary>
-    /// Registers the PostgreSQL repository factory as both
-    /// <see cref="IPostgresProviderFactory"/> and <see cref="IExternalProviderFactory"/>
-    /// so the pool panel discovers it automatically.
-    ///
-    /// Also registers <see cref="IDbContextFactory{GeoAssetsDbContext}"/> so that
-    /// services requiring direct, short-lived DB contexts per request (e.g. the WMS
-    /// renderer) can create them safely from DI.
+    /// Registers the PostgreSQL repository factory (<see cref="PostgresProviderFactory"/>, also as
+    /// <see cref="IPostgresProviderFactory"/>) and <see cref="PostgresProviderPlugin"/> as an
+    /// <see cref="IProviderPlugin"/>, so a server's catalog pool can build catalogs with plugin
+    /// <c>"postgres"</c> (XD01-371). For direct, short-lived DB contexts (e.g. the WMS renderer) see
+    /// <see cref="AddGeoAssetsDbContextFactory"/>.
     /// </summary>
     public static IServiceCollection AddGeoAssetsPostgres(this IServiceCollection services)
     {
         services.AddSingleton<PostgresProviderFactory>();
         services.AddSingleton<IPostgresProviderFactory>(sp => sp.GetRequiredService<PostgresProviderFactory>());
-        services.AddSingleton<IExternalProviderFactory>(sp => sp.GetRequiredService<PostgresProviderFactory>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IProviderPlugin, PostgresProviderPlugin>());
         return services;
     }
 
     /// <summary>
-    /// Registers a fully pre-warmed <see cref="IAssetProvider"/> singleton (wrapped in
-    /// <see cref="ValidatingAssetProvider"/>) backed by PostgreSQL, so <c>PostgresAssetProvider</c>'s
-    /// <see cref="ISyncProvider"/> marker is actually honest for the caller's deployment — no
-    /// request can trigger <c>PostgresAssetProvider.LoadCacheFromDb</c>'s blocking fallback
-    /// (XD01-173).
-    ///
-    /// Must be called after <see cref="AddGeoAssetsPostgres"/> and after registering a
-    /// <see cref="TimeProvider"/>, since it needs <see cref="PostgresProviderFactory"/>
-    /// resolvable right away: <paramref name="services"/> isn't resolvable as a container until
-    /// the caller's own host builder returns from <c>Build()</c>, but this registration needs
-    /// the already-warmed instance at registration time — so it builds a throwaway interim
-    /// container from the registrations made so far to resolve the factory and await
-    /// <see cref="PostgresProviderFactory.CreateAsync"/> before registering the real singleton.
-    /// That interim container is never validated (<c>BuildServiceProvider()</c>'s own
-    /// <c>ServiceProviderOptions</c> default to <c>ValidateOnBuild=false</c>/<c>ValidateScopes=false</c>,
-    /// independent of whatever the caller's real <c>Build()</c> applies later for the full,
-    /// by-then-complete registration set), so it can't fail on registrations that land after
-    /// this call.
+    /// Registers a pre-warmed <see cref="IAssetProvider"/> singleton (wrapped in <see cref="ValidatingAssetProvider"/>)
+    /// backed by PostgreSQL, so <c>PostgresAssetProvider</c>'s <see cref="ISyncProvider"/> marker is honest — no request
+    /// can trigger <c>PostgresAssetProvider.LoadCacheFromDb</c>'s blocking fallback (XD01-173). The provider is built,
+    /// migrated and warmed by <see cref="WarmPostgresAssetProviderAsync"/>, which the host awaits right after building
+    /// its service provider and before it serves; resolving <see cref="IAssetProvider"/> earlier throws. Needs
+    /// <see cref="AddGeoAssetsPostgres"/>, an <see cref="Microsoft.Extensions.Logging.ILoggerFactory"/> and a
+    /// <see cref="TimeProvider"/> registered.
     /// </summary>
-    public static async Task<IServiceCollection> AddWarmedPostgresAssetProviderAsync(
-        this IServiceCollection services, string connectionString, CancellationToken ct = default)
+    public static IServiceCollection AddWarmedPostgresAssetProvider(this IServiceCollection services, string connectionString)
     {
-#pragma warning disable ASP0000 // deliberate — see doc comment above
-        var interim = services.BuildServiceProvider();
-#pragma warning restore ASP0000
-        try
-        {
-            var warmed = await interim
-                .GetRequiredService<PostgresProviderFactory>()
-                .CreateAsync(connectionString, ct)
-                .ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-            // Registered via a factory (not a pre-built instance) so the DI container takes
-            // ownership and disposes it — a singleton instance handed to AddSingleton(instance)
-            // is never disposed by the container.
-            services.AddSingleton<IAssetProvider>(_ => new ValidatingAssetProvider(warmed));
-            return services;
-        }
-        finally
-        {
-            await interim.DisposeAsync().ConfigureAwait(false);
-        }
+        services.AddSingleton(sp => new WarmedPostgresAssetProvider(sp.GetRequiredService<PostgresProviderFactory>(), connectionString));
+        services.AddSingleton<IAssetProvider>(sp => sp.GetRequiredService<WarmedPostgresAssetProvider>().Provider);
+        return services;
+    }
+
+    /// <summary>
+    /// Builds, migrates and warms the provider <see cref="AddWarmedPostgresAssetProvider"/> registered. Call once, right
+    /// after building the service provider and before anything reads assets; later calls do nothing.
+    /// </summary>
+    public static Task WarmPostgresAssetProviderAsync(this IServiceProvider services, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.GetRequiredService<WarmedPostgresAssetProvider>().WarmAsync(ct);
     }
 
     /// <summary>
