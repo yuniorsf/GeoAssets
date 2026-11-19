@@ -118,6 +118,7 @@ PUT /api/identity/organizations/{id} | policy:organizations:edit
 PUT /api/identity/roles/{id} | policy:roles:edit
 PUT /api/identity/userclaims/{claimId} | none
 PUT /api/identity/users/{id} | policy:users:edit
+PUT /api/identity/verticals/{verticalId}/permissions | authorize, requirement:RolesAuthorizationRequirement
 PUT /api/projects/{id}/asset-types | policy:projects:read
 PUT /api/projects/{id}/layers | policy:projects:read
 PUT /api/projects/{id}/name | policy:projects:rename

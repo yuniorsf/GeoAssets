@@ -1,3 +1,4 @@
+using GeoAssets.Identity.Authorization.Modules;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Identity.Authorization.EFCore.Repositories;
@@ -57,7 +58,7 @@ public static class GeoIdentityEFCoreServiceExtensions
     }
 
     /// <summary>
-    /// Seeds the canonical roles/permissions/policies into <see cref="GeoIdentityDbContext"/>
+    /// Seeds the canonical roles/permissions/policies, plus every registered <see cref="IModulePermissionContributor"/>'s, into <see cref="GeoIdentityDbContext"/>
     /// (see <see cref="GeoIdentitySeeder"/>) — idempotent, safe to call on every startup.
     ///
     /// Call once after <c>host.Build()</c>:
@@ -73,6 +74,8 @@ public static class GeoIdentityEFCoreServiceExtensions
         using var scope        = services.CreateScope();
         var db                 = scope.ServiceProvider.GetRequiredService<GeoIdentityDbContext>();
         var timeProvider       = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-        await GeoIdentitySeeder.SeedAsync(db, timeProvider, ct).ConfigureAwait(false);
+        // XD01-377: and every enabled module's permissions and role bundles.
+        var contributors       = scope.ServiceProvider.GetServices<IModulePermissionContributor>();
+        await GeoIdentitySeeder.SeedAsync(db, timeProvider, contributors, ct).ConfigureAwait(false);
     }
 }

@@ -1,5 +1,9 @@
 using FluentAssertions;
+using GeoAssets.Identity.Authorization.EFCore;
+using GeoAssets.Identity.Authorization.Modules;
 using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.Server.Tests.Routing;
+using Microsoft.EntityFrameworkCore;
 using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application;
 using GeoAssets.NeutralOperator.Application.SharedUse;
@@ -103,5 +107,48 @@ public sealed class NeutralOperatorModuleTests
         var act = () => new NeutralOperatorModule().ConfigureServices(new ServiceCollection(), ConfigurationWithConnectionString());
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*OrderTypeRegistry*");
+    }
+
+    [Fact]
+    public void ConfigureServices_RegistersTheNeutralOperatorPermissionContributor()
+    {
+        var services = new ServiceCollection();
+        services.AddOrderTypeRegistry();
+
+        new NeutralOperatorModule().ConfigureServices(services, ConfigurationWithConnectionString());
+
+        services.Should().ContainSingle(d => d.ServiceType == typeof(IModulePermissionContributor))
+            .Which.ImplementationType.Should().Be<NeutralOperatorPermissionContributor>();
+    }
+
+    [Fact]
+    public void NeutralOperatorPermissionContributor_PublishesExactlyTheIspTenantBundle_AndNoPermissions()
+    {
+        var contributor = new NeutralOperatorPermissionContributor();
+
+        contributor.VerticalId.Should().Be("neutral-operator");
+        contributor.Permissions.Should().BeEmpty();
+        NeutralOperatorPermissionContributor.IspTenantRoleId.Should().Be(new Guid("10000000-0000-0000-0000-000000000005"));
+        contributor.RoleBundles.Should().ContainSingle().Which.Should().BeEquivalentTo(new RoleBundleContribution(
+            new Guid("10000000-0000-0000-0000-000000000005"),
+            "IspTenant",
+            "Inquilino ISP: solicitudes y disputas",
+            ["serviceorders:read", "serviceorders:create"]));
+        new ModulePermissionSet { RoleBundles = [.. contributor.RoleBundles] }.FindProblem().Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Host_AfterStartup_SeededTheIspTenantRoleWithItsTwoGrants()
+    {
+        var services = await ServerHostFixture.GetServicesAsync();
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<GeoIdentityDbContext>();
+
+        (await db.Roles.AnyAsync(r => r.Id == NeutralOperatorPermissionContributor.IspTenantRoleId && r.Name == "IspTenant")).Should().BeTrue();
+        var codes = await db.RolePermissions
+            .Where(rp => rp.RoleId == NeutralOperatorPermissionContributor.IspTenantRoleId)
+            .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .ToListAsync();
+        codes.Should().BeEquivalentTo(["serviceorders:read", "serviceorders:create"]);
     }
 }

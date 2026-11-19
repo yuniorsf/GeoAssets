@@ -1,3 +1,5 @@
+using GeoAssets.Identity.Authorization.EFCore;
+using GeoAssets.Identity.Authorization.Modules;
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.Models;
@@ -45,6 +47,7 @@ public static class IdentityRestApiExtensions
         MapInvitationsApi(routes, prefix);
         MapUserClaimsApi(routes, prefix);
         MapOrganizationGrantSyncApi(routes, prefix);
+        MapModulePermissionsApi(routes, prefix);
 
         return routes;
     }
@@ -683,4 +686,23 @@ public static class IdentityRestApiExtensions
         new(i.Id, i.Email, i.ExternalObjectId, i.InvitedByUserId, i.InvitedAt, i.RedeemedAt, i.Status);
 
     private static UserClaimDto ToDto(UserClaim c) => new(c.Id, c.Type, c.Value);
+
+    /// <summary>
+    /// <c>PUT {prefix}/verticals/{verticalId}/permissions</c> (XD01-377): an out-of-process vertical publishes its
+    /// permissions and role bundles — the same idempotent upsert the in-process modules' <c>IModulePermissionContributor</c>s
+    /// get at startup. Only a trusted service principal (the <c>GeoAssets.ServiceCaller</c> app role) may call it. Answers
+    /// 400 for an invalid set, else 200 <c>{ verticalId, changed }</c>; it never deletes a permission or a grant.
+    /// </summary>
+    private static void MapModulePermissionsApi(IEndpointRouteBuilder routes, string prefix)
+    {
+        routes.MapPut($"{prefix}/verticals/{{verticalId}}/permissions", async (
+            string verticalId, ModulePermissionSet? set, GeoIdentityDbContext db, CancellationToken ct) =>
+        {
+            if (set is null) return Results.BadRequest(new { error = "The permission set is missing." });
+            if (set.FindProblem() is { } problem) return Results.BadRequest(new { error = problem });
+
+            var changed = await GeoAssets.Identity.GeoIdentitySeeder.ApplyModulePermissionsAsync(db, set, ct).ConfigureAwait(false);
+            return Results.Ok(new { verticalId, changed });
+        }).RequireAuthorization(policy => policy.RequireRole(GeoAuthorizationHandler.ServiceCallerAppRole));
+    }
 }

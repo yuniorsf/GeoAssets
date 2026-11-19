@@ -1,3 +1,4 @@
+using GeoAssets.Identity.Authorization.Modules;
 using GeoAssets.Hosting.Abstractions;
 
 namespace GeoAssets.Server.Modules.IpBillingBridge;
@@ -20,6 +21,9 @@ public sealed class IpBillingBridgeModule : IGeoAssetsModule
         // MunicipioProvisioningService (XD01-177) — grant provisioning for município↔Prefeitura authorization, over the
         // kernel's IOrganizationGrantRepository.
         services.AddScoped<MunicipioProvisioningService>();
+
+        // The vertical's permissions, seeded by the kernel's identity seeding (XD01-377).
+        services.AddSingleton<IModulePermissionContributor, IpBillingPermissionContributor>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints) => endpoints.MapMunicipioGrantsApi();

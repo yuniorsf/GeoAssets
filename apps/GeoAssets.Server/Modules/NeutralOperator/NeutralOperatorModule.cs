@@ -1,3 +1,4 @@
+using GeoAssets.Identity.Authorization.Modules;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Registry;
@@ -40,6 +41,9 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         // Feature actions as data (XD01-369): on any feature whose asset type is an occupiable support, "Create shared-use
         // order" — published to the kernel's order-type registry exactly as a remote vertical would PUT it.
         services.AddOrderTypeDescriptors(ModuleId, [SharedUseDescriptor]);
+
+        // The ISP tenant role bundle, seeded by the kernel's identity seeding (XD01-377).
+        services.AddSingleton<IModulePermissionContributor, NeutralOperatorPermissionContributor>();
 
         // Staged occupancy changes on an order's targets (XD01-315); a target is a pole when its asset type carries the
         // occupiable-support role (XD01-368) — see OrderOccupancyHostExtensions.

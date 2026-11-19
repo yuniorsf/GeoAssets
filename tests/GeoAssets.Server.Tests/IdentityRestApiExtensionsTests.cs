@@ -4,6 +4,7 @@ using System.Security.Claims;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -74,6 +76,9 @@ public class IdentityRestApiExtensionsTests
                     services.AddSingleton<IGroupRepository>(new NeverCalledGroupRepository());
                     // Same reasoning — POST /organizations now also seeds a default Project (XD01-144).
                     services.AddSingleton<IProjectRepository>(new NeverCalledProjectRepository());
+                    // XD01-377: PUT /verticals/{verticalId}/permissions takes the identity DbContext — must be resolvable.
+                    services.AddSingleton(new GeoIdentityDbContext(
+                        new DbContextOptionsBuilder<GeoIdentityDbContext>().UseSqlite("Data Source=:memory:").Options));
                     // Same reasoning — the XD01-177 municipio-grants routes are in the same group.
                     services.AddSingleton<IOrganizationGrantRepository>(new NeverCalledOrganizationGrantRepository());
                     services.AddScoped<MunicipioProvisioningService>();
@@ -673,6 +678,10 @@ public class IdentityRestApiExtensionsTests
                     // XD01-144: POST /organizations now also seeds a default Project — must be
                     // resolvable even for tests that never hit that endpoint.
                     services.AddSingleton<IProjectRepository>(projectRepo ?? new NeverCalledProjectRepository());
+                    // XD01-377: PUT /verticals/{verticalId}/permissions takes the identity DbContext — must be resolvable
+                    // even for tests that never hit that endpoint (a never-opened in-memory SQLite context).
+                    services.AddSingleton(new GeoIdentityDbContext(
+                        new DbContextOptionsBuilder<GeoIdentityDbContext>().UseSqlite("Data Source=:memory:").Options));
                 });
                 webHost.Configure(app =>
                 {

@@ -1,5 +1,6 @@
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Identity.Authorization.Modules;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Identity;
@@ -28,19 +29,66 @@ public static class GeoIdentitySeeder
     public static readonly Guid SupervisorRoleId = new("10000000-0000-0000-0000-000000000002");
     public static readonly Guid TechnicianRoleId = new("10000000-0000-0000-0000-000000000003");
     public static readonly Guid ReadOnlyRoleId   = new("10000000-0000-0000-0000-000000000004");
-    public static readonly Guid IspTenantRoleId  = new("10000000-0000-0000-0000-000000000005");
 
+    public static Task SeedAsync(GeoIdentityDbContext db, TimeProvider timeProvider, CancellationToken ct = default) =>
+        SeedAsync(db, timeProvider, [], ct);
+
+    /// <summary>
+    /// Seeds the kernel's organizations, permissions, roles and policies, then every module's permissions and role
+    /// bundles (<see cref="IModulePermissionContributor"/>, XD01-377) — idempotent: seeding the same contributors again
+    /// changes nothing, and a contributor no longer registered deletes nothing.
+    /// </summary>
     public static async Task SeedAsync(
-        GeoIdentityDbContext db, TimeProvider timeProvider, CancellationToken ct = default)
+        GeoIdentityDbContext db, TimeProvider timeProvider, IEnumerable<IModulePermissionContributor> contributors, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(contributors);
 
         await SeedOrganizationsAsync(db, timeProvider, ct).ConfigureAwait(false);
         await SeedPermissionsAsync(db, ct).ConfigureAwait(false);
         await SeedRolesAsync(db, ct).ConfigureAwait(false);
         await SeedPoliciesAsync(db, ct).ConfigureAwait(false);
+        foreach (var contributor in contributors)
+        {
+            var set = new ModulePermissionSet { Permissions = [.. contributor.Permissions], RoleBundles = [.. contributor.RoleBundles] };
+            if (set.FindProblem() is { } problem)
+                throw new InvalidOperationException($"Module '{contributor.VerticalId}' contributes an invalid permission set: {problem}");
+            await ApplyAsync(db, set, ct).ConfigureAwait(false);
+        }
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies one module's permissions and role bundles and saves (XD01-377) — what an out-of-process vertical's
+    /// <c>PUT /api/identity/verticals/{verticalId}/permissions</c> does. Idempotent; deletes nothing.
+    /// </summary>
+    /// <returns><see langword="true"/> when anything was added.</returns>
+    /// <exception cref="ArgumentException">The set is invalid (<see cref="ModulePermissionSet.FindProblem"/>).</exception>
+    public static async Task<bool> ApplyModulePermissionsAsync(GeoIdentityDbContext db, ModulePermissionSet set, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(set);
+        if (set.FindProblem() is { } problem) throw new ArgumentException(problem, nameof(set));
+
+        await ApplyAsync(db, set, ct).ConfigureAwait(false);
+        if (!db.ChangeTracker.HasChanges()) return false;
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
+    }
+
+    private static async Task ApplyAsync(GeoIdentityDbContext db, ModulePermissionSet set, CancellationToken ct)
+    {
+        var existingCodes = (await db.Permissions.Select(p => p.Code).ToListAsync(ct).ConfigureAwait(false))
+            .Concat(db.ChangeTracker.Entries<AppPermission>().Select(e => e.Entity.Code))
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var permission in set.Permissions.Where(permission => existingCodes.Add(permission.Code)))
+            db.Permissions.Add(P(permission.Code, permission.Resource, permission.Action, permission.DescriptionKey));
+
+        foreach (var bundle in set.RoleBundles)
+            await AddRoleAsync(db, bundle.RoleId, bundle.RoleName, bundle.Description, isBuiltIn: true, ct, [.. bundle.PermissionCodes]).ConfigureAwait(false);
     }
 
     // ── Organizations ─────────────────────────────────────────────────────────
@@ -113,17 +161,6 @@ public static class GeoIdentitySeeder
             P("projects:rename",            "projects", "rename",            "permissions.projects.rename"),
             P("projects:delete",            "projects", "delete",            "permissions.projects.delete"),
 
-            // XD01-176: IP-billing (GEOS_FAT_IP) reference data + the Levantamento/Fiscalização/
-            // Ofício workflows this epic builds on top of it. Role wiring is left to the phase
-            // that first needs these (Phase 0 adds no UI/REST surface yet).
-            P("ip-billing:read",             "ip-billing", "read",             "permissions.ipBilling.read"),
-            P("ip-billing:upload",           "ip-billing", "upload",           "permissions.ipBilling.upload"),
-            P("ip-billing:calculate",        "ip-billing", "calculate",        "permissions.ipBilling.calculate"),
-            P("ip-billing:validate",         "ip-billing", "validate",         "permissions.ipBilling.validate"),
-            P("ip-billing:ledger-manual",    "ip-billing", "ledger-manual",    "permissions.ipBilling.ledgerManual"),
-            P("ip-billing:ledger-recarga",   "ip-billing", "ledger-recarga",   "permissions.ipBilling.ledgerRecarga"),
-            P("ip-billing:reference-manage", "ip-billing", "reference-manage", "permissions.ipBilling.referenceManage"),
-
             // XD01-369: publishing a vertical's order-type descriptors to the kernel registry — Administrator-only
             // (a GeoAssets.ServiceCaller service principal satisfies every permission policy anyway).
             P("registry:manage",             "registry",   "manage",           "permissions.registry.manage"),
@@ -162,11 +199,6 @@ public static class GeoIdentitySeeder
         await AddRoleAsync(db, ReadOnlyRoleId,   "ReadOnly",        "Solo lectura, sin modificaciones", isBuiltIn: true, ct,
             "serviceorders:read", "features:read",
             "projects:read")
-            .ConfigureAwait(false);
-
-        // XD01-364: the role the ISP order types' policies name — submits attachment requests and disputes notices.
-        await AddRoleAsync(db, IspTenantRoleId,  "IspTenant",       "Inquilino ISP: solicitudes y disputas", isBuiltIn: true, ct,
-            "serviceorders:read", "serviceorders:create")
             .ConfigureAwait(false);
     }
 
