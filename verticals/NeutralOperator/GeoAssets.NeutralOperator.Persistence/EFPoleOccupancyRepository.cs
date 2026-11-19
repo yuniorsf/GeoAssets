@@ -1,10 +1,10 @@
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
 /// EF Core implementation of <see cref="IPoleOccupancyReader"/> and
@@ -14,15 +14,15 @@ namespace GeoAssets.Workflow.Persistence;
 ///
 /// <para><b>Tenancy.</b> Owner only, uniformly: no member calls <c>IgnoreQueryFilters()</c>, so
 /// every read and write sees just the poles of the context's organization
-/// (<see cref="ServiceOrderDbContext.CurrentOrganizationId"/>), which is also the organization
+/// (<see cref="NeutralOperatorDbContext.CurrentOrganizationId"/>), which is also the organization
 /// new rows are written under. On PostgreSQL the tables' row-level-security policies are the
 /// backstop.</para>
 ///
 /// <para><b>Writes bypass the change tracker.</b> A write is a compare-and-swap on the pole's
 /// <c>Version</c> (an insert-if-absent for a pole's first write) followed by replacing its entry
-/// rows, inside one transaction: the caller's when the shared context already has one — which
-/// is how a later slice commits occupancy together with an order transition — or its own
-/// otherwise. Of two connections writing from the same version exactly one changes a row; the
+/// rows, inside one transaction: the caller's when the shared connection already has one — the
+/// kernel's, which the context joins first (<see cref="NeutralOperatorDbContext.JoinAmbientTransaction"/>),
+/// so occupancy commits together with an order transition — or its own otherwise. Of two connections writing from the same version exactly one changes a row; the
 /// other gets <see cref="OccupancyConflictException"/>. When the call throws inside a caller's
 /// transaction, rolling that transaction back is the caller's part.</para>
 /// </summary>
@@ -63,12 +63,12 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     private static readonly string ContractedStatus =
         PoleOccupancyMapper.ToStatusText(PoleAttachmentOccupantStatus.AuthorizedContracted);
 
-    private readonly ServiceOrderDbContext _db;
+    private readonly NeutralOperatorDbContext _db;
     private readonly TimeProvider _timeProvider;
 
-    /// <param name="db">The scoped context shared with the order repository; its tenant is the pole owner.</param>
+    /// <param name="db">The scoped context, on the connection shared with the order repository; its tenant is the pole owner.</param>
     /// <param name="timeProvider">Clock for <see cref="PoleOccupancy.UpdatedAt"/>; the system clock when omitted.</param>
-    public EFPoleOccupancyRepository(ServiceOrderDbContext db, TimeProvider? timeProvider = null)
+    public EFPoleOccupancyRepository(NeutralOperatorDbContext db, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(db);
 
@@ -82,6 +82,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poleFeatureId);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var stored = await LoadAsync(Poles.Where(p => p.PoleFeatureId == poleFeatureId), ct).ConfigureAwait(false);
         return stored.Count == 0 ? null : stored[0].Occupancy;
@@ -91,6 +92,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     {
         ArgumentNullException.ThrowIfNull(poleFeatureIds);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var found = new List<PoleOccupancy>();
         foreach (var chunk in Distinct(poleFeatureIds).Chunk(IdChunkSize))
@@ -108,6 +110,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     {
         ArgumentNullException.ThrowIfNull(poleFeatureIds);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var contractedStatus = ContractedStatus;
         var polesByOccupant = new Dictionary<Guid, SortedSet<string>>();
@@ -141,6 +144,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     {
         ArgumentNullException.ThrowIfNull(query);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var matches = Poles;
         if (query.OccupantOrganizationId is { } occupant)
@@ -178,6 +182,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentOutOfRangeException.ThrowIfNegative(expectedVersion);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var stored = (await LoadAsync(Poles.Where(p => p.PoleFeatureId == poleFeatureId), ct).ConfigureAwait(false))
             .FirstOrDefault();

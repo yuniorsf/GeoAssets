@@ -1,9 +1,9 @@
 using GeoAssets.NeutralOperator.Domain.Occupancy;
-using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace GeoAssets.Workflow.Persistence.Configurations;
+namespace GeoAssets.NeutralOperator.Persistence.Configurations;
 
 internal sealed class PoleOccupancyEntryRecordConfiguration : IEntityTypeConfiguration<PoleOccupancyEntryRecord>
 {

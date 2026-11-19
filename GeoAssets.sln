@@ -189,6 +189,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.IpBilling.UI", "i
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Persistence.Postgres", "providers\GeoAssets.Persistence.Postgres\GeoAssets.Persistence.Postgres.csproj", "{CE47D62A-B4B8-4500-8AF8-E89C2BC7D25E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.NeutralOperator.Persistence", "verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj", "{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -1159,6 +1161,18 @@ Global
 		{CE47D62A-B4B8-4500-8AF8-E89C2BC7D25E}.Release|x64.Build.0 = Release|Any CPU
 		{CE47D62A-B4B8-4500-8AF8-E89C2BC7D25E}.Release|x86.ActiveCfg = Release|Any CPU
 		{CE47D62A-B4B8-4500-8AF8-E89C2BC7D25E}.Release|x86.Build.0 = Release|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Debug|x64.Build.0 = Debug|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Debug|x86.Build.0 = Debug|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Release|x64.ActiveCfg = Release|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Release|x64.Build.0 = Release|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Release|x86.ActiveCfg = Release|Any CPU
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1246,5 +1260,6 @@ Global
 		{E5FF5661-B95C-414B-ADA1-3BCB3837918D} = {4E3F4F56-835C-A42D-E20C-8EA86975176C}
 		{7807909D-F2E0-464A-9CC5-D4A577BA3083} = {4E3F4F56-835C-A42D-E20C-8EA86975176C}
 		{CE47D62A-B4B8-4500-8AF8-E89C2BC7D25E} = {D9007A03-FD03-1159-6598-E081D0A1BEBA}
+		{C6460654-DF5C-4EB3-ABD8-F97ABB930FB2} = {4E3F4F56-835C-A42D-E20C-8EA86975176C}
 	EndGlobalSection
 EndGlobal

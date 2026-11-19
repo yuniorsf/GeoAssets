@@ -1,6 +1,6 @@
 using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Hosting.Abstractions;
-using GeoAssets.Workflow;
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -56,8 +56,8 @@ public static class OrderOccupancyHostExtensions
 
     /// <summary>
     /// Registers the approval that commits staged occupancy (XD01-318) over this host's
-    /// <c>ServiceOrderDbContext</c> stores, its unit of work and its outbox, with its span and
-    /// metrics. Call after <see cref="AddServerOrderOccupancyStaging"/> (whose options it reads)
+    /// <c>NeutralOperatorDbContext</c> stores, joined to the kernel <c>ServiceOrderDbContext</c>'s
+    /// unit of work and outbox (XD01-380), with its span and metrics. Call after <see cref="AddServerOrderOccupancyStaging"/> (whose options it reads)
     /// and <c>AddServerWorkflowOutbox</c>.
     /// </summary>
     public static IServiceCollection AddServerOccupancyCommit(this IServiceCollection services)

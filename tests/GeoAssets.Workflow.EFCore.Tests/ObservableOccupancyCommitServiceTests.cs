@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -244,6 +245,7 @@ public sealed class ObservableOccupancyCommitServiceTests : IDisposable
         services.AddLogging();
         services.AddSingleton<TimeProvider>(_clock);
         services.AddWorkflowPersistence(options => options.UseSqlite("Data Source=:memory:"));
+        services.AddNeutralOperatorPersistence((options, connection) => options.UseSqlite(connection));
         services.AddSingleton<IIntegrationMessageSerializer>(new ProtobufIntegrationMessageSerializer());
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
@@ -258,7 +260,7 @@ public sealed class ObservableOccupancyCommitServiceTests : IDisposable
         resolved.Should().BeOfType<ObservableOccupancyCommitService>();
         services.Count(d => d.ServiceType == typeof(IOccupancyCommitService)).Should().Be(1);
         scope.ServiceProvider.GetRequiredService<IWorkflowUnitOfWork>().Should().BeOfType<EFWorkflowUnitOfWork>();
-        FluentActions.Invoking(() => WorkflowEFCoreServiceExtensions.AddOccupancyCommitPersistence(null!))
+        FluentActions.Invoking(() => NeutralOperatorPersistenceExtensions.AddOccupancyCommitPersistence(null!))
             .Should().Throw<ArgumentNullException>();
     }
 

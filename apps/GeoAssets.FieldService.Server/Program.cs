@@ -25,6 +25,7 @@ using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Integrations.Erp.Sap;
 using GeoAssets.NeutralOperator.Application.Bss;
 using GeoAssets.NeutralOperator.Application.Leasing.Settlement;
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -189,9 +190,11 @@ builder.Services.AddScoped<IServiceOrderRepository>(sp =>
 // which is what lets an order's closing transition release its targets in one SaveChanges.
 builder.Services.AddServiceOrderTargetPersistence();
 
-// Pole occupancy (XD01-314): also on that scoped ServiceOrderDbContext, so a later commit of
-// occupancy can share one transaction with the order transition.
-builder.Services.AddPoleOccupancyPersistence();
+// Pole occupancy (XD01-314): in the NeutralOperator vertical's own NeutralOperatorDbContext since XD01-380 (schema
+// neutral_operator, its own migration chain — apply it to this host's FieldService database after this host's own chain),
+// built over the scoped ServiceOrderDbContext's connection and joining its transaction, so a commit of occupancy still
+// shares one transaction with the order transition.
+builder.Services.AddNeutralOperatorPersistence();
 
 // ── Transactional outbox + relay dispatcher (XD01-228/XD01-229) — AddWorkflowOutbox wires
 // IOutboxWriter, IOutboxDispatcherStore, IIdempotentInbox, and the background

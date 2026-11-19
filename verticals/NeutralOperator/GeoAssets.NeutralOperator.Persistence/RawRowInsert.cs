@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
 /// Inserts rows of a mapped entity with plain <c>INSERT … VALUES (…), (…)</c> statements, past
@@ -13,9 +13,9 @@ namespace GeoAssets.Workflow.Persistence;
 /// context happens to be tracking. Table and column names come from the EF model and every
 /// value travels as a parameter typed by that column's own mapping, so a statement cannot drift
 /// from the schema. Optionally <c>ON CONFLICT (…) DO NOTHING</c>, which PostgreSQL and SQLite —
-/// the two engines <see cref="ServiceOrderDbContext"/> runs on — both understand.
+/// the two engines <see cref="NeutralOperatorDbContext"/> runs on — both understand.
 ///
-/// The same technique as <see cref="EFServiceOrderTargetRepository"/>'s insert, generalized for
+/// The same technique as the kernel target repository's insert, generalized for
 /// the occupancy tables (XD01-314).
 /// </summary>
 internal static class RawRowInsert

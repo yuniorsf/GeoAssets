@@ -50,6 +50,9 @@
     <ProjectReference Include="..\..\core\GeoAssets.Hosting.Abstractions\GeoAssets.Hosting.Abstractions.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <!-- NeutralOperatorDbContext (XD01-380): registered by the NeutralOperator module quarantined in Modules/ only, never
+         by the kernel — with GeoAssets:Modules = [] nothing resolves it. -->
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
     <ProjectReference Include="..\..\projects\GeoAssets.Projects.EFCore\GeoAssets.Projects.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
     <!-- Transactional outbox for the shared-use dispatch notifications (XD01-316): the wire

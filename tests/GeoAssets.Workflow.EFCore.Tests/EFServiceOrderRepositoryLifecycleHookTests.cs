@@ -8,6 +8,8 @@ using GeoAssets.Workflow.TestKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -44,12 +46,13 @@ public sealed class EFServiceOrderRepositoryLifecycleHookTests : IAsyncDisposabl
         }
     }
 
-    /// <summary>Writes past the change tracker — straight to the database, in the transition's transaction — and then fails.</summary>
+    /// <summary>Checks that the release hook's direct write is visible in the transition's transaction — and then fails.</summary>
     private sealed class WriteThenFailHook(IOccupancyChangeSetWriter changeSets) : IOrderLifecycleHook
     {
         public async Task OnTransitionedAsync(OrderTransitionContext context, CancellationToken cancellationToken)
         {
-            (await changeSets.DiscardAllAsync(context.Order.Id, cancellationToken)).Should().BeGreaterThan(0, "the write must have happened");
+            (await changeSets.DiscardAllAsync(context.Order.Id, cancellationToken)).Should().Be(
+                0, "the release hook ahead of this one has already discarded the set, in this same transaction");
             throw new InvalidOperationException("hook failed");
         }
     }
@@ -73,7 +76,7 @@ public sealed class EFServiceOrderRepositoryLifecycleHookTests : IAsyncDisposabl
         return new Stack
         {
             Context = context,
-            ChangeSets = new EFOccupancyChangeSetRepository(context, _clock),
+            ChangeSets = new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(context), _clock),
             Targets = new EFServiceOrderTargetRepository(context, _orderTypes, _clock),
             Orders = hooks => new EFServiceOrderRepository(context, orderTypeRegistry: _orderTypes, timeProvider: _clock, hooks: hooks),
         };
@@ -106,7 +109,7 @@ public sealed class EFServiceOrderRepositoryLifecycleHookTests : IAsyncDisposabl
         await using var verify = PostgresTargetStoreDatabase.NewContext(_connectionString, new FakeTenantContext(Tenant));
         var status = await verify.ServiceOrders.AsNoTracking().Select(o => o.Status).SingleAsync();
         var released = await verify.ServiceOrderTargets.IgnoreQueryFilters().AsNoTracking().Select(t => t.ReleasedAt).SingleAsync();
-        var set = await verify.OccupancyChangeSets.AsNoTracking().Select(s => s.Status).SingleAsync();
+        var set = await NeutralOperatorTestContext.Over(verify).OccupancyChangeSets.AsNoTracking().Select(s => s.Status).SingleAsync();
         return (status, released, set);
     }
 
@@ -124,7 +127,7 @@ public sealed class EFServiceOrderRepositoryLifecycleHookTests : IAsyncDisposabl
 
         probe.HadTransaction.Should().BeTrue("hooks run inside the transition's transaction");
         saves.Should().ContainSingle().Which.Should().Equal(
-            nameof(OccupancyChangeSetRecord), nameof(ServiceOrderRecord), nameof(ServiceOrderTargetRecord));
+            nameof(ServiceOrderRecord), nameof(ServiceOrderTargetRecord));
         var stored = await StoredAsync();
         stored.Status.Should().Be(ServiceOrderStatus.Cancelled);
         stored.ReleasedAt.Should().Be(ClosedAt.UtcDateTime);
@@ -144,8 +147,7 @@ public sealed class EFServiceOrderRepositoryLifecycleHookTests : IAsyncDisposabl
         var stored = await StoredAsync();
         stored.Status.Should().Be(ServiceOrderStatus.Draft, "the transition rolled back");
         stored.ReleasedAt.Should().BeNull("the targets were not released");
-        stored.SetStatus.Should().Be("Staged", "the hook's own write — tracked and direct — is gone");
-        stack.Context.ChangeTracker.Entries<OccupancyChangeSetRecord>().Should().OnlyContain(e => e.State == EntityState.Unchanged);
+        stored.SetStatus.Should().Be("Staged", "the release hook's direct write is gone with the transaction");
         stack.Context.ChangeTracker.Entries<ServiceOrderTargetRecord>().Should().OnlyContain(e => e.State == EntityState.Unchanged);
     }
 

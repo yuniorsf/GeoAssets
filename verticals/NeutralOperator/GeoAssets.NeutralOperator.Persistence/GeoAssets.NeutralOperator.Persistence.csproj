@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-380 (ADR-001 Phase 6): the NeutralOperator vertical's persistence — pole occupancies and staged occupancy
+       change sets in NeutralOperatorDbContext (schema neutral_operator, its own migrations and history table), moved out
+       of the kernel's ServiceOrderDbContext. Until Phase 7 it shares the kernel context's connection and transaction, so
+       it references the engine's persistence (a vertical → engine reference; never the reverse). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.NeutralOperator.Persistence</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The tests of this code stayed where they were when it moved out of GeoAssets.Workflow.EFCore (XD01-380). -->
+    <InternalsVisibleTo Include="GeoAssets.Workflow.EFCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <!-- Design-time only: lets dotnet ef run with this project as its own startup project (NeutralOperatorDbContextFactory). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
+    <ProjectReference Include="..\..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <ProjectReference Include="..\..\..\providers\GeoAssets.Persistence.Postgres\GeoAssets.Persistence.Postgres.csproj" />
+    <ProjectReference Include="..\..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
+  </ItemGroup>
+
+</Project>

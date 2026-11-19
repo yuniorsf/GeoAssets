@@ -7,6 +7,7 @@ using GeoAssets.Workflow.TestKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -33,7 +34,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
         var context = scope.Add(PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(Owner)));
         var orderTypes = new OrderTypeRegistry();
         var clock = new FakeTimeProvider(Now);
-        var store = new EFOccupancyChangeSetRepository(context, clock);
+        var store = new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(context), clock);
 
         return new OccupancyChangeSetStoreContractHarness(
             store,
@@ -45,7 +46,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
             organizationId =>
             {
                 var view = new EFOccupancyChangeSetRepository(
-                    scope.Add(PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(organizationId))), clock);
+                    NeutralOperatorTestContext.Over(scope.Add(PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(organizationId)))), clock);
                 return new OccupancyChangeSetStoreView(view, view);
             },
             scope);
@@ -94,7 +95,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
             await using var context = PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(Owner));
             await context.Database.OpenConnectionAsync();
             await start.Task;
-            return await new EFOccupancyChangeSetRepository(context).StageAsync(set, CancellationToken.None);
+            return await new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(context)).StageAsync(set, CancellationToken.None);
         }).ToList();
         start.SetResult();
         var stored = await Task.WhenAll(attempts);
@@ -102,7 +103,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
         stored.Select(set => set.Id).Should().BeEquivalentTo(sets.Select(set => set.Id), "no call failed");
         await using var verify = PostgresTargetStoreDatabase.NewContext(connectionString);
         var rows = await verify.Database
-            .SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "ServiceOrderOccupancyChangeSets" WHERE "TargetId" = {target.Id}""")
+            .SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM neutral_operator."ServiceOrderOccupancyChangeSets" WHERE "TargetId" = {target.Id}""")
             .SingleAsync();
         rows.Should().Be(1, "the replaced sets are gone and the partial unique index allows one staged row");
         var staged = await harness.Reader.GetStagedAsync("ord-1", target.Id, CancellationToken.None);
@@ -119,7 +120,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
         await using var raw = PostgresTargetStoreDatabase.NewContext(connectionString);
         Task<int> InsertAsync(string status) => raw.Database.ExecuteSqlAsync(
             $"""
-            INSERT INTO "ServiceOrderOccupancyChangeSets"
+            INSERT INTO neutral_operator."ServiceOrderOccupancyChangeSets"
                 ("Id", "ServiceOrderId", "TargetId", "PoleFeatureId", "ChangesJson", "BaselineVersion", "Status", "StagedBy", "StagedAt", "ClosedAt", "OrganizationId")
             VALUES ({Guid.NewGuid()}, 'ord-1', {target.Id}, 'pole-1', '[]', 0, {status}, 'crew-1', now(), NULL, {Owner})
             """);
@@ -152,7 +153,7 @@ public sealed class PostgresOccupancyChangeSetRepositoryContractTests : Occupanc
         (await harness.Reader.GetStagedAsync("ord-1", set.TargetId, CancellationToken.None)).Should().BeEquivalentTo(stored);
         await using var verify = PostgresTargetStoreDatabase.NewContext(connectionString);
         var raw = await verify.Database
-            .SqlQuery<string>($"""SELECT ("Status" || '|' || "ChangesJson") AS "Value" FROM "ServiceOrderOccupancyChangeSets" """)
+            .SqlQuery<string>($"""SELECT ("Status" || '|' || "ChangesJson") AS "Value" FROM neutral_operator."ServiceOrderOccupancyChangeSets" """)
             .SingleAsync();
         raw.Should().Be("""Staged|[{"kind":"MarkUnidentified","slotIndex":4,"cableDiameterMm":0,"cableLoadDaN":0}]""");
     }

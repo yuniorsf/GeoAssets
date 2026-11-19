@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
-using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
 /// Converts between the domain <see cref="OccupancyChangeSet"/> and its EF entity (XD01-315).
@@ -48,8 +48,8 @@ internal static class OccupancyChangeSetMapper
         record.BaselineVersion,
         FromStatusText(record.Status),
         record.StagedBy,
-        new DateTimeOffset(ServiceOrderTargetMapper.ToUtc(record.StagedAt)),
-        record.ClosedAt is { } closedAt ? new DateTimeOffset(ServiceOrderTargetMapper.ToUtc(closedAt)) : null);
+        new DateTimeOffset(StoredInstant.ToUtc(record.StagedAt)),
+        record.ClosedAt is { } closedAt ? new DateTimeOffset(StoredInstant.ToUtc(closedAt)) : null);
 
     public static string ToChangesJson(IReadOnlyList<OccupancyChange> changes) => JsonSerializer.Serialize(changes, ChangeJson);
 

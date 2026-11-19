@@ -53,6 +53,18 @@ dotnet ef database update \
   --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
 ```
 
+With the `neutral-operator` module enabled, also apply `NeutralOperatorDbContext` (XD01-380: pole
+occupancies and occupancy change sets, schema `neutral_operator`) — **after** `ServiceOrderDbContext`,
+whose tables its baseline adopts:
+
+```bash
+dotnet ef database update \
+  --project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
+  --startup-project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
+  --context NeutralOperatorDbContext \
+  --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
+```
+
 Note the host-side port is **5433**, not 5432 — see the comment in `docker-compose.yaml`; this avoids colliding with any Postgres already running natively on your machine's 5432. The `server` container itself talks to `postgres` over the internal Docker network on the standard 5432, unaffected by this remap.
 
 ## What this doesn't solve

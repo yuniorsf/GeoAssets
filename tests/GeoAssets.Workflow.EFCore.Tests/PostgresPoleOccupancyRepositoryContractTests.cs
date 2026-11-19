@@ -5,6 +5,7 @@ using GeoAssets.Workflow.TestKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -27,9 +28,9 @@ public sealed class PostgresPoleOccupancyRepositoryContractTests : PoleOccupancy
         var connectionString = await PostgresTargetStoreDatabase.EnsureCreatedAsync(DatabaseName);
         var scope = new DisposableGroup();
         var context = scope.Add(PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(Owner)));
-        await context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE field_pole_occupancies CASCADE;");
+        await context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE neutral_operator.field_pole_occupancies CASCADE;");
         var clock = new FakeTimeProvider(Now);
-        var store = new EFPoleOccupancyRepository(context, clock);
+        var store = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(context), clock);
 
         return new PoleOccupancyStoreContractHarness(
             store,
@@ -39,7 +40,7 @@ public sealed class PostgresPoleOccupancyRepositoryContractTests : PoleOccupancy
             organizationId =>
             {
                 var view = new EFPoleOccupancyRepository(
-                    scope.Add(PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(organizationId))), clock);
+                    NeutralOperatorTestContext.Over(scope.Add(PostgresTargetStoreDatabase.NewContext(connectionString, new FakeTenantContext(organizationId)))), clock);
                 return new PoleOccupancyStoreView(view, view);
             },
             scope);
@@ -86,7 +87,7 @@ public sealed class PostgresPoleOccupancyRepositoryContractTests : PoleOccupancy
             await start.Task;
             try
             {
-                await new EFPoleOccupancyRepository(context).ReplaceEntriesAsync("pole-1", 1, entries, CancellationToken.None);
+                await new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(context)).ReplaceEntriesAsync("pole-1", 1, entries, CancellationToken.None);
                 return entries.Count;
             }
             catch (OccupancyConflictException)
@@ -119,7 +120,7 @@ public sealed class PostgresPoleOccupancyRepositoryContractTests : PoleOccupancy
             await start.Task;
             try
             {
-                await new EFPoleOccupancyRepository(context).ReplaceEntriesAsync("pole-new", PoleOccupancy.UnsavedVersion, entries, CancellationToken.None);
+                await new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(context)).ReplaceEntriesAsync("pole-new", PoleOccupancy.UnsavedVersion, entries, CancellationToken.None);
                 return entries.Count;
             }
             catch (OccupancyConflictException)
@@ -150,7 +151,7 @@ public sealed class PostgresPoleOccupancyRepositoryContractTests : PoleOccupancy
         (await harness.Reader.GetForPoleAsync("pole-1", CancellationToken.None)).Should().BeEquivalentTo(written);
         await using var verify = PostgresTargetStoreDatabase.NewContext(connectionString);
         var raw = await verify.Database
-            .SqlQueryRaw<string>("""SELECT ("CableDiameterMm"::text || '|' || "CableLoadDaN"::text || '|' || "Status") AS "Value" FROM field_pole_occupancy_entries""")
+            .SqlQueryRaw<string>("""SELECT ("CableDiameterMm"::text || '|' || "CableLoadDaN"::text || '|' || "Status") AS "Value" FROM neutral_operator.field_pole_occupancy_entries""")
             .SingleAsync();
         raw.Should().Be("12.345|0.001|AuthorizedContracted");
     }

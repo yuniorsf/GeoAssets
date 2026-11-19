@@ -1,10 +1,10 @@
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Models;
-using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using Microsoft.EntityFrameworkCore;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
 /// EF Core implementation of <see cref="IOccupancyChangeSetReader"/> and
@@ -14,18 +14,22 @@ namespace GeoAssets.Workflow.Persistence;
 ///
 /// <para><b>Tenancy.</b> Owner only, uniformly: no member calls <c>IgnoreQueryFilters()</c>, so
 /// every read and write sees just the sets — and the targets — of the context's organization
-/// (<see cref="ServiceOrderDbContext.CurrentOrganizationId"/>). On PostgreSQL the table's
+/// (<see cref="NeutralOperatorDbContext.CurrentOrganizationId"/>). On PostgreSQL the table's
 /// row-level-security policy is the backstop.</para>
 ///
 /// <para><b>Staging is delete-then-insert inside one transaction</b> (the caller's when the
-/// shared context already has one, its own otherwise), past the change tracker. The partial
+/// shared connection already has one — the kernel's, which the context joins first through
+/// <see cref="NeutralOperatorDbContext.JoinAmbientTransaction"/> — its own otherwise), past the
+/// change tracker. The partial
 /// unique index on the staged row of a target is what arbitrates two sessions: the later
 /// insert is skipped (<c>ON CONFLICT DO NOTHING</c>), and that session then replaces the row
 /// the earlier one committed — so every caller succeeds and one whole set remains.</para>
 ///
 /// <para><b>Closing an order</b> discards what is still staged on it through
-/// <see cref="DiscardStagedAsync"/> — tracked, unsaved — which the order's lifecycle hook calls so it
-/// lands in the same <c>SaveChanges</c> as the order's own status change (XD01-362).</para>
+/// <see cref="DiscardStagedAsync"/> — one <c>UPDATE</c> in the transaction the order's closing
+/// transition runs in, which the order's lifecycle hook calls before that transition is saved
+/// (XD01-362); the two commit or roll back together. Since XD01-380 this store's context is not
+/// the order's, so the discard cannot ride on the order's <c>SaveChanges</c> as a tracked change.</para>
 /// </summary>
 public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, IOccupancyChangeSetWriter, IOccupancyChangeSetCloser
 {
@@ -58,12 +62,12 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
 
     private static readonly string CommittedStatus = OccupancyChangeSetMapper.ToStatusText(OccupancyChangeSetStatus.Committed);
 
-    private readonly ServiceOrderDbContext _db;
+    private readonly NeutralOperatorDbContext _db;
     private readonly TimeProvider _timeProvider;
 
-    /// <param name="db">The scoped context shared with the order and target repositories; its tenant is the pole owner.</param>
+    /// <param name="db">The scoped context, on the connection shared with the order and target repositories; its tenant is the pole owner.</param>
     /// <param name="timeProvider">Clock for the instant a set is discarded; the system clock when omitted.</param>
-    public EFOccupancyChangeSetRepository(ServiceOrderDbContext db, TimeProvider? timeProvider = null)
+    public EFOccupancyChangeSetRepository(NeutralOperatorDbContext db, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(db);
 
@@ -78,6 +82,7 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var stagedStatus = StagedStatus;
         var record = await Sets
@@ -91,6 +96,7 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
     {
         ArgumentNullException.ThrowIfNull(query);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var orderId = query.OrderId;
         var matches = Sets.Where(s => s.ServiceOrderId == orderId);
@@ -127,6 +133,7 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
     {
         ArgumentNullException.ThrowIfNull(changeSet);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         if (changeSet.Status != OccupancyChangeSetStatus.Staged)
             throw new ArgumentException($"Only a staged change set can be staged; this one is {changeSet.Status}.", nameof(changeSet));
@@ -157,6 +164,7 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var stagedStatus = StagedStatus;
         var discarded = await DiscardWhereAsync(
@@ -166,27 +174,32 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
     }
 
     /// <inheritdoc/>
-    /// <remarks>Unfiltered, like the order the caller is closing: whoever may close it discards all of its staged sets.</remarks>
-    public async Task DiscardStagedAsync(string orderId, DateTimeOffset closedAt, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Unfiltered, like the order the caller is closing: whoever may close it discards all of its staged sets. One
+    /// <c>UPDATE</c>, past the change tracker, in the transaction the closing transition runs in (joined first).
+    /// </remarks>
+    public Task DiscardStagedAsync(string orderId, DateTimeOffset closedAt, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
+        cancellationToken.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
-        var stagedStatus = StagedStatus;
-        var staged = await _db.OccupancyChangeSets.IgnoreQueryFilters()
+        var (stagedStatus, discardedStatus) = (StagedStatus, DiscardedStatus);
+        DateTime? closedAtStamp = OccupancyChangeSetMapper.WholeMicroseconds(closedAt);
+        return _db.OccupancyChangeSets.IgnoreQueryFilters()
             .Where(s => s.ServiceOrderId == orderId && s.Status == stagedStatus)
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-        foreach (var changeSet in staged)
-        {
-            changeSet.Status = DiscardedStatus;
-            changeSet.ClosedAt = OccupancyChangeSetMapper.WholeMicroseconds(closedAt);
-        }
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(s => s.Status, discardedStatus)
+                    .SetProperty(s => s.ClosedAt, closedAtStamp),
+                cancellationToken);
     }
 
     public Task<int> DiscardAllAsync(string orderId, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         var stagedStatus = StagedStatus;
         return DiscardWhereAsync(
@@ -202,6 +215,7 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
     {
         ArgumentNullException.ThrowIfNull(committed);
         ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
 
         if (committed.Status != OccupancyChangeSetStatus.Committed)
             throw new ArgumentException($"Only a committed change set can be recorded as committed; this one is {committed.Status}.", nameof(committed));

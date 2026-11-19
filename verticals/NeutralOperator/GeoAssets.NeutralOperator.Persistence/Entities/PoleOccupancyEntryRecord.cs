@@ -1,4 +1,4 @@
-namespace GeoAssets.Workflow.Persistence.Entities;
+namespace GeoAssets.NeutralOperator.Persistence.Entities;
 
 /// <summary>
 /// EF Core entity mapping to the <c>field_pole_occupancy_entries</c> table (XD01-314): one

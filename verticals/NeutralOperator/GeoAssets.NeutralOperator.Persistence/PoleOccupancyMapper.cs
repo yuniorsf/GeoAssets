@@ -1,8 +1,8 @@
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
-using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
 /// Converts between the domain <see cref="PoleOccupancy"/> / <see cref="PoleOccupancyEntry"/>
@@ -45,7 +45,7 @@ internal static class PoleOccupancyMapper
             record.OrganizationId,
             entries.Select(entry => ToEntry(record, entry)),
             record.Version,
-            new DateTimeOffset(ServiceOrderTargetMapper.ToUtc(record.UpdatedAt)));
+            new DateTimeOffset(StoredInstant.ToUtc(record.UpdatedAt)));
 
     public static PoleOccupancyEntry ToEntry(PoleOccupancyRecord pole, PoleOccupancyEntryRecord entry) => new()
     {

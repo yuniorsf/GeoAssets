@@ -3,6 +3,7 @@ using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.TestKit;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -20,7 +21,7 @@ public sealed class EFPoleOccupancyRepositoryContractTests : PoleOccupancyStoreC
         var scope = new DisposableGroup();
         var fixture = scope.Add(new SqliteFixture(new FakeTenantContext(Owner)));
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 6, 1, 9, 0, 0, TimeSpan.Zero));
-        var store = new EFPoleOccupancyRepository(fixture.Context, clock);
+        var store = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(fixture.Context), clock);
 
         return Task.FromResult(new PoleOccupancyStoreContractHarness(
             store,
@@ -29,7 +30,7 @@ public sealed class EFPoleOccupancyRepositoryContractTests : PoleOccupancyStoreC
             clock,
             organizationId =>
             {
-                var view = new EFPoleOccupancyRepository(scope.Add(fixture.NewContext(new FakeTenantContext(organizationId))), clock);
+                var view = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(scope.Add(fixture.NewContext(new FakeTenantContext(organizationId)))), clock);
                 return new PoleOccupancyStoreView(view, view);
             },
             scope));

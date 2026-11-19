@@ -1,13 +1,13 @@
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Persistence.Postgres.Interceptors;
-using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Tools.SharedUseImport;
 
 /// <summary>
 /// Opens the real store: <see cref="EFPoleOccupancyRepository"/> on a
-/// <see cref="ServiceOrderDbContext"/> scoped to the pole owner, with the same session
-/// interceptor the hosts use so row-level security sees that organization too.
+/// <see cref="NeutralOperatorDbContext"/> (XD01-380) of its own, scoped to the pole owner, with the
+/// same session interceptor the hosts use so row-level security sees that organization too.
 /// </summary>
 internal static class PostgresOccupancyStore
 {
@@ -17,14 +17,14 @@ internal static class PostgresOccupancyStore
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         var tenant = new FixedTenantContext(options.OrganizationId);
-        var dbOptions = new DbContextOptionsBuilder<ServiceOrderDbContext>()
-            .UseNpgsql(options.ConnectionString)
+        var dbOptions = new DbContextOptionsBuilder<NeutralOperatorDbContext>()
+            .UseNpgsql(options.ConnectionString, NeutralOperatorDbContext.ConfigureMigrations)
             .AddInterceptors(new TenantSessionInterceptor(tenant))
             .Options;
-        ServiceOrderDbContext? db = null;
+        NeutralOperatorDbContext? db = null;
         try
         {
-            db = new ServiceOrderDbContext(dbOptions, tenant);
+            db = new NeutralOperatorDbContext(dbOptions, tenant);
             var repository = new EFPoleOccupancyRepository(db, timeProvider);
             var session = new OccupancyStoreSession(repository, repository, db);
             db = null;

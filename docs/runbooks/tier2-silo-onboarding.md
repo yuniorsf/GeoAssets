@@ -56,6 +56,13 @@ an infrastructure operation (Terraform + Helm), with zero source changes.
      --project apps/GeoAssets.Server --startup-project apps/GeoAssets.Server \
      --context ServiceOrderDbContext \
      --connection "<tenant's connection string>"
+
+   # Pole occupancy (XD01-380) — after ServiceOrderDbContext, whose tables its baseline adopts.
+   dotnet ef database update \
+     --project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
+     --startup-project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
+     --context NeutralOperatorDbContext \
+     --connection "<tenant's connection string>"
    ```
 
 3. **Verify the rollout:**

@@ -14,8 +14,8 @@ namespace GeoAssets.Workflow.EFCore.Tests;
 /// database, so classes xUnit runs in parallel never see each other's rows; the container is
 /// torn down with the test process.
 ///
-/// The schema comes from <c>EnsureCreatedAsync</c> (this project has no reference to the hosts
-/// that carry the migrations), i.e. straight from the EF model — including the PostgreSQL-only
+/// The kernel schema comes from <c>EnsureCreatedAsync</c> (this project has no reference to the hosts
+/// that carry the kernel migrations), i.e. straight from the EF model — including the PostgreSQL-only
 /// <c>"C"</c> collation on the sortable target columns, which is part of the model. The
 /// migrations themselves, and the row-level-security policy, are exercised by
 /// GeoAssets.Security.Tests and GeoAssets.FieldService.Server.Tests.
@@ -51,7 +51,13 @@ internal static class PostgresTargetStoreDatabase
             }.ConnectionString;
 
             await using (var db = NewContext(connectionString))
+            {
                 await db.Database.EnsureCreatedAsync();
+
+                // The NeutralOperator vertical's tables (XD01-380) come from its own migration chain, on the kernel schema.
+                await using var neutralOperator = NeutralOperatorTestContext.Over(db);
+                await neutralOperator.Database.MigrateAsync();
+            }
 
             ConnectionStrings[databaseName] = connectionString;
             return connectionString;

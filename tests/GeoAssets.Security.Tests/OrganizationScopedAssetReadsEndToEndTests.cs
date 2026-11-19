@@ -24,6 +24,7 @@ using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
 using GeoAssets.Workflow.Rules;
@@ -240,6 +241,7 @@ public sealed class OrganizationScopedAssetReadsEndToEndTests
             await identity.Database.MigrateAsync();
         await using (var serviceOrders = new ServiceOrderDbContext(SecurityTestContainerFixture.BuildServiceOrderOptions(connectionString)))
             await serviceOrders.Database.MigrateAsync();
+        await SecurityTestContainerFixture.MigrateNeutralOperatorAsync(connectionString);
 
         await SeedCatalogAsync(connectionString);
 
@@ -286,6 +288,7 @@ public sealed class OrganizationScopedAssetReadsEndToEndTests
         services.AddSingleton(new GeoAssetsMeter("1.0.0"));
         services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes());
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+        services.AddNeutralOperatorPersistence();
         services.AddServiceOrderRules();
         services.AddServerOrderOccupancyStaging(configuration);
         services.AddServerWorkflowMessaging(configuration);

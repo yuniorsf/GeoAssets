@@ -9,6 +9,7 @@ using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -140,6 +141,7 @@ public sealed class SharedUseDispatchOnMigratedSchemaTests
             await identity.Database.MigrateAsync();
         await using (var serviceOrders = new ServiceOrderDbContext(SecurityTestContainerFixture.BuildServiceOrderOptions(connectionString)))
             await serviceOrders.Database.MigrateAsync();
+        await SecurityTestContainerFixture.MigrateNeutralOperatorAsync(connectionString);
 
         var configuration = new ConfigurationBuilder().Build();
         var services = new ServiceCollection();
@@ -150,6 +152,7 @@ public sealed class SharedUseDispatchOnMigratedSchemaTests
         services.AddScoped<ITenantContext>(_ => new FixedTenant(Owner));
         services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes());
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+        services.AddNeutralOperatorPersistence();
         services.AddServiceOrderRules();
         services.AddServerWorkflowMessaging(configuration);
         services.AddServerSharedUseDispatch();

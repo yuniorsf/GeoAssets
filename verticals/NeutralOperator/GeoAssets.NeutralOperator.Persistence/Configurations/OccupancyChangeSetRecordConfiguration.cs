@@ -1,9 +1,9 @@
 using GeoAssets.NeutralOperator.Domain.Occupancy;
-using GeoAssets.Workflow.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace GeoAssets.Workflow.Persistence.Configurations;
+namespace GeoAssets.NeutralOperator.Persistence.Configurations;
 
 internal sealed class OccupancyChangeSetRecordConfiguration : IEntityTypeConfiguration<OccupancyChangeSetRecord>
 {
@@ -35,11 +35,11 @@ internal sealed class OccupancyChangeSetRecordConfiguration : IEntityTypeConfigu
         b.Property(s => s.OrganizationId).IsRequired();
 
         // A set lives and dies with the target it was staged on (and, through the target's own
-        // cascade, with the order).
-        b.HasOne<ServiceOrderTargetRecord>()
-         .WithMany()
-         .HasForeignKey(s => s.TargetId)
-         .OnDelete(DeleteBehavior.Cascade);
+        // cascade, with the order): FK_ServiceOrderOccupancyChangeSets_ServiceOrderTargets_TargetId,
+        // ON DELETE CASCADE, to the kernel's "ServiceOrderTargets". Database-only since XD01-380 —
+        // the kernel owns that table and this model does not relate to it (KernelTargetRecord is a
+        // read-only view, excluded from migrations), so this context's migrations neither create
+        // nor drop the constraint; the baseline that adopted the table kept it.
 
         // At most one staged set per target, whatever the application does. Partial: the
         // committed and discarded sets a target accumulates are outside it. It is also what

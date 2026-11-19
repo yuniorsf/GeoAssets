@@ -13,6 +13,9 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.Entities;
+using GeoAssets.NeutralOperator.Persistence.Configurations;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -28,23 +31,28 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
     private static readonly DateTimeOffset Now = new(2026, 6, 1, 9, 0, 0, TimeSpan.Zero);
 
     private readonly SqliteFixture _fixture = new(new FakeTenantContext(Owner));
-    private readonly ServiceOrderDbContext _postgres = new(
-        new DbContextOptionsBuilder<ServiceOrderDbContext>().UseNpgsql("Host=never-connected").Options);
+    private readonly NeutralOperatorDbContext _sqlite;
+    private readonly NeutralOperatorDbContext _postgres = new(
+        new DbContextOptionsBuilder<NeutralOperatorDbContext>()
+            .UseNpgsql("Host=never-connected", NeutralOperatorDbContext.ConfigureMigrations).Options);
     private readonly FakeTimeProvider _clock = new(Now);
     private readonly OrderTypeRegistry _orderTypes = new();
+
+    public OccupancyChangeSetPersistenceTests() => _sqlite = NeutralOperatorTestContext.Over(_fixture.Context);
 
     public void Dispose()
     {
         _postgres.Dispose();
+        _sqlite.Dispose();
         _fixture.Dispose();
     }
 
     public static TheoryData<bool> Providers => new() { { true }, { false } };
 
     private IEntityType Entity(bool postgres) =>
-        (postgres ? _postgres : _fixture.Context).GetService<IDesignTimeModel>().Model.FindEntityType(typeof(OccupancyChangeSetRecord))!;
+        (postgres ? _postgres : _sqlite).GetService<IDesignTimeModel>().Model.FindEntityType(typeof(OccupancyChangeSetRecord))!;
 
-    private EFOccupancyChangeSetRepository Store(ServiceOrderDbContext? context = null) => new(context ?? _fixture.Context, _clock);
+    private EFOccupancyChangeSetRepository Store(ServiceOrderDbContext? context = null) => new(NeutralOperatorTestContext.Over(context ?? _fixture.Context), _clock);
 
     private async Task<string> SeedTargetAsync(string orderId = "ord-1", string pole = "pole-1")
     {
@@ -65,17 +73,31 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public void Table_IsServiceOrderOccupancyChangeSets_KeyedByAnApplicationAssignedId_CascadingFromItsTarget(bool postgres)
+    public void Table_IsServiceOrderOccupancyChangeSets_KeyedByAnApplicationAssignedId_WithNoModelForeignKeyToTheKernel(bool postgres)
     {
         var entity = Entity(postgres);
 
         entity.GetTableName().Should().Be("ServiceOrderOccupancyChangeSets");
+        entity.GetSchema().Should().Be("neutral_operator");
         entity.FindPrimaryKey()!.Properties.Select(p => p.Name).Should().Equal("Id");
         entity.FindProperty("Id")!.ValueGenerated.Should().Be(ValueGenerated.Never);
-        var foreignKey = entity.GetForeignKeys().Should().ContainSingle().Subject;
-        foreignKey.PrincipalEntityType.ClrType.Should().Be<ServiceOrderTargetRecord>();
-        foreignKey.Properties.Select(p => p.Name).Should().Equal("TargetId");
-        foreignKey.DeleteBehavior.Should().Be(DeleteBehavior.Cascade);
+        entity.GetForeignKeys().Should().BeEmpty("the foreign key to the kernel's targets is DB-only since XD01-380 (see the migrated-schema test)");
+    }
+
+    [Fact]
+    public async Task Table_OnTheMigratedSchema_CascadesFromTheKernelsTargets_ThroughADatabaseOnlyForeignKey()
+    {
+        var connectionString = await PostgresTargetStoreDatabase.EnsureCreatedAsync("order_occupancy_change_set_fk");
+        await using var db = PostgresTargetStoreDatabase.NewContext(connectionString);
+
+        var foreignKeys = await db.Database.SqlQuery<string>($"""
+            SELECT pg_get_constraintdef(c.oid) AS "Value"
+            FROM pg_constraint c
+            WHERE c.conrelid = 'neutral_operator."ServiceOrderOccupancyChangeSets"'::regclass AND c.contype = 'f'
+            """).ToListAsync();
+
+        foreignKeys.Should().ContainSingle().Which.Should().Be(
+            "FOREIGN KEY (\"TargetId\") REFERENCES \"ServiceOrderTargets\"(\"Id\") ON DELETE CASCADE");
     }
 
     [Theory]
@@ -230,7 +252,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
     // ── Closing the order ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ClosingTheOrder_DiscardsItsStagedSetsInTheSameSaveChangesAsTheStatus()
+    public async Task ClosingTheOrder_DiscardsItsStagedSetsInTheClosingTransaction_WhileTheSaveChangesWritesOnlyTheStatusAndTargets()
     {
         await SeedTargetAsync("ord-1", "pole-1");
         await SeedTargetAsync("ord-1", "pole-2");
@@ -247,9 +269,8 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
         await orders.UpdateAsync(order);
 
         saves.Should().ContainSingle().Which.Should().Equal(
-            nameof(OccupancyChangeSetRecord), nameof(OccupancyChangeSetRecord), nameof(ServiceOrderRecord),
-            nameof(ServiceOrderTargetRecord), nameof(ServiceOrderTargetRecord));
-        var rows = await _fixture.Context.OccupancyChangeSets.AsNoTracking().ToListAsync();
+            nameof(ServiceOrderRecord), nameof(ServiceOrderTargetRecord), nameof(ServiceOrderTargetRecord));
+        var rows = await NeutralOperatorTestContext.Over(_fixture.Context).OccupancyChangeSets.AsNoTracking().ToListAsync();
         rows.Should().HaveCount(2).And.OnlyContain(row => row.Status == "Discarded" && row.ClosedAt == Now.AddHours(3).UtcDateTime);
     }
 
@@ -287,10 +308,10 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
         var act = () => orders.UpdateAsync(stale);
 
         await act.Should().ThrowAsync<ServiceOrderConcurrencyException>();
-        _fixture.Context.ChangeTracker.Entries<OccupancyChangeSetRecord>()
-            .Should().ContainSingle().Which.Should().Match<Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<OccupancyChangeSetRecord>>(
-                entry => entry.State == EntityState.Unchanged && entry.Entity.Status == "Staged" && entry.Entity.ClosedAt == null,
-                "a discard left pending in the change tracker would be written by this context's next save, on an order that never closed");
+        _fixture.Context.ChangeTracker.Entries<OccupancyChangeSetRecord>().Should().BeEmpty("the kernel context no longer tracks occupancy");
+        var stored = await NeutralOperatorTestContext.Over(_fixture.Context).OccupancyChangeSets.AsNoTracking().SingleAsync();
+        (stored.Status, stored.ClosedAt).Should().Be(("Staged", (DateTime?)null),
+            "the discard the hook wrote ahead of the failing save was rolled back with the closing transaction");
         (await Store().GetStagedAsync("ord-1", targetId, CancellationToken.None))!.Id.Should().Be(staged.Id);
     }
 
@@ -373,8 +394,8 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
         await using var outsider = _fixture.NewContext(new FakeTenantContext(Guid.NewGuid()));
 
         (await Store(outsider).GetStagedAsync("ord-1", targetId, CancellationToken.None)).Should().BeNull();
-        (await outsider.OccupancyChangeSets.CountAsync()).Should().Be(0);
-        (await outsider.OccupancyChangeSets.IgnoreQueryFilters().CountAsync()).Should().Be(1);
+        (await NeutralOperatorTestContext.Over(outsider).OccupancyChangeSets.CountAsync()).Should().Be(0);
+        (await NeutralOperatorTestContext.Over(outsider).OccupancyChangeSets.IgnoreQueryFilters().CountAsync()).Should().Be(1);
         (await Store().GetStagedAsync("ord-1", targetId, CancellationToken.None))!.Id.Should().Be(staged.Id);
     }
 
@@ -394,7 +415,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
         var services = new ServiceCollection();
         services.AddScoped(_ => _fixture.NewContext());
         services.AddSingleton<TimeProvider>(_clock);
-        services.AddPoleOccupancyPersistence().AddPoleOccupancyPersistence();
+        services.AddNeutralOperatorPersistence().AddNeutralOperatorPersistence();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         using var otherScope = provider.CreateScope();

@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
+using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.Entities;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -25,14 +27,20 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
 
     private readonly SqliteFixture _fixture = new(new FakeTenantContext(Owner));
     private readonly FakeTimeProvider _clock = new(Now);
+    private readonly NeutralOperatorDbContext _neutralOperator;
     private readonly EFPoleOccupancyRepository _repository;
 
     public EFPoleOccupancyRepositoryTests()
     {
-        _repository = new EFPoleOccupancyRepository(_fixture.Context, _clock);
+        _neutralOperator = NeutralOperatorTestContext.Over(_fixture.Context);
+        _repository = new EFPoleOccupancyRepository(_neutralOperator, _clock);
     }
 
-    public void Dispose() => _fixture.Dispose();
+    public void Dispose()
+    {
+        _neutralOperator.Dispose();
+        _fixture.Dispose();
+    }
 
     [Fact]
     public void Constructor_NullContext_ThrowsArgumentNullException()
@@ -45,7 +53,7 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     [Fact]
     public async Task Constructor_WithoutAClock_StampsWritesWithTheSystemClock()
     {
-        var repository = new EFPoleOccupancyRepository(_fixture.Context);
+        var repository = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(_fixture.Context));
 
         var written = await repository.ReplaceEntriesAsync("pole-1", 0, [Entry("pole-1", 1)], CancellationToken.None);
 
@@ -91,18 +99,20 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
         await _repository.GetForPoleAsync("pole-1", CancellationToken.None);
 
         _fixture.Context.Database.CurrentTransaction.Should().BeNull();
+        _neutralOperator.Database.CurrentTransaction.Should().BeNull();
         _fixture.Context.ChangeTracker.Entries().Should().BeEmpty();
+        _neutralOperator.ChangeTracker.Entries().Should().BeEmpty();
     }
 
     [Fact]
     public async Task ReplaceEntriesAsync_DoesNotSaveWhatElseTheSharedContextIsTracking()
     {
         var pending = new PoleOccupancyRecord { Id = Guid.NewGuid(), PoleFeatureId = "pole-pending", OrganizationId = Owner, Version = 1, UpdatedAt = Now.UtcDateTime };
-        _fixture.Context.PoleOccupancies.Add(pending);
+        _neutralOperator.PoleOccupancies.Add(pending);
 
         await _repository.ReplaceEntriesAsync("pole-1", 0, [Entry("pole-1", 1)], CancellationToken.None);
 
-        _fixture.Context.Entry(pending).State.Should().Be(EntityState.Added, "the store writes past the change tracker and never calls SaveChanges");
+        _neutralOperator.Entry(pending).State.Should().Be(EntityState.Added, "the store writes past the change tracker and never calls SaveChanges");
         (await _repository.GetForPoleAsync("pole-pending", CancellationToken.None)).Should().BeNull();
     }
 
@@ -111,7 +121,7 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     {
         await _repository.ReplaceEntriesAsync("pole-1", 0, [Entry("pole-1", 1)], CancellationToken.None);
         await using var otherContext = _fixture.NewContext();
-        var other = new EFPoleOccupancyRepository(otherContext, _clock);
+        var other = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(otherContext), _clock);
         var readByOther = await other.GetForPoleAsync("pole-1", CancellationToken.None);
         await _repository.ReplaceEntriesAsync("pole-1", 1, [], CancellationToken.None);
 
@@ -155,7 +165,7 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     public async Task Schema_RejectsASecondEntryOnTheSameRegulatedSlot_ButNotASecondEntryWithoutASlot()
     {
         await _repository.ReplaceEntriesAsync("pole-1", 0, [Entry("pole-1", 3), Entry("pole-1", null)], CancellationToken.None);
-        var poleId = await _fixture.Context.PoleOccupancies.Select(p => p.Id).SingleAsync();
+        var poleId = await NeutralOperatorTestContext.Over(_fixture.Context).PoleOccupancies.Select(p => p.Id).SingleAsync();
 
         var duplicateSlot = () => InsertEntryRawAsync(poleId, slotIndex: 3);
         var secondWithoutSlot = () => InsertEntryRawAsync(poleId, slotIndex: null);
@@ -171,7 +181,7 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     public async Task Schema_RejectsASlotIndexOutsideOneToSix(int slotIndex)
     {
         await _repository.ReplaceEntriesAsync("pole-1", 0, [], CancellationToken.None);
-        var poleId = await _fixture.Context.PoleOccupancies.Select(p => p.Id).SingleAsync();
+        var poleId = await NeutralOperatorTestContext.Over(_fixture.Context).PoleOccupancies.Select(p => p.Id).SingleAsync();
 
         var act = () => InsertEntryRawAsync(poleId, slotIndex);
 
@@ -182,7 +192,7 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     public async Task Schema_RejectsASecondPoleRowForTheSameOwnerAndPole_AndAnEntryWithoutItsPoleOrUnderAnotherOrganization()
     {
         await _repository.ReplaceEntriesAsync("pole-1", 0, [], CancellationToken.None);
-        var poleId = await _fixture.Context.PoleOccupancies.Select(p => p.Id).SingleAsync();
+        var poleId = await NeutralOperatorTestContext.Over(_fixture.Context).PoleOccupancies.Select(p => p.Id).SingleAsync();
         var otherOrganization = () => InsertEntryRawAsync(poleId, slotIndex: 1, organizationId: Guid.NewGuid());
 
         var secondPole = () => _fixture.Context.Database.ExecuteSqlAsync(
@@ -203,7 +213,7 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
 
         await _fixture.Context.Database.ExecuteSqlAsync($"""DELETE FROM field_pole_occupancies WHERE "PoleFeatureId" = 'pole-1'""");
 
-        (await _fixture.Context.PoleOccupancyEntries.CountAsync()).Should().Be(1);
+        (await NeutralOperatorTestContext.Over(_fixture.Context).PoleOccupancyEntries.CountAsync()).Should().Be(1);
         (await _repository.GetForPoleAsync("pole-2", CancellationToken.None))!.Entries.Should().ContainSingle();
     }
 
@@ -221,13 +231,32 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     // ── DI registration ───────────────────────────────────────────────────────
 
     [Fact]
-    public void AddWorkflowPersistence_RegistersBothOccupancyPorts_AsOneScopedRepositoryPerScope()
+    public void AddWorkflowPersistence_Alone_NoLongerRegistersTheOccupancyPorts()
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<GeoAssetsActivitySource>();
         services.AddSingleton<GeoAssetsMeter>();
         services.AddWorkflowPersistence(options => options.UseSqlite("Data Source=:memory:"));
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetService<IPoleOccupancyReader>().Should().BeNull();
+        scope.ServiceProvider.GetService<IPoleOccupancyWriter>().Should().BeNull();
+        scope.ServiceProvider.GetService<EFPoleOccupancyRepository>().Should().BeNull();
+        scope.ServiceProvider.GetService<NeutralOperatorDbContext>().Should().BeNull();
+    }
+
+    [Fact]
+    public void AddNeutralOperatorPersistence_RegistersBothOccupancyPorts_AsOneScopedRepositoryPerScope()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<GeoAssetsActivitySource>();
+        services.AddSingleton<GeoAssetsMeter>();
+        services.AddWorkflowPersistence(options => options.UseSqlite("Data Source=:memory:"));
+        services.AddNeutralOperatorPersistence((options, connection) => options.UseSqlite(connection));
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
         using var scope = provider.CreateScope();
@@ -245,18 +274,20 @@ public sealed class EFPoleOccupancyRepositoryTests : IDisposable
     {
         var services = new ServiceCollection();
 
-        services.AddPoleOccupancyPersistence().AddPoleOccupancyPersistence();
+        services.AddNeutralOperatorPersistence().AddNeutralOperatorPersistence();
 
         services.Count(d => d.ServiceType == typeof(IPoleOccupancyReader)).Should().Be(1);
         services.Count(d => d.ServiceType == typeof(IPoleOccupancyWriter)).Should().Be(1);
         services.Count(d => d.ServiceType == typeof(EFPoleOccupancyRepository)).Should().Be(1);
-        services.Should().OnlyContain(d => d.Lifetime == ServiceLifetime.Scoped);
+        services.Where(d => d.ServiceType == typeof(IPoleOccupancyReader) || d.ServiceType == typeof(IPoleOccupancyWriter)
+                || d.ServiceType == typeof(EFPoleOccupancyRepository) || d.ServiceType == typeof(NeutralOperatorDbContext))
+            .Should().OnlyContain(d => d.Lifetime == ServiceLifetime.Scoped);
     }
 
     [Fact]
     public void AddPoleOccupancyPersistence_NullServices_ThrowsArgumentNullException()
     {
-        var act = () => WorkflowEFCoreServiceExtensions.AddPoleOccupancyPersistence(null!);
+        var act = () => NeutralOperatorPersistenceExtensions.AddNeutralOperatorPersistence(null!);
 
         act.Should().Throw<ArgumentNullException>();
     }

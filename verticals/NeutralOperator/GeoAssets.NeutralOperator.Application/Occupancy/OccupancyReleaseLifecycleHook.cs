@@ -5,7 +5,7 @@ namespace GeoAssets.NeutralOperator.Application.Occupancy;
 /// <summary>
 /// The NeutralOperator vertical's effect of closing an order (XD01-315, as a lifecycle hook since XD01-362 — it used to be
 /// hard-coded in the generic order repository): a closed order can never commit what is still staged on its targets, so
-/// those change sets are discarded at the closing instant and in the same <c>SaveChanges</c> as the closing transition. Sets
+/// those change sets are discarded at the closing instant and in the same transaction as the closing transition. Sets
 /// already committed — the approval path marks them before it closes the order — or discarded are not touched.
 /// </summary>
 public sealed class OccupancyReleaseLifecycleHook(IOccupancyChangeSetCloser changeSets) : IOrderLifecycleHook
