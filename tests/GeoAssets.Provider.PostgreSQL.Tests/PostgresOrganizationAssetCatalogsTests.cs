@@ -787,6 +787,64 @@ public sealed class PostgresOrganizationAssetCatalogsTests(PostgresContainerFixt
             provider.GetRequiredKeyedService<IAssetProvider>(PostgresOrganizationCatalogServiceExtensions.SharedCatalogKey).Should().BeOfType<PostgresAssetProvider>();
     }
 
+    [Fact]
+    public async Task AddPostgresOrganizationAssetCatalogs_RegistersTheCatalogsAsTheIOrganizationCatalogFactorySingleton()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(TimeProvider.System);
+        services.AddGeoAssetsPostgres();
+        services.AddWarmedPostgresAssetProvider(fixture.ConnectionString);
+        services.AddPostgresOrganizationAssetCatalogs(fixture.ConnectionString);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await provider.WarmPostgresAssetProviderAsync();
+
+        var factory = provider.GetRequiredService<IOrganizationCatalogFactory>();
+
+        factory.Should().BeSameAs(provider.GetRequiredService<PostgresOrganizationAssetCatalogs>());
+        factory.Should().BeSameAs(provider.GetRequiredService<IOrganizationCatalogFactory>());
+    }
+
+    [Fact]
+    public async Task GetForOrganization_IsFor()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var factory = catalogs.Sut;
+
+        factory.GetForOrganization(world.A).Should().BeSameAs(catalogs.For(world.A));
+        factory.GetForOrganization(Guid.Empty).Should().BeSameAs(catalogs.For(Guid.Empty));
+    }
+
+    [Fact]
+    public async Task GetForOrganizationAsync_ReturnsTheWarmedCatalog_EqualToFor()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var factory = catalogs.Sut;
+
+        var view = await factory.GetForOrganizationAsync(world.A, CancellationToken.None);
+
+        view.Should().BeSameAs(catalogs.For(world.A));
+        view.GetById(world.OwnA).Should().NotBeNull();
+        view.GetById(world.Shared).Should().NotBeNull();
+        view.GetById(world.OwnB).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetForOrganizationAsync_EmptyOrganization_ReturnsTheSharedOnlyCatalog()
+    {
+        var world = await SeedWorldAsync();
+        await using var catalogs = await NewCatalogsAsync();
+        var factory = catalogs.Sut;
+
+        var view = await factory.GetForOrganizationAsync(Guid.Empty, CancellationToken.None);
+
+        view.Should().BeSameAs(catalogs.For(Guid.Empty));
+        view.GetById(world.Shared).Should().NotBeNull();
+        view.GetById(world.OwnA).Should().BeNull();
+    }
+
     private sealed class SwitchableTenant : ITenantContext
     {
         public Guid OrganizationId { get; set; }

@@ -35,9 +35,10 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // and pre-warmed before the host serves — PostgresAssetProvider's ISyncProvider marker stays honest (XD01-173).
         services.AddGeoAssetsPostgres();
 
-        // Organization-scoped asset reads (XD01-338): the pool's default catalog (the host's singleton IAssetProvider)
-        // is the shared catalog, each request's IAssetProvider is the caller's organization's view.
-        services.AddServerOrganizationAssetCatalogs(connectionString);
+        // Organization-scoped asset reads (XD01-338), natively: one cache per organization over the pool's default catalog
+        // (the host's singleton IAssetProvider, the shared catalog), registered as the host's IOrganizationCatalogFactory
+        // (XD01-373); each request's IAssetProvider is the caller's organization's view.
+        services.AddPostgresOrganizationAssetCatalogs(connectionString);
 
         // IAssetSpatialQuery (XD01-307): area/attribute selection pushed down to PostGIS, scoped to the request's tenant.
         services.AddPostgresAssetSpatialQuery(connectionString);

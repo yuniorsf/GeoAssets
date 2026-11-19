@@ -27,7 +27,7 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///
 /// <para>Disposes the organizations' providers; the shared catalog belongs to whoever created it.</para>
 /// </summary>
-public sealed class PostgresOrganizationAssetCatalogs : IAsyncDisposable
+public sealed class PostgresOrganizationAssetCatalogs : IOrganizationCatalogFactory, IAsyncDisposable
 {
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
     private readonly IAssetProvider _shared;
@@ -65,6 +65,16 @@ public sealed class PostgresOrganizationAssetCatalogs : IAsyncDisposable
     /// </summary>
     public IAssetProvider For(Guid organizationId) =>
         organizationId == Guid.Empty ? _sharedOnly : EntryFor(organizationId).Catalog;
+
+    /// <inheritdoc cref="For"/>
+    public IAssetProvider GetForOrganization(Guid organizationId) => For(organizationId);
+
+    /// <summary>The catalog as <paramref name="organizationId"/> sees it, its cache loaded (<see cref="WarmAsync"/>) first.</summary>
+    public async ValueTask<IAssetProvider> GetForOrganizationAsync(Guid organizationId, CancellationToken ct)
+    {
+        await WarmAsync(organizationId, ct).ConfigureAwait(false);
+        return For(organizationId);
+    }
 
     /// <summary>Loads <paramref name="organizationId"/>'s cache unless already loaded; nothing for <see cref="Guid.Empty"/>.</summary>
     public async Task WarmAsync(Guid organizationId, CancellationToken ct)
