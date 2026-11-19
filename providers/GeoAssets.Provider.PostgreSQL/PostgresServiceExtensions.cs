@@ -1,6 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
 using GeoAssets.Provider.PostgreSQL.Data;
+using GeoAssets.Provider.PostgreSQL.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -66,6 +67,20 @@ public static class PostgresServiceExtensions
             opts.UseNpgsql(connectionString, npgsql => npgsql
                 .UseNetTopologySuite()
                 .EnableRetryOnFailure()));
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IAppliedMutationBatchStore"/> (XD01-229) over a <see cref="IDbContextFactory{GeoAssetsDbContext}"/>
+    /// on <paramref name="connectionString"/> (<see cref="AddGeoAssetsDbContextFactory"/>): one scoped, per-request DbContext.
+    /// </summary>
+    public static IServiceCollection AddPostgresAppliedMutationBatchStore(this IServiceCollection services, string connectionString)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddGeoAssetsDbContextFactory(connectionString);
+        services.AddScoped<IAppliedMutationBatchStore>(sp =>
+            new EFAppliedMutationBatchStore(sp.GetRequiredService<IDbContextFactory<GeoAssetsDbContext>>().CreateDbContext()));
         return services;
     }
 }

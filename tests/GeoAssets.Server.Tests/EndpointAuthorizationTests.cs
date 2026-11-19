@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
@@ -21,7 +22,7 @@ namespace GeoAssets.Server.Tests;
 
 /// <summary>
 /// Never actually invoked by these tests — WMS authorization gating happens in middleware
-/// before the endpoint delegate (and therefore <see cref="WmsPostGisRenderer"/>) runs. Only
+/// before the endpoint delegate (and therefore <see cref="IAssetRenderQuery"/>) runs. Only
 /// exists so the "/wms" endpoint's delegate metadata can be built at all: minimal APIs infer
 /// a complex, unregistered parameter type as a request body, which throws immediately for a
 /// GET endpoint — registering a (non-functional) factory avoids that build-time failure.
@@ -90,7 +91,7 @@ public class EndpointAuthorizationTests
                     services.AddSingleton<IOrganizationGrantRepository, NeverCalledOrganizationGrantRepository>();
                     services.AddSingleton<IAssetProvider>(new TestAssetProvider());
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
-                    services.AddSingleton<WmsPostGisRenderer>();
+                    services.AddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
                 });
                 webHost.Configure(app =>
                 {
@@ -321,7 +322,7 @@ public class EndpointAuthorizationTests
     }
 
     // ── GET /wms (features:read) — capabilities only; GetMap needs a real Postgres-backed
-    // WmsPostGisRenderer, out of scope for this authorization-gating test ─────────────────
+    // render query, out of scope for this authorization-gating test ─────────────────
 
     [Fact]
     public async Task Wms_Unauthenticated_Returns401()

@@ -34,16 +34,17 @@ using Xunit;
 namespace GeoAssets.Security.Tests;
 
 /// <summary>
-/// Characterization (XD01-355, ADR-001 smell P): which organization-owned features the WMS endpoint shows to anonymous,
-/// organization-less and tenant callers, on a database built by the production migrations and with <c>Program.cs</c>'s
-/// WMS wiring — <c>AddGeoAssetsDbContextFactory</c> (a singleton factory, no <c>TenantTransactionInterceptor</c>),
-/// <see cref="WmsPostGisRenderer"/>, <see cref="HttpTenantContext"/>, and <c>MapWmsApi(requireAuthentication: false)</c>
-/// (the <c>Wms:RequireAuthentication</c> default) — in the <c>Production</c> environment the deployed stack runs in.
-/// The application connects as the tables' owner, as the deployed stack does, so row-level security is not in play and
-/// <see cref="GeoAssetsDbContext"/>'s query filter is the only scoping. Asserts today's outcome so that
-/// XD01-372 (epic XD01-348, P4 — <c>IAssetRenderQuery</c> with correct tenant scoping) flips it deliberately.
+/// The WMS endpoint's tenant scoping contract (XD01-372, ADR-001 smell P): anonymous and organization-less callers see
+/// the shared features only; an organization's caller sees its organization's features plus the shared ones — the same
+/// view as the feature API (XD01-338) — for both painted pixels (GetMap) and GetFeatureInfo. Runs on a database built by
+/// the production migrations and with <c>Program.cs</c> + <c>PostgresSpatialModule</c>'s wiring: organization-scoped
+/// catalogs, <c>AddPostgresAssetRenderQuery</c>, <see cref="HttpTenantContext"/> and
+/// <c>MapWmsApi(requireAuthentication: false)</c> (the <c>Wms:RequireAuthentication</c> default), in the
+/// <c>Production</c> environment the deployed stack runs in. The application connects as the tables' owner, as the
+/// deployed stack does, so row-level security is not in play and the tenant-stamped transaction plus
+/// <see cref="GeoAssetsDbContext"/>'s query filter is the only scoping.
 /// </summary>
-public sealed class WmsTenantScopingCharacterizationTests
+public sealed class WmsTenantScopingTests
 {
     private const string OrganizationClaim = "test_org";
     private const string OrganizationHeader = "X-Test-Organization";
@@ -66,18 +67,8 @@ public sealed class WmsTenantScopingCharacterizationTests
     private static readonly Pole SharedPole = new("wms-pole-shared", Guid.Empty, -38.25, -12.75);
     private static readonly Pole[] Poles = [PoleOfA, PoleOfB, SharedPole];
 
-    /// <summary>
-    /// Today: every caller sees exactly the features whose organization equals its own request organization —
-    /// <see cref="Guid.Empty"/> for anonymous and organization-less callers — so tenants do <b>not</b> see the shared
-    /// pole the feature API shows them (XD01-338), and anonymous callers see the shared pole only. No caller sees
-    /// another organization's pole (no cross-tenant leak). The tenant reaches the context because the singleton
-    /// factory resolves the request-scoped <see cref="ITenantContext"/> from the root provider, and
-    /// <see cref="HttpTenantContext"/> reads the request's user through <see cref="IHttpContextAccessor"/> per call —
-    /// scoping by accident of lifetimes, not by design. Inverted by XD01-372 (P4): WMS renders through the provider
-    /// abstraction with the same organization view as the feature API (own + shared).
-    /// </summary>
     [Fact]
-    public async Task Characterization_WmsShowsEachCallerOnlyItsOwnRequestOrganizationsFeatures()
+    public async Task Wms_ShowsEachTenantCallerItsOrganizationAndSharedFeatures()
     {
         await using var host = await HostAsync();
 
@@ -101,10 +92,10 @@ public sealed class WmsTenantScopingCharacterizationTests
         observed["anonymous"].Painted.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
         observed["organization-less"].FeatureInfo.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
         observed["organization-less"].Painted.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
-        observed["organization A"].FeatureInfo.Should().BeEquivalentTo([PoleOfA.Id], because: "observed {0}", report);
-        observed["organization A"].Painted.Should().BeEquivalentTo([PoleOfA.Id], because: "observed {0}", report);
-        observed["organization B"].FeatureInfo.Should().BeEquivalentTo([PoleOfB.Id], because: "observed {0}", report);
-        observed["organization B"].Painted.Should().BeEquivalentTo([PoleOfB.Id], because: "observed {0}", report);
+        observed["organization A"].FeatureInfo.Should().BeEquivalentTo([PoleOfA.Id, SharedPole.Id], because: "observed {0}", report);
+        observed["organization A"].Painted.Should().BeEquivalentTo([PoleOfA.Id, SharedPole.Id], because: "observed {0}", report);
+        observed["organization B"].FeatureInfo.Should().BeEquivalentTo([PoleOfB.Id, SharedPole.Id], because: "observed {0}", report);
+        observed["organization B"].Painted.Should().BeEquivalentTo([PoleOfB.Id, SharedPole.Id], because: "observed {0}", report);
     }
 
     // ── Probes ────────────────────────────────────────────────────────────────
@@ -180,7 +171,7 @@ public sealed class WmsTenantScopingCharacterizationTests
         }
     }
 
-    /// <summary>A fresh database migrated with the production chain and the three poles; then Program.cs's WMS wiring.</summary>
+    /// <summary>A fresh database migrated with the production chain and the three poles; then the production WMS wiring.</summary>
     private static async Task<Host> HostAsync()
     {
         var connectionString = new NpgsqlConnectionStringBuilder(await SecurityTestContainerFixture.EnsureStartedAsync())
@@ -205,10 +196,13 @@ public sealed class WmsTenantScopingCharacterizationTests
         builder.Logging.ClearProviders();
         var services = builder.Services;
 
-        // Program.cs's WMS registrations.
+        // Program.cs's catalog registrations and PostgresSpatialModule's WMS render query.
         services.AddSingleton(TimeProvider.System);
-        services.AddGeoAssetsDbContextFactory(connectionString);
-        services.AddSingleton<WmsPostGisRenderer>();
+        services.AddGeoAssetsPostgres();
+        services.AddWarmedPostgresAssetProvider(connectionString);
+        services.AddPostgresOrganizationAssetCatalogs(connectionString);
+        services.AddServerOrganizationAssetCatalogs();
+        services.AddPostgresAssetRenderQuery(connectionString);
 
         // The caller and their organization, resolved as Program.cs resolves them.
         services.AddHttpContextAccessor();
@@ -224,7 +218,9 @@ public sealed class WmsTenantScopingCharacterizationTests
         services.AddSingleton<IOrganizationGrantRepository, NoGrants>();
 
         var web = builder.Build();
+        await web.Services.WarmPostgresAssetProviderAsync();
         web.UseGeoAssetsAuthentication();
+        web.UseOrganizationAssetCatalogs();
         web.MapWmsApi(requireAuthentication: false);
         await web.StartAsync();
         return new Host(web);
