@@ -1,4 +1,6 @@
+using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Targets;
 
 namespace GeoAssets.Shared.Services.OrderTargets;
 
@@ -18,15 +20,18 @@ public static class SelectionOrderTypes
     /// <param name="creatableTypes">Candidate order types, in display order.</param>
     /// <param name="selectedIds">The selected feature ids.</param>
     /// <param name="assetTypeOf">The asset type id of a loaded feature, or null when the client has no such feature.</param>
+    /// <param name="assetTypes">The loaded asset types, which resolve a policy's targeted roles (XD01-368).</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
     public static IReadOnlyList<SelectionOrderTypeFit> Evaluate(
         IEnumerable<OrderType> creatableTypes,
         IReadOnlyCollection<string> selectedIds,
-        Func<string, string?> assetTypeOf)
+        Func<string, string?> assetTypeOf,
+        IReadOnlyCollection<AssetType> assetTypes)
     {
         ArgumentNullException.ThrowIfNull(creatableTypes);
         ArgumentNullException.ThrowIfNull(selectedIds);
         ArgumentNullException.ThrowIfNull(assetTypeOf);
+        ArgumentNullException.ThrowIfNull(assetTypes);
 
         var typeOfSelected = selectedIds.Select(assetTypeOf).ToList();
 
@@ -35,7 +40,7 @@ public static class SelectionOrderTypes
         {
             if (type.TargetPolicy is not { } policy) continue;
 
-            var targeted = policy.TargetAssetTypeIds.ToHashSet(StringComparer.Ordinal);
+            var targeted = OrderTargetAssetTypes.Resolve(policy, assetTypes).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var unknown = typeOfSelected.Count(t => t is null);
             var eligible = typeOfSelected.Count(t => t is not null && targeted.Contains(t));
             var other = typeOfSelected.Count - unknown - eligible;

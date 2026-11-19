@@ -72,7 +72,11 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
         var rules    = await _http.GetFromJsonAsync<LayerRule[]> ("layer-rules", _opts, ct).ConfigureAwait(false) ?? [];
 
         _cache.LoadAll(features);
-        foreach (var t in types.Where(t => !t.IsBuiltIn))
+        // Every server type the cache lacks, built-in ones included: a seeded type such as the pole carries the roles
+        // that resolve an order type's targets on the client (XD01-368). The generic defaults the cache already holds
+        // are not added twice.
+        var known = _cache.GetAssetTypes().Select(t => t.Id).ToHashSet();
+        foreach (var t in types.Where(t => !known.Contains(t.Id)))
             _cache.AddAssetType(t);
         foreach (var l in layers)
             _cache.AddLayer(l);

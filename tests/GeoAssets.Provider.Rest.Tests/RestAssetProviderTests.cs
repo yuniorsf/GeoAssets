@@ -363,6 +363,46 @@ public class RestAssetProviderTests
         ((IAssetProvider)sut).GetAssetTypesWithRole("isp:pole").Select(t => t.Id).Should().Equal(withRoles.Id);
     }
 
+    [Fact]
+    public async Task InitializeAsync_ABuiltInServerTypeWithRoles_IsCached_AndFoundByRole()
+    {
+        var pole = new AssetType
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000004"),
+            Name = "Poste",
+            IsBuiltIn = true,
+            Roles = ["occupiable-support"],
+        };
+        var handler = new FakeHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/geoassets/asset-types" => JsonBody(new[] { pole }),
+            _ => JsonResponse("[]")
+        });
+        var factory = new RestProviderFactory(new FakeHttpClientFactory(handler));
+
+        var sut = await factory.CreateAsync("http://localhost/api/geoassets");
+
+        sut.GetAssetTypes().Should().ContainSingle(t => t.Id == pole.Id);
+        ((IAssetProvider)sut).GetAssetTypesWithRole("occupiable-support").Select(t => t.Id).Should().Equal(pole.Id);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_TheServersGenericDefaults_AreNotDuplicatedInTheCache()
+    {
+        var handler = new FakeHttpMessageHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/geoassets/asset-types" => JsonBody(AssetType.Defaults.ToArray()),
+            _ => JsonResponse("[]")
+        });
+        var factory = new RestProviderFactory(new FakeHttpClientFactory(handler));
+
+        var sut = await factory.CreateAsync("http://localhost/api/geoassets");
+
+        var ids = sut.GetAssetTypes().Select(t => t.Id).ToList();
+        ids.Should().OnlyHaveUniqueItems();
+        ids.Should().Contain([AssetType.Point.Id, AssetType.Line.Id, AssetType.Area.Id]);
+    }
+
     [Theory]
     [InlineData("""[{"id":"11111111-1111-1111-1111-111111111111","name":"Legacy","roles":null}]""")]
     [InlineData("""[{"id":"11111111-1111-1111-1111-111111111111","name":"Legacy"}]""")]

@@ -47,7 +47,7 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
     private const string Order = "oac-order";
     private const string LightPole = "oac-pole-light";
     private const string CrowdedPole = "oac-pole-crowded";
-    private const string PoleType = OrderOccupancyHostExtensions.SeededPoleAssetTypeId;
+    private const string PoleType = "00000000-0000-0000-0000-000000000004";
 
     private static readonly Guid Owner = new("a3a3a3a3-0000-4000-8000-000000000337");
     private static readonly Guid Occupant = new("a4a4a4a4-0000-4000-8000-000000000337");
@@ -192,7 +192,7 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         services.AddSingleton(new GeoAssetsActivitySource("1.0.0"));
         services.AddSingleton(new GeoAssetsMeter("1.0.0"));
         services.AddScoped<ITenantContext>(_ => new FixedTenant(Owner));
-        services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes(configuration));
+        services.AddOrderTypeRegistry(registry => registry.RegisterSharedUseOrderTypes());
         services.AddWorkflowPersistence(o => o.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
         services.AddServiceOrderRules();
         services.AddServerOrderOccupancyStaging(configuration);

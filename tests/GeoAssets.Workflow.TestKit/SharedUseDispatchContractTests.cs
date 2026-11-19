@@ -53,7 +53,7 @@ public abstract partial class SharedUseDispatchContractTests
     {
         ArgumentNullException.ThrowIfNull(harness);
 
-        SharedUseOrderTypes.RegisterAll(harness.OrderTypes, [PoleType]);
+        SharedUseOrderTypes.RegisterAll(harness.OrderTypes);
         harness.OrderTypes.Register(new OrderType
         {
             Id = ExclusiveTypeId,

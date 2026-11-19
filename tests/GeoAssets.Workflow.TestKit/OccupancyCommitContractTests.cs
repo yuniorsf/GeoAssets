@@ -52,7 +52,7 @@ public abstract class OccupancyCommitContractTests
         ArgumentNullException.ThrowIfNull(harness);
         ArgumentNullException.ThrowIfNull(poles);
         if (harness.OrderTypes.Find(SharedUseOrderTypes.PoleWorkId) is null)
-            SharedUseOrderTypes.RegisterAll(harness.OrderTypes, [PoleType]);
+            SharedUseOrderTypes.RegisterAll(harness.OrderTypes);
 
         await harness.Orders.AddAsync(new ServiceOrder
         {

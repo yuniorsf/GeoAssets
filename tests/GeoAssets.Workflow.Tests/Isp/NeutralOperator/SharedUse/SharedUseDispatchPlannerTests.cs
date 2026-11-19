@@ -24,8 +24,8 @@ public sealed class SharedUseDispatchPlannerTests
     private static readonly Guid Two = new("c2c2c2c2-0000-4000-8000-000000000316");
     private static readonly DateTimeOffset Now = new(2026, 11, 16, 9, 30, 0, TimeSpan.Zero);
 
-    private static readonly OrderType ParentType = SharedUseOrderTypes.CreatePoleWork([Pole]);
-    private static readonly OrderType ChildType = SharedUseOrderTypes.CreateOccupantNotice([Pole]);
+    private static readonly OrderType ParentType = SharedUseOrderTypes.CreatePoleWork();
+    private static readonly OrderType ChildType = SharedUseOrderTypes.CreateOccupantNotice();
 
     private readonly FakeTimeProvider _clock = new(Now);
 

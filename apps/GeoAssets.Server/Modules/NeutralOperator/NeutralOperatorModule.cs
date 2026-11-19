@@ -30,11 +30,11 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         {
             ClandestineAttachmentOrderTypes.RegisterAll(registry);
             TenantAttachmentRequestOrderTypes.RegisterAll(registry);
-            registry.RegisterSharedUseOrderTypes(configuration);
+            registry.RegisterSharedUseOrderTypes();
         });
 
-        // Staged occupancy changes on an order's targets (XD01-315); which asset types are poles is this host's to
-        // say — see OrderOccupancyHostExtensions.
+        // Staged occupancy changes on an order's targets (XD01-315); a target is a pole when its asset type carries the
+        // occupiable-support role (XD01-368) — see OrderOccupancyHostExtensions.
         services.AddServerOrderOccupancyStaging(configuration);
 
         // Shared-use dispatch (XD01-316): a pole owner's order fans out into one order per occupant organization, each

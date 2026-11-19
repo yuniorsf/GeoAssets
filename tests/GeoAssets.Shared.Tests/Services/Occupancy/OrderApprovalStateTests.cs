@@ -25,7 +25,7 @@ public sealed class OrderApprovalStateTests
     private static OrderTypeRegistry NewRegistry()
     {
         var registry = new OrderTypeRegistry();
-        SharedUseOrderTypes.RegisterAll(registry, ["pole"]);
+        SharedUseOrderTypes.RegisterAll(registry);
         registry.Register(new OrderType { Id = "plain", DisplayName = "Plain" });
         return registry;
     }

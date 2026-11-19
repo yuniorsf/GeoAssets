@@ -244,7 +244,7 @@ public sealed class ObservableSharedUseDispatchServiceTests : IDisposable
         using var fixture = new SqliteFixture(new FakeTenantContext(owner));
         SharedUseDispatchEfHarness.ReloadOrdersAfterEachSave(fixture.Context);
         var ef = new SharedUseDispatchEfHarness(fixture.Context, owner, clock: _clock);
-        SharedUseOrderTypes.RegisterAll(ef.OrderTypes, ["pole"]);
+        SharedUseOrderTypes.RegisterAll(ef.OrderTypes);
         var occupant = Guid.NewGuid();
         await ef.Orders.AddAsync(new ServiceOrder
         {

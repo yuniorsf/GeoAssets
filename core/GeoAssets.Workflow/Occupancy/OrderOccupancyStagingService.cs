@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Isp.NeutralOperator.Occupancy;
 using GeoAssets.Core.Models;
 using GeoAssets.Workflow.Orders;
@@ -34,7 +35,10 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
     private readonly IOccupancyChangeSetWriter _changeSetWriter;
     private readonly OrderOccupancyOptions _options;
     private readonly TimeProvider _timeProvider;
+    private readonly IAssetProvider? _assets;
 
+    /// <param name="assets">The asset catalog whose types say which targets are poles (<see cref="OrderOccupancyOptions.PoleRole"/>,
+    /// XD01-368). Without it only <see cref="OrderOccupancyOptions.PoleAssetTypeIds"/> are poles.</param>
     public OrderOccupancyStagingService(
         IServiceOrderReader orders,
         OrderTypeRegistry orderTypes,
@@ -44,7 +48,8 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
         IOccupancyChangeSetReader changeSets,
         IOccupancyChangeSetWriter changeSetWriter,
         OrderOccupancyOptions options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAssetProvider? assets = null)
     {
         ArgumentNullException.ThrowIfNull(orders);
         ArgumentNullException.ThrowIfNull(orderTypes);
@@ -65,6 +70,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
         _changeSetWriter = changeSetWriter;
         _options = options;
         _timeProvider = timeProvider;
+        _assets = assets;
     }
 
     public async Task<TargetOccupancyView> GetAsync(string orderId, string targetId, WorkflowPrincipal principal, CancellationToken ct)
@@ -154,7 +160,7 @@ public sealed class OrderOccupancyStagingService : IOrderOccupancyStagingService
         var target = await _targets.GetByIdAsync(orderId, targetId, ct).ConfigureAwait(false)
             ?? throw new OrderTargetNotFoundException(orderId, targetId);
 
-        return _options.IsPole(target.AssetTypeId)
+        return _options.IsPole(target.AssetTypeId, _assets?.GetAssetTypes() ?? [])
             ? target
             : throw new TargetIsNotAPoleException(targetId, target.AssetTypeId);
     }

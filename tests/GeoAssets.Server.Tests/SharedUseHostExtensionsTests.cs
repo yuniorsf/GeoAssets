@@ -24,42 +24,23 @@ public sealed class SharedUseHostExtensionsTests
     // ── Order types ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void RegisterSharedUseOrderTypes_WithNoPoleTypeConfigured_UsesTheSeededPoleType()
+    public void RegisterSharedUseOrderTypes_TargetsTheOccupiableSupportRole_NotAnyAssetTypeId()
     {
         var registry = new OrderTypeRegistry();
 
-        registry.RegisterSharedUseOrderTypes(Configuration());
+        registry.RegisterSharedUseOrderTypes();
 
-        registry.Get(SharedUseOrderTypes.PoleWorkId).TargetPolicy!.TargetAssetTypeIds
-            .Should().Equal(OrderOccupancyHostExtensions.SeededPoleAssetTypeId);
-        registry.Get(SharedUseOrderTypes.OccupantNoticeId).TargetPolicy!.TargetAssetTypeIds
-            .Should().Equal(OrderOccupancyHostExtensions.SeededPoleAssetTypeId);
-    }
-
-    [Fact]
-    public void TheSeededPoleType_IsOneValue_ForThisHostAndForTheClientsThatRegisterTheSameTypes() =>
-        SharedUseOrderTypes.SeededPoleAssetTypeId.Should().Be(OrderOccupancyHostExtensions.SeededPoleAssetTypeId);
-
-    [Fact]
-    public void RegisterSharedUseOrderTypes_UsesTheSamePoleTypesAsTheOccupancyRoutes()
-    {
-        var configuration = Configuration(
-            ($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:0", " wooden-pole "),
-            ($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:1", "concrete-pole"),
-            ($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:2", " "));
-        var registry = new OrderTypeRegistry();
-
-        registry.RegisterSharedUseOrderTypes(configuration);
-
-        OrderOccupancyHostExtensions.PoleAssetTypeIds(configuration).Should().Equal("wooden-pole", "concrete-pole");
-        registry.Get(SharedUseOrderTypes.PoleWorkId).TargetPolicy!.TargetAssetTypeIds.Should().Equal("wooden-pole", "concrete-pole");
+        foreach (var id in new[] { SharedUseOrderTypes.PoleWorkId, SharedUseOrderTypes.OccupantNoticeId })
+        {
+            registry.Get(id).TargetPolicy!.TargetAssetTypeRoles.Should().Equal("occupiable-support");
+            registry.Get(id).TargetPolicy!.TargetAssetTypeIds.Should().BeEmpty();
+        }
     }
 
     [Fact]
     public void RegisterSharedUseOrderTypes_AndPoleAssetTypeIds_NullArguments_ThrowArgumentNullException()
     {
-        ((Action)(() => SharedUseHostExtensions.RegisterSharedUseOrderTypes(null!, Configuration()))).Should().Throw<ArgumentNullException>();
-        ((Action)(() => new OrderTypeRegistry().RegisterSharedUseOrderTypes(null!))).Should().Throw<ArgumentNullException>();
+        ((Action)(() => SharedUseHostExtensions.RegisterSharedUseOrderTypes(null!))).Should().Throw<ArgumentNullException>();
         ((Action)(() => OrderOccupancyHostExtensions.PoleAssetTypeIds(null!))).Should().Throw<ArgumentNullException>();
     }
 

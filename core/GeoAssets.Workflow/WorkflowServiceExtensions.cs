@@ -196,7 +196,8 @@ public static class WorkflowServiceExtensions
             sp.GetRequiredService<IServiceOrderTargetReader>(),
             sp.GetRequiredService<IServiceOrderTargetWriter>(),
             sp.GetRequiredService<OrderTargetSelectionOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetService<IAssetProvider>()));
         services.TryAddScoped<IOrderTargetSelectionService>(sp => sp.GetRequiredService<OrderTargetSelectionService>());
 
         return services;
@@ -208,8 +209,9 @@ public static class WorkflowServiceExtensions
     /// staged preview. Expects <see cref="OrderTypeRegistry"/>, <see cref="ServiceOrderRules"/>,
     /// <see cref="IServiceOrderReader"/>, <see cref="IServiceOrderTargetReader"/>,
     /// <see cref="IPoleOccupancyReader"/> and both change-set ports to be registered by the host.
-    /// <paramref name="configure"/> names the host's pole asset types
-    /// (<see cref="OrderOccupancyOptions.PoleAssetTypeIds"/>); without any, no target is a pole.
+    /// A target is a pole when its asset type carries <see cref="OrderOccupancyOptions.PoleRole"/> in the host's
+    /// <see cref="IAssetProvider"/> (XD01-368), or is one of the deprecated
+    /// <see cref="OrderOccupancyOptions.PoleAssetTypeIds"/> <paramref name="configure"/> may still name.
     /// </summary>
     public static IServiceCollection AddOrderOccupancyStaging(
         this IServiceCollection services,
@@ -230,7 +232,8 @@ public static class WorkflowServiceExtensions
             sp.GetRequiredService<IOccupancyChangeSetReader>(),
             sp.GetRequiredService<IOccupancyChangeSetWriter>(),
             sp.GetRequiredService<OrderOccupancyOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetService<IAssetProvider>()));
         services.TryAddScoped<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<OrderOccupancyStagingService>());
 
         return services;

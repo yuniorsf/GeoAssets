@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Models;
 using GeoAssets.Shared.Services.OrderTargets;
 using GeoAssets.Workflow.Selection.Strategies;
 using GeoAssets.Workflow.Targets;
@@ -23,9 +24,10 @@ public sealed class OrderTargetSelectionPlannerTests
     [Fact]
     public void NullArguments_Throw()
     {
-        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(null!, ["p1"], null, AssetTypeOf)).Should().Throw<ArgumentNullException>();
-        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(_policy, null!, null, AssetTypeOf)).Should().Throw<ArgumentNullException>();
-        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(_policy, ["p1"], null, null!)).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(null!, ["p1"], null, AssetTypeOf, [])).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(_policy, null!, null, AssetTypeOf, [])).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(_policy, ["p1"], null, null!, [])).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => OrderTargetSelectionPlanner.Plan(_policy, ["p1"], null, AssetTypeOf, null!)).Should().Throw<ArgumentNullException>();
     }
 
     [Theory]
@@ -33,7 +35,7 @@ public sealed class OrderTargetSelectionPlannerTests
     [InlineData(false)]
     public void EmptySelection_IsAProblem_WithOrWithoutAFence(bool withFence)
     {
-        var result = OrderTargetSelectionPlanner.Plan(_policy, [], withFence ? _fence : null, AssetTypeOf);
+        var result = OrderTargetSelectionPlanner.Plan(_policy, [], withFence ? _fence : null, AssetTypeOf, []);
 
         result.Plan.Should().BeNull();
         result.Problem.Should().Be(OrderTargetSelectionPlanProblem.EmptySelection);
@@ -42,7 +44,7 @@ public sealed class OrderTargetSelectionPlannerTests
     [Fact]
     public void SelectionMadeByOneFence_SendsThatFence_RestrictedToThePolicysAssetTypes()
     {
-        var plan = OrderTargetSelectionPlanner.Plan(_policy, ["p1", "c1"], _fence, AssetTypeOf).Plan!;
+        var plan = OrderTargetSelectionPlanner.Plan(_policy, ["p1", "c1"], _fence, AssetTypeOf, []).Plan!;
 
         plan.StrategyId.Should().Be(PolygonFenceSelectionStrategy.Id);
         plan.IsFence.Should().BeTrue();
@@ -55,7 +57,7 @@ public sealed class OrderTargetSelectionPlannerTests
     [Fact]
     public void SelectionNotMadeByOneFence_SendsTheEligibleAndUnloadedIds_InOrdinalOrder_OnTheFeatureIdKey()
     {
-        var plan = OrderTargetSelectionPlanner.Plan(_policy, ["p2", "c1", "zz-unloaded", "m1", "p1"], null, AssetTypeOf).Plan!;
+        var plan = OrderTargetSelectionPlanner.Plan(_policy, ["p2", "c1", "zz-unloaded", "m1", "p1"], null, AssetTypeOf, []).Plan!;
 
         plan.StrategyId.Should().Be(IdentifierListSelectionStrategy.Id);
         plan.IsFence.Should().BeFalse();
@@ -68,7 +70,7 @@ public sealed class OrderTargetSelectionPlannerTests
     [Fact]
     public void OnlyFeaturesOfOtherTypes_IsAProblem()
     {
-        var result = OrderTargetSelectionPlanner.Plan(_policy, ["c1"], null, AssetTypeOf);
+        var result = OrderTargetSelectionPlanner.Plan(_policy, ["c1"], null, AssetTypeOf, []);
 
         result.Problem.Should().Be(OrderTargetSelectionPlanProblem.NoEligibleFeature);
     }
@@ -78,9 +80,9 @@ public sealed class OrderTargetSelectionPlannerTests
     {
         var atCeiling = Enumerable.Range(0, IdentifierListSelectionStrategy.MaxDistinctValues).Select(i => $"u{i}").ToList();
 
-        OrderTargetSelectionPlanner.Plan(_policy, atCeiling, null, AssetTypeOf).Plan!.IdentifierCount
+        OrderTargetSelectionPlanner.Plan(_policy, atCeiling, null, AssetTypeOf, []).Plan!.IdentifierCount
             .Should().Be(IdentifierListSelectionStrategy.MaxDistinctValues);
-        OrderTargetSelectionPlanner.Plan(_policy, [.. atCeiling, "one-more"], null, AssetTypeOf).Problem
+        OrderTargetSelectionPlanner.Plan(_policy, [.. atCeiling, "one-more"], null, AssetTypeOf, []).Problem
             .Should().Be(OrderTargetSelectionPlanProblem.TooManyIdentifiers);
     }
 
@@ -89,7 +91,45 @@ public sealed class OrderTargetSelectionPlannerTests
     {
         var many = Enumerable.Range(0, IdentifierListSelectionStrategy.MaxDistinctValues + 1).Select(i => $"u{i}").ToList();
 
-        OrderTargetSelectionPlanner.Plan(_policy, many, _fence, AssetTypeOf).Plan!.IsFence.Should().BeTrue();
+        OrderTargetSelectionPlanner.Plan(_policy, many, _fence, AssetTypeOf, []).Plan!.IsFence.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ARoleTargetingPolicy_PlansTheFeaturesOfATypeCarryingTheRole_NotThoseOfATypeWithoutIt_AndSendsTheResolvedIds()
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeIds = ["manhole"], TargetAssetTypeRoles = ["occupiable-support"] };
+        var support = new AssetType { Id = Guid.NewGuid(), Name = "Support", Roles = ["occupiable-support"] };
+        var plain = new AssetType { Id = Guid.NewGuid(), Name = "Plain" };
+        var typeOf = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["s1"] = support.Id.ToString(), ["x1"] = plain.Id.ToString(), ["m1"] = "manhole",
+        };
+
+        var plan = OrderTargetSelectionPlanner.Plan(policy, ["s1", "x1", "m1"], null, id => typeOf.GetValueOrDefault(id), [support, plain]).Plan!;
+
+        ((string[])plan.Parameters[IdentifierListSelectionStrategy.ValuesParameter]).Should().Equal("m1", "s1");
+        ((string[])plan.Parameters[IdentifierListSelectionStrategy.AssetTypeIdsParameter]).Should().Equal("manhole", support.Id.ToString());
+        OrderTargetSelectionPlanner.Plan(policy, ["x1"], null, id => typeOf.GetValueOrDefault(id), [support, plain]).Problem
+            .Should().Be(OrderTargetSelectionPlanProblem.NoEligibleFeature);
+    }
+
+    [Fact]
+    public void AFence_CarriesTheResolvedAssetTypeIds()
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeRoles = ["occupiable-support"] };
+        var support = new AssetType { Id = Guid.NewGuid(), Name = "Support", Roles = ["occupiable-support"] };
+
+        var plan = OrderTargetSelectionPlanner.Plan(policy, ["s1"], _fence, AssetTypeOf, [support]).Plan!;
+
+        ((string[])plan.Parameters[PolygonFenceSelectionStrategy.AssetTypeIdsParameter]).Should().Equal(support.Id.ToString());
+    }
+
+    [Fact]
+    public void TargetedAssetTypeIds_AreComparedIgnoringCase()
+    {
+        var policy = new OrderTargetPolicy { TargetAssetTypeIds = ["POLE"] };
+
+        OrderTargetSelectionPlanner.Plan(policy, ["p1"], null, AssetTypeOf, []).Plan!.IdentifierCount.Should().Be(1);
     }
 
     [Fact]

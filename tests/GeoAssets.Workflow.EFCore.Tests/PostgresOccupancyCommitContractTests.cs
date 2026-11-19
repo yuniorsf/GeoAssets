@@ -79,5 +79,5 @@ public sealed class PostgresOccupancyCommitContractTests : OccupancyCommitContra
     }
 
     private static void SharedUseOrderTypesRegistered(OccupancyCommitContractHarness harness) =>
-        GeoAssets.Workflow.Isp.NeutralOperator.SharedUse.SharedUseOrderTypes.RegisterAll(harness.OrderTypes, [PoleType]);
+        GeoAssets.Workflow.Isp.NeutralOperator.SharedUse.SharedUseOrderTypes.RegisterAll(harness.OrderTypes);
 }

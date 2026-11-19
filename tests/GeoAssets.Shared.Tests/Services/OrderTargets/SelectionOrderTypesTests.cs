@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Models;
 using GeoAssets.Shared.Services.OrderTargets;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
@@ -26,15 +27,15 @@ public sealed class SelectionOrderTypesTests
     [Fact]
     public void Evaluate_NullArguments_Throw()
     {
-        FluentActions.Invoking(() => SelectionOrderTypes.Evaluate(null!, [], AssetTypeOf)).Should().Throw<ArgumentNullException>();
-        FluentActions.Invoking(() => SelectionOrderTypes.Evaluate([], null!, AssetTypeOf)).Should().Throw<ArgumentNullException>();
-        FluentActions.Invoking(() => SelectionOrderTypes.Evaluate([], [], null!)).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => SelectionOrderTypes.Evaluate(null!, [], AssetTypeOf, [])).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => SelectionOrderTypes.Evaluate([], null!, AssetTypeOf, [])).Should().Throw<ArgumentNullException>();
+        FluentActions.Invoking(() => SelectionOrderTypes.Evaluate([], [], null!, [])).Should().Throw<ArgumentNullException>();
     }
 
     [Fact]
     public void Evaluate_TypeWithoutATargetPolicy_IsNeverOffered()
     {
-        var fits = SelectionOrderTypes.Evaluate([Type("plain")], ["p1"], AssetTypeOf);
+        var fits = SelectionOrderTypes.Evaluate([Type("plain")], ["p1"], AssetTypeOf, []);
 
         fits.Should().BeEmpty();
     }
@@ -45,7 +46,7 @@ public sealed class SelectionOrderTypesTests
         var fits = SelectionOrderTypes.Evaluate(
             [Type("cables", null, "cable"), Type("lighting", null, "lamp"), Type("poles", null, "pole", "manhole")],
             ["p1", "p2", "c1", "m1"],
-            AssetTypeOf);
+            AssetTypeOf, []);
 
         fits.Select(f => f.Type.Id).Should().Equal("cables", "poles");
         fits[0].Should().Match<SelectionOrderTypeFit>(f => f.EligibleCount == 1 && f.OtherTypeCount == 3 && f.UnknownCount == 0);
@@ -55,7 +56,7 @@ public sealed class SelectionOrderTypesTests
     [Fact]
     public void Evaluate_IdsTheClientHasNotLoaded_KeepATypeOnOffer_TheServerDecides()
     {
-        var fits = SelectionOrderTypes.Evaluate([Type("lighting", null, "lamp")], ["unloaded", "c1"], AssetTypeOf);
+        var fits = SelectionOrderTypes.Evaluate([Type("lighting", null, "lamp")], ["unloaded", "c1"], AssetTypeOf, []);
 
         fits.Should().ContainSingle().Which.Should().Match<SelectionOrderTypeFit>(
             f => f.EligibleCount == 0 && f.UnknownCount == 1 && f.OtherTypeCount == 1);
@@ -63,11 +64,37 @@ public sealed class SelectionOrderTypesTests
 
     [Fact]
     public void Evaluate_EmptySelection_OffersNothing() =>
-        SelectionOrderTypes.Evaluate([Type("poles", null, "pole")], [], AssetTypeOf).Should().BeEmpty();
+        SelectionOrderTypes.Evaluate([Type("poles", null, "pole")], [], AssetTypeOf, []).Should().BeEmpty();
 
     [Fact]
-    public void Evaluate_ComparesAssetTypesOrdinally_AsTheServerDoes() =>
-        SelectionOrderTypes.Evaluate([Type("poles", null, "POLE")], ["p1"], AssetTypeOf).Should().BeEmpty();
+    public void Evaluate_ComparesTargetedAssetTypeIdsIgnoringCase_AsTheServerDoes() =>
+        SelectionOrderTypes.Evaluate([Type("poles", null, "POLE")], ["p1"], AssetTypeOf, []).Should().ContainSingle()
+            .Which.EligibleCount.Should().Be(1);
+
+    [Fact]
+    public void Evaluate_ARoleTargetingPolicy_OffersFeaturesOfATypeCarryingTheRole_NotOfOneWithoutIt()
+    {
+        var roleType = new OrderType
+        {
+            Id = "role-work",
+            DisplayName = "Role work",
+            TargetPolicy = new OrderTargetPolicy { TargetAssetTypeRoles = ["occupiable-support"] },
+        };
+        var pole = new AssetType { Id = Guid.NewGuid(), Name = "Pole", Roles = ["occupiable-support"] };
+        var cable = new AssetType { Id = Guid.NewGuid(), Name = "Cable" };
+        var typeOf = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["r1"] = pole.Id.ToString(), ["r2"] = pole.Id.ToString(), ["k1"] = cable.Id.ToString(),
+        };
+
+        var fits = SelectionOrderTypes.Evaluate([roleType], ["r1", "r2", "k1"], id => typeOf.GetValueOrDefault(id), [pole, cable]);
+        var withoutRoleType = SelectionOrderTypes.Evaluate([roleType], ["k1"], id => typeOf.GetValueOrDefault(id), [pole, cable]);
+
+        fits.Should().ContainSingle().Which.Should().Match<SelectionOrderTypeFit>(f => f.EligibleCount == 2 && f.OtherTypeCount == 1 && f.UnknownCount == 0);
+        withoutRoleType.Should().BeEmpty("a type targeting only the role is not offered for features of a type without it");
+        SelectionOrderTypes.Evaluate([roleType], ["r1"], id => typeOf.GetValueOrDefault(id), [])
+            .Should().BeEmpty("without the catalog's asset types the role resolves to nothing");
+    }
 
     [Theory]
     [InlineData(null, 3, 0, false)]

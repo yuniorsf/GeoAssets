@@ -634,7 +634,7 @@ public sealed class ServiceOrderOccupancyEndpointTests
     // ── Host wiring ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void AddServerOrderOccupancyStaging_NamesTheConfiguredPoleAssetTypes_OrTheSeededOneWhenNoneIs()
+    public void AddServerOrderOccupancyStaging_NamesOnlyTheConfiguredDeprecatedPoleAssetTypes_TheRoleSaysTheRest()
     {
         static OrderOccupancyOptions Options(params (string Key, string? Value)[] settings)
         {
@@ -647,11 +647,10 @@ public sealed class ServiceOrderOccupancyEndpointTests
             return provider.GetRequiredService<OrderOccupancyOptions>();
         }
 
-        Options().PoleAssetTypeIds.Should().Equal(OrderOccupancyHostExtensions.SeededPoleAssetTypeId);
-        Options(($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:0", " ")).PoleAssetTypeIds.Should().Equal(OrderOccupancyHostExtensions.SeededPoleAssetTypeId);
+        Options().PoleAssetTypeIds.Should().BeEmpty();
+        Options(($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:0", " ")).PoleAssetTypeIds.Should().BeEmpty();
         Options(($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:0", "wood-pole"), ($"{OrderOccupancyHostExtensions.PoleAssetTypeIdsKey}:1", " concrete-pole "))
             .PoleAssetTypeIds.Should().BeEquivalentTo(["wood-pole", "concrete-pole"]);
-        OrderOccupancyHostExtensions.SeededPoleAssetTypeId.Should().Be("00000000-0000-0000-0000-000000000004");
         ((Action)(() => OrderOccupancyHostExtensions.AddServerOrderOccupancyStaging(null!, new ConfigurationBuilder().Build()))).Should().Throw<ArgumentNullException>();
         ((Action)(() => new ServiceCollection().AddServerOrderOccupancyStaging(null!))).Should().Throw<ArgumentNullException>();
     }

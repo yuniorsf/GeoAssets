@@ -38,7 +38,10 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
     private readonly IServiceOrderTargetWriter _targetWriter;
     private readonly OrderTargetSelectionOptions _options;
     private readonly TimeProvider _timeProvider;
+    private readonly IAssetProvider? _assets;
 
+    /// <param name="assets">The asset catalog whose types resolve a policy's <see cref="OrderTargetPolicy.TargetAssetTypeRoles"/>
+    /// (XD01-368). Without it only <see cref="OrderTargetPolicy.TargetAssetTypeIds"/> are targeted.</param>
     public OrderTargetSelectionService(
         IServiceOrderRepository orders,
         OrderTypeRegistry orderTypes,
@@ -47,7 +50,8 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         IServiceOrderTargetReader targetReader,
         IServiceOrderTargetWriter targetWriter,
         OrderTargetSelectionOptions options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAssetProvider? assets = null)
     {
         ArgumentNullException.ThrowIfNull(orders);
         ArgumentNullException.ThrowIfNull(orderTypes);
@@ -66,6 +70,7 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         _targetWriter = targetWriter;
         _options = options;
         _timeProvider = timeProvider;
+        _assets = assets;
     }
 
     public async Task<TargetSelectionPreview> PreviewAsync(TargetSelectionRequest request, WorkflowPrincipal principal, CancellationToken ct)
@@ -154,7 +159,8 @@ public sealed class OrderTargetSelectionService : IOrderTargetSelectionService
         var selection = await _selector.SelectAsync(
             new BoundedFeatureSelectionRequest(request.StrategyId, request.Parameters, order.OrganizationId, _options.MaxMatched)
             {
-                AllowedAssetTypeIds = policy.TargetAssetTypeIds,
+                // Roles are resolved once per selection, against the catalog's types as they are now.
+                AllowedAssetTypeIds = OrderTargetAssetTypes.Resolve(policy, _assets?.GetAssetTypes() ?? []),
                 DefaultAttributeKey = policy.AliasAttributeKey,
                 TargetOrder = order,
                 OrderRepository = _orders,

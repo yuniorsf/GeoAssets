@@ -7,13 +7,16 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
-/// This host's registration of staged occupancy changes (XD01-315): it decides which asset
-/// types are poles, which <see cref="OrderOccupancyOptions"/> leaves to the host because the
-/// asset-type catalog has no fixed "pole" type.
+/// This host's registration of staged occupancy changes (XD01-315). A target is a pole when its
+/// asset type carries <see cref="OccupancyAssetTypeRoles.OccupiableSupport"/> (XD01-368); the
+/// deprecated <see cref="PoleAssetTypeIdsKey"/> is still honoured, with a warning at startup.
 /// </summary>
 public static class OrderOccupancyHostExtensions
 {
-    /// <summary>Configuration key of the pole asset type ids (an array of strings).</summary>
+    /// <summary>
+    /// Deprecated (XD01-368) configuration key of extra pole asset type ids (an array of strings): tag the asset type
+    /// with <see cref="OccupancyAssetTypeRoles.OccupiableSupport"/> instead. Still honoured when set, and logged.
+    /// </summary>
     public const string PoleAssetTypeIdsKey = "Workflow:Occupancy:PoleAssetTypeIds";
 
     /// <summary>
@@ -23,16 +26,9 @@ public static class OrderOccupancyHostExtensions
     public const string CatalogInstanceIdKey = AssetCatalogConfiguration.LegacyInstanceIdKey;
 
     /// <summary>
-    /// Id of the pole asset type of the global domain catalog this host's database is seeded
-    /// with (the PostgreSQL provider's <c>SeedDomainAssetTypesAndLayers</c> migration) — what a
-    /// deployment that configures nothing treats as "a pole".
-    /// </summary>
-    public const string SeededPoleAssetTypeId = "00000000-0000-0000-0000-000000000004";
-
-    /// <summary>
-    /// Registers <see cref="IOrderOccupancyStagingService"/> with the pole asset types listed
-    /// under <see cref="PoleAssetTypeIdsKey"/>, or <see cref="SeededPoleAssetTypeId"/> alone when
-    /// the key is absent or empty. Blank entries are ignored.
+    /// Registers <see cref="IOrderOccupancyStagingService"/>: poles are the asset types carrying
+    /// <see cref="OccupancyAssetTypeRoles.OccupiableSupport"/>, plus any listed under the deprecated
+    /// <see cref="PoleAssetTypeIdsKey"/> (blank entries ignored), which is then logged at startup.
     /// </summary>
     public static IServiceCollection AddServerOrderOccupancyStaging(this IServiceCollection services, IConfiguration configuration)
     {
@@ -41,6 +37,10 @@ public static class OrderOccupancyHostExtensions
 
         var poleAssetTypeIds = PoleAssetTypeIds(configuration);
         var catalogInstanceId = CatalogInstanceId(configuration);
+
+        if (poleAssetTypeIds.Count > 0)
+            services.AddHostedService(sp => new DeprecatedPoleAssetTypeIdsWarning(
+                sp.GetRequiredService<ILogger<DeprecatedPoleAssetTypeIdsWarning>>(), poleAssetTypeIds));
 
         // The staged-occupancy routes' problem answers (XD01-363).
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IProblemDetailsMapper, OccupancyProblemMapper>());
@@ -79,19 +79,17 @@ public static class OrderOccupancyHostExtensions
     public static string CatalogInstanceId(IConfiguration configuration) => AssetCatalogConfiguration.InstanceId(configuration);
 
     /// <summary>
-    /// The asset types this host treats as poles: the configured <see cref="PoleAssetTypeIdsKey"/>
-    /// when it lists any, otherwise <see cref="SeededPoleAssetTypeId"/> alone. Also what the
-    /// shared-use order types are registered with (XD01-316), so "a pole" means one thing here.
+    /// The pole asset type ids configured under the deprecated <see cref="PoleAssetTypeIdsKey"/>, trimmed, blank entries
+    /// ignored; empty when the key is absent — the <see cref="OccupancyAssetTypeRoles.OccupiableSupport"/> role then
+    /// alone says which asset types are poles.
     /// </summary>
     public static IReadOnlyList<string> PoleAssetTypeIds(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var configured = (configuration.GetSection(PoleAssetTypeIdsKey).Get<string[]>() ?? [])
+        return (configuration.GetSection(PoleAssetTypeIdsKey).Get<string[]>() ?? [])
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id.Trim())
             .ToList();
-
-        return configured.Count > 0 ? configured : [SeededPoleAssetTypeId];
     }
 }

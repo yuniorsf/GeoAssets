@@ -41,8 +41,8 @@ public sealed class SharedUseDispatchDialogStateTests
     {
         var targetsOnly = new OrderType { Id = "survey", DisplayName = "Survey", TargetPolicy = new OrderTargetPolicy { TargetAssetTypeIds = ["pole"] } };
 
-        SharedUseDispatchDialogState.IsFanOut(SharedUseOrderTypes.CreatePoleWork(["pole"])).Should().BeTrue();
-        SharedUseDispatchDialogState.IsFanOut(SharedUseOrderTypes.CreateOccupantNotice(["pole"])).Should().BeFalse("a notice is dispatched the ordinary way, if at all");
+        SharedUseDispatchDialogState.IsFanOut(SharedUseOrderTypes.CreatePoleWork()).Should().BeTrue();
+        SharedUseDispatchDialogState.IsFanOut(SharedUseOrderTypes.CreateOccupantNotice()).Should().BeFalse("a notice is dispatched the ordinary way, if at all");
         SharedUseDispatchDialogState.IsFanOut(targetsOnly).Should().BeFalse();
         SharedUseDispatchDialogState.IsFanOut(new OrderType { Id = "plain", DisplayName = "Plain" }).Should().BeFalse();
         SharedUseDispatchDialogState.IsFanOut(null).Should().BeFalse("an order whose type the client does not know keeps the ordinary dialog");

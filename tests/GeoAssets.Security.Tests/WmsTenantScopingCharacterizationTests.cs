@@ -48,7 +48,7 @@ public sealed class WmsTenantScopingCharacterizationTests
     private const string OrganizationClaim = "test_org";
     private const string OrganizationHeader = "X-Test-Organization";
     private const string NoOrganization = "none";
-    private const string PoleType = OrderOccupancyHostExtensions.SeededPoleAssetTypeId;
+    private const string PoleType = "00000000-0000-0000-0000-000000000004";
 
     private static readonly Guid OrganizationA = new("a1a1a1a1-0000-4000-8000-000000000355");
     private static readonly Guid OrganizationB = new("b2b2b2b2-0000-4000-8000-000000000355");

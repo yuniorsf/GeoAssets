@@ -389,8 +389,8 @@ public sealed class ServiceOrderRecipientAccessTests
     public void AnOrderTypeThatSaysNothing_OnlyInformsItsRecipients_AndSoDoTheTwoSharedUseTypes()
     {
         new OrderType { Id = "plain", DisplayName = "Plain" }.RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
-        SharedUseOrderTypes.CreatePoleWork(["pole"]).RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
-        SharedUseOrderTypes.CreateOccupantNotice(["pole"]).RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
+        SharedUseOrderTypes.CreatePoleWork().RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
+        SharedUseOrderTypes.CreateOccupantNotice().RecipientAccess.Should().Be(OrderRecipientAccess.Inform);
         ((int)OrderRecipientAccess.Inform, (int)OrderRecipientAccess.Execute, (int)OrderRecipientAccess.Edit)
             .Should().Be((0, 1, 2), "the row-level security functions compare the stored numbers");
     }

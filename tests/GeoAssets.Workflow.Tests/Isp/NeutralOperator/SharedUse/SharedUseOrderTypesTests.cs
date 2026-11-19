@@ -13,25 +13,27 @@ public sealed class SharedUseOrderTypesTests
     {
         var registry = new OrderTypeRegistry();
 
-        SharedUseOrderTypes.RegisterAll(registry, ["pole-a", "pole-b"]);
+        SharedUseOrderTypes.RegisterAll(registry);
 
         var poleWork = registry.Get(SharedUseOrderTypes.PoleWorkId);
         var notice = registry.Get(SharedUseOrderTypes.OccupantNoticeId);
         poleWork.TargetPolicy!.FanOut.Should().Be(new OrderTargetFanOutPolicy(SharedUseOrderTypes.OccupantNoticeId));
-        poleWork.TargetPolicy.TargetAssetTypeIds.Should().Equal("pole-a", "pole-b");
+        poleWork.TargetPolicy.TargetAssetTypeRoles.Should().Equal("occupiable-support");
+        poleWork.TargetPolicy.TargetAssetTypeIds.Should().BeEmpty();
         poleWork.TargetPolicy.Exclusivity.Should().Be(OrderTargetExclusivity.WarnOnOverlap);
         poleWork.TargetPolicy.SelectionLimit.Should().Be(SharedUseOrderTypes.PoleSelectionLimit);
         poleWork.TargetPolicy.AliasAttributeKey.Should().Be(SharedUseOrderTypes.PoleAliasAttributeKey);
         notice.TargetPolicy!.FanOut.Should().BeNull("a notice is not fanned out again");
-        notice.TargetPolicy.TargetAssetTypeIds.Should().Equal("pole-a", "pole-b");
+        notice.TargetPolicy.TargetAssetTypeRoles.Should().Equal("occupiable-support");
+        notice.TargetPolicy.TargetAssetTypeIds.Should().BeEmpty();
         notice.TargetPolicy.Exclusivity.Should().Be(OrderTargetExclusivity.None);
     }
 
     [Fact]
     public void BothTypes_OfferTheSameActivities_SoANoticeKeepsWhatItsParentAssigned()
     {
-        var poleWork = SharedUseOrderTypes.CreatePoleWork(["pole"]);
-        var notice = SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+        var poleWork = SharedUseOrderTypes.CreatePoleWork();
+        var notice = SharedUseOrderTypes.CreateOccupantNotice();
 
         poleWork.TargetPolicy!.Activities.Should().Equal(SharedUseOrderTypes.Activities);
         notice.TargetPolicy!.Activities.Should().Equal(SharedUseOrderTypes.Activities);
@@ -41,7 +43,7 @@ public sealed class SharedUseOrderTypesTests
     [Fact]
     public void PoleWork_StartsAsADraft_IsDispatchedFromDraftAndAgainOnceDispatched_AndFromNowhereElse()
     {
-        var poleWork = SharedUseOrderTypes.CreatePoleWork(["pole"]);
+        var poleWork = SharedUseOrderTypes.CreatePoleWork();
 
         poleWork.InitialStateKey.Should().Be(ServiceOrderStatus.Draft);
         ServiceOrderTransitions.HasTransitionFor(poleWork, ServiceOrderStatus.Draft, OrderActionType.Dispatch).Should().BeTrue();
@@ -59,8 +61,8 @@ public sealed class SharedUseOrderTypesTests
     [Fact]
     public void PoleWork_IsApprovedOnlyOnceCompleted_AndApprovedIsItsOnlySuccess_WhileTheNoticeStillSucceedsOnCompletion()
     {
-        var poleWork = SharedUseOrderTypes.CreatePoleWork(["pole"]);
-        var notice = SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+        var poleWork = SharedUseOrderTypes.CreatePoleWork();
+        var notice = SharedUseOrderTypes.CreateOccupantNotice();
 
         poleWork.Transitions.Where(t => t.TriggerAction == OrderActionType.Approve)
             .Should().ContainSingle().Which.Should().Be(new WorkflowTransition(ServiceOrderStatus.Completed, SharedUseOrderTypes.ApprovedStateKey, OrderActionType.Approve));
@@ -76,7 +78,7 @@ public sealed class SharedUseOrderTypesTests
     [Fact]
     public void Notice_IsBornDispatched_AndIsItselfNeverDispatched()
     {
-        var notice = SharedUseOrderTypes.CreateOccupantNotice(["pole"]);
+        var notice = SharedUseOrderTypes.CreateOccupantNotice();
 
         notice.InitialStateKey.Should().Be(ServiceOrderStatus.Pending);
         notice.States.Select(s => s.Key).Should().Contain(ServiceOrderStatus.Pending);
@@ -86,19 +88,17 @@ public sealed class SharedUseOrderTypesTests
     }
 
     [Fact]
-    public void PoleAssetTypes_AreTrimmedAndDeduplicated_BlanksDropped()
+    public void BothTypes_TargetTheOccupiableSupportRole_AndNameNoAssetTypeId()
     {
-        var poleWork = SharedUseOrderTypes.CreatePoleWork([" pole ", "POLE", "", "  ", "tower"]);
-
-        poleWork.TargetPolicy!.TargetAssetTypeIds.Should().Equal("pole", "tower");
+        foreach (var type in new[] { SharedUseOrderTypes.CreatePoleWork(), SharedUseOrderTypes.CreateOccupantNotice() })
+        {
+            type.TargetPolicy!.TargetAssetTypeRoles.Should().Equal("occupiable-support");
+            type.TargetPolicy.TargetAssetTypeIds.Should().BeEmpty();
+            ((Action)(() => type.TargetPolicy.Validate(type.Id))).Should().NotThrow();
+        }
     }
 
     [Fact]
-    public void Factories_WithNoPoleAssetType_ThrowArgumentException_AndNullThrowsArgumentNullException()
-    {
-        ((Action)(() => SharedUseOrderTypes.CreatePoleWork([]))).Should().Throw<ArgumentException>();
-        ((Action)(() => SharedUseOrderTypes.CreateOccupantNotice([" "]))).Should().Throw<ArgumentException>();
-        ((Action)(() => SharedUseOrderTypes.CreatePoleWork(null!))).Should().Throw<ArgumentNullException>();
-        ((Action)(() => SharedUseOrderTypes.RegisterAll(null!, ["pole"]))).Should().Throw<ArgumentNullException>();
-    }
+    public void RegisterAll_WithANullRegistry_ThrowsArgumentNullException() =>
+        ((Action)(() => SharedUseOrderTypes.RegisterAll(null!))).Should().Throw<ArgumentNullException>();
 }

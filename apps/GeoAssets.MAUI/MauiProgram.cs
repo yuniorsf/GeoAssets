@@ -177,7 +177,7 @@ public static class MauiProgram
         // Shared pole use (XD01-316): seeded in code on the server, so registered here too —
         // see the same registration in GeoAssets.Web's Program.cs.
         builder.Services.AddOrderTypeRegistry(registry =>
-            SharedUseOrderTypes.RegisterAll(registry, [SharedUseOrderTypes.SeededPoleAssetTypeId]));
+            SharedUseOrderTypes.RegisterAll(registry));
 
         var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
             ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");

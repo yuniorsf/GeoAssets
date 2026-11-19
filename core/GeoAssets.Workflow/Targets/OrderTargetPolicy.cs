@@ -8,8 +8,19 @@ namespace GeoAssets.Workflow.Targets;
 /// </summary>
 public sealed record OrderTargetPolicy
 {
-    /// <summary>Asset type ids an order of the owning type may target. Must not be empty.</summary>
-    public required IReadOnlyList<string> TargetAssetTypeIds { get; init; }
+    /// <summary>
+    /// Asset type ids an order of the owning type may target. May be empty when
+    /// <see cref="TargetAssetTypeRoles"/> is not; the targeted types are the union of both
+    /// (<see cref="OrderTargetAssetTypes.Resolve"/>).
+    /// </summary>
+    public IReadOnlyList<string> TargetAssetTypeIds { get; init => field = value ?? []; } = [];
+
+    /// <summary>
+    /// Asset-type roles (<see cref="Core.Models.AssetType.Roles"/>) an order of the owning type may
+    /// target (XD01-368): every asset type carrying one of them, resolved when a selection is
+    /// evaluated. Empty by default (and for <c>null</c>), so a policy persisted before roles existed reads unchanged.
+    /// </summary>
+    public IReadOnlyList<string> TargetAssetTypeRoles { get; init => field = value ?? []; } = [];
 
     /// <summary>
     /// Attribute key whose value is shown as each target's alias. Null means "no alias";
@@ -37,7 +48,8 @@ public sealed record OrderTargetPolicy
     /// </summary>
     /// <param name="owningOrderTypeId">Id of the order type this policy is attached to.</param>
     /// <exception cref="ArgumentException">
-    /// <see cref="TargetAssetTypeIds"/> is empty, two <see cref="Activities"/> share an id,
+    /// <see cref="TargetAssetTypeIds"/> and <see cref="TargetAssetTypeRoles"/> are both empty, a role is
+    /// malformed (<see cref="Core.Models.AssetTypeRoles.IsWellFormed"/>), two <see cref="Activities"/> share an id,
     /// <see cref="AliasAttributeKey"/> is blank, or <see cref="FanOut"/>'s child order type id
     /// is blank or is <paramref name="owningOrderTypeId"/> itself.
     /// </exception>
@@ -46,19 +58,27 @@ public sealed record OrderTargetPolicy
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(owningOrderTypeId);
 
-        EnsureTargetAssetTypes(TargetAssetTypeIds, owningOrderTypeId);
+        EnsureTargetAssetTypes(TargetAssetTypeIds, TargetAssetTypeRoles, owningOrderTypeId);
         EnsureSelectionLimit(SelectionLimit, owningOrderTypeId);
         EnsureUniqueActivityIds(Activities, owningOrderTypeId);
         EnsureAliasAttributeKey(AliasAttributeKey, owningOrderTypeId);
         EnsureFanOut(FanOut, owningOrderTypeId);
     }
 
-    private static void EnsureTargetAssetTypes(IReadOnlyList<string>? targetAssetTypeIds, string owningOrderTypeId)
+    private static void EnsureTargetAssetTypes(
+        IReadOnlyList<string>? targetAssetTypeIds, IReadOnlyList<string>? targetAssetTypeRoles, string owningOrderTypeId)
     {
-        if (targetAssetTypeIds is { Count: > 0 }) return;
+        if (targetAssetTypeRoles?.FirstOrDefault(role => !Core.Models.AssetTypeRoles.IsWellFormed(role)) is { } malformed)
+        {
+            throw new ArgumentException(
+                $"OrderType '{owningOrderTypeId}': target asset-type role '{malformed}' is not a valid role.",
+                nameof(targetAssetTypeRoles));
+        }
+
+        if (targetAssetTypeIds is { Count: > 0 } || targetAssetTypeRoles is { Count: > 0 }) return;
 
         throw new ArgumentException(
-            $"OrderType '{owningOrderTypeId}': a target policy must name at least one target asset type.",
+            $"OrderType '{owningOrderTypeId}': a target policy must name at least one target asset type or asset-type role.",
             nameof(targetAssetTypeIds));
     }
 
