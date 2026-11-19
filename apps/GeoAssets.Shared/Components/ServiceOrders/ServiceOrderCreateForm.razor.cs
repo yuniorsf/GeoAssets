@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GeoAssets.Shared.Components.Assets;
 using GeoAssets.Shared.Services.OrderTargets;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
@@ -26,6 +27,10 @@ public partial class ServiceOrderCreateForm
     private readonly CancellationTokenSource _lifetime = new();
     private List<OrderType> _allowedTypes = [];
 
+    // ─── The chosen type's attributes (XD01-378) ──────────────────────────
+    private readonly Dictionary<string, string> _attributes = new(StringComparer.Ordinal);
+    private IReadOnlyList<string> _attributeErrors = [];
+
     // ─── Create from the map selection (XD01-312) ─────────────────────────
     private bool _selectionModeInitialized;
     private bool _useSelection;
@@ -41,6 +46,24 @@ public partial class ServiceOrderCreateForm
 
     /// <summary><see cref="SelectedFit"/> when it has something to warn about.</summary>
     private SelectionOrderTypeFit? HintFit => SelectedFit is { } fit && (fit.OtherTypeCount > 0 || fit.MayExceedLimit) ? fit : null;
+
+    private OrderType? SelectedType => OrderTypes.Find(_model.OrderTypeId);
+
+    /// <summary>The chosen type's <see cref="OrderType.AttributesSchemaJson"/>, which the form renders as fields.</summary>
+    private string SelectedSchema => SelectedType?.AttributesSchemaJson ?? string.Empty;
+
+    private bool HasSchema => !string.IsNullOrWhiteSpace(SelectedSchema);
+
+    /// <summary>
+    /// <see cref="_attributeErrors"/> not claimed by a field <see cref="SchemaDrivenAttributeEditor"/>
+    /// renders (it shows its own inline), e.g. a "required" violation, whose location is the object
+    /// root — as <c>AssetForm</c> lists them.
+    /// </summary>
+    private IReadOnlyList<string> UnmatchedAttributeErrors =>
+        HasSchema
+            ? [.. _attributeErrors.Where(e => !SchemaDrivenAttributeEditor.ParseFields(SelectedSchema)
+                .Any(f => e.Contains(f.Key, StringComparison.OrdinalIgnoreCase)))]
+            : _attributeErrors;
 
     protected override void OnParametersSet()
     {
@@ -76,8 +99,21 @@ public partial class ServiceOrderCreateForm
 
     private string? AssetTypeOf(string featureId) => AssetProvider.GetById(featureId)?.Properties.AssetTypeId;
 
+    /// <summary>
+    /// The attributes the new order is created with: the values entered for the chosen type's
+    /// schema fields, left-out fields omitted — so a required one is reported missing.
+    /// </summary>
+    private Dictionary<string, string> EnteredAttributes() =>
+        SchemaDrivenAttributeEditor.ParseFields(SelectedSchema)
+            .Where(f => _attributes.TryGetValue(f.Key, out var value) && !string.IsNullOrEmpty(value))
+            .ToDictionary(f => f.Key, f => _attributes[f.Key], StringComparer.Ordinal);
+
     private async Task HandleSave()
     {
+        var attributes = EnteredAttributes();
+        _attributeErrors = SelectedType is { } selectedType ? ServiceOrderAttributeValidator.Validate(selectedType, attributes) : [];
+        if (_attributeErrors.Count > 0) return;
+
         OrderTargetSelectionPlan? plan = null;
         if (_useSelection)
         {
@@ -107,9 +143,18 @@ public partial class ServiceOrderCreateForm
             // XD01-332: an order belongs to its creator's organization. The server stamps the
             // same value on a body that omits it and refuses any other.
             OrganizationId = Guid.TryParse(Principal.OrganizationId, out var organizationId) ? organizationId : Guid.Empty,
+            Attributes     = attributes,
         };
 
-        await Repository.AddAsync(order);
+        try
+        {
+            await Repository.AddAsync(order);
+        }
+        catch (ServiceOrderAttributeValidationException ex)
+        {
+            _attributeErrors = ex.Errors;
+            return;
+        }
 
         if (plan is null)
         {

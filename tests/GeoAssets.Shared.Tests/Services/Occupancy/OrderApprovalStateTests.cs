@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
-using GeoAssets.Shared.Services.Occupancy;
+using GeoAssets.NeutralOperator.UI.Services.Occupancy;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;

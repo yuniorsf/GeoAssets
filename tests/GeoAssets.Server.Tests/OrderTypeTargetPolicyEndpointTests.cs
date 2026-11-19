@@ -111,7 +111,8 @@ public class OrderTypeTargetPolicyEndpointTests
         await client.PostAsJsonAsync(OrderTypesUri, PoleInspection(FullPolicy()), ClientOptions);
         var all = await client.GetFromJsonAsync<OrderType[]>(OrderTypesUri, ClientOptions);
 
-        all.Should().ContainSingle().Which.TargetPolicy.Should().BeEquivalentTo(FullPolicy());
+        // XD01-378: GET all also returns the code-registered types, so the posted one is found among them.
+        all.Should().ContainSingle(t => string.Equals(t.Id, "pole-inspection", StringComparison.Ordinal)).Which.TargetPolicy.Should().BeEquivalentTo(FullPolicy());
     }
 
     [Fact]

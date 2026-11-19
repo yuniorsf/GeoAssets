@@ -25,9 +25,5 @@ public static class OccupancyApproval
     /// has no such transition (or no graph of its own).
     /// </summary>
     public static string? ApprovedStatus(OrderType? orderType, string status) =>
-        orderType is { States.Count: > 0 }
-            ? orderType.Transitions.FirstOrDefault(t =>
-                t.TriggerAction == OrderAction.Approve
-                && string.Equals(t.FromStateKey, status, StringComparison.Ordinal))?.ToStateKey
-            : null;
+        ServiceOrderTransitions.StatusAfter(orderType, OrderAction.Approve, status);
 }

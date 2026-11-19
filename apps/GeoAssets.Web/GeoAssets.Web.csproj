@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.UI\GeoAssets.NeutralOperator.UI.csproj" />
+    <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.UI\GeoAssets.IpBilling.UI.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.IpBilling\GeoAssets.IpBilling.csproj" />

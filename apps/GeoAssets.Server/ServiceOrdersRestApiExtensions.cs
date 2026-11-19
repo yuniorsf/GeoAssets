@@ -397,12 +397,14 @@ public static class ServiceOrdersRestApiExtensions
 
     private static void MapOrderTypesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
-        routes.MapGet($"{prefix}/order-types", async (IOrderTypeRepository repo) =>
-            Results.Json(await repo.GetAllAsync().ConfigureAwait(false), opts));
+        // XD01-378: the clients register no vertical's order types of their own; they read every
+        // type here, the code-registered ones (OrderTypeRegistry) included.
+        routes.MapGet($"{prefix}/order-types", async (IOrderTypeRepository repo, OrderTypeRegistry registry) =>
+            Results.Json(await AllOrderTypesAsync(repo, registry).ConfigureAwait(false), opts));
 
-        routes.MapGet($"{prefix}/order-types/{{id}}", async (string id, IOrderTypeRepository repo) =>
+        routes.MapGet($"{prefix}/order-types/{{id}}", async (string id, IOrderTypeRepository repo, OrderTypeRegistry registry) =>
         {
-            var orderType = await repo.GetByIdAsync(id).ConfigureAwait(false);
+            var orderType = await repo.GetByIdAsync(id).ConfigureAwait(false) ?? registry.Find(id);
             return orderType is null ? Results.NotFound() : Results.Json(orderType, opts);
         });
 
@@ -454,6 +456,20 @@ public static class ServiceOrdersRestApiExtensions
                 ? Results.Ok(new { valid = true })
                 : Results.BadRequest(new { valid = false, errors });
         });
+    }
+
+    /// <summary>
+    /// The code-registered order types of <paramref name="registry"/> merged with the persisted ones
+    /// of <paramref name="repository"/>: a persisted type replaces the registered one with the same id
+    /// (compared as the registry compares ids), ordered by id (ordinal).
+    /// </summary>
+    private static async Task<IReadOnlyList<OrderType>> AllOrderTypesAsync(IOrderTypeRepository repository, OrderTypeRegistry registry)
+    {
+        var merged = registry.All.ToDictionary(t => t.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var persisted in await repository.GetAllAsync().ConfigureAwait(false))
+            merged[persisted.Id] = persisted;
+
+        return [.. merged.Values.OrderBy(t => t.Id, StringComparer.Ordinal)];
     }
 
     /// <summary>

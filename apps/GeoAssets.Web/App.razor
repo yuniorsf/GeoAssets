@@ -10,7 +10,7 @@
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly"
-            AdditionalAssemblies="@(new[] { typeof(GeoAssets.Shared.Pages.Index).Assembly })">
+            AdditionalAssemblies="@(new[] { typeof(GeoAssets.Shared.Pages.Index).Assembly, typeof(GeoAssets.NeutralOperator.UI.Pages.Isp.TenantPortal).Assembly, typeof(GeoAssets.IpBilling.UI.Pages.Municipios).Assembly })">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData">
                 <NotAuthorized>

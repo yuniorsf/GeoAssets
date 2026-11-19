@@ -48,6 +48,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.UI\GeoAssets.NeutralOperator.UI.csproj" />
+    <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.UI\GeoAssets.IpBilling.UI.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />

@@ -131,11 +131,17 @@ public sealed partial class OrderTargetWorkMessagesTests
     [Fact]
     public void TheKeysTheComponentsNameLiterally_AreExactlyTheStaticKeysOfThisTest()
     {
-        var components = Path.Combine(RepositoryRoot().FullName, "apps", "GeoAssets.Shared", "Components", "ServiceOrders");
-        string[] files = ["OrderTargetWorkEditor.razor", "OrderTargetWorkEditor.razor.cs", "OrderTargetOccupancyPanel.razor", "OrderTargetsTable.razor"];
+        var root = RepositoryRoot().FullName;
+        var shared = Path.Combine(root, "apps", "GeoAssets.Shared", "Components", "ServiceOrders");
+        var neutralOperator = Path.Combine(root, "verticals", "NeutralOperator", "GeoAssets.NeutralOperator.UI", "Components", "ServiceOrders");
+        string[] files =
+        [
+            Path.Combine(shared, "OrderTargetWorkEditor.razor"), Path.Combine(shared, "OrderTargetWorkEditor.razor.cs"),
+            Path.Combine(neutralOperator, "OrderTargetOccupancyPanel.razor"), Path.Combine(shared, "OrderTargetsTable.razor"),
+        ];
 
         var named = files
-            .SelectMany(file => LiteralKey().Matches(File.ReadAllText(Path.Combine(components, file))).Select(match => match.Groups["key"].Value))
+            .SelectMany(file => LiteralKey().Matches(File.ReadAllText(file)).Select(match => match.Groups["key"].Value))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();
