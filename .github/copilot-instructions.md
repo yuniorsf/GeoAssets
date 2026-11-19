@@ -93,7 +93,7 @@ Provider extensibility goes through `IProviderPlugin`, collected by `ProviderPlu
 
 The command/plugin subsystem is separate from the map/provider flow. `GeoPluginContainer` composes built-in command handlers plus external assemblies matching `GeoAssets.Plugin.*.dll`. `GeoCommandPluginScaffolder` takes a `GeoCommandPluginSpec` and deterministically generates a compilable plugin project. The agent orchestration abstractions that can produce those specs live in `core/GeoAssets.Core/Agents`, while Anthropic-backed examples stay under `examples/MultiAgent/`.
 
-The PostgreSQL provider is server-oriented. `AddGeoAssetsPostgres()` registers the provider factory used to create repository instances, while `AddGeoAssetsDbContextFactory(connectionString)` is a separate registration for services such as the WMS renderer that need short-lived EF Core contexts and should not share the provider cache.
+The PostgreSQL provider is server-oriented. `AddGeoAssetsPostgres()` registers the provider factory used to create repository instances, while `AddGeoAssetsDbContextFactory(connectionString)` is a separate registration for services such as the applied-batch store that need short-lived EF Core contexts and should not share the provider cache; WMS reads through `IAssetRenderQuery` (XD01-372).
 
 ## Key conventions
 

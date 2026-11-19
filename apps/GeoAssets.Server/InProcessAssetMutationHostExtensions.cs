@@ -2,8 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.Provider.PostgreSQL;
-using GeoAssets.Provider.PostgreSQL.Repositories;
+using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Persistence.Outbox;
 
 namespace GeoAssets.Server;
@@ -23,13 +22,14 @@ public static class InProcessAssetMutationHostExtensions
     /// <see cref="WorkflowMessagingHostExtensions.NoTransport"/>: runs the existing outbox relay
     /// (<see cref="OutboxRelayProcessor"/>) claiming
     /// <see cref="IntegrationEventTypes.AssetMutationBatchRequestedV1"/> messages only, with
-    /// <see cref="InProcessAssetMutationBatchPublisher"/> as its "broker", which applies each batch
-    /// to this host's catalog (<see cref="AssetCatalogConfiguration.InstanceId(IConfiguration)"/>; a warning is logged
-    /// when it comes from the deprecated <see cref="AssetCatalogConfiguration.LegacyInstanceIdKey"/>) through
-    /// <see cref="PostgresAssetMutationBatchApplier"/> on <paramref name="connectionString"/>,
-    /// with <see cref="ObservableAssetMutationBatchApplier"/>'s span and metrics. Every other
-    /// message type stays pending in the outbox, as before. The relay's options are its defaults
-    /// (lease, exponential backoff, attempt limit), with <see cref="RelayWorkerId"/>.
+    /// <see cref="InProcessAssetMutationBatchPublisher"/> as its "broker", which applies each batch to this host's catalog
+    /// (<see cref="AssetCatalogConfiguration.InstanceId(IConfiguration)"/>; a warning is logged when it comes from the
+    /// deprecated <see cref="AssetCatalogConfiguration.LegacyInstanceIdKey"/>) with
+    /// <see cref="ObservableAssetMutationBatchApplier"/>'s span and metrics around the applier the catalog's provider
+    /// registered as <see cref="IAssetMutationBatchApplier"/> (e.g. the PostgreSQL pushdown, XD01-374) — or, when none
+    /// did, <see cref="CatalogMutationBatchApplier"/> over that catalog of the <see cref="ICatalogPool"/> (its default
+    /// catalog when no catalog carries the instance id). Every other message type stays pending in the outbox, as before.
+    /// The relay's options are its defaults (lease, exponential backoff, attempt limit), with <see cref="RelayWorkerId"/>.
     ///
     /// With a broker configured this registers nothing: the relay
     /// <see cref="WorkflowMessagingHostExtensions.AddServerWorkflowMessaging"/> set up publishes every
@@ -39,12 +39,10 @@ public static class InProcessAssetMutationHostExtensions
     /// and serializer) and after the host registered <see cref="GeoAssetsActivitySource"/> and
     /// <see cref="GeoAssetsMeter"/>.
     /// </summary>
-    public static IServiceCollection AddServerInProcessAssetMutationApply(
-        this IServiceCollection services, IConfiguration configuration, string connectionString)
+    public static IServiceCollection AddServerInProcessAssetMutationApply(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         if (WorkflowMessagingHostExtensions.HasBroker(configuration))
         {
@@ -53,12 +51,6 @@ public static class InProcessAssetMutationHostExtensions
 
         var catalogInstanceId = AssetCatalogConfiguration.InstanceId(configuration, out var fromLegacyKey);
 
-        services.AddPostgresAssetMutationBatchApplier(connectionString);
-        services.AddSingleton<IAssetMutationBatchApplier>(sp => new ObservableAssetMutationBatchApplier(
-            RefreshingTheOrganizationCatalogs(sp, sp.GetRequiredService<PostgresAssetMutationBatchApplier>()),
-            sp.GetRequiredService<GeoAssetsActivitySource>(),
-            sp.GetRequiredService<GeoAssetsMeter>(),
-            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IIntegrationEventPublisher>(sp =>
         {
             if (fromLegacyKey)
@@ -68,10 +60,13 @@ public static class InProcessAssetMutationHostExtensions
                     catalogInstanceId);
             }
 
+            var applier = new ObservableAssetMutationBatchApplier(
+                ApplierFor(sp, catalogInstanceId),
+                sp.GetRequiredService<GeoAssetsActivitySource>(),
+                sp.GetRequiredService<GeoAssetsMeter>(),
+                sp.GetRequiredService<TimeProvider>());
             return new InProcessAssetMutationBatchPublisher(
-                sp.GetRequiredService<IIntegrationMessageSerializer>(),
-                sp.GetRequiredService<IAssetMutationBatchApplier>(),
-                catalogInstanceId);
+                sp.GetRequiredService<IIntegrationMessageSerializer>(), applier, catalogInstanceId);
         });
 
         services.AddOptions<OutboxRelayOptions>().Configure(options =>
@@ -84,12 +79,16 @@ public static class InProcessAssetMutationHostExtensions
     }
 
     /// <summary>
-    /// <paramref name="applier"/>, followed by a reload of the batch's organization's cached
-    /// catalog (XD01-338) when the host serves organization-scoped catalogs
-    /// (<see cref="OrganizationAssetCatalogHostExtensions.AddServerOrganizationAssetCatalogs"/>).
+    /// The provider's applier when one is registered; otherwise the generic one over the catalog the batches are addressed
+    /// to. It runs outside any request, so it has no applied-batch store of its own: a provider that needs idempotency
+    /// registers its own applier.
     /// </summary>
-    private static IAssetMutationBatchApplier RefreshingTheOrganizationCatalogs(IServiceProvider sp, IAssetMutationBatchApplier applier) =>
-        sp.GetService<PostgresOrganizationAssetCatalogs>() is { } catalogs
-            ? new OrganizationCatalogRefreshingApplier(applier, catalogs)
-            : applier;
+    private static IAssetMutationBatchApplier ApplierFor(IServiceProvider sp, string catalogInstanceId)
+    {
+        if (sp.GetService<IAssetMutationBatchApplier>() is { } registered) return registered;
+
+        var pool = sp.GetRequiredService<ICatalogPool>();
+        var catalog = pool.TryGetCatalog(catalogInstanceId, out var addressed) ? addressed : pool.DefaultCatalog;
+        return new CatalogMutationBatchApplier(catalog, store: null, sp.GetRequiredService<TimeProvider>());
+    }
 }

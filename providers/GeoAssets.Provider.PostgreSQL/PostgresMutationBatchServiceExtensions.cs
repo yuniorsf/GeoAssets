@@ -13,7 +13,8 @@ public static class PostgresMutationBatchServiceExtensions
     /// <summary>
     /// Registers <see cref="PostgresAssetMutationBatchApplier"/> as a singleton, both as itself (so
     /// a host can decorate it) and as <see cref="IAssetMutationBatchApplier"/> (XD01-337), over
-    /// <paramref name="connectionString"/>. Each batch opens its own context, so the singleton is
+    /// <paramref name="connectionString"/> — followed by a reload of the batch's organization's cached catalog when the
+    /// host serves <see cref="PostgresOrganizationAssetCatalogs"/> (XD01-338, XD01-374). Each batch opens its own context, so the singleton is
     /// safe to share; <see cref="TimeProvider.System"/> is added when no clock is registered.
     /// </summary>
     public static IServiceCollection AddPostgresAssetMutationBatchApplier(
@@ -31,7 +32,12 @@ public static class PostgresMutationBatchServiceExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(sp => new PostgresAssetMutationBatchApplier(
             options, sp.GetRequiredService<ILoggerFactory>(), sp.GetRequiredService<TimeProvider>()));
-        services.AddSingleton<IAssetMutationBatchApplier>(sp => sp.GetRequiredService<PostgresAssetMutationBatchApplier>());
+        // When the host serves PostgreSQL organization catalogs (XD01-338), each applied batch reloads its organization's
+        // cached catalog; the host decorates this applier, it does not build it (XD01-374).
+        services.AddSingleton<IAssetMutationBatchApplier>(sp =>
+            sp.GetService<PostgresOrganizationAssetCatalogs>() is { } catalogs
+                ? new OrganizationCatalogRefreshingApplier(sp.GetRequiredService<PostgresAssetMutationBatchApplier>(), catalogs)
+                : sp.GetRequiredService<PostgresAssetMutationBatchApplier>());
         return services;
     }
 }

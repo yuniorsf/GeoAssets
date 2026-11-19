@@ -6,6 +6,7 @@ using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Services;
 using GeoAssets.Infrastructure.Observability;
+using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Workflow.Messaging.Protobuf;
@@ -312,10 +313,11 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddSingleton(_metrics);
         services.AddServerWorkflowMessaging(configuration);
 
-        services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
+        services.AddPostgresAssetMutationBatchApplier(ConnectionString);
+        services.AddServerInProcessAssetMutationApply(configuration);
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
-        provider.GetRequiredService<IAssetMutationBatchApplier>().Should().BeOfType<ObservableAssetMutationBatchApplier>();
+        provider.GetRequiredService<IAssetMutationBatchApplier>().Should().BeSameAs(provider.GetRequiredService<PostgresAssetMutationBatchApplier>());
         provider.GetRequiredService<PostgresAssetMutationBatchApplier>().Should().NotBeNull();
         provider.GetRequiredService<IIntegrationEventPublisher>().Should().BeOfType<InProcessAssetMutationBatchPublisher>();
         provider.GetServices<IHostedService>().Should().ContainSingle().Which.Should().BeOfType<OutboxRelayProcessor>();
@@ -334,7 +336,8 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
         services.AddServerWorkflowMessaging(configuration);
-        services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
+        services.AddPostgresAssetMutationBatchApplier(ConnectionString);
+        services.AddServerInProcessAssetMutationApply(configuration);
         await using var provider = services.BuildServiceProvider();
 
         var act = () => provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(Batch("default")));
@@ -350,7 +353,8 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
         services.AddServerWorkflowMessaging(configuration);
-        services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
+        services.AddPostgresAssetMutationBatchApplier(ConnectionString);
+        services.AddServerInProcessAssetMutationApply(configuration);
         return services.BuildServiceProvider();
     }
 
@@ -402,7 +406,7 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddServerWorkflowMessaging(configuration);
         var before = services.Select(d => (d.ServiceType, d.ImplementationType)).ToList();
 
-        services.AddServerInProcessAssetMutationApply(configuration, ConnectionString);
+        services.AddServerInProcessAssetMutationApply(configuration);
 
         services.Select(d => (d.ServiceType, d.ImplementationType)).Should().Equal(before);
         services.Should().NotContain(d => d.ServiceType == typeof(IAssetMutationBatchApplier));
@@ -411,12 +415,10 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
     [Fact]
     public void AddServerInProcessAssetMutationApply_InvalidArguments_Throw()
     {
-        ((Action)(() => InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply(null!, Configuration(), ConnectionString)))
+        ((Action)(() => InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply(null!, Configuration())))
             .Should().Throw<ArgumentNullException>();
-        ((Action)(() => new ServiceCollection().AddServerInProcessAssetMutationApply(null!, ConnectionString)))
+        ((Action)(() => new ServiceCollection().AddServerInProcessAssetMutationApply(null!)))
             .Should().Throw<ArgumentNullException>();
-        ((Action)(() => new ServiceCollection().AddServerInProcessAssetMutationApply(Configuration(), " ")))
-            .Should().Throw<ArgumentException>();
     }
 
     [Theory]

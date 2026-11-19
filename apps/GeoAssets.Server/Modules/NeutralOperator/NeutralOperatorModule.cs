@@ -20,7 +20,8 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var connectionString = configuration.GetConnectionString("GeoAssets")
+        // The module's workflow and occupancy stores live in the host's GeoAssets database: fail at startup without it.
+        _ = configuration.GetConnectionString("GeoAssets")
             ?? throw new InvalidOperationException(
                 $"The '{ModuleId}' module needs the 'GeoAssets' connection string.");
 
@@ -47,7 +48,7 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
 
         // With no broker configured, the asset mutation batches that approval stages are applied to this host's own
         // catalog by an in-process outbox relay (XD01-337); every other message stays pending.
-        services.AddServerInProcessAssetMutationApply(configuration, connectionString);
+        services.AddServerInProcessAssetMutationApply(configuration);
 
         // IClandestineAttachmentService (XD01-263), backed by the host's IServiceOrderRepository — performed only by
         // ClandestineNoticeActionHandler, on POST /service-orders/{id}/actions after the rule chain allowed the action
