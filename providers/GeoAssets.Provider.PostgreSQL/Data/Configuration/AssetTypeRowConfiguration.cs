@@ -2,6 +2,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Provider.PostgreSQL.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace GeoAssets.Provider.PostgreSQL.Data.Configuration;
@@ -24,10 +25,24 @@ internal sealed class AssetTypeRowConfiguration : IEntityTypeConfiguration<Asset
 
         e.Property(x => x.OrganizationId).HasDefaultValue(Guid.Empty);
 
+        // Semantic roles (XD01-367): a text[] so "which types carry role X" is an indexed
+        // containment query (GIN), never a scan of every type's tags.
+        // The explicit element-wise comparer keeps the seed data below stable across migrations:
+        // without it the seeded lists compare by reference and every migration re-emits them.
+        e.Property(x => x.Roles)
+         .HasColumnType("text[]")
+         .IsRequired()
+         .HasDefaultValueSql("'{}'::text[]")
+         .Metadata.SetValueComparer(new ValueComparer<List<string>>(
+             (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right, StringComparer.Ordinal),
+             roles => roles.Aggregate(0, (hash, role) => HashCode.Combine(hash, StringComparer.Ordinal.GetHashCode(role))),
+             roles => roles.ToList()));
+
         e.HasOne(x => x.DefaultLayer).WithMany().HasForeignKey(x => x.DefaultLayerId).OnDelete(DeleteBehavior.SetNull);
 
         e.HasIndex(x => x.OrganizationId);
         e.HasIndex(x => x.DefaultLayerId);
+        e.HasIndex(x => x.Roles).HasMethod("gin");
 
         // ── Built-in asset type seed data ───────────────────────────────────────
         e.HasData(
@@ -39,8 +54,11 @@ internal sealed class AssetTypeRowConfiguration : IEntityTypeConfiguration<Asset
         // ── Domain asset type seed data ──────────────────────────────────────────
         // IsBuiltIn = true (shipped by default) but IsProtected = false (unlike the 3 generic
         // defaults above, these are deletable — they're a starting catalog, not a hard requirement).
+        // Roles (XD01-367) are seeded where a vertical consumes the type today: the pole is the
+        // shared-use occupancy support. The IP-billing types are seeded by SeedIpBillingAssetTypes
+        // (raw InsertData, outside this model) and get their roles in AddAssetTypeRoles.
         e.HasData(
-            new AssetTypeRow { Id = DomainAssetTypeIds.Pole,               Name = "Poste",                     AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Pole,               IsBuiltIn = true, IsProtected = false },
+            new AssetTypeRow { Id = DomainAssetTypeIds.Pole,               Name = "Poste",                     AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Pole,               IsBuiltIn = true, IsProtected = false, Roles = ["occupiable-support", "isp:pole"] },
             new AssetTypeRow { Id = DomainAssetTypeIds.Transformer,        Name = "Transformador",              AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Transformer,        IsBuiltIn = true, IsProtected = false },
             new AssetTypeRow { Id = DomainAssetTypeIds.LowTensionWire,     Name = "Línea de baja tensión",      AllowedGeometryType = GeometryType.LineString, DefaultLayerId = DomainLayerIds.LowTensionWire,     IsBuiltIn = true, IsProtected = false },
             new AssetTypeRow { Id = DomainAssetTypeIds.WaterDischargePoint, Name = "Punto de descarga de agua", AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.WaterDischargePoint, IsBuiltIn = true, IsProtected = false },

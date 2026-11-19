@@ -46,6 +46,21 @@
                             @L["map.layers.defaultLayer"]: @(Repository.GetLayers().FirstOrDefault(l => l.Id == type.DefaultLayerId)?.Name ?? L["map.layers.noneOption"])
                             <br />
                             @L["map.layers.zoomRange"]: @ZoomRangeLabel(type)
+                            <br />
+                            @L["map.layers.roles"]:
+                            @if (type.Roles.Count == 0)
+                            {
+                                @L["map.layers.roles.none"]
+                            }
+                            else
+                            {
+                                <span class="role-tags">
+                                    @foreach (var role in type.Roles)
+                                    {
+                                        <span class="badge role-tag">@role</span>
+                                    }
+                                </span>
+                            }
                         </div>
                         <LayerRuleEditor AssetType="type" />
                     </div>
@@ -120,6 +135,41 @@
                     @if (ZoomRangeError is { } zoomError)
                     {
                         <div class="attribute-errors"><strong>@zoomError</strong></div>
+                    }
+                </div>
+            </fieldset>
+
+            <fieldset class="form-group role-input">
+                <legend>@L["map.layers.roles"]</legend>
+                @if (_newTypeRoles.Count > 0)
+                {
+                    <ul class="role-tags list-unstyled" aria-label="@L["map.layers.roles"]">
+                        @foreach (var role in _newTypeRoles)
+                        {
+                            <li class="badge role-tag">
+                                @role
+                                <button type="button" class="btn-close btn-close-sm role-tag-remove"
+                                        aria-label="@L.GetString("map.layers.roles.remove", role)"
+                                        @onclick="() => RemoveNewTypeRole(role)"></button>
+                            </li>
+                        }
+                    </ul>
+                }
+                <div class="input-group input-group-sm">
+                    <input id="new-type-role" class="form-control" type="text" autocomplete="off"
+                           placeholder="@L["map.layers.roles.placeholder"]"
+                           maxlength="@RoleTextMaxLength"
+                           aria-describedby="new-type-role-help new-type-role-error"
+                           aria-invalid="@AriaInvalid(_newTypeRoleProblem is not null)"
+                           @bind="_newTypeRoleText"
+                           @onkeydown="OnNewTypeRoleKeyDown" />
+                    <button class="btn btn-outline-secondary" type="button" @onclick="AddNewTypeRoles">@L["map.layers.roles.add"]</button>
+                </div>
+                <div id="new-type-role-help" class="form-text">@L["map.layers.roles.help"]</div>
+                <div id="new-type-role-error" role="alert">
+                    @if (RoleError is { } roleError)
+                    {
+                        <div class="attribute-errors"><strong>@roleError</strong></div>
                     }
                 </div>
             </fieldset>

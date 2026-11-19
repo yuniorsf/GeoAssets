@@ -16,6 +16,7 @@ public sealed class AssetTypeRow
     public string? AttributesSchemaJson { get; set; }
     public int?   MinZoom { get; set; }
     public int?   MaxZoom { get; set; }
+    public List<string> Roles { get; init; } = [];
     public Guid   OrganizationId { get; set; } = Guid.Empty;
 
     // ── Navigation ──────────────────────────────────────────────────────────────

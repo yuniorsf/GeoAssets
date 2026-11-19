@@ -345,6 +345,8 @@ public static class GeoAssetsRestApiExtensions
             if (assetType is null) return Results.BadRequest("Invalid asset type.");
             if (AssetTypeZoomRange.FindDefect(assetType.MinZoom, assetType.MaxZoom) is { } zoomDefect)
                 return Results.BadRequest($"Invalid asset type zoom range: {zoomDefect}.");
+            if (AssetTypeRoles.FindDefect(assetType.Roles) is { } roleDefect)
+                return Results.BadRequest($"Invalid asset type roles: {roleDefect}.");
             provider.AddAssetType(assetType);
             return Results.Created(new Uri($"{prefix}/asset-types/{assetType.Id}", UriKind.Relative), null);
         })

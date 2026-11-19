@@ -119,11 +119,13 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public void LoadAll(IEnumerable<GeoFeature> features)  => inner.LoadAll(features);
 
     /// <summary>Rejects an asset type whose zoom range breaks <see cref="AssetTypeZoomRange"/>'s
-    /// rules (<see cref="InvalidAssetTypeZoomRangeException"/>) before delegating.</summary>
+    /// rules (<see cref="InvalidAssetTypeZoomRangeException"/>) or whose roles break
+    /// <see cref="AssetTypeRoles"/>'s (<see cref="InvalidAssetTypeRolesException"/>) before delegating.</summary>
     public void AddAssetType(AssetType assetType)
     {
         ArgumentNullException.ThrowIfNull(assetType);
         AssetTypeZoomRange.EnsureValid(assetType.MinZoom, assetType.MaxZoom);
+        AssetTypeRoles.EnsureValid(assetType.Roles);
         inner.AddAssetType(assetType);
     }
 
