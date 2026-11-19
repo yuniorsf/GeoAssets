@@ -123,7 +123,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         bool mapOrderRoutes = false,
         bool mapOccupancyRoutes = false,
         bool mapSharedUseRoutes = false,
-        bool mapIspPortalRoutes = false,
+        bool withIspOrderTypes = false,
         Action<IServiceCollection>? configureServices = null)
     {
         var host = await new HostBuilder()
@@ -132,7 +132,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
                 webHost.UseTestServer();
                 webHost.ConfigureServices(services =>
                 {
-                    ConfigureServices(services, configure, spatialQuery, decorateOrders, mapIspPortalRoutes);
+                    ConfigureServices(services, configure, spatialQuery, decorateOrders, withIspOrderTypes);
                     configureServices?.Invoke(services);
                 });
                 webHost.Configure(app =>
@@ -160,8 +160,6 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
                         if (mapOccupancyRoutes) endpoints.MapServiceOrderOccupancyApi();
                         // XD01-316: on request, the shared-use dispatch routes.
                         if (mapSharedUseRoutes) endpoints.MapSharedUseDispatchApi();
-                        // XD01-364: on request, the ISP tenant portal over the same identities, orders and rules.
-                        if (mapIspPortalRoutes) endpoints.MapIspTenantPortalApi();
                     });
                 });
             })
@@ -175,13 +173,13 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         Action<OrderTargetSelectionOptions>? configure,
         IAssetSpatialQuery? spatialQuery,
         Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders,
-        bool ispPortal)
+        bool ispOrderTypes)
     {
         services.AddRouting();
         services.AddHttpContextAccessor();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
 
-        services.AddOrderTypeRegistry(registry => RegisterOrderTypes(registry, ispPortal));
+        services.AddOrderTypeRegistry(registry => RegisterOrderTypes(registry, ispOrderTypes));
         services.AddSingleton<IOrderTypeRepository, FakeOrderTypeRepository>();
         services.AddSingleton<FakeServiceOrderRepository>();
         services.AddSingleton<IServiceOrderRepository>(sp =>
@@ -202,10 +200,10 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
 
         services.AddServiceOrderRules();
         services.AddScoped<ServerWorkflowPrincipalFactory>();
-        if (ispPortal)
+        if (ispOrderTypes)
         {
-            // The NeutralOperator module's wiring (XD01-364): the notice's action handler and the requirements that
-            // answer the portal's routes.
+            // The NeutralOperator module's wiring (XD01-364, XD01-365): the notice's action handler, which performs a dispute
+            // posted to the generic actions route, and the host's service-order requirements.
             services.AddServiceOrderAuthorization();
             services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
             services.AddScoped<IOrderActionHandler, ClandestineNoticeActionHandler>();
@@ -257,9 +255,9 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         services.AddSingleton<IOrganizationGrantRepository>(sp => sp.GetRequiredService<TestOrganizationGrantRepository>());
     }
 
-    private static void RegisterOrderTypes(OrderTypeRegistry registry, bool ispPortal)
+    private static void RegisterOrderTypes(OrderTypeRegistry registry, bool ispOrderTypes)
     {
-        if (ispPortal)
+        if (ispOrderTypes)
         {
             ClandestineAttachmentOrderTypes.RegisterAll(registry);
             TenantAttachmentRequestOrderTypes.RegisterAll(registry);

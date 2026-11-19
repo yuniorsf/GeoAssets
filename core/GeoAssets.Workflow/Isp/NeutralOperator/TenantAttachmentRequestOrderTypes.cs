@@ -17,6 +17,23 @@ public static class TenantAttachmentRequestOrderTypes
 {
     public const string AttachmentRequestId = "isp-tenant-attachment-request";
 
+    /// <summary>The attribute naming the pole a request is for — required on every request (XD01-365).</summary>
+    public const string PoleFeatureIdAttribute = "poleFeatureId";
+
+    /// <summary>
+    /// Requires a non-empty <see cref="PoleFeatureIdAttribute"/>. No <c>type</c>: the validator reads an attribute value that
+    /// parses as JSON as that JSON, so a numeric-looking pole id must still pass.
+    /// </summary>
+    public const string AttributesSchema = $$"""
+        {
+          "type": "object",
+          "properties": {
+            "{{PoleFeatureIdAttribute}}": { "minLength": 1 }
+          },
+          "required": ["{{PoleFeatureIdAttribute}}"]
+        }
+        """;
+
     public static OrderType CreateAttachmentRequest() => new()
     {
         Id = AttachmentRequestId,
@@ -27,6 +44,7 @@ public static class TenantAttachmentRequestOrderTypes
         Transitions = TenantAttachmentRequestWorkflowGraph.Transitions(),
         CreationPolicies = [new(PolicyKind.Role, IspRoles.Tenant)],
         RecipientAccess = OrderRecipientAccess.Inform,
+        AttributesSchemaJson = AttributesSchema,
     };
 
     public static void RegisterAll(OrderTypeRegistry registry)

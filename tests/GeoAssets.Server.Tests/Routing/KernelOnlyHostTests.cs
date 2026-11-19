@@ -20,9 +20,6 @@ public sealed class KernelOnlyHostTests
         "DELETE /api/workflow/service-orders/{id}/occupancy-changes | none",
         "DELETE /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none",
         "GET /api/geoassets/wms | anonymous",
-        "GET /api/isp/tenant-portal/attachment-requests | policy:serviceorders:read",
-        "GET /api/isp/tenant-portal/attachment-requests/{id} | policy:serviceorders:read",
-        "GET /api/isp/tenant-portal/flagged-notices | policy:serviceorders:read",
         "GET /api/workflow/service-orders/{id}/occupancy-changes | policy:serviceorders:read",
         "GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan | policy:serviceorders:read",
         "GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan/skipped-entries | policy:serviceorders:read",
@@ -31,8 +28,6 @@ public sealed class KernelOnlyHostTests
         "GET /wms | anonymous",
         "POST /api/identity/municipio-grants/revoke | policy:ip-billing:reference-manage",
         "POST /api/identity/municipio-grants/sync | policy:ip-billing:reference-manage",
-        "POST /api/isp/tenant-portal/attachment-requests | policy:serviceorders:create",
-        "POST /api/isp/tenant-portal/flagged-notices/{id}/dispute | policy:serviceorders:create",
         "POST /api/workflow/service-orders/{id}/shared-use/dispatch | none",
         "PUT /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none",
     ];

@@ -50,7 +50,8 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         services.AddServerInProcessAssetMutationApply(configuration, connectionString);
 
         // IClandestineAttachmentService (XD01-263), backed by the host's IServiceOrderRepository — performed only by
-        // ClandestineNoticeActionHandler, after the rule chain allowed the action (XD01-364).
+        // ClandestineNoticeActionHandler, on POST /service-orders/{id}/actions after the rule chain allowed the action
+        // (XD01-364).
         services.AddScoped<IClandestineAttachmentService, ClandestineAttachmentService>();
         services.AddScoped<IOrderActionHandler, ClandestineNoticeActionHandler>();
     }
@@ -65,7 +66,8 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         // Shared-use dispatch (XD01-316) under /api/workflow.
         endpoints.MapSharedUseDispatchApi();
 
-        // Tenant ISP self-service portal (XD01-269) under /api/isp/tenant-portal.
-        endpoints.MapIspTenantPortalApi();
+        // The tenant ISP self-service portal (XD01-269) has no routes of its own (XD01-365, ADR-001 smell H): it creates,
+        // lists and disputes through the generic /api/workflow service-order routes, where ClandestineNoticeActionHandler
+        // performs the dispute after the rule chain allowed it.
     }
 }
