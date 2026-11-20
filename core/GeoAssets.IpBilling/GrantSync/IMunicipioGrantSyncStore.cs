@@ -21,4 +21,12 @@ public interface IMunicipioGrantSyncStore
 
     /// <summary>Counts a failed attempt and gives up on the request (it stays, Failed); false when the lease is lost.</summary>
     Task<bool> MarkFailedAsync(long id, string workerId, string failure, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes up to <paramref name="batchSize"/> finished requests that are not their município's latest (XD01-400), oldest
+    /// first: completed before <paramref name="completedBefore"/>, or — only when <paramref name="failedBefore"/> is set —
+    /// failed before it. A município's latest request (which its <c>grantSyncState</c> is derived from) and unfinished
+    /// requests are never deleted. Returns how many rows it deleted.
+    /// </summary>
+    Task<int> PruneAsync(DateTimeOffset completedBefore, DateTimeOffset? failedBefore, int batchSize, CancellationToken ct = default);
 }

@@ -3,8 +3,9 @@ namespace GeoAssets.IpBilling.Server;
 /// <summary>
 /// Registers the município grant-sync dispatcher (XD01-395): <see cref="MunicipioGrantSyncOptions"/> from the
 /// <c>GrantSync</c> section, validated on start, its <see cref="MunicipioGrantSyncMetrics"/> and the
-/// <see cref="MunicipioGrantSyncDispatcher"/> hosted service. The outbox it drains is <c>AddIpBillingPersistence</c>'s; the
-/// <see cref="MunicipioProvisioningService"/> it calls and its kernel client are the host's.
+/// <see cref="MunicipioGrantSyncDispatcher"/> and <see cref="MunicipioGrantSyncPruner"/> (XD01-400) hosted services. The
+/// outbox they drain and prune is <c>AddIpBillingPersistence</c>'s; the <see cref="MunicipioProvisioningService"/> the
+/// dispatcher calls and its kernel client are the host's.
 /// </summary>
 internal static class MunicipioGrantSyncHostExtensions
 {
@@ -20,6 +21,7 @@ internal static class MunicipioGrantSyncHostExtensions
         services.AddMetrics();
         services.AddSingleton<MunicipioGrantSyncMetrics>();
         services.AddHostedService<MunicipioGrantSyncDispatcher>();
+        services.AddHostedService<MunicipioGrantSyncPruner>();
 
         return services;
     }
