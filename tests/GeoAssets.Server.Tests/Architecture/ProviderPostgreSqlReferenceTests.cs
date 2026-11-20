@@ -36,10 +36,7 @@ public sealed class ProviderPostgreSqlReferenceTests
     /// shrink — <see cref="KnownViolations_AreStillViolations_SoTheListOnlyShrinks"/> fails once an
     /// entry stops referencing the provider, and nothing may be added.
     /// </summary>
-    private static readonly string[] KnownPreExistingViolations =
-    [
-        "plugins/commands/GeoAssets.Plugin.GeoJsonImport/GeoAssets.Plugin.GeoJsonImport.csproj",
-    ];
+    private static readonly string[] KnownPreExistingViolations = [];
 
     [Fact]
     public void OnlyGeoAssetsServerReferencesProviderPostgreSql()
