@@ -9,9 +9,7 @@ using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Projects;
 using GeoAssets.Server;
 using GeoAssets.Server.Catalogs;
-using GeoAssets.Server.Modules.IpBillingBridge;
-using GeoAssets.Server.Modules.NeutralOperator;
-using GeoAssets.Server.Modules.PostgresSpatial;
+using GeoAssets.Server.Modules;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Registry;
@@ -119,13 +117,10 @@ builder.Services.AddOrderTypeDescriptorRegistry();
 builder.Services.AddServerTargetLedger(builder.Configuration);
 
 // ── Modules (XD01-358/XD01-359, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in that
-// order; with none the kernel boots on its own (invariant I5).
-//   PostgresSpatialModule: the "postgres" provider plugin, organization catalogs, WMS.
-//   NeutralOperatorModule: shared-use dispatch, pole occupancy staging and commit, the in-process
-//     asset-mutation apply, clandestine attachments and the ISP tenant portal.
-//   IpBillingBridgeModule: the município↔Prefeitura grant provisioning for IP billing.
-await builder.AddGeoAssetsModulesAsync(
-    [new PostgresSpatialModule(), new NeutralOperatorModule(), new IpBillingBridgeModule()]).ConfigureAwait(false);
+// order; with none the kernel boots on its own (invariant I5). The built-ins are ServerModules'
+// (postgres-spatial, neutral-operator, ip-billing-bridge): leaving 'neutral-operator' out is the
+// cut-over to GeoAssets.NeutralOperator.Server, listing it again the rollback (XD01-382).
+await builder.AddGeoAssetsModulesAsync(ServerModules.BuiltIns()).ConfigureAwait(false);
 
 // Organization-scoped asset reads (XD01-373): when no module registered a native IOrganizationCatalogFactory, each
 // request's IAssetProvider is its organization's filtering view of the default catalog.

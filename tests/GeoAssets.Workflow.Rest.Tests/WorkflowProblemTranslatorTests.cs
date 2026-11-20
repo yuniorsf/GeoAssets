@@ -165,7 +165,7 @@ public sealed class WorkflowProblemTranslatorTests
             .Select(f => (string)f.GetRawConstantValue()!)
             .ToList();
 
-        codes.Should().HaveCount(13);
+        codes.Should().HaveCount(14).And.Contain(WorkflowProblemCodes.TargetLedgerUnavailable);
         foreach (var code in codes)
         {
             using var response = BodyRecordingHandler.Problem(HttpStatusCode.BadRequest, code);

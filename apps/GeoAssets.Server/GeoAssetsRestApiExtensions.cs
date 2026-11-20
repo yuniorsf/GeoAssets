@@ -1,6 +1,5 @@
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
-using GeoAssets.NeutralOperator.Domain.GisExport;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
@@ -55,7 +54,9 @@ public static class GeoAssetsRestApiExtensions
 
     /// <summary>
     /// The kernel's asset endpoints under <paramref name="prefix"/>, with the WFS alias. The WMS alias
-    /// (<c>{prefix}/wms</c>) renders straight from PostGIS, so the PostgreSQL spatial module maps it (XD01-359).
+    /// (<c>{prefix}/wms</c>) renders straight from PostGIS, so the PostgreSQL spatial module maps it (XD01-359); the GIS
+    /// export (<c>{prefix}/export/gis/v1</c>) projects through a vertical's projector, so the NeutralOperator module maps it
+    /// while the kernel hosts that module (XD01-382).
     /// </summary>
     public static IEndpointRouteBuilder MapGeoAssetsApi(
         this IEndpointRouteBuilder routes,
@@ -67,7 +68,6 @@ public static class GeoAssetsRestApiExtensions
         MapAssetTypesApi(routes, prefix, opts);
         MapLayersApi(routes, prefix, opts);
         MapMutationBatchesApi(routes, prefix, opts);
-        MapGisExportApi(routes, prefix);
 
         // WFS 2.0 handler mounted under the same CORS-configured prefix so Blazor WASM clients can
         // reach it without separate CORS origin entries. External OGC clients can also use the
@@ -308,30 +308,6 @@ public static class GeoAssetsRestApiExtensions
             return Results.Json(applied, opts);
         })
             .RequireAuthorization("features:edit");
-    }
-
-    /// <summary>
-    /// Generic concessionaire GIS export (XD01-271) — projects every feature of the given
-    /// <paramref name="assetTypeId"/> (the caller's own configured asset-type catalog has no
-    /// fixed "pole" id, so the caller names which of their asset types that is) through
-    /// <see cref="GisExportProjector"/> into the versioned contract documented on
-    /// <see cref="GisExportSchema"/>, and returns it as plain RFC 7946 GeoJSON
-    /// (<c>application/geo+json</c>) — consumable by GE Smallworld/Esri ArcGIS Enterprise or any
-    /// other generic GIS import with zero GeoAssets-specific knowledge. No vendor-specific
-    /// adapter is implemented here, by design (out of scope for this epic). Compliance-status
-    /// fields report <see cref="GisExportSchema.ComplianceUnknown"/> for every feature until a
-    /// persisted <see cref="PoleAttachmentSlotMatrix"/> store/DI registration exists — none does
-    /// as of this ticket (see <see cref="NullPoleAttachmentSlotMatrixProvider"/>).
-    /// </summary>
-    private static void MapGisExportApi(IEndpointRouteBuilder routes, string prefix)
-    {
-        routes.MapGet($"{prefix}/export/gis/v1", (string assetTypeId, IAssetProvider provider) =>
-        {
-            var features = provider.GetByAssetType(assetTypeId);
-            var collection = GisExportProjector.Project(features);
-            return Results.Text(GisExportProjector.ToGeoJson(collection), "application/geo+json");
-        })
-            .RequireAuthorization("features:read");
     }
 
     private static void MapAssetTypesApi(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)

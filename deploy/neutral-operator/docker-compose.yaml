@@ -1,0 +1,63 @@
+# GeoAssets.NeutralOperator.Server (XD01-382, ADR-001 Phase 7) next to the kernel stack of deploy/server.
+# Start deploy/server first: this stack joins its network (KERNEL_NETWORK, "server_default" for the default project
+# name) and uses its Postgres container with a database of its own, geoassets_neutral_operator. See README.md.
+services:
+  # One-shot: creates the geoassets_neutral_operator database in the kernel stack's Postgres when it does not exist yet.
+  neutral-operator-db:
+    image: postgis/postgis:16-3.4
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/neutral-operator/.env (the deploy/server one)}
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        until pg_isready -h ${POSTGRES_HOST:-postgres} -U postgres; do sleep 1; done;
+        psql -h ${POSTGRES_HOST:-postgres} -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'geoassets_neutral_operator'" | grep -q 1
+        || psql -h ${POSTGRES_HOST:-postgres} -U postgres -c "CREATE DATABASE geoassets_neutral_operator"
+    restart: "no"
+    networks:
+      - kernel
+
+  neutral-operator:
+    container_name: geoasset-neutral-operator
+    build:
+      context: ../..
+      dockerfile: apps/GeoAssets.NeutralOperator.Server/Dockerfile
+    # The same Key Vault-backed vendor credentials as deploy/server (NEW_RELIC_LICENSE_KEY, …) when present, then this
+    # stack's own .env (AzureAdCiam__*, ServiceAuth__*).
+    env_file:
+      - path: ../otel/.env
+        required: false
+      - path: .env
+        required: false
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__NeutralOperator: Host=${POSTGRES_HOST:-postgres};Port=5432;Database=geoassets_neutral_operator;Username=postgres;Password=${POSTGRES_PASSWORD}
+      # The kernel's root URL on the shared network (the deploy/server "server" service).
+      GeoCoreServer__BaseUrl: ${GEOCORE_SERVER_BASE_URL:-http://server:8080}
+      # GeoAssets.ServiceCaller client credentials (XD01-299). Empty/false locally: the kernel's machine-to-machine routes
+      # answer 401, the vertical-registration check stays Degraded — /healthz is still 200, /readyz 503.
+      ServiceAuth__Enabled: ${SERVICE_AUTH_ENABLED:-false}
+      ServiceAuth__TenantId: ${SERVICE_AUTH_TENANT_ID:-}
+      ServiceAuth__ClientId: ${SERVICE_AUTH_CLIENT_ID:-}
+      ServiceAuth__ClientSecret: ${SERVICE_AUTH_CLIENT_SECRET:-}
+      ServiceAuth__Scope: ${SERVICE_AUTH_SCOPE:-api://geoassets-server/.default}
+      Workflow__Outbox__Transport: ${WORKFLOW_OUTBOX_TRANSPORT:-None}
+    depends_on:
+      neutral-operator-db:
+        condition: service_completed_successfully
+    ports:
+      - "8082:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - kernel
+
+networks:
+  kernel:
+    name: ${KERNEL_NETWORK:-server_default}
+    external: true

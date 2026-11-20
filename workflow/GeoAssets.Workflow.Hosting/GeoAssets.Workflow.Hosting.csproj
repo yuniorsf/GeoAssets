@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Workflow.Hosting</RootNamespace>
+  </PropertyGroup>
+
+  <!-- The order-type service chassis' HTTP surface (XD01-382, ADR-001 Part 3.1): the generic service-order, target and
+       selection routes, their problem answers, the service-order authorization requirements, the caller's
+       WorkflowPrincipal and the workflow integration-event transport — lifted out of GeoAssets.Server so that every host
+       that runs order types (the kernel, and each vertical microservice such as GeoAssets.NeutralOperator.Server)
+       composes the same routes instead of forking them. Domain-free: no vertical, provider or PostGIS reference. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- The implicit usings of Microsoft.NET.Sdk.Web, which the moved code was written against. -->
+  <ItemGroup>
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Hosting.Abstractions\GeoAssets.Hosting.Abstractions.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <!-- The outbox relay's wire serializer and the two brokers it can publish to, chosen by configuration
+         (Workflow:Outbox:Transport — see WorkflowMessagingHostExtensions). -->
+    <ProjectReference Include="..\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj" />
+  </ItemGroup>
+
+</Project>

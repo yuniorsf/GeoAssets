@@ -1,6 +1,6 @@
 using System.Net;
 using FluentAssertions;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;

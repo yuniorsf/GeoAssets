@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-382 (ADR-001 Phase 7): the NeutralOperator vertical as an order-type chassis module — order types, feature-action
+       descriptors, permissions, problem mappers, action handlers, occupancy staging and shared-use dispatch routes —
+       lifted out of GeoAssets.Server's Modules/ quarantine so that both hosts compose the same unit: the standalone
+       GeoAssets.NeutralOperator.Server always, and the kernel while GeoAssets:Modules still lists 'neutral-operator'
+       (the rollback flag). It references the chassis (GeoAssets.Workflow.Hosting), never a host. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.NeutralOperator.Modules</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- The implicit usings of Microsoft.NET.Sdk.Web, which the moved code was written against. -->
+  <ItemGroup>
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
+    <ProjectReference Include="..\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\core\GeoAssets.Hosting.Abstractions\GeoAssets.Hosting.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <ProjectReference Include="..\..\..\workflow\GeoAssets.Workflow.Hosting\GeoAssets.Workflow.Hosting.csproj" />
+  </ItemGroup>
+
+</Project>

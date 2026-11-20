@@ -5,7 +5,7 @@ using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Server;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;

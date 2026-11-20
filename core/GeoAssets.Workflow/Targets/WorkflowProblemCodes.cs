@@ -44,4 +44,10 @@ public static class WorkflowProblemCodes
 
     /// <summary>The order rules refused the caller.</summary>
     public const string Denied = "auth.denied";
+
+    /// <summary>
+    /// A vertical host could not reach the kernel's global target ledger, or the kernel does not know the vertical's order
+    /// type yet (its registration is pending) — retry later (503, XD01-382).
+    /// </summary>
+    public const string TargetLedgerUnavailable = "targets.ledger-unavailable";
 }

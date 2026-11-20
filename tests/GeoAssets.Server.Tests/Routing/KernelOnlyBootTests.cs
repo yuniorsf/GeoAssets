@@ -15,7 +15,7 @@ namespace GeoAssets.Server.Tests.Routing;
 public sealed class KernelOnlyBootTests
 {
     private static readonly Regex NeutralOperatorRoute = new(
-        @"/occupancy|/shared-use(/|\s|$)",
+        @"/occupancy|/shared-use(/|\s|$)|/export/gis/",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         TimeSpan.FromSeconds(1));
 
