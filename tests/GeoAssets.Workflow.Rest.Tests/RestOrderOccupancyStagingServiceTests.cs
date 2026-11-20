@@ -320,8 +320,8 @@ public sealed class RestOrderOccupancyStagingServiceTests
             .Select(f => (string)f.GetRawConstantValue()!)
             .ToList();
 
-        codes.Should().HaveCount(6, "XD01-318 added the approval conflict");
-        foreach (var code in codes)
+        codes.Should().HaveCount(8, "XD01-318 added the approval conflict, XD01-383 the two approval-saga codes");
+        foreach (var code in codes.Where(code => !SagaCodes.Contains(code, StringComparer.Ordinal)))
         {
             using var response = BodyRecordingHandler.Problem(HttpStatusCode.BadRequest, code);
             var problem = await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None);
@@ -331,6 +331,21 @@ public sealed class RestOrderOccupancyStagingServiceTests
                 translated.Should().BeNull("a stale baseline is only ever a warning inside a successful read");
             else
                 translated.Should().NotBeNull("code '{0}' must map to an exception", code);
+        }
+    }
+
+    private static readonly string[] SagaCodes = [OccupancyProblemCodes.ApplyPending, OccupancyProblemCodes.ApplyNotPending];
+
+    [Fact]
+    public async Task TheApprovalSagaProblemCodes_AreTranslated()
+    {
+        foreach (var code in SagaCodes)
+        {
+            using var response = BodyRecordingHandler.Problem(HttpStatusCode.Conflict, code);
+            var problem = await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None);
+
+            WorkflowProblemTranslator.ToException(problem!, "ord-1", OrderActionType.Approve)
+                .Should().NotBeNull("code '{0}' must map to an exception", code);
         }
     }
 

@@ -1,4 +1,6 @@
 using GeoAssets.Core.Messaging;
+using GeoAssets.Core.Services;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.NeutralOperator.Application.Occupancy;
@@ -40,10 +42,15 @@ internal sealed class OccupancyCommitEfHarness
         Occupancy = new EFPoleOccupancyRepository(NeutralOperatorTestContext.Over(context), Clock);
         ChangeSets = new EFOccupancyChangeSetRepository(NeutralOperatorTestContext.Over(context), Clock);
         UnitOfWork = new EFWorkflowUnitOfWork(context);
+        var outboxWriter = outbox ?? new EFOutboxStore(context, Clock, Serializer);
+        SagaStore = new EFOccupancyApplySagaStore(NeutralOperatorTestContext.Over(context), Occupancy);
         Service = new OccupancyCommitService(
             Orders, OrderTypes, Rules, Targets, Occupancy, Occupancy, ChangeSets, ChangeSets,
-            outbox ?? new EFOutboxStore(context, Clock, Serializer), UnitOfWork,
+            outboxWriter, SagaStore, UnitOfWork,
             new OrderOccupancyOptions { CatalogInstanceId = CatalogInstanceId }, Clock);
+        SagaService = new OccupancyApplySagaService(
+            Orders, OrderTypes, Rules, SagaStore, outboxWriter, new EFIdempotentInbox(context, Clock), UnitOfWork,
+            new TenantOrganizationScope(), Clock);
     }
 
     public ServiceOrderDbContext Context { get; }
@@ -57,10 +64,12 @@ internal sealed class OccupancyCommitEfHarness
     public EFOccupancyChangeSetRepository ChangeSets { get; }
     public EFWorkflowUnitOfWork UnitOfWork { get; }
     public OccupancyCommitService Service { get; }
+    public EFOccupancyApplySagaStore SagaStore { get; }
+    public OccupancyApplySagaService SagaService { get; }
 
     public OccupancyCommitContractHarness ToContractHarness(IAsyncDisposable? scope = null) => new(
         Service, Orders, Targets, Targets, Occupancy, Occupancy, ChangeSets, ChangeSets, OrderTypes, Clock, Owner, CatalogInstanceId,
-        StagedBatchesAsync, scope);
+        StagedBatchesAsync, SagaService, SagaStore, scope);
 
     /// <summary>The outbox rows as the contract suite reads asset mutation batches, oldest first.</summary>
     public async Task<IReadOnlyList<StagedAssetMutationBatch>> StagedBatchesAsync(CancellationToken ct)

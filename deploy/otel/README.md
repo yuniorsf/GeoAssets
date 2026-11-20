@@ -292,3 +292,13 @@ Everything above is about the Collector in isolation. To actually run
 `GeoAssets.Server` as a container on your machine (New Relic direct, no
 Collector, backed by a local PostGIS container) — see `../server/README.md`.
 It reuses this directory's `.env` for `NEW_RELIC_LICENSE_KEY`.
+
+## Alert rules
+
+`alerts/` holds the alert rules of the application's own symptoms, in Prometheus rule-file format, for whichever backend
+evaluates them (load them into Prometheus/Grafana Mimir, or translate the same conditions into New Relic NRQL / Datadog
+monitors — the metric names are the OTLP ones):
+
+- `alerts/saga-apply-alerts.yaml` (XD01-383) — the occupancy approval saga: approvals past `Saga:ApplyTimeout`
+  (`geoassets.saga.apply.timeouts`), the oldest pending approval's age (`geoassets.saga.apply.oldest_pending_age`), and a
+  batch the catalog applied after its saga was compensated (`geoassets.saga.apply.outcomes{outcome="applied-after-revert"}`).

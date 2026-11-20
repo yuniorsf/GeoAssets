@@ -182,4 +182,80 @@ public class GeoAssetsMeterTests
         act.Should().NotThrow();
         capture.Measurements.Should().BeEmpty();
     }
+
+    // ── Approval saga (XD01-383) ──────────────────────────────────────────────
+
+    [Fact]
+    public void RecordSagaApplyTimeouts_AddsTheNumberOfSagasFlagged_NothingForNone()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordSagaApplyTimeouts(0);
+        meter.RecordSagaApplyTimeouts(-3);
+        meter.RecordSagaApplyTimeouts(4);
+
+        capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.saga.apply.timeouts").Which.Value.Should().Be(4);
+    }
+
+    [Fact]
+    public void RecordSagaApplyOutcome_CountsTheOutcome_AndTimesOnlyWhenADurationIsGiven()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordSagaApplyOutcome("committed", 12.5);
+        meter.RecordSagaApplyOutcome("duplicate", null);
+
+        var outcomes = capture.Measurements.Where(m => string.Equals(m.Instrument, "geoassets.saga.apply.outcomes", StringComparison.Ordinal)).ToList();
+        outcomes.Should().HaveCount(2);
+        outcomes[0].Tags.Should().ContainSingle().Which.Should().Be(new KeyValuePair<string, object?>("outcome", "committed"));
+        outcomes[1].Tags.Should().ContainSingle().Which.Should().Be(new KeyValuePair<string, object?>("outcome", "duplicate"));
+        var durations = capture.Measurements.Where(m => string.Equals(m.Instrument, "geoassets.saga.apply.duration", StringComparison.Ordinal)).ToList();
+        durations.Should().ContainSingle().Which.Value.Should().Be(12.5);
+    }
+
+    [Fact]
+    public void RecordSagaApplyOutcome_ANegativeDuration_IsRecordedAsZero()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordSagaApplyOutcome("reverted", -5);
+
+        capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.saga.apply.duration").Which.Value.Should().Be(0);
+    }
+
+    [Fact]
+    public void SetSagaApplyBacklog_IsWhatTheGaugesReport_ClampedAtZero()
+    {
+        var version = $"backlog-{Guid.NewGuid():N}";
+        using var meter = new GeoAssetsMeter(version);
+        using var listener = new MeterListener();
+        var readings = new List<(string Instrument, double Value)>();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (string.Equals(instrument.Meter.Name, GeoAssetsMeter.MeterName, StringComparison.Ordinal)
+                && string.Equals(instrument.Meter.Version, version, StringComparison.Ordinal)
+                && instrument.Name.StartsWith("geoassets.saga.apply.", StringComparison.Ordinal))
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => readings.Add((instrument.Name, value)));
+        listener.SetMeasurementEventCallback<double>((instrument, value, _, _) => readings.Add((instrument.Name, value)));
+        listener.Start();
+
+        meter.SetSagaApplyBacklog(7, 321.5);
+        listener.RecordObservableInstruments();
+        var first = readings.ToList();
+        readings.Clear();
+        meter.SetSagaApplyBacklog(-2, -9);
+        listener.RecordObservableInstruments();
+
+        first.Should().Contain(("geoassets.saga.apply.pending", 7));
+        first.Should().Contain(("geoassets.saga.apply.oldest_pending_age", 321.5));
+        readings.Should().Contain(("geoassets.saga.apply.pending", 0));
+        readings.Should().Contain(("geoassets.saga.apply.oldest_pending_age", 0));
+    }
 }

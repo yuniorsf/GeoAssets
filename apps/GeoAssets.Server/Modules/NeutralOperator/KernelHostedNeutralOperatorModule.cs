@@ -5,9 +5,10 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 
 /// <summary>
 /// The NeutralOperator module as this host composes it (XD01-382, ADR-001 Phase 7): the
-/// <see cref="NeutralOperatorModule"/> that <c>GeoAssets.NeutralOperator.Server</c> hosts on its own, plus the two things
-/// only a host that serves its own asset catalog does — applying the asset mutation batches an approval stages to that
-/// catalog in process when no broker is configured (XD01-337), and the GIS export over it (XD01-271). Enabled while
+/// <see cref="NeutralOperatorModule"/> that <c>GeoAssets.NeutralOperator.Server</c> hosts on its own, plus the one thing
+/// only a host that serves its own asset catalog does — the GIS export over it (XD01-271). The asset mutation batches an
+/// approval stages are applied by the kernel's own consumer (<c>AddServerAssetMutationApply</c>, XD01-383), registered by
+/// the kernel whether or not this module is enabled, over a broker or in process alike. Enabled while
 /// <c>GeoAssets:Modules</c> lists <see cref="NeutralOperatorModule.ModuleId"/> — today's default; leaving it out is the
 /// cut-over to <c>GeoAssets.NeutralOperator.Server</c>, listing it again the rollback (see <c>deploy/neutral-operator/README.md</c>).
 /// </summary>
@@ -28,10 +29,6 @@ public sealed class KernelHostedNeutralOperatorModule : IGeoAssetsModule
                 $"The '{Id}' module needs the 'GeoAssets' connection string.");
 
         _module.ConfigureServices(services, configuration);
-
-        // With no broker configured, the asset mutation batches that approval stages are applied to this host's own
-        // catalog by an in-process outbox relay (XD01-337); every other message stays pending.
-        services.AddServerInProcessAssetMutationApply(configuration);
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)

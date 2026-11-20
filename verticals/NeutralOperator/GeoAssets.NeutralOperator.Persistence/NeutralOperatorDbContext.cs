@@ -10,8 +10,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
-/// The NeutralOperator vertical's own EF Core context (XD01-380, ADR-001 Phase 6): pole occupancies, their entries and the
-/// occupancy change sets staged on service-order targets, in schema <see cref="Schema"/> with their own migrations
+/// The NeutralOperator vertical's own EF Core context (XD01-380, ADR-001 Phase 6): pole occupancies, their entries, the
+/// occupancy change sets staged on service-order targets and the approvals' apply sagas (XD01-383), in schema <see cref="Schema"/> with their own migrations
 /// (this assembly) and history table (<see cref="MigrationsHistoryTableName"/>) — moved out of the kernel's
 /// <c>ServiceOrderDbContext</c>, whose chains no longer map them.
 ///
@@ -44,6 +44,8 @@ public class NeutralOperatorDbContext(
     internal DbSet<PoleOccupancyRecord> PoleOccupancies => Set<PoleOccupancyRecord>();
     internal DbSet<PoleOccupancyEntryRecord> PoleOccupancyEntries => Set<PoleOccupancyEntryRecord>();
     internal DbSet<OccupancyChangeSetRecord> OccupancyChangeSets => Set<OccupancyChangeSetRecord>();
+    internal DbSet<OccupancyApplySagaRecord> OccupancyApplySagas => Set<OccupancyApplySagaRecord>();
+    internal DbSet<OccupancyApplySagaPoleRecord> OccupancyApplySagaPoles => Set<OccupancyApplySagaPoleRecord>();
 
     /// <summary>The kernel's targets, read-only (see <see cref="KernelTargetRecord"/>).</summary>
     internal DbSet<KernelTargetRecord> ServiceOrderTargets => Set<KernelTargetRecord>();
@@ -104,6 +106,7 @@ public class NeutralOperatorDbContext(
 
         ConfigurePoleOccupancy(modelBuilder);
         ConfigureOccupancyChangeSets(modelBuilder);
+        ConfigureOccupancyApplySagas(modelBuilder);
 
         // The kernel applies the same filter to its targets; this read is the one staging makes, and staging is the pole
         // owner's (the change set's row-level-security WITH CHECK pins the target to that same organization). Only the
@@ -124,6 +127,21 @@ public class NeutralOperatorDbContext(
 
         if (Database.IsNpgsql())
             OccupancyChangeSetRecordConfiguration.UseOrdinalTextOrder(modelBuilder.Entity<OccupancyChangeSetRecord>());
+    }
+
+    private void ConfigureOccupancyApplySagas(ModelBuilder modelBuilder)
+    {
+        // The approval sagas (XD01-383) — owner only on every request, like the occupancy they hold open. The timeout sweeper
+        // alone reads the headers across organizations (IgnoreQueryFilters): they hold ids, states and instants, no
+        // occupancy entry, and no row-level-security policy, like the outbox. The poles' snapshots hold entries: the uniform
+        // filter here, and their table's row-level-security policy (AddOccupancyApplySagas) at the database.
+        modelBuilder.Entity<OccupancyApplySagaRecord>()
+            .HasQueryFilter(s => s.OrganizationId == _tenantContext.CurrentOrganizationId);
+        modelBuilder.Entity<OccupancyApplySagaPoleRecord>()
+            .HasQueryFilter(p => p.OrganizationId == _tenantContext.CurrentOrganizationId);
+
+        if (Database.IsNpgsql())
+            OccupancyApplySagaPoleRecordConfiguration.UseOrdinalTextOrder(modelBuilder.Entity<OccupancyApplySagaPoleRecord>());
     }
 
     private void ConfigurePoleOccupancy(ModelBuilder modelBuilder)

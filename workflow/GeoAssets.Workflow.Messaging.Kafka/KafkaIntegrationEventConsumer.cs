@@ -79,6 +79,12 @@ public sealed partial class KafkaIntegrationEventConsumer<TEvent> : BackgroundSe
         ArgumentNullException.ThrowIfNull(envelope);
         ct.ThrowIfCancellationRequested();
 
+        // A message of a type this consumer does not handle is skipped before any span or inbox read (XD01-383).
+        if (_options.MessageTypes.Count > 0 && !_options.MessageTypes.Contains(envelope.MessageType, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
         var parentContext = ExtractRemoteContext(envelope);
         var destination = string.IsNullOrWhiteSpace(_options.TopicName) ? "kafka" : _options.TopicName;
 

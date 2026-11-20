@@ -1,7 +1,10 @@
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using System.Security.Claims;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
+using GeoAssets.Core.Messaging.Events;
+using GeoAssets.Core.Services;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Identity.Authorization.Models;
@@ -91,6 +94,7 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
         Occupancy = host.Services.GetRequiredService<InMemoryPoleOccupancyStore>();
         ChangeSets = host.Services.GetRequiredService<InMemoryOccupancyChangeSetStore>();
         Outbox = host.Services.GetRequiredService<RecordingOutboxWriter>();
+        Sagas = host.Services.GetRequiredService<InMemoryOccupancyApplySagaStore>();
         Clock = (FakeTimeProvider)host.Services.GetRequiredService<TimeProvider>();
     }
 
@@ -109,6 +113,44 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
 
     /// <summary>The store of staged occupancy changes behind the occupancy routes (XD01-315).</summary>
     public InMemoryOccupancyChangeSetStore ChangeSets { get; }
+
+    /// <summary>The approval sagas on file (XD01-383).</summary>
+    public InMemoryOccupancyApplySagaStore Sagas { get; }
+
+    /// <summary>
+    /// What the kernel's answer does, in process (XD01-383): delivers an Applied reply for the latest asset mutation batch an
+    /// approval staged on <see cref="Outbox"/>, through the same saga service the host's consumer calls.
+    /// </summary>
+    public async Task<OccupancyApplySagaResult> ReplyAppliedAsync(Guid? messageId = null)
+    {
+        var batch = StagedBatches()[^1];
+        await using var scope = _host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IOccupancyApplySagaService>().HandleAppliedAsync(
+            AssetBatchAppliedEvent.Create(
+                batch.BatchId, batch.CatalogInstanceId, batch.OrganizationId, batch.RequestedByService, "kernel", [], Clock,
+                sourceOrderId: batch.SourceOrderId, sourceOrderTypeId: batch.SourceOrderTypeId, correlationId: batch.CorrelationId,
+                sourceVerticalId: batch.SourceVerticalId),
+            new IntegrationMessageContextBuilder().WithMessageId(messageId ?? Guid.NewGuid())
+                .WithMessageType(IntegrationEventTypes.AssetMutationBatchAppliedV1).Build(),
+            CancellationToken.None);
+    }
+
+    /// <summary>The kernel's rejection of the latest staged batch, delivered in process (XD01-383).</summary>
+    public async Task<OccupancyApplySagaResult> ReplyRejectedAsync(string reasonCode, string reason, params string[] conflicting)
+    {
+        var batch = StagedBatches()[^1];
+        await using var scope = _host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IOccupancyApplySagaService>().HandleRejectedAsync(
+            AssetMutationBatchRejectedEvent.For(batch, reasonCode, reason, conflicting, Clock),
+            new IntegrationMessageContextBuilder().WithMessageId(Guid.NewGuid())
+                .WithMessageType(IntegrationEventTypes.AssetMutationBatchRejectedV1).Build(),
+            CancellationToken.None);
+    }
+
+    /// <summary>The asset mutation batches staged on the outbox so far, oldest first.</summary>
+    public IReadOnlyList<AssetMutationBatchRequestedEvent> StagedBatches() =>
+        [.. Outbox.Messages.Where(m => string.Equals(m.MessageType, IntegrationEventTypes.AssetMutationBatchRequestedV1, StringComparison.Ordinal))
+            .Select(m => (AssetMutationBatchRequestedEvent)m.Message)];
 
     /// <summary>What the shared-use dispatch staged on the outbox (XD01-316).</summary>
     public RecordingOutboxWriter Outbox { get; }
@@ -239,6 +281,14 @@ internal sealed class OrderTargetsApiHost : IAsyncDisposable
 
         // Approval that commits staged occupancy (XD01-318): the real service over the same stores.
         services.AddSingleton<IPoleOccupancyWriter>(sp => sp.GetRequiredService<InMemoryPoleOccupancyStore>());
+        // The approval saga (XD01-383): its in-memory store moves the change sets and restores the poles as the EF one does,
+        // and the replies it handles are deduplicated by an in-memory inbox.
+        services.AddSingleton(sp => new InMemoryOccupancyApplySagaStore(
+            sp.GetRequiredService<InMemoryOccupancyChangeSetStore>(), sp.GetRequiredService<InMemoryPoleOccupancyStore>()));
+        services.AddSingleton<IOccupancyApplySagaStore>(sp => sp.GetRequiredService<InMemoryOccupancyApplySagaStore>());
+        services.AddSingleton<RecordingIdempotentInbox>();
+        services.AddSingleton<IIdempotentInbox>(sp => sp.GetRequiredService<RecordingIdempotentInbox>());
+        services.AddScoped<ITenantOrganizationScope, TenantOrganizationScope>();
         services.AddOccupancyCommit();
         services.AddScoped<IOrderActionHandler, OccupancyApprovalHandler>(); // the module's wiring (XD01-360)
 

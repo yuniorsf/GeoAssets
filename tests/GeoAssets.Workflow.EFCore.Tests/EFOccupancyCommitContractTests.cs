@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
+using GeoAssets.Core.Messaging.Events;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.TestKit;
@@ -35,6 +36,18 @@ public sealed class EFOccupancyCommitContractTests : OccupancyCommitContractTest
     /// Two poles staged; the second pole's write, the sets' status and the order's transition
     /// have all run when the batch fails to stage — and none of it is kept.
     /// </summary>
+    [Fact]
+    public async Task ApplyReply_TheSagasLogEntries_AreAttributedToTheSystem_NotToTheApprover()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+        await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.InvalidBatch, "bad batch");
+
+        var log = (await harness.Orders.GetByIdAsync("ord-1"))!.ActionLog;
+
+        log.Select(entry => entry.ActorKind).Should().Equal(ActorKind.Human, ActorKind.System);
+    }
+
     [Fact]
     public async Task ApproveAndCommitAsync_WhenStagingTheBatchFails_RollsBackEverything_PolesSetsOrderAndLog()
     {

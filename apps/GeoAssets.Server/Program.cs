@@ -122,6 +122,12 @@ builder.Services.AddServerTargetLedger(builder.Configuration);
 // cut-over to GeoAssets.NeutralOperator.Server, listing it again the rollback (XD01-382).
 await builder.AddGeoAssetsModulesAsync(ServerModules.BuiltIns()).ConfigureAwait(false);
 
+// ── Asset-mutation apply (XD01-383, ADR-001 Phase 7) — the kernel's one consumer of every vertical's
+// AssetMutationBatchRequestedV1: applied once to this host's catalog, answered with AppliedV1/RejectedV1 on the outbox.
+// Over the broker when one names a topic for it, in process (this host's relay) when there is none. After the modules:
+// the provider module may register the catalog's own applier.
+builder.Services.AddServerAssetMutationApply(builder.Configuration);
+
 // Organization-scoped asset reads (XD01-373): when no module registered a native IOrganizationCatalogFactory, each
 // request's IAssetProvider is its organization's filtering view of the default catalog.
 builder.Services.AddServerOrganizationAssetCatalogs();

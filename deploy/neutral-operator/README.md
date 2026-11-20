@@ -79,5 +79,26 @@ plus the target policies and terminal statuses the ledger needs).
 - **Roll back**: list `neutral-operator` again (remove the override) and restart the kernel — it serves the module
   in process exactly as before.
 
-Orders already in the kernel's database are not moved by this ticket; the data move and the approval saga (the asset
-mutation batches an approval stages stay on this host's outbox until XD01-383 delivers them to the kernel) follow.
+Orders already in the kernel's database are not moved by this ticket; the data move follows.
+
+## The approval saga (XD01-383)
+
+Approving a shared-use pole-work order writes the poles' occupancy here as **pending** (change sets `Pending`, one row in
+`neutral_operator.occupancy_apply_sagas` with each pole's previous entries), keeps the order in `Completed` with the
+attribute `occupancy.apply.state = awaiting-apply` (every other status change is refused meanwhile), and stages one
+`AssetMutationBatchRequestedV1` for the kernel — the map (WMS/WFS) shows the new occupancy only once the kernel applied it.
+The kernel answers `geoassets.assets.mutation-batch-applied.v1` (the order moves to `Approved`, the sets to `Committed`)
+or `geoassets.assets.mutation-batch-rejected.v1` (the poles are restored, the sets become `Reverted`, the order stays in
+`Completed` with the kernel's reason in its action log). Every message is deduplicated in the inbox; a batch is applied
+once whatever is redelivered.
+
+- **It needs a broker on this host** (`Workflow:Outbox:Transport` = `Kafka` or `ServiceBus`, with a consumer topic): in
+  process this host reaches only itself, never the kernel. With `None` the batches stay pending in the outbox (nothing is
+  lost), the approvals stay awaiting apply, and a startup warning says so. There is no REST fallback: only the kernel's
+  consumer can tell a rejection from a retryable failure.
+- **Timeout**: an approval still awaiting the kernel `Saga:ApplyTimeout` (default 15 min) after its batch was last staged
+  is flagged — `geoassets.saga.apply.timeouts`, a structured warning, `geoassets.saga.apply.pending` /
+  `geoassets.saga.apply.oldest_pending_age` gauges; alert rules in `deploy/otel/alerts/saga-apply-alerts.yaml` — and stays
+  pending. Check the kernel's asset-mutation consumer, then retry:
+  `POST /api/workflow/service-orders/{id}/occupancy-saga/retry` (whoever may approve the order; 202 with the saga) stages
+  the same batch again.

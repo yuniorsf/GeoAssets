@@ -71,6 +71,8 @@ internal static class OccupancyChangeSetMapper
         OccupancyChangeSetStatus.Staged => nameof(OccupancyChangeSetStatus.Staged),
         OccupancyChangeSetStatus.Committed => nameof(OccupancyChangeSetStatus.Committed),
         OccupancyChangeSetStatus.Discarded => nameof(OccupancyChangeSetStatus.Discarded),
+        OccupancyChangeSetStatus.Pending => nameof(OccupancyChangeSetStatus.Pending),
+        OccupancyChangeSetStatus.Reverted => nameof(OccupancyChangeSetStatus.Reverted),
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown change set status."),
     };
 
@@ -79,6 +81,8 @@ internal static class OccupancyChangeSetMapper
         nameof(OccupancyChangeSetStatus.Staged) => OccupancyChangeSetStatus.Staged,
         nameof(OccupancyChangeSetStatus.Committed) => OccupancyChangeSetStatus.Committed,
         nameof(OccupancyChangeSetStatus.Discarded) => OccupancyChangeSetStatus.Discarded,
+        nameof(OccupancyChangeSetStatus.Pending) => OccupancyChangeSetStatus.Pending,
+        nameof(OccupancyChangeSetStatus.Reverted) => OccupancyChangeSetStatus.Reverted,
         _ => throw new InvalidOperationException($"Stored change set status '{status}' is not a known {nameof(OccupancyChangeSetStatus)}."),
     };
 

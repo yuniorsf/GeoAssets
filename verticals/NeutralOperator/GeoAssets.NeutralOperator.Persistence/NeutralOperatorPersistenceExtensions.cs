@@ -2,6 +2,7 @@ using System.Data.Common;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Workflow.Orders;
@@ -9,6 +10,7 @@ using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.NeutralOperator.Persistence;
 
@@ -86,14 +88,28 @@ public static class NeutralOperatorPersistenceExtensions
     /// Registers what the occupancy approval (XD01-318, <c>AddOccupancyCommit</c>) needs from the persistence layer:
     /// <see cref="EFWorkflowUnitOfWork"/> as <see cref="IWorkflowUnitOfWork"/> on the scope's kernel
     /// <see cref="ServiceOrderDbContext"/> (when not registered yet) — the transaction the occupancy stores join — and
-    /// <see cref="ObservableOccupancyCommitService"/> around the concrete <see cref="OccupancyCommitService"/>. Call it after
-    /// <c>AddOccupancyCommit()</c>: it replaces that interface registration.
+    /// <see cref="ObservableOccupancyCommitService"/> around the concrete <see cref="OccupancyCommitService"/>; and the approval
+    /// saga's store (XD01-383) — <see cref="IOccupancyApplySagaStore"/> and <see cref="IOccupancyApplySagaMonitor"/> on one
+    /// scoped <see cref="EFOccupancyApplySagaStore"/> — with <see cref="ObservableOccupancyApplySagaService"/> around the
+    /// concrete <see cref="OccupancyApplySagaService"/>. Call it after <c>AddOccupancyCommit()</c>: it replaces those interface
+    /// registrations.
     /// </summary>
     public static IServiceCollection AddOccupancyCommitPersistence(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
+        services.TryAddScoped(sp => new EFOccupancyApplySagaStore(
+            sp.GetRequiredService<NeutralOperatorDbContext>(),
+            sp.GetRequiredService<EFPoleOccupancyRepository>()));
+        services.TryAddScoped<IOccupancyApplySagaStore>(sp => sp.GetRequiredService<EFOccupancyApplySagaStore>());
+        services.TryAddScoped<IOccupancyApplySagaMonitor>(sp => sp.GetRequiredService<EFOccupancyApplySagaStore>());
+        services.Replace(ServiceDescriptor.Scoped<IOccupancyApplySagaService>(sp =>
+            new ObservableOccupancyApplySagaService(
+                sp.GetRequiredService<OccupancyApplySagaService>(),
+                sp.GetRequiredService<GeoAssetsActivitySource>(),
+                sp.GetRequiredService<GeoAssetsMeter>(),
+                sp.GetRequiredService<ILogger<ObservableOccupancyApplySagaService>>())));
         services.Replace(ServiceDescriptor.Scoped<IOccupancyCommitService>(sp =>
             new ObservableOccupancyCommitService(
                 sp.GetRequiredService<OccupancyCommitService>(),

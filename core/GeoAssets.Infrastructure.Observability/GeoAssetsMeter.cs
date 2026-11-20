@@ -69,6 +69,9 @@ public sealed class GeoAssetsMeter : IDisposable
     /// <summary>The <c>geoassets.catalog.mutation_batch*</c> instruments (XD01-337).</summary>
     private readonly AssetMutationBatchInstruments _assetMutationBatch;
 
+    /// <summary>The <c>geoassets.saga.apply.*</c> instruments (XD01-383).</summary>
+    private readonly SagaApplyInstruments _sagaApply;
+
     public GeoAssetsMeter(string version)
     {
         _meter = new Meter(MeterName, version);
@@ -77,6 +80,7 @@ public sealed class GeoAssetsMeter : IDisposable
         _fanOut = new FanOutInstruments(_meter);
         _occupancyCommit = new OccupancyCommitInstruments(_meter);
         _assetMutationBatch = new AssetMutationBatchInstruments(_meter);
+        _sagaApply = new SagaApplyInstruments(_meter);
 
         _orderTransitions = _meter.CreateCounter<long>(
             "geoassets.orders.transitions",
@@ -219,6 +223,30 @@ public sealed class GeoAssetsMeter : IDisposable
         _assetMutationBatch.Batches.Add(1, tag);
         _assetMutationBatch.DurationMs.Record(milliseconds, tag);
     }
+
+    /// <summary>Counts sagas the timeout sweeper found still pending past the saga timeout (XD01-383), each once.</summary>
+    public void RecordSagaApplyTimeouts(int sagas)
+    {
+        if (sagas <= 0) return;
+
+        _sagaApply.Timeouts.Add(sagas);
+    }
+
+    /// <summary>
+    /// Counts one saga reply handled (XD01-383) by <paramref name="outcome"/> — a fixed, vertical-agnostic set — and, when
+    /// the reply ended the saga, how long it ran. Never tagged with a batch, order or organization id.
+    /// </summary>
+    public void RecordSagaApplyOutcome(string outcome, double? durationSeconds)
+    {
+        var tag = new KeyValuePair<string, object?>("outcome", outcome);
+        _sagaApply.Outcomes.Add(1, tag);
+        if (durationSeconds is { } seconds)
+            _sagaApply.Duration.Record(Math.Max(0d, seconds), tag);
+    }
+
+    /// <summary>The pending-saga backlog the <c>geoassets.saga.apply.pending</c> and <c>…oldest_pending_age</c> gauges report (XD01-383).</summary>
+    public void SetSagaApplyBacklog(long pending, double oldestPendingAgeSeconds) =>
+        _sagaApply.SetBacklog(pending, oldestPendingAgeSeconds);
 
     public void Dispose() => _meter.Dispose();
 }

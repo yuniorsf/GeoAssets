@@ -67,6 +67,10 @@ builder.Services.AddHostedService<OrderActionHandlerValidation>();
 builder.Services.AddServerWorkflowMessaging(builder.Configuration);
 builder.Services.AddSingleton(NeutralOperatorMessaging.From(builder.Configuration));
 
+// The approval saga (XD01-383) needs a broker on this host: the kernel that applies its asset mutation batches is remote.
+if (!WorkflowMessagingHostExtensions.HasBroker(builder.Configuration))
+    builder.Services.AddHostedService<ApprovalSagaTransportWarning>();
+
 // ── Targets: selection is the kernel's ledger's (ADR-001 §3.4 D2) — LedgerOrderTargetSelectionService reserves there and
 // mirrors the reservation into this host's ServiceOrderTargets; LedgerTargetReleaseLifecycleHook releases it when the
 // order closes. The strategy catalog stays local only to word the routes' problems; nothing here queries features. ──

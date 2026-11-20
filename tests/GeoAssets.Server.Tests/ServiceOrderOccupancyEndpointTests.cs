@@ -499,7 +499,8 @@ public sealed class ServiceOrderOccupancyEndpointTests
             .Where(route => route.RoutePattern.RawText!.Contains("occupancy", StringComparison.Ordinal))
             .ToList();
 
-        routes.Should().HaveCount(5, "XD01-315 maps five routes");
+        routes.Should().HaveCount(6, "XD01-315 maps five routes and XD01-383 adds the approval saga's retry");
+        routes.Select(route => route.RoutePattern.RawText).Should().Contain(text => text!.EndsWith("/occupancy-saga/retry", StringComparison.Ordinal));
         foreach (var route in routes)
         {
             var method = route.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single();
@@ -567,7 +568,7 @@ public sealed class ServiceOrderOccupancyEndpointTests
     }
 
     [Theory]
-    [InlineData("pending")]
+    [InlineData("bogus")]
     [InlineData("9")]
     [InlineData("")]
     public async Task GetChanges_UnknownStatus_Returns400ValidationFailed(string status)

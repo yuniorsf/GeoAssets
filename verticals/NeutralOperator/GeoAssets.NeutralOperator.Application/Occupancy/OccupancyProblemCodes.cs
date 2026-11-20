@@ -31,4 +31,13 @@ public static class OccupancyProblemCodes
     /// was staged (XD01-318). Nothing was committed; the changes must be staged again.
     /// </summary>
     public const string ConcurrentModification = "occupancy.concurrent-modification";
+
+    /// <summary>
+    /// An earlier approval's asset-mutation apply is still open (XD01-383): the order awaits the asset catalog's apply, or
+    /// one of its poles is held by another order's pending approval. Wait for the catalog, or retry the pending one.
+    /// </summary>
+    public const string ApplyPending = "occupancy.apply-pending";
+
+    /// <summary>A retry of an order's asset-mutation apply found no pending apply to retry (XD01-383).</summary>
+    public const string ApplyNotPending = "occupancy.apply-not-pending";
 }

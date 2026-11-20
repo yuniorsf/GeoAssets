@@ -1,9 +1,12 @@
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.NeutralOperator.Application;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Services;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
@@ -49,16 +52,17 @@ public sealed class OccupancyCommitServiceTests
     [InlineData(9)]
     [InlineData(10)]
     [InlineData(11)]
+    [InlineData(12)]
     public void Constructor_NullCollaborator_ThrowsArgumentNullException(int nullAt)
     {
         var f = _fixture;
-        object?[] args = [f.Orders, f.OrderTypes, f.Rules, f.Targets, f.Occupancy, f.Occupancy, f.ChangeSets, f.ChangeSets, f.Outbox, f.UnitOfWork, f.Options, f.Clock];
+        object?[] args = [f.Orders, f.OrderTypes, f.Rules, f.Targets, f.Occupancy, f.Occupancy, f.ChangeSets, f.ChangeSets, f.Outbox, f.UnitOfWork, f.Options, f.Clock, f.Sagas];
         args[nullAt] = null;
 
         var act = () => new OccupancyCommitService(
             (IServiceOrderRepository)args[0]!, (OrderTypeRegistry)args[1]!, (ServiceOrderRules)args[2]!, (IServiceOrderTargetReader)args[3]!,
             (IPoleOccupancyReader)args[4]!, (IPoleOccupancyWriter)args[5]!, (IOccupancyChangeSetReader)args[6]!, (IOccupancyChangeSetWriter)args[7]!,
-            (IOutboxWriter)args[8]!, (IWorkflowUnitOfWork)args[9]!, (OrderOccupancyOptions)args[10]!, (TimeProvider)args[11]!);
+            (IOutboxWriter)args[8]!, (IOccupancyApplySagaStore)args[12]!, (IWorkflowUnitOfWork)args[9]!, (OrderOccupancyOptions)args[10]!, (TimeProvider)args[11]!);
 
         act.Should().Throw<ArgumentNullException>();
     }
@@ -222,11 +226,11 @@ public sealed class OccupancyCommitServiceTests
     // ── Under the approval ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ApproveAndCommitAsync_ASetNoLongerStagedWhenItIsMarked_ThrowsOccupancyConflictException_NamingItsPole()
+    public async Task ApproveAndCommitAsync_ASetNoLongerStagedWhenTheSagaMovesItToPending_ThrowsOccupancyConflictException_NamingItsPole()
     {
         await SeedAsync();
         await StageAsync("pole-1", OccupancyChangeBuilder.Add(1));
-        var sut = _fixture.Build(changeSetWriter: new LosingChangeSetWriter(_fixture.ChangeSets));
+        var sut = _fixture.Build(sagas: new LosingSagaStore(_fixture.Sagas));
 
         var act = () => sut.ApproveAndCommitAsync(Order, Supervisor, CancellationToken.None);
 
@@ -264,7 +268,7 @@ public sealed class OccupancyCommitServiceTests
     }
 
     [Fact]
-    public async Task ApproveAndCommitAsync_CommitsTheSetsBeforeClosingTheOrder_CarryingTheRowVersionItWasReadWith_ThenLogs()
+    public async Task ApproveAndCommitAsync_MovesTheSetsToPendingBeforeUpdatingTheOrder_CarryingTheRowVersionItWasReadWith_ThenLogs()
     {
         await SeedAsync(rowVersion: [4, 2]);
         await StageAsync("pole-1", OccupancyChangeBuilder.Add(1));
@@ -277,7 +281,7 @@ public sealed class OccupancyCommitServiceTests
 
         await _fixture.Build(orders: orders).ApproveAndCommitAsync(Order, Supervisor, CancellationToken.None);
 
-        setsAtUpdate.Should().Equal([OccupancyChangeSetStatus.Committed], "the set was committed before the order closed");
+        setsAtUpdate.Should().Equal([OccupancyChangeSetStatus.Pending], "the set waited for the catalog before the order was marked awaiting apply");
         orders.Writes.Should().Equal($"update:{Order}", $"action:{Order}");
         orders.UpdatedRowVersions.Should().ContainSingle().Which.Should().Equal(4, 2);
     }
@@ -344,6 +348,23 @@ public sealed class OccupancyCommitServiceTests
     }
 
     [Fact]
+    public void AddOccupancyCommit_RegistersTheApprovalSaga_AndItsTransitionGuard_ScopedAndOnce()
+    {
+        var services = CommitServices();
+        services.AddOccupancyCommit();
+        services.AddOccupancyCommit();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var saga = scope.ServiceProvider.GetRequiredService<IOccupancyApplySagaService>();
+
+        saga.Should().BeSameAs(scope.ServiceProvider.GetRequiredService<OccupancyApplySagaService>());
+        services.Single(d => d.ServiceType == typeof(IOccupancyApplySagaService)).Lifetime.Should().Be(ServiceLifetime.Scoped);
+        scope.ServiceProvider.GetServices<ITransitionGuard>().OfType<OccupancyApplyPendingTransitionGuard>()
+            .Should().ContainSingle("registering twice adds the guard once");
+    }
+
+    [Fact]
     public void AddOccupancyCommit_NullServices_ThrowsArgumentNullException()
     {
         var act = () => NeutralOperatorServiceExtensions.AddOccupancyCommit(null!);
@@ -366,6 +387,9 @@ public sealed class OccupancyCommitServiceTests
         services.AddSingleton<IOccupancyChangeSetWriter>(_fixture.ChangeSets);
         services.AddSingleton<IOutboxWriter>(_fixture.Outbox);
         services.AddSingleton<IWorkflowUnitOfWork>(_fixture.UnitOfWork);
+        services.AddSingleton<IOccupancyApplySagaStore>(_fixture.Sagas);
+        services.AddSingleton<IIdempotentInbox>(_fixture.Inbox);
+        services.AddScoped<ITenantOrganizationScope, TenantOrganizationScope>();
         return services;
     }
 
@@ -405,13 +429,19 @@ public sealed class OccupancyCommitServiceTests
             CancellationToken.None);
     }
 
-    /// <summary>The change-set store, except that every set it is asked to mark committed has just been replaced by someone else.</summary>
-    private sealed class LosingChangeSetWriter(IOccupancyChangeSetWriter inner) : IOccupancyChangeSetWriter
+    /// <summary>The saga store, except that every set it is asked to move to pending has just been replaced by someone else.</summary>
+    private sealed class LosingSagaStore(IOccupancyApplySagaStore inner) : IOccupancyApplySagaStore
     {
-        public Task<OccupancyChangeSet> StageAsync(OccupancyChangeSet changeSet, CancellationToken ct) => inner.StageAsync(changeSet, ct);
-        public Task<bool> DiscardAsync(string orderId, string targetId, CancellationToken ct) => inner.DiscardAsync(orderId, targetId, ct);
-        public Task<int> DiscardAllAsync(string orderId, CancellationToken ct) => inner.DiscardAllAsync(orderId, ct);
-        public Task<bool> MarkCommittedAsync(OccupancyChangeSet committed, CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> BeginAsync(
+            OccupancyApplySaga saga, IReadOnlyCollection<OccupancyApplySagaPole> poles, IReadOnlyCollection<Guid> changeSetIds, CancellationToken ct) =>
+            Task.FromResult(false);
+
+        public Task<bool> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct) => inner.CompleteAsync(completed, ct);
+        public Task<bool> RecordRetryAsync(Guid batchId, DateTimeOffset retriedAt, CancellationToken ct) => inner.RecordRetryAsync(batchId, retriedAt, ct);
+        public Task<OccupancyApplySaga?> FindAsync(Guid batchId, CancellationToken ct) => inner.FindAsync(batchId, ct);
+        public Task<OccupancyApplySaga?> FindLatestForOrderAsync(string orderId, CancellationToken ct) => inner.FindLatestForOrderAsync(orderId, ct);
+        public Task<IReadOnlyList<string>> FindPendingPolesAsync(IReadOnlyCollection<string> poleFeatureIds, CancellationToken ct) => inner.FindPendingPolesAsync(poleFeatureIds, ct);
+        public Task<IReadOnlyList<OccupancyApplySagaPole>> GetPolesAsync(Guid batchId, CancellationToken ct) => inner.GetPolesAsync(batchId, ct);
     }
 
     /// <summary>The change-set store's read side, cancelling the caller's token as it answers — the caller gives up mid-approval.</summary>

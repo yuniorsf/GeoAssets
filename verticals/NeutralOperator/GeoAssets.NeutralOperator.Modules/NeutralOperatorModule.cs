@@ -54,8 +54,9 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         services.AddServerSharedUseDispatch();
 
         // Approving an order with targets commits the occupancy staged on its poles (XD01-318) — OccupancyApprovalHandler,
-        // this module's order action handler on POST /service-orders/{id}/actions (XD01-360).
-        services.AddServerOccupancyCommit();
+        // this module's order action handler on POST /service-orders/{id}/actions (XD01-360) — as a saga with the kernel
+        // (XD01-383): pending until the kernel applies the asset mutation batch, compensated when it rejects it.
+        services.AddServerOccupancyCommit(configuration);
 
         // IClandestineAttachmentService (XD01-263), backed by the host's IServiceOrderRepository — performed only by
         // ClandestineNoticeActionHandler, on POST /service-orders/{id}/actions after the rule chain allowed the action

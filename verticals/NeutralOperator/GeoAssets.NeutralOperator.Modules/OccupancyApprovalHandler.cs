@@ -1,5 +1,6 @@
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
@@ -11,8 +12,10 @@ namespace GeoAssets.NeutralOperator.Modules;
 /// <see cref="OrderAction.Approve"/> on an order whose type declares a target policy is not a plain status write: it goes
 /// to <see cref="IOccupancyCommitService"/>, which commits the occupancy staged on the order's poles in the same unit as the
 /// transition. The outcomes keep the action route's own dialect — applied, not found, denied, invalid transition, changed
-/// meanwhile — plus one problem, 409 <c>occupancy.concurrent-modification</c> with the poles whose occupancy changed after
-/// staging.
+/// meanwhile — plus two problems, 409 <c>occupancy.concurrent-modification</c> with the poles whose occupancy changed after
+/// staging, and 409 <c>occupancy.apply-pending</c> (XD01-383) when an earlier approval of the order — or of another order
+/// holding one of its poles — still awaits the asset catalog's apply. Applied means approved: when poles were written the
+/// order is "approved, awaiting apply" until the kernel answers the approval saga.
 /// </summary>
 public sealed class OccupancyApprovalHandler(IOccupancyCommitService commits) : IOrderActionHandler
 {
@@ -60,6 +63,10 @@ public sealed class OccupancyApprovalHandler(IOccupancyCommitService commits) : 
             StatusCodes.Status409Conflict, OccupancyProblemCodes.ConcurrentModification,
             "The occupancy of a pole changed after its changes were staged.", conflict.Message,
             ("poleFeatureIds", conflict.PoleFeatureIds)),
+        OccupancyApplyPendingException pending => OrderActionOutcome.Problem(
+            StatusCodes.Status409Conflict, OccupancyProblemCodes.ApplyPending,
+            "An earlier approval awaits the asset catalog's apply.", pending.Message,
+            ("poleFeatureIds", pending.PoleFeatureIds)),
         ServiceOrderConcurrencyException => OrderActionOutcome.ConcurrentModification,
         _ => null,
     };

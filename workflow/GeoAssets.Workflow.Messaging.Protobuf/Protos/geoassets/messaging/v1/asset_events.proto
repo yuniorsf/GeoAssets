@@ -78,6 +78,8 @@ message AssetMutationBatchRequestedEventProto {
   repeated AssetFeatureMutationItemProto mutations = 9;
   google.protobuf.Timestamp requested_at_utc = 10;
   optional string correlation_id = 11;
+  // XD01-383: the vertical that requested the batch, so the kernel's reply routes back to its saga.
+  optional string source_vertical_id = 12;
 }
 
 message AssetBatchAppliedItemProto {
@@ -100,6 +102,25 @@ message AssetBatchAppliedEventProto {
   Rfc7946BoundingBoxProto affected_bounds = 10;
   google.protobuf.Timestamp applied_at_utc = 11;
   optional string correlation_id = 12;
+  // XD01-383: copied from the request (geoassets.assets.mutation-batch-applied.v1).
+  optional string source_vertical_id = 13;
+}
+
+// XD01-383: geoassets.assets.mutation-batch-rejected.v1, the approval saga's compensating reply.
+message AssetMutationBatchRejectedEventProto {
+  string batch_id = 1;
+  string catalog_instance_id = 2;
+  string organization_id = 3;
+  string requested_by_service = 4;
+  optional string source_order_id = 5;
+  optional string source_order_type_id = 6;
+  optional string scope_id = 7;
+  string reason_code = 8;
+  string reason = 9;
+  repeated string conflicting_feature_ids = 10;
+  google.protobuf.Timestamp rejected_at_utc = 11;
+  optional string correlation_id = 12;
+  optional string source_vertical_id = 13;
 }
 
 message FeatureCatalogMutatedEventProto {

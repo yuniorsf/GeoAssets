@@ -45,14 +45,17 @@ public sealed class InProcessAssetMutationKernelFallbackTests
         services.AddSingleton<IProviderPlugin>(_plugin);
         services.AddServerCatalogPool(configuration);
         services.AddServerWorkflowMessaging(configuration);
+        _doubles = KernelApplyDoubles.Replace(services);
         if (registered is not null)
             services.AddSingleton(registered);
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
 
         var provider = services.BuildServiceProvider();
         await provider.InitializeCatalogPoolAsync();
         return provider;
     }
+
+    private KernelApplyDoubles _doubles = null!;
 
     private static AssetMutationBatchRequestedEvent Batch(string catalogInstanceId) =>
         AssetMutationBatchRequestedEvent.Create(
@@ -89,6 +92,7 @@ public sealed class InProcessAssetMutationKernelFallbackTests
         var pool = provider.GetRequiredService<ICatalogPool>();
         pool.GetCatalog("west").GetById("pole-1").Should().NotBeNull();
         pool.DefaultCatalog.GetById("pole-1").Should().BeNull();
+        _doubles.Outbox.Messages.Should().ContainSingle().Which.MessageType.Should().Be(IntegrationEventTypes.AssetMutationBatchAppliedV1);
     }
 
     [Fact]
@@ -126,6 +130,7 @@ public sealed class InProcessAssetMutationKernelFallbackTests
         await provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(batch));
 
         recorder.Received.Should().ContainSingle().Which.BatchId.Should().Be(batch.BatchId);
+        _doubles.Outbox.Messages.Should().ContainSingle().Which.MessageType.Should().Be(IntegrationEventTypes.AssetMutationBatchAppliedV1);
         var pool = provider.GetRequiredService<ICatalogPool>();
         pool.GetCatalog("west").GetById("pole-1").Should().BeNull();
         pool.DefaultCatalog.GetById("pole-1").Should().BeNull();
