@@ -73,6 +73,9 @@ public sealed class MunicipioGrantSyncDispatcherTests
             if (LeaseHeld) Failed.Add((id, failure));
             return Task.FromResult(LeaseHeld);
         }
+
+        public Task<int> PruneAsync(DateTimeOffset completedBefore, DateTimeOffset? failedBefore, int batchSize, CancellationToken ct = default) =>
+            Task.FromResult(0);
     }
 
     private sealed class FakeGrantClient : IOrganizationGrantClient

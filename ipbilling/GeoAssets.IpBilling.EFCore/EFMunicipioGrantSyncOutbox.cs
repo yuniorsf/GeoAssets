@@ -10,7 +10,8 @@ namespace GeoAssets.IpBilling.Persistence;
 /// <c>MunicipioGrantSyncRequests</c>. <see cref="Enqueue"/> only stages the row on the scoped context, which
 /// <see cref="EFMunicipioRepository"/> shares, so the município save's <c>SaveChangesAsync</c> commits both. The dispatcher
 /// side claims with a lease taken by a conditional <c>UPDATE</c> (only one worker can win it, on any provider), recording
-/// every outcome only while it still holds the lease.
+/// every outcome only while it still holds the lease. <see cref="PruneAsync"/> deletes finished requests a later request of
+/// the same município superseded (XD01-400).
 /// </summary>
 public sealed class EFMunicipioGrantSyncOutbox(IpBillingDbContext db, TimeProvider timeProvider)
     : IMunicipioGrantSyncQueue, IMunicipioGrantSyncStore
@@ -135,6 +136,39 @@ public sealed class EFMunicipioGrantSyncOutbox(IpBillingDbContext db, TimeProvid
                 ct)
             .ConfigureAwait(false);
         return updated == 1;
+    }
+
+    public async Task<int> PruneAsync(
+        DateTimeOffset completedBefore, DateTimeOffset? failedBefore, int batchSize, CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+
+        var completedCutoff = completedBefore.UtcDateTime;
+        var failedCutoff = failedBefore?.UtcDateTime;
+        var requests = db.MunicipioGrantSyncRequests;
+
+        // A município's latest request (the max Id of its line) carries its grantSyncState, so only rows a later request of
+        // the same município superseded are candidates; unfinished rows never match the finished predicate.
+        var ids = await requests
+            .AsNoTracking()
+            .Where(r => ((r.CompletedAt != null && r.CompletedAt < completedCutoff)
+                    || (failedCutoff != null && r.FailedAt != null && r.FailedAt < failedCutoff))
+                && requests.Any(o => o.MunicipioId == r.MunicipioId && o.Id > r.Id))
+            .OrderBy(r => r.Id)
+            .Select(r => r.Id)
+            .Take(batchSize)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (ids.Count == 0) return 0;
+
+        // The finished predicate is checked again so a row that changed since the select is left alone.
+        return await requests
+            .Where(r => ids.Contains(r.Id)
+                && ((r.CompletedAt != null && r.CompletedAt < completedCutoff)
+                    || (failedCutoff != null && r.FailedAt != null && r.FailedAt < failedCutoff)))
+            .ExecuteDeleteAsync(ct)
+            .ConfigureAwait(false);
     }
 
     private IQueryable<MunicipioGrantSyncRequestRecord> Leased(long id, string workerId)

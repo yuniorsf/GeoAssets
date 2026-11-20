@@ -48,7 +48,13 @@ the gateway's `/api/ip-billing/**` route, `IPBILLING_DESTINATION`); that host is
 `GeoAssets.ServiceCaller` credentials (`ServiceAuth__Enabled=true`, `ServiceAuth__TenantId`, `ServiceAuth__ClientId`,
 `ServiceAuth__ClientSecret`, `ServiceAuth__Scope`): it provisions the grants through the kernel's generic
 `/api/identity/organization-grants` API and publishes its `ip-billing:*` permissions
-(`PUT /api/identity/verticals/ip-billing/permissions`) — until it has, its `/readyz` answers 503.
+(`PUT /api/identity/verticals/ip-billing/permissions`) — until it has, its `/readyz` answers 503. Município saves queue
+their grant change in its `MunicipioGrantSyncRequests` outbox and a dispatcher sends it (`GrantSync__*`, XD01-395); a pruner
+deletes finished requests (XD01-400): completed ones after `GrantSync__CompletedRetention` (default `30.00:00:00`), failed
+ones only when `GrantSync__FailedRetention` is set (default empty = kept), `GrantSync__PruneBatchSize` (500) rows at a time
+every `GrantSync__PruneInterval` (`01:00:00`, first run soon after start) — never a município's latest request (its
+`grantSyncState`) nor an unfinished one; deletions are counted on `geoassets.ipbilling.grant_sync_pruned`.
+`GrantSync__Enabled=false` stops both.
 
 ## Token audiences of the vertical hosts (XD01-390)
 
