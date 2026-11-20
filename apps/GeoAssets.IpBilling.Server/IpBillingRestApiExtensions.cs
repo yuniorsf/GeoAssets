@@ -1,4 +1,7 @@
+using System.Security.Claims;
+using GeoAssets.Identity.Authentication;
 using GeoAssets.IpBilling.Calculation;
+using GeoAssets.IpBilling.GrantSync;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Resolution;
@@ -24,11 +27,13 @@ namespace GeoAssets.IpBilling.Server;
 /// município grant endpoints (<see cref="MunicipioGrantsRestApiExtensions"/>) do; these endpoints
 /// keep their authenticated-caller bar.
 ///
-/// <strong>Município/UnidadeOrganizacional writes do not call
-/// <see cref="MunicipioProvisioningService"/></strong>: a município saved here with a
-/// <c>PrefeituraOrganizationId</c> provisions its scoped <c>OrganizationGrant</c> only when the
-/// caller also posts to <c>/api/ip-billing/municipio-grants/sync</c> — wiring the save to the
-/// sync is a separate decision (how a kernel failure during a save is answered).
+/// <strong>Município writes sync the Prefeitura's scoped <c>OrganizationGrant</c> themselves</strong>
+/// (XD01-395): a create, update or delete that changes the grant (<see cref="MunicipioGrantSyncPlanner"/>)
+/// queues the change in the same transaction as the save (<see cref="IMunicipioGrantSyncQueue"/>),
+/// requested by the caller's user id from its token, and <see cref="MunicipioGrantSyncDispatcher"/>
+/// sends it to the kernel afterwards — a kernel outage never fails the save. The município reads
+/// report where it stands (<c>grantSyncState</c>, <c>grantSyncError</c>, <c>grantSyncedAt</c>);
+/// <c>/api/ip-billing/municipio-grants/sync|revoke</c> stay for manual repair.
 /// </summary>
 internal static class IpBillingRestApiExtensions
 {
@@ -137,6 +142,8 @@ internal static class IpBillingRestApiExtensions
         group.MapPost("/municipios", async (
             [FromBody] MunicipioWriteRequest req,
             [FromServices] IMunicipioRepository repo,
+            [FromServices] IMunicipioGrantSyncQueue grantSync,
+            ClaimsPrincipal caller,
             CancellationToken ct) =>
         {
             var municipio = new Municipio
@@ -146,6 +153,7 @@ internal static class IpBillingRestApiExtensions
             };
             ApplyMunicipioWrite(municipio, req);
             await repo.AddAsync(municipio, ct).ConfigureAwait(false);
+            QueueGrantSync(grantSync, caller, municipio, before: null, after: MunicipioGrantLink.Of(municipio));
             await repo.SaveChangesAsync(ct).ConfigureAwait(false);
             return Results.Created($"/api/ip-billing/municipios/{municipio.IbgeCode}", municipio);
         });
@@ -154,13 +162,17 @@ internal static class IpBillingRestApiExtensions
             Guid id,
             [FromBody] MunicipioWriteRequest req,
             [FromServices] IMunicipioRepository repo,
+            [FromServices] IMunicipioGrantSyncQueue grantSync,
+            ClaimsPrincipal caller,
             CancellationToken ct) =>
         {
             var municipio = await repo.GetByIdAsync(id, ct).ConfigureAwait(false);
             if (municipio is null) return Results.NotFound();
 
+            var before = MunicipioGrantLink.Of(municipio);
             ApplyMunicipioWrite(municipio, req);
             await repo.UpdateAsync(municipio, ct).ConfigureAwait(false);
+            QueueGrantSync(grantSync, caller, municipio, before, MunicipioGrantLink.Of(municipio));
             await repo.SaveChangesAsync(ct).ConfigureAwait(false);
             return Results.NoContent();
         });
@@ -168,13 +180,61 @@ internal static class IpBillingRestApiExtensions
         group.MapDelete("/municipios/{id:guid}", async (
             Guid id,
             [FromServices] IMunicipioRepository repo,
+            [FromServices] IMunicipioGrantSyncQueue grantSync,
+            ClaimsPrincipal caller,
             CancellationToken ct) =>
         {
+            var municipio = await repo.GetByIdAsync(id, ct).ConfigureAwait(false);
             await repo.DeleteAsync(id, ct).ConfigureAwait(false);
+            if (municipio is not null)
+                QueueGrantSync(grantSync, caller, municipio, MunicipioGrantLink.Of(municipio), after: null);
             await repo.SaveChangesAsync(ct).ConfigureAwait(false);
             return Results.NoContent();
         });
     }
+
+    /// <summary>
+    /// Queues the grant change the save of <paramref name="municipio"/> calls for, if any (XD01-395), on the save's own unit
+    /// of work, and reports it on <paramref name="municipio"/> as pending.
+    /// </summary>
+    private static void QueueGrantSync(
+        IMunicipioGrantSyncQueue grantSync,
+        ClaimsPrincipal caller,
+        Municipio municipio,
+        MunicipioGrantLink? before,
+        MunicipioGrantLink? after)
+    {
+        var change = MunicipioGrantSyncPlanner.Plan(before, after);
+        if (change is null) return;
+
+        grantSync.Enqueue(change, CallerId(caller));
+        municipio.GrantSyncState = MunicipioGrantSyncState.Pending;
+        municipio.GrantSyncError = null;
+        municipio.GrantSyncedAt = null;
+    }
+
+    /// <summary>
+    /// The caller's user id, from its token's claims only (never a header): the IdP object id, else the name identifier or
+    /// subject, else the calling application's id.
+    /// </summary>
+    internal static string CallerId(ClaimsPrincipal caller)
+    {
+        ArgumentNullException.ThrowIfNull(caller);
+
+        string?[] candidates =
+        [
+            ClaimMapping.EntraDefault.Map(caller)?.ExternalObjectId,
+            caller.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            caller.FindFirst("sub")?.Value,
+            caller.FindFirst("azp")?.Value,
+            caller.FindFirst("appid")?.Value,
+        ];
+
+        return candidates.FirstOrDefault(id => !string.IsNullOrWhiteSpace(id)) ?? UnknownCaller;
+    }
+
+    /// <summary>What <see cref="CallerId"/> answers for a principal without any identifying claim.</summary>
+    internal const string UnknownCaller = "unknown";
 
     private static void ApplyMunicipioWrite(Municipio municipio, MunicipioWriteRequest req)
     {

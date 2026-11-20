@@ -61,6 +61,10 @@ builder.Services.AddGeoPermissionPolicies();
 // published to the kernel by the bootstrap registration: retried with backoff; /healthz stays 200 (Degraded) until it is
 // done, /readyz answers 503 until then. ────────────────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<MunicipioProvisioningService>();
+
+// Município saves queue their grant change in their own transaction; this dispatcher sends them to the kernel, retrying with
+// backoff (XD01-395, GrantSync:* options).
+builder.Services.AddMunicipioGrantSync(builder.Configuration);
 builder.Services.AddSingleton<IModulePermissionContributor, IpBillingPermissionContributor>();
 builder.Services.AddVerticalRegistration(
     builder.Configuration, new VerticalRegistrationSource(IpBillingPermissionContributor.IpBillingVerticalId));

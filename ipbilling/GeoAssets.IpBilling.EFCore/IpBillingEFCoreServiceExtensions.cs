@@ -1,12 +1,14 @@
 using GeoAssets.IpBilling.Calculation;
 using GeoAssets.IpBilling.FaturamentoLedger;
 using GeoAssets.IpBilling.Fiscalizacao;
+using GeoAssets.IpBilling.GrantSync;
 using GeoAssets.IpBilling.Levantamento;
 using GeoAssets.IpBilling.Oficio;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Resolution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GeoAssets.IpBilling.Persistence;
 
@@ -31,6 +33,13 @@ public static class IpBillingEFCoreServiceExtensions
 
         services.AddScoped<ILampTypeRepository, EFLampTypeRepository>();
         services.AddScoped<IMunicipioRepository, EFMunicipioRepository>();
+
+        // The município grant-sync outbox (XD01-395): one scoped instance on the same context as the município repository,
+        // so a save commits the município and its queued grant change together.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<EFMunicipioGrantSyncOutbox>();
+        services.AddScoped<IMunicipioGrantSyncQueue>(sp => sp.GetRequiredService<EFMunicipioGrantSyncOutbox>());
+        services.AddScoped<IMunicipioGrantSyncStore>(sp => sp.GetRequiredService<EFMunicipioGrantSyncOutbox>());
         services.AddScoped<IUnidadeOrganizacionalRepository, EFUnidadeOrganizacionalRepository>();
         services.AddScoped<IIpTransformerIndexRepository, EFIpTransformerIndexRepository>();
         services.AddScoped<IFaturamentoRepository, EFFaturamentoRepository>();

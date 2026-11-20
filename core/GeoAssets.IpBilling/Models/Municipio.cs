@@ -1,3 +1,5 @@
+using GeoAssets.IpBilling.GrantSync;
+
 namespace GeoAssets.IpBilling.Models;
 
 /// <summary>
@@ -56,4 +58,16 @@ public sealed class Municipio
     /// Cálculo" in the out-of-scope graduation path) currently arrives via spreadsheet
     /// upload or a dispatched service order.</summary>
     public OrigemWorkflow OrigemMemoriaCalculo { get; set; } = OrigemWorkflow.Planilha;
+
+    /// <summary>
+    /// Where this município's Prefeitura grant stands against its saved link (XD01-395) — read-only: derived on read from
+    /// the latest grant-sync request a save queued for it, never written by a save.
+    /// </summary>
+    public MunicipioGrantSyncState GrantSyncState { get; set; } = MunicipioGrantSyncState.None;
+
+    /// <summary>The latest request's last error (bounded) while it is retried or after it failed; null otherwise.</summary>
+    public string? GrantSyncError { get; set; }
+
+    /// <summary>When the latest request reached the kernel, when <see cref="GrantSyncState"/> is <c>synced</c>.</summary>
+    public DateTimeOffset? GrantSyncedAt { get; set; }
 }

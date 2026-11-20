@@ -27,6 +27,10 @@
                      @onclick="() => SelectMunicipio(municipio)">
                     <span class="asset-name">@municipio.Name</span>
                     <span style="color:var(--text-secondary)">@municipio.Uf · @municipio.IbgeCode</span>
+                    @if (GrantSyncLabelKey(municipio.GrantSyncState) is { } grantSyncLabelKey)
+                    {
+                        <span class="badge" style="@GrantSyncBadgeStyle(municipio.GrantSyncState)" title="@GrantSyncTitle(municipio)">@L[grantSyncLabelKey]</span>
+                    }
                 </div>
             }
         </div>

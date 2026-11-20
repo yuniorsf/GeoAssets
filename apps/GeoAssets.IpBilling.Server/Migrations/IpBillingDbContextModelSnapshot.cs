@@ -455,6 +455,84 @@ namespace GeoAssets.IpBilling.Server.Migrations
                     b.ToTable("LevantamentoTransformerLines", (string)null);
                 });
 
+            modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.MunicipioGrantSyncRequestRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DistribuidoraOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("FailedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IbgeCode")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("LeaseExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LeasedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("MunicipioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PrefeituraOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PreviousDistribuidoraOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PreviousIbgeCode")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<Guid?>("PreviousPrefeituraOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAt")
+                        .HasFilter("\"CompletedAt\" IS NULL AND \"FailedAt\" IS NULL");
+
+                    b.HasIndex("MunicipioId", "Id");
+
+                    b.ToTable("MunicipioGrantSyncRequests", (string)null);
+                });
+
             modelBuilder.Entity("GeoAssets.IpBilling.Persistence.Entities.MunicipioRecord", b =>
                 {
                     b.Property<Guid>("Id")
