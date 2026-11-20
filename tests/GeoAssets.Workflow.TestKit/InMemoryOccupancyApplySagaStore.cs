@@ -7,7 +7,8 @@ namespace GeoAssets.Workflow.TestKit;
 /// Dictionary-backed <see cref="IOccupancyApplySagaStore"/> and <see cref="IOccupancyApplySagaMonitor"/> (XD01-383) for
 /// in-memory fixtures. It keeps the sagas and their poles and, when it is given the change-set and pole stores a fixture
 /// shares with the approval, does what the EF store does in the same unit of work: moves the saga's change sets from staged
-/// to pending and on to committed or reverted, and restores the poles' baselines on a revert. Without them it keeps state only.
+/// to pending and on to committed or reverted, and restores the poles' baselines on a revert — leaving, and naming, a pole
+/// moved on since (XD01-392). Without them it keeps state only.
 /// </summary>
 public sealed class InMemoryOccupancyApplySagaStore : IOccupancyApplySagaStore, IOccupancyApplySagaMonitor
 {
@@ -98,22 +99,27 @@ public sealed class InMemoryOccupancyApplySagaStore : IOccupancyApplySagaStore, 
         lock (_gate) return Task.FromResult(_poles.GetValueOrDefault(batchId) ?? []);
     }
 
-    public Task<bool> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct)
+    public Task<OccupancyApplySagaCompletion> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(completed);
         lock (_gate)
         {
             if (!_sagas.TryGetValue(completed.BatchId, out var stored) || stored.State != OccupancyApplySagaState.Pending)
-                return Task.FromResult(false);
-            _sagas[completed.BatchId] = completed;
+                return Task.FromResult(OccupancyApplySagaCompletion.NotPending);
 
             var reverted = completed.State == OccupancyApplySagaState.Reverted;
+            List<string> unrestored = [];
             if (reverted && _poleStore is not null)
             {
                 var owner = _poleStore.ForOrganization(completed.OrganizationId);
-                foreach (var pole in _poles.GetValueOrDefault(completed.BatchId) ?? [])
-                    owner.RestoreEntries(pole.PoleFeatureId, pole.AppliedVersion, pole.BaselineEntries);
+                foreach (var pole in (_poles.GetValueOrDefault(completed.BatchId) ?? []).OrderBy(p => p.PoleFeatureId, StringComparer.Ordinal))
+                {
+                    if (owner.TryRestoreEntries(pole.PoleFeatureId, pole.AppliedVersion, pole.BaselineEntries) is null)
+                        unrestored.Add(pole.PoleFeatureId);
+                }
             }
+
+            _sagas[completed.BatchId] = completed with { UnrestoredFeatureIds = unrestored };
 
             if (_changeSetStore is not null)
             {
@@ -123,7 +129,9 @@ public sealed class InMemoryOccupancyApplySagaStore : IOccupancyApplySagaStore, 
                     _changeSetStore.Seed(Settled(set, settled, completed.CompletedAt!.Value));
             }
 
-            return Task.FromResult(true);
+            return Task.FromResult(unrestored.Count == 0
+                ? OccupancyApplySagaCompletion.Done
+                : new OccupancyApplySagaCompletion(true, unrestored));
         }
     }
 

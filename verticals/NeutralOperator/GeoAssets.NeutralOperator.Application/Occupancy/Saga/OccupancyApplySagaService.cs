@@ -16,7 +16,9 @@ namespace GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 /// logged as <see cref="OccupancyApplyActions.Applied"/>. <b>Rejected</b> — every pole of the saga is restored to what it
 /// held before the approval, the saga and its change sets become reverted, and the order stays where it is (the status it
 /// had before the approval) with <see cref="OccupancyApplySagaAttributes.Reverted"/> and the kernel's reason logged as
-/// <see cref="OccupancyApplyActions.Reverted"/>.</para>
+/// <see cref="OccupancyApplyActions.Reverted"/>. A pole another order wrote since the approval is not restored — the later
+/// change wins — and the saga still reverts, naming it in <see cref="OccupancyApplySaga.UnrestoredFeatureIds"/>, on the
+/// order's <see cref="OccupancyApplySagaAttributes.UnrestoredKey"/> and in the logged entry (XD01-392).</para>
 ///
 /// <para><b>Exactly-once effects.</b> Each reply's message id is recorded in the inbox under its consumer name in the same
 /// unit of work as everything it changes, and a saga that is no longer pending is never changed again: a redelivered or
@@ -108,7 +110,7 @@ public sealed class OccupancyApplySagaService : IOccupancyApplySagaService
             }
 
             var committed = saga with { State = OccupancyApplySagaState.Committed, CompletedAt = now };
-            if (!await _sagas.CompleteAsync(committed, token).ConfigureAwait(false))
+            if (!(await _sagas.CompleteAsync(committed, token).ConfigureAwait(false)).Completed)
                 return OccupancyApplySagaResult.Duplicate;
 
             await SettleOrderAsync(
@@ -123,6 +125,7 @@ public sealed class OccupancyApplySagaService : IOccupancyApplySagaService
                     ActorKind = ActorKind.System,
                 },
                 now,
+                unrestored: null,
                 token).ConfigureAwait(false);
 
             return new OccupancyApplySagaResult(OccupancyApplySagaOutcome.Committed, committed);
@@ -148,23 +151,29 @@ public sealed class OccupancyApplySagaService : IOccupancyApplySagaService
                 Reason = reason,
                 ConflictingFeatureIds = [.. rejected.ConflictingFeatureIds],
             };
-            if (!await _sagas.CompleteAsync(reverted, token).ConfigureAwait(false))
+            var completion = await _sagas.CompleteAsync(reverted, token).ConfigureAwait(false);
+            if (!completion.Completed)
                 return OccupancyApplySagaResult.Duplicate;
+            reverted = reverted with { UnrestoredFeatureIds = completion.UnrestoredFeatureIds };
 
             var conflicting = rejected.ConflictingFeatureIds.Count == 0
                 ? string.Empty
                 : $" Conflicting feature(s): {string.Join(", ", rejected.ConflictingFeatureIds)}.";
+            var compensated = reverted.UnrestoredFeatureIds.Count == 0
+                ? $"The approval was compensated: the occupancy of {saga.Batch.Mutations.Count} pole(s) was restored and the changes must be staged again."
+                : $"The approval was compensated except on pole(s) {string.Join(", ", reverted.UnrestoredFeatureIds)}: a later change superseded the approval there, so their occupancy was kept. The occupancy of the other pole(s) was restored and the changes must be staged again.";
             await SettleOrderAsync(
                 saga,
                 OccupancyApplySagaAttributes.Reverted,
                 status: null,
                 new OrderActionLog(
                     OccupancyApplyActions.Reverted, saga.RequestedBy, now.UtcDateTime,
-                    $"The asset catalog rejected batch {saga.BatchId} ({rejected.ReasonCode}): {reason}{conflicting} The approval was compensated: the occupancy of {saga.Batch.Mutations.Count} pole(s) was restored and the changes must be staged again.")
+                    $"The asset catalog rejected batch {saga.BatchId} ({rejected.ReasonCode}): {reason}{conflicting} {compensated}")
                 {
                     ActorKind = ActorKind.System,
                 },
                 now,
+                reverted.UnrestoredFeatureIds,
                 token).ConfigureAwait(false);
 
             return new OccupancyApplySagaResult(OccupancyApplySagaOutcome.Reverted, reverted);
@@ -265,10 +274,17 @@ public sealed class OccupancyApplySagaService : IOccupancyApplySagaService
     /// <summary>
     /// The order's side of a reply: its saga state attribute set to <paramref name="state"/> and, when
     /// <paramref name="status"/> is given and the order is still where the approval left it, moved there; then
-    /// <paramref name="entry"/> logged (its resulting status only when the order did move).
+    /// <paramref name="entry"/> logged (its resulting status only when the order did move). <paramref name="unrestored"/>
+    /// names the poles a revert left untouched, on the order's <see cref="OccupancyApplySagaAttributes.UnrestoredKey"/>.
     /// </summary>
     private async Task SettleOrderAsync(
-        OccupancyApplySaga saga, string state, string? status, OrderActionLog entry, DateTimeOffset now, CancellationToken ct)
+        OccupancyApplySaga saga,
+        string state,
+        string? status,
+        OrderActionLog entry,
+        DateTimeOffset now,
+        IReadOnlyList<string>? unrestored,
+        CancellationToken ct)
     {
         if (await _orders.GetByIdAsync(saga.OrderId, ct).ConfigureAwait(false) is not ServiceOrder order)
             return;
@@ -279,7 +295,7 @@ public sealed class OccupancyApplySagaService : IOccupancyApplySagaService
                 order,
                 _orderTypes.Find(order.OrderTypeId),
                 moves ? status! : order.Status,
-                OccupancyOrderRevision.SagaAttributes(order, state),
+                OccupancyOrderRevision.SagaAttributes(order, state, unrestored: unrestored),
                 now),
             ct).ConfigureAwait(false);
         await _orders.AppendActionAsync(order.Id, moves ? entry : entry with { ResultingStatus = null }, ct).ConfigureAwait(false);

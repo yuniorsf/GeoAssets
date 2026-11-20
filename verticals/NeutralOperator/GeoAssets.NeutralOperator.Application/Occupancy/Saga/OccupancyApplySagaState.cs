@@ -12,6 +12,10 @@ public enum OccupancyApplySagaState
     /// <summary>The kernel applied the batch: the occupancy is final and the order moved on to its approved status.</summary>
     Committed = 1,
 
-    /// <summary>The kernel rejected the batch: the poles' occupancy was restored and the order stayed where it was before the approval.</summary>
+    /// <summary>
+    /// The kernel rejected the batch: the poles' occupancy was restored — except on a pole a later change had moved on, which
+    /// keeps that change and is named in <see cref="OccupancyApplySaga.UnrestoredFeatureIds"/> (XD01-392) — and the order
+    /// stayed where it was before the approval.
+    /// </summary>
     Reverted = 2,
 }

@@ -244,6 +244,14 @@ public sealed class GeoAssetsMeter : IDisposable
             _sagaApply.Duration.Record(Math.Max(0d, seconds), tag);
     }
 
+    /// <summary>
+    /// Counts one reverted saga whose compensation left targets untouched because a later change had moved them on
+    /// (XD01-392), tagged with the saga's <paramref name="orderTypeId"/> only — never a batch, order, organization or
+    /// target id.
+    /// </summary>
+    public void RecordSagaApplyCompensationConflict(string orderTypeId) =>
+        _sagaApply.CompensationConflicts.Add(1, new KeyValuePair<string, object?>("order.type", orderTypeId));
+
     /// <summary>The pending-saga backlog the <c>geoassets.saga.apply.pending</c> and <c>…oldest_pending_age</c> gauges report (XD01-383).</summary>
     public void SetSagaApplyBacklog(long pending, double oldestPendingAgeSeconds) =>
         _sagaApply.SetBacklog(pending, oldestPendingAgeSeconds);

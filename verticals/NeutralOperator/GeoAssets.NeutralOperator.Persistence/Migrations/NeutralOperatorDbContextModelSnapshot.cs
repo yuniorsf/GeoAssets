@@ -159,6 +159,9 @@ namespace GeoAssets.NeutralOperator.Persistence.Migrations
                     b.Property<DateTime?>("TimedOutAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("UnrestoredFeatureIdsJson")
+                        .HasColumnType("text");
+
                     b.HasKey("BatchId");
 
                     b.HasIndex("OrganizationId");

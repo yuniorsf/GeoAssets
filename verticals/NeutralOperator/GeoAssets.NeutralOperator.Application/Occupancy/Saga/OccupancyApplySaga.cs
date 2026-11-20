@@ -63,6 +63,12 @@ public sealed record OccupancyApplySaga
     /// <summary>The features the kernel could not apply the batch to, for a reverted saga; may be empty.</summary>
     public IReadOnlyList<string> ConflictingFeatureIds { get; init; } = [];
 
+    /// <summary>
+    /// The poles a reverted saga's compensation left untouched because a later change had moved them past the version the
+    /// approval left them at (XD01-392) — their occupancy is that later change's; empty when every pole was restored.
+    /// </summary>
+    public IReadOnlyList<string> UnrestoredFeatureIds { get; init; } = [];
+
     /// <summary>The batch exactly as staged — what a retry stages again.</summary>
     public required AssetMutationBatchRequestedEvent Batch { get; init; }
 }

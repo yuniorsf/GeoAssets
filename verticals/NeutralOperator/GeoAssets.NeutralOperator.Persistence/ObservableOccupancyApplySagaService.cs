@@ -15,8 +15,10 @@ namespace GeoAssets.NeutralOperator.Persistence;
 /// <para>Spans: <c>Saga.AssetMutationApplied</c>, <c>Saga.AssetMutationRejected</c>, <c>Saga.AssetMutationRetry</c>, each a
 /// child of the consume (or request) span it runs in — so the approval, the kernel's apply and the reply are one trace — and
 /// tagged with the batch, order and organization and the outcome. Metrics: <c>geoassets.saga.apply.outcomes</c> by outcome
-/// and, for a reply that ended a saga, <c>geoassets.saga.apply.duration</c>; never a batch, order or organization id. An
-/// applied batch whose saga had already reverted is logged as an error for an operator to reconcile.</para>
+/// and, for a reply that ended a saga, <c>geoassets.saga.apply.duration</c>; for a revert whose compensation left poles
+/// untouched (XD01-392), <c>geoassets.saga.apply.compensation_conflicts</c> by order type and a warning naming them; never a
+/// batch, order or organization id as a tag. An applied batch whose saga had already reverted is logged as an error for an
+/// operator to reconcile.</para>
 /// </summary>
 public sealed partial class ObservableOccupancyApplySagaService : IOccupancyApplySagaService
 {
@@ -71,7 +73,16 @@ public sealed partial class ObservableOccupancyApplySagaService : IOccupancyAppl
             {
                 var result = await _inner.HandleRejectedAsync(rejected, context, ct).ConfigureAwait(false);
                 if (result.Outcome == OccupancyApplySagaOutcome.Reverted)
+                {
                     LogReverted(_logger, rejected.BatchId, rejected.SourceOrderId, rejected.ReasonCode);
+                    if (result.Saga is { UnrestoredFeatureIds.Count: > 0 } saga)
+                    {
+                        Activity.Current?.SetTag("saga.unrestored_count", saga.UnrestoredFeatureIds.Count);
+                        _metrics.RecordSagaApplyCompensationConflict(saga.OrderTypeId);
+                        LogCompensationConflict(_logger, saga.BatchId, saga.OrderId, string.Join(", ", saga.UnrestoredFeatureIds));
+                    }
+                }
+
                 return result;
             });
     }
@@ -126,6 +137,11 @@ public sealed partial class ObservableOccupancyApplySagaService : IOccupancyAppl
         Level = LogLevel.Warning,
         Message = "Approval saga of batch {BatchId} (order {OrderId}) reverted: the asset catalog rejected it ({ReasonCode}).")]
     private static partial void LogReverted(ILogger logger, Guid batchId, string? orderId, string reasonCode);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Approval saga of batch {BatchId} (order {OrderId}) reverted without restoring pole(s) {UnrestoredFeatureIds}: a later change superseded the approval there, so their occupancy was kept.")]
+    private static partial void LogCompensationConflict(ILogger logger, Guid batchId, string orderId, string unrestoredFeatureIds);
 
     [LoggerMessage(
         Level = LogLevel.Information,

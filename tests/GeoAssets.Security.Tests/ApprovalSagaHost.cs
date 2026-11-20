@@ -59,6 +59,7 @@ namespace GeoAssets.Security.Tests;
 internal sealed class ApprovalSagaHost : IAsyncDisposable
 {
     public const string OwnersPole = "saga-pole-owner";
+    public const string SecondPole = "saga-pole-second";
     public const string PoleType = "00000000-0000-0000-0000-000000000004";
     public const string OrganizationClaim = "test_org";
     public const string OrganizationHeader = "X-Test-Organization";
@@ -73,10 +74,12 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
     private const double Lat = -12.9;
 
     private readonly WebApplication _web;
+    private readonly bool _withSecondPole;
 
-    private ApprovalSagaHost(WebApplication web, string connectionString, FaultInjectingApplier fault)
+    private ApprovalSagaHost(WebApplication web, string connectionString, FaultInjectingApplier fault, bool withSecondPole)
     {
         _web = web;
+        _withSecondPole = withSecondPole;
         ConnectionString = connectionString;
         Fault = fault;
     }
@@ -95,7 +98,9 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
     /// <param name="poleInCatalog">Whether the order's pole is in the owner's catalog; without it the kernel cannot apply the batch (a rejection).</param>
     /// <param name="staleCatalogInstanceId">The catalog instance the approval addresses when it is not this host's (a misaddressed batch).</param>
     /// <param name="maxAttempts">The relay's delivery attempts per message before it leaves one failed.</param>
-    public static async Task<ApprovalSagaHost> StartAsync(bool poleInCatalog = true, string? staleCatalogInstanceId = null, int? maxAttempts = null)
+    /// <param name="withSecondPole">Whether the order also targets <see cref="SecondPole"/> (in the owner's catalog when <paramref name="poleInCatalog"/>).</param>
+    public static async Task<ApprovalSagaHost> StartAsync(
+        bool poleInCatalog = true, string? staleCatalogInstanceId = null, int? maxAttempts = null, bool withSecondPole = false)
     {
         var connectionString = new NpgsqlConnectionStringBuilder(await SecurityTestContainerFixture.EnsureStartedAsync())
         {
@@ -119,7 +124,7 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
             await serviceOrders.Database.MigrateAsync();
         await SecurityTestContainerFixture.MigrateNeutralOperatorAsync(connectionString);
 
-        await SeedCatalogAsync(connectionString, poleInCatalog);
+        await SeedCatalogAsync(connectionString, poleInCatalog, withSecondPole);
 
         var catalogConnectionString = new NpgsqlConnectionStringBuilder(connectionString)
         {
@@ -189,19 +194,21 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
         web.MapGeoAssetsApi();
         await web.StartAsync();
 
-        var host = new ApprovalSagaHost(web, connectionString, web.Services.GetRequiredService<FaultInjectingApplier>());
+        var host = new ApprovalSagaHost(web, connectionString, web.Services.GetRequiredService<FaultInjectingApplier>(), withSecondPole);
         await host.SeedOrderAsync();
         return host;
     }
 
     // ── Act ───────────────────────────────────────────────────────────────────
 
-    public async Task StageAsync(params OccupancyChange[] changes)
+    public Task StageAsync(params OccupancyChange[] changes) => StageAsync(OwnersPole, changes);
+
+    public async Task StageAsync(string pole, params OccupancyChange[] changes)
     {
         await using var scope = Services.CreateAsyncScope();
-        var baseline = await scope.ServiceProvider.GetRequiredService<IPoleOccupancyReader>().GetForPoleAsync(OwnersPole, CancellationToken.None);
+        var baseline = await scope.ServiceProvider.GetRequiredService<IPoleOccupancyReader>().GetForPoleAsync(pole, CancellationToken.None);
         var set = OccupancyChangeSet.Stage(
-            Order, OrderTargetSelectionService.TargetId(Order, OwnersPole), OwnersPole, Owner, changes, baseline, "crew-1", new DateTimeOffset(SeedTime));
+            Order, OrderTargetSelectionService.TargetId(Order, pole), pole, Owner, changes, baseline, "crew-1", new DateTimeOffset(SeedTime));
         await scope.ServiceProvider.GetRequiredService<IOccupancyChangeSetWriter>().StageAsync(set, CancellationToken.None);
     }
 
@@ -236,12 +243,15 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
     }
 
     /// <summary>Puts <paramref name="entries"/> on the order's pole before the approval — what an earlier approval left.</summary>
-    public async Task OccupyAsync(params PoleOccupancyEntry[] entries)
+    public Task OccupyAsync(params PoleOccupancyEntry[] entries) => OccupyAsync(OwnersPole, entries);
+
+    /// <summary>Replaces <paramref name="pole"/>'s live entries through the real store, as any other order's commit would.</summary>
+    public async Task<PoleOccupancy> OccupyAsync(string pole, params PoleOccupancyEntry[] entries)
     {
         await using var scope = Services.CreateAsyncScope();
-        var live = await scope.ServiceProvider.GetRequiredService<IPoleOccupancyReader>().GetForPoleAsync(OwnersPole, CancellationToken.None);
-        await scope.ServiceProvider.GetRequiredService<IPoleOccupancyWriter>().ReplaceEntriesAsync(
-            OwnersPole, live?.Version ?? PoleOccupancy.UnsavedVersion, entries, CancellationToken.None);
+        var live = await scope.ServiceProvider.GetRequiredService<IPoleOccupancyReader>().GetForPoleAsync(pole, CancellationToken.None);
+        return await scope.ServiceProvider.GetRequiredService<IPoleOccupancyWriter>().ReplaceEntriesAsync(
+            pole, live?.Version ?? PoleOccupancy.UnsavedVersion, entries, CancellationToken.None);
     }
 
     // ── Observe ───────────────────────────────────────────────────────────────
@@ -268,10 +278,12 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
             .GetPageAsync(new OccupancyChangeSetQuery(Order, pageSize: OccupancyChangeSetQuery.MaxPageSize), CancellationToken.None)).Items;
     }
 
-    public async Task<PoleOccupancy?> OccupancyAsync()
+    public Task<PoleOccupancy?> OccupancyAsync() => OccupancyAsync(OwnersPole);
+
+    public async Task<PoleOccupancy?> OccupancyAsync(string pole)
     {
         await using var scope = Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IPoleOccupancyReader>().GetForPoleAsync(OwnersPole, CancellationToken.None);
+        return await scope.ServiceProvider.GetRequiredService<IPoleOccupancyReader>().GetForPoleAsync(pole, CancellationToken.None);
     }
 
     /// <summary>The pole as its owner's catalog reads it.</summary>
@@ -385,32 +397,35 @@ internal sealed class ApprovalSagaHost : IAsyncDisposable
             OrganizationId = Owner,
             CreatedAt = SeedTime,
         });
+        string[] poles = _withSecondPole ? [OwnersPole, SecondPole] : [OwnersPole];
         await scope.ServiceProvider.GetRequiredService<IServiceOrderTargetWriter>().AddRangeAsync(
             Order,
             [
-                new ServiceOrderTarget
+                .. poles.Select(pole => new ServiceOrderTarget
                 {
-                    Id = OrderTargetSelectionService.TargetId(Order, OwnersPole),
+                    Id = OrderTargetSelectionService.TargetId(Order, pole),
                     OrderId = Order,
-                    FeatureId = OwnersPole,
+                    FeatureId = pole,
                     AssetTypeId = PoleType,
                     ActivityIds = ["relocate-attachment"],
                     Status = OrderTargetStatus.Pending,
                     AddedAt = SeedTime,
                     AddedBy = "planner-1",
                     OrganizationId = Owner,
-                },
+                }),
             ],
             CancellationToken.None);
     }
 
-    private static async Task SeedCatalogAsync(string connectionString, bool poleInCatalog)
+    private static async Task SeedCatalogAsync(string connectionString, bool poleInCatalog, bool withSecondPole)
     {
         var options = SecurityTestContainerFixture.BuildGeoAssetsOptions(connectionString);
         await using var catalog = new PostgresAssetProvider(
             new GeoAssetsDbContext(options), options, NullLogger<PostgresAssetProvider>.Instance, TimeProvider.System);
         // A pole of another organization keeps the catalog non-empty when the order's own is missing.
-        catalog.AddRange(poleInCatalog ? [Pole(OwnersPole, Owner, 0.01)] : [Pole("saga-pole-other", Other, 0.02)]);
+        catalog.AddRange(poleInCatalog
+            ? withSecondPole ? [Pole(OwnersPole, Owner, 0.01), Pole(SecondPole, Owner, 0.03)] : [Pole(OwnersPole, Owner, 0.01)]
+            : [Pole("saga-pole-other", Other, 0.02)]);
     }
 
     private static GeoFeature Pole(string id, Guid organizationId, double offset) => new()

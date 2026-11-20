@@ -161,6 +161,47 @@ public sealed class ObservableOccupancyApplySagaServiceTests : IDisposable
         warning.Message.Should().Contain(AssetMutationBatchRejectionCodes.FeatureNotFound).And.Contain(_orderId).And.NotContain("pole-secret", "the reason and features stay on the order's log, not in the telemetry");
     }
 
+    [Fact]
+    public async Task HandleRejectedAsync_ARevertThatLeftPolesUnrestored_CountsOneCompensationConflictByOrderTypeOnly_TagsTheSpan_AndWarnsNamingThem()
+    {
+        var saga = Saga(OccupancyApplySagaState.Reverted, TimeSpan.FromSeconds(7)) with { UnrestoredFeatureIds = ["pole-a", "pole-b"] };
+        _inner.Result = new OccupancyApplySagaResult(OccupancyApplySagaOutcome.Reverted, saga);
+
+        await Sut().HandleRejectedAsync(Rejected(), Context(), CancellationToken.None);
+
+        var conflict = Measured("geoassets.saga.apply.compensation_conflicts").Should().ContainSingle().Subject;
+        conflict.Value.Should().Be(1);
+        conflict.Tags.Should().HaveCount(1).And.ContainKey("order.type").WhoseValue.Should().Be("pole-work");
+        Span("Saga.AssetMutationRejected").GetTagItem("saga.unrestored_count").Should().Be(2);
+        Measured("geoassets.saga.apply.outcomes").Should().ContainSingle().Which.Tags["outcome"].Should().Be("reverted");
+        _logs.Entries.Should().HaveCount(2);
+        var warning = _logs.Entries.Should().ContainSingle(entry => entry.Message.Contains("without restoring", StringComparison.Ordinal)).Subject;
+        warning.Level.Should().Be(LogLevel.Warning);
+        warning.Message.Should().Contain(saga.BatchId.ToString()).And.Contain(_orderId).And.Contain("pole-a, pole-b");
+    }
+
+    [Fact]
+    public async Task HandleRejectedAsync_AFullyRestoredRevert_RecordsNoCompensationConflict_AndNoUnrestoredTag()
+    {
+        _inner.Result = new OccupancyApplySagaResult(OccupancyApplySagaOutcome.Reverted, Saga(OccupancyApplySagaState.Reverted, TimeSpan.FromSeconds(7)));
+
+        await Sut().HandleRejectedAsync(Rejected(), Context(), CancellationToken.None);
+
+        Measured("geoassets.saga.apply.compensation_conflicts").Should().BeEmpty();
+        Span("Saga.AssetMutationRejected").GetTagItem("saga.unrestored_count").Should().BeNull();
+        _logs.Entries.Should().ContainSingle().Which.Message.Should().NotContain("without restoring");
+    }
+
+    [Fact]
+    public async Task HandleRejectedAsync_ADuplicateReply_RecordsNoCompensationConflict()
+    {
+        _inner.Result = OccupancyApplySagaResult.Duplicate;
+
+        await Sut().HandleRejectedAsync(Rejected(), Context(), CancellationToken.None);
+
+        Measured("geoassets.saga.apply.compensation_conflicts").Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(OccupancyApplySagaOutcome.Duplicate, "duplicate")]
     [InlineData(OccupancyApplySagaOutcome.Ignored, "ignored")]

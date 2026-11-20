@@ -5,8 +5,8 @@ namespace GeoAssets.Infrastructure.Observability;
 /// <summary>
 /// The asset-mutation apply saga instruments of <see cref="GeoAssetsMeter"/> (XD01-383), created on that meter: how
 /// many approvals wait for the kernel to apply their batch, how old the oldest is, how many outlived the saga timeout,
-/// and how each one ended. Vertical-agnostic and low-cardinality: the only tag is <c>outcome</c>, from a fixed set; none
-/// is ever tagged with a batch, order, organization or feature id.
+/// and how each one ended. Vertical-agnostic and low-cardinality: the tags are <c>outcome</c>, from a fixed set, and the
+/// compensation conflicts' <c>order.type</c>; none is ever tagged with a batch, order, organization or feature id.
 /// </summary>
 internal sealed class SagaApplyInstruments
 {
@@ -24,6 +24,11 @@ internal sealed class SagaApplyInstruments
             "geoassets.saga.apply.outcomes",
             unit: "{sagas}",
             description: "Asset-mutation apply saga replies handled (tag: outcome=committed|reverted|duplicate|applied-after-revert|ignored).");
+
+        CompensationConflicts = meter.CreateCounter<long>(
+            "geoassets.saga.apply.compensation_conflicts",
+            unit: "{sagas}",
+            description: "Reverted asset-mutation apply sagas whose compensation left targets untouched because a later change had moved them on (tag: order.type).");
 
         Duration = meter.CreateHistogram<double>(
             "geoassets.saga.apply.duration",
@@ -48,6 +53,9 @@ internal sealed class SagaApplyInstruments
 
     /// <summary>Saga replies handled (tag: outcome).</summary>
     public Counter<long> Outcomes { get; }
+
+    /// <summary>Reverted sagas whose compensation could not restore every target (tag: order.type).</summary>
+    public Counter<long> CompensationConflicts { get; }
 
     /// <summary>Saga duration, staged to settled (tag: outcome).</summary>
     public Histogram<double> Duration { get; }

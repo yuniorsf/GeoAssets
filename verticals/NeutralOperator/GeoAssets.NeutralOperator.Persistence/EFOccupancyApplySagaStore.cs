@@ -13,7 +13,9 @@ namespace GeoAssets.NeutralOperator.Persistence;
 /// <para><b>Transactions.</b> Every write joins the ambient (kernel unit-of-work) transaction first, like the other
 /// occupancy stores, so a saga changes with the order, the change sets, the poles and the outbox message it belongs to.
 /// State moves are compare-and-set <c>UPDATE … WHERE State = 'Pending'</c> statements past the change tracker: of two
-/// replies racing for one saga, one matches and the other changes nothing.</para>
+/// replies racing for one saga, one matches and the other changes nothing. A revert restores each pole with a
+/// compare-and-set on its version; a pole that moved on is left as it is and recorded in <c>UnrestoredFeatureIdsJson</c>
+/// (XD01-392).</para>
 ///
 /// <para><b>Tenancy.</b> Owner only on every port member but the monitor's, which reads and flags the headers across
 /// organizations (<c>IgnoreQueryFilters</c>) and never touches a pole snapshot.</para>
@@ -127,7 +129,7 @@ public sealed class EFOccupancyApplySagaStore : IOccupancyApplySagaStore, IOccup
         return [.. records.Select(OccupancyApplySagaMapper.ToDomain).OrderBy(p => p.PoleFeatureId, StringComparer.Ordinal)];
     }
 
-    public async Task<bool> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct)
+    public async Task<OccupancyApplySagaCompletion> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(completed);
         if (completed.State == OccupancyApplySagaState.Pending || completed.CompletedAt is null)
@@ -151,12 +153,25 @@ public sealed class EFOccupancyApplySagaStore : IOccupancyApplySagaStore, IOccup
                     .SetProperty(s => s.ConflictingFeatureIdsJson, conflicting),
                 ct).ConfigureAwait(false);
         if (updated == 0)
-            return false;
+            return OccupancyApplySagaCompletion.NotPending;
 
+        List<string> unrestored = [];
         if (completed.State == OccupancyApplySagaState.Reverted)
         {
             foreach (var pole in await GetPolesAsync(batchId, ct).ConfigureAwait(false))
-                await _poles.RestoreEntriesAsync(pole.PoleFeatureId, pole.AppliedVersion, pole.BaselineEntries, ct).ConfigureAwait(false);
+            {
+                if (await _poles.TryRestoreEntriesAsync(pole.PoleFeatureId, pole.AppliedVersion, pole.BaselineEntries, ct).ConfigureAwait(false) is null)
+                    unrestored.Add(pole.PoleFeatureId);
+            }
+        }
+
+        if (unrestored.Count > 0)
+        {
+            var unrestoredJson = OccupancyApplySagaMapper.ToJson(unrestored);
+            await Sagas
+                .Where(s => s.BatchId == batchId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.UnrestoredFeatureIdsJson, unrestoredJson), ct)
+                .ConfigureAwait(false);
         }
 
         var pendingStatus = PendingStatus;
@@ -170,7 +185,7 @@ public sealed class EFOccupancyApplySagaStore : IOccupancyApplySagaStore, IOccup
                     .SetProperty(s => s.Status, settledStatus)
                     .SetProperty(s => s.ClosedAt, completedAt),
                 ct).ConfigureAwait(false);
-        return true;
+        return unrestored.Count == 0 ? OccupancyApplySagaCompletion.Done : new OccupancyApplySagaCompletion(true, unrestored);
     }
 
     public async Task<bool> RecordRetryAsync(Guid batchId, DateTimeOffset retriedAt, CancellationToken ct)

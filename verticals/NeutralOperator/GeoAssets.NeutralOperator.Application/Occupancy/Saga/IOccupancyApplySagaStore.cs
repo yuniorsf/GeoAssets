@@ -18,12 +18,15 @@ public interface IOccupancyApplySagaStore : IOccupancyApplySagaReader
     /// <summary>
     /// Ends a pending saga as <paramref name="completed"/> says (<see cref="OccupancyApplySagaState.Committed"/> or
     /// <see cref="OccupancyApplySagaState.Reverted"/>, with its instant and reason) and moves its change sets from
-    /// <c>Pending</c> to <c>Committed</c> or <c>Reverted</c>. Reverting also restores every pole of the saga to its
-    /// <see cref="OccupancyApplySagaPole.BaselineEntries"/> as its next version — a compensation, not a revision, so a slot
-    /// status may move back — and throws <see cref="Domain.Occupancy.OccupancyConflictException"/> when a pole is no longer at
-    /// the version the approval left it at. Returns false, changing nothing, when the saga is no longer pending.
+    /// <c>Pending</c> to <c>Committed</c> or <c>Reverted</c>. Reverting also restores each pole of the saga still at the
+    /// version the approval left it at (<see cref="OccupancyApplySagaPole.AppliedVersion"/>, checked and advanced in one
+    /// conditional write) to its <see cref="OccupancyApplySagaPole.BaselineEntries"/> as its next version — a compensation,
+    /// not a revision, so a slot status may move back. A pole written since (another order's change) is left untouched — the
+    /// later state wins — and named in the answer's <see cref="OccupancyApplySagaCompletion.UnrestoredFeatureIds"/>, which the
+    /// saga keeps as its <see cref="OccupancyApplySaga.UnrestoredFeatureIds"/>; such a revert never throws for it (XD01-392).
+    /// Answers <see cref="OccupancyApplySagaCompletion.NotPending"/>, changing nothing, when the saga is no longer pending.
     /// </summary>
-    Task<bool> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct);
+    Task<OccupancyApplySagaCompletion> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct);
 
     /// <summary>
     /// Records an operator's retry of a pending saga at <paramref name="retriedAt"/>: one more retry, the timeout restarted.

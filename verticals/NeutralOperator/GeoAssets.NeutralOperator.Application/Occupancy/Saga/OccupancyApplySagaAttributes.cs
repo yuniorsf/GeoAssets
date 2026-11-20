@@ -15,6 +15,12 @@ public static class OccupancyApplySagaAttributes
     /// <summary>The attribute holding the saga's batch id on the order.</summary>
     public const string BatchIdKey = "occupancy.apply.batch-id";
 
+    /// <summary>
+    /// The attribute naming, comma-separated in ordinal order, the poles a reverted saga's compensation left untouched
+    /// because a later change superseded the approval (XD01-392); absent when every pole was restored.
+    /// </summary>
+    public const string UnrestoredKey = "occupancy.apply.unrestored";
+
     /// <summary>Approved; the kernel has not applied the batch yet. Every transition but the approval's is refused meanwhile.</summary>
     public const string AwaitingApply = "awaiting-apply";
 

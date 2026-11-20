@@ -32,9 +32,10 @@ public sealed class NeutralOperatorMigrationChainTests
         await vertical.Database.MigrateAsync();
 
         (await vertical.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
-        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(2).And.SatisfyRespectively(
+        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(3).And.SatisfyRespectively(
             baseline => baseline.Should().EndWith("_AdoptOccupancyTables"),
-            saga => saga.Should().EndWith("_AddOccupancyApplySagas"));
+            saga => saga.Should().EndWith("_AddOccupancyApplySagas"),
+            unrestored => unrestored.Should().EndWith("_AddOccupancyApplySagaUnrestoredFeatureIds"));
         (await DatabaseProbe.ValuesAsync(connectionString, """
             SELECT (table_schema || '.' || table_name)::text AS "Value" FROM information_schema.tables
             WHERE table_schema IN ('public', 'neutral_operator') AND table_type = 'BASE TABLE'
