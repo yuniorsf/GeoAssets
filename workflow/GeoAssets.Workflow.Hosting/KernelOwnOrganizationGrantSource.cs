@@ -2,9 +2,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Workflow.Hosting;
 
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>
 /// The caller's own organization's active grants (XD01-382) as the kernel answers <c>GET /api/identity/organization-grants/me</c>
@@ -12,7 +11,7 @@ namespace GeoAssets.NeutralOperator.Server;
 /// organization gate decides here as it does in the kernel. A kernel that does not answer yields no grant: a grantee is
 /// then offered less than the kernel would allow, never more.
 /// </summary>
-internal sealed class KernelOwnOrganizationGrantSource(HttpClient http) : IOwnOrganizationGrantSource
+public sealed class KernelOwnOrganizationGrantSource(HttpClient http) : IOwnOrganizationGrantSource
 {
     private static readonly JsonSerializerOptions _opts = new(JsonSerializerDefaults.Web);
 

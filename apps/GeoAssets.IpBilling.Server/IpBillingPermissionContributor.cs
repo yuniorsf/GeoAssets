@@ -1,15 +1,19 @@
 using GeoAssets.Identity.Authorization.Modules;
 
-namespace GeoAssets.Server.Modules.IpBillingBridge;
+namespace GeoAssets.IpBilling.Server;
 
 /// <summary>
-/// The IP-billing vertical's permissions (XD01-377), contributed to the kernel's identity seeding instead of being
-/// hard-coded in it — XD01-176's reference-data and Levantamento/Fiscalização/Ofício permissions. No role bundles: the
-/// role wiring was left to the phase that first needs these permissions, so none is granted here either.
+/// The IP-billing vertical's permissions (XD01-377) — XD01-176's reference-data and Levantamento/Fiscalização/Ofício
+/// permissions. Seeded by the kernel's identity seeding while the kernel hosted the IP-billing bridge module; published by
+/// this host's bootstrap registration (<c>PUT /api/identity/verticals/ip-billing/permissions</c>) since XD01-385. No role
+/// bundles: the role wiring was left to the phase that first needs these permissions, so none is granted here either.
 /// </summary>
-public sealed class IpBillingPermissionContributor : IModulePermissionContributor
+internal sealed class IpBillingPermissionContributor : IModulePermissionContributor
 {
-    public string VerticalId => IpBillingBridgeModule.ModuleId;
+    /// <summary>This vertical's id at the kernel's registration routes.</summary>
+    public const string IpBillingVerticalId = "ip-billing";
+
+    public string VerticalId => IpBillingVerticalId;
 
     public IEnumerable<PermissionDefinition> Permissions { get; } =
     [

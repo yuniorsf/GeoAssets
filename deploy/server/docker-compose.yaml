@@ -39,8 +39,9 @@ services:
       # this local stack keeps the kernel hosting it: it has no GeoAssets.ServiceCaller credentials (NeutralOperator.Server's
       # registration would stay Degraded) and no broker (its approval saga needs one). Switch to NeutralOperator.Server with
       # KERNEL_NEUTRAL_OPERATOR_MODULE= (blank) and NEUTRAL_OPERATOR_DESTINATION=http://neutral-operator:8080 in .env, then
-      # start deploy/neutral-operator — see deploy/neutral-operator/README.md.
-      GeoAssets__Modules__2: ${KERNEL_NEUTRAL_OPERATOR_MODULE-neutral-operator}
+      # start deploy/neutral-operator — see deploy/neutral-operator/README.md. Index 1, right after appsettings.json's only
+      # entry ('postgres-spatial', XD01-385); the module list reader skips a blank entry.
+      GeoAssets__Modules__1: ${KERNEL_NEUTRAL_OPERATOR_MODULE-neutral-operator}
     depends_on:
       postgres:
         condition: service_healthy

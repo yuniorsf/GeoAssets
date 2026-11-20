@@ -1,8 +1,8 @@
-namespace GeoAssets.Server.Modules.IpBillingBridge;
+namespace GeoAssets.IpBilling.Server;
 
-/// <summary>Payload for <c>POST /api/identity/municipio-grants/revoke</c> — see
+/// <summary>Payload for <c>POST /api/ip-billing/municipio-grants/revoke</c> — see
 /// <see cref="MunicipioGrantSyncRequest"/>'s doc comment for why these fields are primitives.</summary>
-public sealed record MunicipioGrantRevokeRequest(
+internal sealed record MunicipioGrantRevokeRequest(
     string IbgeCode,
     Guid DistribuidoraOrganizationId,
     Guid? PrefeituraOrganizationId);

@@ -1,6 +1,7 @@
 using System.Net;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Server.Tests.Support;
+using GeoAssets.Workflow.Hosting;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 

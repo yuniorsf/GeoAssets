@@ -33,6 +33,7 @@ GET /api/identity/invitations | policy:users:read
 GET /api/identity/invitations/me | none
 GET /api/identity/invitations/status | none
 GET /api/identity/me | none
+GET /api/identity/organization-grants | authorize, requirement:RolesAuthorizationRequirement
 GET /api/identity/organization-grants/me | none
 GET /api/identity/organization-grants/sync | policy:organizations:read
 GET /api/identity/organizations | policy:organizations:read
@@ -87,8 +88,7 @@ POST /api/identity/groups | policy:groups:edit
 POST /api/identity/groups/{id}/members/{userId} | policy:groups:edit
 POST /api/identity/invitations | policy:users:edit
 POST /api/identity/invitations/{id}/redeem | none
-POST /api/identity/municipio-grants/revoke | policy:ip-billing:reference-manage
-POST /api/identity/municipio-grants/sync | policy:ip-billing:reference-manage
+POST /api/identity/organization-grants/revoke | authorize, requirement:RolesAuthorizationRequirement
 POST /api/identity/organizations | policy:organizations:edit
 POST /api/identity/roles | policy:roles:edit
 POST /api/identity/roles/{id}/permissions/{permId} | policy:roles:edit
@@ -111,6 +111,7 @@ POST /api/workflow/service-orders/{id}/targets/selection/apply | none
 POST /api/workflow/service-orders/{id}/targets/selection/preview | policy:serviceorders:read
 PUT /api/geoassets/features/{id} | policy:features:edit
 PUT /api/identity/groups/{id} | policy:groups:edit
+PUT /api/identity/organization-grants | authorize, requirement:RolesAuthorizationRequirement
 PUT /api/identity/organizations/{id} | policy:organizations:edit
 PUT /api/identity/roles/{id} | policy:roles:edit
 PUT /api/identity/userclaims/{claimId} | none

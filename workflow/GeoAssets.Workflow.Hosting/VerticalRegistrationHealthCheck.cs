@@ -1,7 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>
 /// The <c>vertical-registration</c> health check (XD01-382): <see cref="HealthStatus.Healthy"/> once the kernel knows this
@@ -9,7 +9,7 @@ namespace GeoAssets.NeutralOperator.Server;
 /// — so <c>/healthz</c> (liveness) still answers 200 and a kernel outage never restarts this host, while <c>/readyz</c>
 /// (tagged <see cref="ReadinessTag"/>) answers 503 until it is registered.
 /// </summary>
-internal sealed class VerticalRegistrationHealthCheck(VerticalRegistrationState state) : IHealthCheck
+public sealed class VerticalRegistrationHealthCheck(VerticalRegistrationState state) : IHealthCheck
 {
     public const string Name = "vertical-registration";
 

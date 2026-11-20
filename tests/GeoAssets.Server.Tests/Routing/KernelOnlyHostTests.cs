@@ -21,8 +21,6 @@ public sealed class KernelOnlyHostTests
     [
         "GET /api/geoassets/wms | anonymous",
         "GET /wms | anonymous",
-        "POST /api/identity/municipio-grants/revoke | policy:ip-billing:reference-manage",
-        "POST /api/identity/municipio-grants/sync | policy:ip-billing:reference-manage",
     ];
 
     [Fact]

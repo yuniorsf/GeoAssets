@@ -14,7 +14,7 @@ namespace GeoAssets.Server.Tests.Routing;
 /// <summary>
 /// XD01-384 (AC: "Kernel route-inventory snapshot: NeutralOperator routes absent"): the cut-over's default. The kernel as
 /// <c>appsettings.json</c> composes it hosts none of the NeutralOperator module's eleven routes, registers none of its
-/// services, and lists no module but postgres-spatial and ip-billing-bridge; the host that lists the module again (the rollback)
+/// services, and lists no module but postgres-spatial; the host that lists the module again (the rollback)
 /// serves exactly those eleven routes more, and nothing else differs.
 /// </summary>
 [Trait("Category", "RouteInventory")]
@@ -96,13 +96,13 @@ public sealed class NeutralOperatorCutOverTests
     }
 
     [Fact]
-    public async Task TheDefaultHost_ListsOnlyPostgresSpatialAndIpBillingBridge_AndRegistersNothingOfTheVertical()
+    public async Task TheDefaultHost_ListsOnlyPostgresSpatial_AndRegistersNothingOfTheVertical()
     {
         var services = await ServerHostFixture.GetServicesAsync();
         await using var scope = services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
 
-        services.GetRequiredService<GeoAssetsModuleCatalog>().Modules.Select(m => m.Id).Should().Equal("postgres-spatial", "ip-billing-bridge");
+        services.GetRequiredService<GeoAssetsModuleCatalog>().Modules.Select(m => m.Id).Should().Equal("postgres-spatial");
         provider.GetService<NeutralOperatorDbContext>().Should().BeNull();
         provider.GetRequiredService<IOrderTypeDescriptorRegistry>().GetAll().Should().NotContain(d => string.Equals(d.VerticalId, NeutralOperatorModule.ModuleId, StringComparison.Ordinal));
         provider.GetRequiredService<OrderTypeRegistry>().Find(GeoAssets.NeutralOperator.Application.SharedUse.SharedUseOrderTypes.PoleWorkId).Should().BeNull();
@@ -122,13 +122,13 @@ public sealed class NeutralOperatorCutOverTests
     }
 
     [Fact]
-    public async Task TheServersAppSettings_ListTheKernelsTwoModulesByDefault_AndNoNeutralOperator()
+    public async Task TheServersAppSettings_ListOnlyPostgresSpatialByDefault_AndNoNeutralOperator()
     {
         var path = Path.Combine(RepositoryRoot(), "apps", "GeoAssets.Server", "appsettings.json");
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(path));
 
         var modules = document.RootElement.GetProperty("GeoAssets").GetProperty("Modules").EnumerateArray().Select(m => m.GetString()).ToList();
 
-        modules.Should().Equal("postgres-spatial", "ip-billing-bridge");
+        modules.Should().Equal("postgres-spatial");
     }
 }

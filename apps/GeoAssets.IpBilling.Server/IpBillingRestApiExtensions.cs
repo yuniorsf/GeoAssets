@@ -18,17 +18,17 @@ namespace GeoAssets.IpBilling.Server;
 /// Every endpoint requires an authenticated caller via <c>AddGeoAssetsAuthentication</c>'s
 /// global fallback policy (XD01-177) — the same authenticated-caller-only bar as
 /// <c>GeoAssets.FieldService.Server</c>, not the finer <c>ip-billing:read</c>/
-/// <c>ip-billing:reference-manage</c> permission codes <c>GeoIdentitySeeder</c> seeds (XD01-176):
-/// those require <c>IGeoAuthorizationService</c>, backed by the EF identity database this host
-/// deliberately doesn't carry (see <c>MunicipioProvisioningService</c>'s doc comment in
-/// <c>GeoAssets.Server</c> for the architecture boundary this respects).
+/// <c>ip-billing:reference-manage</c> permission codes this vertical publishes to the kernel
+/// (<see cref="IpBillingPermissionContributor"/>). Since XD01-385 this host can evaluate them — the
+/// caller's permissions are the kernel's answer for its token (<c>AddKernelIdentity</c>) — and the
+/// município grant endpoints (<see cref="MunicipioGrantsRestApiExtensions"/>) do; these endpoints
+/// keep their authenticated-caller bar.
 ///
-/// <strong>Município/UnidadeOrganizacional writes do not yet call
-/// <c>MunicipioProvisioningService</c>'s município-grant sync/revoke endpoints</strong> — doing
-/// so safely needs a service-to-service credential this codebase has no mechanism for yet (see
-/// XD01-177's closing comment and its filed follow-up). A município saved here with a
-/// <c>PrefeituraOrganizationId</c> does not yet provision the corresponding scoped
-/// <c>OrganizationGrant</c> end-to-end.
+/// <strong>Município/UnidadeOrganizacional writes do not call
+/// <see cref="MunicipioProvisioningService"/></strong>: a município saved here with a
+/// <c>PrefeituraOrganizationId</c> provisions its scoped <c>OrganizationGrant</c> only when the
+/// caller also posts to <c>/api/ip-billing/municipio-grants/sync</c> — wiring the save to the
+/// sync is a separate decision (how a kernel failure during a save is answered).
 /// </summary>
 internal static class IpBillingRestApiExtensions
 {

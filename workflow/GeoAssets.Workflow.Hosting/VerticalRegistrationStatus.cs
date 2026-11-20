@@ -1,7 +1,7 @@
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>The states of <see cref="VerticalRegistrationState"/>.</summary>
-internal enum VerticalRegistrationStatus
+public enum VerticalRegistrationStatus
 {
     Pending,
     Failing,

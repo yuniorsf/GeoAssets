@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Identity.Authorization.Modules;
 using GeoAssets.NeutralOperator.Modules;
+using GeoAssets.Workflow.Hosting;
 using GeoAssets.Workflow.Registry;
 using Xunit;
 

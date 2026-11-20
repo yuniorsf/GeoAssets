@@ -8,7 +8,7 @@ namespace GeoAssets.Server.Tests.Architecture;
 /// <summary>
 /// The NeutralOperator vertical left the kernel (XD01-382, AC3/AC5): no kernel type — nothing of <c>GeoAssets.Server</c> outside its
 /// <c>GeoAssets.Server.Modules</c> quarantine — names any <c>GeoAssets.NeutralOperator*</c> namespace (the module library included), and
-/// the kernel reference ratchet holds no entry on the vertical's account any more: only <c>Program</c> remains, for SlaGuard.
+/// the kernel reference ratchet holds no entry at all since XD01-385 (SlaGuard left <c>Program</c>).
 /// </summary>
 [Trait("Category", "Architecture")]
 public sealed class NeutralOperatorExtractionArchitectureTests
@@ -49,17 +49,9 @@ public sealed class NeutralOperatorExtractionArchitectureTests
     }
 
     [Fact]
-    public void KernelReferenceAllowlist_HoldsOnlyProgram_ForSlaGuard_AndNothingOnTheVerticalsAccount()
+    public void KernelReferenceAllowlist_IsEmpty_AndNoKernelTypeViolates()
     {
-        KernelReferenceRatchet.Allowlist.Keys.Should().Equal(["Program"]);
-        KernelReferenceRatchet.Allowlist.Should().NotContain(
-            entry => entry.Key.Contains("NeutralOperator", StringComparison.OrdinalIgnoreCase)
-                || entry.Value.Contains("NeutralOperator", StringComparison.OrdinalIgnoreCase)
-                || entry.Key.Contains("GisExport", StringComparison.OrdinalIgnoreCase)
-                || entry.Value.Contains("GIS export", StringComparison.OrdinalIgnoreCase));
-        Violations().Keys.Should().Equal(["Program"], "the only kernel type that still names a forbidden namespace is Program");
-        Violations()["Program"].Should().OnlyContain(
-            reference => reference.StartsWith("GeoAssets.Workflow.SlaGuard.", StringComparison.Ordinal),
-            "what Program still references is the SlaGuard engine, not the vertical");
+        KernelReferenceRatchet.Allowlist.Should().BeEmpty();
+        Violations().Should().BeEmpty("no kernel type names a forbidden namespace any more (XD01-385)");
     }
 }

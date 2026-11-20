@@ -1,29 +1,27 @@
 using System.Security.Cryptography;
 using GeoAssets.Identity.Authorization.Modules;
-using GeoAssets.NeutralOperator.Modules;
-using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using Microsoft.Extensions.Options;
 
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>
-/// The bootstrap registration of this vertical with the kernel (XD01-382, ADR-001 Part 1.2), as the
-/// <c>GeoAssets.ServiceCaller</c> service principal:
+/// The bootstrap registration of a vertical host with the kernel (XD01-382, ADR-001 Part 1.2; generic since XD01-385), as
+/// the <c>GeoAssets.ServiceCaller</c> service principal, for the vertical <see cref="VerticalRegistrationSource"/> names:
 /// <list type="number">
-///   <item><c>PUT /api/registry/verticals/neutral-operator/order-types</c> — <see cref="NeutralOperatorModule.PublishedDescriptors"/>:
-///   every order type of the vertical with its target policy and terminal statuses (what the global target ledger needs)
-///   and the shared-use feature action (XD01-369);</item>
-///   <item><c>PUT /api/identity/verticals/neutral-operator/permissions</c> — the permissions and role bundles of the vertical's
+///   <item><c>PUT /api/registry/verticals/{verticalId}/order-types</c> — the source's order-type and feature-action
+///   descriptors (XD01-369), when it has any: every order type of the vertical with its target policy and terminal
+///   statuses (what the global target ledger needs);</item>
+///   <item><c>PUT /api/identity/verticals/{verticalId}/permissions</c> — the permissions and role bundles of the vertical's
 ///   <see cref="IModulePermissionContributor"/>s (XD01-377).</item>
 /// </list>
 /// Both are idempotent upserts. A failed attempt is retried with exponential backoff and jitter on
 /// <see cref="TimeProvider"/> (<see cref="VerticalRegistrationOptions"/>) until it succeeds; afterwards it is republished every
 /// refresh interval. <see cref="VerticalRegistrationState"/> reports where it stands to the health checks.
 /// </summary>
-internal sealed partial class VerticalRegistrationService(
+public sealed partial class VerticalRegistrationService(
     IServiceScopeFactory scopes,
-    OrderTypeRegistry orderTypes,
+    VerticalRegistrationSource source,
     IEnumerable<IModulePermissionContributor> contributors,
     VerticalRegistrationState state,
     IOptions<VerticalRegistrationOptions> options,
@@ -42,7 +40,7 @@ internal sealed partial class VerticalRegistrationService(
                 await PublishAsync(stoppingToken).ConfigureAwait(false);
                 var wasRegistered = state.Current.Status == VerticalRegistrationStatus.Registered;
                 state.Registered(timeProvider.GetUtcNow());
-                if (!wasRegistered) LogRegistered(logger, NeutralOperatorModule.ModuleId);
+                if (!wasRegistered) LogRegistered(logger, source.VerticalId);
                 failures = 0;
                 delay = settings.RefreshInterval;
             }
@@ -51,7 +49,7 @@ internal sealed partial class VerticalRegistrationService(
                 failures++;
                 state.Failed(ex.Message);
                 delay = Backoff(settings, failures);
-                LogFailed(logger, NeutralOperatorModule.ModuleId, failures, delay, ex);
+                LogFailed(logger, source.VerticalId, failures, delay, ex);
             }
 
             try
@@ -70,7 +68,7 @@ internal sealed partial class VerticalRegistrationService(
     /// consecutive failure, capped at <see cref="VerticalRegistrationOptions.MaxDelay"/>, then jittered to 50–100 % of it so
     /// that hosts restarted together do not retry in step.
     /// </summary>
-    internal static TimeSpan Backoff(VerticalRegistrationOptions settings, int failures)
+    public static TimeSpan Backoff(VerticalRegistrationOptions settings, int failures)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -87,18 +85,20 @@ internal sealed partial class VerticalRegistrationService(
         {
             var client = scope.ServiceProvider.GetRequiredService<IVerticalRegistrationClient>();
 
-            await client.PublishOrderTypesAsync(
-                NeutralOperatorModule.ModuleId, NeutralOperatorModule.PublishedDescriptors(orderTypes), ct).ConfigureAwait(false);
+            if (source.OrderTypes is { } orderTypes)
+            {
+                await client.PublishOrderTypesAsync(source.VerticalId, orderTypes(scope.ServiceProvider), ct).ConfigureAwait(false);
+            }
 
             var own = contributors
-                .Where(c => string.Equals(c.VerticalId, NeutralOperatorModule.ModuleId, StringComparison.Ordinal))
+                .Where(c => string.Equals(c.VerticalId, source.VerticalId, StringComparison.Ordinal))
                 .ToList();
             var permissions = new ModulePermissionSet
             {
                 Permissions = [.. own.SelectMany(c => c.Permissions)],
                 RoleBundles = [.. own.SelectMany(c => c.RoleBundles)],
             };
-            await client.PublishPermissionsAsync(NeutralOperatorModule.ModuleId, permissions, ct).ConfigureAwait(false);
+            await client.PublishPermissionsAsync(source.VerticalId, permissions, ct).ConfigureAwait(false);
         }
     }
 

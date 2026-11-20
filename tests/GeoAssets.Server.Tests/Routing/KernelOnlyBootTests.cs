@@ -30,7 +30,7 @@ public sealed class KernelOnlyBootTests
         var diff = RouteInventory.Compare(expected, actual);
         var removed = string.Join(Environment.NewLine, diff.Removed);
 
-        services.GetRequiredService<GeoAssetsModuleCatalog>().Modules.Select(m => m.Id).Should().Equal("postgres-spatial", "ip-billing-bridge");
+        services.GetRequiredService<GeoAssetsModuleCatalog>().Modules.Select(m => m.Id).Should().Equal("postgres-spatial");
         diff.Added.Should().BeEmpty("disabling a module must not add routes. Added:{0}{1}", Environment.NewLine, string.Join(Environment.NewLine, diff.Added));
         diff.Removed.Should().NotBeEmpty("the neutral-operator module contributes routes to the host that lists it");
         diff.Removed.Should().OnlyContain(

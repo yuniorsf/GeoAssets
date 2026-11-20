@@ -72,6 +72,9 @@ builder.Services.AddProjectPersistence(o => o.UseNpgsql(
 // mutations, layered on top of IProjectRepository above.
 builder.Services.AddScoped<IProjectService, ProjectService>();
 
+// OrganizationGrantService (XD01-385) — the generic grant upsert/revoke/list behind MapOrganizationGrantsApi.
+builder.Services.AddScoped<OrganizationGrantService>();
+
 // ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
 // apps/GeoAssets.Web/Program.cs, so server-side enforcement and the client UI agree on
 // who can do what. ServerWorkflowPrincipalFactory builds the WorkflowPrincipal it evaluates
@@ -118,8 +121,9 @@ builder.Services.AddServerTargetLedger(builder.Configuration);
 
 // ── Modules (XD01-358/XD01-359, ADR-001 Phase 1) — the ones listed in GeoAssets:Modules, in that
 // order; with none the kernel boots on its own (invariant I5). The built-ins are ServerModules'
-// (postgres-spatial, neutral-operator, ip-billing-bridge): leaving 'neutral-operator' out is the
-// cut-over to GeoAssets.NeutralOperator.Server, listing it again the rollback (XD01-382).
+// (postgres-spatial, neutral-operator): the default lists only 'postgres-spatial' (XD01-385); listing
+// 'neutral-operator' again is the rollback of the cut-over to GeoAssets.NeutralOperator.Server (XD01-382).
+// An unknown id (e.g. the retired 'ip-billing-bridge') fails the startup, naming the known ids.
 await builder.AddGeoAssetsModulesAsync(ServerModules.BuiltIns()).ConfigureAwait(false);
 
 // ── Asset-mutation apply (XD01-383, ADR-001 Phase 7) — the kernel's one consumer of every vertical's
@@ -131,12 +135,6 @@ builder.Services.AddServerAssetMutationApply(builder.Configuration);
 // Organization-scoped asset reads (XD01-373): when no module registered a native IOrganizationCatalogFactory, each
 // request's IAssetProvider is its organization's filtering view of the default catalog.
 builder.Services.AddServerOrganizationAssetCatalogs();
-
-// SLA breach reporting (XD01-233) — no regulatory SlaGuardEngine matrix is configured yet
-// (see SlaMatrixRow's doc comment on why one is never hardcoded here), so this registers in
-// its documented "not configured" state until a host supplies the real REN 1.000/Sabesp ISAP
-// durations.
-builder.Services.AddSlaBreachReporting();
 
 // ── Identity (RBAC/ABAC) — EF Core backend against Postgres (XD01-14). Well-known
 // roles/permissions/policies are seeded idempotently on every startup (see
@@ -243,14 +241,17 @@ app.MapTargetLedgerApi();
 app.MapProjectsApi();
 
 // Read-only identity/authorization endpoints under /api/identity (XD01-18) — see
-// IdentityRestApiExtensions for the full endpoint list. (The município grant-provisioning
-// endpoints under the same prefix belong to IpBillingBridgeModule since XD01-359.)
+// IdentityRestApiExtensions for the full endpoint list.
 app.MapIdentityApi();
 
 // The caller's own organization's active cross-organization grants, under the same
 // /api/identity prefix (XD01-332) — what lets a client evaluate the service-order
 // organization gate as this host does. See OwnOrganizationGrantsRestApiExtensions.
 app.MapOwnOrganizationGrantsApi();
+
+// The generic organization-grant API (XD01-385), under the same prefix: vertical hosts upsert, revoke and list the
+// cross-organization grants their reference data implies, as GeoAssets.ServiceCaller. See OrganizationGrantsRestApiExtensions.
+app.MapOrganizationGrantsApi();
 
 // Standalone OGC endpoint for external GIS clients (CORS not required for server-to-server or
 // native desktop tools). The WMS routes (/wms, /api/geoassets/wms) render from PostGIS and are

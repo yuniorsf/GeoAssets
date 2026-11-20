@@ -45,6 +45,8 @@
     <!-- XD01-308: the REST target clients are run against the real endpoints in a TestServer,
          with the shared target-store contract suite and in-memory store from the TestKit. -->
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
+    <!-- EngineContentsTests inspects the SLA guard add-on, which the kernel no longer references (XD01-385). -->
+    <ProjectReference Include="..\..\core\GeoAssets.Workflow.SlaGuard\GeoAssets.Workflow.SlaGuard.csproj" />
     <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
   </ItemGroup>
 

@@ -11,8 +11,6 @@ using GeoAssets.Workflow.Hosting;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using GeoAssets.Workflow.Targets;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,11 +83,11 @@ await builder.AddGeoAssetsModulesAsync(NeutralOperatorServerModules.BuiltIns()).
 
 // ── Bootstrap registration with the kernel, retried with backoff; its state is the vertical-registration check: Degraded
 // (→ /healthz 200) until registered, and /readyz answers 503 until then. ──────────────────────────────────────────────
-builder.Services.Configure<VerticalRegistrationOptions>(builder.Configuration.GetSection(VerticalRegistrationOptions.SectionName));
-builder.Services.AddSingleton<VerticalRegistrationState>();
-builder.Services.AddHostedService<VerticalRegistrationService>();
-builder.Services.AddHealthChecks()
-    .AddCheck<VerticalRegistrationHealthCheck>(VerticalRegistrationHealthCheck.Name, tags: [VerticalRegistrationHealthCheck.ReadinessTag]);
+builder.Services.AddVerticalRegistration(
+    builder.Configuration,
+    new VerticalRegistrationSource(
+        NeutralOperatorModule.ModuleId,
+        sp => NeutralOperatorModule.PublishedDescriptors(sp.GetRequiredService<OrderTypeRegistry>())));
 
 // ── CORS — the Blazor WASM origins configured in appsettings.json, as the kernel. ────────────────────────────────────
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -106,16 +104,7 @@ app.UseGeoAssetsModules();
 app.UseGeoAssetsObservability();
 
 // Readiness: Healthy only once the kernel knows this vertical (every check tagged "ready"); 503 otherwise.
-app.MapHealthChecks("/readyz", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains(VerticalRegistrationHealthCheck.ReadinessTag),
-    ResultStatusCodes =
-    {
-        [HealthStatus.Healthy] = StatusCodes.Status200OK,
-        [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
-        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable,
-    },
-}).AllowAnonymous();
+app.MapVerticalReadiness();
 
 // The chassis' generic service-order, order-type, target and selection routes under /api/workflow — the same routes the
 // kernel serves for its in-process orders. Map gestures are resolved by the kernel's own /selection/resolve.

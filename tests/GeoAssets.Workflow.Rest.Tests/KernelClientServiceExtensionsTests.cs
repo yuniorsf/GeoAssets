@@ -1,6 +1,7 @@
 using System.Net;
 using FluentAssertions;
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -8,7 +9,7 @@ using Xunit;
 namespace GeoAssets.Workflow.Rest.Tests;
 
 /// <summary>
-/// <see cref="KernelClientServiceExtensions.AddKernelServiceCallerClients"/> (XD01-382): both machine-to-machine clients of the kernel are
+/// <see cref="KernelClientServiceExtensions.AddKernelServiceCallerClients"/> (XD01-382): the machine-to-machine clients of the kernel (the target ledger, the bootstrap registration and, since XD01-385, the organization grants) are
 /// registered against its root URL — and a URL that is not an absolute HTTP(S) one is refused at startup, not at the first call.
 /// </summary>
 public sealed class KernelClientServiceExtensionsTests
@@ -70,12 +71,13 @@ public sealed class KernelClientServiceExtensionsTests
     [InlineData("http://geoassets-server:8080/")]
     [InlineData("https://kernel.example.org")]
     [InlineData("HTTP://KERNEL.TEST")]
-    public void AddKernelServiceCallerClients_WithAnAbsoluteHttpUrl_RegistersBothClients(string url)
+    public void AddKernelServiceCallerClients_WithAnAbsoluteHttpUrl_RegistersTheServiceCallerClients(string url)
     {
         using var provider = Provider(url, NoContent());
 
         provider.GetRequiredService<ITargetLedgerClient>().Should().BeOfType<RestTargetLedgerClient>();
         provider.GetRequiredService<IVerticalRegistrationClient>().Should().BeOfType<RestVerticalRegistrationClient>();
+        provider.GetRequiredService<IOrganizationGrantClient>().Should().BeOfType<RestOrganizationGrantClient>();
     }
 
     [Theory]
@@ -127,8 +129,34 @@ public sealed class KernelClientServiceExtensionsTests
         provider.GetRequiredService<IVerticalRegistrationClient>().Should().NotBeSameAs(provider.GetRequiredService<IVerticalRegistrationClient>());
     }
 
+    [Theory]
+    [InlineData("http://geoassets-server:8080", "http://geoassets-server:8080/api/identity/organization-grants/revoke")]
+    [InlineData("http://geoassets-server:8080/", "http://geoassets-server:8080/api/identity/organization-grants/revoke")]
+    [InlineData("https://gateway.test/kernel", "https://gateway.test/kernel/api/identity/organization-grants/revoke")]
+    public async Task TheGrantClient_IsRelativeToTheKernelsRoot_AndSendsTheRegisteredServiceToken(string url, string expected)
+    {
+        var handler = new RecordingKernelHandler(_ => RecordingKernelHandler.Json(HttpStatusCode.OK, """{ "revoked": 1 }"""));
+        using var provider = Provider(url, handler, withTokens: true);
+
+        var result = await provider.GetRequiredService<IOrganizationGrantClient>()
+            .RevokeAsync(new OrganizationGrantKey(Guid.NewGuid(), Guid.NewGuid(), null, "3550308"), CancellationToken.None);
+
+        result.Revoked.Should().Be(1);
+        var request = handler.Requests.Should().ContainSingle().Subject;
+        request.Original.Should().Be(expected);
+        request.Authorization.Should().Be("Bearer service-token-1");
+    }
+
     [Fact]
-    public void TheNamedClient_IsTheOneBothClientsShare()
+    public void TheGrantClient_IsTransient()
+    {
+        using var provider = Provider("http://geoassets-server:8080", NoContent());
+
+        provider.GetRequiredService<IOrganizationGrantClient>().Should().NotBeSameAs(provider.GetRequiredService<IOrganizationGrantClient>());
+    }
+
+    [Fact]
+    public void TheNamedClient_IsTheOneEveryClientShares()
     {
         KernelClientServiceExtensions.HttpClientName.Should().Be("GeoAssetsKernel:service-caller");
     }
