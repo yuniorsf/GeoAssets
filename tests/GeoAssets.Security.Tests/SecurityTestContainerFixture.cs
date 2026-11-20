@@ -1,3 +1,4 @@
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Provider.PostgreSQL.Data;
@@ -14,9 +15,11 @@ namespace GeoAssets.Security.Tests;
 /// GeoAssets.Workflow.EFCore.Tests, rather than xUnit's <c>ICollectionFixture</c>, which requires
 /// a <c>public</c> type — conflicting with this project's CA1515 "make it internal"), with the
 /// <b>actual</b> production EF Core migrations applied for both <see cref="GeoAssetsDbContext"/>
-/// (owns <c>geo_entity</c>) and <see cref="ServiceOrderDbContext"/> (owns <c>ServiceOrders</c> and
-/// <c>ContractorUsLedgerEntries</c> — its real migrations live in the <c>GeoAssets.Server</c>
-/// assembly, not this one, since <c>Program.cs</c> sets <c>MigrationsAssembly("GeoAssets.Server")</c>).
+/// (owns <c>geo_entity</c>) and <see cref="ServiceOrderDbContext"/> (owns <c>ServiceOrders</c> — its real migrations live in the <c>GeoAssets.Server</c>
+/// assembly, not this one, since <c>Program.cs</c> sets <c>MigrationsAssembly("GeoAssets.Server")</c>)
+/// and <see cref="FieldServiceDbContext"/> (XD01-381: the contractor US ledger, US catalog, postings, paving measurements
+/// and manhole audits, in schema <c>field_service</c> — the kernel chain no longer holds them, so the vertical's own baseline
+/// creates them, row-level security included, after the kernel chain).
 ///
 /// Deliberately uses <see cref="DbContext.Database"/>'s <c>MigrateAsync</c> rather than
 /// <c>EnsureCreatedAsync</c> plus hand-copied RLS SQL (the pattern every single-table RLS test
@@ -64,6 +67,9 @@ internal static class SecurityTestContainerFixture
             await using var serviceOrders = new ServiceOrderDbContext(BuildServiceOrderOptions(connectionString));
             await serviceOrders.Database.MigrateAsync();
 
+            // The FieldService vertical's tables (XD01-381) come from its own chain, on the kernel schema it requires.
+            await MigrateFieldServiceAsync(connectionString);
+
             // A single non-owner role, granted access to every table this suite exercises. RLS
             // doesn't restrict a table's owner unless FORCE ROW LEVEL SECURITY is also set
             // (deliberately not set yet on any of these tables — see each RLS migration's own
@@ -82,12 +88,16 @@ internal static class SecurityTestContainerFixture
                 -- above), which is how an attribute inherits its feature's visibility (XD01-308).
                 GRANT SELECT, INSERT, UPDATE, DELETE ON geo_entity_attribute TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON "ServiceOrders" TO {TenantScopedRole};
-                GRANT SELECT, INSERT, UPDATE, DELETE ON "ContractorUsLedgerEntries" TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON asset_type TO {TenantScopedRole};
-                GRANT SELECT, INSERT, UPDATE, DELETE ON field_manhole_audits TO {TenantScopedRole};
                 GRANT SELECT, INSERT, UPDATE, DELETE ON applied_mutation_batches TO {TenantScopedRole};
-                GRANT SELECT, INSERT, UPDATE, DELETE ON field_icerp_paving_measurements TO {TenantScopedRole};
-                GRANT SELECT, INSERT, UPDATE, DELETE ON "UsCatalogItems" TO {TenantScopedRole};
+                -- The FieldService vertical's tables (XD01-381), in their own schema: owner-only policies that read nothing
+                -- but their own table.
+                GRANT USAGE ON SCHEMA field_service TO {TenantScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_service."ContractorUsLedgerEntries" TO {TenantScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_service.field_manhole_audits TO {TenantScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_service.field_icerp_paving_measurements TO {TenantScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_service."UsCatalogItems" TO {TenantScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_service.field_contractor_us_postings TO {TenantScopedRole};
                 -- "ServiceOrderTargets"' policy reads the parent row in "ServiceOrders" (already
                 -- granted above), which is how a target inherits its order's visibility.
                 GRANT SELECT, INSERT, UPDATE, DELETE ON "ServiceOrderTargets" TO {TenantScopedRole};
@@ -138,6 +148,19 @@ internal static class SecurityTestContainerFixture
     {
         await using var neutralOperator = new NeutralOperatorDbContext(BuildNeutralOperatorOptions(connectionString));
         await neutralOperator.Database.MigrateAsync();
+    }
+
+    /// <summary>The FieldService vertical's context (XD01-381) with its own migrations assembly and history table.</summary>
+    public static DbContextOptions<FieldServiceDbContext> BuildFieldServiceOptions(string connectionString) =>
+        new DbContextOptionsBuilder<FieldServiceDbContext>()
+            .UseNpgsql(connectionString, FieldServiceDbContext.ConfigureMigrations)
+            .Options;
+
+    /// <summary>Applies the FieldService chain (XD01-381) to <paramref name="connectionString"/>'s database — after the kernel chain, which it requires.</summary>
+    public static async Task MigrateFieldServiceAsync(string connectionString)
+    {
+        await using var fieldService = new FieldServiceDbContext(BuildFieldServiceOptions(connectionString));
+        await fieldService.Database.MigrateAsync();
     }
 
     public static async Task<NpgsqlConnection> OpenScopedRoleConnectionAsync()

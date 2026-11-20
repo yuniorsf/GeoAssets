@@ -65,6 +65,38 @@ dotnet ef database update \
   --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
 ```
 
+Since XD01-381 the `ServiceOrderDbContext` chain above also drops the FieldService vertical's tables
+(`ContractorUsLedgerEntries`, `UsCatalogItems`, `field_contractor_us_postings`,
+`field_icerp_paving_measurements`, `field_manhole_audits`) from this database — `GeoAssets.Server`
+never used them. Its `DropFieldServiceTablesFromKernel` migration only drops empty tables: if any holds
+a row it aborts with `Cannot drop <table> from the kernel database: it holds N row(s). Move them to
+the FieldService database first.` and changes nothing.
+
+`GeoAssets.FieldService.Server` (its own `FieldService` database, not part of this stack) applies, in
+this order: its own `ServiceOrderDbContext` chain, `NeutralOperatorDbContext`, then
+`FieldServiceDbContext` (XD01-381, schema `field_service`), whose baseline adopts the kernel-created
+tables:
+
+```bash
+dotnet ef database update \
+  --project apps/GeoAssets.FieldService.Server \
+  --startup-project apps/GeoAssets.FieldService.Server \
+  --context ServiceOrderDbContext \
+  --connection "<FieldService connection string>"
+
+dotnet ef database update \
+  --project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
+  --startup-project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
+  --context NeutralOperatorDbContext \
+  --connection "<FieldService connection string>"
+
+dotnet ef database update \
+  --project verticals/FieldService/GeoAssets.FieldService.Persistence \
+  --startup-project verticals/FieldService/GeoAssets.FieldService.Persistence \
+  --context FieldServiceDbContext \
+  --connection "<FieldService connection string>"
+```
+
 Note the host-side port is **5433**, not 5432 — see the comment in `docker-compose.yaml`; this avoids colliding with any Postgres already running natively on your machine's 5432. The `server` container itself talks to `postgres` over the internal Docker network on the standard 5432, unaffected by this remap.
 
 ## What this doesn't solve

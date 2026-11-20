@@ -40,6 +40,8 @@
     <Compile Include="..\GeoAssets.FieldService.Server.Tests\TargetLedgerMigrationContract.cs" Link="TargetLedgerMigrationContract.cs" />
     <!-- XD01-380: the NeutralOperator move (kernel RemoveOccupancyFromKernelModel + the AdoptOccupancyTables baseline) is likewise one body run against both histories. -->
     <Compile Include="..\GeoAssets.FieldService.Server.Tests\NeutralOperatorMigrationContract.cs" Link="NeutralOperatorMigrationContract.cs" />
+    <!-- XD01-381: the FieldService move (kernel XD01-381 migration + the AdoptFieldServiceTables baseline) is likewise one body run against both histories. -->
+    <Compile Include="..\GeoAssets.FieldService.Server.Tests\FieldServiceMigrationContract.cs" Link="FieldServiceMigrationContract.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -57,6 +59,9 @@
          misconfigured RLS migration fails this suite loudly (XD01-204's AC) instead of being
          silently reapplied by the test itself. -->
     <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
+    <!-- XD01-381: FieldServiceDbContext (the contractor US ledger, US catalog, postings, paving measurements and manhole
+         audits in schema field_service) — the kernel chain no longer creates those tables, the vertical's own chain does. -->
+    <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Persistence\GeoAssets.FieldService.Persistence.csproj" />
     <!-- XD01-379: the ledger end-to-end suite builds the service over test doubles of the selection's spatial query. -->
     <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
   </ItemGroup>

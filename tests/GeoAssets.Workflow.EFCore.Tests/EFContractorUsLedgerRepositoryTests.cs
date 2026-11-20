@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.FieldService.Contractors;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
         _connection.Open();
         using var db = NewContext(TenantA);
         db.Database.EnsureCreated();
+        FieldServiceTestContext.CreateSqliteTables(db);
     }
 
     private ServiceOrderDbContext NewContext(Guid organizationId)
@@ -67,7 +69,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task AddAsync_ThenGetById_RoundTripsAllFields()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
         var entry = NewEntry(TenantA, "order-1");
 
         await repo.AddAsync(entry);
@@ -92,14 +94,14 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task AddAsync_WithoutSaveChanges_DoesNotPersist()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
         var entry = NewEntry(TenantA);
 
         await repo.AddAsync(entry);
         // Deliberately no SaveChangesAsync() call.
 
         using var freshDb = NewContext(TenantA);
-        var freshRepo = new EFContractorUsLedgerRepository(freshDb);
+        var freshRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(freshDb));
         (await freshRepo.GetByIdAsync(entry.Id)).Should().BeNull();
     }
 
@@ -107,7 +109,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task GetByIdAsync_UnknownId_ReturnsNull()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
 
         (await repo.GetByIdAsync(Guid.NewGuid())).Should().BeNull();
     }
@@ -119,11 +121,12 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     {
         using var writerDb = NewContext(TenantA);
         var entry = NewEntry(TenantA);
-        await new EFContractorUsLedgerRepository(writerDb).AddAsync(entry);
-        await writerDb.SaveChangesAsync();
+        var writerDbRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(writerDb));
+        await writerDbRepo.AddAsync(entry);
+        await writerDbRepo.SaveChangesAsync();
 
         using var readerDb = NewContext(TenantB);
-        var readerRepo = new EFContractorUsLedgerRepository(readerDb);
+        var readerRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(readerDb));
 
         (await readerRepo.GetByIdAsync(entry.Id)).Should().BeNull(
             "the global query filter scopes every read to the caller's own tenant, with no cross-contractor exception");
@@ -134,17 +137,19 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     {
         using (var dbA = NewContext(TenantA))
         {
-            await new EFContractorUsLedgerRepository(dbA).AddAsync(NewEntry(TenantA));
-            await dbA.SaveChangesAsync();
+            var dbARepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(dbA));
+            await dbARepo.AddAsync(NewEntry(TenantA));
+            await dbARepo.SaveChangesAsync();
         }
         using (var dbB = NewContext(TenantB))
         {
-            await new EFContractorUsLedgerRepository(dbB).AddAsync(NewEntry(TenantB));
-            await dbB.SaveChangesAsync();
+            var dbBRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(dbB));
+            await dbBRepo.AddAsync(NewEntry(TenantB));
+            await dbBRepo.SaveChangesAsync();
         }
 
         using var readerDb = NewContext(TenantA);
-        var all = await new EFContractorUsLedgerRepository(readerDb).GetAllAsync();
+        var all = await new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(readerDb)).GetAllAsync();
 
         all.Should().ContainSingle().Which.OrganizationId.Should().Be(TenantA);
     }
@@ -153,7 +158,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task GetByServiceOrderIdAsync_FiltersByServiceOrderWithinTenant()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
         await repo.AddAsync(NewEntry(TenantA, "order-1"));
         await repo.AddAsync(NewEntry(TenantA, "order-2"));
         await repo.SaveChangesAsync();
@@ -167,7 +172,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task GetByPeriodAsync_FiltersByCreatedAtWithinTenant()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
 
         var january = new ContractorUsLedgerEntry
         {
@@ -201,7 +206,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task UpdateAsync_ChangesScalarFields()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
         var entry = NewEntry(TenantA);
         await repo.AddAsync(entry);
         await repo.SaveChangesAsync();
@@ -221,18 +226,20 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     {
         using var writerDb = NewContext(TenantA);
         var entry = NewEntry(TenantA);
-        await new EFContractorUsLedgerRepository(writerDb).AddAsync(entry);
-        await writerDb.SaveChangesAsync();
+        var writerDbRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(writerDb));
+        await writerDbRepo.AddAsync(entry);
+        await writerDbRepo.SaveChangesAsync();
 
         using (var attackerDb = NewContext(TenantB))
         {
             entry.Description = "Tampered";
-            await new EFContractorUsLedgerRepository(attackerDb).UpdateAsync(entry);
-            await attackerDb.SaveChangesAsync();
+            var attackerDbRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(attackerDb));
+            await attackerDbRepo.UpdateAsync(entry);
+            await attackerDbRepo.SaveChangesAsync();
         }
 
         using var verifyDb = NewContext(TenantA);
-        var loaded = await new EFContractorUsLedgerRepository(verifyDb).GetByIdAsync(entry.Id);
+        var loaded = await new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(verifyDb)).GetByIdAsync(entry.Id);
         loaded!.Description.Should().NotBe("Tampered", "a different tenant's update must be a silent no-op, not an actual mutation");
     }
 
@@ -242,7 +249,7 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     public async Task DeleteAsync_RemovesEntry()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFContractorUsLedgerRepository(db);
+        var repo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(db));
         var entry = NewEntry(TenantA);
         await repo.AddAsync(entry);
         await repo.SaveChangesAsync();
@@ -258,17 +265,19 @@ public sealed class EFContractorUsLedgerRepositoryTests : IDisposable
     {
         using var writerDb = NewContext(TenantA);
         var entry = NewEntry(TenantA);
-        await new EFContractorUsLedgerRepository(writerDb).AddAsync(entry);
-        await writerDb.SaveChangesAsync();
+        var writerDbRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(writerDb));
+        await writerDbRepo.AddAsync(entry);
+        await writerDbRepo.SaveChangesAsync();
 
         using (var attackerDb = NewContext(TenantB))
         {
-            await new EFContractorUsLedgerRepository(attackerDb).DeleteAsync(entry.Id);
-            await attackerDb.SaveChangesAsync();
+            var attackerDbRepo = new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(attackerDb));
+            await attackerDbRepo.DeleteAsync(entry.Id);
+            await attackerDbRepo.SaveChangesAsync();
         }
 
         using var verifyDb = NewContext(TenantA);
-        (await new EFContractorUsLedgerRepository(verifyDb).GetByIdAsync(entry.Id)).Should().NotBeNull(
+        (await new EFContractorUsLedgerRepository(FieldServiceTestContext.Over(verifyDb)).GetByIdAsync(entry.Id)).Should().NotBeNull(
             "a different tenant's delete must be a no-op, not silently succeed");
     }
 

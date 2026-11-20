@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.FieldService.Infrastructure;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ public sealed class EFManholeAuditRepositoryTests : IDisposable
         _connection.Open();
         using var db = NewContext(TenantA);
         db.Database.EnsureCreated();
+        FieldServiceTestContext.CreateSqliteTables(db);
     }
 
     private ServiceOrderDbContext NewContext(Guid organizationId)
@@ -48,7 +50,7 @@ public sealed class EFManholeAuditRepositoryTests : IDisposable
     public async Task AddAsync_ThenGetById_RoundTripsAllFields()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFManholeAuditRepository(db);
+        var repo = new EFManholeAuditRepository(FieldServiceTestContext.Over(db));
         var audit = Audit("conduit-1", TenantA);
 
         await repo.AddAsync(audit);
@@ -80,7 +82,7 @@ public sealed class EFManholeAuditRepositoryTests : IDisposable
     public async Task GetByConduitFeatureIdAsync_ReturnsOnlyThatConduitsAudits_MostRecentFirst()
     {
         using var db = NewContext(TenantA);
-        var repo = new EFManholeAuditRepository(db);
+        var repo = new EFManholeAuditRepository(FieldServiceTestContext.Over(db));
 
         await repo.AddAsync(Audit("conduit-a", TenantA, auditedAtUtc: new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)));
         await repo.AddAsync(Audit("conduit-a", TenantA, auditedAtUtc: new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc)));
@@ -101,11 +103,12 @@ public sealed class EFManholeAuditRepositoryTests : IDisposable
     {
         using var dbA = NewContext(TenantA);
         var audit = Audit("conduit-1", TenantA);
-        await new EFManholeAuditRepository(dbA).AddAsync(audit);
-        await dbA.SaveChangesAsync();
+        var dbARepo = new EFManholeAuditRepository(FieldServiceTestContext.Over(dbA));
+        await dbARepo.AddAsync(audit);
+        await dbARepo.SaveChangesAsync();
 
         using var dbB = NewContext(TenantB);
-        var result = await new EFManholeAuditRepository(dbB).GetByIdAsync(audit.Id);
+        var result = await new EFManholeAuditRepository(FieldServiceTestContext.Over(dbB)).GetByIdAsync(audit.Id);
 
         result.Should().BeNull();
     }

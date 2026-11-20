@@ -2,7 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.Workflow.Orders;
-using GeoAssets.Workflow.Persistence;
+using GeoAssets.FieldService.Persistence;
 
 namespace GeoAssets.FieldService.Server;
 

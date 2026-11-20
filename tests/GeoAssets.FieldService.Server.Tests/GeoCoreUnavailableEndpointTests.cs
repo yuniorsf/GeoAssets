@@ -7,6 +7,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Integrations.Scada;
@@ -87,7 +88,8 @@ public sealed class GeoCoreUnavailableEndpointTests : IAsyncLifetime, IDisposabl
                         sp.GetRequiredService<ServiceOrderDbContext>(),
                         orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>(),
                         timeProvider: sp.GetRequiredService<TimeProvider>()));
-                    services.AddScoped<IUsCatalogRepository, EFUsCatalogRepository>();
+                    // The US catalog store lives in FieldServiceDbContext since XD01-381, over the kernel context's connection.
+                    services.AddFieldServicePersistence((options, connection) => options.UseSqlite(connection));
 
                     services.AddSingleton<IAssetTopologyQuery>(_assets);
                     services.AddSingleton<IDispatchAssetQuery>(_assets);
@@ -100,6 +102,7 @@ public sealed class GeoCoreUnavailableEndpointTests : IAsyncLifetime, IDisposabl
                     {
                         var db = scope.ServiceProvider.GetRequiredService<ServiceOrderDbContext>();
                         db.Database.EnsureCreated();
+                        FieldServiceSqliteSchema.Create(scope.ServiceProvider.GetRequiredService<FieldServiceDbContext>());
                         db.Database.ExecuteSqlRaw("""
                             CREATE TRIGGER ServiceOrders_RowVersion_Update AFTER UPDATE ON ServiceOrders
                             BEGIN

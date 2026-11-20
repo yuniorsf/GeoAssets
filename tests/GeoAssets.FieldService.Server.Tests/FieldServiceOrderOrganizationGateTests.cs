@@ -6,6 +6,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.FieldService.Contractors.Governance;
@@ -126,15 +127,18 @@ public sealed class FieldServiceOrderOrganizationGateTests : IAsyncLifetime, IDi
                     // As Program.cs registers it: the EF store behind the validating decorator.
                     services.AddScoped<IServiceOrderRepository>(sp =>
                         new ValidatingServiceOrderRepository(new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>())));
-                    services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
-                    services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
+                    // The ledger and postings stores live in FieldServiceDbContext since XD01-381, over the kernel context's connection.
+                    services.AddFieldServicePersistence((options, connection) => options.UseSqlite(connection));
                     services.AddSingleton<IGeoCoreClient>(_geoCore);
                     services.AddSingleton<IContractorGovernancePortalClient>(_portal);
                 });
                 webHost.Configure(app =>
                 {
                     using (var scope = app.ApplicationServices.CreateScope())
+                    {
                         scope.ServiceProvider.GetRequiredService<ServiceOrderDbContext>().Database.EnsureCreated();
+                        FieldServiceSqliteSchema.Create(scope.ServiceProvider.GetRequiredService<FieldServiceDbContext>());
+                    }
 
                     app.Use(async (ctx, next) =>
                     {

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.FieldService.Contractors;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
         _connection.Open();
         using var db = NewContext(Cemig);
         db.Database.EnsureCreated();
+        FieldServiceTestContext.CreateSqliteTables(db);
     }
 
     private ServiceOrderDbContext NewContext(Guid organizationId)
@@ -54,7 +56,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task AddAsync_ThenGetById_RoundTripsAllFields()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
         var item = NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
         await repo.AddAsync(item);
@@ -77,20 +79,22 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task SameItemCode_UnderTwoDifferentOrganizations_CoexistsWithoutCollision()
     {
         using var dbCemig = NewContext(Cemig);
-        await new EFUsCatalogRepository(dbCemig).AddAsync(NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
-        await dbCemig.SaveChangesAsync();
+        var dbCemigRepo = new EFUsCatalogRepository(FieldServiceTestContext.Over(dbCemig));
+        await dbCemigRepo.AddAsync(NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+        await dbCemigRepo.SaveChangesAsync();
 
         using var dbCpfl = NewContext(Cpfl);
         var cpflItem = NewItem(Cpfl, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         cpflItem.BaseUsFactor = 9.9m; // a deliberately different factor for the "same" code
-        await new EFUsCatalogRepository(dbCpfl).AddAsync(cpflItem);
-        await dbCpfl.SaveChangesAsync();
+        var dbCpflRepo = new EFUsCatalogRepository(FieldServiceTestContext.Over(dbCpfl));
+        await dbCpflRepo.AddAsync(cpflItem);
+        await dbCpflRepo.SaveChangesAsync();
 
         using var queryDb = NewContext(Cemig);
-        var cemigResult = await new EFUsCatalogRepository(queryDb).FindEffectiveAsync(Cemig, "US-EL-014", new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        var cemigResult = await new EFUsCatalogRepository(FieldServiceTestContext.Over(queryDb)).FindEffectiveAsync(Cemig, "US-EL-014", new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
         using var queryDb2 = NewContext(Cpfl);
-        var cpflResult = await new EFUsCatalogRepository(queryDb2).FindEffectiveAsync(Cpfl, "US-EL-014", new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        var cpflResult = await new EFUsCatalogRepository(FieldServiceTestContext.Over(queryDb2)).FindEffectiveAsync(Cpfl, "US-EL-014", new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
         cemigResult!.BaseUsFactor.Should().Be(2.5m);
         cpflResult!.BaseUsFactor.Should().Be(9.9m);
@@ -102,7 +106,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task FindEffectiveAsync_MultipleVersions_ReturnsTheOneEffectiveAtTheGivenInstant()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
 
         var oldVersion = NewItem(Cemig, new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         oldVersion.BaseUsFactor = 2.0m;
@@ -124,7 +128,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task FindEffectiveAsync_BeforeAnyVersionExisted_ReturnsNull()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
         await repo.AddAsync(NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
         await repo.SaveChangesAsync();
 
@@ -137,7 +141,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task FindEffectiveAsync_ExactlyAtEffectiveFrom_IsIncluded()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
         var effectiveFrom = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         await repo.AddAsync(NewItem(Cemig, effectiveFrom));
         await repo.SaveChangesAsync();
@@ -151,7 +155,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task FindEffectiveAsync_ExactlyAtEffectiveTo_IsExcluded()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
         var effectiveTo = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         await repo.AddAsync(NewItem(Cemig, new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc), effectiveTo));
         await repo.SaveChangesAsync();
@@ -167,15 +171,17 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task GetByOrganizationAsync_OnlyReturnsThatOrganizationsItems()
     {
         using var dbCemig = NewContext(Cemig);
-        await new EFUsCatalogRepository(dbCemig).AddAsync(NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
-        await dbCemig.SaveChangesAsync();
+        var dbCemigRepo = new EFUsCatalogRepository(FieldServiceTestContext.Over(dbCemig));
+        await dbCemigRepo.AddAsync(NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+        await dbCemigRepo.SaveChangesAsync();
 
         using var dbCpfl = NewContext(Cpfl);
-        await new EFUsCatalogRepository(dbCpfl).AddAsync(NewItem(Cpfl, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
-        await dbCpfl.SaveChangesAsync();
+        var dbCpflRepo = new EFUsCatalogRepository(FieldServiceTestContext.Over(dbCpfl));
+        await dbCpflRepo.AddAsync(NewItem(Cpfl, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+        await dbCpflRepo.SaveChangesAsync();
 
         using var queryDb = NewContext(Cemig);
-        var results = await new EFUsCatalogRepository(queryDb).GetByOrganizationAsync(Cemig);
+        var results = await new EFUsCatalogRepository(FieldServiceTestContext.Over(queryDb)).GetByOrganizationAsync(Cemig);
 
         results.Should().ContainSingle().Which.OrganizationId.Should().Be(Cemig);
     }
@@ -186,7 +192,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task UpdateAsync_ChangesPersistedFields()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
         var item = NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         await repo.AddAsync(item);
         await repo.SaveChangesAsync();
@@ -203,7 +209,7 @@ public sealed class EFUsCatalogRepositoryTests : IDisposable
     public async Task DeleteAsync_RemovesTheItem()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFUsCatalogRepository(db);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(db));
         var item = NewItem(Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         await repo.AddAsync(item);
         await repo.SaveChangesAsync();

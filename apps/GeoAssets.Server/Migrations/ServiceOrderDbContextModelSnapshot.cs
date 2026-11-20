@@ -21,109 +21,6 @@ namespace GeoAssets.Server.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ContractorUsLedgerEntryRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
-
-                    b.Property<string>("PhotoProofJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<string>("ServiceOrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)");
-
-                    b.Property<decimal>("UnitValue")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UsCode")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("ServiceOrderId");
-
-                    b.ToTable("ContractorUsLedgerEntries", (string)null);
-                });
-
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ContractorUsPostingRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ContractorOrganizationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ItemCode")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<decimal>("MonetaryRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.Property<DateTime>("PostedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<string>("ServiceOrderId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)");
-
-                    b.Property<decimal>("TotalBrl")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("TotalUs")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.Property<decimal>("UnitUs")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ServiceOrderId");
-
-                    b.HasIndex("ContractorOrganizationId", "PostedAtUtc");
-
-                    b.ToTable("field_contractor_us_postings", (string)null);
-                });
-
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.InboxProcessedMessageRecord", b =>
                 {
                     b.Property<Guid>("MessageId")
@@ -149,53 +46,6 @@ namespace GeoAssets.Server.Migrations
                     b.HasIndex("ExpiresAtUtc");
 
                     b.ToTable("WorkflowInboxProcessedMessages", (string)null);
-                });
-
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ManholeAuditRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("AuditedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("AuditedBy")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<double>("BoreOccupancyPercentage")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("ConduitFeatureId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Nr33ChecklistAttributesJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SpliceEnclosureCondition")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("SubDuctsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConduitFeatureId");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.ToTable("field_manhole_audits", (string)null);
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderActionLogRecord", b =>
@@ -653,57 +503,6 @@ namespace GeoAssets.Server.Migrations
                     b.ToTable("WorkflowOutboxMessages", (string)null);
                 });
 
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PavingMeasurementRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("ActualAreaSquareMeters")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("ChildServiceOrderId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)");
-
-                    b.Property<double>("DepthMeters")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("LengthMeters")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ParentServiceOrderId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)");
-
-                    b.Property<double>("RecordedAreaSquareMeters")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("RecordedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("VolumeCubicMeters")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("WidthMeters")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChildServiceOrderId");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("ParentServiceOrderId");
-
-                    b.ToTable("field_icerp_paving_measurements", (string)null);
-                });
-
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>
                 {
                     b.Property<string>("Id")
@@ -904,68 +703,6 @@ namespace GeoAssets.Server.Migrations
                         });
                 });
 
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.UsCatalogItemRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("BaseUsFactor")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ItemCode")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<decimal>("MonetaryConversionRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
-
-                    b.Property<decimal>("RegionalMultiplier")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
-                        .HasDefaultValue(1m);
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrganizationId", "ItemCode");
-
-                    b.ToTable("UsCatalogItems", (string)null);
-                });
-
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ContractorUsPostingRecord", b =>
-                {
-                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
-                        .WithMany()
-                        .HasForeignKey("ServiceOrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.OrderActionLogRecord", b =>
                 {
                     b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", "ServiceOrder")
@@ -1030,23 +767,6 @@ namespace GeoAssets.Server.Migrations
                         .IsRequired();
 
                     b.Navigation("OrderType");
-                });
-
-            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.PavingMeasurementRecord", b =>
-                {
-                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
-                        .WithMany()
-                        .HasForeignKey("ChildServiceOrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FK_field_icerp_paving_measurements_ServiceOrders_Child");
-
-                    b.HasOne("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", null)
-                        .WithMany()
-                        .HasForeignKey("ParentServiceOrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FK_field_icerp_paving_measurements_ServiceOrders_Parent");
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>
