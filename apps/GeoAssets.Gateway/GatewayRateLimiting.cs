@@ -4,6 +4,9 @@ using System.Threading.RateLimiting;
 using GeoAssets.Identity.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace GeoAssets.Gateway;
 
@@ -14,7 +17,9 @@ namespace GeoAssets.Gateway;
 /// <para>
 /// One global <see cref="PartitionedRateLimiter"/>, its partition chosen per request from the policy
 /// (<see cref="GatewayRateLimitPolicies.Classify"/>: <c>tiles</c> for <c>/wms</c>/<c>/wfs</c>, <c>api</c> otherwise) and
-/// the caller (<see cref="RateLimitPartitionKeyResolver"/>: organization claim → token subject → client address). The
+/// the caller (<see cref="RateLimitPartitionKeyResolver"/>: organization claim → token subject → client address, the
+/// claims from a token <see cref="GatewayTokenValidator"/> validated when <c>AzureAdCiam</c> is configured — XD01-398 —
+/// resolved by <see cref="GatewayRateLimitPartitioning"/> ahead of the limiter, whose synchronous partitioner reads it). The
 /// policy is part of the partition key and each policy has its own <see cref="RateLimitBucketOptions"/>
 /// (<c>RateLimiting:Api</c>, <c>RateLimiting:Tiles</c>), so a caller exhausting its tile bucket keeps its API bucket and
 /// vice versa, and one caller's bucket is never another's. A single selecting limiter rather than
@@ -72,6 +77,8 @@ internal static class GatewayRateLimiting
         services.AddMetrics();
         services.AddSingleton<GatewayRateLimitMetrics>();
         services.AddGatewayTrustedProxies(configuration);
+        services.AddSingleton(claimMapping);
+        AddTokenValidation(services, configuration);
 
         services.AddRateLimiter(options =>
         {
@@ -87,12 +94,49 @@ internal static class GatewayRateLimiting
 
                 var policy = GatewayRateLimitPolicies.Classify(httpContext.Request.Path);
                 var bucket = BucketOf(policy, api, tiles);
-                var partitionKey = policy.ToName() + "|" + RateLimitPartitionKeyResolver.Resolve(httpContext.Request, claimMapping);
+                // The caller GatewayRateLimitPartitioning resolved (validated token claims, or the client address); without
+                // that middleware in the pipeline, the decode-only key, so the partitioner never depends on it to work.
+                var caller = httpContext.Items.TryGetValue(GatewayRateLimitPartitioning.CallerItemKey, out var item) && item is PartitionCaller resolved
+                    ? resolved.Key
+                    : RateLimitPartitionKeyResolver.Resolve(httpContext.Request, claimMapping);
+                var partitionKey = policy.ToName() + "|" + caller;
                 return RateLimitPartition.GetTokenBucketLimiter(partitionKey, _ => bucket.ToLimiterOptions());
             });
         });
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="GatewayTokenValidator"/> (XD01-398) and, when <c>AzureAdCiam</c> is configured, the cached CIAM
+    /// metadata source it reads the issuer and signing keys from, fetched with the named
+    /// <see cref="GatewayTokenValidator.MetadataHttpClientName"/> client.
+    /// </summary>
+    private static void AddTokenValidation(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = GatewayTokenValidationOptions.Read(configuration);
+        services.AddSingleton(options);
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddHttpClient(GatewayTokenValidator.MetadataHttpClientName);
+
+        if (options.IsConfigured)
+        {
+            var metadataAddress = options.MetadataAddress!;
+            services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(sp =>
+                new ConfigurationManager<OpenIdConnectConfiguration>(
+                    metadataAddress,
+                    new OpenIdConnectConfigurationRetriever(),
+                    new HttpDocumentRetriever(sp.GetRequiredService<IHttpClientFactory>().CreateClient(GatewayTokenValidator.MetadataHttpClientName))
+                    {
+                        RequireHttps = metadataAddress.StartsWith(Uri.UriSchemeHttps + "://", StringComparison.OrdinalIgnoreCase),
+                    }));
+        }
+
+        services.AddSingleton(sp => new GatewayTokenValidator(
+            sp.GetRequiredService<GatewayTokenValidationOptions>(),
+            sp.GetService<IConfigurationManager<OpenIdConnectConfiguration>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<GatewayTokenValidator>>()));
     }
 
     private static RateLimitBucketOptions BucketOf(GatewayRateLimitPolicy policy, RateLimitBucketOptions api, RateLimitBucketOptions tiles) =>

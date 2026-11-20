@@ -20,10 +20,38 @@ never spends another's tokens. The caller (partition key) is, first match wins:
 3. `ip:<address>` — the client IP (IPv4-mapped IPv6 as IPv4, IPv6 canonical, no scope id). Tile requests carry no
    token, so tiles are always per IP.
 
-The token is decoded, never validated — the gateway authorizes nothing. A forged token only chooses the bucket its sender
-lands in; it grants nothing. It can, however, name someone else's subject or organization and spend *their* bucket,
-which was already true of the organization key before XD01-393. Validating the token at the edge is what would close it.
 Claim values over 128 characters are keyed by their SHA-256.
+
+### Which token's claims count (XD01-398)
+
+With `AzureAdCiam:Instance` and `AzureAdCiam:TenantId` set (the same tenant as the kernel's; or
+`AzureAdCiam:MetadataAddress`, by default `{Instance}/{TenantId}/v2.0/.well-known/openid-configuration`), the claims key a
+bucket only when the token's **signature, issuer and lifetime** validate against the tenant's signing keys
+(`RateLimiting:TokenValidation:ClockSkewSeconds`, default 300). The audience is not checked against a list — the gateway
+fronts several APIs, each validating its own audience — but the token must carry one. A forged token can no longer
+name someone else's subject or organization and spend *their* bucket: it lands in its sender's client-IP bucket.
+The gateway still authorizes nothing and **never rejects a request because of its token**; backends decide.
+
+| The bearer token | Validation outcome | Bucket |
+|---|---|---|
+| none, or not a JWT | `absent` | `ip:` |
+| validates | `valid` | `org:` → `sub:` → `ip:` |
+| bad signature or unknown key, wrong issuer, expired / not yet valid, no audience, malformed | `invalid` | `ip:` |
+| signing keys unobtainable (metadata unreachable, or backing off after a failure) | `unavailable` | `ip:` |
+| `AzureAdCiam` not configured: decoded only, as before XD01-398 | `unvalidated` | `org:` → `sub:` → `ip:` |
+
+Every request except `/healthz` increments `geoassets.gateway.rate_limit_partition` (meter `GeoAssets.Gateway`), tagged
+`policy=api|tiles`, `source=org|sub|ip|unresolved` and `validation=absent|valid|invalid|unavailable|unvalidated` — never
+the key. A rising `validation=invalid` share is forged or stale tokens; any `unavailable` means the tenant's metadata
+can't be reached. With `AzureAdCiam` not configured the gateway logs one **warning at startup** ("rate limits key on
+unvalidated token claims…"): a forged token can then name another caller's bucket, as before XD01-398.
+
+**Cost.** Validation is a local signature check against keys held in memory: the metadata document and its JWKS are
+fetched once and cached by `ConfigurationManager` (refreshed on its own schedule, 12 h by default). A token signed by an
+unknown `kid` (the tenant rolled its keys, or a forgery) asks for a refetch, which the manager grants at most once per
+its `RefreshInterval` (5 min by default), so a stream of forged `kid`s cannot make the gateway hammer the tenant. A
+failed fetch makes every token `unavailable` (IP-keyed) for `RateLimiting:TokenValidation:MetadataFailureBackoffSeconds`
+(default 30) without trying again, logged as a warning each time it fails.
 
 **Behind a load balancer** the connection's address is the load balancer's, so every caller without a token would share
 one bucket. List the load balancer in `RateLimiting:TrustedProxies` (IP addresses) or `RateLimiting:TrustedNetworks`

@@ -35,7 +35,9 @@ It forwards the bearer token untouched (it authorizes nothing), answers CORS for
 `http://localhost:8081`) and the dev origins, and rate-limits each caller (organization claim, else token subject, else
 client IP) with two buckets (XD01-393): API calls (`GATEWAY_RATE_LIMIT_API_TOKENS`, default 500, refilled 10/s) and WMS/WFS
 tiles (`GATEWAY_RATE_LIMIT_TILE_TOKENS`, default 1000, refilled 100/s) — see `docs/perf/gateway-rate-limits.md`; the former
-`GATEWAY_RATE_LIMIT_TOKENS` is no longer read. Here the kernel keeps hosting the NeutralOperator module (`GeoAssets__Modules__1`) and is
+`GATEWAY_RATE_LIMIT_TOKENS` is no longer read. The token's claims key a bucket only once its signature, issuer and lifetime validate
+against the CIAM tenant (XD01-398): set `AzureAdCiam__Instance`/`AzureAdCiam__TenantId` in `.env` (the server reads the
+same two); unset, the gateway only decodes the token and logs a startup warning. Here the kernel keeps hosting the NeutralOperator module (`GeoAssets__Modules__1`) and is
 the gateway's NeutralOperator destination — see `deploy/neutral-operator/README.md` to switch to `NeutralOperator.Server`.
 
 The kernel's default `GeoAssets:Modules` is `[ "postgres-spatial" ]` (XD01-385); an unknown module id — such as the retired

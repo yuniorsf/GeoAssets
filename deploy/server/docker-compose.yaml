@@ -75,6 +75,11 @@ services:
       # /wfs) — the production defaults of docs/perf/gateway-rate-limits.md; raise them here for a heavier local load test.
       RateLimiting__Api__TokenLimit: ${GATEWAY_RATE_LIMIT_API_TOKENS:-500}
       RateLimiting__Tiles__TokenLimit: ${GATEWAY_RATE_LIMIT_TILE_TOKENS:-1000}
+      # XD01-398: the CIAM tenant whose signing keys validate the token before its claims key a bucket — the same
+      # AzureAdCiam__Instance / AzureAdCiam__TenantId the server service reads from .env. Unset (the default): the token is
+      # only decoded, as before, and the gateway logs one startup warning.
+      AzureAdCiam__Instance: ${AzureAdCiam__Instance:-}
+      AzureAdCiam__TenantId: ${AzureAdCiam__TenantId:-}
     depends_on:
       server:
         condition: service_started
