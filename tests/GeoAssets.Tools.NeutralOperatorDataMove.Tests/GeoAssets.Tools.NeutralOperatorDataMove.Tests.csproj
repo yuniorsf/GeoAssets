@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-391: tests of the NeutralOperator data-move tool (tools/GeoAssets.Tools.NeutralOperatorDataMove). The database
+       tests run the tool's verbs over one shared PostgreSQL Testcontainer: kernel-shaped databases (the kernel's
+       ServiceOrderDbContext chain, then NeutralOperatorDbContext's) seeded with NeutralOperator orders, and
+       NeutralOperator.Server-shaped targets (the host's own chain, then NeutralOperatorDbContext's) that the real
+       NeutralOperator.Server host then serves. The tool's internals are visible to this assembly (InternalsVisibleTo). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\GeoAssets.Tools.NeutralOperatorDataMove\GeoAssets.Tools.NeutralOperatorDataMove.csproj" />
+    <!-- The two ServiceOrderDbContext migration chains whose heads the tool names, and the host the moved orders are served by. -->
+    <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
+    <ProjectReference Include="..\..\apps\GeoAssets.NeutralOperator.Server\GeoAssets.NeutralOperator.Server.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
+  </ItemGroup>
+
+  <!-- The NeutralOperator host's own test doubles (its stubbed kernel and bearer authentication), shared rather than forked. -->
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\FakeKernel.cs" Link="Support\FakeKernel.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\RecordedRequest.cs" Link="Support\RecordedRequest.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\KernelFault.cs" Link="Support\KernelFault.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\TestIdentity.cs" Link="Support\TestIdentity.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\TestIdentities.cs" Link="Support\TestIdentities.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\BearerTokenAuthenticationHandler.cs" Link="Support\BearerTokenAuthenticationHandler.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\FakeServiceAuthTokenProvider.cs" Link="Support\FakeServiceAuthTokenProvider.cs" />
+  </ItemGroup>
+
+</Project>

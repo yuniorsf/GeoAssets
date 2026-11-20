@@ -114,7 +114,105 @@ NEUTRAL_OPERATOR_DESTINATION=http://neutral-operator:8080
 
 restart `deploy/server`, then start this stack (with `ServiceAuth__*` credentials and a broker in its `.env`).
 
-Orders already in the kernel's database are not moved by this ticket; the data move follows.
+Orders the kernel created while it hosted the module stay in the kernel's database until they are moved: see
+[Moving the kernel's NeutralOperator orders](#moving-the-kernels-neutraloperator-orders-xd01-391).
+
+## Moving the kernel's NeutralOperator orders (XD01-391)
+
+While the kernel hosted the module, its NeutralOperator orders were written to the **kernel's** GeoAssets database.
+`tools/GeoAssets.Tools.NeutralOperatorDataMove` moves them, once, to this host's database — re-runnable, in four verbs:
+
+```bash
+export GEOASSETS_KERNEL_DB="Host=…;Database=geoassets;Username=<table owner>;Password=…"
+export GEOASSETS_NEUTRAL_OPERATOR_DB="Host=…;Database=geoassets_neutral_operator;Username=<table owner>;Password=…"
+dotnet run --project tools/GeoAssets.Tools.NeutralOperatorDataMove -- plan            # dry run (the default verb)
+dotnet run --project tools/GeoAssets.Tools.NeutralOperatorDataMove -- copy [--include-pending-outbox]
+dotnet run --project tools/GeoAssets.Tools.NeutralOperatorDataMove -- verify
+dotnet run --project tools/GeoAssets.Tools.NeutralOperatorDataMove -- remove --confirm
+```
+
+(`--source` / `--target` instead of the variables; `--batch-size <n>`, default 500.) The tool never prints a connection
+string — only `host:port/database` — and exits **0** done · **1** usage error · **2** conflicts or differences found
+(nothing overwritten) · **3** refused (a precondition failed; nothing changed) · **4** failed (database error or Ctrl+C;
+rolled back).
+
+**What moves.** Every order whose `OrderTypeId` is one of the module's order types (`NeutralOperatorModule.RegisterOrderTypes`
+— the tool reads them from that code), with:
+
+| Kernel table | How |
+|---|---|
+| `public."ServiceOrders"` | every column as stored — ids, `RowVersion`, timestamps, `OrganizationId`, attributes JSON; parents first |
+| `public."OrderDispatches"`, `public."OrderActionLogs"` | per order, in the kernel's order; their integer identity is renumbered by this database (it is a local surrogate no route returns — both databases number from 1) |
+| `public."ServiceOrderTargets"` (the orders' rows under the `kernel` vertical) | as stored — they become this host's local targets, exactly what `LedgerOrderTargetSelectionService` mirrors |
+| `public."WorkflowOutboxMessages"` | only the moved orders' **undelivered** `AssetMutationBatchRequestedV1` / `OrderStateChangedV1`, and only with `--include-pending-outbox` |
+| `neutral_operator.*` | the whole schema: pole occupancies and entries, occupancy change sets, approval sagas and their poles |
+
+Not moved: order types, states, transitions, permissions and policies (this host builds its order types from the module's
+code; a kernel-side order-type row for a NeutralOperator type is reported as a warning), the outbox's delivered history, the
+inbox, the organization-grant mirror and cursor, and the kernel's own undelivered answers to a batch (they stay in its outbox
+and reach this host over the broker).
+
+**Semantics.** `copy` inserts each moved row this database lacks, in foreign-key order, one transaction per batch, keeping
+every value (it compares and writes each column's exact text form). A row already here with identical content is skipped —
+a second `copy` changes nothing. A row whose id (or any unique index) is already here with other content is a **conflict**:
+reported, never overwritten, exit 2, and `copy` writes nothing at all while `plan` shows one. `verify` checks that every
+moved row is here, identical (outbox messages: the message, not each relay's delivery state). `remove --confirm` runs
+`verify` again inside one kernel transaction that locks the moved tables against writers, and deletes the kernel's rows
+only if every one of them is here, identical — a row changed, or a NeutralOperator order created, after the copy refuses it
+(exit 3, nothing deleted).
+
+**The global target ledger stays in the kernel (ADR-001 D2).** In the kernel's database the moved orders' targets *are* the
+ledger's entries of those orders, held under the in-process `kernel` vertical — and deleting their orders would cascade them
+away. So `remove` does not delete them: in the same transaction it re-keys each one to `(neutral-operator, order id)` —
+same target id, feature, status, version, release instant and organization, plus the order's type and its policy's
+exclusivity, as a remote vertical's entry carries them — which is the key this host reserves, lists and releases its orders'
+targets under. No other ledger entry is touched.
+
+### Prerequisites
+
+- **Both databases at their migration heads**: the kernel's GeoAssets database with the kernel's `ServiceOrderDbContext`
+  chain and the `NeutralOperatorDbContext` chain; this database with both chains of [First-run database setup](#first-run-database-setup-manual-like-the-kernels).
+  The tool checks the history tables and every moved table's columns against the EF models, and refuses otherwise.
+- **Connect as the owner of the tables on both databases** (the role the migrations ran as) or a superuser. The workflow and
+  occupancy tables have row-level security without `FORCE`, so their owner reads every row; `plan` reports — and every verb
+  refuses — a role that row-level security would filter (and the tool's session runs with `row_security = off`, so such a
+  read fails rather than returning fewer rows). `copy` disables this database's user triggers (the `ServiceOrders`
+  row-version trigger would re-stamp `RowVersion`) inside each batch's own transaction, which only the owner can do.
+- **A maintenance window: freeze writes** to NeutralOperator orders for the whole procedure — stop the gateway, or block
+  `/api/v/neutral-operator/**` and the kernel's workflow routes at it. Each copy batch into a table with user triggers
+  (`ServiceOrders`, `ServiceOrderTargets`) holds that table's exclusive lock until it commits.
+- **A broker on this host** when an approval is awaiting the kernel's apply (`occupancy.apply.state = awaiting-apply`), so
+  its staged batch is delivered from here (see [The approval saga](#the-approval-saga-xd01-383)).
+- **A backup of both databases** (`pg_dump`) before `copy` and again before `remove`.
+
+### Runbook
+
+1. **Plan** — `plan`. Resolve every conflict and refusal it lists until it exits 0 (`outbox.pending`: decide on
+   `--include-pending-outbox`; `order-types.not-moved`: re-create the override here if it is still wanted).
+   *Rollback*: nothing to roll back.
+2. **Copy** — `copy` (with `--include-pending-outbox` when `plan` reported pending messages: this host's relay delivers
+   them; if the kernel's relay delivers its copy too, the consumer drops the second by its message id). Re-run it until it
+   exits 0; a second run copies nothing. *Rollback*: the kernel is untouched and still authoritative; restore this
+   database from its backup (or drop and re-create it) before trying again.
+3. **Verify** — `verify` must exit 0. *Rollback*: as for copy.
+4. **Remove** — take the second backup of the kernel's database, then `remove --confirm`, still inside the window and
+   **before this host serves anything**. Keep this host stopped (or at least unreachable and not yet started over the
+   copy) from step 2 until here: once it runs, it legitimately writes to the copied rows — its approval-saga sweeper stamps
+   `TimedOutAt` on a pending saga older than `Saga:ApplyTimeout`, and every request changes orders — so `verify` would
+   report differences and `remove` would refuse (exit 3), correctly, since it cannot tell those writes from rows the copy
+   missed. `remove` refuses (exit 3, nothing deleted) if anything changed on either side since step 3.
+   *Rollback*: there is no reverse move — restore the kernel's database from the backup taken in this step; this database
+   still holds every row.
+5. **Switch** — point the gateway's `Destinations:NeutralOperator:Shared` (and each silo) at this host and drop
+   `neutral-operator` from the kernel's `GeoAssets:Modules`; start this host and restart the kernel. This host now serves
+   the moved orders. *Rollback*: restore the kernel's NeutralOperator rows from the step-4 backup (or re-run this tool in
+   the other direction by hand — it has no reverse verb), list the module on the kernel again and point the gateway back;
+   anything this host wrote after the switch is then lost unless copied back.
+6. End the window.
+
+The order matters: `remove` must run while both databases are still exactly as `verify` saw them. If this host was started
+over the copy before `remove` (or an approval saga already timed out there), restore this database from its step-2 backup,
+re-run `copy` and `verify`, and then `remove` before starting it again.
 
 ## The approval saga (XD01-383)
 
