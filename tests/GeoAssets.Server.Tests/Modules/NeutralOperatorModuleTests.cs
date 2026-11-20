@@ -82,11 +82,11 @@ public sealed class NeutralOperatorModuleTests
             VerticalId = "neutral-operator",
             OrderTypeId = SharedUseOrderTypes.PoleWorkId,
             DisplayNameKey = "orderTypes.sharedUsePoleWork",
-            ApiBaseRoute = "/api/workflow/service-orders",
+            ApiBaseRoute = "/api/v/neutral-operator/workflow/service-orders",
             FeatureActions =
             [
                 new FeatureActionDescriptor(
-                    "occupiable-support", "create", "featureActions.createSharedUseOrder", SharedUseOrderTypes.PoleWorkId, "/api/workflow/service-orders"),
+                    "occupiable-support", "create", "featureActions.createSharedUseOrder", SharedUseOrderTypes.PoleWorkId, "/api/v/neutral-operator/workflow/service-orders"),
             ],
         }).Should().BeTrue();
     }
@@ -152,7 +152,7 @@ public sealed class NeutralOperatorModuleTests
     [Fact]
     public async Task Host_AfterStartup_SeededTheIspTenantRoleWithItsTwoGrants()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GeoIdentityDbContext>();
 

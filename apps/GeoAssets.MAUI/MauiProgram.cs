@@ -191,9 +191,11 @@ public static class MauiProgram
         builder.Services.AddOrderTypeRegistry();
         builder.Services.AddSingleton<OrderTypeCatalogLoader>();
 
+        // XD01-384: through the gateway, routed by the kernel registry's order-type descriptors — same as
+        // apps/GeoAssets.Web/Program.cs, so OrderTypeCatalogLoader also learns the order types a vertical's own host serves.
         var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
             ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
-        builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
+        builder.Services.AddDescriptorRoutedWorkflowRest(serviceOrdersApiBaseUrl);
 
         builder.Services.AddServiceOrderRules();
         builder.Services.AddScoped<WorkflowPrincipalFactory>();

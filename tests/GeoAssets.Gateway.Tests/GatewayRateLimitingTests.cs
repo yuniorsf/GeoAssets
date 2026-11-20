@@ -39,7 +39,7 @@ public sealed class GatewayRateLimitingTests : IAsyncLifetime
     {
         _backend = await TestBackend.StartAsync("backend");
         var destinations = new GatewayRouteCatalog.ServiceDestinations(TestBackend.Address(_backend), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
-        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
+        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations, destinations);
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)

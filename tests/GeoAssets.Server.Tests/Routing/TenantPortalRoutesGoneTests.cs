@@ -16,7 +16,7 @@ public sealed class TenantPortalRoutesGoneTests
     [Fact]
     public async Task PortalRoutes_AreGone()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
 
         var patterns = services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()

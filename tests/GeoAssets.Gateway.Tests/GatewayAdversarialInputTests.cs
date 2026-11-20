@@ -37,7 +37,7 @@ public sealed class GatewayAdversarialInputTests : IAsyncLifetime
         var destinations = new GatewayRouteCatalog.ServiceDestinations(
             TestBackend.Address(_sharedBackend),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["acme.example.com"] = TestBackend.Address(_siloBackend) });
-        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
+        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations, destinations);
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)

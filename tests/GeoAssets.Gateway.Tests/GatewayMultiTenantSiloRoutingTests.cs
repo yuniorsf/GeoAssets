@@ -35,7 +35,7 @@ public sealed class GatewayMultiTenantSiloRoutingTests : IAsyncLifetime
                 ["acme.example.com"] = TestBackend.Address(_acmeSiloBackend),
                 ["globex.example.com"] = TestBackend.Address(_globexSiloBackend),
             });
-        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
+        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations, destinations);
 
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>

@@ -14,6 +14,12 @@
     </PackageReference>
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
+    <!-- The end-to-end tests (XD01-384) run the NeutralOperator host over a Testcontainers Postgres behind the gateway, with the
+         support code of GeoAssets.NeutralOperator.Server.Tests linked in. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
@@ -24,6 +30,24 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\apps\GeoAssets.Gateway\GeoAssets.Gateway.csproj" />
+    <ProjectReference Include="..\..\apps\GeoAssets.NeutralOperator.Server\GeoAssets.NeutralOperator.Server.csproj" Aliases="NoServer" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Modules\GeoAssets.NeutralOperator.Modules.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\BearerTokenAuthenticationHandler.cs" Link="EndToEnd\Support\BearerTokenAuthenticationHandler.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\DatabaseProbe.cs" Link="EndToEnd\Support\DatabaseProbe.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\FakeKernel.cs" Link="EndToEnd\Support\FakeKernel.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\FakeServiceAuthTokenProvider.cs" Link="EndToEnd\Support\FakeServiceAuthTokenProvider.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\FixedTenantContext.cs" Link="EndToEnd\Support\FixedTenantContext.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\KernelFault.cs" Link="EndToEnd\Support\KernelFault.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\OccupancySeed.cs" Link="EndToEnd\Support\OccupancySeed.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\RecordedRequest.cs" Link="EndToEnd\Support\RecordedRequest.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\TestIdentities.cs" Link="EndToEnd\Support\TestIdentities.cs" />
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\TestIdentity.cs" Link="EndToEnd\Support\TestIdentity.cs" />
   </ItemGroup>
 
 </Project>

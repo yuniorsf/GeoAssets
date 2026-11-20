@@ -11,28 +11,18 @@ namespace GeoAssets.Server.Tests.Routing;
 /// <summary>
 /// Acceptance for XD01-359 (invariant I5): with every module entry blank the real <c>Program</c> still boots on a plain
 /// in-memory <c>IAssetProvider</c>, serves the kernel's endpoints, and the only routes it loses against the checked-in
-/// inventory are the modules' — neutral-operator's, the IP-billing grant bridge's and the PostGIS WMS routes.
+/// inventory are the enabled modules' — the IP-billing grant bridge's and the PostGIS WMS routes (neutral-operator's are not in the
+/// inventory since the XD01-384 cut-over).
 /// </summary>
 [Trait("Category", "RouteInventory")]
 public sealed class KernelOnlyHostTests
 {
     private static readonly string[] ExpectedRemoved =
     [
-        "DELETE /api/workflow/service-orders/{id}/occupancy-changes | none",
-        "DELETE /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none",
-        "GET /api/geoassets/export/gis/v1 | policy:features:read",
         "GET /api/geoassets/wms | anonymous",
-        "GET /api/workflow/service-orders/{id}/occupancy-changes | policy:serviceorders:read",
-        "GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan | policy:serviceorders:read",
-        "GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan/skipped-entries | policy:serviceorders:read",
-        "GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan/unnotifiable-poles | policy:serviceorders:read",
-        "GET /api/workflow/service-orders/{id}/targets/{targetId}/occupancy | policy:serviceorders:read",
         "GET /wms | anonymous",
         "POST /api/identity/municipio-grants/revoke | policy:ip-billing:reference-manage",
         "POST /api/identity/municipio-grants/sync | policy:ip-billing:reference-manage",
-        "POST /api/workflow/service-orders/{id}/occupancy-saga/retry | none",
-        "POST /api/workflow/service-orders/{id}/shared-use/dispatch | none",
-        "PUT /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none",
     ];
 
     [Fact]

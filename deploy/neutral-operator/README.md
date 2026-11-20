@@ -65,19 +65,37 @@ dotnet ef database update \
   --connection "Host=localhost;Port=5433;Database=geoassets_neutral_operator;Username=postgres;Password=<POSTGRES_PASSWORD>"
 ```
 
-## Cut-over and rollback (kernel flag)
+## Cut-over and rollback (kernel flag + gateway destination)
 
-Until the cut-over the kernel keeps hosting the NeutralOperator module (its default `GeoAssets:Modules` is
-`[ "postgres-spatial", "neutral-operator", "ip-billing-bridge" ]`), so both hosts can run side by side; this host's
-registration then replaces the kernel's in-process `neutral-operator` descriptors with its own (the same feature action,
-plus the target policies and terminal statuses the ledger needs).
+Since XD01-384 the cut-over is the default: the kernel's `GeoAssets:Modules` is `[ "postgres-spatial", "ip-billing-bridge" ]`,
+so it maps none of the module's routes (occupancy, shared-use dispatch, the GIS export `GET /api/geoassets/export/gis/v1`)
+and registers none of its services, and clients reach the vertical through the gateway (`apps/GeoAssets.Gateway`):
 
-- **Cut over**: start the kernel without the module — blank its entry with an environment variable
-  (`GeoAssets__Modules__1=` on the `server` service of `deploy/server`; a blank entry is ignored) or list the modules
-  without `neutral-operator`. The kernel then maps none of the module's routes (occupancy, shared-use dispatch, the GIS
-  export `GET /api/geoassets/export/gis/v1`) and registers none of its services; clients reach the vertical here.
-- **Roll back**: list `neutral-operator` again (remove the override) and restart the kernel — it serves the module
-  in process exactly as before.
+| Client calls (gateway) | Gateway forwards to (`Destinations:NeutralOperator`) |
+|---|---|
+| `/api/v/neutral-operator/{**rest}` (query string kept) | `/api/{rest}` — e.g. `/api/v/neutral-operator/workflow/service-orders/{id}/shared-use/dispatch` → `/api/workflow/service-orders/{id}/shared-use/dispatch` |
+
+The vertical's order-type descriptors (this host's and, while it hosts the module, the kernel's) publish
+`ApiBaseRoute = /api/v/neutral-operator/workflow/service-orders`, and the Web/MAUI clients (`AddDescriptorRoutedWorkflowRest`)
+reach each order type at its descriptor's route on the gateway's origin — they know no host of this vertical.
+
+- **Production / cut over**: `Destinations:NeutralOperator:Shared` (and each silo) = this host; the kernel without the module
+  (the default).
+- **Roll back**: list `neutral-operator` again on the kernel (`GeoAssets__Modules__2=neutral-operator`) and restart it — it
+  serves the module in process exactly as before — and point `Destinations:NeutralOperator:Shared` at the kernel. The module's
+  routes are identical on both hosts, so the same `/api/v/neutral-operator/** → /api/**` rewrite reaches either.
+
+**The local Docker stack keeps the kernel hosting the module** (`deploy/server`: `GeoAssets__Modules__2=neutral-operator` on
+`server`, the gateway's `Destinations__NeutralOperator__Shared=http://server:8080`): it has no `GeoAssets.ServiceCaller`
+credentials (this host's registration stays Degraded, ledger reservations answer 503) and no broker (the approval saga needs
+one). To run the vertical here instead, set in `deploy/server/.env`
+
+```bash
+KERNEL_NEUTRAL_OPERATOR_MODULE=                       # blank: the kernel without the module
+NEUTRAL_OPERATOR_DESTINATION=http://neutral-operator:8080
+```
+
+restart `deploy/server`, then start this stack (with `ServiceAuth__*` credentials and a broker in its `.env`).
 
 Orders already in the kernel's database are not moved by this ticket; the data move follows.
 

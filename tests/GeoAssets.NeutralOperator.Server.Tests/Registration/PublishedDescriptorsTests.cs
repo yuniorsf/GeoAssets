@@ -86,7 +86,7 @@ public sealed class PublishedDescriptorsTests
         var descriptor = Published().Single(d => string.Equals(d.OrderTypeId, SharedUseOrderTypes.PoleWorkId, StringComparison.Ordinal));
 
         descriptor.FeatureActions.Should().ContainSingle().Which.Should().Be(new FeatureActionDescriptor(
-            OccupancyAssetTypeRoles.OccupiableSupport, "create", "featureActions.createSharedUseOrder", SharedUseOrderTypes.PoleWorkId, "/api/workflow/service-orders"));
+            OccupancyAssetTypeRoles.OccupiableSupport, "create", "featureActions.createSharedUseOrder", SharedUseOrderTypes.PoleWorkId, "/api/v/neutral-operator/workflow/service-orders"));
         descriptor.DisplayNameKey.Should().Be("orderTypes.sharedUsePoleWork");
         Published().Where(d => !string.Equals(d.OrderTypeId, SharedUseOrderTypes.PoleWorkId, StringComparison.Ordinal)).Should().OnlyContain(d => d.FeatureActions.Count == 0);
     }

@@ -2,6 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Projects.Persistence;
 using GeoAssets.Server.Catalogs;
+using GeoAssets.Server.Modules;
 using GeoAssets.Server.Tests.Catalogs;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Workflow.Persistence;
@@ -29,17 +30,19 @@ internal static class ServerHostFixture
     private static PostgreSqlContainer? _container;
     private static string? _connectionString;
     private static WebApplicationFactory<HttpTenantContext>? _factory;
+    private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorEnabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _ipBillingBridgeDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
     private static WebApplicationFactory<HttpTenantContext>? _secondCatalogFactory;
 
+    /// <summary>The host as <c>appsettings.json</c> composes it — since the XD01-384 cut-over, without the neutral-operator module.</summary>
     public static async Task<IServiceProvider> GetServicesAsync()
     {
         await StartLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            _factory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: []);
+            _factory ??= CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), modules: null);
             return _factory.Services;
         }
         finally
@@ -49,8 +52,28 @@ internal static class ServerHostFixture
     }
 
     /// <summary>
-    /// The same host on the same database, with <c>GeoAssets:Modules:1</c> (neutral-operator) blanked (XD01-358): what the
-    /// host maps and registers without the ISP neutral-operator vertical.
+    /// The same host on the same database with every built-in module listed explicitly — postgres-spatial, neutral-operator,
+    /// ip-billing-bridge (the cut-over's rollback configuration, XD01-384): what the host maps and registers while it still
+    /// hosts the ISP neutral-operator vertical.
+    /// </summary>
+    public static async Task<IServiceProvider> GetNeutralOperatorEnabledServicesAsync()
+    {
+        await StartLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _neutralOperatorEnabledFactory ??= CreateFactory(
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "neutral-operator", "ip-billing-bridge"]);
+            return _neutralOperatorEnabledFactory.Services;
+        }
+        finally
+        {
+            StartLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// The same host on the same database with the modules listed explicitly without neutral-operator (XD01-358): what the
+    /// host maps and registers without the ISP neutral-operator vertical, whatever <c>appsettings.json</c> lists.
     /// </summary>
     public static async Task<IServiceProvider> GetNeutralOperatorDisabledServicesAsync()
     {
@@ -58,7 +81,7 @@ internal static class ServerHostFixture
         try
         {
             _neutralOperatorDisabledFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [1]);
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "ip-billing-bridge"]);
             return _neutralOperatorDisabledFactory.Services;
         }
         finally
@@ -68,7 +91,7 @@ internal static class ServerHostFixture
     }
 
     /// <summary>
-    /// The same host on the same database, with <c>GeoAssets:Modules:2</c> (ip-billing-bridge) blanked (XD01-377): what the
+    /// The same host on the same database with the modules listed explicitly without ip-billing-bridge (XD01-377): what the
     /// host registers and seeds without the IP-billing vertical.
     /// </summary>
     public static async Task<IServiceProvider> GetIpBillingBridgeDisabledServicesAsync()
@@ -77,7 +100,7 @@ internal static class ServerHostFixture
         try
         {
             _ipBillingBridgeDisabledFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [2]);
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "neutral-operator"]);
             return _ipBillingBridgeDisabledFactory.Services;
         }
         finally
@@ -97,7 +120,7 @@ internal static class ServerHostFixture
         try
         {
             _kernelOnlyFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [0, 1, 2], kernelTestDoubles: true);
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: [], kernelTestDoubles: true);
             _ = _kernelOnlyFactory.Services; // start the host inside the lock: every host seeds the same database on startup
             return _kernelOnlyFactory;
         }
@@ -117,7 +140,7 @@ internal static class ServerHostFixture
         try
         {
             _secondCatalogFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), blankedModuleIndexes: [], secondCatalogPlugin: true);
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: null, secondCatalogPlugin: true);
             _ = _secondCatalogFactory.Services; // start the host inside the lock: every host seeds the same database on startup
             return _secondCatalogFactory;
         }
@@ -131,14 +154,21 @@ internal static class ServerHostFixture
         _connectionString ??= await StartDatabaseAsync().ConfigureAwait(false);
 
     private static WebApplicationFactory<HttpTenantContext> CreateFactory(
-        string connectionString, int[] blankedModuleIndexes, bool kernelTestDoubles = false, bool secondCatalogPlugin = false) =>
+        string connectionString, string[]? modules, bool kernelTestDoubles = false, bool secondCatalogPlugin = false) =>
         new WebApplicationFactory<HttpTenantContext>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Testing");
             host.UseSetting("ConnectionStrings:GeoAssets", connectionString);
-            foreach (var index in blankedModuleIndexes)
+
+            // null keeps appsettings.json's list; otherwise exactly these modules, every other position up to the number of
+            // built-ins blanked (a blank entry is ignored), so no entry of appsettings.json survives the override.
+            if (modules is not null)
             {
-                host.UseSetting($"GeoAssets:Modules:{index}", "");
+                var positions = Math.Max(modules.Length, ServerModules.BuiltIns().Count);
+                for (var index = 0; index < positions; index++)
+                {
+                    host.UseSetting($"GeoAssets:Modules:{index}", index < modules.Length ? modules[index] : "");
+                }
             }
 
             if (secondCatalogPlugin)
