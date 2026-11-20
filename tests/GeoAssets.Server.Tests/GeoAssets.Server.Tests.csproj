@@ -36,6 +36,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
     <ProjectReference Include="..\..\apps\GeoAssets.IpBilling.Server\GeoAssets.IpBilling.Server.csproj" />
+    <!-- XD01-397: the real NeutralOperator host validating the caller's token for its own audience, against the kernel's real
+         bearer validation (TokenAudiences/NeutralOperatorTokenAudienceEndToEndTests). -->
+    <ProjectReference Include="..\..\apps\GeoAssets.NeutralOperator.Server\GeoAssets.NeutralOperator.Server.csproj" />
     <!-- XD01-381: the FieldService vertical's persistence — referenced only to name its types: the Server host must never register them. -->
     <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Persistence\GeoAssets.FieldService.Persistence.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
@@ -59,6 +62,11 @@
 
   <ItemGroup>
     <None Include="Snapshots\route-inventory.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- XD01-397: the NeutralOperator host's migrated Testcontainers database, shared with its own suite rather than forked. -->
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\NeutralOperatorDatabase.cs" Link="TokenAudiences\NeutralOperatorDatabase.cs" />
   </ItemGroup>
 
 </Project>

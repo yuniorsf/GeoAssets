@@ -140,6 +140,13 @@ public static class MauiProgram
         builder.Services.AddScoped<ICurrentUserAccessor, MauiCurrentUserAccessor>();
         builder.Services.AddScoped<IAuthNavigationService, MauiAuthNavigationService>();
 
+        // Which scope each "GeoAssetsServer" request's token carries (XD01-397): GeoAssetsServer:ApiScope, or a
+        // GeoAssetsServer:RouteScopes entry's for a request under that route on the gateway.
+        var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
+            ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
+        builder.Services.AddSingleton(ApiScopeRoutes.FromConfiguration(
+            builder.Configuration.GetSection("GeoAssetsServer"), new Uri(geoAssetsServerBaseUrl, UriKind.Absolute)));
+
         // Attaches a silently-acquired bearer token to the "GeoAssetsServer" named HttpClient —
         // see MsalAuthorizationHandler's doc comment. Identity authorization and the Service
         // Order workflow (both below) are this client's first real callers (XD01-24).

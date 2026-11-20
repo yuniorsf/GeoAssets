@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GeoAssets.NeutralOperator.Server.Tests" />
+    <!-- XD01-397: the two-audience end-to-end test boots this host next to the kernel's real bearer validation. -->
+    <InternalsVisibleTo Include="GeoAssets.Server.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -27,6 +27,16 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
         // app registration (XD01-178) — a separate audience from GeoAssetsServer:ApiScope.
         var ipBillingApiScope = configuration["GeoAssetsIpBillingServer:ApiScope"];
 
+        // The GeoAssetsServer:RouteScopes scopes (XD01-397) — another resource's API each (e.g. the NeutralOperator
+        // host's), whose token RouteScopedAuthorizationMessageHandler requests on its own. A token request carries only
+        // one resource's scopes, so these are consented at sign-in rather than added to DefaultAccessTokenScopes.
+        // Program.cs fails fast on a missing GeoAssetsServer:BaseUrl; here a missing one just asks for no extra consent.
+        var serverBaseUrl = configuration["GeoAssetsServer:BaseUrl"];
+        IReadOnlyList<string> routeScopes = string.IsNullOrWhiteSpace(serverBaseUrl)
+            ? []
+            : ApiScopeRoutes.FromConfiguration(
+                configuration.GetSection("GeoAssetsServer"), new Uri(serverBaseUrl, UriKind.Absolute)).AdditionalScopes;
+
         services.AddMsalAuthentication(options =>
         {
             configuration.Bind("AzureAdCiam", options.ProviderOptions.Authentication);
@@ -47,6 +57,9 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
             // own CIAM app registration/audience, distinct from GeoAssetsServer's.
             if (!string.IsNullOrWhiteSpace(ipBillingApiScope))
                 options.ProviderOptions.DefaultAccessTokenScopes.Add(ipBillingApiScope);
+
+            foreach (var routeScope in routeScopes)
+                options.ProviderOptions.AdditionalScopesToConsent.Add(routeScope);
         })
         // See RolesClaimsPrincipalFactory's doc comment — the default factory doesn't split
         // Entra's array-valued "roles" claim into individual claims.
