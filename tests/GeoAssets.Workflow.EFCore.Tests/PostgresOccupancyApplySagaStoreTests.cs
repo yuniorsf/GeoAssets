@@ -137,8 +137,8 @@ public sealed class PostgresOccupancyApplySagaStoreTests : IAsyncDisposable
         var first = await store.CompleteAsync(committed, CancellationToken.None);
         var second = await store.CompleteAsync(saga with { State = OccupancyApplySagaState.Reverted, CompletedAt = Now.AddMinutes(2), ReasonCode = "x", Reason = "y" }, CancellationToken.None);
 
-        first.Should().BeTrue();
-        second.Should().BeFalse("a saga that is no longer pending is never changed again");
+        first.Completed.Should().BeTrue();
+        second.Completed.Should().BeFalse("a saga that is no longer pending is never changed again");
         var stored = (await store.FindAsync(saga.BatchId, CancellationToken.None))!;
         stored.State.Should().Be(OccupancyApplySagaState.Committed);
         stored.CompletedAt.Should().Be(Now.AddMinutes(1));
@@ -159,7 +159,7 @@ public sealed class PostgresOccupancyApplySagaStoreTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task CompleteAsync_RevertingWhileAPoleMovedSinceTheApproval_RefusesWithAConflict_NamingThePole()
+    public async Task CompleteAsync_RevertingWhileAPoleMovedSinceTheApproval_LeavesThePole_AndNamesItUnrestored()
     {
         await FreshAsync();
         var (store, poles, _, _) = For(Owner);
@@ -169,9 +169,14 @@ public sealed class PostgresOccupancyApplySagaStoreTests : IAsyncDisposable
         // A data correction writes the pole after the approval: the compensation no longer knows what to restore over.
         await poles.ReplaceEntriesAsync("pole-moved", written.Version, [], CancellationToken.None);
 
-        var act = () => store.CompleteAsync(saga with { State = OccupancyApplySagaState.Reverted, CompletedAt = Now.AddMinutes(1), ReasonCode = "x", Reason = "y" }, CancellationToken.None);
+        var completion = await store.CompleteAsync(saga with { State = OccupancyApplySagaState.Reverted, CompletedAt = Now.AddMinutes(1), ReasonCode = "x", Reason = "y" }, CancellationToken.None);
 
-        (await act.Should().ThrowAsync<OccupancyConflictException>()).Which.PoleFeatureIds.Should().Equal("pole-moved");
+        completion.Completed.Should().BeTrue();
+        completion.UnrestoredFeatureIds.Should().Equal("pole-moved");
+        (await poles.GetForPoleAsync("pole-moved", CancellationToken.None))!.Version.Should().Be(written.Version + 1, "the later write wins");
+        var stored = (await store.FindAsync(saga.BatchId, CancellationToken.None))!;
+        stored.State.Should().Be(OccupancyApplySagaState.Reverted);
+        stored.UnrestoredFeatureIds.Should().Equal("pole-moved");
     }
 
     [Fact]

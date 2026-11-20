@@ -300,5 +300,7 @@ evaluates them (load them into Prometheus/Grafana Mimir, or translate the same c
 monitors — the metric names are the OTLP ones):
 
 - `alerts/saga-apply-alerts.yaml` (XD01-383) — the occupancy approval saga: approvals past `Saga:ApplyTimeout`
-  (`geoassets.saga.apply.timeouts`), the oldest pending approval's age (`geoassets.saga.apply.oldest_pending_age`), and a
-  batch the catalog applied after its saga was compensated (`geoassets.saga.apply.outcomes{outcome="applied-after-revert"}`).
+  (`geoassets.saga.apply.timeouts`), the oldest pending approval's age (`geoassets.saga.apply.oldest_pending_age`), a
+  batch the catalog applied after its saga was compensated (`geoassets.saga.apply.outcomes{outcome="applied-after-revert"}`),
+  and a rejection whose compensation left poles a later change had moved on (`geoassets.saga.apply.compensation_conflicts`,
+  XD01-392).

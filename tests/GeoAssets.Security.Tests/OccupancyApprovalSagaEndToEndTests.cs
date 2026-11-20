@@ -164,6 +164,74 @@ public sealed class OccupancyApprovalSagaEndToEndTests
         (await host.OutboxAsync(Requested)).Should().HaveCount(2);
     }
 
+    // ── Rejection after a later order rewrote a pole (XD01-392) ───────────────
+
+    [Fact]
+    public async Task KernelRejectionArrivingAfterALaterChangeRewroteAPole_CompensatesWhatItCan_KeepsTheLaterChange_RecordsTheReplyOnce_AndLeavesAwaitingApply()
+    {
+        await using var host = await ApprovalSagaHost.StartAsync(poleInCatalog: false, withSecondPole: true);
+        var baseline = new PoleOccupancyEntryBuilder().ForPole(ApprovalSagaHost.OwnersPole).OwnedBy(ApprovalSagaHost.Owner).OnSlot(1)
+            .OccupiedBy(ApprovalSagaHost.Occupant).Build();
+        await host.OccupyAsync(baseline);
+        await host.StageAsync(ApprovalSagaHost.OwnersPole, ApprovalSagaHost.Add(2));
+        await host.StageAsync(ApprovalSagaHost.SecondPole, ApprovalSagaHost.Add(1));
+        await host.ApproveAsync();
+        (await host.OccupancyAsync(ApprovalSagaHost.SecondPole))!.Entries.Should().ContainSingle("the approval wrote the second pole, pending the catalog");
+        var approved = (await host.OccupancyAsync())!;
+
+        // Another order's commit rewrites the shared pole before the kernel's answer arrives.
+        var later = new PoleOccupancyEntryBuilder().ForPole(ApprovalSagaHost.OwnersPole).OwnedBy(ApprovalSagaHost.Owner).OnSlot(3)
+            .OccupiedBy(ApprovalSagaHost.Other).Build();
+        var rewritten = await host.OccupyAsync(ApprovalSagaHost.OwnersPole, [.. approved.Entries, later]);
+        rewritten.Version.Should().BeGreaterThan(approved.Version);
+
+        (await host.RelayAsync()).Should().Be(1, "the kernel rejects the batch: an answer, delivered");
+        (await host.OutboxAsync(Rejected)).Should().ContainSingle();
+
+        var delivered = await host.RelayAsync();
+
+        delivered.Should().Be(1, "the saga handles the rejection without throwing out of the handler");
+        (await host.InboxRecordsAsync(OccupancyApplySagaService.RejectedConsumerName)).Should().Be(1, "the reply is recorded: it is not redelivered forever");
+        var saga = (await host.SagaAsync())!;
+        saga.State.Should().Be(OccupancyApplySagaState.Reverted);
+        saga.UnrestoredFeatureIds.Should().Equal(ApprovalSagaHost.OwnersPole);
+        var shared = (await host.OccupancyAsync())!;
+        shared.Version.Should().Be(rewritten.Version, "the compensation did not touch the pole the later change wrote");
+        shared.Entries.Should().BeEquivalentTo(rewritten.Entries, "the later change's occupancy is kept");
+        var second = (await host.OccupancyAsync(ApprovalSagaHost.SecondPole))!;
+        second.Entries.Should().BeEmpty("the pole nobody else wrote is back at its baseline");
+        (await host.SetsAsync()).Should().HaveCount(2).And.OnlyContain(set => set.Status == OccupancyChangeSetStatus.Reverted);
+        var order = await host.OrderAsync();
+        order.Status.Should().Be(ServiceOrderStatus.Completed, "the order stays at its status before the approval");
+        OccupancyApplySagaAttributes.IsAwaitingApply(order.Attributes).Should().BeFalse();
+        order.Attributes.Should().Contain(OccupancyApplySagaAttributes.StateKey, OccupancyApplySagaAttributes.Reverted)
+            .And.Contain(OccupancyApplySagaAttributes.UnrestoredKey, ApprovalSagaHost.OwnersPole);
+        order.ActionLog.Select(entry => entry.Action).Should().Equal(OrderActionType.Approve, OccupancyApplyActions.Reverted);
+        order.ActionLog[1].Comment.Should().Contain($"compensated except on pole(s) {ApprovalSagaHost.OwnersPole}")
+            .And.Contain("their occupancy was kept");
+        order.ActionLog[1].Comment.Should().NotContain(ApprovalSagaHost.SecondPole + ":", "only the unrestored pole is named as kept");
+
+        // The broker hands the very same reply over again: a no-op.
+        var logged = order.ActionLog.Count;
+        await host.MarkPendingAgainAsync(Rejected);
+        (await host.RelayAsync()).Should().Be(1);
+        (await host.InboxRecordsAsync(OccupancyApplySagaService.RejectedConsumerName)).Should().Be(1);
+        (await host.SagaAsync())!.CompletedAt.Should().Be(saga.CompletedAt);
+        (await host.OccupancyAsync())!.Version.Should().Be(rewritten.Version);
+        (await host.OccupancyAsync(ApprovalSagaHost.SecondPole))!.Version.Should().Be(second.Version);
+        (await host.OrderAsync()).ActionLog.Should().HaveCount(logged);
+
+        // The transition guard no longer blocks the order: it can be staged and approved again.
+        await host.StageAsync(ApprovalSagaHost.OwnersPole, ApprovalSagaHost.Add(4));
+        var again = await host.ApproveAsync();
+
+        again.AssetMutationBatchId.Should().Be(OccupancyCommitService.AssetMutationBatchId(host.Order, attempt: 2));
+        (await host.SagaAsync())!.Attempt.Should().Be(2);
+        var reapproved = await host.OrderAsync();
+        OccupancyApplySagaAttributes.IsAwaitingApply(reapproved.Attributes).Should().BeTrue();
+        reapproved.Attributes.Should().NotContainKey(OccupancyApplySagaAttributes.UnrestoredKey);
+    }
+
     // ── Retryable is not a rejection ──────────────────────────────────────────
 
     [Fact]

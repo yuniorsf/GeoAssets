@@ -67,8 +67,8 @@ public sealed class OccupancyApplySagaMigrationTests
 
         await vertical.Database.MigrateAsync();
 
-        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(2);
-        (await Values(connectionString, """SELECT count(*)::text AS "Value" FROM neutral_operator."__EFMigrationsHistory_neutral_operator" """)).Should().Equal("2");
+        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(3);
+        (await Values(connectionString, """SELECT count(*)::text AS "Value" FROM neutral_operator."__EFMigrationsHistory_neutral_operator" """)).Should().Equal("3");
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class OccupancyApplySagaMigrationTests
 
         await vertical.Database.MigrateAsync();
 
-        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(2);
+        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(3);
         (await Values(connectionString, """SELECT count(*)::text AS "Value" FROM neutral_operator."ServiceOrderOccupancyChangeSets" """)).Should().Equal("1");
     }
 

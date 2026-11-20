@@ -8,8 +8,8 @@ using GeoAssets.NeutralOperator.Persistence.Entities;
 namespace GeoAssets.NeutralOperator.Persistence;
 
 /// <summary>
-/// Converts between the approval saga (XD01-383) and its EF entities. The batch, the pole snapshots and the conflicting
-/// feature ids travel as JSON, enum values by name, like the change sets' changes; the state column is written by name too.
+/// Converts between the approval saga (XD01-383) and its EF entities. The batch, the pole snapshots, the conflicting
+/// and the unrestored feature ids travel as JSON, enum values by name, like the change sets' changes; the state column is written by name too.
 /// </summary>
 internal static class OccupancyApplySagaMapper
 {
@@ -38,6 +38,7 @@ internal static class OccupancyApplySagaMapper
         ReasonCode = saga.ReasonCode,
         Reason = saga.Reason,
         ConflictingFeatureIdsJson = JsonSerializer.Serialize(saga.ConflictingFeatureIds, Json),
+        UnrestoredFeatureIdsJson = saga.UnrestoredFeatureIds.Count == 0 ? null : ToJson(saga.UnrestoredFeatureIds),
         BatchJson = JsonSerializer.Serialize(saga.Batch, Json),
         OrganizationId = saga.OrganizationId,
     };
@@ -61,6 +62,9 @@ internal static class OccupancyApplySagaMapper
         ReasonCode = record.ReasonCode,
         Reason = record.Reason,
         ConflictingFeatureIds = Read<List<string>>(record.ConflictingFeatureIdsJson, "conflicting feature ids"),
+        UnrestoredFeatureIds = record.UnrestoredFeatureIdsJson is { } unrestored
+            ? Read<List<string>>(unrestored, "unrestored feature ids")
+            : [],
         Batch = Read<AssetMutationBatchRequestedEvent>(record.BatchJson, "asset mutation batch"),
     };
 

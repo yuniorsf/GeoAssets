@@ -227,6 +227,40 @@ public class GeoAssetsMeterTests
     }
 
     [Fact]
+    public void RecordSagaApplyCompensationConflict_CountsOneWithTheOrderTypeAsTheOnlyTag()
+    {
+        using var meter = new GeoAssetsMeter("1.0.0");
+        using var capture = new MeasurementCapture();
+
+        meter.RecordSagaApplyCompensationConflict("pole-work");
+
+        var measurement = capture.Measurements.Should().ContainSingle(m => m.Instrument == "geoassets.saga.apply.compensation_conflicts").Subject;
+        measurement.Value.Should().Be(1);
+        measurement.Tags.Should().HaveCount(1).And.Contain(new KeyValuePair<string, object?>("order.type", "pole-work"));
+    }
+
+    [Fact]
+    public void CompensationConflictsInstrument_IsACounterWithTheSagasUnit()
+    {
+        var published = new List<(string Name, string? Unit, Type Type)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, _) =>
+        {
+            if (string.Equals(instrument.Meter.Name, GeoAssetsMeter.MeterName, StringComparison.Ordinal)
+                && string.Equals(instrument.Name, "geoassets.saga.apply.compensation_conflicts", StringComparison.Ordinal))
+            {
+                published.Add((instrument.Name, instrument.Unit, instrument.GetType()));
+            }
+        };
+        listener.Start();
+
+        using var meter = new GeoAssetsMeter("1.0.0");
+
+        published.Should().ContainSingle().Which.Should().Match<(string Name, string? Unit, Type Type)>(i =>
+            i.Unit == "{sagas}" && i.Type == typeof(Counter<long>));
+    }
+
+    [Fact]
     public void SetSagaApplyBacklog_IsWhatTheGaugesReport_ClampedAtZero()
     {
         var version = $"backlog-{Guid.NewGuid():N}";

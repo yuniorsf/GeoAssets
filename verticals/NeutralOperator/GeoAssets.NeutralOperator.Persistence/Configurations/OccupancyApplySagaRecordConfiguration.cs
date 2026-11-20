@@ -33,6 +33,7 @@ internal sealed class OccupancyApplySagaRecordConfiguration : IEntityTypeConfigu
         b.Property(s => s.ReasonCode).HasMaxLength(OccupancyApplySaga.MaxReasonCodeLength);
         b.Property(s => s.Reason).HasMaxLength(OccupancyApplySaga.MaxReasonLength);
         b.Property(s => s.ConflictingFeatureIdsJson).IsRequired();
+        b.Property(s => s.UnrestoredFeatureIdsJson);
         b.Property(s => s.BatchJson).IsRequired();
         b.Property(s => s.OrganizationId).IsRequired();
 

@@ -5,6 +5,7 @@
 # Prometheus forms (dots → underscores, counters get _total, units are suffixed):
 #   geoassets.saga.apply.timeouts            → geoassets_saga_apply_timeouts_total
 #   geoassets.saga.apply.outcomes{outcome}   → geoassets_saga_apply_outcomes_total
+#   geoassets.saga.apply.compensation_conflicts{order.type} → geoassets_saga_apply_compensation_conflicts_total{order_type} (XD01-392)
 #   geoassets.saga.apply.pending             → geoassets_saga_apply_pending
 #   geoassets.saga.apply.oldest_pending_age  → geoassets_saga_apply_oldest_pending_age_seconds
 #
@@ -49,3 +50,15 @@ groups:
           description: >-
             The catalog holds occupancy attributes the vertical rolled back (an operator retry raced a rejection).
             Reconcile by hand: the error log "applied batch … after its approval saga had reverted" names the batch and order.
+
+      - alert: GeoAssetsSagaCompensationConflict
+        expr: sum by (order_type) (increase(geoassets_saga_apply_compensation_conflicts_total[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A rejected occupancy approval could not be fully compensated: a later change had moved some poles on"
+          description: >-
+            {{ $value }} {{ $labels.order_type }} approval saga(s) reverted in the last hour without restoring every pole:
+            another order wrote those poles after the approval, so their occupancy was kept (the later change wins). The
+            sagas are Reverted and their orders free to be staged again; review the poles named by the warning "Approval
+            saga of batch … reverted without restoring pole(s) …" and on the order's occupancy.apply.unrestored attribute.

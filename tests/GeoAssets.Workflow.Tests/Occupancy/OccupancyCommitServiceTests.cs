@@ -436,7 +436,7 @@ public sealed class OccupancyCommitServiceTests
             OccupancyApplySaga saga, IReadOnlyCollection<OccupancyApplySagaPole> poles, IReadOnlyCollection<Guid> changeSetIds, CancellationToken ct) =>
             Task.FromResult(false);
 
-        public Task<bool> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct) => inner.CompleteAsync(completed, ct);
+        public Task<OccupancyApplySagaCompletion> CompleteAsync(OccupancyApplySaga completed, CancellationToken ct) => inner.CompleteAsync(completed, ct);
         public Task<bool> RecordRetryAsync(Guid batchId, DateTimeOffset retriedAt, CancellationToken ct) => inner.RecordRetryAsync(batchId, retriedAt, ct);
         public Task<OccupancyApplySaga?> FindAsync(Guid batchId, CancellationToken ct) => inner.FindAsync(batchId, ct);
         public Task<OccupancyApplySaga?> FindLatestForOrderAsync(string orderId, CancellationToken ct) => inner.FindLatestForOrderAsync(orderId, ct);

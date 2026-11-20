@@ -41,6 +41,12 @@ internal sealed class OccupancyApplySagaRecord
     /// <summary>JSON array of the feature ids the kernel could not apply the batch to.</summary>
     public string ConflictingFeatureIdsJson { get; set; } = "[]";
 
+    /// <summary>
+    /// JSON array of the poles a revert's compensation left untouched because a later change had moved them on (XD01-392);
+    /// null when every pole was restored, and for every saga recorded before the column existed.
+    /// </summary>
+    public string? UnrestoredFeatureIdsJson { get; set; }
+
     /// <summary>The <c>AssetMutationBatchRequestedEvent</c> as staged, as JSON: what a retry stages again.</summary>
     public string BatchJson { get; set; } = "{}";
 

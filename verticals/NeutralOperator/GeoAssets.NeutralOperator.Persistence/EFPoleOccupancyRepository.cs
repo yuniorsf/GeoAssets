@@ -214,11 +214,12 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     /// The approval saga's compensation (XD01-383): puts <paramref name="entries"/> — the pole's entries before a rejected
     /// approval — back on the pole the approval left at <paramref name="expectedVersion"/>, as the next version. Unlike
     /// <see cref="ReplaceEntriesAsync"/> it is not a revision: undoing an approval may move a regulated slot's status back,
-    /// which a revision refuses, so only what must hold of any pole is checked. Throws <see cref="OccupancyConflictException"/>
-    /// when the pole is not at <paramref name="expectedVersion"/> (written since — the saga refuses such writes). Runs in the
-    /// caller's transaction, which the context joins first.
+    /// which a revision refuses, so only what must hold of any pole is checked. Answers null, changing nothing, when the pole
+    /// is not at <paramref name="expectedVersion"/> — written since by a later change, which wins (XD01-392): the version is
+    /// checked and advanced in one conditional update, so a write racing this one leaves the pole untouched here too. Runs in
+    /// the caller's transaction, which the context joins first.
     /// </summary>
-    internal async Task<PoleOccupancy> RestoreEntriesAsync(
+    internal async Task<PoleOccupancy?> TryRestoreEntriesAsync(
         string poleFeatureId, int expectedVersion, IReadOnlyCollection<PoleOccupancyEntry> entries, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poleFeatureId);
@@ -229,12 +230,11 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
         var stored = (await LoadAsync(Poles.Where(p => p.PoleFeatureId == poleFeatureId), ct).ConfigureAwait(false))
             .FirstOrDefault();
         if (stored is null || stored.Occupancy.Version != expectedVersion)
-            throw new OccupancyConflictException([poleFeatureId]);
+            return null;
 
         var next = PoleOccupancy.Create(
             poleFeatureId, _db.CurrentOrganizationId, entries, expectedVersion + 1, WholeMicroseconds(_timeProvider.GetUtcNow()));
-        await WriteAsync(stored.Id, next, ct).ConfigureAwait(false);
-        return next;
+        return await TryWriteAsync(stored.Id, next, ct).ConfigureAwait(false) ? next : null;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -287,6 +287,16 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
     /// </summary>
     private async Task WriteAsync(Guid? storedId, PoleOccupancy next, CancellationToken ct)
     {
+        if (!await TryWriteAsync(storedId, next, ct).ConfigureAwait(false))
+            throw new OccupancyConflictException([next.PoleFeatureId]);
+    }
+
+    /// <summary>
+    /// <see cref="WriteAsync"/>'s compare-and-swap and entry replacement, answering false — before anything was changed —
+    /// instead of throwing when the race is lost.
+    /// </summary>
+    private async Task<bool> TryWriteAsync(Guid? storedId, PoleOccupancy next, CancellationToken ct)
+    {
         Guid poleId;
         if (storedId is null)
         {
@@ -297,7 +307,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
                 .ExecuteAsync(_db, [PoleOccupancyMapper.ToRecord(next, poleId)], PoleColumns, PoleIdentity, ct)
                 .ConfigureAwait(false);
             if (inserted == 0)
-                throw new OccupancyConflictException([next.PoleFeatureId]);
+                return false;
         }
         else
         {
@@ -313,7 +323,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
                         .SetProperty(p => p.UpdatedAt, updatedAt),
                     ct).ConfigureAwait(false);
             if (updated == 0)
-                throw new OccupancyConflictException([next.PoleFeatureId]);
+                return false;
 
             await _db.PoleOccupancyEntries
                 .Where(e => e.PoleOccupancyId == poleId)
@@ -322,6 +332,7 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
 
         var records = next.Entries.Select(entry => PoleOccupancyMapper.ToEntryRecord(entry, poleId)).ToList();
         await RawRowInsert.ExecuteAsync(_db, records, EntryColumns, skipOnConflict: null, ct).ConfigureAwait(false);
+        return true;
     }
 
     private sealed record StoredPole(Guid Id, PoleOccupancy Occupancy);

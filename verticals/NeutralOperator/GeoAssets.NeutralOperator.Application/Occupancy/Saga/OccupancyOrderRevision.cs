@@ -39,8 +39,13 @@ internal static class OccupancyOrderRevision
             ActionLog = [.. order.ActionLog],
         };
 
-    /// <summary><paramref name="order"/>'s attributes with the saga's state (and, when given, its batch) set.</summary>
-    public static Dictionary<string, string> SagaAttributes(IServiceOrder order, string state, Guid? batchId = null)
+    /// <summary>
+    /// <paramref name="order"/>'s attributes with the saga's state (and, when given, its batch) set, and
+    /// <see cref="OccupancyApplySagaAttributes.UnrestoredKey"/> naming <paramref name="unrestored"/> — removed when none is
+    /// given, so it always describes the order's latest saga.
+    /// </summary>
+    public static Dictionary<string, string> SagaAttributes(
+        IServiceOrder order, string state, Guid? batchId = null, IReadOnlyList<string>? unrestored = null)
     {
         var attributes = new Dictionary<string, string>(order.Attributes, StringComparer.Ordinal)
         {
@@ -48,6 +53,10 @@ internal static class OccupancyOrderRevision
         };
         if (batchId is { } batch)
             attributes[OccupancyApplySagaAttributes.BatchIdKey] = batch.ToString("D");
+        if (unrestored is { Count: > 0 })
+            attributes[OccupancyApplySagaAttributes.UnrestoredKey] = string.Join(',', unrestored);
+        else
+            attributes.Remove(OccupancyApplySagaAttributes.UnrestoredKey);
         return attributes;
     }
 }

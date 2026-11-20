@@ -553,6 +553,143 @@ public abstract class OccupancyCommitContractTests
     }
 
     [Fact]
+    public async Task ApplyReply_WhenAPoleWasRewrittenSinceTheApproval_RevertsWithoutThrowing_KeepsThatPole_RestoresTheOthers_AndNamesItOnTheOrder()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedOrderAsync(harness, "ord-1", ServiceOrderStatus.Completed, "pole-1", "pole-2");
+        await OccupyAsync(harness, "pole-1", Entry(harness, "pole-1", 1, OccupantOne));
+        await StageAsync(harness, "ord-1", "pole-1", OccupancyChangeBuilder.Add(2));
+        await StageAsync(harness, "ord-1", "pole-2", OccupancyChangeBuilder.Add(1));
+        await ApproveAsync(harness, "ord-1");
+        var approved = (await harness.OccupancyReader.GetForPoleAsync("pole-1", CancellationToken.None))!;
+        var later = await OccupyAsync(harness, "pole-1", [.. approved.Entries, Entry(harness, "pole-1", 3, OccupantTwo)]);
+
+        var result = await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.FeatureNotFound, "Feature 'pole-2' not found for UpdateAttributes.", "pole-2");
+
+        result.Outcome.Should().Be(OccupancyApplySagaOutcome.Reverted);
+        result.Saga!.UnrestoredFeatureIds.Should().Equal("pole-1");
+        var saga = (await harness.SagaReader.FindLatestForOrderAsync("ord-1", CancellationToken.None))!;
+        saga.State.Should().Be(OccupancyApplySagaState.Reverted);
+        saga.UnrestoredFeatureIds.Should().Equal("pole-1");
+        var pole1 = (await harness.OccupancyReader.GetForPoleAsync("pole-1", CancellationToken.None))!;
+        pole1.Version.Should().Be(later.Version, "the compensation did not touch the pole the later change wrote");
+        pole1.Entries.Should().BeEquivalentTo(later.Entries);
+        var pole2 = (await harness.OccupancyReader.GetForPoleAsync("pole-2", CancellationToken.None))!;
+        pole2.Entries.Should().BeEmpty("the pole nobody else wrote is restored to its baseline");
+        pole2.Version.Should().Be(2);
+        (await SetsAsync(harness, "ord-1")).Should().HaveCount(2).And.OnlyContain(set => set.Status == OccupancyChangeSetStatus.Reverted);
+        var order = (await harness.Orders.GetByIdAsync("ord-1"))!;
+        order.Status.Should().Be(ServiceOrderStatus.Completed);
+        order.Attributes.Should().Contain(OccupancyApplySagaAttributes.StateKey, OccupancyApplySagaAttributes.Reverted)
+            .And.Contain(OccupancyApplySagaAttributes.UnrestoredKey, "pole-1");
+        OccupancyApplySagaAttributes.IsAwaitingApply(order.Attributes).Should().BeFalse();
+        order.ActionLog.Select(entry => entry.Action).Should().Equal(OrderActionType.Approve, OccupancyApplyActions.Reverted);
+        order.ActionLog[1].Comment.Should().Contain(AssetMutationBatchRejectionCodes.FeatureNotFound)
+            .And.Contain("The approval was compensated except on pole(s) pole-1: a later change superseded the approval there, so their occupancy was kept.")
+            .And.Contain("The occupancy of the other pole(s) was restored and the changes must be staged again.");
+        order.ActionLog[1].ResultingStatus.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ApplyReply_ARejectionRedeliveredAfterAConflictingRevert_IsADuplicate_AndChangesNothing()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+        var later = await OccupyAsync(harness, "pole-1", Entry(harness, "pole-1", 4, OccupantTwo));
+        var message = Guid.NewGuid();
+        await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.ValidationFailed, "bad attribute", "pole-1", message);
+        var before = (await harness.Orders.GetByIdAsync("ord-1"))!;
+
+        var sameMessage = await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.ValidationFailed, "bad attribute", "pole-1", message);
+        var otherMessage = await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.ValidationFailed, "bad attribute", "pole-1");
+
+        sameMessage.Outcome.Should().Be(OccupancyApplySagaOutcome.Duplicate);
+        otherMessage.Outcome.Should().Be(OccupancyApplySagaOutcome.Duplicate);
+        var pole = (await harness.OccupancyReader.GetForPoleAsync("pole-1", CancellationToken.None))!;
+        pole.Version.Should().Be(later.Version);
+        pole.Entries.Should().BeEquivalentTo(later.Entries);
+        var after = (await harness.Orders.GetByIdAsync("ord-1"))!;
+        after.ActionLog.Should().HaveCount(before.ActionLog.Count);
+        after.Attributes.Should().BeEquivalentTo(before.Attributes);
+        (await harness.SagaReader.FindLatestForOrderAsync("ord-1", CancellationToken.None))!.UnrestoredFeatureIds.Should().Equal("pole-1");
+    }
+
+    [Fact]
+    public async Task ApplyReply_WhenEveryPoleWasRewrittenSinceTheApproval_RevertsKeepingAll_NamesThemInOrdinalOrder_AndRestoresNone()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedOrderAsync(harness, "ord-1", ServiceOrderStatus.Completed, "pole-1", "pole-2");
+        await StageAsync(harness, "ord-1", "pole-2", OccupancyChangeBuilder.Add(1));
+        await StageAsync(harness, "ord-1", "pole-1", OccupancyChangeBuilder.Add(1));
+        await ApproveAsync(harness, "ord-1");
+        var later2 = await OccupyAsync(harness, "pole-2", Entry(harness, "pole-2", 5, OccupantTwo));
+        var later1 = await OccupyAsync(harness, "pole-1", Entry(harness, "pole-1", 5, OccupantTwo));
+
+        var result = await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.FeatureNotFound, "gone", "pole-1");
+
+        result.Outcome.Should().Be(OccupancyApplySagaOutcome.Reverted);
+        result.Saga!.UnrestoredFeatureIds.Should().Equal("pole-1", "pole-2");
+        (await harness.OccupancyReader.GetForPoleAsync("pole-1", CancellationToken.None))!.Entries.Should().BeEquivalentTo(later1.Entries);
+        (await harness.OccupancyReader.GetForPoleAsync("pole-2", CancellationToken.None))!.Entries.Should().BeEquivalentTo(later2.Entries);
+        (await SetsAsync(harness, "ord-1")).Should().OnlyContain(set => set.Status == OccupancyChangeSetStatus.Reverted);
+        var order = (await harness.Orders.GetByIdAsync("ord-1"))!;
+        order.Attributes.Should().Contain(OccupancyApplySagaAttributes.UnrestoredKey, "pole-1,pole-2");
+        order.ActionLog[1].Comment.Should().Contain("compensated except on pole(s) pole-1, pole-2");
+    }
+
+    [Fact]
+    public async Task ApplyReply_ARevertThatRestoresEveryPole_LeavesNoUnrestoredAttribute_AndLogsTheOriginalText()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+
+        var result = await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.Unsupported, "not supported");
+
+        result.Outcome.Should().Be(OccupancyApplySagaOutcome.Reverted);
+        result.Saga!.UnrestoredFeatureIds.Should().BeEmpty();
+        var order = (await harness.Orders.GetByIdAsync("ord-1"))!;
+        order.Attributes.Should().NotContainKey(OccupancyApplySagaAttributes.UnrestoredKey);
+        order.ActionLog[1].Comment.Should().EndWith("The approval was compensated: the occupancy of 1 pole(s) was restored and the changes must be staged again.")
+            .And.NotContain("except on");
+    }
+
+    [Fact]
+    public async Task ApplyReply_AnAppliedAnswerAfterAConflictingRevert_IsAppliedAfterRevert_AndChangesNothing()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+        var later = await OccupyAsync(harness, "pole-1", Entry(harness, "pole-1", 4, OccupantTwo));
+        await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.Unsupported, "not supported", "pole-1");
+        var before = (await harness.Orders.GetByIdAsync("ord-1"))!;
+
+        var late = await ReplyAppliedAsync(harness);
+
+        late.Outcome.Should().Be(OccupancyApplySagaOutcome.AppliedAfterRevert);
+        var after = (await harness.Orders.GetByIdAsync("ord-1"))!;
+        after.Attributes.Should().BeEquivalentTo(before.Attributes);
+        after.ActionLog.Should().HaveCount(before.ActionLog.Count);
+        (await harness.OccupancyReader.GetForPoleAsync("pole-1", CancellationToken.None))!.Entries.Should().BeEquivalentTo(later.Entries);
+    }
+
+    [Fact]
+    public async Task ApproveAndCommitAsync_AfterAConflictingRevert_IsNotBlocked_AndClearsTheStaleUnrestoredAttribute()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+        await OccupyAsync(harness, "pole-1", Entry(harness, "pole-1", 4, OccupantTwo));
+        await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.FeatureNotFound, "gone", "pole-1");
+        (await harness.Orders.GetByIdAsync("ord-1"))!.Attributes.Should().ContainKey(OccupancyApplySagaAttributes.UnrestoredKey);
+        await StageAsync(harness, "ord-1", "pole-1", OccupancyChangeBuilder.Add(2));
+
+        var result = await ApproveAsync(harness, "ord-1");
+
+        result.AssetMutationBatchId.Should().Be(OccupancyCommitService.AssetMutationBatchId("ord-1", attempt: 2));
+        var order = (await harness.Orders.GetByIdAsync("ord-1"))!;
+        OccupancyApplySagaAttributes.IsAwaitingApply(order.Attributes).Should().BeTrue();
+        order.Attributes.Should().NotContainKey(OccupancyApplySagaAttributes.UnrestoredKey, "it describes the latest saga only");
+    }
+
+    [Fact]
     public async Task ApplyReply_ARejectionDeliveredTwice_RevertsOnce()
     {
         await using var harness = await CreateHarnessAsync();

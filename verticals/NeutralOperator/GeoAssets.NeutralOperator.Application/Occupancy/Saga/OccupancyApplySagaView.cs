@@ -11,9 +11,15 @@ public sealed record OccupancyApplySagaView(
     int RetryCount,
     DateTimeOffset? TimedOutAt)
 {
+    /// <summary>The poles a reverted saga's compensation left untouched (XD01-392); empty when none.</summary>
+    public IReadOnlyList<string> UnrestoredFeatureIds { get; init; } = [];
+
     public static OccupancyApplySagaView From(OccupancyApplySaga saga)
     {
         ArgumentNullException.ThrowIfNull(saga);
-        return new(saga.BatchId, saga.OrderId, saga.Attempt, saga.State, saga.RequestedAt, saga.LastRequestedAt, saga.RetryCount, saga.TimedOutAt);
+        return new(saga.BatchId, saga.OrderId, saga.Attempt, saga.State, saga.RequestedAt, saga.LastRequestedAt, saga.RetryCount, saga.TimedOutAt)
+        {
+            UnrestoredFeatureIds = saga.UnrestoredFeatureIds,
+        };
     }
 }
