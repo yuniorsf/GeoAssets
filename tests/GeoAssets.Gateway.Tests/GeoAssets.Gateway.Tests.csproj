@@ -39,6 +39,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- XD01-393: the load-profile tool's pure model (internal to its exe), compiled in so a test can hold it to the shipped appsettings defaults. -->
+    <Compile Include="..\..\tools\GeoAssets.Tools.GatewayLoadProfile\LoadProfileModel.cs" Link="RateLimits\LoadProfileModel.cs" />
     <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\BearerTokenAuthenticationHandler.cs" Link="EndToEnd\Support\BearerTokenAuthenticationHandler.cs" />
     <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\DatabaseProbe.cs" Link="EndToEnd\Support\DatabaseProbe.cs" />
     <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\FakeKernel.cs" Link="EndToEnd\Support\FakeKernel.cs" />

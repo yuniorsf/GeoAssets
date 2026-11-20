@@ -39,6 +39,12 @@ internal static class GatewayRouteCatalog
     /// </summary>
     public const int KernelCatchAllFirstOrder = 10_000;
 
+    /// <summary>The kernel's OGC WMS endpoint — the anonymous map-tile traffic the <c>tiles</c> rate-limit policy covers (XD01-393).</summary>
+    public const string WmsPath = "/wms";
+
+    /// <summary>The kernel's OGC WFS endpoint — rate-limited with <see cref="WmsPath"/> by the <c>tiles</c> policy (XD01-393).</summary>
+    public const string WfsPath = "/wfs";
+
     /// <summary>Organization headers no caller may hand a backend: dropped from every proxied request.</summary>
     public static readonly IReadOnlyList<string> UntrustedOrganizationHeaders = ["X-GeoAssets-Organization-Id", "X-Organization-Id"];
 
@@ -87,8 +93,8 @@ internal static class GatewayRouteCatalog
             firstOrder: 1, pathPattern: $"/api/{CatchAll}");
 
         AddRoutes(routes, "kernel-api", "geoassets", $"/api/{CatchAll}", geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
-        AddRoutes(routes, "kernel-wms", "geoassets", "/wms", geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
-        AddRoutes(routes, "kernel-wfs", "geoassets", "/wfs", geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
+        AddRoutes(routes, "kernel-wms", "geoassets", WmsPath, geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
+        AddRoutes(routes, "kernel-wfs", "geoassets", WfsPath, geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
 
         return (routes, clusters);
     }
