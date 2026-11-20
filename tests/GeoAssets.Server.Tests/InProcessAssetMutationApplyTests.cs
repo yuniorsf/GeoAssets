@@ -9,8 +9,10 @@ using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.NeutralOperator.Modules;
+using GeoAssets.Workflow.Hosting;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence.Outbox;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -151,85 +153,6 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         appliedItems: [new AssetBatchAppliedItem("pole-1", AssetMutationKind.UpdateAttributes, "pole", [])],
         timeProvider: TimeProvider.System);
 
-    // ── The in-process publisher ──────────────────────────────────────────────
-
-    [Fact]
-    public async Task PublishAsync_AnAssetBatchForThisCatalog_HandsTheDeserializedBatchToTheApplier()
-    {
-        var applier = new StubApplier();
-        var batch = Batch();
-        var sut = new InProcessAssetMutationBatchPublisher(_serializer, applier, "default");
-
-        await sut.PublishAsync(Envelope(batch));
-
-        var received = applier.Received.Should().ContainSingle().Subject;
-        received.BatchId.Should().Be(batch.BatchId);
-        received.OrganizationId.Should().Be(Organization);
-        received.Mutations.Should().ContainSingle().Which.CustomAttributes.Should().Contain("occupancyClass", "High");
-    }
-
-    [Fact]
-    public async Task PublishAsync_ABatchForAnotherCatalogInstance_IsRefused_AndNothingIsApplied()
-    {
-        var applier = new StubApplier();
-        var sut = new InProcessAssetMutationBatchPublisher(_serializer, applier, "default");
-
-        var act = () => sut.PublishAsync(Envelope(Batch("east")));
-
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'east'*'default'*");
-        applier.Received.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task PublishAsync_AnyOtherMessageType_IsRefused_AndNothingIsApplied()
-    {
-        var applier = new StubApplier();
-        var sut = new InProcessAssetMutationBatchPublisher(_serializer, applier, "default");
-
-        var act = () => sut.PublishAsync(Envelope(Batch(), IntegrationEventTypes.OrderStateChangedV1));
-
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage($"*{IntegrationEventTypes.OrderStateChangedV1}*");
-        applier.Received.Should().BeEmpty();
-    }
-
-    [Fact]
-    public Task PublishAsync_TheApplierFails_SurfacesTheFailure_SoTheRelayRetriesIt()
-    {
-        var sut = new InProcessAssetMutationBatchPublisher(_serializer, new StubApplier { Failure = new TimeoutException("db") }, "default");
-
-        var act = () => sut.PublishAsync(Envelope(Batch()));
-
-        return act.Should().ThrowAsync<TimeoutException>();
-    }
-
-    [Fact]
-    public async Task PublishBatchAsync_AppliesEveryEnvelopeInOrder()
-    {
-        var applier = new StubApplier();
-        var first = Batch();
-        var second = Batch();
-        var sut = new InProcessAssetMutationBatchPublisher(_serializer, applier, "default");
-
-        await sut.PublishBatchAsync([Envelope(first), Envelope(second)]);
-
-        applier.Received.Select(b => b.BatchId).Should().Equal(first.BatchId, second.BatchId);
-    }
-
-    [Fact]
-    public async Task Publisher_InvalidArguments_Throw()
-    {
-        var sut = new InProcessAssetMutationBatchPublisher(_serializer, new StubApplier(), "default");
-
-        ((Action)(() => _ = new InProcessAssetMutationBatchPublisher(null!, new StubApplier(), "default")))
-            .Should().Throw<ArgumentNullException>().WithParameterName("serializer");
-        ((Action)(() => _ = new InProcessAssetMutationBatchPublisher(_serializer, null!, "default")))
-            .Should().Throw<ArgumentNullException>().WithParameterName("applier");
-        ((Action)(() => _ = new InProcessAssetMutationBatchPublisher(_serializer, new StubApplier(), " ")))
-            .Should().Throw<ArgumentException>().WithParameterName("catalogInstanceId");
-        await ((Func<Task>)(() => sut.PublishAsync(null!))).Should().ThrowAsync<ArgumentNullException>();
-        await ((Func<Task>)(() => sut.PublishBatchAsync(null!))).Should().ThrowAsync<ArgumentNullException>();
-    }
-
     // ── Span and metrics ──────────────────────────────────────────────────────
 
     [Fact]
@@ -301,7 +224,7 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
     [InlineData("")]
     [InlineData("None")]
     [InlineData("none")]
-    public void AddServerInProcessAssetMutationApply_WithNoTransport_RunsTheRelayOnAssetBatchesOnly_ThroughTheDecoratedPostgresApplier(string? transport)
+    public void AddServerAssetMutationApply_WithNoTransport_RunsTheRelayOnAssetBatchesOnly_ThroughTheDecoratedPostgresApplier(string? transport)
     {
         var configuration = Configuration(
             (WorkflowMessagingHostExtensions.OutboxTransportKey, transport),
@@ -314,20 +237,20 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddServerWorkflowMessaging(configuration);
 
         services.AddPostgresAssetMutationBatchApplier(ConnectionString);
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
         provider.GetRequiredService<IAssetMutationBatchApplier>().Should().BeSameAs(provider.GetRequiredService<PostgresAssetMutationBatchApplier>());
         provider.GetRequiredService<PostgresAssetMutationBatchApplier>().Should().NotBeNull();
-        provider.GetRequiredService<IIntegrationEventPublisher>().Should().BeOfType<InProcessAssetMutationBatchPublisher>();
+        provider.GetRequiredService<IIntegrationEventPublisher>().Should().BeOfType<InProcessIntegrationEventPublisher>();
         provider.GetServices<IHostedService>().Should().ContainSingle().Which.Should().BeOfType<OutboxRelayProcessor>();
         var options = provider.GetRequiredService<IOptions<OutboxRelayOptions>>().Value;
-        options.WorkerId.Should().Be(InProcessAssetMutationHostExtensions.RelayWorkerId);
+        options.WorkerId.Should().Be(IntegrationConsumerHostExtensions.InProcessRelayWorkerId);
         options.MessageTypes.Should().Equal(IntegrationEventTypes.AssetMutationBatchRequestedV1);
     }
 
     [Fact]
-    public async Task AddServerInProcessAssetMutationApply_ThePublisherServesTheConfiguredCatalogInstance()
+    public async Task AddServerAssetMutationApply_ThePublisherServesTheConfiguredCatalogInstance()
     {
         var configuration = Configuration((OrderOccupancyHostExtensions.CatalogInstanceIdKey, " west "));
         var services = new ServiceCollection();
@@ -336,13 +259,15 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
         services.AddServerWorkflowMessaging(configuration);
+        KernelApplyDoubles.Replace(services);
         services.AddPostgresAssetMutationBatchApplier(ConnectionString);
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
         await using var provider = services.BuildServiceProvider();
 
         var act = () => provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(Batch("default")));
 
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'default'*'west'*");
+        (await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*'default'*'west'*"))
+            .Which.Should().NotBeOfType<NotSupportedException>("a misaddressed batch is neither applied nor answered: it is not this host's");
     }
 
     private ServiceProvider RelayProvider(IConfiguration configuration, CapturingLoggerProvider logs)
@@ -353,8 +278,9 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         services.AddSingleton(_tracer);
         services.AddSingleton(_metrics);
         services.AddServerWorkflowMessaging(configuration);
+        KernelApplyDoubles.Replace(services);
         services.AddPostgresAssetMutationBatchApplier(ConnectionString);
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
         return services.BuildServiceProvider();
     }
 
@@ -368,7 +294,7 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
 
         var act = () => provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(Batch("default")));
 
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'default'*'east'*");
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*'default'*'east'*");
     }
 
     [Fact]
@@ -380,7 +306,7 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
 
         var act = () => provider.GetRequiredService<IIntegrationEventPublisher>().PublishAsync(Envelope(Batch("default")));
 
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*'default'*'west'*");
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*'default'*'west'*");
         logs.Entries.Should().Contain(e => e.EventId.Id == 3570 && e.Level == LogLevel.Warning);
     }
 
@@ -391,7 +317,7 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
         var configuration = Configuration((AssetCatalogConfiguration.InstanceIdKey, "east"));
         await using var provider = RelayProvider(configuration, logs);
 
-        provider.GetRequiredService<IIntegrationEventPublisher>().Should().BeOfType<InProcessAssetMutationBatchPublisher>();
+        provider.GetRequiredService<IIntegrationEventPublisher>().Should().BeOfType<InProcessIntegrationEventPublisher>();
 
         logs.Entries.Should().NotContain(e => e.EventId.Id == 3570);
     }
@@ -399,25 +325,51 @@ public sealed class InProcessAssetMutationApplyTests : IDisposable
     [Theory]
     [InlineData("Kafka")]
     [InlineData("ServiceBus")]
-    public void AddServerInProcessAssetMutationApply_WithABroker_RegistersNothing_SoTheBrokerRelayIsUnchanged(string transport)
+    public void AddServerAssetMutationApply_WithABrokerButNoTopic_RegistersNoConsumer_AndNoInProcessRelay(string transport)
     {
         var configuration = Configuration((WorkflowMessagingHostExtensions.OutboxTransportKey, transport));
         var services = new ServiceCollection();
         services.AddServerWorkflowMessaging(configuration);
         var before = services.Select(d => (d.ServiceType, d.ImplementationType)).ToList();
 
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
 
-        services.Select(d => (d.ServiceType, d.ImplementationType)).Should().Equal(before);
+        services.Should().NotContain(d => d.ServiceType == typeof(InProcessIntegrationRoute));
+        services.Should().NotContain(d => d.ServiceType == typeof(IIntegrationEventHandler<AssetMutationBatchRequestedEvent>));
         services.Should().NotContain(d => d.ServiceType == typeof(IAssetMutationBatchApplier));
+        services.Select(d => (d.ServiceType, d.ImplementationType)).Where(d => !before.Contains(d)).Select(d => d.ServiceType)
+            .Should().OnlyContain(type => type == typeof(ITenantOrganizationScope) || type == typeof(IWorkflowUnitOfWork) || type == typeof(KernelAssetMutationApplier),
+                "with no consumer to run, only the handler's collaborators are registered");
     }
 
     [Fact]
-    public void AddServerInProcessAssetMutationApply_InvalidArguments_Throw()
+    public void AddServerAssetMutationApply_WithKafkaAndATopic_RegistersTheNamedBrokerConsumer_NotTheInProcessRelay()
     {
-        ((Action)(() => InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply(null!, Configuration())))
+        var configuration = Configuration(
+            (WorkflowMessagingHostExtensions.OutboxTransportKey, "Kafka"),
+            ("Workflow:Kafka:BootstrapServers", "localhost:9092"),
+            ("WorkflowKafkaConsumer:Consumers:AssetMutationApply:TopicName", "geoassets.asset-mutations"));
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(_tracer);
+        services.AddSingleton(_metrics);
+        services.AddServerWorkflowMessaging(configuration);
+        var hostedBefore = services.Count(d => d.ServiceType == typeof(IHostedService));
+
+        services.AddServerAssetMutationApply(configuration);
+
+        services.Count(d => d.ServiceType == typeof(IHostedService)).Should().Be(hostedBefore + 1, "one named consumer on the broker topic");
+        services.Should().NotContain(d => d.ServiceType == typeof(InProcessIntegrationRoute));
+        services.Should().Contain(d => d.ServiceType == typeof(IIntegrationEventHandler<AssetMutationBatchRequestedEvent>)
+            && d.ImplementationType == typeof(AssetMutationBatchApplyHandler));
+    }
+
+    [Fact]
+    public void AddServerAssetMutationApply_InvalidArguments_Throw()
+    {
+        ((Action)(() => AssetMutationApplyHostExtensions.AddServerAssetMutationApply(null!, Configuration())))
             .Should().Throw<ArgumentNullException>();
-        ((Action)(() => new ServiceCollection().AddServerInProcessAssetMutationApply(null!)))
+        ((Action)(() => new ServiceCollection().AddServerAssetMutationApply(null!)))
             .Should().Throw<ArgumentNullException>();
     }
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Workflow.Orders;
@@ -37,7 +38,14 @@ public sealed class NeutralOperatorPersistenceWiringTests
         provider.GetRequiredService<IOccupancyCommitService>().Should().BeOfType<ObservableOccupancyCommitService>();
         provider.GetRequiredService<IWorkflowUnitOfWork>().Should().BeOfType<EFWorkflowUnitOfWork>();
         provider.GetServices<IOrderLifecycleHook>().Should().ContainSingle(hook => hook is OccupancyReleaseLifecycleHook);
-        neutralOperator.Database.GetMigrations().Should().ContainSingle().Which.Should().EndWith("_AdoptOccupancyTables");
+        neutralOperator.Database.GetMigrations().Should().HaveCount(2)
+            .And.SatisfyRespectively(
+                baseline => baseline.Should().EndWith("_AdoptOccupancyTables"),
+                saga => saga.Should().EndWith("_AddOccupancyApplySagas"));
+        provider.GetRequiredService<IOccupancyApplySagaStore>().Should().BeOfType<EFOccupancyApplySagaStore>()
+            .And.BeSameAs(provider.GetRequiredService<IOccupancyApplySagaMonitor>());
+        provider.GetRequiredService<IOccupancyApplySagaService>().Should().BeOfType<ObservableOccupancyApplySagaService>();
+        provider.GetServices<ITransitionGuard>().Should().ContainSingle(guard => guard is OccupancyApplyPendingTransitionGuard);
     }
 
     [Fact]

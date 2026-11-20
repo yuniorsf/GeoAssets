@@ -3,6 +3,8 @@ using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
+using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -35,8 +37,12 @@ internal sealed class OccupancyCommitFixture
         Occupancy = new InMemoryPoleOccupancyStore(tenant, Clock);
         ChangeSets = new InMemoryOccupancyChangeSetStore(Targets, Orders, OrderTypes, tenant, Clock);
         Outbox = new RecordingOutboxWriter();
+        Sagas = new InMemoryOccupancyApplySagaStore(ChangeSets, Occupancy);
+        Inbox = new RecordingIdempotentInbox();
         UnitOfWork = new InMemoryWorkflowUnitOfWork();
         Options = new OrderOccupancyOptions { CatalogInstanceId = CatalogInstanceId };
+        SagaService = new OccupancyApplySagaService(
+            Orders, OrderTypes, Rules, Sagas, Outbox, Inbox, UnitOfWork, new TenantOrganizationScope(), Clock);
         Sut = Build();
     }
 
@@ -48,6 +54,9 @@ internal sealed class OccupancyCommitFixture
     public InMemoryPoleOccupancyStore Occupancy { get; }
     public InMemoryOccupancyChangeSetStore ChangeSets { get; }
     public RecordingOutboxWriter Outbox { get; }
+    public InMemoryOccupancyApplySagaStore Sagas { get; }
+    public RecordingIdempotentInbox Inbox { get; }
+    public OccupancyApplySagaService SagaService { get; }
     public InMemoryWorkflowUnitOfWork UnitOfWork { get; }
     public OrderOccupancyOptions Options { get; }
     public OccupancyCommitService Sut { get; }
@@ -61,13 +70,14 @@ internal sealed class OccupancyCommitFixture
         IOccupancyChangeSetReader? changeSets = null,
         IOccupancyChangeSetWriter? changeSetWriter = null,
         IOutboxWriter? outbox = null,
-        IWorkflowUnitOfWork? unitOfWork = null) =>
+        IWorkflowUnitOfWork? unitOfWork = null,
+        IOccupancyApplySagaStore? sagas = null) =>
         new(orders ?? Orders, OrderTypes, Rules, targets ?? Targets, occupancy ?? Occupancy, occupancyWriter ?? Occupancy,
-            changeSets ?? ChangeSets, changeSetWriter ?? ChangeSets, outbox ?? Outbox, unitOfWork ?? UnitOfWork, Options, Clock);
+            changeSets ?? ChangeSets, changeSetWriter ?? ChangeSets, outbox ?? Outbox, sagas ?? Sagas, unitOfWork ?? UnitOfWork, Options, Clock);
 
     public OccupancyCommitContractHarness ToHarness() => new(
         Sut, Orders, Targets, Targets, Occupancy, Occupancy, ChangeSets, ChangeSets, OrderTypes, Clock, Owner, CatalogInstanceId,
-        _ => Task.FromResult(Batches()));
+        _ => Task.FromResult(Batches()), SagaService, Sagas);
 
     /// <summary>The asset mutation batches staged so far, in the shape the contract suite reads.</summary>
     public IReadOnlyList<StagedAssetMutationBatch> Batches() =>

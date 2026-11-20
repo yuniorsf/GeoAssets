@@ -33,6 +33,7 @@ POST /api/workflow/service-orders | none
 POST /api/workflow/service-orders/targets/usages | policy:serviceorders:read
 POST /api/workflow/service-orders/{id}/actions | none
 POST /api/workflow/service-orders/{id}/dispatch | none
+POST /api/workflow/service-orders/{id}/occupancy-saga/retry | none
 POST /api/workflow/service-orders/{id}/shared-use/dispatch | none
 POST /api/workflow/service-orders/{id}/targets/remove | none
 POST /api/workflow/service-orders/{id}/targets/selection/apply | none

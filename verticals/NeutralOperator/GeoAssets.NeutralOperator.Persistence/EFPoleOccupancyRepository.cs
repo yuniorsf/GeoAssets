@@ -210,6 +210,33 @@ public sealed class EFPoleOccupancyRepository : IPoleOccupancyReader, IPoleOccup
         return next;
     }
 
+    /// <summary>
+    /// The approval saga's compensation (XD01-383): puts <paramref name="entries"/> — the pole's entries before a rejected
+    /// approval — back on the pole the approval left at <paramref name="expectedVersion"/>, as the next version. Unlike
+    /// <see cref="ReplaceEntriesAsync"/> it is not a revision: undoing an approval may move a regulated slot's status back,
+    /// which a revision refuses, so only what must hold of any pole is checked. Throws <see cref="OccupancyConflictException"/>
+    /// when the pole is not at <paramref name="expectedVersion"/> (written since — the saga refuses such writes). Runs in the
+    /// caller's transaction, which the context joins first.
+    /// </summary>
+    internal async Task<PoleOccupancy> RestoreEntriesAsync(
+        string poleFeatureId, int expectedVersion, IReadOnlyCollection<PoleOccupancyEntry> entries, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(poleFeatureId);
+        ArgumentNullException.ThrowIfNull(entries);
+        ct.ThrowIfCancellationRequested();
+        _db.JoinAmbientTransaction();
+
+        var stored = (await LoadAsync(Poles.Where(p => p.PoleFeatureId == poleFeatureId), ct).ConfigureAwait(false))
+            .FirstOrDefault();
+        if (stored is null || stored.Occupancy.Version != expectedVersion)
+            throw new OccupancyConflictException([poleFeatureId]);
+
+        var next = PoleOccupancy.Create(
+            poleFeatureId, _db.CurrentOrganizationId, entries, expectedVersion + 1, WholeMicroseconds(_timeProvider.GetUtcNow()));
+        await WriteAsync(stored.Id, next, ct).ConfigureAwait(false);
+        return next;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private IQueryable<PoleOccupancyRecord> Poles => _db.PoleOccupancies.AsNoTracking();

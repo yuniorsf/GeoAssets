@@ -102,7 +102,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public void Indexes_AreOneStagedSetPerTarget_PlusTarget_OrderWithStatus_AndOrganization(bool postgres)
+    public void Indexes_AreOneStagedSetPerTarget_PlusTarget_OrderWithStatus_Organization_AndTheApprovalSaga(bool postgres)
     {
         var indexes = Entity(postgres).GetIndexes()
             .Select(index => (string.Join(',', index.Properties.Select(p => p.Name)), index.IsUnique, index.GetFilter()))
@@ -114,6 +114,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
             ("TargetId", false, null),
             ("ServiceOrderId,Status", false, null),
             ("OrganizationId", false, null),
+            ("ApplyBatchId", false, null),
         });
         OccupancyChangeSetRecordConfiguration.StagedFilter.Should().Be("\"Status\" = 'Staged'");
         OccupancyChangeSetRecordConfiguration.StagedFilter.Should().Contain(
@@ -132,6 +133,7 @@ public sealed class OccupancyChangeSetPersistenceTests : IDisposable
         entity.FindProperty("StagedBy")!.GetMaxLength().Should().Be(OccupancyChangeSet.MaxStagedByLength);
         entity.FindProperty("ChangesJson")!.GetMaxLength().Should().BeNull();
         entity.FindProperty("ClosedAt")!.IsNullable.Should().BeTrue();
+        entity.FindProperty("ApplyBatchId")!.IsNullable.Should().BeTrue("a set that never reached an approval saga has no batch");
         entity.FindProperty("PoleFeatureId")!.GetCollation().Should().Be(postgres ? "C" : null);
         entity.FindProperty("TargetId")!.GetCollation().Should().Be(postgres ? "C" : null);
     }

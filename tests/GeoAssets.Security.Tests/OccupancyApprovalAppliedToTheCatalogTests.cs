@@ -69,9 +69,12 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
 
         var result = await ApproveAsync(host);
         var dispatched = await Relay(host).ProcessNextBatchAsync(CancellationToken.None);
+        var replies = await Relay(host).ProcessNextBatchAsync(CancellationToken.None);
 
         result.PolesUpdated.Should().Be(2);
-        dispatched.Should().Be(1);
+        dispatched.Should().Be(1, "the batch is delivered to the kernel's consumer, which applies it and stages its answer");
+        replies.Should().Be(1, "the kernel's Applied answer is delivered to the approval saga, which finalizes the approval");
+        await AssertApprovedAsync(host);
         var light = (await PoleAsync(host, LightPole))!;
         var crowded = (await PoleAsync(host, CrowdedPole))!;
         light.Properties.CustomAttributes.Should().Contain(new Dictionary<string, string>(StringComparer.Ordinal)
@@ -97,7 +100,8 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         RuleLayer(rules, "Low").Should().NotBe(DefaultPoleLayerId);
 
         (await OutboxStatusAsync(host, IntegrationEventTypes.AssetMutationBatchRequestedV1)).Should().Be(OutboxMessageStatus.Dispatched);
-        (await OutboxStatusAsync(host, notification)).Should().Be(OutboxMessageStatus.Pending, "with no broker, nothing but asset batches is delivered");
+        (await OutboxStatusAsync(host, IntegrationEventTypes.AssetMutationBatchAppliedV1)).Should().Be(OutboxMessageStatus.Dispatched);
+        (await OutboxStatusAsync(host, notification)).Should().Be(OutboxMessageStatus.Pending, "with no broker, nothing but the asset batches and their answers is delivered");
         (await AppliedBatchesAsync(host)).Should().Be(1);
 
         // Redelivery: the relay hands the same batch over again.
@@ -114,10 +118,12 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
 
         (await AppliedBatchesAsync(host)).Should().Be(1);
         (await OutboxStatusAsync(host, IntegrationEventTypes.AssetMutationBatchRequestedV1)).Should().Be(OutboxMessageStatus.Dispatched);
+        (await OutboxCountAsync(host, IntegrationEventTypes.AssetMutationBatchAppliedV1)).Should().Be(1, "the redelivered batch was recognized by the consumer's inbox: no second answer");
+        await AssertApprovedAsync(host);
     }
 
     [Fact]
-    public async Task ABatchThatCannotBeApplied_IsRetriedWithBackoff_ThenLeftFailedInTheOutbox_AndNoPoleIsWritten()
+    public async Task ABatchNamingAPoleTheCatalogLacks_IsRejectedByTheKernel_NotRetried_AndNoPoleIsWritten()
     {
         await using var host = await HostAsync(maxAttempts: 2);
         await SeedAsync(host, [LightPole], features: []);
@@ -125,20 +131,34 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         await ApproveAsync(host);
         var relay = Relay(host);
 
-        (await relay.ProcessNextBatchAsync(CancellationToken.None)).Should().Be(0);
-        var afterFirst = await OutboxRowAsync(host);
-        afterFirst.Status.Should().Be(OutboxMessageStatus.Pending, "a failed attempt is retried");
-        afterFirst.AttemptCount.Should().Be(1);
-        afterFirst.LastError.Should().Contain(LightPole, "the pole is not in the owner's catalog");
-        afterFirst.NextRetryAtUtc.Should().BeAfter(afterFirst.CreatedAtUtc, "the retry waits for the relay's backoff");
+        (await relay.ProcessNextBatchAsync(CancellationToken.None)).Should().Be(1, "a business rejection is an answer, delivered like any other");
 
-        await ExpireBackoffAsync(host);
-        (await relay.ProcessNextBatchAsync(CancellationToken.None)).Should().Be(0);
-
-        var afterLast = await OutboxRowAsync(host);
-        afterLast.Status.Should().Be(OutboxMessageStatus.Failed, "after the last attempt the batch stays in the outbox as failed, not delivered");
-        afterLast.AttemptCount.Should().Be(2);
+        var requested = await OutboxRowAsync(host);
+        requested.Status.Should().Be(OutboxMessageStatus.Dispatched, "the kernel answered: nothing to retry");
+        requested.AttemptCount.Should().Be(0);
+        (await OutboxCountAsync(host, IntegrationEventTypes.AssetMutationBatchRejectedV1)).Should().Be(1);
+        (await OutboxCountAsync(host, IntegrationEventTypes.AssetMutationBatchAppliedV1)).Should().Be(0);
         (await AppliedBatchesAsync(host)).Should().Be(0);
+        (await PoleAsync(host, LightPole)).Should().BeNull("the pole is not in the owner's catalog");
+    }
+
+    private static async Task AssertApprovedAsync(Host host)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var order = (await scope.ServiceProvider.GetRequiredService<IServiceOrderRepository>().GetByIdAsync(Order))!;
+        order.Status.Should().Be(SharedUseOrderTypes.ApprovedStateKey, "the kernel applied the batch and the saga finalized the approval");
+        (await scope.ServiceProvider.GetRequiredService<IOccupancyChangeSetReader>()
+            .GetPageAsync(new OccupancyChangeSetQuery(Order, pageSize: OccupancyChangeSetQuery.MaxPageSize), CancellationToken.None))
+            .Items.Should().OnlyContain(set => set.Status == OccupancyChangeSetStatus.Committed);
+    }
+
+    private static async Task<long> OutboxCountAsync(Host host, string messageType)
+    {
+        await using var connection = await OpenAsync(host);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """SELECT count(*) FROM "WorkflowOutboxMessages" WHERE "MessageType" = @type""";
+        command.Parameters.AddWithValue("type", messageType);
+        return (long)(await command.ExecuteScalarAsync())!;
     }
 
     // ── Host ──────────────────────────────────────────────────────────────────
@@ -201,9 +221,9 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         services.AddServiceOrderRules();
         services.AddServerOrderOccupancyStaging(configuration);
         services.AddServerWorkflowMessaging(configuration);
-        services.AddServerOccupancyCommit();
+        services.AddServerOccupancyCommit(configuration);
         services.AddPostgresAssetMutationBatchApplier(catalogConnectionString);
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
         if (maxAttempts is { } attempts)
             services.Configure<OutboxRelayOptions>(o => o.MaxAttempts = attempts);
 
@@ -379,7 +399,7 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
         await using var connection = new NpgsqlConnection(host.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = """SELECT "Status" FROM "WorkflowOutboxMessages" WHERE "MessageType" = @type""";
+        command.CommandText = """SELECT "Status" FROM "WorkflowOutboxMessages" WHERE "MessageType" = @type ORDER BY "CreatedAtUtc" LIMIT 1""";
         command.Parameters.AddWithValue("type", messageType);
         return (OutboxMessageStatus)(int)(await command.ExecuteScalarAsync())!;
     }
@@ -412,17 +432,6 @@ public sealed class OccupancyApprovalAppliedToTheCatalogTests
             """;
         command.Parameters.AddWithValue("type", IntegrationEventTypes.AssetMutationBatchRequestedV1);
         command.Parameters.AddWithValue("pending", (int)OutboxMessageStatus.Pending);
-        (await command.ExecuteNonQueryAsync()).Should().Be(1);
-    }
-
-    private static async Task ExpireBackoffAsync(Host host)
-    {
-        await using var connection = await OpenAsync(host);
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE "WorkflowOutboxMessages" SET "NextRetryAtUtc" = "CreatedAtUtc" WHERE "MessageType" = @type
-            """;
-        command.Parameters.AddWithValue("type", IntegrationEventTypes.AssetMutationBatchRequestedV1);
         (await command.ExecuteNonQueryAsync()).Should().Be(1);
     }
 

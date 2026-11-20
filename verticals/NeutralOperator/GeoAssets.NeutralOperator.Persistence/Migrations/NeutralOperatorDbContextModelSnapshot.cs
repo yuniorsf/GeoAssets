@@ -44,6 +44,11 @@ namespace GeoAssets.NeutralOperator.Persistence.Migrations
                         .HasMaxLength(36)
                         .HasColumnType("character varying(36)");
 
+                    b.Property<string>("VerticalId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.ToTable("ServiceOrderTargets", "public", t =>
@@ -52,9 +57,126 @@ namespace GeoAssets.NeutralOperator.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GeoAssets.NeutralOperator.Persistence.Entities.OccupancyApplySagaPoleRecord", b =>
+                {
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PoleFeatureId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<int>("AppliedVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BaselineEntriesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("BaselineVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("BatchId", "PoleFeatureId");
+
+                    b.HasIndex("PoleFeatureId", "OrganizationId");
+
+                    b.ToTable("occupancy_apply_saga_poles", "neutral_operator");
+                });
+
+            modelBuilder.Entity("GeoAssets.NeutralOperator.Persistence.Entities.OccupancyApplySagaRecord", b =>
+                {
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovedStatus")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BatchJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConflictingFeatureIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("LastRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OrderTypeId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ServiceOrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime?>("TimedOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("BatchId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ServiceOrderId", "Attempt")
+                        .IsUnique();
+
+                    b.HasIndex("State", "LastRequestedAt");
+
+                    b.ToTable("occupancy_apply_sagas", "neutral_operator");
+                });
+
             modelBuilder.Entity("GeoAssets.NeutralOperator.Persistence.Entities.OccupancyChangeSetRecord", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ApplyBatchId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("BaselineVersion")
@@ -101,6 +223,8 @@ namespace GeoAssets.NeutralOperator.Persistence.Migrations
                         .UseCollation("C");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApplyBatchId");
 
                     b.HasIndex("OrganizationId");
 
@@ -203,6 +327,15 @@ namespace GeoAssets.NeutralOperator.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("field_pole_occupancies", "neutral_operator");
+                });
+
+            modelBuilder.Entity("GeoAssets.NeutralOperator.Persistence.Entities.OccupancyApplySagaPoleRecord", b =>
+                {
+                    b.HasOne("GeoAssets.NeutralOperator.Persistence.Entities.OccupancyApplySagaRecord", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GeoAssets.NeutralOperator.Persistence.Entities.PoleOccupancyEntryRecord", b =>

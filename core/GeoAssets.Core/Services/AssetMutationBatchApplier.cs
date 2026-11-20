@@ -100,7 +100,7 @@ public sealed class AssetMutationBatchApplier(IAssetProvider provider, TimeProvi
     private AssetBatchAppliedItem ApplyUpdateAttributes(AssetFeatureMutationItem item)
     {
         var feature = provider.GetById(item.FeatureId)
-            ?? throw new KeyNotFoundException($"Feature '{item.FeatureId}' not found for UpdateAttributes.");
+            ?? throw new AssetMutationFeatureNotFoundException(item.FeatureId, $"Feature '{item.FeatureId}' not found for UpdateAttributes.");
 
         foreach (var (key, value) in item.CustomAttributes)
         {
@@ -116,7 +116,7 @@ public sealed class AssetMutationBatchApplier(IAssetProvider provider, TimeProvi
     private AssetBatchAppliedItem ApplyTopologyEdge(AssetFeatureMutationItem item, bool add)
     {
         var feature = provider.GetById(item.FeatureId)
-            ?? throw new KeyNotFoundException($"Feature '{item.FeatureId}' not found for {item.MutationKind}.");
+            ?? throw new AssetMutationFeatureNotFoundException(item.FeatureId, $"Feature '{item.FeatureId}' not found for {item.MutationKind}.");
 
         foreach (var edge in item.TopologyEdges)
         {

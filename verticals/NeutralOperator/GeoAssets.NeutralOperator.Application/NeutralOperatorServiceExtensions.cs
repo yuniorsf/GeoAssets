@@ -2,6 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Providers;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Workflow.Orders;
@@ -90,7 +91,8 @@ public static class NeutralOperatorServiceExtensions
     /// Registers the approval that commits staged occupancy (XD01-318): one scoped
     /// <see cref="OccupancyCommitService"/> behind <see cref="IOccupancyCommitService"/>. Needs
     /// what <see cref="AddOrderOccupancyStaging"/> needs plus <see cref="IServiceOrderRepository"/>,
-    /// <see cref="IPoleOccupancyWriter"/>, <see cref="IOutboxWriter"/> and
+    /// <see cref="IPoleOccupancyWriter"/>, <see cref="IOutboxWriter"/>, <see cref="IOccupancyApplySagaStore"/>,
+    /// <see cref="IIdempotentInbox"/>, <see cref="ITenantOrganizationScope"/> and
     /// <see cref="IWorkflowUnitOfWork"/>; reads <see cref="OrderOccupancyOptions"/> (the catalog
     /// instance) when registered, the defaults otherwise.
     /// </summary>
@@ -108,10 +110,26 @@ public static class NeutralOperatorServiceExtensions
             sp.GetRequiredService<IOccupancyChangeSetReader>(),
             sp.GetRequiredService<IOccupancyChangeSetWriter>(),
             sp.GetRequiredService<IOutboxWriter>(),
+            sp.GetRequiredService<IOccupancyApplySagaStore>(),
             sp.GetRequiredService<IWorkflowUnitOfWork>(),
             sp.GetService<OrderOccupancyOptions>() ?? new OrderOccupancyOptions(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System));
         services.TryAddScoped<IOccupancyCommitService>(sp => sp.GetRequiredService<OccupancyCommitService>());
+
+        // The approval saga (XD01-383): the kernel's replies and the operator's retry, and the guard that holds an order
+        // "approved, awaiting apply" until the catalog answers.
+        services.TryAddScoped(sp => new OccupancyApplySagaService(
+            sp.GetRequiredService<IServiceOrderRepository>(),
+            sp.GetRequiredService<OrderTypeRegistry>(),
+            sp.GetRequiredService<ServiceOrderRules>(),
+            sp.GetRequiredService<IOccupancyApplySagaStore>(),
+            sp.GetRequiredService<IOutboxWriter>(),
+            sp.GetRequiredService<IIdempotentInbox>(),
+            sp.GetRequiredService<IWorkflowUnitOfWork>(),
+            sp.GetRequiredService<ITenantOrganizationScope>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.TryAddScoped<IOccupancyApplySagaService>(sp => sp.GetRequiredService<OccupancyApplySagaService>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ITransitionGuard, OccupancyApplyPendingTransitionGuard>());
 
         return services;
     }

@@ -1,8 +1,11 @@
 namespace GeoAssets.Core.Messaging.Events;
 
 /// <summary>
-/// Integration event emitted after a requested batch of asset mutations has been committed to a catalog shard.
+/// Integration event emitted after a requested batch of asset mutations has been committed to a catalog shard — what
+/// <c>IAssetMutationBatchApplier</c> returns, and the payload the kernel publishes as
+/// <see cref="IntegrationEventTypes.AssetMutationBatchAppliedV1"/>, the success reply of the approval saga (XD01-383).
 /// </summary>
+/// <param name="SourceVerticalId">The vertical that requested the batch (<see cref="AssetMutationBatchRequestedEvent.SourceVerticalId"/>), so the reply routes back; null when it named none.</param>
 public sealed record AssetBatchAppliedEvent(
     Guid BatchId,
     string CatalogInstanceId,
@@ -15,7 +18,8 @@ public sealed record AssetBatchAppliedEvent(
     IReadOnlyList<AssetBatchAppliedItem> AppliedItems,
     Rfc7946BoundingBox? AffectedBounds,
     DateTimeOffset AppliedAtUtc,
-    string? CorrelationId = null)
+    string? CorrelationId = null,
+    string? SourceVerticalId = null)
 {
     public static AssetBatchAppliedEvent Create(
         Guid batchId,
@@ -29,7 +33,8 @@ public sealed record AssetBatchAppliedEvent(
         string? sourceOrderTypeId = null,
         string? scopeId = null,
         Rfc7946BoundingBox? affectedBounds = null,
-        string? correlationId = null)
+        string? correlationId = null,
+        string? sourceVerticalId = null)
     {
         if (batchId == Guid.Empty)
         {
@@ -54,6 +59,7 @@ public sealed record AssetBatchAppliedEvent(
             AppliedItems: appliedItems,
             AffectedBounds: affectedBounds,
             AppliedAtUtc: timeProvider.GetUtcNow(),
-            CorrelationId: correlationId);
+            CorrelationId: correlationId,
+            SourceVerticalId: sourceVerticalId);
     }
 }

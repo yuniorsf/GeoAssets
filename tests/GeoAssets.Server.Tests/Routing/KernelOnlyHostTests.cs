@@ -30,6 +30,7 @@ public sealed class KernelOnlyHostTests
         "GET /wms | anonymous",
         "POST /api/identity/municipio-grants/revoke | policy:ip-billing:reference-manage",
         "POST /api/identity/municipio-grants/sync | policy:ip-billing:reference-manage",
+        "POST /api/workflow/service-orders/{id}/occupancy-saga/retry | none",
         "POST /api/workflow/service-orders/{id}/shared-use/dispatch | none",
         "PUT /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none",
     ];

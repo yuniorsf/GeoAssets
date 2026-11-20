@@ -54,6 +54,7 @@ public sealed class EFOccupancyChangeSetRepository : IOccupancyChangeSetReader, 
         (nameof(OccupancyChangeSetRecord.StagedAt), r => r.StagedAt),
         (nameof(OccupancyChangeSetRecord.ClosedAt), r => r.ClosedAt),
         (nameof(OccupancyChangeSetRecord.OrganizationId), r => r.OrganizationId),
+        (nameof(OccupancyChangeSetRecord.ApplyBatchId), r => r.ApplyBatchId),
     ];
 
     internal static readonly string StagedStatus = OccupancyChangeSetMapper.ToStatusText(OccupancyChangeSetStatus.Staged);

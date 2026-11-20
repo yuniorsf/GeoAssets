@@ -1,5 +1,6 @@
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.Time.Testing;
@@ -25,6 +26,8 @@ namespace GeoAssets.Workflow.TestKit;
 /// <param name="OwnerOrganizationId">The pole owner every store is scoped to.</param>
 /// <param name="CatalogInstanceId">The catalog instance the approval is configured to address.</param>
 /// <param name="StagedBatchesAsync">Every asset mutation batch staged so far, in the order staged.</param>
+/// <param name="Sagas">The approval saga's replies and retry (XD01-383): what the kernel's Applied / Rejected answers drive.</param>
+/// <param name="SagaReader">The approval sagas on file, read side.</param>
 /// <param name="Scope">Whatever must be disposed with the harness (a database, a connection).</param>
 public sealed record OccupancyCommitContractHarness(
     IOccupancyCommitService Service,
@@ -40,6 +43,8 @@ public sealed record OccupancyCommitContractHarness(
     Guid OwnerOrganizationId,
     string CatalogInstanceId,
     Func<CancellationToken, Task<IReadOnlyList<StagedAssetMutationBatch>>> StagedBatchesAsync,
+    IOccupancyApplySagaService Sagas,
+    IOccupancyApplySagaReader SagaReader,
     IAsyncDisposable? Scope = null) : IAsyncDisposable
 {
     public ValueTask DisposeAsync() => Scope?.DisposeAsync() ?? ValueTask.CompletedTask;

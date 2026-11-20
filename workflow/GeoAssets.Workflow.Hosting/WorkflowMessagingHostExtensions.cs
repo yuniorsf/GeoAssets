@@ -32,8 +32,9 @@ public static class WorkflowMessagingHostExtensions
     ///
     /// The relay runs only when <see cref="OutboxTransportKey"/> names a broker. With no transport (the default) staged
     /// messages stay in the outbox table as pending: none is lost, none is marked delivered without having been, and they
-    /// are published once the host is started with a transport — except asset mutation batches, which
-    /// <see cref="InProcessAssetMutationHostExtensions.AddServerInProcessAssetMutationApply"/> applies in process (XD01-337).
+    /// are published once the host is started with a transport — except the message types a consumer registered through
+    /// <see cref="IntegrationConsumerHostExtensions.AddWorkflowIntegrationConsumer{TEvent, THandler}"/> handles in process
+    /// (XD01-383: the asset-mutation apply saga's request and replies).
     /// </summary>
     /// <exception cref="InvalidOperationException"><see cref="OutboxTransportKey"/> names no known transport.</exception>
     public static IServiceCollection AddServerWorkflowMessaging(this IServiceCollection services, IConfiguration configuration)

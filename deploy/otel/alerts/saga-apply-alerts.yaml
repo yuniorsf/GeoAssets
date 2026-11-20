@@ -1,0 +1,51 @@
+# XD01-383 — alert rules of the occupancy approval saga (ADR-001 Phase 7, risks 3.3), Prometheus rule-file format.
+#
+# The instruments are emitted by every host running the NeutralOperator module (GeoAssets.NeutralOperator.Server, and
+# GeoAssets.Server while it hosts the module) on the GeoAssets meter, exported over OTLP; the names below are their
+# Prometheus forms (dots → underscores, counters get _total, units are suffixed):
+#   geoassets.saga.apply.timeouts            → geoassets_saga_apply_timeouts_total
+#   geoassets.saga.apply.outcomes{outcome}   → geoassets_saga_apply_outcomes_total
+#   geoassets.saga.apply.pending             → geoassets_saga_apply_pending
+#   geoassets.saga.apply.oldest_pending_age  → geoassets_saga_apply_oldest_pending_age_seconds
+#
+# Symptom-based (observability-conventions, slo-based-alerting): each rule fires on what an approver sees — an approval
+# that never becomes final, or a map that disagrees with the occupancy — not on a resource threshold. No label carries a
+# batch, order or organization id; find the sagas in the structured warning the sweeper logs per timed-out saga
+# ("Approval saga of batch … has waited …") or by the batch id on the Saga.* spans. Backends without Prometheus rules
+# (New Relic, Datadog, Azure Monitor) take the same conditions as NRQL/monitor queries on the same metric names.
+groups:
+  - name: geoassets-saga-apply
+    rules:
+      - alert: GeoAssetsSagaApplyTimedOut
+        expr: sum(increase(geoassets_saga_apply_timeouts_total[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Occupancy approvals are waiting longer than Saga:ApplyTimeout for the asset catalog's apply"
+          description: >-
+            {{ $value }} approval saga(s) timed out in the last 15 minutes. They stay pending (never reverted silently).
+            Check the kernel's asset-mutation consumer (consumer AssetMutationApply / inbox kernel.asset-mutation-apply)
+            and the broker, then POST /api/workflow/service-orders/{id}/occupancy-saga/retry for each order named in the
+            "Approval saga of batch …" warnings.
+
+      - alert: GeoAssetsSagaApplyStalled
+        expr: max(geoassets_saga_apply_oldest_pending_age_seconds) > 3600
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "An occupancy approval has been waiting over an hour for the asset catalog"
+          description: >-
+            The oldest pending approval saga was last staged {{ $value | humanizeDuration }} ago; the map (WMS/WFS) does not
+            show its occupancy. The kernel is not consuming AssetMutationBatchRequestedV1, or its replies do not reach the
+            vertical.
+
+      - alert: GeoAssetsSagaAppliedAfterRevert
+        expr: sum(increase(geoassets_saga_apply_outcomes_total{outcome="applied-after-revert"}[1h])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The asset catalog applied a batch whose approval saga had already been compensated"
+          description: >-
+            The catalog holds occupancy attributes the vertical rolled back (an operator retry raced a rejection).
+            Reconcile by hand: the error log "applied batch … after its approval saga had reverted" names the batch and order.

@@ -132,6 +132,28 @@ public sealed class GeoAssetsActivitySource : IDisposable
                 .AddTag("organization.id", organizationId.ToString("D"))
                 .AddTag("catalog.batch.mutations", mutations);
 
+    /// <summary>
+    /// Starts a span of the asset-mutation apply saga (XD01-383), <c>Saga.{step}</c> — e.g. <c>Saga.AssetMutationApply</c> in
+    /// the kernel, <c>Saga.AssetMutationApplied</c>/<c>…Rejected</c>/<c>…Retry</c>/<c>…TimeoutSweep</c> in the vertical. Started
+    /// inside the consume span of the message it handles, so the whole approval is one trace. The batch, order and
+    /// organization ids belong on the span, never on a metric.
+    /// </summary>
+    public Activity? StartSagaActivity(string step, Guid? batchId = null, string? orderId = null, string? organizationId = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(step);
+
+        var activity = _source.StartActivity($"Saga.{step}");
+        if (activity is null) return null;
+
+        if (batchId is { } batch)
+            activity.SetTag("catalog.batch.id", batch.ToString("D"));
+        if (orderId is not null)
+            activity.SetTag("order.id", orderId);
+        if (organizationId is not null)
+            activity.SetTag("organization.id", organizationId);
+        return activity;
+    }
+
     // ── Integration Messaging ─────────────────────────────────────────────────
 
     public Activity? StartIntegrationPublishActivity(

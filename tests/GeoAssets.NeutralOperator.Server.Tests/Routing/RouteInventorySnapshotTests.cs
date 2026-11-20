@@ -56,4 +56,13 @@ public sealed class RouteInventorySnapshotTests
             "the kernel's routes are reached over REST; map-gesture resolution is the kernel's /selection/resolve");
         actual.Should().Contain(["* /healthz | anonymous", "* /readyz | anonymous"]);
     }
+
+    [Fact]
+    public async Task TheSnapshot_HoldsTheApprovalSagasRetryRoute_Exactly_AndNoOtherSagaRoute()
+    {
+        var snapshot = (await File.ReadAllLinesAsync(Path.Combine(SnapshotDirectory, SnapshotFile))).Where(line => line.Length > 0).ToArray();
+
+        snapshot.Where(line => line.Contains("saga", StringComparison.OrdinalIgnoreCase)).Should().ContainSingle(
+            "XD01-383 adds the retry route and nothing else").Which.Should().Be("POST /api/workflow/service-orders/{id}/occupancy-saga/retry | none");
+    }
 }

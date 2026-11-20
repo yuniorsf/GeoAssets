@@ -52,6 +52,9 @@ internal sealed class OccupancyChangeSetRecordConfiguration : IEntityTypeConfigu
         // "The staged sets of this order."
         b.HasIndex(s => new { s.ServiceOrderId, s.Status });
         b.HasIndex(s => s.OrganizationId);
+
+        // "The sets of this approval saga" (XD01-383).
+        b.HasIndex(s => s.ApplyBatchId);
     }
 
     /// <summary>

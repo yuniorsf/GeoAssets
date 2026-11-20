@@ -2,6 +2,7 @@ using System.Diagnostics;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
@@ -79,7 +80,7 @@ public sealed class ObservableOccupancyCommitService : IOccupancyCommitService
     internal static string Outcome(Exception ex) => ex switch
     {
         OperationCanceledException => OutcomeCancelled,
-        OccupancyConflictException or ServiceOrderConcurrencyException => OutcomeConflict,
+        OccupancyConflictException or ServiceOrderConcurrencyException or OccupancyApplyPendingException => OutcomeConflict,
         ArgumentException or KeyNotFoundException or OrderActionDeniedException
             or InvalidServiceOrderTransitionException => OutcomeRejected,
         _ => OutcomeError,

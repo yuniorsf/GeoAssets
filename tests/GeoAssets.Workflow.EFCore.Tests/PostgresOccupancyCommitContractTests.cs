@@ -1,6 +1,8 @@
+using GeoAssets.Core.Messaging.Events;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.TestKit;
 using Microsoft.EntityFrameworkCore;
@@ -32,8 +34,23 @@ public sealed class PostgresOccupancyCommitContractTests : OccupancyCommitContra
         var connectionString = await PostgresTargetStoreDatabase.EnsureCreatedAsync(DatabaseName);
         await using var db = PostgresTargetStoreDatabase.NewContext(connectionString);
         await db.Database.ExecuteSqlRawAsync(
-            """TRUNCATE TABLE "ServiceOrders", "WorkflowOutboxMessages", neutral_operator.field_pole_occupancies CASCADE;""");
+            """
+            TRUNCATE TABLE "ServiceOrders", "WorkflowOutboxMessages", "WorkflowInboxProcessedMessages", neutral_operator.field_pole_occupancies,
+                neutral_operator.occupancy_apply_sagas, neutral_operator.occupancy_apply_saga_poles CASCADE;
+            """);
         return connectionString;
+    }
+
+    [Fact]
+    public async Task ApplyReply_TheSagasLogEntries_AreAttributedToTheSystem_NotToTheApprover()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+        await ReplyRejectedAsync(harness, AssetMutationBatchRejectionCodes.InvalidBatch, "bad batch");
+
+        var log = (await harness.Orders.GetByIdAsync("ord-1"))!.ActionLog;
+
+        log.Select(entry => entry.ActorKind).Should().Equal(ActorKind.Human, ActorKind.System);
     }
 
     [Fact]
@@ -60,7 +77,7 @@ public sealed class PostgresOccupancyCommitContractTests : OccupancyCommitContra
                 await ApproveAsync(caller, "ord-1");
                 return (Exception?)null;
             }
-            catch (Exception ex) when (ex is OccupancyConflictException or ServiceOrderConcurrencyException or InvalidServiceOrderTransitionException)
+            catch (Exception ex) when (ex is OccupancyConflictException or ServiceOrderConcurrencyException or InvalidServiceOrderTransitionException or OccupancyApplyPendingException)
             {
                 return ex;
             }
@@ -75,7 +92,8 @@ public sealed class PostgresOccupancyCommitContractTests : OccupancyCommitContra
         (await check.OccupancyReader.GetForPoleAsync("pole-2", CancellationToken.None))!.Entries.Should().HaveCount(2);
         (await check.StagedBatchesAsync(CancellationToken.None)).Should().ContainSingle();
         (await verify.OrderActionLogs.CountAsync(a => a.ServiceOrderId == "ord-1")).Should().Be(1);
-        (await SetsAsync(check, "ord-1")).Should().OnlyContain(set => set.Status == OccupancyChangeSetStatus.Committed);
+        (await SetsAsync(check, "ord-1")).Should().OnlyContain(set => set.Status == OccupancyChangeSetStatus.Pending, "the catalog has not answered");
+        (await check.SagaReader.FindLatestForOrderAsync("ord-1", CancellationToken.None))!.Attempt.Should().Be(1, "one saga began");
     }
 
     private static void SharedUseOrderTypesRegistered(OccupancyCommitContractHarness harness) =>

@@ -10,8 +10,8 @@ namespace GeoAssets.Server.Modules;
 /// vertical: which of them run, and in what order, is <c>GeoAssets:Modules</c>'s to say.
 /// <list type="bullet">
 ///   <item><see cref="PostgresSpatialModule"/>: the "postgres" provider plugin, organization catalogs, WMS.</item>
-///   <item><see cref="KernelHostedNeutralOperatorModule"/>: shared-use dispatch, pole occupancy staging and commit, the
-///   in-process asset-mutation apply, clandestine attachments, the ISP tenant portal and the GIS export — the rollback
+///   <item><see cref="KernelHostedNeutralOperatorModule"/>: shared-use dispatch, pole occupancy staging and the approval
+///   saga, clandestine attachments, the ISP tenant portal and the GIS export — the rollback
 ///   flag of the cut-over to <c>GeoAssets.NeutralOperator.Server</c>.</item>
 ///   <item><see cref="IpBillingBridgeModule"/>: the município↔Prefeitura grant provisioning for IP billing.</item>
 /// </list>

@@ -4,6 +4,7 @@ using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.TestKit;
@@ -34,7 +35,7 @@ public sealed class OccupancyApprovalEndpointTests
     private static async Task<OrderTargetsApiHost> StartAsync(
         string status = ServiceOrderStatus.Completed, Func<IServiceOrderRepository, IServiceOrderRepository>? decorateOrders = null)
     {
-        var host = await SharedUseApiSeed.StartAsync(status: status, poles: 1, occupied: false, decorateOrders: decorateOrders);
+        var host = await SharedUseApiSeed.StartAsync(status: status, poles: 1, occupied: false, mapOccupancyRoutes: true, decorateOrders: decorateOrders);
         return host;
     }
 
@@ -48,7 +49,7 @@ public sealed class OccupancyApprovalEndpointTests
     }
 
     [Fact]
-    public async Task Approve_ByASupervisorOfThePoleOwner_Returns204_CommitsTheStagedSet_ApprovesTheOrder_AndStagesTheBatch()
+    public async Task Approve_ByASupervisorOfThePoleOwner_Returns204_WritesTheStagedSetAsPending_StagesTheBatch_AndTheOrderIsApprovedOnlyOnceTheCatalogApplied()
     {
         await using var host = await StartAsync();
         await StageAsync(host, OccupancyChangeBuilder.Add(1), OccupancyChangeBuilder.AddBeyondRegulatedSlots());
@@ -56,17 +57,109 @@ public sealed class OccupancyApprovalEndpointTests
 
         var response = await client.PostJsonAsync($"service-orders/{Order}/actions", Approve(SharedUseOrderTypes.ApprovedStateKey));
 
+        // Step one: the approval is accepted, the poles carry the occupancy, the batch is staged — and the order awaits the catalog.
         response.StatusCode.Should().Be(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
-        var order = (await host.Orders.GetByIdAsync(Order))!;
-        order.Status.Should().Be(SharedUseOrderTypes.ApprovedStateKey);
-        order.ActionLog.Should().ContainSingle().Which.PerformedBy
+        var awaiting = (await host.Orders.GetByIdAsync(Order))!;
+        awaiting.Status.Should().Be(ServiceOrderStatus.Completed, "approved, awaiting apply: the status moves when the kernel answers");
+        OccupancyApplySagaAttributes.IsAwaitingApply(awaiting.Attributes).Should().BeTrue();
+        awaiting.ActionLog.Should().ContainSingle().Which.PerformedBy
             .Should().Be(OrderTargetsApiHost.Identities["supervisor-a"].UserId.ToString(), "the approval is logged as the caller, never as the body says");
         var pole = (await host.Occupancy.ForOrganization(OrderTargetsApiHost.OrgA).GetForPoleAsync(Pole, CancellationToken.None))!;
         pole.Entries.Should().HaveCount(2);
         pole.OverCapacityEntries.Should().ContainSingle();
+        host.ChangeSets.Snapshot().Should().ContainSingle().Which.Status.Should().Be(OccupancyChangeSetStatus.Pending);
         var batch = (AssetMutationBatchRequestedEvent)host.Outbox.Messages.Should().ContainSingle().Subject.Message;
         batch.CatalogInstanceId.Should().Be(OrderOccupancyOptions.DefaultCatalogInstanceId);
+        batch.SourceVerticalId.Should().Be("neutral-operator");
         batch.Mutations.Should().ContainSingle().Which.CustomAttributes[OccupancyAssetAttributes.ClassKey].Should().Be("Low");
+
+        // Step two: the kernel applies the batch; the saga finalizes the approval in process.
+        (await host.ReplyAppliedAsync()).Outcome.Should().Be(OccupancyApplySagaOutcome.Committed);
+        var approved = (await host.Orders.GetByIdAsync(Order))!;
+        approved.Status.Should().Be(SharedUseOrderTypes.ApprovedStateKey);
+        approved.ActionLog.Select(entry => entry.Action).Should().Equal(OrderActionType.Approve, OccupancyApplyActions.Applied);
+        host.ChangeSets.Snapshot().Should().ContainSingle().Which.Status.Should().Be(OccupancyChangeSetStatus.Committed);
+    }
+
+    [Fact]
+    public async Task Approve_Twice_BeforeTheCatalogAnswers_Returns409ApplyPending_AndStagesNothingMore()
+    {
+        await using var host = await StartAsync();
+        await StageAsync(host, OccupancyChangeBuilder.Add(1));
+        using var client = host.ClientFor("supervisor-a");
+        (await client.PostJsonAsync($"service-orders/{Order}/actions", Approve())).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var second = await client.PostJsonAsync($"service-orders/{Order}/actions", Approve());
+
+        var problem = await second.ShouldBeProblemAsync(HttpStatusCode.Conflict, OccupancyProblemCodes.ApplyPending);
+        problem.GetProperty("poleFeatureIds").GetArrayLength().Should().Be(0, "the order itself awaits the catalog");
+        host.Outbox.Messages.Should().ContainSingle();
+        (await host.Orders.GetByIdAsync(Order))!.ActionLog.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Approve_AnOrderWhosePoleAnotherPendingApprovalHolds_Returns409ApplyPending_NamingThePole()
+    {
+        await using var host = await StartAsync();
+        await StageAsync(host, OccupancyChangeBuilder.Add(1));
+        using var client = host.ClientFor("supervisor-a");
+        (await client.PostJsonAsync($"service-orders/{Order}/actions", Approve())).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var other = await host.SeedOrderAsync(
+            "ord-2", SharedUseOrderTypes.PoleWorkId, ServiceOrderStatus.Completed,
+            createdBy: OrderTargetsApiHost.Identities["creator"].UserId.ToString());
+        await SharedUseApiSeed.SeedTargetsAsync(host, "ord-2", [SharedUseApiSeed.Activity], Pole);
+        var baseline = await host.Occupancy.ForOrganization(OrderTargetsApiHost.OrgA).GetForPoleAsync(Pole, CancellationToken.None);
+        await host.ChangeSets.ForOrganization(OrderTargetsApiHost.OrgA).StageAsync(
+            OccupancyChangeSet.Stage("ord-2", $"ord-2-{Pole}", Pole, OrderTargetsApiHost.OrgA, [OccupancyChangeBuilder.Add(2)], baseline, "crew-1", OrderTargetsApiHost.Now),
+            CancellationToken.None);
+
+        var response = await client.PostJsonAsync($"service-orders/{other.Id}/actions", Approve());
+
+        var problem = await response.ShouldBeProblemAsync(HttpStatusCode.Conflict, OccupancyProblemCodes.ApplyPending);
+        problem.GetProperty("poleFeatureIds").Strings().Should().Equal(Pole);
+        (await host.Orders.GetByIdAsync("ord-2"))!.ActionLog.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Approve_WhenTheCatalogRejects_TheSagaCompensates_TheOrderStaysCompleted_AndAFreshApprovalStagesAnAttemptTwoBatch()
+    {
+        await using var host = await StartAsync();
+        await StageAsync(host, OccupancyChangeBuilder.Add(1));
+        using var client = host.ClientFor("supervisor-a");
+        (await client.PostJsonAsync($"service-orders/{Order}/actions", Approve())).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await host.ReplyRejectedAsync("feature-not-found", "Feature 'f-001' not found for UpdateAttributes.", Pole)).Outcome
+            .Should().Be(OccupancyApplySagaOutcome.Reverted);
+
+        var order = (await host.Orders.GetByIdAsync(Order))!;
+        order.Status.Should().Be(ServiceOrderStatus.Completed);
+        order.Attributes.Should().Contain(OccupancyApplySagaAttributes.StateKey, OccupancyApplySagaAttributes.Reverted);
+        (await host.Occupancy.ForOrganization(OrderTargetsApiHost.OrgA).GetForPoleAsync(Pole, CancellationToken.None))!.Entries
+            .Should().BeEmpty("the pole holds what it held before the approval: nothing");
+        host.ChangeSets.Snapshot().Should().ContainSingle().Which.Status.Should().Be(OccupancyChangeSetStatus.Reverted);
+        var reverted = await (await client.GetAsync(new Uri($"service-orders/{Order}/occupancy-changes?status=reverted", UriKind.Relative))).ReadJsonAsync();
+        reverted.GetProperty("totalCount").GetInt32().Should().Be(1);
+
+        await StageAsync(host, OccupancyChangeBuilder.Add(2));
+        (await client.PostJsonAsync($"service-orders/{Order}/actions", Approve())).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        host.StagedBatches().Select(batch => batch.BatchId).Should().Equal(
+            OccupancyCommitService.AssetMutationBatchId(Order, attempt: 1), OccupancyCommitService.AssetMutationBatchId(Order, attempt: 2));
+    }
+
+    [Fact]
+    public async Task GetChanges_StatusPending_ListsTheSetsAnApprovalWroteAndTheCatalogHasNotAnswered()
+    {
+        await using var host = await StartAsync();
+        await StageAsync(host, OccupancyChangeBuilder.Add(1));
+        using var client = host.ClientFor("supervisor-a");
+        (await client.PostJsonAsync($"service-orders/{Order}/actions", Approve())).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var pending = await (await client.GetAsync(new Uri($"service-orders/{Order}/occupancy-changes?status=pending", UriKind.Relative))).ReadJsonAsync();
+        var staged = await (await client.GetAsync(new Uri($"service-orders/{Order}/occupancy-changes", UriKind.Relative))).ReadJsonAsync();
+
+        pending.GetProperty("items").EnumerateArray().Should().ContainSingle()
+            .Which.GetProperty("status").GetInt32().Should().Be((int)OccupancyChangeSetStatus.Pending);
+        staged.GetProperty("totalCount").GetInt32().Should().Be(0);
     }
 
     [Fact]

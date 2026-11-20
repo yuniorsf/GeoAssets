@@ -104,6 +104,12 @@ public sealed partial class ServiceBusIntegrationEventConsumer<TEvent> : IHosted
         ArgumentNullException.ThrowIfNull(envelope);
         ct.ThrowIfCancellationRequested();
 
+        // A message of a type this consumer does not handle is completed before any span or inbox read (XD01-383).
+        if (_options.MessageTypes.Count > 0 && !_options.MessageTypes.Contains(envelope.MessageType, StringComparer.Ordinal))
+        {
+            return ServiceBusConsumeDisposition.MessageTypeSkipped;
+        }
+
         var parentContext = ExtractRemoteContext(envelope);
         var destination = string.IsNullOrWhiteSpace(_options.TopicName) ? "servicebus" : _options.TopicName;
         var consumerGroup = string.IsNullOrWhiteSpace(_options.SubscriptionName)
@@ -379,6 +385,7 @@ public sealed partial class ServiceBusIntegrationEventConsumer<TEvent> : IHosted
                 break;
 
             case ServiceBusConsumeDisposition.CatalogShardFenced:
+            case ServiceBusConsumeDisposition.MessageTypeSkipped:
                 await args.CompleteMessageAsync(args.Message, args.CancellationToken).ConfigureAwait(false);
                 break;
         }

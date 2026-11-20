@@ -69,7 +69,7 @@ internal static class NeutralOperatorMigrationContract
         await db.Database.MigrateAsync();
         (await SnapshotAsync(db, "public")).Should().BeEquivalentTo(before, "the kernel's head migration touches nothing");
         await using var neutralOperator = NewNeutralOperator(db);
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
 
         foreach (var table in Tables)
             (await ExistsAsync(db, "public", table)).Should().BeFalse($"{table} left public");
@@ -87,7 +87,8 @@ internal static class NeutralOperatorMigrationContract
         (await QueryAsync(db, ForeignKeysSql(Entries))).Should().ContainSingle().Which.Should().Contain("ON DELETE CASCADE");
         (await QueryAsync(db, """SELECT "MigrationId"::text AS "Value" FROM neutral_operator."__EFMigrationsHistory_neutral_operator" """))
             .Should().ContainSingle().Which.Should().EndWith("_" + BaselineName);
-        (await neutralOperator.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
+        (await neutralOperator.Database.GetPendingMigrationsAsync()).Should().NotContain(id => id.EndsWith("_" + BaselineName, StringComparison.Ordinal),
+            "the baseline is applied; whatever the chain adds after it is not this contract's");
         neutralOperator.Database.HasPendingModelChanges().Should().BeFalse("the shipped snapshot is the model");
 
         // Deleting an order still removes its targets and, through the foreign key across the schemas, their change sets.
@@ -109,12 +110,12 @@ internal static class NeutralOperatorMigrationContract
         await SeedAsync(db);
         await db.Database.MigrateAsync();
         await using var neutralOperator = NewNeutralOperator(db);
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
         var applied = await SnapshotAsync(db, NeutralOperatorSchema);
 
         await ExecuteAsync(db, """DELETE FROM neutral_operator."__EFMigrationsHistory_neutral_operator" """);
-        (await neutralOperator.Database.GetPendingMigrationsAsync()).Should().ContainSingle();
-        await neutralOperator.Database.MigrateAsync();
+        (await neutralOperator.Database.GetPendingMigrationsAsync()).Should().ContainSingle(id => id.EndsWith("_" + BaselineName, StringComparison.Ordinal));
+        await MigrateToBaselineAsync(neutralOperator);
 
         (await SnapshotAsync(db, NeutralOperatorSchema)).Should().BeEquivalentTo(applied);
         (await QueryAsync(db, """SELECT count(*)::text AS "Value" FROM neutral_operator."__EFMigrationsHistory_neutral_operator" """)).Should().Equal("1");
@@ -173,7 +174,7 @@ internal static class NeutralOperatorMigrationContract
         await db.Database.MigrateAsync();
         await using var neutralOperator = NewNeutralOperator(db);
 
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
 
         var shape = await SnapshotAsync(db, NeutralOperatorSchema);
         foreach (var table in Tables)
@@ -205,7 +206,7 @@ internal static class NeutralOperatorMigrationContract
         await using var moved = await newEmptyDatabase();
         await moved.Database.MigrateAsync();
         await using var movedNeutralOperator = NewNeutralOperator(moved);
-        await movedNeutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(movedNeutralOperator);
         var movedShape = await SnapshotAsync(moved, NeutralOperatorSchema);
 
         await using var created = await newEmptyDatabase();
@@ -215,7 +216,7 @@ internal static class NeutralOperatorMigrationContract
             (await ExistsAsync(created, "public", table)).Should().BeFalse();
         await using var createdNeutralOperator = NewNeutralOperator(created);
 
-        await createdNeutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(createdNeutralOperator);
 
         (await SnapshotAsync(created, NeutralOperatorSchema)).Should().BeEquivalentTo(movedShape);
         foreach (var table in Tables)
@@ -234,7 +235,7 @@ internal static class NeutralOperatorMigrationContract
         var original = await SnapshotAsync(db, "public");
         await db.Database.MigrateAsync();
         await using var neutralOperator = NewNeutralOperator(db);
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
         var moved = await SnapshotAsync(db, NeutralOperatorSchema);
 
         await neutralOperator.GetService<IMigrator>().MigrateAsync(Migration.InitialDatabase);
@@ -244,7 +245,7 @@ internal static class NeutralOperatorMigrationContract
             (await ExistsAsync(db, NeutralOperatorSchema, table)).Should().BeFalse($"{table} went back");
         (await SnapshotAsync(db, "public")).Should().BeEquivalentTo(original, "rows, indexes, constraints, flags and policies came back with the tables");
 
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
 
         (await SnapshotAsync(db, NeutralOperatorSchema)).Should().BeEquivalentTo(moved);
         foreach (var table in Tables)
@@ -260,7 +261,7 @@ internal static class NeutralOperatorMigrationContract
         await SeedAsync(db);
         await db.Database.MigrateAsync();
         await using var neutralOperator = NewNeutralOperator(db);
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
         var moved = await SnapshotAsync(db, NeutralOperatorSchema);
         // The last table of the Down loop's order is the poles: the other two are moved before it is reached.
         await ExecuteAsync(db, $"CREATE TABLE public.{Poles} (stray integer)");
@@ -293,7 +294,7 @@ internal static class NeutralOperatorMigrationContract
         await SeedAsync(db);
         await db.Database.MigrateAsync();
         await using var neutralOperator = NewNeutralOperator(db);
-        await neutralOperator.Database.MigrateAsync();
+        await MigrateToBaselineAsync(neutralOperator);
         await using var scoped = await OpenScopedRoleAsync(db);
 
         (await ReadIdsAsync(scoped, Poles)).Should().BeEmpty("a session that named no organization sees nothing");
@@ -513,6 +514,16 @@ internal static class NeutralOperatorMigrationContract
         new(new DbContextOptionsBuilder<NeutralOperatorDbContext>()
             .UseNpgsql(db.Database.GetConnectionString(), NeutralOperatorDbContext.ConfigureMigrations)
             .Options);
+
+    /// <summary>
+    /// The NeutralOperator chain up to and including its baseline — what this contract is about. The migrations the chain
+    /// gained after it (XD01-383's <c>AddOccupancyApplySagas</c>) have a contract of their own.
+    /// </summary>
+    private static Task MigrateToBaselineAsync(NeutralOperatorDbContext neutralOperator)
+    {
+        var target = neutralOperator.Database.GetMigrations().Single(id => id.EndsWith("_" + BaselineName, StringComparison.Ordinal));
+        return neutralOperator.GetService<IMigrator>().MigrateAsync(target);
+    }
 
     private static Task MigrateKernelToAsync(ServiceOrderDbContext db, string migrationName)
     {

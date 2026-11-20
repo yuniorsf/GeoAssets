@@ -256,6 +256,8 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
             PerformedAt = entry.PerformedAt,
             Comment = entry.Comment,
             ResultingStatus = entry.ResultingStatus,
+            ActorKind = (int)entry.ActorKind,
+            AgentInvocationId = entry.AgentInvocationId,
         });
 
         if (entry.ResultingStatus is not null)

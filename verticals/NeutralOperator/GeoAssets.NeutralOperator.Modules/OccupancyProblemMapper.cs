@@ -1,6 +1,7 @@
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -42,6 +43,14 @@ public sealed class OccupancyProblemMapper : IProblemDetailsMapper
             "The pole holds no such occupancy entry.", missing.Message,
             ("slotIndex", missing.SlotIndex), ("entryId", missing.EntryId)),
         KeyNotFoundException => WorkflowProblemResults.OrderNotFound(orderId),
+        OccupancyApplyPendingException pending => WorkflowProblemResults.Create(
+            StatusCodes.Status409Conflict, OccupancyProblemCodes.ApplyPending,
+            "An earlier approval awaits the asset catalog's apply.", pending.Message,
+            ("poleFeatureIds", pending.PoleFeatureIds)),
+        OccupancyApplyNotPendingException notPending => WorkflowProblemResults.Create(
+            StatusCodes.Status409Conflict, OccupancyProblemCodes.ApplyNotPending,
+            "The order has no asset-catalog apply to retry.", notPending.Message,
+            ("state", notPending.State?.ToString())),
         TargetIsNotAPoleException notAPole => WorkflowProblemResults.Create(
             StatusCodes.Status422UnprocessableEntity, OccupancyProblemCodes.NotAPole,
             "The target is not a pole.", notAPole.Message, ("assetTypeId", notAPole.AssetTypeId)),

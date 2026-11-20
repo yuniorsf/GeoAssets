@@ -5,6 +5,7 @@ using GeoAssets.Hosting.Abstractions;
 using GeoAssets.NeutralOperator.Modules.Occupancy;
 using GeoAssets.Workflow.Hosting.Targets;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 using GeoAssets.Workflow.Hosting;
@@ -21,6 +22,7 @@ namespace GeoAssets.NeutralOperator.Modules;
 /// <item><term>PUT    /service-orders/{id}/targets/{targetId}/occupancy-changes</term><description>stage, replacing what was staged (idempotent)</description></item>
 /// <item><term>DELETE /service-orders/{id}/targets/{targetId}/occupancy-changes</term><description>discard the target's staged set</description></item>
 /// <item><term>DELETE /service-orders/{id}/occupancy-changes</term><description>discard every staged set of the order</description></item>
+/// <item><term>POST   /service-orders/{id}/occupancy-saga/retry</term><description>re-stage the asset mutation batch of the order's pending approval saga (XD01-383) — 202 with the saga</description></item>
 /// </list>
 ///
 /// <para><b>Authorization</b> is <see cref="IOrderOccupancyStagingService"/>'s: the caller is
@@ -31,6 +33,13 @@ namespace GeoAssets.NeutralOperator.Modules;
 /// organization gate refuses gets the same <c>404 orders.not-found</c> as for an unknown order;
 /// a caller inside the gate whom the rules decline, or a cross-organization grantee, gets
 /// <c>403 auth.denied</c>. The reads additionally require <c>serviceorders:read</c>.</para>
+///
+/// <para>The <b>retry</b> route (XD01-383) is the operator's handle on an approval saga that timed out: it is authorized as
+/// the approval itself is — <see cref="ServiceOrderRules"/> must grant <c>Approve</c> on the order (no permission of its
+/// own: whoever may approve the order may ask the catalog again to apply that approval), the caller must be of the order's
+/// organization, and a caller outside the organization gate gets the unknown-order <c>404</c>. It re-stages the same batch
+/// (same batch id: the kernel applies it at most once and answers again); <c>409 occupancy.apply-not-pending</c> when the
+/// order has no pending saga.</para>
 ///
 /// <para><b>Nothing here writes a pole's live occupancy.</b> Errors are
 /// <c>application/problem+json</c> with a stable <c>code</c>; see <see cref="OccupancyProblemMapper"/>.
@@ -52,8 +61,18 @@ public static class ServiceOrderOccupancyRestApiExtensions
         MapChangeSetPage(routes, prefix, opts);
         MapStage(routes, prefix, opts);
         MapDiscard(routes, prefix, opts);
+        MapSagaRetry(routes, prefix, opts);
 
         return routes;
+    }
+
+    private static void MapSagaRetry(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
+    {
+        routes.MapPost($"{prefix}/service-orders/{{id}}/occupancy-saga/retry", (
+            string id, IOccupancyApplySagaService sagas,
+            ServerWorkflowPrincipalFactory principalFactory, IEnumerable<IProblemDetailsMapper> problemMappers, CancellationToken ct) =>
+            RunAsync(id, targetId: null, principalFactory, problemMappers, async principal =>
+                Results.Json(await sagas.RetryAsync(id, principal, ct).ConfigureAwait(false), opts, statusCode: StatusCodes.Status202Accepted), ct));
     }
 
     private static void MapTargetOccupancy(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)

@@ -15,7 +15,7 @@ public sealed class NeutralOperatorMigrationChainTests
 {
     private static readonly string[] KernelTablesWithRowLevelSecurity = ["OrderActionLogs", "OrderDispatches", "ServiceOrderTargets", "ServiceOrders"];
 
-    private static readonly string[] VerticalTables = ["field_pole_occupancies", "field_pole_occupancy_entries", "ServiceOrderOccupancyChangeSets"];
+    private static readonly string[] VerticalTables = ["field_pole_occupancies", "field_pole_occupancy_entries", "ServiceOrderOccupancyChangeSets", "occupancy_apply_saga_poles"];
 
     [Fact]
     public async Task ServiceOrderChain_OnAnEmptyDatabase_AppliesEveryMigration_AndTheVerticalsChainApplies_OnTopOfIt()
@@ -32,7 +32,9 @@ public sealed class NeutralOperatorMigrationChainTests
         await vertical.Database.MigrateAsync();
 
         (await vertical.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
-        (await vertical.Database.GetAppliedMigrationsAsync()).Should().ContainSingle().Which.Should().EndWith("_AdoptOccupancyTables");
+        (await vertical.Database.GetAppliedMigrationsAsync()).Should().HaveCount(2).And.SatisfyRespectively(
+            baseline => baseline.Should().EndWith("_AdoptOccupancyTables"),
+            saga => saga.Should().EndWith("_AddOccupancyApplySagas"));
         (await DatabaseProbe.ValuesAsync(connectionString, """
             SELECT (table_schema || '.' || table_name)::text AS "Value" FROM information_schema.tables
             WHERE table_schema IN ('public', 'neutral_operator') AND table_type = 'BASE TABLE'
@@ -41,6 +43,8 @@ public sealed class NeutralOperatorMigrationChainTests
             "neutral_operator.field_pole_occupancies",
             "neutral_operator.field_pole_occupancy_entries",
             "neutral_operator.ServiceOrderOccupancyChangeSets",
+            "neutral_operator.occupancy_apply_sagas",
+            "neutral_operator.occupancy_apply_saga_poles",
             "public.__EFMigrationsHistory",
             "public.OrderActionLogs",
             "public.OrderActionPermissions",
@@ -129,7 +133,9 @@ public sealed class NeutralOperatorMigrationChainTests
             SELECT (c.relname || ':' || c.relrowsecurity::text || ':' || c.relforcerowsecurity::text)::text AS "Value"
             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'neutral_operator' AND c.relkind = 'r' AND c.relname NOT LIKE '__EF%'
-            """)).Should().BeEquivalentTo(VerticalTables.Order(StringComparer.Ordinal).Select(t => $"{t}:true:false"));
+            """)).Should().BeEquivalentTo(
+            [.. VerticalTables.Order(StringComparer.Ordinal).Select(t => $"{t}:true:false"), "occupancy_apply_sagas:false:false"],
+            "the saga table holds ids, states and instants only — no occupancy — so, like the outbox, it has no policy");
         (await DatabaseProbe.ValuesAsync(connectionString, """
             SELECT (tablename || '|' || policyname)::text AS "Value" FROM pg_policies WHERE schemaname = 'neutral_operator'
             """)).Should().BeEquivalentTo(VerticalTables.Order(StringComparer.Ordinal).Select(t => $"{t}|tenant_isolation_policy"));

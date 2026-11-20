@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.TestKit;
 using Xunit;
@@ -26,9 +27,22 @@ public sealed class InMemoryOccupancyCommitContractTests : OccupancyCommitContra
         await StageAsync(harness, "ord-1", "pole-1", OccupancyChangeBuilder.Add(1));
 
         await ApproveAsync(harness, "ord-1");
-        await ((Func<Task>)(() => ApproveAsync(harness, "ord-1"))).Should().ThrowAsync<InvalidServiceOrderTransitionException>();
+        await ((Func<Task>)(() => ApproveAsync(harness, "ord-1"))).Should().ThrowAsync<OccupancyApplyPendingException>();
 
         fixture.UnitOfWork.Started.Should().Be(1, "the repeated approval was refused before any write");
         fixture.UnitOfWork.Completed.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ApplyReply_TheSagasLogEntries_AreAttributedToTheSystem_NotToTheApprover()
+    {
+        await using var harness = await CreateHarnessAsync();
+        await SeedAndApproveAsync(harness);
+        await ReplyRejectedAsync(harness, GeoAssets.Core.Messaging.Events.AssetMutationBatchRejectionCodes.InvalidBatch, "bad batch");
+
+        var log = (await harness.Orders.GetByIdAsync("ord-1"))!.ActionLog;
+
+        log.Select(entry => entry.ActorKind).Should().Equal(ActorKind.Human, ActorKind.System);
+        log[1].PerformedBy.Should().Be("approver-1", "the entry names the approval it settles, performed by the system");
     }
 }

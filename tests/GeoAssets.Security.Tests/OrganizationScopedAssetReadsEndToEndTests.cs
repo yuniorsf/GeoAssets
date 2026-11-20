@@ -292,9 +292,9 @@ public sealed class OrganizationScopedAssetReadsEndToEndTests
         services.AddServiceOrderRules();
         services.AddServerOrderOccupancyStaging(configuration);
         services.AddServerWorkflowMessaging(configuration);
-        services.AddServerOccupancyCommit();
+        services.AddServerOccupancyCommit(configuration);
         services.AddPostgresAssetMutationBatchApplier(catalogConnectionString);
-        services.AddServerInProcessAssetMutationApply(configuration);
+        services.AddServerAssetMutationApply(configuration);
         var relay = services.Single(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(OutboxRelayProcessor));
         services.Remove(relay);
         services.AddSingleton<OutboxRelayProcessor>();

@@ -29,6 +29,7 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             OrderStateChangedEvent evt => MapOrderStateChangedToProto(evt, nameof(message)).ToByteArray(),
             AssetMutationBatchRequestedEvent evt => MapBatchRequestedToProto(evt, nameof(message)).ToByteArray(),
             AssetBatchAppliedEvent evt => MapBatchAppliedToProto(evt, nameof(message)).ToByteArray(),
+            AssetMutationBatchRejectedEvent evt => MapBatchRejectedToProto(evt, nameof(message)).ToByteArray(),
             FeatureCatalogMutatedEvent evt => MapFeatureMutatedToProto(evt, nameof(message)).ToByteArray(),
             TopologyInvalidatedEvent evt => MapTopologyInvalidatedToProto(evt, nameof(message)).ToByteArray(),
             TargetLedgerEvent evt => MapTargetLedgerToProto(evt, nameof(message)).ToByteArray(),
@@ -60,6 +61,8 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
                     MapBatchRequestedFromProto(AssetMutationBatchRequestedEventProto.Parser.ParseFrom(payload.Span), nameof(payload)),
                 var t when t == typeof(AssetBatchAppliedEvent) =>
                     MapBatchAppliedFromProto(AssetBatchAppliedEventProto.Parser.ParseFrom(payload.Span), nameof(payload)),
+                var t when t == typeof(AssetMutationBatchRejectedEvent) =>
+                    MapBatchRejectedFromProto(AssetMutationBatchRejectedEventProto.Parser.ParseFrom(payload.Span), nameof(payload)),
                 var t when t == typeof(FeatureCatalogMutatedEvent) =>
                     MapFeatureMutatedFromProto(FeatureCatalogMutatedEventProto.Parser.ParseFrom(payload.Span), nameof(payload)),
                 var t when t == typeof(TopologyInvalidatedEvent) =>
@@ -91,6 +94,7 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             && target != typeof(OrderStateChangedEvent)
             && target != typeof(AssetMutationBatchRequestedEvent)
             && target != typeof(AssetBatchAppliedEvent)
+            && target != typeof(AssetMutationBatchRejectedEvent)
             && target != typeof(FeatureCatalogMutatedEvent)
             && target != typeof(TopologyInvalidatedEvent)
             && target != typeof(TargetsReservedEvent)
@@ -398,6 +402,11 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             proto.CorrelationId = evt.CorrelationId;
         }
 
+        if (evt.SourceVerticalId is not null)
+        {
+            proto.SourceVerticalId = evt.SourceVerticalId;
+        }
+
         foreach (var item in evt.Mutations)
         {
             proto.Mutations.Add(MapMutationItemToProto(item, paramName));
@@ -432,7 +441,8 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             ScopeId: proto.HasScopeId ? proto.ScopeId : null,
             Mutations: mutations,
             RequestedAtUtc: requestedAtUtc,
-            CorrelationId: proto.HasCorrelationId ? proto.CorrelationId : null);
+            CorrelationId: proto.HasCorrelationId ? proto.CorrelationId : null,
+            SourceVerticalId: proto.HasSourceVerticalId ? proto.SourceVerticalId : null);
     }
 
     private static AssetFeatureMutationItemProto MapMutationItemToProto(AssetFeatureMutationItem item, string paramName)
@@ -601,6 +611,11 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             proto.CorrelationId = evt.CorrelationId;
         }
 
+        if (evt.SourceVerticalId is not null)
+        {
+            proto.SourceVerticalId = evt.SourceVerticalId;
+        }
+
         foreach (var appliedItem in evt.AppliedItems)
         {
             proto.AppliedItems.Add(MapBatchAppliedItemToProto(appliedItem, paramName));
@@ -658,7 +673,85 @@ public sealed class ProtobufIntegrationMessageSerializer : IIntegrationMessageSe
             AppliedItems: appliedItems,
             AffectedBounds: proto.AffectedBounds is null ? null : MapBoundingBoxFromProto(proto.AffectedBounds, paramName),
             AppliedAtUtc: appliedAtUtc,
-            CorrelationId: proto.HasCorrelationId ? proto.CorrelationId : null);
+            CorrelationId: proto.HasCorrelationId ? proto.CorrelationId : null,
+            SourceVerticalId: proto.HasSourceVerticalId ? proto.SourceVerticalId : null);
+    }
+
+    private static AssetMutationBatchRejectedEventProto MapBatchRejectedToProto(AssetMutationBatchRejectedEvent evt, string paramName)
+    {
+        ValidateCatalogInstanceId(evt.CatalogInstanceId, paramName);
+        if (string.IsNullOrWhiteSpace(evt.ReasonCode))
+        {
+            throw new ArgumentException("AssetMutationBatchRejectedEvent.ReasonCode must not be empty.", paramName);
+        }
+
+        if (evt.ConflictingFeatureIds is null)
+        {
+            throw new ArgumentException("AssetMutationBatchRejectedEvent.ConflictingFeatureIds must not be null.", paramName);
+        }
+
+        var proto = new AssetMutationBatchRejectedEventProto
+        {
+            BatchId = FormatGuid(evt.BatchId),
+            CatalogInstanceId = evt.CatalogInstanceId,
+            OrganizationId = FormatGuid(evt.OrganizationId),
+            RequestedByService = evt.RequestedByService ?? string.Empty,
+            ReasonCode = evt.ReasonCode,
+            Reason = evt.Reason ?? string.Empty,
+            RejectedAtUtc = ToProtoTimestamp(evt.RejectedAtUtc),
+        };
+
+        if (evt.SourceOrderId is not null)
+        {
+            proto.SourceOrderId = evt.SourceOrderId;
+        }
+
+        if (evt.SourceOrderTypeId is not null)
+        {
+            proto.SourceOrderTypeId = evt.SourceOrderTypeId;
+        }
+
+        if (evt.ScopeId is not null)
+        {
+            proto.ScopeId = evt.ScopeId;
+        }
+
+        if (evt.CorrelationId is not null)
+        {
+            proto.CorrelationId = evt.CorrelationId;
+        }
+
+        if (evt.SourceVerticalId is not null)
+        {
+            proto.SourceVerticalId = evt.SourceVerticalId;
+        }
+
+        proto.ConflictingFeatureIds.AddRange(evt.ConflictingFeatureIds);
+        return proto;
+    }
+
+    private static AssetMutationBatchRejectedEvent MapBatchRejectedFromProto(AssetMutationBatchRejectedEventProto proto, string paramName)
+    {
+        ValidateCatalogInstanceId(proto.CatalogInstanceId, paramName);
+        if (string.IsNullOrWhiteSpace(proto.ReasonCode))
+        {
+            throw new FormatException("AssetMutationBatchRejectedEventProto.reason_code is required.");
+        }
+
+        return new AssetMutationBatchRejectedEvent(
+            BatchId: ParseGuidOrThrow(proto.BatchId, "batch_id"),
+            CatalogInstanceId: proto.CatalogInstanceId,
+            OrganizationId: ParseGuidOrThrow(proto.OrganizationId, "organization_id"),
+            RequestedByService: proto.RequestedByService,
+            SourceOrderId: proto.HasSourceOrderId ? proto.SourceOrderId : null,
+            SourceOrderTypeId: proto.HasSourceOrderTypeId ? proto.SourceOrderTypeId : null,
+            ScopeId: proto.HasScopeId ? proto.ScopeId : null,
+            ReasonCode: proto.ReasonCode,
+            Reason: proto.Reason,
+            ConflictingFeatureIds: [.. proto.ConflictingFeatureIds],
+            RejectedAtUtc: FromProtoTimestampOrThrow(proto.RejectedAtUtc, "rejected_at_utc"),
+            CorrelationId: proto.HasCorrelationId ? proto.CorrelationId : null,
+            SourceVerticalId: proto.HasSourceVerticalId ? proto.SourceVerticalId : null);
     }
 
     private static FeatureCatalogMutatedEventProto MapFeatureMutatedToProto(

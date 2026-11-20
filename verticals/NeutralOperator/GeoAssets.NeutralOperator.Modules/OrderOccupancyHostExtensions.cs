@@ -2,6 +2,11 @@ using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
+using GeoAssets.NeutralOperator.Modules.Occupancy;
+using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Messaging.Events;
+using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Orders;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using GeoAssets.Workflow.Hosting;
@@ -58,19 +63,48 @@ public static class OrderOccupancyHostExtensions
     /// <summary>
     /// Registers the approval that commits staged occupancy (XD01-318) over this host's
     /// <c>NeutralOperatorDbContext</c> stores, joined to the kernel <c>ServiceOrderDbContext</c>'s
-    /// unit of work and outbox (XD01-380), with its span and metrics. Call after <see cref="AddServerOrderOccupancyStaging"/> (whose options it reads)
-    /// and <c>AddServerWorkflowOutbox</c>.
+    /// unit of work and outbox (XD01-380), with its span and metrics — and its saga (XD01-383): the consumers of the kernel's
+    /// <see cref="IntegrationEventTypes.AssetMutationBatchAppliedV1"/> and <see cref="IntegrationEventTypes.AssetMutationBatchRejectedV1"/>
+    /// on this host's transport (a broker consumer each when a broker names a topic for them, in process when the host has
+    /// no broker — <see cref="IntegrationConsumerHostExtensions.AddWorkflowIntegrationConsumer{TEvent, THandler}"/>), and the
+    /// timeout sweeper (<see cref="OccupancyApplySagaOptions"/> from <c>Saga</c>). Call after
+    /// <see cref="AddServerOrderOccupancyStaging"/> (whose options it reads) and <c>AddServerWorkflowMessaging</c>.
     /// </summary>
-    public static IServiceCollection AddServerOccupancyCommit(this IServiceCollection services)
+    public static IServiceCollection AddServerOccupancyCommit(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
         // The approval that commits staged occupancy is this module's order action handler (XD01-360).
         services.AddScoped<IOrderActionHandler, OccupancyApprovalHandler>();
 
-        return services
-            .AddOccupancyCommit()
-            .AddOccupancyCommitPersistence();
+        services.AddOccupancyCommit().AddOccupancyCommitPersistence();
+
+        // The approval saga's replies, deduplicated by the saga's own inbox records (XD01-383).
+        services.TryAddScoped<ITenantOrganizationScope, TenantOrganizationScope>();
+        services.AddWorkflowIntegrationConsumer<AssetBatchAppliedEvent, OccupancyApplyAppliedHandler>(
+            configuration,
+            new IntegrationConsumerRegistration(
+                OccupancyApplySagaService.AppliedConsumerKey,
+                OccupancyApplySagaService.AppliedConsumerName,
+                IntegrationEventTypes.AssetMutationBatchAppliedV1));
+        services.AddWorkflowIntegrationConsumer<AssetMutationBatchRejectedEvent, OccupancyApplyRejectedHandler>(
+            configuration,
+            new IntegrationConsumerRegistration(
+                OccupancyApplySagaService.RejectedConsumerKey,
+                OccupancyApplySagaService.RejectedConsumerName,
+                IntegrationEventTypes.AssetMutationBatchRejectedV1));
+
+        // The saga timeout: flagged, counted, alerted on — never reverted silently.
+        services.AddOptions<OccupancyApplySagaOptions>()
+            .Bind(configuration.GetSection(OccupancyApplySagaOptions.SectionName))
+            .Validate(
+                o => o.ApplyTimeout > TimeSpan.Zero && o.SweepInterval > TimeSpan.Zero && o.SweepBatchSize > 0 && o.MaxPagesPerSweep > 0,
+                $"{OccupancyApplySagaOptions.SectionName}: ApplyTimeout and SweepInterval must be positive, SweepBatchSize and MaxPagesPerSweep at least 1.")
+            .ValidateOnStart();
+        services.AddHostedService<OccupancyApplySagaSweeper>();
+
+        return services;
     }
 
     /// <summary>

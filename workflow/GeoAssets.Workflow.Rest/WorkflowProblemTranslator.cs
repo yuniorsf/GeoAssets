@@ -3,6 +3,7 @@ using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Services;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -98,12 +99,21 @@ internal static class WorkflowProblemTranslator
         OccupancyProblemCodes.TargetReleased => new OccupancyTargetReleasedException(problem.Detail),
         // Approval that commits staged occupancy (XD01-318).
         OccupancyProblemCodes.ConcurrentModification => new OccupancyConflictException(problem.Strings("poleFeatureIds")),
+        // Approval saga (XD01-383).
+        OccupancyProblemCodes.ApplyPending => new OccupancyApplyPendingException(orderId ?? string.Empty, problem.Strings("poleFeatureIds")),
+        OccupancyProblemCodes.ApplyNotPending => new OccupancyApplyNotPendingException(orderId ?? string.Empty, SagaStateOf(problem)),
         // Shared-use dispatch (XD01-316).
         SharedUseProblemCodes.NoFanOut => new OrderTypeHasNoFanOutException(
             problem.String("orderTypeId") ?? string.Empty, problem.Detail),
         _ when SharedUseProblemCodes.ReasonOf(problem.Code) is { } reason => Blocked(problem, orderId, reason),
         _ => null,
     };
+
+    /// <summary>The saga state a not-pending retry names; null when the order has no saga.</summary>
+    private static OccupancyApplySagaState? SagaStateOf(WorkflowProblem problem) =>
+        Enum.TryParse<OccupancyApplySagaState>(problem.String("state"), ignoreCase: false, out var state) && Enum.IsDefined(state)
+            ? state
+            : null;
 
     /// <summary>A blocked dispatch comes back with its reason and the offending targets the host listed.</summary>
     private static SharedUseDispatchBlockedException Blocked(WorkflowProblem problem, string? orderId, SharedUseDispatchBlockReason reason)

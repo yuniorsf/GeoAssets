@@ -133,6 +133,29 @@ public sealed class InMemoryPoleOccupancyStore : IPoleOccupancyReader, IPoleOccu
         }
     }
 
+    /// <summary>
+    /// The approval saga's compensation (XD01-383), as the EF store's <c>RestoreEntriesAsync</c> does it: puts
+    /// <paramref name="entries"/> back on the pole the approval left at <paramref name="expectedVersion"/>, as the next
+    /// version, without the status-move checks of a revision.
+    /// </summary>
+    public PoleOccupancy RestoreEntries(string poleFeatureId, int expectedVersion, IReadOnlyCollection<PoleOccupancyEntry> entries)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(poleFeatureId);
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var organizationId = _tenantContext.CurrentOrganizationId;
+        lock (_state.Gate)
+        {
+            var stored = _state.Poles.GetValueOrDefault((organizationId, poleFeatureId));
+            if (stored is null || stored.Version != expectedVersion)
+                throw new OccupancyConflictException([poleFeatureId]);
+
+            var next = PoleOccupancy.Create(poleFeatureId, organizationId, entries, expectedVersion + 1, _state.TimeProvider.GetUtcNow());
+            _state.Poles[(organizationId, poleFeatureId)] = next;
+            return next;
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private List<PoleOccupancy> Find(IReadOnlyCollection<string> poleFeatureIds)

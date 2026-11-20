@@ -4,6 +4,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
+using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -29,12 +30,20 @@ namespace GeoAssets.NeutralOperator.Application.Occupancy;
 /// itself, and the unit rolls back.</para>
 ///
 /// <para><b>The write</b>, poles in ordinal order: each pole's live occupancy is replaced with
-/// its set applied (over-capacity entries included) and the set is marked committed; sets on
-/// skipped or not-executable targets are discarded; then the order moves along its approval
-/// transition, carrying the row version it was read with, and the approval is logged — after the
-/// sets are committed, because closing an order discards whatever is still staged on it; last,
-/// one asset mutation batch with the written poles' occupancy attributes is staged on the
-/// outbox.</para>
+/// its set applied (over-capacity entries included); sets on skipped or not-executable targets are
+/// discarded. When no pole was written, the order moves along its approval transition, carrying the
+/// row version it was read with, and the approval is logged.</para>
+///
+/// <para><b>The approval saga</b> (XD01-383, ADR-001 Phase 7): when poles were written, the asset catalog — the kernel,
+/// possibly another service — must apply their occupancy attributes before the approval is final. So the committed sets
+/// become <see cref="OccupancyChangeSetStatus.Pending"/> under one <see cref="OccupancyApplySaga"/> (with each pole's
+/// occupancy before the approval, for a compensation), the order keeps its status with
+/// <see cref="OccupancyApplySagaAttributes.AwaitingApply"/> — "approved, awaiting apply" — and the approval is logged; last,
+/// one asset mutation batch with the written poles' occupancy attributes is staged on the outbox, all in the same unit.
+/// <see cref="OccupancyApplySagaService"/> finalizes (order to its approved status) or compensates (occupancy restored)
+/// when the kernel answers. Approving an order whose saga is still pending, or a pole another order's pending saga holds,
+/// is refused with <see cref="OccupancyApplyPendingException"/>: nothing may be written over an occupancy a rejection may
+/// have to restore.</para>
 /// </summary>
 public sealed class OccupancyCommitService : IOccupancyCommitService
 {
@@ -54,6 +63,7 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
     private readonly IOccupancyChangeSetReader _changeSets;
     private readonly IOccupancyChangeSetWriter _changeSetWriter;
     private readonly IOutboxWriter _outbox;
+    private readonly IOccupancyApplySagaStore _sagas;
     private readonly IWorkflowUnitOfWork _unitOfWork;
     private readonly OrderOccupancyOptions _options;
     private readonly TimeProvider _timeProvider;
@@ -68,6 +78,7 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         IOccupancyChangeSetReader changeSets,
         IOccupancyChangeSetWriter changeSetWriter,
         IOutboxWriter outbox,
+        IOccupancyApplySagaStore sagas,
         IWorkflowUnitOfWork unitOfWork,
         OrderOccupancyOptions options,
         TimeProvider timeProvider)
@@ -81,6 +92,7 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         ArgumentNullException.ThrowIfNull(changeSets);
         ArgumentNullException.ThrowIfNull(changeSetWriter);
         ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(sagas);
         ArgumentNullException.ThrowIfNull(unitOfWork);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -94,22 +106,36 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         _changeSets = changeSets;
         _changeSetWriter = changeSetWriter;
         _outbox = outbox;
+        _sagas = sagas;
         _unitOfWork = unitOfWork;
         _options = options;
         _timeProvider = timeProvider;
     }
 
-    /// <summary>The causation id of the asset mutation batch an order's approval stages.</summary>
+    /// <summary>The causation id of the asset mutation batch an order's (first) approval stages.</summary>
     public static string CausationId(string orderId) => $"occupancy-commit:{orderId}";
 
+    /// <summary>The causation id of the asset mutation batch an order's <paramref name="attempt"/>-th approval stages (XD01-383).</summary>
+    public static string CausationId(string orderId, int attempt)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(attempt, 1);
+        return attempt == 1 ? CausationId(orderId) : $"{CausationId(orderId)}:{attempt}";
+    }
+
     /// <summary>
-    /// The id of the asset mutation batch an order's approval stages: derived from the order id,
+    /// The id of the asset mutation batch an order's (first) approval stages: derived from the order id,
     /// so a relayed batch delivered twice is applied once by an idempotent consumer.
     /// </summary>
-    public static Guid AssetMutationBatchId(string orderId)
+    public static Guid AssetMutationBatchId(string orderId) => AssetMutationBatchId(orderId, attempt: 1);
+
+    /// <summary>
+    /// The id of the asset mutation batch an order's <paramref name="attempt"/>-th approval stages (XD01-383): an approval
+    /// after a rejected one stages a new batch, so the kernel never answers it with the earlier one's result.
+    /// </summary>
+    public static Guid AssetMutationBatchId(string orderId, int attempt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(CausationId(orderId)));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(CausationId(orderId, attempt)));
         return new Guid(hash.AsSpan(0, 16));
     }
 
@@ -130,6 +156,12 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         if (order is not ServiceOrder stored)
             throw new InvalidOperationException($"Expected a {nameof(ServiceOrder)} instance, got {order.GetType().Name}.");
 
+        // XD01-383: an order whose earlier approval still awaits the catalog's apply is not approved again.
+        var latest = await _sagas.FindLatestForOrderAsync(order.Id, ct).ConfigureAwait(false);
+        if (latest is { State: OccupancyApplySagaState.Pending } || OccupancyApplySagaAttributes.IsAwaitingApply(order.Attributes))
+            throw new OccupancyApplyPendingException(order.Id, []);
+        var attempt = (latest?.Attempt ?? 0) + 1;
+
         var plan = await PlanAsync(order.Id, ct).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
 
@@ -137,7 +169,7 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         ct.ThrowIfCancellationRequested();
 
         var written = await _unitOfWork
-            .ExecuteAsync(token => WriteAsync(stored, orderType, approvedStatus, plan, principal, now, token), ct)
+            .ExecuteAsync(token => WriteAsync(stored, orderType, approvedStatus, plan, principal, now, attempt, token), ct)
             .ConfigureAwait(false);
 
         var changesByKind = plan.Commits
@@ -151,13 +183,14 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
             OrderId = order.Id,
             OrderTypeId = order.OrderTypeId,
             PreviousStatus = order.Status,
-            Status = approvedStatus,
+            Status = written.Count > 0 ? order.Status : approvedStatus,
+            AwaitingApply = written.Count > 0,
             ChangeSetsCommitted = plan.Commits.Count,
             ChangeSetsDiscarded = plan.Discards.Count,
             ChangesCommitted = changesByKind.Values.Sum(),
             ChangesByKind = changesByKind,
             PolesUpdated = written.Count,
-            AssetMutationBatchId = written.Count > 0 ? AssetMutationBatchId(order.Id) : null,
+            AssetMutationBatchId = written.Count > 0 ? AssetMutationBatchId(order.Id, attempt) : null,
         };
     }
 
@@ -206,12 +239,18 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
         if (stale.Count > 0)
             throw new OccupancyConflictException(stale);
 
+        // XD01-383: a pole another approval's pending saga holds is not written over — its rejection must restore it.
+        IReadOnlyList<string> held = poleIds.Count == 0 ? [] : await _sagas.FindPendingPolesAsync(poleIds, ct).ConfigureAwait(false);
+        if (held.Count > 0)
+            throw new OccupancyApplyPendingException(orderId, held);
+
         var commits = toCommit
             .OrderBy(set => set.PoleFeatureId, StringComparer.Ordinal)
             .Select(set => new PlannedCommit(
                 set,
                 targets[set.TargetId].AssetTypeId,
-                OccupancyChangeApplier.Apply(live.GetValueOrDefault(set.PoleFeatureId), set).Entries))
+                OccupancyChangeApplier.Apply(live.GetValueOrDefault(set.PoleFeatureId), set).Entries,
+                live.GetValueOrDefault(set.PoleFeatureId)))
             .ToList();
 
         return new CommitPlan(commits, toDiscard);
@@ -270,9 +309,9 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
 
     private async Task<List<(PlannedCommit Commit, PoleOccupancy Pole)>> WriteAsync(
         ServiceOrder order, OrderType orderType, string approvedStatus, CommitPlan plan,
-        WorkflowPrincipal principal, DateTimeOffset now, CancellationToken ct)
+        WorkflowPrincipal principal, DateTimeOffset now, int attempt, CancellationToken ct)
     {
-        var written = new List<(PlannedCommit, PoleOccupancy)>(plan.Commits.Count);
+        var written = new List<(PlannedCommit Commit, PoleOccupancy Pole)>(plan.Commits.Count);
         foreach (var commit in plan.Commits)
         {
             var set = commit.Set;
@@ -280,35 +319,95 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
                 .ReplaceEntriesAsync(set.PoleFeatureId, set.BaselineVersion, commit.Entries, ct)
                 .ConfigureAwait(false);
 
-            if (!await _changeSetWriter.MarkCommittedAsync(set.Commit(now), ct).ConfigureAwait(false))
-                throw new OccupancyConflictException([set.PoleFeatureId]);
-
             written.Add((commit, pole));
         }
 
         foreach (var set in plan.Discards)
             await _changeSetWriter.DiscardAsync(set.OrderId, set.TargetId, ct).ConfigureAwait(false);
 
-        // After the sets are committed: closing the order discards whatever is still staged on it.
-        await _orders.UpdateAsync(Approved(order, orderType, approvedStatus, now), ct).ConfigureAwait(false);
+        if (written.Count == 0)
+        {
+            // Nothing for the catalog to apply: the approval is final now, as before the saga.
+            await _orders.UpdateAsync(
+                OccupancyOrderRevision.With(order, orderType, approvedStatus, order.Attributes, now), ct).ConfigureAwait(false);
+            await _orders.AppendActionAsync(
+                order.Id,
+                new OrderActionLog(
+                    OrderAction.Approve, principal.UserId, now.UtcDateTime,
+                    "Approved: 0 occupancy change set(s) committed.", approvedStatus)
+                {
+                    ActorKind = principal.Kind,
+                },
+                ct).ConfigureAwait(false);
+            return written;
+        }
+
+        await BeginSagaAsync(order, orderType, approvedStatus, plan, principal, now, attempt, written, ct).ConfigureAwait(false);
+        return written;
+    }
+
+    /// <summary>
+    /// The saga half of an approval that wrote poles (XD01-383): the committed sets pending under one saga with the poles'
+    /// baselines, the order "approved, awaiting apply" with the approval logged, and the batch staged.
+    /// </summary>
+    private async Task BeginSagaAsync(
+        ServiceOrder order, OrderType orderType, string approvedStatus, CommitPlan plan, WorkflowPrincipal principal,
+        DateTimeOffset now, int attempt, List<(PlannedCommit Commit, PoleOccupancy Pole)> written, CancellationToken ct)
+    {
+        var batch = AttributesBatch(order, principal, written, attempt);
+        var saga = new OccupancyApplySaga
+        {
+            BatchId = batch.BatchId,
+            Attempt = attempt,
+            OrderId = order.Id,
+            OrderTypeId = order.OrderTypeId,
+            OrganizationId = order.OrganizationId,
+            PreviousStatus = order.Status,
+            ApprovedStatus = approvedStatus,
+            RequestedBy = principal.UserId,
+            RequestedAt = now,
+            LastRequestedAt = now,
+            State = OccupancyApplySagaState.Pending,
+            Batch = batch,
+        };
+        var poles = written
+            .Select(item => new OccupancyApplySagaPole(
+                item.Pole.PoleFeatureId,
+                item.Commit.Baseline?.Version ?? PoleOccupancy.UnsavedVersion,
+                item.Pole.Version,
+                item.Commit.Baseline?.Entries ?? []))
+            .ToList();
+        if (!await _sagas.BeginAsync(saga, poles, [.. written.Select(item => item.Commit.Set.Id)], ct).ConfigureAwait(false))
+            throw new OccupancyConflictException([.. written.Select(item => item.Commit.Set.PoleFeatureId)]);
+
+        // "Approved, awaiting apply": the status stays until the catalog applies the batch (OccupancyApplySagaService).
+        await _orders.UpdateAsync(
+            OccupancyOrderRevision.With(
+                order, orderType, order.Status,
+                OccupancyOrderRevision.SagaAttributes(order, OccupancyApplySagaAttributes.AwaitingApply, batch.BatchId), now),
+            ct).ConfigureAwait(false);
         await _orders.AppendActionAsync(
             order.Id,
             new OrderActionLog(
                 OrderAction.Approve, principal.UserId, now.UtcDateTime,
-                $"Approved: {plan.Commits.Count} occupancy change set(s) committed.", approvedStatus)
+                $"Approved: {plan.Commits.Count} occupancy change set(s) written to the poles, awaiting the asset catalog's apply of batch {batch.BatchId}.")
             {
                 ActorKind = principal.Kind,
             },
             ct).ConfigureAwait(false);
 
-        if (written.Count > 0)
-            await EnqueueAttributesAsync(order, principal, written, ct).ConfigureAwait(false);
-
-        return written;
+        await _outbox.EnqueueAsync(
+            batch,
+            IntegrationEventTypes.AssetMutationBatchRequestedV1,
+            partitionKey: order.Id,
+            catalogInstanceId: _options.CatalogInstanceId,
+            correlationId: order.Id,
+            causationId: CausationId(order.Id, attempt),
+            ct: ct).ConfigureAwait(false);
     }
 
-    private Task<Guid> EnqueueAttributesAsync(
-        ServiceOrder order, WorkflowPrincipal principal, List<(PlannedCommit Commit, PoleOccupancy Pole)> written, CancellationToken ct)
+    private AssetMutationBatchRequestedEvent AttributesBatch(
+        ServiceOrder order, WorkflowPrincipal principal, List<(PlannedCommit Commit, PoleOccupancy Pole)> written, int attempt)
     {
         var mutations = written
             .Select(item => new AssetFeatureMutationItem(
@@ -323,57 +422,23 @@ public sealed class OccupancyCommitService : IOccupancyCommitService
                 CustomAttributes: OccupancyAssetAttributes.For(item.Pole)))
             .ToList();
 
-        var batch = AssetMutationBatchRequestedEvent.Create(
+        return AssetMutationBatchRequestedEvent.Create(
             catalogInstanceId: _options.CatalogInstanceId,
             organizationId: order.OrganizationId,
             requestedByService: RequestedByService,
             performedByUserId: principal.UserId,
             mutations: mutations,
             timeProvider: _timeProvider,
-            batchId: AssetMutationBatchId(order.Id),
+            batchId: AssetMutationBatchId(order.Id, attempt),
             sourceOrderId: order.Id,
             sourceOrderTypeId: order.OrderTypeId,
             scopeId: (order as IScopeableResource)?.ScopeId,
-            correlationId: order.Id);
-
-        return _outbox.EnqueueAsync(
-            batch,
-            IntegrationEventTypes.AssetMutationBatchRequestedV1,
-            partitionKey: order.Id,
-            catalogInstanceId: _options.CatalogInstanceId,
             correlationId: order.Id,
-            causationId: CausationId(order.Id),
-            ct: ct);
+            sourceVerticalId: OccupancyApplySagaService.VerticalId);
     }
 
-    /// <summary>The order as the approval stores it: moved to <paramref name="approvedStatus"/>, stamped, carrying the row version it was read with.</summary>
-    private static ServiceOrder Approved(ServiceOrder order, OrderType orderType, string approvedStatus, DateTimeOffset now) => new()
-    {
-        Id = order.Id,
-        RowVersion = order.RowVersion,
-        Title = order.Title,
-        Description = order.Description,
-        OrderTypeId = order.OrderTypeId,
-        Status = approvedStatus,
-        Priority = order.Priority,
-        CreatedBy = order.CreatedBy,
-        AssignedTo = order.AssignedTo,
-        OrganizationId = order.OrganizationId,
-        CreatedAt = order.CreatedAt,
-        UpdatedAt = now.UtcDateTime,
-        ScheduledAt = order.ScheduledAt,
-        CompletedAt = ServiceOrderTransitions.IsSuccessState(orderType, approvedStatus) ? now.UtcDateTime : order.CompletedAt,
-        Attributes = new Dictionary<string, string>(order.Attributes, StringComparer.Ordinal),
-        Features = [.. order.Features],
-        SelectionSpec = order.SelectionSpec,
-        FeatureIds = [.. order.FeatureIds],
-        ParentOrderId = order.ParentOrderId,
-        ChildOrderIds = [.. order.ChildOrderIds],
-        Dispatches = [.. order.Dispatches],
-        ActionLog = [.. order.ActionLog],
-    };
-
-    private sealed record PlannedCommit(OccupancyChangeSet Set, string AssetTypeId, IReadOnlyList<PoleOccupancyEntry> Entries);
+    private sealed record PlannedCommit(
+        OccupancyChangeSet Set, string AssetTypeId, IReadOnlyList<PoleOccupancyEntry> Entries, PoleOccupancy? Baseline);
 
     private sealed record CommitPlan(IReadOnlyList<PlannedCommit> Commits, IReadOnlyList<OccupancyChangeSet> Discards);
 }

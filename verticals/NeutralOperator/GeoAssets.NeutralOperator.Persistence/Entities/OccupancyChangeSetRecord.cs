@@ -32,9 +32,15 @@ internal sealed class OccupancyChangeSetRecord
 
     public DateTime StagedAt { get; set; }
 
-    /// <summary>UTC instant the set was committed or discarded; null while staged.</summary>
+    /// <summary>UTC instant the set was written by an approval, committed or discarded; null while staged.</summary>
     public DateTime? ClosedAt { get; set; }
 
     /// <summary>The organization that owns the pole — and the order, its target and this row.</summary>
     public Guid OrganizationId { get; set; } = Guid.Empty;
+
+    /// <summary>
+    /// The asset mutation batch of the approval saga that holds this set (XD01-383) — set when an approval writes it to its
+    /// pole as <c>Pending</c>, kept once the saga commits or reverts it; null for a set no approval wrote.
+    /// </summary>
+    public Guid? ApplyBatchId { get; set; }
 }
