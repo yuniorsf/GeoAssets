@@ -68,8 +68,12 @@ signature and lifetime are validated as before.
 
 In Entra External ID (CIAM): expose an API (an app registration with an Application ID URI and an `access_as_user` scope)
 per host, grant the Web and MAUI client registrations that scope, and have the clients request each API's scope for that
-host's routes (the Web client's `GeoAssetsServer:ApiScope`, `GeoAssetsIpBillingServer:ApiScope`). Alternatively (model
-(a)) a vertical host can use the kernel's API audience as its own `ClientId` and the kernel needs no extra audience.
+host's routes: the Web client's `GeoAssetsServer:ApiScope` (the kernel) and `GeoAssetsIpBillingServer:ApiScope`, and — for
+a vertical reached through the gateway, e.g. `/api/v/neutral-operator/` — a `GeoAssetsServer:RouteScopes` entry
+(`PathPrefix` + `Scope`, Web and MAUI, XD01-397): a request under that prefix carries a token for that scope instead of
+the kernel's, consented at sign-in; a blank `Scope` (the shipped default) is ignored. Steps for NeutralOperator:
+`deploy/neutral-operator/README.md` "Token audiences". Alternatively (model (a)) a vertical host can use the kernel's API
+audience as its own `ClientId` and the kernel needs no extra audience.
 
 **Symptom of a missing audience**: the vertical host answers **502** with problem code `kernel.token-rejected` ("The
 GeoAssets kernel rejected the caller's token.", the detail carries the kernel's `error_description`, e.g. *The audience

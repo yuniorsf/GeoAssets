@@ -1,5 +1,5 @@
 using System.Net.Http.Headers;
-using Microsoft.Extensions.Configuration;
+using GeoAssets.Identity.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Identity.Client;
 
@@ -15,17 +15,20 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// has no REST-backed provider/repository today (it's InMemory + PostgreSQL only). Registered
 /// ahead of that, same as <c>ProviderConnectionMapRenderer</c> was in XD01-83 before XD01-84 wired
 /// it in: the seam is ready for whenever MAUI gains a REST call site against GeoAssets.Server.
+///
+/// The token's one scope is <see cref="ApiScopeRoutes.ScopeFor"/>'s for the request (XD01-397): a
+/// <c>GeoAssetsServer:RouteScopes</c> entry's under that route on the gateway, else <c>GeoAssetsServer:ApiScope</c>.
 /// </summary>
 public sealed partial class MsalAuthorizationHandler(
     IPublicClientApplication app,
-    IConfiguration configuration,
+    ApiScopeRoutes routes,
     ILogger<MsalAuthorizationHandler> logger) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var scope = configuration["GeoAssetsServer:ApiScope"];
+        var scope = request.RequestUri is { IsAbsoluteUri: true } uri ? routes.ScopeFor(uri) : routes.DefaultScope;
         if (!string.IsNullOrWhiteSpace(scope))
         {
             var account = (await app.GetAccountsAsync()).FirstOrDefault();

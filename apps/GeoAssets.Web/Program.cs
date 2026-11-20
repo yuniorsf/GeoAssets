@@ -116,19 +116,10 @@ builder.Services.AddSingleton<IProviderPool, ProviderPool>();
 var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
     ?? throw new InvalidOperationException("GeoAssetsServer:BaseUrl is not configured.");
 
-// AuthorizationMessageHandler (MSAL) attaches the CIAM access token to the "GeoAssetsServer"
-// named HttpClient that RestProviderFactory requests (XD01-17) — scoped to the configured,
-// trusted GeoAssets.Server origin only, never to arbitrary REST URLs a user might type into
-// the provider-pool UI (RestProviderPlugin).
-builder.Services.AddHttpClient("GeoAssetsServer")
-    .AddHttpMessageHandler(sp =>
-    {
-        var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
-        handler.ConfigureHandler(
-            authorizedUrls: [geoAssetsServerBaseUrl],
-            scopes: [builder.Configuration["GeoAssetsServer:ApiScope"] ?? ""]);
-        return handler;
-    });
+// The "GeoAssetsServer" named HttpClient that RestProviderFactory requests (XD01-17) attaches the CIAM access token,
+// scoped to the configured, trusted gateway origin only — GeoAssetsServer:ApiScope's, or a GeoAssetsServer:RouteScopes
+// entry's for a request under that route (XD01-397); see GeoAssetsServerClientExtensions.
+builder.Services.AddGeoAssetsServerClient(builder.Configuration, geoAssetsServerBaseUrl);
 
 // The map context menu's feature actions (XD01-370): GET /api/geoassets/features/{id}/actions on GeoAssets.Server,
 // through the token-carrying "GeoAssetsServer" client above.

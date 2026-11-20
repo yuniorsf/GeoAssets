@@ -24,11 +24,25 @@ This host validates the caller's token against its **own** API registration (`Az
 API's client id) and forwards the same token to the kernel's identity routes (`/api/identity/me`, `/api/identity/policies`,
 `/api/identity/organization-grants/me`), so the kernel must accept that audience: set on the kernel
 `AzureAdCiam__AdditionalAudiences__N=<NeutralOperator API client id>` (or its App ID URI, whichever the tokens carry as
-`aud`; `deploy/server/.env` for the local stack). In Entra External ID (CIAM): expose an API for this host (Application ID
-URI + `access_as_user` scope), grant the Web and MAUI clients that scope, and have them request it for this vertical's
-routes. Alternatively (model (a)) set `AzureAdCiam__ClientId` to the kernel's API audience — what works while the clients
-request only the kernel's scope — and the kernel needs no extra audience. See `deploy/server/README.md` "Token audiences of
-the vertical hosts".
+`aud`; `deploy/server/.env` for the local stack). See `deploy/server/README.md` "Token audiences of the vertical hosts".
+
+The Web and MAUI clients reach this host through the gateway at `/api/v/neutral-operator/` and request this API's scope for
+exactly those routes (XD01-397) — every other request keeps the kernel's scope. To run CIAM model (b) end to end:
+
+1. In Entra External ID (CIAM), create an app registration for the NeutralOperator API and expose an API on it
+   (Application ID URI, e.g. `api://<NeutralOperator API client id>`, and an `access_as_user` scope).
+2. Grant the Web (SPA) and MAUI (native) client registrations that scope (API permissions → *My APIs*; grant admin consent
+   if the tenant requires it).
+3. Set the clients' route scope for this vertical's routes — the entry `GeoAssetsServer:RouteScopes` already lists with a
+   blank `Scope` (blank = ignored, so the request keeps the kernel's scope): in `apps/GeoAssets.Web/wwwroot/appsettings.json`
+   (baked in at build time, like `GeoAssetsServer:ApiScope`) and `apps/GeoAssets.MAUI/appsettings.json`,
+   `{ "PathPrefix": "/api/v/neutral-operator/", "Scope": "api://<NeutralOperator API client id>/access_as_user" }`. The
+   clients ask consent for it at sign-in and acquire its token separately, one resource per token request.
+4. Set this host's `AzureAdCiam__ClientId` to the NeutralOperator API's client id.
+5. List its audience on the kernel: `AzureAdCiam__AdditionalAudiences__N=<NeutralOperator API client id>`.
+
+Alternatively (model (a)) set `AzureAdCiam__ClientId` to the kernel's API audience, leave the clients' route scope blank,
+and the kernel needs no extra audience.
 
 A kernel that does not accept the audience makes every route that needs the caller's identity answer **502**
 `kernel.token-rejected` (the detail carries the kernel's `error_description`) with one Error log naming the kernel route,

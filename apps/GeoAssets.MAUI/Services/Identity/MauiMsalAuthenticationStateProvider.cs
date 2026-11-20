@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GeoAssets.Identity.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Identity.Client;
@@ -19,7 +20,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// from the ID token's claims, so no manual JWT parsing is needed here.
 /// </summary>
 public sealed class MauiMsalAuthenticationStateProvider(
-    IPublicClientApplication app, IConfiguration configuration) : AuthenticationStateProvider
+    IPublicClientApplication app, IConfiguration configuration, ApiScopeRoutes routes) : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
@@ -41,10 +42,18 @@ public sealed class MauiMsalAuthenticationStateProvider(
         }
     }
 
-    /// <summary>Launches MSAL's interactive (system-browser) sign-in flow.</summary>
+    /// <summary>
+    /// Launches MSAL's interactive (system-browser) sign-in flow — asking consent for the
+    /// <c>GeoAssetsServer:RouteScopes</c> scopes too (XD01-397): another resource's API each, whose token
+    /// <see cref="MsalAuthorizationHandler"/> acquires silently on its own, since one token request carries only one
+    /// resource's scopes.
+    /// </summary>
     public async Task SignInInteractiveAsync(CancellationToken ct = default)
     {
-        var result = await app.AcquireTokenInteractive(RequestedScopes).ExecuteAsync(ct);
+        var request = app.AcquireTokenInteractive(RequestedScopes);
+        if (routes.AdditionalScopes.Count > 0)
+            request = request.WithExtraScopesToConsent(routes.AdditionalScopes);
+        var result = await request.ExecuteAsync(ct);
         NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(result.ClaimsPrincipal)));
     }
 
