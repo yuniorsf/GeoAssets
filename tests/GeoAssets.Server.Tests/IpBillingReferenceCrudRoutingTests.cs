@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using FluentAssertions;
+using GeoAssets.IpBilling.GrantSync;
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.Repositories;
 using GeoAssets.IpBilling.Resolution;
@@ -132,8 +133,9 @@ public sealed class IpBillingReferenceCrudRoutingTests
             throw new NotSupportedException();
     }
 
-    private static async Task<(TestServer Server, InMemoryMunicipioRepository Municipios, InMemoryUnidadeOrganizacionalRepository Unidades)> BuildServerAsync()
+    private static async Task<(TestServer Server, InMemoryMunicipioRepository Municipios, InMemoryUnidadeOrganizacionalRepository Unidades)> BuildServerAsync(RecordingMunicipioGrantSyncQueue? queue = null)
     {
+        queue ??= new RecordingMunicipioGrantSyncQueue();
         var municipioRepo = new InMemoryMunicipioRepository();
         var unidadeRepo = new InMemoryUnidadeOrganizacionalRepository();
 
@@ -146,6 +148,7 @@ public sealed class IpBillingReferenceCrudRoutingTests
                     services.AddRouting();
                     services.AddSingleton(TimeProvider.System);
                     services.AddSingleton<IMunicipioRepository>(municipioRepo);
+                    services.AddSingleton<IMunicipioGrantSyncQueue>(queue);
                     services.AddSingleton<IUnidadeOrganizacionalRepository>(unidadeRepo);
                     services.AddSingleton<ILampTypeRepository>(new NeverCalledLampTypeRepository());
                     services.AddSingleton<IFaturamentoRepository>(new NeverCalledFaturamentoRepository());
@@ -267,6 +270,91 @@ public sealed class IpBillingReferenceCrudRoutingTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await municipios.GetAllAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PostMunicipio_WithPrefeitura_QueuesASyncRequestedByTheCallersTokenClaim()
+    {
+        var queue = new RecordingMunicipioGrantSyncQueue();
+        var (server, _, _) = await BuildServerAsync(queue);
+        using var client = AuthenticatedClient(server);
+        var prefeitura = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync(new Uri("/api/ip-billing/municipios", UriKind.Relative), MunicipioRequest(prefeituraId: prefeitura));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var (change, requestedBy) = queue.Queued.Should().ContainSingle().Subject;
+        change.Kind.Should().Be(MunicipioGrantSyncKind.Sync);
+        change.PrefeituraOrganizationId.Should().Be(prefeitura);
+        requestedBy.Should().Be("test-user");
+    }
+
+    [Fact]
+    public async Task PostMunicipio_WithoutPrefeitura_QueuesNothing()
+    {
+        var queue = new RecordingMunicipioGrantSyncQueue();
+        var (server, _, _) = await BuildServerAsync(queue);
+        using var client = AuthenticatedClient(server);
+
+        await client.PostAsJsonAsync(new Uri("/api/ip-billing/municipios", UriKind.Relative), MunicipioRequest());
+
+        queue.Queued.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PutMunicipio_ChangingThePrefeitura_QueuesASyncNamingThePreviousOne()
+    {
+        var queue = new RecordingMunicipioGrantSyncQueue();
+        var (server, municipios, _) = await BuildServerAsync(queue);
+        using var client = AuthenticatedClient(server);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        await client.PostAsJsonAsync(new Uri("/api/ip-billing/municipios", UriKind.Relative), MunicipioRequest(prefeituraId: first));
+        var created = (await municipios.GetAllAsync()).Single();
+        queue.Queued.Clear();
+
+        var response = await client.PutAsJsonAsync(
+            new Uri($"/api/ip-billing/municipios/{created.Id}", UriKind.Relative),
+            new { ibgeCode = created.IbgeCode, name = created.Name, uf = created.Uf, distribuidoraOrganizationId = created.DistribuidoraOrganizationId, prefeituraOrganizationId = second });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var change = queue.Queued.Should().ContainSingle().Subject.Change;
+        change.Kind.Should().Be(MunicipioGrantSyncKind.Sync);
+        change.PrefeituraOrganizationId.Should().Be(second);
+        change.PreviousPrefeituraOrganizationId.Should().Be(first);
+    }
+
+    [Fact]
+    public async Task DeleteMunicipio_WithPrefeitura_QueuesARevokeOfItsGrant()
+    {
+        var queue = new RecordingMunicipioGrantSyncQueue();
+        var (server, municipios, _) = await BuildServerAsync(queue);
+        using var client = AuthenticatedClient(server);
+        var prefeitura = Guid.NewGuid();
+        await client.PostAsJsonAsync(new Uri("/api/ip-billing/municipios", UriKind.Relative), MunicipioRequest(prefeituraId: prefeitura));
+        var created = (await municipios.GetAllAsync()).Single();
+        queue.Queued.Clear();
+
+        var response = await client.DeleteAsync(new Uri($"/api/ip-billing/municipios/{created.Id}", UriKind.Relative));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var change = queue.Queued.Should().ContainSingle().Subject.Change;
+        change.Kind.Should().Be(MunicipioGrantSyncKind.Revoke);
+        change.PrefeituraOrganizationId.Should().Be(prefeitura);
+        change.IbgeCode.Should().Be(created.IbgeCode);
+    }
+
+    [Fact]
+    public async Task DeleteMunicipio_Unknown_Returns204AndQueuesNothing()
+    {
+        var queue = new RecordingMunicipioGrantSyncQueue();
+        var (server, _, _) = await BuildServerAsync(queue);
+        using var client = AuthenticatedClient(server);
+
+        var response = await client.DeleteAsync(new Uri($"/api/ip-billing/municipios/{Guid.NewGuid()}", UriKind.Relative));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        queue.Queued.Should().BeEmpty();
     }
 
     [Fact]

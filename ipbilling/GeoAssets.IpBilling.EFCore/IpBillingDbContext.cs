@@ -41,6 +41,7 @@ public class IpBillingDbContext(DbContextOptions<IpBillingDbContext> options)
     internal DbSet<DistribuidoraLampWattageRecord>     DistribuidoraLampWattages     => Set<DistribuidoraLampWattageRecord>();
     internal DbSet<FiscalizacaoLampDetailRecord>       FiscalizacaoLampDetails       => Set<FiscalizacaoLampDetailRecord>();
     internal DbSet<OficioLampDetailRecord>             OficioLampDetails             => Set<OficioLampDetailRecord>();
+    internal DbSet<MunicipioGrantSyncRequestRecord>    MunicipioGrantSyncRequests    => Set<MunicipioGrantSyncRequestRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

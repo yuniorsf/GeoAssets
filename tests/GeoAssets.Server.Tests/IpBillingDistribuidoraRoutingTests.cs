@@ -102,6 +102,7 @@ public sealed class IpBillingDistribuidoraRoutingTests
                     services.AddSingleton<IDistribuidoraRepository>(distribuidoras);
                     services.AddSingleton<IDistribuidoraLampWattageRepository>(chart);
                     services.AddSingleton<IMunicipioRepository>(municipios);
+                    services.AddSingleton<GeoAssets.IpBilling.GrantSync.IMunicipioGrantSyncQueue>(new RecordingMunicipioGrantSyncQueue());
                     services.AddAuthentication("Test")
                         .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
                     services.AddAuthorization(options =>
