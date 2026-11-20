@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -22,7 +23,8 @@ public sealed class RestOrganizationGrantClient(HttpClient http, IServiceAuthTok
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return SendAsync<OrganizationGrantUpsertResult>(HttpMethod.Put, Route, JsonContent.Create(request, options: _opts), ct);
+        return SendAsync<OrganizationGrantUpsertResult>(
+            HttpMethod.Put, Route, JsonContent.Create(request, options: _opts), ct, conflictKey: request.Key);
     }
 
     public Task<OrganizationGrantRevokeResult> RevokeAsync(OrganizationGrantKey key, CancellationToken ct)
@@ -44,7 +46,8 @@ public sealed class RestOrganizationGrantClient(HttpClient http, IServiceAuthTok
         return SendAsync<OrganizationGrantPage>(HttpMethod.Get, Route + query, content: null, ct);
     }
 
-    private async Task<T> SendAsync<T>(HttpMethod method, string path, HttpContent? content, CancellationToken ct)
+    private async Task<T> SendAsync<T>(
+        HttpMethod method, string path, HttpContent? content, CancellationToken ct, OrganizationGrantKey? conflictKey = null)
     {
         using var request = new HttpRequestMessage(method, new Uri(path, UriKind.Relative)) { Content = content };
 
@@ -55,8 +58,44 @@ public sealed class RestOrganizationGrantClient(HttpClient http, IServiceAuthTok
         }
 
         using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
+        if (conflictKey is not null && response.StatusCode == HttpStatusCode.Conflict
+            && await ReadConflictDetailAsync(response, ct).ConfigureAwait(false) is { IsConflict: true } conflict)
+        {
+            throw new OrganizationGrantConflictException(conflictKey, conflict.Detail);
+        }
+
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<T>(_opts, ct).ConfigureAwait(false)
             ?? throw new HttpRequestException($"The kernel's {method} /{Route} answered an empty body.");
+    }
+
+    /// <summary>
+    /// Whether a 409's body is the kernel's <see cref="OrganizationGrantConflictException.ProblemCode"/> problem (XD01-401), and
+    /// its <c>detail</c>. Anything else — no body, not JSON, not an object, another code — is not, and keeps the plain 409.
+    /// </summary>
+    private static async Task<(bool IsConflict, string? Detail)> ReadConflictDetailAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using (stream.ConfigureAwait(false))
+            {
+                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+                var root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Object
+                    || !root.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.String
+                    || !string.Equals(code.GetString(), OrganizationGrantConflictException.ProblemCode, StringComparison.Ordinal))
+                {
+                    return (false, null);
+                }
+
+                var detail = root.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null;
+                return (true, detail);
+            }
+        }
+        catch (JsonException)
+        {
+            return (false, null);
+        }
     }
 }
