@@ -1,5 +1,6 @@
 using GeoAssets.Gateway;
 using GeoAssets.Infrastructure.Observability;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 // forwarder span's) make a gateway hop one trace with the backend's spans; /healthz is excluded from traces. ──────────
 builder.Services.AddGeoAssetsObservability(builder.Configuration);
 builder.Services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddSource(GatewayTelemetry.YarpActivitySourceName));
+builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddMeter(GatewayTelemetry.MeterName));
 builder.Services.AddHealthChecks();
 
 // ── Destination addresses (XD01-213) — read from configuration so a real deployment points
@@ -26,10 +28,15 @@ builder.Services.AddReverseProxy().LoadFromMemory(routes, clusters);
 // ── CORS for the browser origins (XD01-384) — see GatewayCors. ───────────────────────────────────────────────────────
 builder.Services.AddGatewayCors(builder.Configuration);
 
-// ── Per-OrganizationId token-bucket rate limiting (XD01-214) ────────────────────────────────
+// ── Token-bucket rate limiting (XD01-214, XD01-393) — api and tiles policies, keyed by organization claim → token
+// subject → client address (behind RateLimiting:TrustedProxies/TrustedNetworks); see GatewayRateLimiting. ─────────────
 builder.Services.AddTenantRateLimiting(builder.Configuration);
 
 var app = builder.Build();
+
+// The client address first (XD01-393): a trusted proxy's X-Forwarded-For becomes RemoteIpAddress before the rate limiter
+// keys by it; the routes' X-Forwarded transform later forwards that same address. A no-op without a trusted proxy.
+app.UseGatewayTrustedProxies();
 
 // CORS first: a preflight is answered here, never rate-limited nor proxied, and a 429 still carries the CORS headers.
 app.UseCors();

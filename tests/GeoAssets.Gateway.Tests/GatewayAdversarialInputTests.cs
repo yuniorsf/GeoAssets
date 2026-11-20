@@ -17,7 +17,7 @@ namespace GeoAssets.Gateway.Tests;
 /// <summary>
 /// XD01-216's cross-tenant penetration test pass against the Gateway: adversarial inputs a
 /// pentest would specifically try against <see cref="GatewayRouteCatalog"/>'s route matching and
-/// <see cref="OrganizationIdPartitionKeyResolver"/>'s claim extraction, on top of the "happy
+/// <see cref="RateLimitPartitionKeyResolver"/>'s claim extraction, on top of the "happy
 /// path" coverage <see cref="GatewayRoutingTests"/>/<see cref="GatewayRateLimitingTests"/>
 /// already have.
 /// </summary>
@@ -135,7 +135,7 @@ public sealed class GatewayAdversarialInputTests : IAsyncLifetime
         var response = await client.GetAsync(new Uri("/api/geoassets/widgets", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "OrganizationIdPartitionKeyResolver.CanReadToken must reject a malformed/garbage token into the shared 'unresolved' bucket, never throw and take the Gateway down");
+            "RateLimitPartitionKeyResolver must read no claim from a malformed/garbage token (the client address then decides the bucket), never throw and take the Gateway down");
     }
 
     public async Task DisposeAsync()

@@ -1,70 +1,128 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using GeoAssets.Identity.Authentication;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace GeoAssets.Gateway;
 
 /// <summary>
-/// Per-<c>OrganizationId</c> token-bucket rate limiting at the gateway edge (XD01-214) — mitigates
-/// the "noisy neighbor" risk (e.g. a contractor's batch mobile photo upload) degrading other
-/// tenants sharing the same downstream clusters, before their traffic ever reaches a backend.
-///
-/// Every <see cref="OrganizationIdPartitionKeyResolver.Resolve"/> partition gets its own
-/// independent <see cref="TokenBucketRateLimiterOptions"/> instance (the token-bucket limiter
-/// factory passed to <see cref="RateLimitPartition.GetTokenBucketLimiter{TKey}"/> runs once per
-/// distinct key), so one organization exhausting its bucket can never consume another's tokens.
+/// Token-bucket rate limiting at the gateway edge (XD01-214, XD01-393) — keeps one caller's burst (a contractor's batch
+/// mobile photo upload, a map pan's dozens of tiles) from degrading everyone else sharing the same downstream clusters,
+/// before the traffic ever reaches a backend.
+/// <para>
+/// One global <see cref="PartitionedRateLimiter"/>, its partition chosen per request from the policy
+/// (<see cref="GatewayRateLimitPolicies.Classify"/>: <c>tiles</c> for <c>/wms</c>/<c>/wfs</c>, <c>api</c> otherwise) and
+/// the caller (<see cref="RateLimitPartitionKeyResolver"/>: organization claim → token subject → client address). The
+/// policy is part of the partition key and each policy has its own <see cref="RateLimitBucketOptions"/>
+/// (<c>RateLimiting:Api</c>, <c>RateLimiting:Tiles</c>), so a caller exhausting its tile bucket keeps its API bucket and
+/// vice versa, and one caller's bucket is never another's. A single selecting limiter rather than
+/// <see cref="PartitionedRateLimiter.CreateChained{TResource}"/>: chaining makes every request acquire from every limiter
+/// (a tile request would also spend API tokens), the opposite of two disjoint budgets; and rather than YARP per-route
+/// policies, which would change the route table and run after routing — the global limiter rejects before routing,
+/// unmatched paths included. <c>/healthz</c> is never limited.
+/// </para>
+/// <para>
+/// A rejected request is answered 429 at once (no queue) with <c>Retry-After</c> (seconds, from the bucket's own
+/// estimate, else its replenishment period) and an <c>application/problem+json</c> body carrying
+/// <c>code: rate-limit.exceeded</c> and the <c>policy</c>, and counted on
+/// <see cref="GatewayTelemetry.RateLimitedCounterName"/>.
+/// </para>
 /// </summary>
 internal static class GatewayRateLimiting
 {
+    /// <summary>The problem body's <c>code</c> of a rate-limited request.</summary>
+    public const string RateLimitExceededCode = "rate-limit.exceeded";
+
+    /// <summary>
+    /// <c>RateLimiting:Api</c> when not configured — per caller (subject or client address by default): a 500-request
+    /// burst for a mobile photo-upload sync, refilled at 10 requests/s. See <c>docs/perf/gateway-rate-limits.md</c>.
+    /// </summary>
+    public static readonly RateLimitBucketOptions DefaultApi = new(TokenLimit: 500, TokensPerPeriod: 10, ReplenishmentPeriodSeconds: 1);
+
+    /// <summary>
+    /// <c>RateLimiting:Tiles</c> when not configured — per client address (tiles are anonymous): a 1000-tile burst for
+    /// a few users zooming behind one NAT, refilled at 100 tiles/s. See <c>docs/perf/gateway-rate-limits.md</c>.
+    /// </summary>
+    public static readonly RateLimitBucketOptions DefaultTiles = new(TokenLimit: 1000, TokensPerPeriod: 100, ReplenishmentPeriodSeconds: 1);
+
     private const string HealthPath = "/healthz";
+    private const string ProblemContentType = "application/problem+json";
 
     public static IServiceCollection AddTenantRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
-        var tokenLimit = configuration.GetValue("RateLimiting:TokenLimit", defaultValue: 100);
-        var tokensPerPeriod = configuration.GetValue("RateLimiting:TokensPerPeriod", defaultValue: 100);
-        var replenishmentPeriodSeconds = configuration.GetValue("RateLimiting:ReplenishmentPeriodSeconds", defaultValue: 10);
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        // Entra CIAM doesn't emit an organization claim out of the box (ClaimMapping.EntraDefault
-        // leaves OrganizationIdClaimTypes empty) — same convention as HttpTenantContext in
-        // GeoAssets.Server/GeoAssets.FieldService.Server. Until an operator configures this, every
-        // caller resolves to OrganizationIdPartitionKeyResolver.UnresolvedPartitionKey and shares
-        // one bucket, which is a safe (if less useful) default rather than a broken one.
-        // Only OrganizationIdClaimTypes is ever read (OrganizationIdPartitionKeyResolver doesn't
-        // need ObjectId/Email/DisplayName/Role), so a minimal ClaimMapping is enough here —
-        // ClaimMapping is a plain class with init-only properties, not a record, so there's no
-        // "with" expression to copy ClaimMapping.EntraDefault's other fields from.
-        var organizationIdClaimType = configuration["RateLimiting:OrganizationIdClaimType"];
+        var section = configuration.GetSection("RateLimiting");
+
+        // RateLimiting:Api:*, overridden by the pre-XD01-393 flat RateLimiting:{TokenLimit,TokensPerPeriod,
+        // ReplenishmentPeriodSeconds} when a deployment still sets them, so its existing override keeps working.
+        var api = RateLimitBucketOptions.Read(section, RateLimitBucketOptions.Read(section.GetSection("Api"), DefaultApi));
+        var tiles = RateLimitBucketOptions.Read(section.GetSection("Tiles"), DefaultTiles);
+
+        // Entra CIAM emits no organization claim (ClaimMapping.EntraDefault leaves OrganizationIdClaimTypes empty): until an
+        // operator configures one, the key falls back to the token's subject, then to the client address. Only
+        // OrganizationIdClaimTypes is read from this mapping.
+        var organizationIdClaimType = section["OrganizationIdClaimType"];
         var claimMapping = string.IsNullOrWhiteSpace(organizationIdClaimType)
             ? ClaimMapping.EntraDefault
             : new ClaimMapping { OrganizationIdClaimTypes = [organizationIdClaimType] };
 
+        services.AddMetrics();
+        services.AddSingleton<GatewayRateLimitMetrics>();
+        services.AddGatewayTrustedProxies(configuration);
+
         services.AddRateLimiter(options =>
         {
-            options.OnRejected = (context, ct) =>
-            {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                return ValueTask.CompletedTask;
-            };
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = (context, ct) => RejectAsync(context, api, tiles, ct);
 
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
             {
-                // The gateway's own liveness probe (XD01-384) carries no token: it must never be throttled by — nor
-                // consume — the shared unresolved bucket the caller traffic without an organization claim lands in.
+                // The gateway's own liveness probe (XD01-384) carries no token: it must never be throttled by — nor consume —
+                // a bucket of the caller traffic.
                 if (httpContext.Request.Path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase))
                     return RateLimitPartition.GetNoLimiter(HealthPath);
 
-                var partitionKey = OrganizationIdPartitionKeyResolver.Resolve(httpContext.Request, claimMapping);
-                return RateLimitPartition.GetTokenBucketLimiter(partitionKey, _ => new TokenBucketRateLimiterOptions
-                {
-                    TokenLimit = tokenLimit,
-                    TokensPerPeriod = tokensPerPeriod,
-                    ReplenishmentPeriod = TimeSpan.FromSeconds(replenishmentPeriodSeconds),
-                    QueueLimit = 0,
-                    AutoReplenishment = true,
-                });
+                var policy = GatewayRateLimitPolicies.Classify(httpContext.Request.Path);
+                var bucket = BucketOf(policy, api, tiles);
+                var partitionKey = policy.ToName() + "|" + RateLimitPartitionKeyResolver.Resolve(httpContext.Request, claimMapping);
+                return RateLimitPartition.GetTokenBucketLimiter(partitionKey, _ => bucket.ToLimiterOptions());
             });
         });
 
         return services;
+    }
+
+    private static RateLimitBucketOptions BucketOf(GatewayRateLimitPolicy policy, RateLimitBucketOptions api, RateLimitBucketOptions tiles) =>
+        policy == GatewayRateLimitPolicy.Tiles ? tiles : api;
+
+    private static async ValueTask RejectAsync(
+        OnRejectedContext context, RateLimitBucketOptions api, RateLimitBucketOptions tiles, CancellationToken cancellationToken)
+    {
+        var httpContext = context.HttpContext;
+        var policy = GatewayRateLimitPolicies.Classify(httpContext.Request.Path);
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var estimate)
+            ? estimate
+            : BucketOf(policy, api, tiles).ReplenishmentPeriod;
+        var retryAfterSeconds = Math.Max(1L, (long)Math.Ceiling(retryAfter.TotalSeconds));
+
+        httpContext.RequestServices.GetRequiredService<GatewayRateLimitMetrics>().RecordRejected(policy);
+
+        var response = httpContext.Response;
+        response.StatusCode = StatusCodes.Status429TooManyRequests;
+        response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status429TooManyRequests,
+            Title = "Too many requests",
+            Detail = string.Create(CultureInfo.InvariantCulture, $"The '{policy.ToName()}' rate limit for this caller is exhausted; retry after {retryAfterSeconds} s."),
+        };
+        problem.Extensions["code"] = RateLimitExceededCode;
+        problem.Extensions["policy"] = policy.ToName();
+
+        await response.WriteAsJsonAsync(problem, (JsonSerializerOptions?)null, ProblemContentType, cancellationToken).ConfigureAwait(false);
     }
 }

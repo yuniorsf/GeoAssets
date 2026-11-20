@@ -32,8 +32,10 @@ The stack also runs `GeoAssets.Gateway` (service `gateway`, host port **8090**, 
 client (`deploy/web`, `GEOASSETS_GATEWAY_URL=http://localhost:8090`) talks to: every kernel API unchanged (`/api/**`,
 `/wms`, `/wfs` → `server:8080`) and the NeutralOperator vertical at `/api/v/neutral-operator/**` (rewritten to `/api/**`).
 It forwards the bearer token untouched (it authorizes nothing), answers CORS for `WEB_ORIGIN` (default
-`http://localhost:8081`) and the dev origins, and rate-limits per organization (`GATEWAY_RATE_LIMIT_TOKENS` per 10 s while
-every caller shares one bucket). Here the kernel keeps hosting the NeutralOperator module (`GeoAssets__Modules__1`) and is
+`http://localhost:8081`) and the dev origins, and rate-limits each caller (organization claim, else token subject, else
+client IP) with two buckets (XD01-393): API calls (`GATEWAY_RATE_LIMIT_API_TOKENS`, default 500, refilled 10/s) and WMS/WFS
+tiles (`GATEWAY_RATE_LIMIT_TILE_TOKENS`, default 1000, refilled 100/s) — see `docs/perf/gateway-rate-limits.md`; the former
+`GATEWAY_RATE_LIMIT_TOKENS` is no longer read. Here the kernel keeps hosting the NeutralOperator module (`GeoAssets__Modules__1`) and is
 the gateway's NeutralOperator destination — see `deploy/neutral-operator/README.md` to switch to `NeutralOperator.Server`.
 
 The kernel's default `GeoAssets:Modules` is `[ "postgres-spatial" ]` (XD01-385); an unknown module id — such as the retired
