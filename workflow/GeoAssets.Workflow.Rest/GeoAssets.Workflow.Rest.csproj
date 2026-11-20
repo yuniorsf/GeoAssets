@@ -22,7 +22,6 @@
     <!-- IServiceAuthTokenProvider and ModulePermissionSet (XD01-382): the kernel's machine-to-machine clients
          (RestTargetLedgerClient, RestVerticalRegistrationClient) authenticate as GeoAssets.ServiceCaller. -->
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
-    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
   </ItemGroup>
 
 </Project>

@@ -201,6 +201,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.NeutralOperator.S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.NeutralOperator.Server.Tests", "tests\GeoAssets.NeutralOperator.Server.Tests\GeoAssets.NeutralOperator.Server.Tests.csproj", "{6A37CDEE-8245-48D0-9117-E26075DAC6BF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.NeutralOperator.Rest", "verticals\NeutralOperator\GeoAssets.NeutralOperator.Rest\GeoAssets.NeutralOperator.Rest.csproj", "{EB287A3D-467A-430C-9D34-137C8CD82361}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -1243,6 +1245,18 @@ Global
 		{6A37CDEE-8245-48D0-9117-E26075DAC6BF}.Release|x64.Build.0 = Release|Any CPU
 		{6A37CDEE-8245-48D0-9117-E26075DAC6BF}.Release|x86.ActiveCfg = Release|Any CPU
 		{6A37CDEE-8245-48D0-9117-E26075DAC6BF}.Release|x86.Build.0 = Release|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Debug|x64.Build.0 = Debug|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Debug|x86.Build.0 = Debug|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Release|x64.ActiveCfg = Release|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Release|x64.Build.0 = Release|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Release|x86.ActiveCfg = Release|Any CPU
+		{EB287A3D-467A-430C-9D34-137C8CD82361}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1336,5 +1350,6 @@ Global
 		{0C02D6E4-F4FA-4C0D-8E47-CE8D6407C707} = {4E3F4F56-835C-A42D-E20C-8EA86975176C}
 		{3B30DA65-65A1-430B-BB03-46E18ECAE956} = {5A6B7C8D-9E0F-4321-ABCD-EF0123456789}
 		{6A37CDEE-8245-48D0-9117-E26075DAC6BF} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{EB287A3D-467A-430C-9D34-137C8CD82361} = {4E3F4F56-835C-A42D-E20C-8EA86975176C}
 	EndGlobalSection
 EndGlobal

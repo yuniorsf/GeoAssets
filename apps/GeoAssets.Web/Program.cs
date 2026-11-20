@@ -6,6 +6,7 @@ using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.IpBilling.UI.Navigation;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.NeutralOperator.UI;
 using GeoAssets.NeutralOperator.UI.Navigation;
 using GeoAssets.Provider.Rest;
@@ -235,6 +236,8 @@ builder.Services.AddOrderTypeRegistry();
 var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
     ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
 builder.Services.AddDescriptorRoutedWorkflowRest(serviceOrdersApiBaseUrl);
+// XD01-388: the NeutralOperator vertical's ports (staged occupancy, shared-use dispatch) and problem codes over that routing.
+builder.Services.AddDescriptorRoutedNeutralOperatorRest();
 
 // Map box/fence selection (XD01-310) resolves through the server's selection/resolve route —
 // replaces the "not available" fallback AddGeoAssetsPanelState registers.

@@ -3,6 +3,8 @@ using System.Text;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Rest;
+using GeoAssets.NeutralOperator.Rest.Routing;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest.Routing;
 using GeoAssets.Workflow.Targets;
@@ -21,6 +23,7 @@ public sealed class DescriptorRoutedRegistrationTests
         services.AddHttpClient("GeoAssetsServer").ConfigurePrimaryHttpMessageHandler(() => handler);
         if (clock is not null) services.AddSingleton(clock);
         services.AddDescriptorRoutedWorkflowRest("http://gw/api/workflow/", refresh);
+        services.AddDescriptorRoutedNeutralOperatorRest();
         return services.BuildServiceProvider();
     }
 

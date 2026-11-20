@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\apps\GeoAssets.NeutralOperator.Server\GeoAssets.NeutralOperator.Server.csproj" Aliases="NoServer" />
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Modules\GeoAssets.NeutralOperator.Modules.csproj" />
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Rest\GeoAssets.NeutralOperator.Rest.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
     <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
   </ItemGroup>

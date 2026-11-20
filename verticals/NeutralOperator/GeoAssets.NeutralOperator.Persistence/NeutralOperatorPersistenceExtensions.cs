@@ -3,7 +3,9 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
+using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
+using GeoAssets.NeutralOperator.Persistence.SharedUse;
 using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -113,6 +115,33 @@ public static class NeutralOperatorPersistenceExtensions
         services.Replace(ServiceDescriptor.Scoped<IOccupancyCommitService>(sp =>
             new ObservableOccupancyCommitService(
                 sp.GetRequiredService<OccupancyCommitService>(),
+                sp.GetRequiredService<GeoAssetsActivitySource>(),
+                sp.GetRequiredService<GeoAssetsMeter>(),
+                sp.GetService<TimeProvider>())));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers what the shared-use dispatch (XD01-316, <c>AddSharedUseDispatch</c>) needs from
+    /// the persistence layer: <see cref="EFWorkflowUnitOfWork"/> as <see cref="IWorkflowUnitOfWork"/> on the
+    /// scope's <see cref="ServiceOrderDbContext"/>, <see cref="ActivitySharedUseFanOutTracer"/>
+    /// for the per-child spans, and <see cref="ObservableSharedUseDispatchService"/> around the
+    /// registered <see cref="ISharedUseDispatchService"/>. Call it after
+    /// <c>AddSharedUseDispatch()</c>: it replaces that interface registration and decorates the
+    /// concrete <see cref="SharedUseDispatchService"/>. Moved out of the engine's <c>GeoAssets.Workflow.EFCore</c> by XD01-388.
+    /// </summary>
+    public static IServiceCollection AddSharedUseDispatchPersistence(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
+        services.TryAddSingleton<ISharedUseFanOutTracer>(sp =>
+            new ActivitySharedUseFanOutTracer(sp.GetRequiredService<GeoAssetsActivitySource>()));
+
+        services.Replace(ServiceDescriptor.Scoped<ISharedUseDispatchService>(sp =>
+            new ObservableSharedUseDispatchService(
+                sp.GetRequiredService<SharedUseDispatchService>(),
                 sp.GetRequiredService<GeoAssetsActivitySource>(),
                 sp.GetRequiredService<GeoAssetsMeter>(),
                 sp.GetService<TimeProvider>())));

@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GeoAssets.Core.Services;
-using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 
 namespace GeoAssets.Workflow.Rest;
@@ -32,10 +31,17 @@ namespace GeoAssets.Workflow.Rest;
 /// responsibility, enforced by its own <c>EFServiceOrderRepository</c>-backed store — this is a
 /// thin HTTP client that returns exactly what the server reports, so there is nothing for it to
 /// enforce independently.
+///
+/// A write answered <c>409 Conflict</c> is a <see cref="ServiceOrderConcurrencyException"/> unless one of
+/// <paramref name="problemMappers"/> — the verticals' translations (XD01-388) — names another exception for its problem
+/// (<see cref="IWorkflowProblemMapper.ToWriteConflictException"/>).
 /// </summary>
-public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderRepository
+public sealed class RestServiceOrderRepository(HttpClient http, IEnumerable<IWorkflowProblemMapper>? problemMappers = null)
+    : IServiceOrderRepository
 {
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
+
+    private readonly IWorkflowProblemMapper[] _problemMappers = [.. problemMappers ?? []];
 
     public event EventHandler<IServiceOrder>? OrderAdded;
     public event EventHandler<IServiceOrder>? OrderUpdated;
@@ -161,12 +167,31 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
         order as ServiceOrder ?? throw new ArgumentException($"Expected {nameof(ServiceOrder)}.", nameof(order));
 
     /// <summary>
+    /// A write's <c>409 Conflict</c>: a vertical's own conflict (e.g. XD01-318's approval refused because a pole's occupancy
+    /// changed after staging) is its mapper's to name (XD01-388); any other conflict is a changed order.
+    /// </summary>
+    private async Task<Exception> ConflictAsync(HttpResponseMessage response, string orderId)
+    {
+        if (_problemMappers.Length > 0
+            && await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None).ConfigureAwait(false) is { } conflict)
+        {
+            foreach (var mapper in _problemMappers)
+            {
+                if (mapper.ToWriteConflictException(conflict, orderId) is { } translated)
+                    return translated;
+            }
+        }
+
+        return new ServiceOrderConcurrencyException(orderId);
+    }
+
+    /// <summary>
     /// Translates a failed write response into the same domain exceptions
     /// <c>EFServiceOrderRepository</c>/<c>ValidatingServiceOrderRepository</c> throw server-side,
     /// so callers observe identical exception types regardless of backend. See
     /// <c>ServiceOrdersRestApiExtensions</c> for the matching response shapes.
     /// </summary>
-    private static async Task EnsureWriteSuccessAsync(HttpResponseMessage response, string orderId)
+    private async Task EnsureWriteSuccessAsync(HttpResponseMessage response, string orderId)
     {
         if (response.IsSuccessStatusCode) return;
 
@@ -176,14 +201,7 @@ public sealed class RestServiceOrderRepository(HttpClient http) : IServiceOrderR
                 throw new KeyNotFoundException($"ServiceOrder '{orderId}' not found.");
 
             case HttpStatusCode.Conflict:
-                // XD01-318: an approval refused because a pole's occupancy changed after staging.
-                if (await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None).ConfigureAwait(false) is
-                    { Code: OccupancyProblemCodes.ConcurrentModification } conflict)
-                {
-                    throw WorkflowProblemTranslator.ToException(conflict, orderId, OrderAction.Approve)!;
-                }
-
-                throw new ServiceOrderConcurrencyException(orderId);
+                throw await ConflictAsync(response, orderId).ConfigureAwait(false);
 
             case HttpStatusCode.BadRequest:
                 var body = await response.Content.ReadFromJsonAsync<JsonElement>().ConfigureAwait(false);

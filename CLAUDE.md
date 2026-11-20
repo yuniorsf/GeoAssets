@@ -30,7 +30,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 |---|---|---|---|
 | `10` | `dotnet format --verify-no-changes` | `WHITESPACE`, `IDE0055` | Run `dotnet format GeoAssets.sln` inside the worktree and re-verify that no unintended semantic changes were introduced. |
 | `20` | `dotnet build --no-incremental /warnaserror` | `AsyncFixer01`–`04`, `RS0030`, `MA*`, `CA*` | Parse the diagnostic code and resolve without breaking domain invariants (see table below). |
-| `30` | `dotnet test --no-build` (NetArchTest / Domain) | Onion layer violation or broken domain invariant | Refactor misplaced infrastructure dependencies back behind `core/` interfaces (`IAssetProvider`, `IServiceOrderRepository`, etc.) and re-run. |
+| `30` | `dotnet test --no-build` (reflection-based architecture tests — `GetReferencedAssemblies`, no NetArchTest — / Domain) | Onion layer violation or broken domain invariant | Refactor misplaced infrastructure dependencies back behind `core/` interfaces (`IAssetProvider`, `IServiceOrderRepository`, etc.) and re-run. |
 
 #### Common Analyzer Diagnostic Resolutions (`Exit Code 20`)
 - **`AsyncFixer01` (Unnecessary `async`/`await`)**: Remove the `async`/`await` state-machine wrapper and return the underlying `Task` directly, **unless** the `await` is inside a `using` block, `try/catch/finally` block, or active `Activity` span scope (in which case eliding `async` would dispose the resource or end the span before the task completes — restructure the scope instead).
@@ -94,6 +94,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 | Descriptor-routed workflow clients | `workflow/GeoAssets.Workflow.Rest/Routing/` (`AddDescriptorRoutedWorkflowRest`) |
 | Order-type chassis HTTP surface | `workflow/GeoAssets.Workflow.Hosting/` (generic service-order/target routes, `ServerWorkflowPrincipalFactory`, problems) |
 | NeutralOperator chassis module | `verticals/NeutralOperator/GeoAssets.NeutralOperator.Modules/` |
+| NeutralOperator REST clients + problem mapper | `verticals/NeutralOperator/GeoAssets.NeutralOperator.Rest/` (XD01-388: `AddDescriptorRoutedNeutralOperatorRest`/`AddNeutralOperatorWorkflowRest`, `NeutralOperatorProblemMapper : IWorkflowProblemMapper`; the chassis libraries reference no vertical assembly) |
 | MAUI app | `apps/GeoAssets.MAUI/` |
 | Architecture decision records | `docs/architecture/` (ADR-001: GeoAssets.Server domain decoupling) |
 

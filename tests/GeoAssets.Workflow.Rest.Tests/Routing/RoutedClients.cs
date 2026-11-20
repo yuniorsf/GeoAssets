@@ -1,3 +1,4 @@
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.Workflow.Rest.Routing;
 
 namespace GeoAssets.Workflow.Rest.Tests.Routing;

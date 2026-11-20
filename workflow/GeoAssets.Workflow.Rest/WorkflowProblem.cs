@@ -7,18 +7,18 @@ namespace GeoAssets.Workflow.Rest;
 /// human-readable <see cref="Detail"/> (falling back to the title), and the whole body for the
 /// extension members a particular code carries.
 /// </summary>
-internal sealed record WorkflowProblem(string Code, string Detail, JsonElement Body)
+public sealed record WorkflowProblem(string Code, string Detail, JsonElement Body)
 {
-    public string? String(string member) =>
+    public string? GetString(string member) =>
         Body.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     /// <summary>The strings of an array member; empty when the member is absent or not an array of strings.</summary>
-    public IReadOnlyList<string> Strings(string member) =>
+    public IReadOnlyList<string> GetStrings(string member) =>
         Body.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.Array
             ? [.. value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
             : [];
 
-    public int Int32(string member) =>
+    public int GetInt32(string member) =>
         Body.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
             ? number
             : 0;

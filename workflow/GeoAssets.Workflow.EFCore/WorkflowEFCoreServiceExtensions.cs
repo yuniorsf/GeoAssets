@@ -2,7 +2,6 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Persistence.Outbox;
@@ -185,33 +184,6 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IOutboxWriter>(sp => sp.GetRequiredService<EFOutboxStore>());
         services.AddScoped<IOutboxDispatcherStore>(sp => sp.GetRequiredService<EFOutboxStore>());
         services.AddScoped<IIdempotentInbox, EFIdempotentInbox>();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers what the shared-use dispatch (XD01-316, <c>AddSharedUseDispatch</c>) needs from
-    /// this layer: <see cref="EFWorkflowUnitOfWork"/> as <see cref="IWorkflowUnitOfWork"/> on the
-    /// scope's <see cref="ServiceOrderDbContext"/>, <see cref="ActivitySharedUseFanOutTracer"/>
-    /// for the per-child spans, and <see cref="ObservableSharedUseDispatchService"/> around the
-    /// registered <see cref="ISharedUseDispatchService"/>. Call it after
-    /// <c>AddSharedUseDispatch()</c>: it replaces that interface registration and decorates the
-    /// concrete <see cref="SharedUseDispatchService"/>.
-    /// </summary>
-    public static IServiceCollection AddSharedUseDispatchPersistence(this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        services.TryAddScoped<IWorkflowUnitOfWork>(sp => new EFWorkflowUnitOfWork(sp.GetRequiredService<ServiceOrderDbContext>()));
-        services.TryAddSingleton<ISharedUseFanOutTracer>(sp =>
-            new ActivitySharedUseFanOutTracer(sp.GetRequiredService<GeoAssetsActivitySource>()));
-
-        services.Replace(ServiceDescriptor.Scoped<ISharedUseDispatchService>(sp =>
-            new ObservableSharedUseDispatchService(
-                sp.GetRequiredService<SharedUseDispatchService>(),
-                sp.GetRequiredService<GeoAssetsActivitySource>(),
-                sp.GetRequiredService<GeoAssetsMeter>(),
-                sp.GetService<TimeProvider>())));
 
         return services;
     }

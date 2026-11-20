@@ -4,12 +4,12 @@ using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence.SharedUse;
 
 /// <summary>
 /// Span and metrics around <see cref="ISharedUseDispatchService.DispatchAsync"/> (XD01-316), in
 /// the adapter project because the workflow core references no telemetry library — the same
-/// arrangement as <see cref="ObservableOrderTargetSelectionService"/>.
+/// arrangement as <see cref="GeoAssets.Workflow.Persistence.ObservableOrderTargetSelectionService"/>.
 ///
 /// The span is <c>ServiceOrder.FanOutDispatch</c>, tagged with the order, the caller's
 /// organization and, when the dispatch completed, the order type and what it did; the child

@@ -476,7 +476,7 @@ Both ratchets are at zero: `KernelReferenceRatchet.Allowlist` (invariant I1) and
 | P7 | `GeoAssets.NeutralOperator.Server` on the chassis, the approval saga, the gateway (`apps/GeoAssets.Gateway`), and the município grant bridge on `GeoAssets.IpBilling.Server` over the kernel's generic organization-grant API. |
 
 **Known follow-ups (not covered by I1–I5, no ratchet yet):**
-- `workflow/GeoAssets.Workflow.EFCore` references `GeoAssets.NeutralOperator.Application` (the shared-use dispatch decorators of XD01-316: `ObservableSharedUseDispatchService`, `ActivitySharedUseFanOutTracer`, their registration), and `workflow/GeoAssets.Workflow.Rest` references NeutralOperator types (`WorkflowProblemTranslator`, `RestSharedUseDispatchClient`, `RestOrderOccupancyStagingService`, the descriptor-routed clients). Neither is the kernel assembly (I1) nor the engine's namespaces or `ServiceOrderDbContext` model (I2 — the vertical-token ratchet scans identifiers and `GeoAssets.Domain.*` references, not `GeoAssets.NeutralOperator.*` assembly references), so they are outside the closed invariants; moving them into the vertical's assemblies (and adding an assembly-reference ratchet for the chassis libraries) is the next step.
+- *Closed by XD01-388 (chassis assembly-reference ratchet):* the shared-use dispatch decorators moved to `GeoAssets.NeutralOperator.Persistence` and the NeutralOperator REST clients and problem mapper to `GeoAssets.NeutralOperator.Rest`; the chassis libraries reference no vertical assembly, allowlist empty. The remaining out-of-ratchet reference is `workflow/GeoAssets.Workflow.Agents` → `GeoAssets.FieldService.Application` (used only by `GeoAssets.FieldService.Server`).
 - `plugins/commands/GeoAssets.Plugin.GeoJsonImport` still references `GeoAssets.Provider.PostgreSQL` (`ProviderPostgreSqlReferenceTests.KnownPreExistingViolations`).
 - `GeoAssets.IpBilling.Server`'s município writes do not call the grant sync themselves; callers post to `/api/ip-billing/municipio-grants/sync`. Its `ip-billing:reference-manage` check is the kernel's answer for the caller's forwarded token, so the kernel must accept that token's audience (see the host's `appsettings.json`).
 
@@ -486,4 +486,4 @@ Both ratchets are at zero: `KernelReferenceRatchet.Allowlist` (invariant I1) and
 
 ## Follow-ups not yet ticketed
 
-- `CLAUDE.md`'s gate table names NetArchTest; the repository's architecture tests are reflection-based (`GetReferencedAssemblies`). P0 extends those; adopting `NetArchTest.Rules` is optional.
+None.

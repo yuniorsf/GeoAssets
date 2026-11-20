@@ -26,6 +26,8 @@
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
+    <!-- The tests of the NeutralOperator REST clients stayed here when they moved out of GeoAssets.Workflow.Rest (XD01-388). -->
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Rest\GeoAssets.NeutralOperator.Rest.csproj" />
   </ItemGroup>
 
 </Project>

@@ -6,10 +6,11 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rest;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 
-namespace GeoAssets.Workflow.Rest;
+namespace GeoAssets.NeutralOperator.Rest;
 
 /// <summary>
 /// REST client implementation of <see cref="IOrderOccupancyStagingService"/> over the
@@ -18,12 +19,14 @@ namespace GeoAssets.Workflow.Rest;
 ///
 /// The <see cref="WorkflowPrincipal"/> argument is required by the port but never sent: the
 /// host derives the caller from the request's token. Failures come back as the exceptions the
-/// in-process service throws (<see cref="WorkflowProblemTranslator"/>); arguments are checked,
+/// in-process service throws (<see cref="WorkflowProblemTranslator"/> with <see cref="NeutralOperatorProblemMapper"/>); arguments are checked,
 /// and an already-cancelled token throws, before any request.
 /// </summary>
 public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOccupancyStagingService
 {
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
+
+    private static readonly IWorkflowProblemMapper[] ProblemMappers = [new NeutralOperatorProblemMapper()];
 
     public async Task<TargetOccupancyView> GetAsync(string orderId, string targetId, WorkflowPrincipal principal, CancellationToken ct)
     {
@@ -118,7 +121,7 @@ public sealed class RestOrderOccupancyStagingService(HttpClient http) : IOrderOc
         var problem = await WorkflowProblemTranslator.ReadAsync(response, ct).ConfigureAwait(false);
         if (problem is { Code: WorkflowProblemCodes.TargetNotFound } && targetId is not null)
             throw new OrderTargetNotFoundException(orderId, targetId);
-        if (problem is not null && WorkflowProblemTranslator.ToException(problem, orderId, action) is { } translated)
+        if (problem is not null && WorkflowProblemTranslator.ToException(problem, orderId, action, ProblemMappers) is { } translated)
             throw translated;
 
         response.EnsureSuccessStatusCode();

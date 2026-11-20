@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.SharedUse;
 
 namespace GeoAssets.Workflow.EFCore.Tests;
 
@@ -325,7 +326,7 @@ public sealed class ObservableSharedUseDispatchServiceTests : IDisposable
         scope.ServiceProvider.GetRequiredService<IWorkflowUnitOfWork>().Should().BeOfType<EFWorkflowUnitOfWork>()
             .And.BeSameAs(scope.ServiceProvider.GetRequiredService<IWorkflowUnitOfWork>());
         provider.GetRequiredService<ISharedUseFanOutTracer>().Should().BeOfType<ActivitySharedUseFanOutTracer>();
-        FluentActions.Invoking(() => WorkflowEFCoreServiceExtensions.AddSharedUseDispatchPersistence(null!))
+        FluentActions.Invoking(() => NeutralOperatorPersistenceExtensions.AddSharedUseDispatchPersistence(null!))
             .Should().Throw<ArgumentNullException>();
     }
 

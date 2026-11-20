@@ -7,20 +7,34 @@ namespace GeoAssets.Workflow.Rest.Tests.Routing;
 /// <summary>XD01-384: the routing knows no vertical — its routes are whatever the registry holds.</summary>
 public sealed class DescriptorRoutedArchitectureTests
 {
-    private static string RoutingDirectory()
+    private static string RoutingDirectory() => Path.Combine(RepositoryRoot(), "workflow", "GeoAssets.Workflow.Rest", "Routing");
+
+    private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "GeoAssets.sln")))
             directory = directory.Parent;
 
         directory.Should().NotBeNull("the solution root is above the test output");
-        return Path.Combine(directory!.FullName, "workflow", "GeoAssets.Workflow.Rest", "Routing");
+        return directory!.FullName;
+    }
+
+    [Fact]
+    public void TheVerticalsRoutingSources_AreFound_AndAreNotTheChassis()
+    {
+        var chassis = Directory.EnumerateFiles(RoutingDirectory(), "*.cs").Select(Path.GetFileName).ToList();
+        var vertical = Directory.EnumerateFiles(
+            Path.Combine(RepositoryRoot(), "verticals", "NeutralOperator", "GeoAssets.NeutralOperator.Rest", "Routing"), "*.cs")
+            .Select(Path.GetFileName).ToList();
+
+        vertical.Should().HaveCount(2).And.OnlyContain(name => name!.StartsWith("DescriptorRouted", StringComparison.Ordinal));
+        chassis.Should().NotIntersectWith(vertical, "XD01-388 moved the vertical's routed clients out of the chassis");
     }
 
     [Fact]
     public void TheRoutingSources_AreFound()
     {
-        Directory.EnumerateFiles(RoutingDirectory(), "*.cs").Should().HaveCountGreaterThanOrEqualTo(10);
+        Directory.EnumerateFiles(RoutingDirectory(), "*.cs").Should().HaveCountGreaterThanOrEqualTo(8);
     }
 
     [Fact]

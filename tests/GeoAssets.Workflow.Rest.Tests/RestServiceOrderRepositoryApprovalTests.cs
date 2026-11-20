@@ -4,6 +4,7 @@ using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.Core.Services;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.Workflow.Orders;
 using Xunit;
 
@@ -19,7 +20,7 @@ public sealed class RestServiceOrderRepositoryApprovalTests
     private static readonly OrderActionLog Approve = new(OrderActionType.Approve, "approver-1", new DateTime(2026, 11, 16, 9, 0, 0, DateTimeKind.Utc));
 
     private static RestServiceOrderRepository Sut(FakeHttpMessageHandler handler) =>
-        new(new HttpClient(handler) { BaseAddress = new Uri("http://test/") });
+        new(new HttpClient(handler) { BaseAddress = new Uri("http://test/") }, [new NeutralOperatorProblemMapper()]);
 
     private static HttpResponseMessage Response(HttpStatusCode status, object? body = null)
     {

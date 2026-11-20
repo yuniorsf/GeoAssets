@@ -14,9 +14,11 @@ namespace GeoAssets.Workflow.Rest;
 /// This is deliberately not a port implementation: the map-selection resolver port belongs to
 /// the UI slice that introduces it, which wraps this client.
 /// </summary>
-public sealed class RestMapSelectionClient(HttpClient http)
+public sealed class RestMapSelectionClient(HttpClient http, IEnumerable<IWorkflowProblemMapper>? problemMappers = null)
 {
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
+
+    private readonly IWorkflowProblemMapper[] _problemMappers = [.. problemMappers ?? []];
 
     /// <summary>
     /// Returns the selected feature ids, ordered by id (ordinal). The result is bounded, not
@@ -34,7 +36,7 @@ public sealed class RestMapSelectionClient(HttpClient http)
 
         using var response = await http.PostAsJsonAsync(
             new Uri("selection/resolve", UriKind.Relative), new { strategyId, parameters }, _opts, ct).ConfigureAwait(false);
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId: null, OrderAction.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId: null, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(_opts, ct).ConfigureAwait(false);
         return body.ValueKind == JsonValueKind.Object && body.TryGetProperty("featureIds", out var ids) && ids.ValueKind == JsonValueKind.Array

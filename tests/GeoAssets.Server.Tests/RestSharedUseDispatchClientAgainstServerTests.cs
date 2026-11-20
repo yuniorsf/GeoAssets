@@ -2,6 +2,7 @@ using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.Workflow.Rest;
 using GeoAssets.Workflow.Rules;
 using Xunit;
