@@ -31,7 +31,7 @@ public sealed class GatewayRoutingTests : IAsyncLifetime
         var destinations = new GatewayRouteCatalog.ServiceDestinations(
             TestBackend.Address(_sharedBackend),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["acme.example.com"] = TestBackend.Address(_siloBackend) });
-        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations);
+        var (routes, clusters) = GatewayRouteCatalog.Build(destinations, destinations, destinations, destinations);
 
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>

@@ -229,9 +229,12 @@ builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
 // among them) with the persisted ones, so the client registers no vertical's types of its own.
 builder.Services.AddOrderTypeRegistry();
 
+// XD01-384: through the gateway (GeoAssetsServer:BaseUrl / ServiceOrders:ApiBaseUrl are the gateway's): the kernel's
+// /api/workflow, and each order type the kernel's registry names a vertical route for at that route on the same origin
+// (/api/v/neutral-operator/workflow/... for the NeutralOperator vertical) — no vertical host name in the client.
 var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
     ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
-builder.Services.AddWorkflowRest(serviceOrdersApiBaseUrl);
+builder.Services.AddDescriptorRoutedWorkflowRest(serviceOrdersApiBaseUrl);
 
 // Map box/fence selection (XD01-310) resolves through the server's selection/resolve route —
 // replaces the "not available" fallback AddGeoAssetsPanelState registers.

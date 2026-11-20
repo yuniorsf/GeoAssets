@@ -14,10 +14,7 @@ DELETE /api/identity/userclaims/{claimId} | none
 DELETE /api/projects/{id} | policy:projects:delete
 DELETE /api/workflow/order-types/{id} | none
 DELETE /api/workflow/service-orders/{id} | none
-DELETE /api/workflow/service-orders/{id}/occupancy-changes | none
-DELETE /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none
 GET /api/geoassets/asset-types | policy:features:read
-GET /api/geoassets/export/gis/v1 | policy:features:read
 GET /api/geoassets/features | policy:features:read
 GET /api/geoassets/features/bounds | policy:features:read
 GET /api/geoassets/features/{id} | policy:features:read
@@ -69,16 +66,11 @@ GET /api/workflow/service-orders/dispatched-to/{targetId} | policy:serviceorders
 GET /api/workflow/service-orders/roots | policy:serviceorders:read
 GET /api/workflow/service-orders/{id} | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/children | policy:serviceorders:read
-GET /api/workflow/service-orders/{id}/occupancy-changes | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/parent | policy:serviceorders:read
-GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan | policy:serviceorders:read
-GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan/skipped-entries | policy:serviceorders:read
-GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan/unnotifiable-poles | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/targets | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/targets/count | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/targets/extent | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/targets/{targetId} | policy:serviceorders:read
-GET /api/workflow/service-orders/{id}/targets/{targetId}/occupancy | policy:serviceorders:read
 GET /wfs | policy:features:read
 GET /wms | anonymous
 PATCH /api/workflow/service-orders/{id}/targets/{targetId} | none
@@ -114,8 +106,6 @@ POST /api/workflow/service-orders | none
 POST /api/workflow/service-orders/targets/usages | policy:serviceorders:read
 POST /api/workflow/service-orders/{id}/actions | none
 POST /api/workflow/service-orders/{id}/dispatch | none
-POST /api/workflow/service-orders/{id}/occupancy-saga/retry | none
-POST /api/workflow/service-orders/{id}/shared-use/dispatch | none
 POST /api/workflow/service-orders/{id}/targets/remove | none
 POST /api/workflow/service-orders/{id}/targets/selection/apply | none
 POST /api/workflow/service-orders/{id}/targets/selection/preview | policy:serviceorders:read
@@ -134,4 +124,3 @@ PUT /api/projects/{id}/view | policy:projects:read
 PUT /api/registry/verticals/{verticalId}/order-types | policy:registry:manage
 PUT /api/workflow/order-types/{id} | none
 PUT /api/workflow/service-orders/{id} | none
-PUT /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none

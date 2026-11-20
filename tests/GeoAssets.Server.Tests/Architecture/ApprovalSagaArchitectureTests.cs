@@ -3,6 +3,7 @@ using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.NeutralOperator.Modules.Occupancy;
 using GeoAssets.Server.Tests.Routing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,8 +12,8 @@ namespace GeoAssets.Server.Tests.Architecture;
 /// <summary>
 /// Where the approval saga's halves live (XD01-383, ADR-001): the kernel's consumer of the asset mutation batches is a kernel type —
 /// vertical-agnostic, registered whatever <c>GeoAssets:Modules</c> says — and names no vertical type; the saga's own consumers,
-/// service and sweeper are the NeutralOperator module's, present only with the module; and the route inventory differs from the
-/// checked-in one by the retry route and nothing else.
+/// service and sweeper are the NeutralOperator module's, present only with the module; and the module's routes add the retry
+/// route and no other saga route, none of which the checked-in (cut-over, XD01-384) snapshot holds.
 /// </summary>
 [Trait("Category", "Architecture")]
 public sealed class ApprovalSagaArchitectureTests
@@ -74,7 +75,7 @@ public sealed class ApprovalSagaArchitectureTests
     [Fact]
     public async Task WithTheNeutralOperatorModule_TheKernelHostsBothHalvesOfTheSaga()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
         await using var scope = services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
 
@@ -92,11 +93,15 @@ public sealed class ApprovalSagaArchitectureTests
     }
 
     [Fact]
-    public async Task TheServerRouteSnapshot_HoldsTheApprovalSagasRetryRoute_Exactly_AndNoOtherSagaRoute()
+    public async Task WithTheModule_TheRoutesHoldTheApprovalSagasRetryRoute_Exactly_AndTheCutOverSnapshotNone()
     {
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
+        var withModule = RouteInventory.Describe(services.GetRequiredService<EndpointDataSource>().Endpoints);
         var snapshot = (await File.ReadAllLinesAsync(Path.Combine(AppContext.BaseDirectory, "Snapshots", "route-inventory.txt"))).Where(line => line.Length > 0).ToArray();
 
-        snapshot.Where(line => line.Contains("saga", StringComparison.OrdinalIgnoreCase)).Should().ContainSingle(
+        withModule.Where(line => line.Contains("saga", StringComparison.OrdinalIgnoreCase)).Should().ContainSingle(
             "XD01-383 adds the retry route and nothing else").Which.Should().Be("POST /api/workflow/service-orders/{id}/occupancy-saga/retry | none");
+        snapshot.Where(line => line.Contains("saga", StringComparison.OrdinalIgnoreCase)).Should().BeEmpty(
+            "since the XD01-384 cut-over the kernel's default composition hosts none of the NeutralOperator module's routes");
     }
 }

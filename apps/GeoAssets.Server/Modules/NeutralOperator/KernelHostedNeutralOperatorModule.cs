@@ -9,8 +9,9 @@ namespace GeoAssets.Server.Modules.NeutralOperator;
 /// only a host that serves its own asset catalog does — the GIS export over it (XD01-271). The asset mutation batches an
 /// approval stages are applied by the kernel's own consumer (<c>AddServerAssetMutationApply</c>, XD01-383), registered by
 /// the kernel whether or not this module is enabled, over a broker or in process alike. Enabled while
-/// <c>GeoAssets:Modules</c> lists <see cref="NeutralOperatorModule.ModuleId"/> — today's default; leaving it out is the
-/// cut-over to <c>GeoAssets.NeutralOperator.Server</c>, listing it again the rollback (see <c>deploy/neutral-operator/README.md</c>).
+/// <c>GeoAssets:Modules</c> lists <see cref="NeutralOperatorModule.ModuleId"/> — not the default since the XD01-384 cut-over
+/// to <c>GeoAssets.NeutralOperator.Server</c>; listing it again (with the gateway's NeutralOperator destination pointed at
+/// this host) is the rollback (see <c>deploy/neutral-operator/README.md</c>).
 /// </summary>
 public sealed class KernelHostedNeutralOperatorModule : IGeoAssetsModule
 {

@@ -16,7 +16,7 @@ public sealed class OrderTypeDescriptorHostTests
     [Fact]
     public async Task ServerHost_Registry_ContainsTheNeutralOperatorDescriptor()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
 
         var descriptors = services.GetRequiredService<IOrderTypeDescriptorRegistry>().GetAll();
 

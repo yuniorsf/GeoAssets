@@ -1,6 +1,7 @@
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rest.Routing;
 using GeoAssets.Workflow.Targets;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -55,7 +56,69 @@ public static class WorkflowRestServiceExtensions
         return services;
     }
 
-    private static HttpClient BuildClient(IServiceProvider sp, string baseUrl)
+    /// <summary>
+    /// Registers the same ports as <see cref="AddWorkflowRest"/>, routed by order-type descriptor (XD01-384, ADR-001 Phase 7)
+    /// for a client that reaches every workflow API through one gateway: <paramref name="baseUrl"/> is the kernel's workflow
+    /// API root on the gateway (e.g. <c>https://gateway/api/workflow</c>), and each order type whose descriptor in the kernel's
+    /// registry names an <see cref="Registry.OrderTypeDescriptor.ApiBaseRoute"/> is reached at that route on the same origin
+    /// — see <see cref="DescriptorOrderApiRoutes"/> (registry read every <paramref name="refreshInterval"/>, default
+    /// <see cref="DescriptorOrderApiRoutes.DefaultRefreshInterval"/>), <see cref="ServiceOrderRouteLocator"/> (orders known by
+    /// id) and <see cref="DescriptorRoutedServiceOrderRepository"/> (lists merged across the roots). Map gestures
+    /// (<see cref="RestMapSelectionClient"/>) stay on the kernel's root: selection is the kernel's.
+    /// </summary>
+    public static IServiceCollection AddDescriptorRoutedWorkflowRest(
+        this IServiceCollection services, string baseUrl, TimeSpan? refreshInterval = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
+
+        services.AddHttpClient();
+        var defaultRoot = new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute);
+
+        services.AddSingleton<IOrderApiRoutes>(sp => new DescriptorOrderApiRoutes(
+            BuildClient(sp, defaultRoot),
+            defaultRoot,
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            refreshInterval ?? DescriptorOrderApiRoutes.DefaultRefreshInterval));
+
+        services.AddSingleton(sp => new ClientsByRoot<RestServiceOrderRepository>(root => new RestServiceOrderRepository(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestOrderTypeRepository>(root => new RestOrderTypeRepository(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestServiceOrderTargetRepository>(root => new RestServiceOrderTargetRepository(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestOrderTargetSelectionService>(root => new RestOrderTargetSelectionService(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestOrderOccupancyStagingService>(root => new RestOrderOccupancyStagingService(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestSharedUseDispatchClient>(root => new RestSharedUseDispatchClient(BuildClient(sp, root))));
+        services.AddSingleton<ServiceOrderRouteLocator>();
+
+        services.AddSingleton<DescriptorRoutedServiceOrderRepository>();
+        services.AddSingleton<IServiceOrderRepository>(sp => sp.GetRequiredService<DescriptorRoutedServiceOrderRepository>());
+        services.AddSingleton<IServiceOrderReader>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+        services.AddSingleton<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
+
+        services.AddSingleton<DescriptorRoutedOrderTypeRepository>();
+        services.AddSingleton<IOrderTypeRepository>(sp => sp.GetRequiredService<DescriptorRoutedOrderTypeRepository>());
+
+        services.AddSingleton<DescriptorRoutedServiceOrderTargets>();
+        services.AddSingleton<IServiceOrderTargetReader>(sp => sp.GetRequiredService<DescriptorRoutedServiceOrderTargets>());
+        services.AddSingleton<IServiceOrderTargetWriter>(sp => sp.GetRequiredService<DescriptorRoutedServiceOrderTargets>());
+
+        services.AddSingleton<DescriptorRoutedOrderTargetSelectionService>();
+        services.AddSingleton<IOrderTargetSelectionService>(sp => sp.GetRequiredService<DescriptorRoutedOrderTargetSelectionService>());
+
+        services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, defaultRoot)));
+
+        services.AddSingleton<DescriptorRoutedOrderOccupancyStagingService>();
+        services.AddSingleton<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<DescriptorRoutedOrderOccupancyStagingService>());
+
+        services.AddSingleton<DescriptorRoutedSharedUseDispatchClient>();
+        services.AddSingleton<ISharedUseDispatchService>(sp => sp.GetRequiredService<DescriptorRoutedSharedUseDispatchClient>());
+        services.AddSingleton<ISharedUseDispatchPlanReader>(sp => sp.GetRequiredService<DescriptorRoutedSharedUseDispatchClient>());
+
+        return services;
+    }
+
+    private static HttpClient BuildClient(IServiceProvider sp, string baseUrl) =>
+        BuildClient(sp, new Uri(baseUrl.TrimEnd('/') + "/"));
+
+    private static HttpClient BuildClient(IServiceProvider sp, Uri baseAddress)
     {
         // Named (not the anonymous default) so a host's auth handler on this name also covers
         // ServiceOrders/OrderType calls — same reasoning as RestProviderFactory.BuildClient and
@@ -64,7 +127,7 @@ public static class WorkflowRestServiceExtensions
         // anonymous client this used to request never carried a token, so every call 401'd
         // against GeoAssets.Server's FallbackPolicy.RequireAuthenticatedUser() (XD01-127).
         var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient("GeoAssetsServer");
-        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+        client.BaseAddress = baseAddress;
         return client;
     }
 }

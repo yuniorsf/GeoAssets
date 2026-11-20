@@ -1,0 +1,21 @@
+{
+  "GeoAssetsServer": {
+    "BaseUrl": "${GEOASSETS_GATEWAY_URL}"
+  },
+
+  "Api": {
+    "BaseUrl": "${GEOASSETS_GATEWAY_URL}/api/geoassets"
+  },
+
+  "GeoAssetsIpBillingServer": {
+    "BaseUrl": "${GEOASSETS_IPBILLING_SERVER_URL}"
+  },
+
+  "ServiceOrders": {
+    "ApiBaseUrl": "${GEOASSETS_GATEWAY_URL}/api/workflow"
+  },
+
+  "Projects": {
+    "ApiBaseUrl": "${GEOASSETS_GATEWAY_URL}/api/projects"
+  }
+}

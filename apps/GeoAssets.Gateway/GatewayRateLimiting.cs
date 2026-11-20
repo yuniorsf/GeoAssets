@@ -16,6 +16,8 @@ namespace GeoAssets.Gateway;
 /// </summary>
 internal static class GatewayRateLimiting
 {
+    private const string HealthPath = "/healthz";
+
     public static IServiceCollection AddTenantRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
         var tokenLimit = configuration.GetValue("RateLimiting:TokenLimit", defaultValue: 100);
@@ -46,6 +48,11 @@ internal static class GatewayRateLimiting
 
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
             {
+                // The gateway's own liveness probe (XD01-384) carries no token: it must never be throttled by — nor
+                // consume — the shared unresolved bucket the caller traffic without an organization claim lands in.
+                if (httpContext.Request.Path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase))
+                    return RateLimitPartition.GetNoLimiter(HealthPath);
+
                 var partitionKey = OrganizationIdPartitionKeyResolver.Resolve(httpContext.Request, claimMapping);
                 return RateLimitPartition.GetTokenBucketLimiter(partitionKey, _ => new TokenBucketRateLimiterOptions
                 {

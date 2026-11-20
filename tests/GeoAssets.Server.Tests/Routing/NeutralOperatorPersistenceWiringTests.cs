@@ -21,7 +21,7 @@ public sealed class NeutralOperatorPersistenceWiringTests
     [Fact]
     public async Task Server_WithTheNeutralOperatorModule_ResolvesTheVerticalsContextAndOccupancyPorts_OverTheKernelsConnection()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
         await using var scope = services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
 

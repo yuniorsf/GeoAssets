@@ -43,7 +43,7 @@ public sealed class FieldServicePersistenceWiringTests
     [Fact]
     public async Task Server_WithEveryModule_RegistersNeitherTheFieldServiceContextNorAnyOfItsStores()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
         await using var scope = services.CreateAsyncScope();
 
         AssertNoneIsRegistered(scope.ServiceProvider);

@@ -19,7 +19,7 @@ namespace GeoAssets.Server.Tests.Routing;
 /// The kernel's <c>GeoAssets:Modules</c> flag for the NeutralOperator vertical (XD01-382, AC6): with <c>neutral-operator</c> left out —
 /// the cut-over to <c>GeoAssets.NeutralOperator.Server</c> — the real <c>Program</c> boots, exposes no NeutralOperator route (shared-use
 /// dispatch, occupancy staging, GIS export, tenant portal) and registers nothing of the vertical (context, ports, order types,
-/// descriptors, permissions, handlers); with it — the default, and the rollback — all of that is there.
+/// descriptors, permissions, handlers); with it listed — the rollback of the cut-over (XD01-384), no longer the default — all of that is there.
 /// </summary>
 [Trait("Category", "RouteInventory")]
 public sealed class NeutralOperatorModuleFlagTests
@@ -66,9 +66,9 @@ public sealed class NeutralOperatorModuleFlagTests
     }
 
     [Fact]
-    public async Task WithTheModule_TheDefault_TheKernelServesTheVerticalAsBefore()
+    public async Task WithTheModuleListed_TheRollbackConfiguration_TheKernelServesTheVerticalAsBefore()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
         await using var scope = services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
 
@@ -86,7 +86,7 @@ public sealed class NeutralOperatorModuleFlagTests
     [Fact]
     public async Task TheKernelHostedModule_IsWhatProgramComposes_NotTheLibraryModuleOnItsOwn()
     {
-        var services = await ServerHostFixture.GetServicesAsync();
+        var services = await ServerHostFixture.GetNeutralOperatorEnabledServicesAsync();
 
         var module = services.GetRequiredService<GeoAssetsModuleCatalog>().Modules.Single(m => string.Equals(m.Id, NeutralOperatorModule.ModuleId, StringComparison.Ordinal));
 

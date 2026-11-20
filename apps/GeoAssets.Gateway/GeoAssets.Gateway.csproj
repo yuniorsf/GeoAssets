@@ -24,6 +24,8 @@
          other host in this solution already uses (HttpTenantContext), rather than a third,
          gateway-specific copy of that claim-shape logic. -->
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
+    <!-- The shared OTel pipeline (XD01-384): server and forwarder spans, logs and metrics, the /healthz endpoint. -->
+    <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
   </ItemGroup>
 
 </Project>

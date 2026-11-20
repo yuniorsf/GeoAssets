@@ -4,5 +4,10 @@ services:
     build:
       context: ../..
       dockerfile: apps/GeoAssets.Web/Dockerfile
+    environment:
+      # XD01-384: the browser reaches every API through the gateway (deploy/server service "gateway", host port 8090) —
+      # GeoAssetsServer:BaseUrl, ServiceOrders:ApiBaseUrl, … of appsettings.Production.json are rendered from these at start.
+      GEOASSETS_GATEWAY_URL: ${GEOASSETS_GATEWAY_URL:-http://localhost:8090}
+      GEOASSETS_IPBILLING_SERVER_URL: ${GEOASSETS_IPBILLING_SERVER_URL:-http://localhost:8090}
     ports:
       - "8081:80"

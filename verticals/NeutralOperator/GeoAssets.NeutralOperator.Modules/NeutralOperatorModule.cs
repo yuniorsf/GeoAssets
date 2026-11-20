@@ -23,6 +23,14 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
 {
     public const string ModuleId = "neutral-operator";
 
+    /// <summary>
+    /// The vertical's service-order collection as clients reach it (XD01-384): the gateway's <c>/api/v/neutral-operator/**</c>
+    /// route, which rewrites the prefix to <c>/api/**</c> on whichever host serves the vertical — <c>NeutralOperator.Server</c>,
+    /// or the kernel while it still hosts this module (the rollback). The same value from both hosts, since the gateway
+    /// reaches either; its parent (<c>/api/v/neutral-operator/workflow</c>) is the vertical's workflow API root.
+    /// </summary>
+    public const string ApiBaseRoute = "/api/v/neutral-operator/workflow/service-orders";
+
     public string Id => ModuleId;
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
@@ -136,7 +144,7 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
         VerticalId = ModuleId,
         OrderTypeId = SharedUseOrderTypes.PoleWorkId,
         DisplayNameKey = "orderTypes.sharedUsePoleWork",
-        ApiBaseRoute = "/api/workflow/service-orders",
+        ApiBaseRoute = NeutralOperatorModule.ApiBaseRoute,
         FeatureActions =
         [
             new FeatureActionDescriptor(
@@ -144,7 +152,7 @@ public sealed class NeutralOperatorModule : IGeoAssetsModule
                 "create",
                 "featureActions.createSharedUseOrder",
                 SharedUseOrderTypes.PoleWorkId,
-                "/api/workflow/service-orders"),
+                NeutralOperatorModule.ApiBaseRoute),
         ],
     };
 }
