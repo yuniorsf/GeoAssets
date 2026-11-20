@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;

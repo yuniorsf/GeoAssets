@@ -15,7 +15,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

@@ -17,6 +17,12 @@
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1510</WarningsNotAsErrors>
   </PropertyGroup>
 
+  <!-- The chassis types moved out of this assembly (XD01-382) keep their call sites unchanged. -->
+  <ItemGroup>
+    <Using Include="GeoAssets.Workflow.Hosting" />
+    <Using Include="GeoAssets.Workflow.Hosting.Targets" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
     <!-- The managed SkiaSharp package alone doesn't ship libSkiaSharp.so — without
@@ -50,9 +56,13 @@
     <ProjectReference Include="..\..\core\GeoAssets.Hosting.Abstractions\GeoAssets.Hosting.Abstractions.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
-    <!-- NeutralOperatorDbContext (XD01-380): registered by the NeutralOperator module quarantined in Modules/ only, never
-         by the kernel — with GeoAssets:Modules = [] nothing resolves it. -->
-    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
+    <!-- The order-type chassis' HTTP surface (XD01-382): the generic service-order, target and selection routes, their
+         authorization and problem answers, and the workflow messaging wiring — shared with every vertical host. -->
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Hosting\GeoAssets.Workflow.Hosting.csproj" />
+    <!-- The NeutralOperator vertical as a chassis module (XD01-382): composed only from the Modules/ quarantine
+         (KernelHostedNeutralOperatorModule), while GeoAssets:Modules lists 'neutral-operator' — the rollback flag of the
+         cut-over to GeoAssets.NeutralOperator.Server. With it left out nothing of the vertical is registered. -->
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Modules\GeoAssets.NeutralOperator.Modules.csproj" />
     <ProjectReference Include="..\..\projects\GeoAssets.Projects.EFCore\GeoAssets.Projects.EFCore.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
     <!-- Transactional outbox for the shared-use dispatch notifications (XD01-316): the wire

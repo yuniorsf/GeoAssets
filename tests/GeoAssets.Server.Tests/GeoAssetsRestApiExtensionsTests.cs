@@ -10,6 +10,7 @@ using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -63,7 +64,7 @@ public class GeoAssetsRestApiExtensionsTests
         Properties = { AssetTypeId = AssetType.Point.Id.ToString() }
     };
 
-    private static async Task<TestServer> BuildServerAsync(IAssetProvider provider)
+    private static async Task<TestServer> BuildServerAsync(IAssetProvider provider, bool mapGisExport = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -92,7 +93,11 @@ public class GeoAssetsRestApiExtensionsTests
                     });
                     app.UseRouting();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapGeoAssetsApi());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapGeoAssetsApi();
+                        if (mapGisExport) endpoints.MapNeutralOperatorGisExportApi();
+                    });
                 });
             })
             .StartAsync();
@@ -227,7 +232,7 @@ public class GeoAssetsRestApiExtensionsTests
             Properties = new GeoFeatureProperties { AssetTypeId = "type-lamp", Name = "Lamp 1" }
         });
 
-        using var server = await BuildServerAsync(provider);
+        using var server = await BuildServerAsync(provider, mapGisExport: true);
         using var client = server.CreateClient();
 
         var response = await client.GetAsync(new Uri("/api/geoassets/export/gis/v1?assetTypeId=type-pole", UriKind.Relative));

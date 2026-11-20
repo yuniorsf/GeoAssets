@@ -19,7 +19,7 @@ using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Application.Occupancy;

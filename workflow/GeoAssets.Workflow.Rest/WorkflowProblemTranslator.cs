@@ -88,6 +88,7 @@ internal static class WorkflowProblemTranslator
             problem.String("orderId") ?? orderId ?? string.Empty),
         WorkflowProblemCodes.TargetLimitExceeded => new SelectionLimitExceededException(
             problem.Int32("limit"), problem.Int32("current"), problem.Int32("requested")),
+        WorkflowProblemCodes.TargetLedgerUnavailable => new TargetLedgerUnavailableException(problem.Detail),
         WorkflowProblemCodes.Denied => new OrderActionDeniedException(
             orderId ?? string.Empty, RuleEvaluationResult.Deny(action, problem.String("reason") ?? problem.Detail)),
         // Staged occupancy (XD01-315).

@@ -42,10 +42,10 @@ public sealed class ServerArchitectureTests
 
     [Fact]
     public void NoServerType_IsADomainProblemResults() =>
-        typeof(GeoAssetsRestApiExtensions).Assembly.GetTypes()
+        new[] { typeof(GeoAssetsRestApiExtensions).Assembly, typeof(WorkflowProblemResults).Assembly }.SelectMany(a => a.GetTypes())
             .Where(t => t.Name.EndsWith("ProblemResults", StringComparison.Ordinal))
             .Select(t => t.FullName)
-            .Should().BeEquivalentTo(["GeoAssets.Server.WorkflowProblemResults"],
+            .Should().BeEquivalentTo(["GeoAssets.Workflow.Hosting.WorkflowProblemResults"],
                 because: "problem answers a vertical needs are IProblemDetailsMapper implementations (XD01-363), not *ProblemResults types the routes reference");
 
     [Theory]

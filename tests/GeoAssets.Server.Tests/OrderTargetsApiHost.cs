@@ -8,7 +8,7 @@ using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application;
 using GeoAssets.NeutralOperator.Application.SharedUse;

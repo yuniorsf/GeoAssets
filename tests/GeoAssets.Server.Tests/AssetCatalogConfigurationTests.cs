@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

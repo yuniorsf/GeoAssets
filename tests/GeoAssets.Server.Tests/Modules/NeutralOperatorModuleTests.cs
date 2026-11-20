@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Identity.Authorization.Modules;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Server.Tests.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -91,14 +92,25 @@ public sealed class NeutralOperatorModuleTests
     }
 
     [Fact]
-    public void ConfigureServices_WithoutConnectionString_Throws()
+    public void ConfigureServices_KernelHostedModuleWithoutConnectionString_Throws()
+    {
+        var services = new ServiceCollection();
+        services.AddOrderTypeRegistry();
+
+        var act = () => new KernelHostedNeutralOperatorModule().ConfigureServices(services, Configuration());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*neutral-operator*GeoAssets*connection string*");
+    }
+
+    [Fact]
+    public void ConfigureServices_LibraryModuleWithoutConnectionString_DoesNotRequireOne()
     {
         var services = new ServiceCollection();
         services.AddOrderTypeRegistry();
 
         var act = () => new NeutralOperatorModule().ConfigureServices(services, Configuration());
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*neutral-operator*GeoAssets*connection string*");
+        act.Should().NotThrow();
     }
 
     [Fact]

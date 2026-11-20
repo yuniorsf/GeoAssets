@@ -48,6 +48,12 @@
     <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
   </ItemGroup>
 
+  <!-- The chassis types that moved out of GeoAssets.Server (XD01-382) keep their test call sites unchanged. -->
+  <ItemGroup>
+    <Using Include="GeoAssets.Workflow.Hosting" />
+    <Using Include="GeoAssets.Workflow.Hosting.Targets" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="Snapshots\route-inventory.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

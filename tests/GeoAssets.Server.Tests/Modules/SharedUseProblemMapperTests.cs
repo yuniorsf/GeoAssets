@@ -1,6 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Hosting.Abstractions;
-using GeoAssets.Server.Modules.NeutralOperator;
+using GeoAssets.NeutralOperator.Modules;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;

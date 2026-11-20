@@ -20,6 +20,7 @@ public sealed class KernelOnlyHostTests
     [
         "DELETE /api/workflow/service-orders/{id}/occupancy-changes | none",
         "DELETE /api/workflow/service-orders/{id}/targets/{targetId}/occupancy-changes | none",
+        "GET /api/geoassets/export/gis/v1 | policy:features:read",
         "GET /api/geoassets/wms | anonymous",
         "GET /api/workflow/service-orders/{id}/occupancy-changes | policy:serviceorders:read",
         "GET /api/workflow/service-orders/{id}/shared-use/dispatch-plan | policy:serviceorders:read",

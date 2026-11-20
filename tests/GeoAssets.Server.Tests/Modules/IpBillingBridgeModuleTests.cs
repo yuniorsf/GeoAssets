@@ -110,7 +110,7 @@ public sealed class IpBillingBridgeModuleTests
         var services = await ServerHostFixture.GetIpBillingBridgeDisabledServicesAsync();
 
         services.GetServices<IModulePermissionContributor>().Should().ContainSingle()
-            .Which.Should().BeOfType<Server.Modules.NeutralOperator.NeutralOperatorPermissionContributor>();
+            .Which.Should().BeOfType<GeoAssets.NeutralOperator.Modules.NeutralOperatorPermissionContributor>();
         using var scope = services.CreateScope();
         (await scope.ServiceProvider.GetRequiredService<GeoIdentityDbContext>().Roles.AnyAsync()).Should().BeTrue("startup seeded the kernel's roles");
     }

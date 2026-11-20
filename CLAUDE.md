@@ -89,6 +89,9 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 | Map interop impl | `apps/GeoAssets.Shared/Services/MapInteropService.cs` |
 | Web app | `apps/GeoAssets.Web/` |
 | Server app | `apps/GeoAssets.Server/` |
+| NeutralOperator microservice | `apps/GeoAssets.NeutralOperator.Server/` (deploy: `deploy/neutral-operator/`) |
+| Order-type chassis HTTP surface | `workflow/GeoAssets.Workflow.Hosting/` (generic service-order/target routes, `ServerWorkflowPrincipalFactory`, problems) |
+| NeutralOperator chassis module | `verticals/NeutralOperator/GeoAssets.NeutralOperator.Modules/` |
 | MAUI app | `apps/GeoAssets.MAUI/` |
 | Architecture decision records | `docs/architecture/` (ADR-001: GeoAssets.Server domain decoupling) |
 
@@ -99,6 +102,7 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 - **JS→C# callbacks** (all `[JSInvokable]` on `MapContainer`): `OnFeatureDrawnFromJs`, `OnFeatureEditedFromJs`, `OnFeatureClickedFromJs`, `OnFeatureContextMenuFromJs`, `OnViewportChangedFromJs`, `OnSelectionGeometryFromJs`, `OnSelectionClickFromJs` (the last two only while a map selection tool is armed — XD01-310)
 - **Auto-save**: `AssetService` debounces 500ms on `CollectionChanged` → `IStorageService.SaveAsync`
 - **Server domain decoupling (ADR-001, in progress)**: `GeoAssets.Server` is the domain-agnostic spatial & platform kernel (provider pool, features/WFS/WMS, identity, global target ledger, order-type descriptor registry); vertical service-order domains run as modules on the order-type chassis and are extracted to their own hosts (one microservice per vertical). Don't add vertical-domain registrations, routes, tables or special cases to the kernel — see `docs/architecture/ADR-001-server-domain-decoupling.md` and Jira epics XD01-344…XD01-351 (label `server-decoupling`).
+- **NeutralOperator.Server (XD01-382)**: `apps/GeoAssets.NeutralOperator.Server` hosts the NeutralOperator module (`GeoAssets.NeutralOperator.Modules`) on the chassis (`GeoAssets.Workflow.Hosting`) over its own database (`ConnectionStrings:NeutralOperator`, `geoassets_neutral_operator`); it reaches the kernel only over REST (`GeoCoreServer:BaseUrl` = the kernel's root): descriptors/permissions registration and the global target ledger as `GeoAssets.ServiceCaller`, the caller's identity with the caller's own token. Selection apply reserves in the kernel ledger and mirrors the targets locally (`LedgerOrderTargetSelectionService`); closing an order releases them (`LedgerTargetReleaseLifecycleHook`). `/healthz` stays 200 (registration Degraded until done), `/readyz` is 503 until registered. Migrations are manual, in order: `dotnet ef database update --project apps/GeoAssets.NeutralOperator.Server --startup-project apps/GeoAssets.NeutralOperator.Server --context ServiceOrderDbContext --connection "<NO db>"`, then the same with `--project/--startup-project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence --context NeutralOperatorDbContext`. **Cut-over flag**: the kernel still hosts the module by default (`GeoAssets:Modules` lists `neutral-operator`, composed in its `Modules/` quarantine by `KernelHostedNeutralOperatorModule`); cut over by leaving it out (e.g. `GeoAssets__Modules__1=`), roll back by listing it again — see `deploy/neutral-operator/README.md`.
 
 ## Geometry (NTS Integration)
 

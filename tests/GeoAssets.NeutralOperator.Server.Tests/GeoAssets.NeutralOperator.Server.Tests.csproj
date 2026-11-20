@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-382: tests of GeoAssets.NeutralOperator.Server — the NeutralOperator vertical's own host on the order-type
+       chassis. The real Program.cs is booted (WebApplicationFactory) over a Testcontainers Postgres carrying both migration
+       chains (the host's ServiceOrderDbContext, then NeutralOperatorDbContext), with the kernel replaced by an in-process
+       stub HttpMessageHandler. The host's internals are visible to this assembly (InternalsVisibleTo). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
+    <!-- Pins past an older EFCore version the test packages' dependency graph otherwise resolves to (MSB3277), as the
+         other host suites do. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\apps\GeoAssets.NeutralOperator.Server\GeoAssets.NeutralOperator.Server.csproj" />
+    <!-- The FieldService host's migration chain is the reference end state the NeutralOperator host's hand-written
+         isolation SQL claims to reproduce for the kernel tables (MigrationChainTests). -->
+    <ProjectReference Include="..\..\apps\GeoAssets.FieldService.Server\GeoAssets.FieldService.Server.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
+    <ProjectReference Include="..\GeoAssets.Workflow.TestKit\GeoAssets.Workflow.TestKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Snapshots\route-inventory.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The route-inventory format is the kernel's (XD01-354): one description of a route per line, shared rather than forked. -->
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.Server.Tests\Routing\RouteInventory.cs" Link="Routing\RouteInventory.cs" />
+    <Compile Include="..\GeoAssets.Server.Tests\Routing\RouteInventoryDiff.cs" Link="Routing\RouteInventoryDiff.cs" />
+  </ItemGroup>
+
+</Project>
