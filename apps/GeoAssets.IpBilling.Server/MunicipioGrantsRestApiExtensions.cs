@@ -12,7 +12,8 @@ namespace GeoAssets.IpBilling.Server;
 /// token (<c>AddKernelIdentity</c> + <c>AddGeoPermissionPolicies</c>), and a <c>GeoAssets.ServiceCaller</c> service
 /// principal passes it. The organizations are the body's, not the caller's: a reference-data manager provisions grants
 /// for any Distribuidora/Prefeitura pair, as the kernel's endpoints allowed. Both answer 204; an invalid body (or one the kernel refuses) answers
-/// 400, and an unavailable kernel 503 (<see cref="KernelFailureTranslation"/>).
+/// 400, an unavailable kernel 503, and a kernel that rejects the caller's token 502
+/// (<see cref="GeoAssets.Workflow.Hosting.KernelFailureTranslation"/>, XD01-390).
 /// </summary>
 internal static class MunicipioGrantsRestApiExtensions
 {

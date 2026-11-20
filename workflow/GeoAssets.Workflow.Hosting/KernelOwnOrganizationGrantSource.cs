@@ -9,7 +9,8 @@ namespace GeoAssets.Workflow.Hosting;
 /// The caller's own organization's active grants (XD01-382) as the kernel answers <c>GET /api/identity/organization-grants/me</c>
 /// for the caller's own token — the route the Blazor client reads for the same purpose (XD01-332), so the service-order
 /// organization gate decides here as it does in the kernel. A kernel that does not answer yields no grant: a grantee is
-/// then offered less than the kernel would allow, never more.
+/// then offered less than the kernel would allow, never more. A kernel that rejects the caller's token (401) throws
+/// <see cref="KernelRejectedCallerTokenException"/> from <see cref="ForwardedBearerTokenHandler"/> instead (XD01-390).
 /// </summary>
 public sealed class KernelOwnOrganizationGrantSource(HttpClient http) : IOwnOrganizationGrantSource
 {
