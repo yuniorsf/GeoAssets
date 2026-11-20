@@ -3,6 +3,7 @@ using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
 using GeoAssets.NeutralOperator.Application.Occupancy;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -325,7 +326,7 @@ public sealed class RestOrderOccupancyStagingServiceTests
         {
             using var response = BodyRecordingHandler.Problem(HttpStatusCode.BadRequest, code);
             var problem = await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None);
-            var translated = WorkflowProblemTranslator.ToException(problem!, "ord-1", OrderActionType.View);
+            var translated = WorkflowProblemTranslator.ToException(problem!, "ord-1", OrderActionType.View, Mappers);
 
             if (string.Equals(code, OccupancyProblemCodes.StaleBaseline, StringComparison.Ordinal))
                 translated.Should().BeNull("a stale baseline is only ever a warning inside a successful read");
@@ -333,6 +334,8 @@ public sealed class RestOrderOccupancyStagingServiceTests
                 translated.Should().NotBeNull("code '{0}' must map to an exception", code);
         }
     }
+
+    private static readonly IWorkflowProblemMapper[] Mappers = [new NeutralOperatorProblemMapper()];
 
     private static readonly string[] SagaCodes = [OccupancyProblemCodes.ApplyPending, OccupancyProblemCodes.ApplyNotPending];
 
@@ -344,7 +347,7 @@ public sealed class RestOrderOccupancyStagingServiceTests
             using var response = BodyRecordingHandler.Problem(HttpStatusCode.Conflict, code);
             var problem = await WorkflowProblemTranslator.ReadAsync(response, CancellationToken.None);
 
-            WorkflowProblemTranslator.ToException(problem!, "ord-1", OrderActionType.Approve)
+            WorkflowProblemTranslator.ToException(problem!, "ord-1", OrderActionType.Approve, Mappers)
                 .Should().NotBeNull("code '{0}' must map to an exception", code);
         }
     }
@@ -352,12 +355,12 @@ public sealed class RestOrderOccupancyStagingServiceTests
     // ── Registration ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task AddWorkflowRest_RegistersTheOccupancyClient_OnTheNamedGeoAssetsServerClient()
+    public async Task AddNeutralOperatorWorkflowRest_RegistersTheOccupancyClient_OnTheNamedGeoAssetsServerClient()
     {
         var handler = Answering(HttpStatusCode.OK, ViewJson);
         var services = new ServiceCollection();
         services.AddHttpClient("GeoAssetsServer").ConfigurePrimaryHttpMessageHandler(() => handler);
-        services.AddWorkflowRest("http://test/api/workflow");
+        services.AddNeutralOperatorWorkflowRest("http://test/api/workflow");
         await using var provider = services.BuildServiceProvider();
 
         var staging = provider.GetRequiredService<IOrderOccupancyStagingService>();

@@ -7,6 +7,7 @@ using GeoAssets.NeutralOperator.Application.Occupancy.Saga;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.NeutralOperator.Server.Tests.Support;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
@@ -90,6 +91,7 @@ public sealed class GatewayEndToEndTests : IAsyncLifetime
             .ConfigurePrimaryHttpMessageHandler(() => webToGateway)
             .AddHttpMessageHandler(() => new BearerHandler("owner-admin"));
         services.AddDescriptorRoutedWorkflowRest("http://gateway.test/api/workflow");
+        services.AddDescriptorRoutedNeutralOperatorRest();
         var web = services.BuildServiceProvider();
         _disposables.Add(web);
 

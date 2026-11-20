@@ -35,12 +35,15 @@ namespace GeoAssets.Workflow.Rest;
 /// </description></item>
 /// </list>
 /// </summary>
-public sealed class RestServiceOrderTargetRepository(HttpClient http) : IServiceOrderTargetReader, IServiceOrderTargetWriter
+public sealed class RestServiceOrderTargetRepository(HttpClient http, IEnumerable<IWorkflowProblemMapper>? problemMappers = null)
+    : IServiceOrderTargetReader, IServiceOrderTargetWriter
 {
     /// <summary>The most ids the usages and remove routes accept in one request.</summary>
     public const int MaxIdsPerRequest = 500;
 
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
+
+    private readonly IWorkflowProblemMapper[] _problemMappers = [.. problemMappers ?? []];
 
     // ── Read ──────────────────────────────────────────────────────────────────
 
@@ -58,7 +61,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
         if (await IsUnknownOrderAsync(response, ct).ConfigureAwait(false))
             return new PagedResult<ServiceOrderTarget> { Items = [], TotalCount = 0 };
 
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, query.OrderId, OrderAction.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, query.OrderId, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
 
         var page = await response.Content.ReadFromJsonAsync<PagedEnvelope<ServiceOrderTarget>>(_opts, ct).ConfigureAwait(false);
         return new PagedResult<ServiceOrderTarget> { Items = page?.Items ?? [], TotalCount = page?.TotalCount ?? 0 };
@@ -79,7 +82,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
             if (problem?.Code is WorkflowProblemCodes.TargetNotFound or WorkflowProblemCodes.OrderNotFound) return null;
         }
 
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
         return await response.Content.ReadFromJsonAsync<ServiceOrderTarget>(_opts, ct).ConfigureAwait(false);
     }
 
@@ -92,7 +95,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
             Relative($"service-orders/{Uri.EscapeDataString(orderId)}/targets/count"), ct).ConfigureAwait(false);
         if (await IsUnknownOrderAsync(response, ct).ConfigureAwait(false)) return 0;
 
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(_opts, ct).ConfigureAwait(false);
         return body.GetProperty("count").GetInt32();
@@ -115,7 +118,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
                 var request = new { featureIds = chunk, excludingOrderId, page, pageSize = OrderTargetQuery.MaxPageSize };
                 using var response = await http
                     .PostAsJsonAsync(Relative("service-orders/targets/usages"), request, _opts, ct).ConfigureAwait(false);
-                await WorkflowProblemTranslator.ThrowIfFailedAsync(response, excludingOrderId, OrderAction.View, ct).ConfigureAwait(false);
+                await WorkflowProblemTranslator.ThrowIfFailedAsync(response, excludingOrderId, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
 
                 var envelope = await response.Content.ReadFromJsonAsync<PagedEnvelope<OrderTargetUsage>>(_opts, ct).ConfigureAwait(false);
                 var items = envelope?.Items ?? [];
@@ -138,7 +141,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
         if (response.StatusCode == HttpStatusCode.NoContent) return null;
         if (await IsUnknownOrderAsync(response, ct).ConfigureAwait(false)) return null;
 
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(_opts, ct).ConfigureAwait(false);
         if (body.ValueKind != JsonValueKind.Object
@@ -191,7 +194,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
             content,
             ct).ConfigureAwait(false);
 
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, target.OrderId, OrderAction.Annotate, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, target.OrderId, OrderAction.Annotate, _problemMappers, ct).ConfigureAwait(false);
     }
 
     public async Task<int> RemoveAsync(string orderId, IReadOnlyCollection<string> targetIds, CancellationToken ct)
@@ -209,7 +212,7 @@ public sealed class RestServiceOrderTargetRepository(HttpClient http) : IService
                 Relative($"service-orders/{Uri.EscapeDataString(orderId)}/targets/remove"), new { targetIds = chunk }, _opts, ct).ConfigureAwait(false);
             if (await IsUnknownOrderAsync(response, ct).ConfigureAwait(false)) return removed;
 
-            await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.Annotate, ct).ConfigureAwait(false);
+            await WorkflowProblemTranslator.ThrowIfFailedAsync(response, orderId, OrderAction.Annotate, _problemMappers, ct).ConfigureAwait(false);
 
             var body = await response.Content.ReadFromJsonAsync<JsonElement>(_opts, ct).ConfigureAwait(false);
             removed += body.GetProperty("removed").GetInt32();

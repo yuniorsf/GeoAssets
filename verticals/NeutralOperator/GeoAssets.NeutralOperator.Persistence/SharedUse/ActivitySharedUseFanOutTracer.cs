@@ -1,7 +1,7 @@
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 
-namespace GeoAssets.Workflow.Persistence;
+namespace GeoAssets.NeutralOperator.Persistence.SharedUse;
 
 /// <summary>
 /// <see cref="ISharedUseFanOutTracer"/> on <see cref="GeoAssetsActivitySource"/> (XD01-316): one

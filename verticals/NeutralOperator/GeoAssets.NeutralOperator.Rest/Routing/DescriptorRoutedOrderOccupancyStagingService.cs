@@ -1,9 +1,10 @@
 using GeoAssets.Core.Models;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.NeutralOperator.Domain.Occupancy;
+using GeoAssets.Workflow.Rest.Routing;
 using GeoAssets.Workflow.Rules;
 
-namespace GeoAssets.Workflow.Rest.Routing;
+namespace GeoAssets.NeutralOperator.Rest.Routing;
 
 /// <summary>
 /// <see cref="IOrderOccupancyStagingService"/> over every workflow API the client reaches through the gateway (XD01-384):

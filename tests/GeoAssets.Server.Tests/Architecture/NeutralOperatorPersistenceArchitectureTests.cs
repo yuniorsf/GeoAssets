@@ -91,7 +91,7 @@ public sealed class NeutralOperatorPersistenceArchitectureTests
     }
 
     [Fact]
-    public void KernelPersistenceTypes_ReferencingTheNeutralOperatorNamespace_AreOnlyTheSharedUseDispatchOnes()
+    public void KernelPersistenceTypes_NameNoNeutralOperatorNamespace()
     {
         var offenders = KernelReferenceScanner.FindForbiddenReferences(
             KernelPersistence.GetTypes(),
@@ -99,16 +99,8 @@ public sealed class NeutralOperatorPersistenceArchitectureTests
                 && (string.Equals(ns, NeutralOperatorNamespace, StringComparison.Ordinal)
                     || ns.StartsWith(NeutralOperatorNamespace + ".", StringComparison.Ordinal)));
 
-        // Shared-use dispatch (XD01-316) persistence is not part of XD01-380: it stays in the kernel persistence assembly.
-        offenders.Keys.Should().BeEquivalentTo(
-            [
-                "GeoAssets.Workflow.WorkflowEFCoreServiceExtensions",
-                "GeoAssets.Workflow.Persistence.ActivitySharedUseFanOutTracer",
-                "GeoAssets.Workflow.Persistence.ObservableSharedUseDispatchService",
-            ],
-            "only AddSharedUseDispatchPersistence and its two decorators still name the vertical. Offenders: {0}",
+        // XD01-388 moved AddSharedUseDispatchPersistence and the shared-use dispatch (XD01-316) decorators to the vertical's persistence.
+        offenders.Should().BeEmpty("no kernel persistence type names the vertical. Offenders: {0}",
             string.Join("; ", offenders.Select(o => $"{o.Key}: {string.Join(", ", o.Value)}")));
-        offenders.Values.SelectMany(references => references).Should().OnlyContain(
-            reference => reference.StartsWith("GeoAssets.NeutralOperator.Application.SharedUse.", StringComparison.Ordinal));
     }
 }

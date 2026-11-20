@@ -5,10 +5,11 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Rest;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 
-namespace GeoAssets.Workflow.Rest;
+namespace GeoAssets.NeutralOperator.Rest;
 
 /// <summary>
 /// The shared-use dispatch ports over the host's routes (XD01-316):
@@ -18,7 +19,7 @@ namespace GeoAssets.Workflow.Rest;
 /// The principal is required by the ports and never sent: the host takes the caller from the
 /// token. Arguments are checked, and an already-cancelled token throws, before any request. A
 /// failure the host reports as a problem comes back as the exception the in-process service
-/// throws for it (see <see cref="WorkflowProblemTranslator"/>); anything else is an
+/// throws for it (see <see cref="WorkflowProblemTranslator"/> and <see cref="NeutralOperatorProblemMapper"/>); anything else is an
 /// <see cref="HttpRequestException"/>.
 /// </summary>
 public sealed class RestSharedUseDispatchClient(HttpClient http) : ISharedUseDispatchService, ISharedUseDispatchPlanReader
@@ -26,6 +27,8 @@ public sealed class RestSharedUseDispatchClient(HttpClient http) : ISharedUseDis
     private const string PlanRoute = "shared-use/dispatch-plan";
 
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
+
+    private static readonly IWorkflowProblemMapper[] ProblemMappers = [new NeutralOperatorProblemMapper()];
 
     public async Task<SharedUseDispatchPreview> PreviewAsync(
         string orderId, int page, int pageSize, WorkflowPrincipal principal, CancellationToken ct)
@@ -99,8 +102,8 @@ public sealed class RestSharedUseDispatchClient(HttpClient http) : ISharedUseDis
 
         var problem = await WorkflowProblemTranslator.ReadAsync(response, ct).ConfigureAwait(false);
         if (problem is { Code: WorkflowProblemCodes.OrderTypeNotFound })
-            throw new OrderTypeNotRegisteredException(problem.String("orderTypeId") ?? string.Empty, problem.Detail);
-        if (problem is not null && WorkflowProblemTranslator.ToException(problem, orderId, OrderAction.Dispatch) is { } translated)
+            throw new OrderTypeNotRegisteredException(problem.GetString("orderTypeId") ?? string.Empty, problem.Detail);
+        if (problem is not null && WorkflowProblemTranslator.ToException(problem, orderId, OrderAction.Dispatch, ProblemMappers) is { } translated)
             throw translated;
 
         response.EnsureSuccessStatusCode();

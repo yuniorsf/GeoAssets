@@ -1,8 +1,9 @@
 using GeoAssets.Core.Models;
 using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.Workflow.Rest.Routing;
 using GeoAssets.Workflow.Rules;
 
-namespace GeoAssets.Workflow.Rest.Routing;
+namespace GeoAssets.NeutralOperator.Rest.Routing;
 
 /// <summary>
 /// The shared-use dispatch ports over every workflow API the client reaches through the gateway (XD01-384): each operation

@@ -1,5 +1,3 @@
-using GeoAssets.NeutralOperator.Application.SharedUse;
-using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest.Routing;
 using GeoAssets.Workflow.Targets;
@@ -18,12 +16,14 @@ public static class WorkflowRestServiceExtensions
     /// Registers <see cref="RestServiceOrderRepository"/>/<see cref="RestOrderTypeRepository"/>
     /// pointed at <paramref name="baseUrl"/> (e.g. <c>http://localhost:5000/api/workflow</c> — the
     /// prefix <c>ServiceOrdersRestApiExtensions.MapServiceOrdersApi</c> mounts on the server).
+    /// The clients translate a vertical's problem codes with every registered <see cref="IWorkflowProblemMapper"/>, resolved
+    /// when each client is first built; no vertical's ports are registered here (XD01-388) — a vertical registers its own.
     /// </summary>
     public static IServiceCollection AddWorkflowRest(this IServiceCollection services, string baseUrl)
     {
         services.AddHttpClient();
 
-        services.AddSingleton(sp => new RestServiceOrderRepository(BuildClient(sp, baseUrl)));
+        services.AddSingleton(sp => new RestServiceOrderRepository(BuildClient(sp, baseUrl), sp.GetServices<IWorkflowProblemMapper>()));
         services.AddSingleton<IServiceOrderRepository>(sp => sp.GetRequiredService<RestServiceOrderRepository>());
 
         // Read-only or write-only consumers can depend on just the piece they need
@@ -35,23 +35,14 @@ public static class WorkflowRestServiceExtensions
         services.AddSingleton<IOrderTypeRepository>(sp => sp.GetRequiredService<RestOrderTypeRepository>());
 
         // Service-order targets and selection (XD01-308) — same named client, same lifetime.
-        services.AddSingleton(sp => new RestServiceOrderTargetRepository(BuildClient(sp, baseUrl)));
+        services.AddSingleton(sp => new RestServiceOrderTargetRepository(BuildClient(sp, baseUrl), sp.GetServices<IWorkflowProblemMapper>()));
         services.AddSingleton<IServiceOrderTargetReader>(sp => sp.GetRequiredService<RestServiceOrderTargetRepository>());
         services.AddSingleton<IServiceOrderTargetWriter>(sp => sp.GetRequiredService<RestServiceOrderTargetRepository>());
 
-        services.AddSingleton(sp => new RestOrderTargetSelectionService(BuildClient(sp, baseUrl)));
+        services.AddSingleton(sp => new RestOrderTargetSelectionService(BuildClient(sp, baseUrl), sp.GetServices<IWorkflowProblemMapper>()));
         services.AddSingleton<IOrderTargetSelectionService>(sp => sp.GetRequiredService<RestOrderTargetSelectionService>());
 
-        services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, baseUrl)));
-
-        // Staged occupancy changes (XD01-315) — same named client, same lifetime.
-        services.AddSingleton(sp => new RestOrderOccupancyStagingService(BuildClient(sp, baseUrl)));
-        services.AddSingleton<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<RestOrderOccupancyStagingService>());
-
-        // Shared-use dispatch (XD01-316) — one client behind both ports, same named client.
-        services.AddSingleton(sp => new RestSharedUseDispatchClient(BuildClient(sp, baseUrl)));
-        services.AddSingleton<ISharedUseDispatchService>(sp => sp.GetRequiredService<RestSharedUseDispatchClient>());
-        services.AddSingleton<ISharedUseDispatchPlanReader>(sp => sp.GetRequiredService<RestSharedUseDispatchClient>());
+        services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, baseUrl), sp.GetServices<IWorkflowProblemMapper>()));
 
         return services;
     }
@@ -64,7 +55,10 @@ public static class WorkflowRestServiceExtensions
     /// — see <see cref="DescriptorOrderApiRoutes"/> (registry read every <paramref name="refreshInterval"/>, default
     /// <see cref="DescriptorOrderApiRoutes.DefaultRefreshInterval"/>), <see cref="ServiceOrderRouteLocator"/> (orders known by
     /// id) and <see cref="DescriptorRoutedServiceOrderRepository"/> (lists merged across the roots). Map gestures
-    /// (<see cref="RestMapSelectionClient"/>) stay on the kernel's root: selection is the kernel's.
+    /// (<see cref="RestMapSelectionClient"/>) stay on the kernel's root: selection is the kernel's. As in
+    /// <see cref="AddWorkflowRest"/>, the clients use every registered <see cref="IWorkflowProblemMapper"/> and no vertical's
+    /// ports are registered here: a vertical routes its own over this routing (<see cref="IOrderApiRoutes"/>,
+    /// <see cref="ServiceOrderRouteLocator"/>, <see cref="ClientsByRoot{TClient}"/>).
     /// </summary>
     public static IServiceCollection AddDescriptorRoutedWorkflowRest(
         this IServiceCollection services, string baseUrl, TimeSpan? refreshInterval = null)
@@ -80,12 +74,10 @@ public static class WorkflowRestServiceExtensions
             sp.GetService<TimeProvider>() ?? TimeProvider.System,
             refreshInterval ?? DescriptorOrderApiRoutes.DefaultRefreshInterval));
 
-        services.AddSingleton(sp => new ClientsByRoot<RestServiceOrderRepository>(root => new RestServiceOrderRepository(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestServiceOrderRepository>(root => new RestServiceOrderRepository(BuildClient(sp, root), sp.GetServices<IWorkflowProblemMapper>())));
         services.AddSingleton(sp => new ClientsByRoot<RestOrderTypeRepository>(root => new RestOrderTypeRepository(BuildClient(sp, root))));
-        services.AddSingleton(sp => new ClientsByRoot<RestServiceOrderTargetRepository>(root => new RestServiceOrderTargetRepository(BuildClient(sp, root))));
-        services.AddSingleton(sp => new ClientsByRoot<RestOrderTargetSelectionService>(root => new RestOrderTargetSelectionService(BuildClient(sp, root))));
-        services.AddSingleton(sp => new ClientsByRoot<RestOrderOccupancyStagingService>(root => new RestOrderOccupancyStagingService(BuildClient(sp, root))));
-        services.AddSingleton(sp => new ClientsByRoot<RestSharedUseDispatchClient>(root => new RestSharedUseDispatchClient(BuildClient(sp, root))));
+        services.AddSingleton(sp => new ClientsByRoot<RestServiceOrderTargetRepository>(root => new RestServiceOrderTargetRepository(BuildClient(sp, root), sp.GetServices<IWorkflowProblemMapper>())));
+        services.AddSingleton(sp => new ClientsByRoot<RestOrderTargetSelectionService>(root => new RestOrderTargetSelectionService(BuildClient(sp, root), sp.GetServices<IWorkflowProblemMapper>())));
         services.AddSingleton<ServiceOrderRouteLocator>();
 
         services.AddSingleton<DescriptorRoutedServiceOrderRepository>();
@@ -103,14 +95,7 @@ public static class WorkflowRestServiceExtensions
         services.AddSingleton<DescriptorRoutedOrderTargetSelectionService>();
         services.AddSingleton<IOrderTargetSelectionService>(sp => sp.GetRequiredService<DescriptorRoutedOrderTargetSelectionService>());
 
-        services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, defaultRoot)));
-
-        services.AddSingleton<DescriptorRoutedOrderOccupancyStagingService>();
-        services.AddSingleton<IOrderOccupancyStagingService>(sp => sp.GetRequiredService<DescriptorRoutedOrderOccupancyStagingService>());
-
-        services.AddSingleton<DescriptorRoutedSharedUseDispatchClient>();
-        services.AddSingleton<ISharedUseDispatchService>(sp => sp.GetRequiredService<DescriptorRoutedSharedUseDispatchClient>());
-        services.AddSingleton<ISharedUseDispatchPlanReader>(sp => sp.GetRequiredService<DescriptorRoutedSharedUseDispatchClient>());
+        services.AddSingleton(sp => new RestMapSelectionClient(BuildClient(sp, defaultRoot), sp.GetServices<IWorkflowProblemMapper>()));
 
         return services;
     }
@@ -118,8 +103,18 @@ public static class WorkflowRestServiceExtensions
     private static HttpClient BuildClient(IServiceProvider sp, string baseUrl) =>
         BuildClient(sp, new Uri(baseUrl.TrimEnd('/') + "/"));
 
-    private static HttpClient BuildClient(IServiceProvider sp, Uri baseAddress)
+    private static HttpClient BuildClient(IServiceProvider sp, Uri baseAddress) => CreateWorkflowHttpClient(sp, baseAddress);
+
+    /// <summary>
+    /// The host's token-carrying workflow client (the named <c>GeoAssetsServer</c> client of <see cref="IHttpClientFactory"/>)
+    /// based at <paramref name="baseAddress"/> — a workflow API root with a trailing slash. A vertical's REST registration
+    /// (XD01-388) builds its clients with it, so they carry the same token as the chassis'.
+    /// </summary>
+    public static HttpClient CreateWorkflowHttpClient(IServiceProvider sp, Uri baseAddress)
     {
+        ArgumentNullException.ThrowIfNull(sp);
+        ArgumentNullException.ThrowIfNull(baseAddress);
+
         // Named (not the anonymous default) so a host's auth handler on this name also covers
         // ServiceOrders/OrderType calls — same reasoning as RestProviderFactory.BuildClient and
         // GeoIdentityRestExtensions.CreateIdentityClient. GeoAssets.Web attaches its CIAM

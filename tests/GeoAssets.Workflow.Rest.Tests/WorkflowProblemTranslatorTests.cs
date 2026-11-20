@@ -216,8 +216,8 @@ public sealed class WorkflowProblemTranslatorTests
 
         problem!.Code.Should().Be("orders.invalid-state");
         problem.Detail.Should().Be("Only a title");
-        problem.String("from").Should().Be("Draft");
-        problem.String("missing").Should().BeNull();
-        problem.Int32("limit").Should().Be(0);
+        problem.GetString("from").Should().Be("Draft");
+        problem.GetString("missing").Should().BeNull();
+        problem.GetInt32("limit").Should().Be(0);
     }
 }

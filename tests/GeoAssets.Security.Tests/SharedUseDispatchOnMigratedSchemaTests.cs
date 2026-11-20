@@ -10,6 +10,7 @@ using GeoAssets.Workflow;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.NeutralOperator.Persistence;
+using GeoAssets.NeutralOperator.Persistence.SharedUse;
 using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;

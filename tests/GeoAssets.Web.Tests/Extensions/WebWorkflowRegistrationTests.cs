@@ -7,6 +7,8 @@ using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.NeutralOperator.Application;
 using GeoAssets.NeutralOperator.Application.Occupancy;
 using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Rest;
+using GeoAssets.NeutralOperator.Rest.Routing;
 using GeoAssets.Shared.Services;
 using GeoAssets.Web.Extensions;
 using GeoAssets.Workflow.Orders;
@@ -71,6 +73,7 @@ public sealed class WebWorkflowRegistrationTests
         services.AddSingleton<WorkflowPrincipalFactory>();
         services.AddHttpClient("GeoAssetsServer").ConfigurePrimaryHttpMessageHandler(() => gate);
         services.AddDescriptorRoutedWorkflowRest($"{Gateway}/api/workflow");
+        services.AddDescriptorRoutedNeutralOperatorRest();
         services.AddIspTenantPortalRest();
         return services.BuildServiceProvider();
     }
@@ -136,6 +139,7 @@ public sealed class WebWorkflowRegistrationTests
         var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "apps", "GeoAssets.Web", "Program.cs"));
 
         program.Should().Contain("AddDescriptorRoutedWorkflowRest(serviceOrdersApiBaseUrl)");
+        program.Should().Contain("AddDescriptorRoutedNeutralOperatorRest(");
         program.Should().NotContain("AddWorkflowRest(");
     }
 
@@ -145,6 +149,7 @@ public sealed class WebWorkflowRegistrationTests
         var program = File.ReadAllText(Path.Combine(RepositoryRoot(), "apps", "GeoAssets.MAUI", "MauiProgram.cs"));
 
         program.Should().Contain("AddDescriptorRoutedWorkflowRest(");
+        program.Should().Contain("AddDescriptorRoutedNeutralOperatorRest(");
         program.Should().NotContain("AddWorkflowRest(");
     }
 

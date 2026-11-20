@@ -13,6 +13,7 @@ using GeoAssets.MAUI.Services.Localization;
 using GeoAssets.MAUI.Services.Evidence;
 using GeoAssets.MAUI.Services.FieldWork;
 using GeoAssets.MAUI.Services.Offline;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.NeutralOperator.UI;
 using GeoAssets.NeutralOperator.UI.Navigation;
 using GeoAssets.Provider.Rest;
@@ -196,6 +197,8 @@ public static class MauiProgram
         var serviceOrdersApiBaseUrl = builder.Configuration["ServiceOrders:ApiBaseUrl"]
             ?? throw new InvalidOperationException("ServiceOrders:ApiBaseUrl is not configured.");
         builder.Services.AddDescriptorRoutedWorkflowRest(serviceOrdersApiBaseUrl);
+        // XD01-388: the NeutralOperator vertical's ports and problem codes over that routing — same as apps/GeoAssets.Web/Program.cs.
+        builder.Services.AddDescriptorRoutedNeutralOperatorRest();
 
         builder.Services.AddServiceOrderRules();
         builder.Services.AddScoped<WorkflowPrincipalFactory>();

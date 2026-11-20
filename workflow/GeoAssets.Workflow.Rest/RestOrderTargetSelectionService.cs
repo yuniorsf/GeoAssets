@@ -16,14 +16,17 @@ namespace GeoAssets.Workflow.Rest;
 /// trusted. Failures come back as the exceptions the in-process service throws
 /// (<see cref="WorkflowProblemTranslator"/>).
 /// </summary>
-public sealed class RestOrderTargetSelectionService(HttpClient http) : IOrderTargetSelectionService
+public sealed class RestOrderTargetSelectionService(HttpClient http, IEnumerable<IWorkflowProblemMapper>? problemMappers = null)
+    : IOrderTargetSelectionService
 {
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
+
+    private readonly IWorkflowProblemMapper[] _problemMappers = [.. problemMappers ?? []];
 
     public async Task<TargetSelectionPreview> PreviewAsync(TargetSelectionRequest request, WorkflowPrincipal principal, CancellationToken ct)
     {
         using var response = await SendAsync("preview", request, principal, ct).ConfigureAwait(false);
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, request.OrderId, OrderAction.View, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, request.OrderId, OrderAction.View, _problemMappers, ct).ConfigureAwait(false);
 
         return await response.Content.ReadFromJsonAsync<TargetSelectionPreview>(_opts, ct).ConfigureAwait(false)
             ?? throw new JsonException("The selection preview response is empty.");
@@ -32,7 +35,7 @@ public sealed class RestOrderTargetSelectionService(HttpClient http) : IOrderTar
     public async Task<TargetSelectionResult> ApplyAsync(TargetSelectionRequest request, WorkflowPrincipal principal, CancellationToken ct)
     {
         using var response = await SendAsync("apply", request, principal, ct).ConfigureAwait(false);
-        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, request.OrderId, OrderAction.Annotate, ct).ConfigureAwait(false);
+        await WorkflowProblemTranslator.ThrowIfFailedAsync(response, request.OrderId, OrderAction.Annotate, _problemMappers, ct).ConfigureAwait(false);
 
         return await response.Content.ReadFromJsonAsync<TargetSelectionResult>(_opts, ct).ConfigureAwait(false)
             ?? throw new JsonException("The selection result response is empty.");

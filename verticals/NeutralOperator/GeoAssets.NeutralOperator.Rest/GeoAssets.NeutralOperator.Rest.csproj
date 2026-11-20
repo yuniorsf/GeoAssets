@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-388: the NeutralOperator vertical's REST clients — staged occupancy, shared-use dispatch, their descriptor-routed
+       counterparts and the translation of the vertical's problem codes — out of the generic GeoAssets.Workflow.Rest, which
+       references no vertical. A vertical → chassis reference; never the reverse. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.NeutralOperator.Rest</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The tests of this code stayed where they were when it moved out of GeoAssets.Workflow.Rest (XD01-388). -->
+    <InternalsVisibleTo Include="GeoAssets.Workflow.Rest.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.NeutralOperator.Application\GeoAssets.NeutralOperator.Application.csproj" />
+    <ProjectReference Include="..\..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
+  </ItemGroup>
+
+</Project>

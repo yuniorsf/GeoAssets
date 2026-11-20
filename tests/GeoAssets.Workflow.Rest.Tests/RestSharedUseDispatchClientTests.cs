@@ -2,6 +2,7 @@ using System.Net;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Domain;
 using GeoAssets.NeutralOperator.Application.SharedUse;
+using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
@@ -334,12 +335,12 @@ public sealed class RestSharedUseDispatchClientTests
     // ── Registration ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task AddWorkflowRest_RegistersOneClientBehindBothPorts_OnTheNamedGeoAssetsServerClient()
+    public async Task AddNeutralOperatorWorkflowRest_RegistersOneClientBehindBothPorts_OnTheNamedGeoAssetsServerClient()
     {
         var handler = Answering(PreviewJson);
         var services = new ServiceCollection();
         services.AddHttpClient("GeoAssetsServer").ConfigurePrimaryHttpMessageHandler(() => handler);
-        services.AddWorkflowRest("http://test/api/workflow");
+        services.AddNeutralOperatorWorkflowRest("http://test/api/workflow");
         await using var provider = services.BuildServiceProvider();
 
         var plans = provider.GetRequiredService<ISharedUseDispatchPlanReader>();
