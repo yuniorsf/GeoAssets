@@ -1,5 +1,6 @@
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
+using GeoAssets.Identity.Authorization.Services;
 
 namespace GeoAssets.Server.Tests;
 
@@ -15,6 +16,7 @@ internal sealed class TestOrganizationGrantRepository : IOrganizationGrantReposi
         Task.FromResult<IReadOnlyList<OrganizationGrant>>([.. Active.Where(g => g.GranteeOrganizationId == granteeOrganizationId)]);
 
     public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<OrganizationGrant?> FindActiveGrantByKeyAsync(OrganizationGrantKey key, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default) => throw new NotSupportedException();
     public Task AddAsync(OrganizationGrant grant, CancellationToken ct = default) => throw new NotSupportedException();

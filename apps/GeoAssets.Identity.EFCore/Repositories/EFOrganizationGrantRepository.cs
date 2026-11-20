@@ -1,6 +1,9 @@
+using System.Data.Common;
+using GeoAssets.Identity.Authorization.EFCore.Configuration;
 using GeoAssets.Identity.Authorization.EFCore.Entities;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
+using GeoAssets.Identity.Authorization.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace GeoAssets.Identity.Authorization.EFCore.Repositories;
@@ -36,6 +39,20 @@ public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db, TimeP
                      && (g.ExpiresAt == null || g.ExpiresAt > now))
             .ToListAsync(ct)
             .ConfigureAwait(false);
+    }
+
+    public Task<OrganizationGrant?> FindActiveGrantByKeyAsync(OrganizationGrantKey key, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return db.OrganizationGrants
+            .Where(g => g.GranteeOrganizationId == key.GranteeOrganizationId
+                     && g.ResourceOrganizationId == key.ResourceOrganizationId
+                     && g.ResourceType == key.ResourceType
+                     && g.ScopeId == key.ScopeId
+                     && g.IsActive)
+            .OrderBy(g => g.GrantedAt)
+            .ThenBy(g => g.Id)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task AddAsync(OrganizationGrant grant, CancellationToken ct = default)
@@ -74,8 +91,55 @@ public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db, TimeP
             },
             ct).ConfigureAwait(false);
 
-    public Task SaveChangesAsync(CancellationToken ct = default)
-        => db.SaveChangesAsync(ct);
+    /// <summary>
+    /// Saves the unit of work. A save the store refuses because a grant being saved collides with another active grant's
+    /// key (<see cref="OrganizationGrantConfiguration.ActiveKeyIndexName"/>, XD01-394 — a concurrent upsert stored its
+    /// grant first) throws <see cref="OrganizationGrantKeyConflictException"/> instead, after detaching every tracked grant
+    /// and grant-sync outbox entry: the failed save's writes must not ride along on a later save (no outbox row for a grant
+    /// that was never stored), and a re-read must materialize the store's rows rather than the stale tracked ones.
+    /// </summary>
+    public async Task SaveChangesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch (DbUpdateException ex) when (IsActiveKeyConflict(ex))
+        {
+            var key = PendingGrantKey();
+            DiscardTrackedGrantWrites();
+            throw new OrganizationGrantKeyConflictException(key, ex);
+        }
+    }
+
+    /// <summary>
+    /// The unique violation of <see cref="OrganizationGrantConfiguration.ActiveKeyIndexName"/>, told apart without a
+    /// provider dependency: PostgreSQL's SQLSTATE 23505 naming the index, or SQLite's unique-constraint failure on the grant
+    /// table (no SQLSTATE; SQLite names the columns, not the index).
+    /// </summary>
+    private static bool IsActiveKeyConflict(DbUpdateException ex) =>
+        ex.InnerException is DbException inner
+        && ((string.Equals(inner.SqlState, "23505", StringComparison.Ordinal)
+                && inner.Message.Contains(OrganizationGrantConfiguration.ActiveKeyIndexName, StringComparison.Ordinal))
+            || (inner.SqlState is null
+                && inner.Message.Contains("UNIQUE constraint failed: OrganizationGrants.GranteeOrganizationId, ", StringComparison.Ordinal)));
+
+    private OrganizationGrantKey? PendingGrantKey()
+    {
+        var pending = db.ChangeTracker.Entries<OrganizationGrant>()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+            .Select(e => e.Entity)
+            .ToList();
+        return pending.Count == 1
+            ? new OrganizationGrantKey(pending[0].GranteeOrganizationId, pending[0].ResourceOrganizationId, pending[0].ResourceType, pending[0].ScopeId)
+            : null;
+    }
+
+    private void DiscardTrackedGrantWrites()
+    {
+        foreach (var entry in db.ChangeTracker.Entries<OrganizationGrant>().ToList()) entry.State = EntityState.Detached;
+        foreach (var entry in db.ChangeTracker.Entries<OrganizationGrantSyncOutboxRecord>().ToList()) entry.State = EntityState.Detached;
+    }
 
     public async Task<IReadOnlyList<OrganizationGrantSyncEntry>> GetSyncBatchAsync(
         long afterSequence, int take, CancellationToken ct = default)

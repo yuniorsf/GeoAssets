@@ -8,6 +8,14 @@ namespace GeoAssets.Identity.Authorization.EFCore.Configuration;
 
 internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<OrganizationGrant>
 {
+    /// <summary>
+    /// One active grant per <c>OrganizationGrantKey</c> (XD01-394): unique over the key's four columns among the rows
+    /// flagged active, expired or not. On PostgreSQL a null resource type or scope compares equal to another null
+    /// (<c>NULLS NOT DISTINCT</c>); other providers (SQLite in tests) treat nulls as distinct, so there the rule only
+    /// holds for keys without one.
+    /// </summary>
+    internal const string ActiveKeyIndexName = "UX_OrganizationGrants_ActiveKey";
+
     public void Configure(EntityTypeBuilder<OrganizationGrant> b)
     {
         b.ToTable("OrganizationGrants");
@@ -36,5 +44,9 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
 
         b.HasIndex(g => new { g.GranteeOrganizationId, g.ResourceOrganizationId });
         b.HasIndex(g => g.IsActive);
+        b.HasIndex(g => new { g.GranteeOrganizationId, g.ResourceOrganizationId, g.ResourceType, g.ScopeId }, ActiveKeyIndexName)
+         .IsUnique()
+         .HasFilter("\"IsActive\"")
+         .AreNullsDistinct(false);
     }
 }

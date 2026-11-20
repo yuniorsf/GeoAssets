@@ -1,4 +1,5 @@
 using GeoAssets.Identity.Authorization.Models;
+using GeoAssets.Identity.Authorization.Services;
 
 namespace GeoAssets.Identity.Authorization.Repositories;
 
@@ -27,8 +28,24 @@ public interface IOrganizationGrantRepository
     Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(
         Guid granteeOrganizationId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The grant flagged active with exactly <paramref name="key"/> (resource type and scope compared ordinally, null
+    /// matching only null), <b>expired or not</b> — the one row the store's one-active-grant-per-key rule
+    /// (<c>UX_OrganizationGrants_ActiveKey</c>, XD01-394) allows, so the one a new grant with that key would collide with.
+    /// The oldest by <see cref="OrganizationGrant.GrantedAt"/> (then id) should a store not enforce the rule; null if none.
+    /// </summary>
+    Task<OrganizationGrant?> FindActiveGrantByKeyAsync(OrganizationGrantKey key, CancellationToken ct = default);
+
     Task AddAsync(OrganizationGrant grant, CancellationToken ct = default);
     Task UpdateAsync(OrganizationGrant grant, CancellationToken ct = default);
+
+    /// <summary>
+    /// Saves the pending grant writes and their grant-sync outbox entries as one unit.
+    /// </summary>
+    /// <exception cref="OrganizationGrantKeyConflictException">
+    /// The store refused the save because another active grant already has the key of a grant being saved (XD01-394);
+    /// the failed save's grant writes have been discarded.
+    /// </exception>
     Task SaveChangesAsync(CancellationToken ct = default);
 
     /// <summary>

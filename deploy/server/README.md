@@ -146,6 +146,63 @@ dotnet ef database update \
   --connection "<FieldService connection string>"
 ```
 
+### Duplicate active organization grants (XD01-394)
+
+`GeoIdentityDbContext` (identity, roles, organization grants; migrations in `apps/GeoAssets.Server/Migrations`) is
+applied the same way, by hand:
+
+```bash
+dotnet ef database update \
+  --project apps/GeoAssets.Server \
+  --startup-project apps/GeoAssets.Server \
+  --context GeoIdentityDbContext \
+  --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
+```
+
+Its `EnforceOneActiveOrganizationGrantPerKey` migration adds the unique index `UX_OrganizationGrants_ActiveKey`: at most
+one grant flagged active (expired or not) per key `(GranteeOrganizationId, ResourceOrganizationId, ResourceType,
+ScopeId)`, a null resource type or scope counting as one value (`NULLS NOT DISTINCT`). Before the XD01-394 fix two
+concurrent upserts of one key could both insert, so a database may already hold duplicates. The migration checks first
+and, if any key has several active grants, aborts with `Cannot enforce one active organization grant per key: N key(s)
+have several active grants: (grantee …, resource …, resourceType …, scopeId …): grants <id>, <id>; …` (each key's grant
+ids oldest first) and changes nothing. It never deactivates a grant itself.
+
+To clean up, review the named grants. Then keep the oldest active grant of each key (earliest `GrantedAt`, then lowest
+`Id`) and deactivate the rest. Deactivate rather than delete: grants are never hard-deleted. Record each deactivation on
+the grant-sync outbox so the FieldService mirror (XD01-290) drops the grant too:
+
+```sql
+BEGIN;
+
+WITH ranked AS (
+    SELECT "Id",
+           row_number() OVER (
+               PARTITION BY "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId"
+               ORDER BY "GrantedAt", "Id") AS position
+      FROM "OrganizationGrants"
+     WHERE "IsActive"
+),
+deactivated AS (
+    UPDATE "OrganizationGrants" AS g
+       SET "IsActive" = false
+      FROM ranked AS r
+     WHERE g."Id" = r."Id"
+       AND r.position > 1
+ RETURNING g."Id", g."GranteeOrganizationId", g."ResourceOrganizationId", g."ResourceType", g."ScopeId", g."ExpiresAt"
+)
+INSERT INTO "OrganizationGrantSyncOutbox"
+       ("GrantId", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId", "IsActive", "ExpiresAt", "RecordedAtUtc")
+SELECT "Id", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId", false, "ExpiresAt", now()
+  FROM deactivated
+RETURNING "GrantId", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId";
+
+COMMIT;
+```
+
+The surviving grant keeps its own actions, role and expiry. If one of the deactivated grants carried the ones you meant,
+re-send that grant through `PUT /api/identity/organization-grants` after the migration: the upsert updates the
+surviving grant in place. Then run the `database update` again.
+
 Note the host-side port is **5433**, not 5432 — see the comment in `docker-compose.yaml`; this avoids colliding with any Postgres already running natively on your machine's 5432. The `server` container itself talks to `postgres` over the internal Docker network on the standard 5432, unaffected by this remap.
 
 ## What this doesn't solve
