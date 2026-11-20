@@ -46,6 +46,35 @@ the gateway's `/api/ip-billing/**` route, `IPBILLING_DESTINATION`); that host is
 `/api/identity/organization-grants` API and publishes its `ip-billing:*` permissions
 (`PUT /api/identity/verticals/ip-billing/permissions`) — until it has, its `/readyz` answers 503.
 
+## Token audiences of the vertical hosts (XD01-390)
+
+`GeoAssets.IpBilling.Server` and `GeoAssets.NeutralOperator.Server` validate the caller's bearer token against **their own**
+API registration (`AzureAdCiam:ClientId` = that host's API) and then forward the same token to the kernel's caller-scoped
+identity routes (`GET /api/identity/me`, `GET /api/identity/policies`, `GET /api/identity/organization-grants/me`). The
+kernel therefore has to accept their audiences too (CIAM model (b): one app registration per API):
+
+| Host | Its `AzureAdCiam:ClientId` | Kernel setting |
+|---|---|---|
+| `GeoAssets.Server` (kernel) | the kernel's API | — (its own `ClientId` and `api://{ClientId}` are always accepted) |
+| `GeoAssets.IpBilling.Server` | the IP-billing API | `AzureAdCiam__AdditionalAudiences__0=<IpBilling API client id>` |
+| `GeoAssets.NeutralOperator.Server` | the NeutralOperator API | `AzureAdCiam__AdditionalAudiences__1=<NeutralOperator API client id>` |
+
+List whatever the tokens carry as `aud` — the API's client id for v2.0 access tokens, or its App ID URI
+(`api://<client id>`) — in this stack's `.env` (passed to the `server` container) or the kernel's environment. Empty (the
+default) keeps the kernel accepting only its own audience, exactly as before; only the audience set widens — issuer,
+signature and lifetime are validated as before.
+
+In Entra External ID (CIAM): expose an API (an app registration with an Application ID URI and an `access_as_user` scope)
+per host, grant the Web and MAUI client registrations that scope, and have the clients request each API's scope for that
+host's routes (the Web client's `GeoAssetsServer:ApiScope`, `GeoAssetsIpBillingServer:ApiScope`). Alternatively (model
+(a)) a vertical host can use the kernel's API audience as its own `ClientId` and the kernel needs no extra audience.
+
+**Symptom of a missing audience**: the vertical host answers **502** with problem code `kernel.token-rejected` ("The
+GeoAssets kernel rejected the caller's token.", the detail carries the kernel's `error_description`, e.g. *The audience
+'…' is invalid*) and logs one Error naming the kernel route, the token's `aud` and `iss` and the kernel's `error` — add that
+`aud` to the kernel's `AzureAdCiam:AdditionalAudiences` and restart the kernel. (Before XD01-390 IpBilling.Server answered
+this as `503 kernel.unavailable` and NeutralOperator.Server as an unhandled 500.)
+
 ## First-run database setup
 
 `GeoAssetsDbContext` (assets/PostGIS data) migrates itself automatically at

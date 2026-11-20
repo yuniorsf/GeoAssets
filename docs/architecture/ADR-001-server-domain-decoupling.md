@@ -478,7 +478,7 @@ Both ratchets are at zero: `KernelReferenceRatchet.Allowlist` (invariant I1) and
 **Known follow-ups (not covered by I1–I5, no ratchet yet):**
 - *Closed by XD01-388 (chassis assembly-reference ratchet):* the shared-use dispatch decorators moved to `GeoAssets.NeutralOperator.Persistence` and the NeutralOperator REST clients and problem mapper to `GeoAssets.NeutralOperator.Rest`; the chassis libraries reference no vertical assembly, allowlist empty. The remaining out-of-ratchet reference is `workflow/GeoAssets.Workflow.Agents` → `GeoAssets.FieldService.Application` (used only by `GeoAssets.FieldService.Server`).
 - Closed by XD01-389: `plugins/commands/GeoAssets.Plugin.GeoJsonImport` writes to the host's active `IAssetProvider` (command `geojson-import-file`) instead of opening PostgreSQL itself; `ProviderPostgreSqlReferenceTests.KnownPreExistingViolations` is empty.
-- `GeoAssets.IpBilling.Server`'s município writes do not call the grant sync themselves; callers post to `/api/ip-billing/municipio-grants/sync`. Its `ip-billing:reference-manage` check is the kernel's answer for the caller's forwarded token, so the kernel must accept that token's audience (see the host's `appsettings.json`).
+- `GeoAssets.IpBilling.Server`'s município writes do not call the grant sync themselves; callers post to `/api/ip-billing/municipio-grants/sync`. Its `ip-billing:reference-manage` check is the kernel's answer for the caller's forwarded token, so the kernel must accept that token's audience — accepted audiences configurable since XD01-390 (the kernel's `AzureAdCiam:AdditionalAudiences`; a rejected token answers `502 kernel.token-rejected` on the vertical host).
 
 ## Related host deviation (tracked: XD01-386)
 

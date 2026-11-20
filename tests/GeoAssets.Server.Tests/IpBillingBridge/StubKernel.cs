@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using GeoAssets.Identity.Authorization.EFCore;
+using GeoAssets.Server.Tests.TokenAudiences;
 using GeoAssets.Identity.Authorization.EFCore.Repositories;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
@@ -54,7 +55,11 @@ internal sealed class StubKernel : IAsyncDisposable
     /// <summary>The kernel in process: an <see cref="HttpMessageHandler"/> a vertical host's HTTP clients send through.</summary>
     public HttpMessageHandler CreateHandler() => _host!.GetTestServer().CreateHandler();
 
-    public async Task StartAsync()
+    /// <param name="jwt">
+    /// When given, the kernel validates bearer tokens with its own <c>AddGeoAssetsAuthentication</c> (the real Entra CIAM provider,
+    /// audience set included) against the local signing key of <see cref="LocalJwt"/> instead of the stand-in token lookup (XD01-390).
+    /// </param>
+    public async Task StartAsync(KernelJwtAuthentication? jwt = null)
     {
         // A shared-cache in-memory database, so each request's scope has a connection of its own (the registration loop and a test's
         // request run concurrently); the keeper connection holds the database alive.
@@ -71,10 +76,19 @@ internal sealed class StubKernel : IAsyncDisposable
                 {
                     services.AddRouting();
                     services.AddHttpContextAccessor();
-                    services.AddAuthentication(BridgeTokenAuthenticationHandler.SchemeName)
-                        .AddScheme<BridgeTokenAuthenticationOptions, BridgeTokenAuthenticationHandler>(
-                            BridgeTokenAuthenticationHandler.SchemeName, o => o.KernelOnly = true);
-                    services.AddAuthorization(o => o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+                    if (jwt is null)
+                    {
+                        services.AddAuthentication(BridgeTokenAuthenticationHandler.SchemeName)
+                            .AddScheme<BridgeTokenAuthenticationOptions, BridgeTokenAuthenticationHandler>(
+                                BridgeTokenAuthenticationHandler.SchemeName, o => o.KernelOnly = true);
+                        services.AddAuthorization(o => o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+                    }
+                    else
+                    {
+                        services.AddGeoAssetsAuthentication(jwt.Configuration());
+                        LocalJwt.TrustLocalSigning(services);
+                    }
+
                     services.AddScoped(_ => NewContext());
                     services.AddSingleton<TimeProvider>(Time);
                     services.AddScoped<IGeoAuthorizationService, ClaimsAuthorizationService>();

@@ -282,16 +282,18 @@ public sealed class MunicipioGrantBridgeEndToEndTests
     }
 
     [Fact]
-    public async Task Sync_WhenTheKernelRejectsTheCallersToken_TheAudienceMismatch_Answers503_NotAnUnhandled500()
+    public async Task Sync_WhenTheKernelRejectsTheCallersToken_TheAudienceMismatch_Answers502TokenRejected_NotAnUnhandled500()
     {
         // The ADR's audience risk: this host validates the token (its own audience), the kernel's /api/identity/me does not
         // accept it and answers 401. That is a deployment misconfiguration the caller cannot fix by signing in again, so the
-        // host answers 503 kernel.unavailable rather than an unhandled 500.
+        // host answers 502 kernel.token-rejected (XD01-390; 503 kernel.unavailable before) rather than an unhandled 500.
         await using var host = await IpBillingBridgeHost.StartAsync();
 
-        var status = await PostAsync(host, BridgeCallers.WrongAudienceToken, Sync, SyncBody(PrefeituraA));
+        using var client = host.ClientFor(BridgeCallers.WrongAudienceToken);
+        using var response = await client.PostAsJsonAsync(new Uri(Sync, UriKind.Relative), SyncBody(PrefeituraA));
 
-        status.Should().Be(HttpStatusCode.ServiceUnavailable);
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("\"code\":\"kernel.token-rejected\"");
         host.Unhandled.Should().BeEmpty();
         host.Kernel.To(HttpMethod.Get, "/api/identity/me").Should().ContainSingle();
         host.Kernel.Requests.Should().NotContain(r => r.Path.Contains("organization-grants", StringComparison.Ordinal));

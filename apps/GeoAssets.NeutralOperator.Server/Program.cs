@@ -18,8 +18,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddGeoAssetsObservability(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 
-// ── Authentication (bearer tokens of the CIAM tenant, the kernel's API audience) — every endpoint requires an
-// authenticated caller by default (XD01-12). ──────────────────────────────────────────────────────────────────────
+// ── Authentication (bearer tokens of the CIAM tenant, this host's own API audience — which the kernel lists in its
+// AzureAdCiam:AdditionalAudiences, XD01-390) — every endpoint requires an authenticated caller by default (XD01-12). ─
 builder.Services.AddGeoAssetsAuthentication(builder.Configuration);
 
 // ── Tenant resolution (XD01-200) — the request's organization claim stamps this host's row-level security. ────────
@@ -99,6 +99,10 @@ var app = builder.Build();
 await app.Services.LoadRegistryFromDbAsync().ConfigureAwait(false);
 
 app.UseCors();
+// A failed kernel call (XD01-390): the kernel rejecting the caller's forwarded token answers 502 kernel.token-rejected,
+// an unreachable kernel 503 kernel.unavailable — instead of an unhandled 500. Before authentication, so the permission
+// policies' kernel calls are covered.
+app.UseKernelFailureTranslation();
 app.UseGeoAssetsAuthentication();
 app.UseGeoAssetsModules();
 app.UseGeoAssetsObservability();

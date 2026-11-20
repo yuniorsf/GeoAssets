@@ -44,10 +44,14 @@ internal sealed class IpBillingBridgeHost : IAsyncDisposable
 
     public SwitchableServiceAuthTokenProvider ServiceTokens { get; }
 
-    public static async Task<IpBillingBridgeHost> StartAsync(bool kernelRegistrationFails = false)
+    /// <param name="kernelRegistrationFails">Makes the stand-in kernel answer the registration PUTs 503 (ignored with <paramref name="startedKernel"/>).</param>
+    /// <param name="startedKernel">A kernel the test started itself (e.g. with real JWT validation); the host owns and disposes it.</param>
+    /// <param name="configureServices">Applied after the host's stand-in authentication, to replace it (XD01-390).</param>
+    public static async Task<IpBillingBridgeHost> StartAsync(
+        bool kernelRegistrationFails = false, StubKernel? startedKernel = null, Action<IServiceCollection>? configureServices = null)
     {
-        var kernel = new StubKernel { RegistrationFails = kernelRegistrationFails };
-        await kernel.StartAsync();
+        var kernel = startedKernel ?? new StubKernel { RegistrationFails = kernelRegistrationFails };
+        if (startedKernel is null) await kernel.StartAsync();
         var link = new KernelLink(kernel.CreateHandler());
         var tokens = new SwitchableServiceAuthTokenProvider();
         var unhandled = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
@@ -75,6 +79,7 @@ internal sealed class IpBillingBridgeHost : IAsyncDisposable
                     })
                     .AddScheme<BridgeTokenAuthenticationOptions, BridgeTokenAuthenticationHandler>(BridgeTokenAuthenticationHandler.SchemeName, _ => { });
                 services.AddTransient<IStartupFilter>(_ => new AnswerUnhandledExceptionsWith500(unhandled));
+                configureServices?.Invoke(services);
             });
         });
 

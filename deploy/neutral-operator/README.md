@@ -18,6 +18,23 @@ It serves on host port **8082** (the kernel is 8080, the web client 8081) the ge
 order-type and target routes and the module's occupancy and shared-use routes — the same routes the kernel serves while it
 still hosts the module.
 
+## Token audiences (XD01-390)
+
+This host validates the caller's token against its **own** API registration (`AzureAdCiam__ClientId` = the NeutralOperator
+API's client id) and forwards the same token to the kernel's identity routes (`/api/identity/me`, `/api/identity/policies`,
+`/api/identity/organization-grants/me`), so the kernel must accept that audience: set on the kernel
+`AzureAdCiam__AdditionalAudiences__N=<NeutralOperator API client id>` (or its App ID URI, whichever the tokens carry as
+`aud`; `deploy/server/.env` for the local stack). In Entra External ID (CIAM): expose an API for this host (Application ID
+URI + `access_as_user` scope), grant the Web and MAUI clients that scope, and have them request it for this vertical's
+routes. Alternatively (model (a)) set `AzureAdCiam__ClientId` to the kernel's API audience — what works while the clients
+request only the kernel's scope — and the kernel needs no extra audience. See `deploy/server/README.md` "Token audiences of
+the vertical hosts".
+
+A kernel that does not accept the audience makes every route that needs the caller's identity answer **502**
+`kernel.token-rejected` (the detail carries the kernel's `error_description`) with one Error log naming the kernel route,
+the token's `aud`/`iss` and the kernel's `error` — not 401 (the caller cannot fix it by signing in again) and not 500. An
+unreachable kernel answers `503 kernel.unavailable`.
+
 ## Running it
 
 Start the kernel stack first (`deploy/server`, see its README): this stack joins its Docker network and reuses its

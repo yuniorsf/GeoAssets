@@ -40,6 +40,12 @@ internal sealed class FakeKernel(IReadOnlyDictionary<string, TestIdentity> ident
     /// <summary>Makes every <c>/api/identity/me</c> answer 503 while true.</summary>
     public bool IdentityFails { get; set; }
 
+    /// <summary>
+    /// When set, every <c>/api/identity/me</c> answers 401 with <c>WWW-Authenticate: Bearer error="invalid_token",
+    /// error_description="{this value}"</c> — the kernel refusing a token it does not accept the audience of (XD01-390).
+    /// </summary>
+    public string? IdentityRejection { get; set; }
+
     public IReadOnlyList<RecordedRequest> To(HttpMethod method, string pathContains) =>
         [.. Requests.Where(r => r.Method == method && r.Path.Contains(pathContains, StringComparison.Ordinal))];
 
@@ -85,6 +91,13 @@ internal sealed class FakeKernel(IReadOnlyDictionary<string, TestIdentity> ident
     private HttpResponseMessage Me(RecordedRequest request)
     {
         if (IdentityFails) return Problem(HttpStatusCode.ServiceUnavailable, "kernel.unavailable", "The kernel is down.");
+        if (IdentityRejection is not null)
+        {
+            var rejection = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            rejection.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer", $"error=\"invalid_token\", error_description=\"{IdentityRejection}\""));
+            return rejection;
+        }
 
         var token = request.Authorization?.StartsWith("Bearer ", StringComparison.Ordinal) == true ? request.Authorization["Bearer ".Length..] : null;
         if (token is null || !identities.TryGetValue(token, out var identity)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
