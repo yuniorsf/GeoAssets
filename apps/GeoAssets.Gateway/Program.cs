@@ -29,7 +29,8 @@ builder.Services.AddReverseProxy().LoadFromMemory(routes, clusters);
 builder.Services.AddGatewayCors(builder.Configuration);
 
 // ── Token-bucket rate limiting (XD01-214, XD01-393) — api and tiles policies, keyed by organization claim → token
-// subject → client address (behind RateLimiting:TrustedProxies/TrustedNetworks); see GatewayRateLimiting. ─────────────
+// subject → client address (behind RateLimiting:TrustedProxies/TrustedNetworks), the claims from a validated token when
+// AzureAdCiam is configured (XD01-398); see GatewayRateLimiting. ──────────────────────────────────────────────────────
 builder.Services.AddTenantRateLimiting(builder.Configuration);
 
 var app = builder.Build();
@@ -40,6 +41,10 @@ app.UseGatewayTrustedProxies();
 
 // CORS first: a preflight is answered here, never rate-limited nor proxied, and a 429 still carries the CORS headers.
 app.UseCors();
+
+// The rate limiter's caller (XD01-398): the bearer token validated against the CIAM tenant's keys when AzureAdCiam is
+// configured, else decoded only — resolved here because the limiter's partitioner can't await. Never rejects a request.
+app.UseRateLimitPartitioning();
 
 app.UseRateLimiter();
 

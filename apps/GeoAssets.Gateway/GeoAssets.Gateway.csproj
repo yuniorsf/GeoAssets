@@ -14,9 +14,12 @@
 
   <ItemGroup>
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
-    <!-- Decodes (never signature-validates — see RateLimitPartitionKeyResolver's own doc
-         comment) the caller's bearer token to resolve the rate limiter's partition key (XD01-214, XD01-393). -->
+    <!-- Decodes the caller's bearer token to resolve the rate limiter's partition key (XD01-214, XD01-393) — only decodes
+         when AzureAdCiam is not configured; see GatewayTokenValidator. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+    <!-- XD01-398: the CIAM tenant's OpenID Connect metadata (issuer, signing keys), cached by ConfigurationManager, that
+         GatewayTokenValidator validates the token's signature, issuer and lifetime against. Same IdentityModel version. -->
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.23.0" />
   </ItemGroup>
 
   <ItemGroup>

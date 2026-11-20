@@ -20,7 +20,11 @@ internal static class RateLimitTestGateway
     /// A gateway whose every destination is <paramref name="backend"/>; <paramref name="more"/> are extra settings. The
     /// connection's address of a request is the one its <see cref="RemoteAddressHeader"/> names (a TestServer has none).
     /// </summary>
-    public static GatewayFactory Create(RecordingBackend backend, params (string Key, string Value)[] more)
+    public static GatewayFactory Create(RecordingBackend backend, params (string Key, string Value)[] more) =>
+        Create(backend, null, more);
+
+    /// <summary><see cref="Create(RecordingBackend, (string Key, string Value)[])"/> with <paramref name="configureServices"/> applied to the gateway's services too.</summary>
+    public static GatewayFactory Create(RecordingBackend backend, Action<IServiceCollection>? configureServices, params (string Key, string Value)[] more)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -34,7 +38,11 @@ internal static class RateLimitTestGateway
         };
         foreach (var (key, value) in more) settings[key] = value;
 
-        return new GatewayFactory(settings, services => services.AddSingleton<IStartupFilter, TestRemoteAddressStartupFilter>());
+        return new GatewayFactory(settings, services =>
+        {
+            services.AddSingleton<IStartupFilter, TestRemoteAddressStartupFilter>();
+            configureServices?.Invoke(services);
+        });
     }
 
     /// <summary>The settings of one policy's bucket that never refills during a test.</summary>
