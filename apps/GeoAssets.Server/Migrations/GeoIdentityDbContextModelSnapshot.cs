@@ -314,6 +314,12 @@ namespace GeoAssets.Server.Migrations
 
                     b.HasIndex("GranteeOrganizationId", "ResourceOrganizationId");
 
+                    b.HasIndex(new[] { "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId" }, "UX_OrganizationGrants_ActiveKey")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\"");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex(new[] { "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId" }, "UX_OrganizationGrants_ActiveKey"), false);
+
                     b.ToTable("OrganizationGrants", (string)null);
                 });
 

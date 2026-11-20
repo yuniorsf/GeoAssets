@@ -365,6 +365,11 @@ public sealed class OrganizationGrantsEndpointTests
     public async Task Revoke_SeveralActiveGrantsWithTheKey_DeactivatesAllOfThem()
     {
         await using var harness = await StartedAsync();
+
+        // Three active grants of one key can only exist here because the key has a null resourceType: the SQLite test
+        // database treats nulls as distinct, so UX_OrganizationGrants_ActiveKey (XD01-394) does not see them as one key. On
+        // PostgreSQL (NULLS NOT DISTINCT) they cannot be created — see OrganizationGrantsPostgresRepositoryTests; the revoke
+        // still handles every active grant it finds, which is what this test pins.
         await harness.SeedAsync();
         await harness.SeedAsync();
         await harness.SeedAsync();

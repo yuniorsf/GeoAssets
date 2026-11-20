@@ -8,46 +8,31 @@ namespace GeoAssets.Server;
 /// The kernel's generic organization-grant writes (XD01-385) behind <see cref="OrganizationGrantsRestApiExtensions"/>: an
 /// idempotent upsert and a revoke, both keyed by <see cref="OrganizationGrantKey"/>, and the paged list of one organization
 /// pair's active grants — over <see cref="IOrganizationGrantRepository"/>, so every write also lands on the grant-sync feed
-/// (XD01-290). It knows no vertical: what a grant means is the caller's business.
+/// (XD01-290). It knows no vertical: what a grant means is the caller's business. The store keeps one active grant per key
+/// (<c>UX_OrganizationGrants_ActiveKey</c>, XD01-394).
 /// </summary>
 public sealed class OrganizationGrantService(IOrganizationGrantRepository grants, TimeProvider timeProvider)
 {
+    /// <summary>
+    /// Creates the grant with <c>request.Key</c>, or brings the active one to the request — safe under concurrent upserts of
+    /// one key (XD01-394): the store keeps one active grant per key, so when another upsert stores its grant between this
+    /// one's read and its save (<see cref="OrganizationGrantKeyConflictException"/>, the failed write already discarded by
+    /// the repository), the upsert re-reads the key once and answers <see cref="OrganizationGrantUpsertOutcome.Unchanged"/>
+    /// or applies the update (<see cref="OrganizationGrantUpsertOutcome.Updated"/>) — exactly one of the racing callers gets
+    /// <see cref="OrganizationGrantUpsertOutcome.Created"/>. A second conflict propagates (the route answers 409).
+    /// </summary>
     public async Task<OrganizationGrantUpsertResult> UpsertAsync(OrganizationGrantUpsertRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var existing = await FindActiveAsync(request.Key, ct).ConfigureAwait(false);
-        if (existing.Count == 0)
+        try
         {
-            var created = new OrganizationGrant
-            {
-                GranteeOrganizationId = request.Key.GranteeOrganizationId,
-                ResourceOrganizationId = request.Key.ResourceOrganizationId,
-                ResourceType = request.Key.ResourceType,
-                ScopeId = request.Key.ScopeId,
-                AllowedActions = [.. request.AllowedActions],
-                RequiredRole = request.RequiredRole,
-                ExpiresAt = request.ExpiresAt,
-                GrantedBy = request.GrantedBy,
-                GrantedAt = timeProvider.GetUtcNow().UtcDateTime,
-                IsActive = true,
-            };
-            await grants.AddAsync(created, ct).ConfigureAwait(false);
-            await grants.SaveChangesAsync(ct).ConfigureAwait(false);
-            return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(created), OrganizationGrantUpsertOutcome.Created);
+            return await UpsertOnceAsync(request, ct).ConfigureAwait(false);
         }
-
-        var grant = existing[0];
-        if (Matches(grant, request))
-            return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(grant), OrganizationGrantUpsertOutcome.Unchanged);
-
-        grant.AllowedActions.Clear();
-        grant.AllowedActions.AddRange(request.AllowedActions);
-        grant.RequiredRole = request.RequiredRole;
-        grant.ExpiresAt = request.ExpiresAt;
-        await grants.UpdateAsync(grant, ct).ConfigureAwait(false);
-        await grants.SaveChangesAsync(ct).ConfigureAwait(false);
-        return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(grant), OrganizationGrantUpsertOutcome.Updated);
+        catch (OrganizationGrantKeyConflictException)
+        {
+            return await UpsertOnceAsync(request, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Deactivates every active grant with <paramref name="key"/> (this repository never hard-deletes).</summary>
@@ -80,6 +65,53 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
             .Select(OrganizationGrantDto.FromModel)
             .ToList();
         return new OrganizationGrantPage(items, page, pageSize, active.Count);
+    }
+
+    private async Task<OrganizationGrantUpsertResult> UpsertOnceAsync(OrganizationGrantUpsertRequest request, CancellationToken ct)
+    {
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var grant = await grants.FindActiveGrantByKeyAsync(request.Key, ct).ConfigureAwait(false);
+
+        // An expired grant still flagged active holds the key's one active slot while granting nothing: retire it (its
+        // deactivation lands on the grant-sync feed like any write) so the key can take a new grant.
+        if (grant is { ExpiresAt: { } expiresAt } && expiresAt <= now)
+        {
+            grant.IsActive = false;
+            await grants.UpdateAsync(grant, ct).ConfigureAwait(false);
+            await grants.SaveChangesAsync(ct).ConfigureAwait(false);
+            grant = null;
+        }
+
+        if (grant is null)
+        {
+            var created = new OrganizationGrant
+            {
+                GranteeOrganizationId = request.Key.GranteeOrganizationId,
+                ResourceOrganizationId = request.Key.ResourceOrganizationId,
+                ResourceType = request.Key.ResourceType,
+                ScopeId = request.Key.ScopeId,
+                AllowedActions = [.. request.AllowedActions],
+                RequiredRole = request.RequiredRole,
+                ExpiresAt = request.ExpiresAt,
+                GrantedBy = request.GrantedBy,
+                GrantedAt = now,
+                IsActive = true,
+            };
+            await grants.AddAsync(created, ct).ConfigureAwait(false);
+            await grants.SaveChangesAsync(ct).ConfigureAwait(false);
+            return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(created), OrganizationGrantUpsertOutcome.Created);
+        }
+
+        if (Matches(grant, request))
+            return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(grant), OrganizationGrantUpsertOutcome.Unchanged);
+
+        grant.AllowedActions.Clear();
+        grant.AllowedActions.AddRange(request.AllowedActions);
+        grant.RequiredRole = request.RequiredRole;
+        grant.ExpiresAt = request.ExpiresAt;
+        await grants.UpdateAsync(grant, ct).ConfigureAwait(false);
+        await grants.SaveChangesAsync(ct).ConfigureAwait(false);
+        return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(grant), OrganizationGrantUpsertOutcome.Updated);
     }
 
     private async Task<List<OrganizationGrant>> FindActiveAsync(OrganizationGrantKey key, CancellationToken ct)

@@ -52,6 +52,7 @@ public sealed class ServiceOrderAuthorizationHandlerTests
     private sealed class NoGrantsRepository : IOrganizationGrantRepository
     {
         public Task<OrganizationGrant?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<OrganizationGrant?> FindActiveGrantByKeyAsync(OrganizationGrantKey key, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<OrganizationGrant>> GetAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<OrganizationGrant>>([]);

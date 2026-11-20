@@ -42,6 +42,9 @@ internal sealed class OrganizationGrantsHarness : IAsyncDisposable
 
     public HttpClient Client { get; private set; } = null!;
 
+    /// <summary>Wraps the real repository of each request scope (XD01-394: to force save conflicts); set before <see cref="StartAsync"/>.</summary>
+    public Func<IOrganizationGrantRepository, IOrganizationGrantRepository>? DecorateRepository { get; set; }
+
     public FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
 
     public async Task StartAsync()
@@ -62,7 +65,10 @@ internal sealed class OrganizationGrantsHarness : IAsyncDisposable
                     services.AddSingleton(Db);
                     services.AddSingleton<TimeProvider>(Time);
                     services.AddScoped<IOrganizationGrantRepository>(sp =>
-                        new EFOrganizationGrantRepository(sp.GetRequiredService<GeoIdentityDbContext>(), sp.GetRequiredService<TimeProvider>()));
+                    {
+                        var repository = new EFOrganizationGrantRepository(sp.GetRequiredService<GeoIdentityDbContext>(), sp.GetRequiredService<TimeProvider>());
+                        return DecorateRepository?.Invoke(repository) ?? repository;
+                    });
                     services.AddScoped<OrganizationGrantService>();
                 });
                 webHost.Configure(app =>
