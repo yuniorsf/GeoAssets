@@ -63,7 +63,22 @@ an infrastructure operation (Terraform + Helm), with zero source changes.
      --startup-project verticals/NeutralOperator/GeoAssets.NeutralOperator.Persistence \
      --context NeutralOperatorDbContext \
      --connection "<tenant's connection string>"
+
+   # FieldService tables (XD01-381: contractor US ledger, US catalog, postings, paving
+   # measurements, manhole audits; schema field_service) — after ServiceOrderDbContext and
+   # NeutralOperatorDbContext; its baseline adopts the tables the kernel chain created.
+   dotnet ef database update \
+     --project verticals/FieldService/GeoAssets.FieldService.Persistence \
+     --startup-project verticals/FieldService/GeoAssets.FieldService.Persistence \
+     --context FieldServiceDbContext \
+     --connection "<tenant's connection string>"
    ```
+
+   Note: the silo runs `GeoAssets.FieldService.Server`, whose `ServiceOrderDbContext` chain is
+   `apps/GeoAssets.FieldService.Server` (`MigrationsAssembly("GeoAssets.FieldService.Server")`). The
+   `apps/GeoAssets.Server` chain above drops the FieldService tables (`DropFieldServiceTablesFromKernel`,
+   XD01-381) — harmless on a new, empty database (`FieldServiceDbContext`'s baseline then creates them in
+   `field_service`), but it refuses to run if any of them already holds a row.
 
 3. **Verify the rollout:**
 

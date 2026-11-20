@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.RegularExpressions;
 using FluentAssertions;
 using GeoAssets.NeutralOperator.Persistence;
 using GeoAssets.Workflow.Persistence;
@@ -58,16 +57,13 @@ public sealed class NeutralOperatorPersistenceArchitectureTests
     }
 
     [Fact]
-    public void KernelServiceOrderDbContext_RemainingVerticalTokenViolations_AreOnlyXD01381s_ContractorUs_Paving_ManholeAudit()
+    public void KernelServiceOrderDbContext_HasNoVerticalTokenViolation_AfterXD01381MovedTheLastVerticalDbSets()
     {
         var violations = VerticalTokenRatchet.FindViolations([typeof(ServiceOrderDbContext)]);
 
-        var hits = violations.Should().ContainKey("GeoAssets.Workflow.Persistence.ServiceOrderDbContext").WhoseValue;
-        var remaining = new Regex(@"^.+ ~ (Contractor|Paving|Manhole)$", RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-        hits.Should().NotBeEmpty().And.OnlyContain(hit => remaining.IsMatch(hit),
-            "only XD01-381's paving, manhole-audit and contractor-US DbSets are left in the kernel context. Hits: {0}", string.Join("; ", hits));
-        hits.Should().NotContain(hit => hit.Contains("Occupancy", StringComparison.Ordinal) || hit.Contains("Pole", StringComparison.Ordinal));
-        VerticalTokenRatchet.Allowlist["GeoAssets.Workflow.Persistence.ServiceOrderDbContext"].Should().Contain("XD01-381").And.NotContain("XD01-380");
+        violations.Should().NotContainKey("GeoAssets.Workflow.Persistence.ServiceOrderDbContext",
+            "XD01-380 took the occupancy tables and XD01-381 the paving, manhole-audit and contractor-US ones: no vertical DbSet is left in the kernel context");
+        VerticalTokenRatchet.Allowlist.Should().NotContainKey("GeoAssets.Workflow.Persistence.ServiceOrderDbContext");
     }
 
     [Fact]

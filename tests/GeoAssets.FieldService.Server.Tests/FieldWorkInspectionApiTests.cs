@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Workflow;
@@ -98,14 +99,13 @@ public sealed class FieldWorkInspectionApiTests : IAsyncLifetime, IDisposable
                         new ValidatingServiceOrderRepository(
                             new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>(), orderTypeRegistry: sp.GetRequiredService<OrderTypeRegistry>()),
                             sp.GetRequiredService<OrderTypeRegistry>()));
-                    services.AddScoped<IUsCatalogRepository, EFUsCatalogRepository>();
-                    services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
-                    services.AddScoped<IPavingMeasurementRepository, EFPavingMeasurementRepository>();
+                    // The stores and the inspection commit live in FieldServiceDbContext's assembly since XD01-381; the context is
+                    // built over the kernel context's connection and joins its transaction.
+                    services.AddFieldServicePersistence((options, connection) => options.UseSqlite(connection));
                     services.AddSingleton(TimeProvider.System);
                     services.AddScoped<IOutboxWriter>(sp => new EFOutboxStore(
                         sp.GetRequiredService<ServiceOrderDbContext>(), sp.GetRequiredService<TimeProvider>(),
                         new ProtobufIntegrationMessageSerializer(), "test-service"));
-                    services.AddScoped<InspectionCommitService>();
                 });
                 webHost.Configure(app =>
                 {
@@ -113,6 +113,7 @@ public sealed class FieldWorkInspectionApiTests : IAsyncLifetime, IDisposable
                     {
                         var db = scope.ServiceProvider.GetRequiredService<ServiceOrderDbContext>();
                         db.Database.EnsureCreated();
+                        FieldServiceSqliteSchema.Create(scope.ServiceProvider.GetRequiredService<FieldServiceDbContext>());
 
                         // Same SQLite RowVersion-on-UPDATE trigger as FieldServiceSyncApiTests —
                         // SQLite has no native auto-updating rowversion column.

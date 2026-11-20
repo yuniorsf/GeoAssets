@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.FieldService.Contractors;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
@@ -26,6 +27,7 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
         _connection.Open();
         using var db = NewContext(Cemig);
         db.Database.EnsureCreated();
+        FieldServiceTestContext.CreateSqliteTables(db);
     }
 
     private ServiceOrderDbContext NewContext(Guid organizationId)
@@ -78,7 +80,7 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
     {
         using var db = NewContext(Cemig);
         var orderId = await SeedServiceOrderAsync(db, "order-1");
-        var repo = new EFContractorUsPostingRepository(db);
+        var repo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(db));
         var posting = Posting(orderId, Cemig);
 
         await repo.AddAsync(posting);
@@ -103,7 +105,7 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
     public async Task AddAsync_ReferencingNonexistentServiceOrder_FailsOnSave()
     {
         using var db = NewContext(Cemig);
-        var repo = new EFContractorUsPostingRepository(db);
+        var repo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(db));
         var posting = Posting("no-such-order", Cemig);
 
         await repo.AddAsync(posting);
@@ -130,7 +132,7 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
         using var db = NewContext(Cemig);
         var orderA = await SeedServiceOrderAsync(db, "order-a");
         var orderB = await SeedServiceOrderAsync(db, "order-b");
-        var repo = new EFContractorUsPostingRepository(db);
+        var repo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(db));
 
         await repo.AddAsync(Posting(orderA, Cemig, postedAtUtc: new DateTime(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc)));
         await repo.AddAsync(Posting(orderA, Cemig, postedAtUtc: new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc)));
@@ -151,7 +153,7 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
     {
         using var db = NewContext(Cemig);
         var orderId = await SeedServiceOrderAsync(db, "order-1");
-        var repo = new EFContractorUsPostingRepository(db);
+        var repo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(db));
 
         await repo.AddAsync(Posting(orderId, Cemig, postedAtUtc: new DateTime(2026, 10, 31, 23, 59, 59, DateTimeKind.Utc))); // before window
         await repo.AddAsync(Posting(orderId, Cemig, postedAtUtc: new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc))); // start, inclusive
@@ -172,16 +174,18 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
     {
         using var dbCemig = NewContext(Cemig);
         var orderCemig = await SeedServiceOrderAsync(dbCemig, "order-cemig");
-        await new EFContractorUsPostingRepository(dbCemig).AddAsync(Posting(orderCemig, Cemig));
-        await dbCemig.SaveChangesAsync();
+        var dbCemigRepo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(dbCemig));
+        await dbCemigRepo.AddAsync(Posting(orderCemig, Cemig));
+        await dbCemigRepo.SaveChangesAsync();
 
         using var dbCpfl = NewContext(Cpfl);
         var orderCpfl = await SeedServiceOrderAsync(dbCpfl, "order-cpfl");
-        await new EFContractorUsPostingRepository(dbCpfl).AddAsync(Posting(orderCpfl, Cpfl));
-        await dbCpfl.SaveChangesAsync();
+        var dbCpflRepo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(dbCpfl));
+        await dbCpflRepo.AddAsync(Posting(orderCpfl, Cpfl));
+        await dbCpflRepo.SaveChangesAsync();
 
         using var queryDb = NewContext(Cemig);
-        var results = await new EFContractorUsPostingRepository(queryDb).GetByContractorAndPeriodAsync(
+        var results = await new EFContractorUsPostingRepository(FieldServiceTestContext.Over(queryDb)).GetByContractorAndPeriodAsync(
             Cemig, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
         results.Should().ContainSingle().Which.ContractorOrganizationId.Should().Be(Cemig);
@@ -195,11 +199,12 @@ public sealed class EFContractorUsPostingRepositoryTests : IDisposable
         using var dbCemig = NewContext(Cemig);
         var orderId = await SeedServiceOrderAsync(dbCemig, "order-1");
         var posting = Posting(orderId, Cemig);
-        await new EFContractorUsPostingRepository(dbCemig).AddAsync(posting);
-        await dbCemig.SaveChangesAsync();
+        var dbCemigRepo = new EFContractorUsPostingRepository(FieldServiceTestContext.Over(dbCemig));
+        await dbCemigRepo.AddAsync(posting);
+        await dbCemigRepo.SaveChangesAsync();
 
         using var dbCpfl = NewContext(Cpfl);
-        var result = await new EFContractorUsPostingRepository(dbCpfl).GetByIdAsync(posting.Id);
+        var result = await new EFContractorUsPostingRepository(FieldServiceTestContext.Over(dbCpfl)).GetByIdAsync(posting.Id);
 
         result.Should().BeNull();
     }

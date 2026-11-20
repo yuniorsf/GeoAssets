@@ -1,4 +1,4 @@
-using GeoAssets.Workflow.Persistence;
+using GeoAssets.FieldService.Persistence;
 
 namespace GeoAssets.FieldService.Server;
 

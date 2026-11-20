@@ -4,6 +4,7 @@ using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.FieldService.FieldWork;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -32,9 +33,9 @@ public sealed class InspectionCommitServiceTests : IDisposable
     private InspectionCommitService BuildService(string sourceService = "test-service") => new(
         _fixture.Context,
         new ValidatingServiceOrderRepository(new EFServiceOrderRepository(_fixture.Context, orderTypeRegistry: _registry), _registry),
-        new EFContractorUsPostingRepository(_fixture.Context),
-        new EFUsCatalogRepository(_fixture.Context),
-        new EFPavingMeasurementRepository(_fixture.Context),
+        new EFContractorUsPostingRepository(FieldServiceTestContext.Over(_fixture.Context)),
+        new EFUsCatalogRepository(FieldServiceTestContext.Over(_fixture.Context)),
+        new EFPavingMeasurementRepository(FieldServiceTestContext.Over(_fixture.Context)),
         new EFOutboxStore(_fixture.Context, _timeProvider, new ProtobufIntegrationMessageSerializer(), sourceService),
         _registry,
         _timeProvider);
@@ -63,7 +64,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
 
     private async Task SeedCatalogItemAsync(string itemCode, decimal baseUsFactor, decimal regionalMultiplier, decimal monetaryConversionRate)
     {
-        var repo = new EFUsCatalogRepository(_fixture.Context);
+        var repo = new EFUsCatalogRepository(FieldServiceTestContext.Over(_fixture.Context));
         await repo.AddAsync(new UsCatalogItem
         {
             OrganizationId = Guid.Empty,
@@ -100,7 +101,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
         reloadedOrder!.Status.Should().Be(FieldWorkStatus.Inspected);
         reloadedOrder.RowVersion.Should().NotBeEquivalentTo(rowVersion, "the update must have advanced RowVersion");
 
-        var postedLedgerRows = await new EFContractorUsPostingRepository(verifyContext).GetByServiceOrderIdAsync(orderId);
+        var postedLedgerRows = await new EFContractorUsPostingRepository(FieldServiceTestContext.Over(verifyContext)).GetByServiceOrderIdAsync(orderId);
         postedLedgerRows.Should().ContainSingle().Which.TotalUs.Should().Be(result.TotalUs);
 
         var outbox = new EFOutboxStore(verifyContext, _timeProvider, new ProtobufIntegrationMessageSerializer(), "verify-worker");
@@ -131,7 +132,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
         var reloadedOrder = await new EFServiceOrderRepository(verifyContext, orderTypeRegistry: _registry).GetByIdAsync(orderId);
         reloadedOrder!.Status.Should().Be(FieldWorkStatus.Completed, "the crashed transaction must leave the order's status unchanged");
 
-        var postedLedgerRows = await new EFContractorUsPostingRepository(verifyContext).GetByServiceOrderIdAsync(orderId);
+        var postedLedgerRows = await new EFContractorUsPostingRepository(FieldServiceTestContext.Over(verifyContext)).GetByServiceOrderIdAsync(orderId);
         postedLedgerRows.Should().BeEmpty("the crashed transaction must leave zero ledger rows, even though the posting was already flushed before the rollback");
     }
 
@@ -153,7 +154,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
         var reloadedOrder = await new EFServiceOrderRepository(verifyContext, orderTypeRegistry: _registry).GetByIdAsync(orderId);
         reloadedOrder!.Status.Should().Be(FieldWorkStatus.Completed);
 
-        var postedLedgerRows = await new EFContractorUsPostingRepository(verifyContext).GetByServiceOrderIdAsync(orderId);
+        var postedLedgerRows = await new EFContractorUsPostingRepository(FieldServiceTestContext.Over(verifyContext)).GetByServiceOrderIdAsync(orderId);
         postedLedgerRows.Should().BeEmpty("the first line's posting must roll back along with the second line's failure");
     }
 
@@ -257,7 +258,7 @@ public sealed class InspectionCommitServiceTests : IDisposable
         reloadedChild!.ParentOrderId.Should().Be(orderId);
         reloadedChild.OrderTypeId.Should().Be(PavingRestorationOrderType.Id);
 
-        var measurements = await new EFPavingMeasurementRepository(verifyContext).GetByParentServiceOrderIdAsync(orderId);
+        var measurements = await new EFPavingMeasurementRepository(FieldServiceTestContext.Over(verifyContext)).GetByParentServiceOrderIdAsync(orderId);
         measurements.Should().ContainSingle();
         measurements[0].ChildServiceOrderId.Should().Be(result.PavingChildServiceOrderId);
         measurements[0].RecordedAreaSquareMeters.Should().Be(100.0);
@@ -296,10 +297,10 @@ public sealed class InspectionCommitServiceTests : IDisposable
         var reloadedParent = await new EFServiceOrderRepository(verifyContext, orderTypeRegistry: _registry).GetByIdAsync(orderId);
         reloadedParent!.Status.Should().Be(FieldWorkStatus.Completed, "a rejected geometry check must roll back the parent transition along with every other write");
 
-        var postedLedgerRows = await new EFContractorUsPostingRepository(verifyContext).GetByServiceOrderIdAsync(orderId);
+        var postedLedgerRows = await new EFContractorUsPostingRepository(FieldServiceTestContext.Over(verifyContext)).GetByServiceOrderIdAsync(orderId);
         postedLedgerRows.Should().BeEmpty("the ledger line posted before the geometry check must roll back too");
 
-        var measurements = await new EFPavingMeasurementRepository(verifyContext).GetByParentServiceOrderIdAsync(orderId);
+        var measurements = await new EFPavingMeasurementRepository(FieldServiceTestContext.Over(verifyContext)).GetByParentServiceOrderIdAsync(orderId);
         measurements.Should().BeEmpty("no measurement row is ever written when the geometry check itself rejects the commit");
     }
 

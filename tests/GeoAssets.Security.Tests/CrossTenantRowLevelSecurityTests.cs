@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -263,12 +264,12 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE \"ContractorUsLedgerEntries\" CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.\"ContractorUsLedgerEntries\" CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO "ContractorUsLedgerEntries"
+                INSERT INTO field_service."ContractorUsLedgerEntries"
                     ("Id", "OrganizationId", "ServiceOrderId", "UsCode", "Description", "Quantity", "UnitValue", "PhotoProofJson", "CreatedAt")
                 VALUES
                     (@idA, @orgA, NULL, 'US-A', 'Entry A', 1, 100, '[]', now()),
@@ -285,7 +286,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
 
         await using var select = connection.CreateCommand();
-        select.CommandText = "SELECT \"Id\" FROM \"ContractorUsLedgerEntries\" ORDER BY \"Id\"";
+        select.CommandText = "SELECT \"Id\" FROM field_service.\"ContractorUsLedgerEntries\" ORDER BY \"Id\"";
         var ids = new List<Guid>();
         await using (var reader = await select.ExecuteReaderAsync())
             while (await reader.ReadAsync())
@@ -300,7 +301,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE \"ContractorUsLedgerEntries\" CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.\"ContractorUsLedgerEntries\" CASCADE";
             await truncate.ExecuteNonQueryAsync();
         }
 
@@ -311,7 +312,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         {
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
-                INSERT INTO "ContractorUsLedgerEntries"
+                INSERT INTO field_service."ContractorUsLedgerEntries"
                     ("Id", "OrganizationId", "ServiceOrderId", "UsCode", "Description", "Quantity", "UnitValue", "PhotoProofJson", "CreatedAt")
                 VALUES
                     (@id, @orgId, NULL, 'US-C', 'Entry C', 1, 100, '[]', now());
@@ -333,12 +334,12 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE \"ContractorUsLedgerEntries\" CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.\"ContractorUsLedgerEntries\" CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO "ContractorUsLedgerEntries"
+                INSERT INTO field_service."ContractorUsLedgerEntries"
                     ("Id", "OrganizationId", "ServiceOrderId", "UsCode", "Description", "Quantity", "UnitValue", "PhotoProofJson", "CreatedAt")
                 VALUES (@id, @orgId, NULL, 'US-A', 'Entry A', 1, 100, '[]', now());
                 """;
@@ -351,14 +352,14 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
 
         await using var delete = connection.CreateCommand();
-        delete.CommandText = "DELETE FROM \"ContractorUsLedgerEntries\" WHERE \"Id\" = @id";
+        delete.CommandText = "DELETE FROM field_service.\"ContractorUsLedgerEntries\" WHERE \"Id\" = @id";
         delete.Parameters.Add(new NpgsqlParameter("id", idA));
         var affected = await delete.ExecuteNonQueryAsync();
 
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
-    // ── field_manhole_audits (XD01-265) ───────────────────────────────────────
+    // ── field_service.field_manhole_audits (XD01-265) ───────────────────────────────────────
 
     [Fact]
     public async Task ManholeAudits_SelectAcrossTenants_OnlyReturnsOwnTenantsRows()
@@ -369,12 +370,12 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE field_manhole_audits CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.field_manhole_audits CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO field_manhole_audits
+                INSERT INTO field_service.field_manhole_audits
                     ("Id", "ConduitFeatureId", "OrganizationId", "BoreOccupancyPercentage", "SubDuctsJson", "SpliceEnclosureCondition", "Nr33ChecklistAttributesJson", "AuditedBy", "AuditedAtUtc")
                 VALUES
                     (@idA, 'conduit-a', @orgA, 50, '[]', 'Good', '{}', 'tech-a', now()),
@@ -391,7 +392,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
 
         await using var select = connection.CreateCommand();
-        select.CommandText = "SELECT \"Id\" FROM field_manhole_audits ORDER BY \"Id\"";
+        select.CommandText = "SELECT \"Id\" FROM field_service.field_manhole_audits ORDER BY \"Id\"";
         var ids = new List<Guid>();
         await using (var reader = await select.ExecuteReaderAsync())
             while (await reader.ReadAsync())
@@ -406,7 +407,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE field_manhole_audits CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.field_manhole_audits CASCADE";
             await truncate.ExecuteNonQueryAsync();
         }
 
@@ -417,7 +418,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         {
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
-                INSERT INTO field_manhole_audits
+                INSERT INTO field_service.field_manhole_audits
                     ("Id", "ConduitFeatureId", "OrganizationId", "BoreOccupancyPercentage", "SubDuctsJson", "SpliceEnclosureCondition", "Nr33ChecklistAttributesJson", "AuditedBy", "AuditedAtUtc")
                 VALUES (@id, 'conduit-c', @orgId, 50, '[]', 'Good', '{}', 'tech-c', now());
                 """;
@@ -438,12 +439,12 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE field_manhole_audits CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.field_manhole_audits CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO field_manhole_audits
+                INSERT INTO field_service.field_manhole_audits
                     ("Id", "ConduitFeatureId", "OrganizationId", "BoreOccupancyPercentage", "SubDuctsJson", "SpliceEnclosureCondition", "Nr33ChecklistAttributesJson", "AuditedBy", "AuditedAtUtc")
                 VALUES (@id, 'conduit-a', @orgId, 50, '[]', 'Good', '{}', 'tech-a', now());
                 """;
@@ -456,7 +457,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
 
         await using var delete = connection.CreateCommand();
-        delete.CommandText = "DELETE FROM field_manhole_audits WHERE \"Id\" = @id";
+        delete.CommandText = "DELETE FROM field_service.field_manhole_audits WHERE \"Id\" = @id";
         delete.Parameters.Add(new NpgsqlParameter("id", idA));
         var affected = await delete.ExecuteNonQueryAsync();
 
@@ -568,10 +569,10 @@ public sealed class CrossTenantRowLevelSecurityTests
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
     }
 
-    // ── field_icerp_paving_measurements (XD01-297) ────────────────────────────
+    // ── field_service.field_icerp_paving_measurements (XD01-297) ────────────────────────────
 
     /// <summary>
-    /// Unlike every other table in this suite, <c>field_icerp_paving_measurements</c> has real FK
+    /// Unlike every other table in this suite, <c>field_service.field_icerp_paving_measurements</c> has real FK
     /// constraints to <c>"ServiceOrders"</c> (parent + child), so each test seeds the referenced
     /// orders first via <c>ON CONFLICT ... DO NOTHING</c> (idempotent, and deliberately not a
     /// <c>"ServiceOrders"</c> truncate — that would cascade-wipe every other test's fixture data
@@ -600,7 +601,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE field_icerp_paving_measurements CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.field_icerp_paving_measurements CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await SeedServiceOrderAsync(owner, "paving-parent-a", TenantA);
@@ -610,7 +611,7 @@ public sealed class CrossTenantRowLevelSecurityTests
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO field_icerp_paving_measurements
+                INSERT INTO field_service.field_icerp_paving_measurements
                     ("Id", "ParentServiceOrderId", "ChildServiceOrderId", "OrganizationId", "LengthMeters", "WidthMeters", "DepthMeters", "RecordedAreaSquareMeters", "ActualAreaSquareMeters", "VolumeCubicMeters", "RecordedAtUtc")
                 VALUES
                     (@idA, 'paving-parent-a', 'paving-child-a', @orgA, 2, 1, 0.5, 2, 2, 1, now()),
@@ -627,7 +628,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
 
         await using var select = connection.CreateCommand();
-        select.CommandText = "SELECT \"Id\" FROM field_icerp_paving_measurements ORDER BY \"Id\"";
+        select.CommandText = "SELECT \"Id\" FROM field_service.field_icerp_paving_measurements ORDER BY \"Id\"";
         var ids = new List<Guid>();
         await using (var reader = await select.ExecuteReaderAsync())
             while (await reader.ReadAsync())
@@ -642,7 +643,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE field_icerp_paving_measurements CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.field_icerp_paving_measurements CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await SeedServiceOrderAsync(owner, "paving-parent-c", TenantA);
@@ -656,7 +657,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         {
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
-                INSERT INTO field_icerp_paving_measurements
+                INSERT INTO field_service.field_icerp_paving_measurements
                     ("Id", "ParentServiceOrderId", "ChildServiceOrderId", "OrganizationId", "LengthMeters", "WidthMeters", "DepthMeters", "RecordedAreaSquareMeters", "ActualAreaSquareMeters", "VolumeCubicMeters", "RecordedAtUtc")
                 VALUES (@id, 'paving-parent-c', 'paving-child-c', @orgId, 2, 1, 0.5, 2, 2, 1, now());
                 """;
@@ -677,7 +678,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE field_icerp_paving_measurements CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.field_icerp_paving_measurements CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await SeedServiceOrderAsync(owner, "paving-parent-a", TenantA);
@@ -685,7 +686,7 @@ public sealed class CrossTenantRowLevelSecurityTests
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO field_icerp_paving_measurements
+                INSERT INTO field_service.field_icerp_paving_measurements
                     ("Id", "ParentServiceOrderId", "ChildServiceOrderId", "OrganizationId", "LengthMeters", "WidthMeters", "DepthMeters", "RecordedAreaSquareMeters", "ActualAreaSquareMeters", "VolumeCubicMeters", "RecordedAtUtc")
                 VALUES (@id, 'paving-parent-a', 'paving-child-a', @orgId, 2, 1, 0.5, 2, 2, 1, now());
                 """;
@@ -698,11 +699,107 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
 
         await using var delete = connection.CreateCommand();
-        delete.CommandText = "DELETE FROM field_icerp_paving_measurements WHERE \"Id\" = @id";
+        delete.CommandText = "DELETE FROM field_service.field_icerp_paving_measurements WHERE \"Id\" = @id";
         delete.Parameters.Add(new NpgsqlParameter("id", idA));
         var affected = await delete.ExecuteNonQueryAsync();
 
         affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
+    }
+
+    // ── field_service.field_contractor_us_postings (XD01-381) ─────────────────
+
+    /// <summary>
+    /// Its policy compares <c>"ContractorOrganizationId"</c> (not <c>"OrganizationId"</c>). The table was created without any
+    /// row-level security by the kernel chain of GeoAssets.Server; the FieldService baseline gives it its policy.
+    /// </summary>
+    [Fact]
+    public async Task ContractorUsPostings_SelectAcrossTenants_OnlyReturnsOwnTenantsRows()
+    {
+        var idA = Guid.NewGuid();
+        var idB = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await TruncatePostingsAsync(owner);
+            await SeedServiceOrderAsync(owner, "posting-order-a", TenantA);
+            await SeedServiceOrderAsync(owner, "posting-order-b", TenantB);
+            await InsertPostingAsync(owner, idA, "posting-order-a", TenantA);
+            await InsertPostingAsync(owner, idB, "posting-order-b", TenantB);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT \"Id\" FROM field_service.field_contractor_us_postings ORDER BY \"Id\"";
+        var ids = new List<Guid>();
+        await using (var reader = await select.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                ids.Add(reader.GetGuid(0));
+
+        ids.Should().Equal(idA);
+    }
+
+    [Fact]
+    public async Task ContractorUsPostings_InsertUnderAnotherTenant_ViolatesRowSecurityPolicy()
+    {
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await TruncatePostingsAsync(owner);
+            await SeedServiceOrderAsync(owner, "posting-order-c", TenantA);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
+
+        var act = async () => await InsertPostingAsync(connection, Guid.NewGuid(), "posting-order-c", TenantB);
+
+        await act.Should().ThrowAsync<PostgresException>()
+            .Where(e => e.SqlState == "42501");
+    }
+
+    [Fact]
+    public async Task ContractorUsPostings_DeleteAcrossTenants_AffectsNoRows()
+    {
+        var idA = Guid.NewGuid();
+
+        await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
+        {
+            await TruncatePostingsAsync(owner);
+            await SeedServiceOrderAsync(owner, "posting-order-d", TenantA);
+            await InsertPostingAsync(owner, idA, "posting-order-d", TenantA);
+        }
+
+        await using var connection = await SecurityTestContainerFixture.OpenScopedRoleConnectionAsync();
+        await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
+
+        await using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM field_service.field_contractor_us_postings WHERE \"Id\" = @id";
+        delete.Parameters.Add(new NpgsqlParameter("id", idA));
+        var affected = await delete.ExecuteNonQueryAsync();
+
+        affected.Should().Be(0, "a different tenant's raw-SQL DELETE must silently affect zero rows, never another tenant's row");
+    }
+
+    private static async Task TruncatePostingsAsync(NpgsqlConnection owner)
+    {
+        await using var truncate = owner.CreateCommand();
+        truncate.CommandText = "TRUNCATE TABLE field_service.field_contractor_us_postings CASCADE";
+        await truncate.ExecuteNonQueryAsync();
+    }
+
+    private static async Task InsertPostingAsync(NpgsqlConnection connection, Guid id, string serviceOrderId, Guid contractorOrganizationId)
+    {
+        await using var insert = connection.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO field_service.field_contractor_us_postings
+                ("Id", "ServiceOrderId", "ContractorOrganizationId", "ItemCode", "Quantity", "UnitUs", "TotalUs", "MonetaryRate", "TotalBrl", "PostedAtUtc")
+            VALUES (@id, @orderId, @contractor, 'US-EL-014', 2, 3, 6, 85, 510, now());
+            """;
+        insert.Parameters.Add(new NpgsqlParameter("id", id));
+        insert.Parameters.Add(new NpgsqlParameter("orderId", serviceOrderId));
+        insert.Parameters.Add(new NpgsqlParameter("contractor", contractorOrganizationId));
+        await insert.ExecuteNonQueryAsync();
     }
 
     // ── UsCatalogItems (XD01-298) ──────────────────────────────────────────────
@@ -716,12 +813,12 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE \"UsCatalogItems\" CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.\"UsCatalogItems\" CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO "UsCatalogItems"
+                INSERT INTO field_service."UsCatalogItems"
                     ("Id", "OrganizationId", "ItemCode", "Description", "Unit", "BaseUsFactor", "RegionalMultiplier", "MonetaryConversionRate", "EffectiveFrom")
                 VALUES
                     (@idA, @orgA, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 10.5, now()),
@@ -738,7 +835,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantA);
 
         await using var select = connection.CreateCommand();
-        select.CommandText = "SELECT \"Id\" FROM \"UsCatalogItems\" ORDER BY \"Id\"";
+        select.CommandText = "SELECT \"Id\" FROM field_service.\"UsCatalogItems\" ORDER BY \"Id\"";
         var ids = new List<Guid>();
         await using (var reader = await select.ExecuteReaderAsync())
             while (await reader.ReadAsync())
@@ -753,7 +850,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE \"UsCatalogItems\" CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.\"UsCatalogItems\" CASCADE";
             await truncate.ExecuteNonQueryAsync();
         }
 
@@ -764,7 +861,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         {
             await using var insert = connection.CreateCommand();
             insert.CommandText = """
-                INSERT INTO "UsCatalogItems"
+                INSERT INTO field_service."UsCatalogItems"
                     ("Id", "OrganizationId", "ItemCode", "Description", "Unit", "BaseUsFactor", "RegionalMultiplier", "MonetaryConversionRate", "EffectiveFrom")
                 VALUES (@id, @orgId, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 10.5, now());
                 """;
@@ -785,12 +882,12 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var owner = await SecurityTestContainerFixture.OpenOwnerConnectionAsync())
         {
             await using var truncate = owner.CreateCommand();
-            truncate.CommandText = "TRUNCATE TABLE \"UsCatalogItems\" CASCADE";
+            truncate.CommandText = "TRUNCATE TABLE field_service.\"UsCatalogItems\" CASCADE";
             await truncate.ExecuteNonQueryAsync();
 
             await using var insert = owner.CreateCommand();
             insert.CommandText = """
-                INSERT INTO "UsCatalogItems"
+                INSERT INTO field_service."UsCatalogItems"
                     ("Id", "OrganizationId", "ItemCode", "Description", "Unit", "BaseUsFactor", "RegionalMultiplier", "MonetaryConversionRate", "EffectiveFrom")
                 VALUES (@id, @orgId, 'US-EL-014', 'Poste concreto', 'un', 1.0, 1.0, 10.5, now());
                 """;
@@ -803,7 +900,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await SecurityTestContainerFixture.SetSessionOrganizationAsync(connection, TenantB);
 
         await using var delete = connection.CreateCommand();
-        delete.CommandText = "DELETE FROM \"UsCatalogItems\" WHERE \"Id\" = @id";
+        delete.CommandText = "DELETE FROM field_service.\"UsCatalogItems\" WHERE \"Id\" = @id";
         delete.Parameters.Add(new NpgsqlParameter("id", idA));
         var affected = await delete.ExecuteNonQueryAsync();
 
@@ -1150,7 +1247,7 @@ public sealed class CrossTenantRowLevelSecurityTests
         await using (var serviceOrders = new ServiceOrderDbContext(SecurityTestContainerFixture.BuildServiceOrderOptions(connectionString)))
             CollectOrganizationScopedTableNames(serviceOrders.Model, orgScopedTables);
 
-        orgScopedTables.Should().NotBeEmpty("this suite's own known org-scoped entities (geo_entity, ServiceOrders, ContractorUsLedgerEntries) must be discovered");
+        orgScopedTables.Should().NotBeEmpty("this suite's own known org-scoped entities (geo_entity, ServiceOrders) must be discovered");
 
         await using var connection = await SecurityTestContainerFixture.OpenOwnerConnectionAsync();
 
@@ -1180,6 +1277,58 @@ public sealed class CrossTenantRowLevelSecurityTests
                 $"table '{table}' has an OrganizationId column and must have Row Level Security enabled");
             policyCountByTable.GetValueOrDefault(table).Should().BeGreaterThan(0,
                 $"table '{table}' has RLS enabled but no policy would still deny every row by default, which likely means the policy was dropped or never created");
+        }
+    }
+
+    /// <summary>
+    /// The same guarantee for the FieldService vertical's tables (XD01-381), which left the kernel's model and so no longer
+    /// show up in the scan above: every table of <see cref="FieldServiceDbContext"/>'s model that carries an
+    /// <c>OrganizationId</c> — or, for the contractor US postings, a <c>ContractorOrganizationId</c> — has Row Level
+    /// Security enabled with at least one policy, in schema <c>field_service</c>.
+    /// </summary>
+    [Fact]
+    public async Task EveryFieldServiceOrganizationScopedTable_HasRowLevelSecurityEnabledWithAtLeastOnePolicy()
+    {
+        var connectionString = await SecurityTestContainerFixture.EnsureStartedAsync();
+
+        var tables = new HashSet<string>(StringComparer.Ordinal);
+        await using (var fieldService = new FieldServiceDbContext(SecurityTestContainerFixture.BuildFieldServiceOptions(connectionString)))
+        {
+            foreach (var entityType in fieldService.Model.GetEntityTypes())
+            {
+                if (entityType.FindProperty("OrganizationId") is null && entityType.FindProperty("ContractorOrganizationId") is null) continue;
+                if (entityType.GetTableName() is { } tableName) tables.Add(tableName);
+            }
+        }
+
+        tables.Should().BeEquivalentTo(
+            ["ContractorUsLedgerEntries", "UsCatalogItems", "field_contractor_us_postings", "field_icerp_paving_measurements", "field_manhole_audits"],
+            "the vertical's five tables are all tenant-scoped");
+
+        await using var connection = await SecurityTestContainerFixture.OpenOwnerConnectionAsync();
+
+        var rlsEnabledByTable = new Dictionary<string, bool>(StringComparer.Ordinal);
+        await using (var rlsQuery = connection.CreateCommand())
+        {
+            rlsQuery.CommandText = "SELECT relname, relrowsecurity FROM pg_class WHERE relkind = 'r' AND relnamespace = 'field_service'::regnamespace";
+            await using var reader = await rlsQuery.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                rlsEnabledByTable[reader.GetString(0)] = reader.GetBoolean(1);
+        }
+
+        var policyCountByTable = new Dictionary<string, long>(StringComparer.Ordinal);
+        await using (var policyQuery = connection.CreateCommand())
+        {
+            policyQuery.CommandText = "SELECT tablename, COUNT(*) FROM pg_policies WHERE schemaname = 'field_service' GROUP BY tablename";
+            await using var reader = await policyQuery.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                policyCountByTable[reader.GetString(0)] = reader.GetInt64(1);
+        }
+
+        foreach (var table in tables)
+        {
+            rlsEnabledByTable.GetValueOrDefault(table).Should().BeTrue($"field_service.{table} must have Row Level Security enabled");
+            policyCountByTable.GetValueOrDefault(table).Should().BeGreaterThan(0, $"field_service.{table} must have a policy");
         }
     }
 

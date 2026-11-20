@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.FieldService.Contractors;
@@ -83,17 +84,20 @@ public sealed class ContractorUsLedgerApiTests : IAsyncLifetime, IDisposable
 
                     services.AddSingleton(TimeProvider.System);
                     services.AddDbContext<ServiceOrderDbContext>(options => options.UseSqlite(_connection));
-                    services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
+                    // The ledger and postings stores live in FieldServiceDbContext since XD01-381, over the kernel context's connection.
+                    services.AddFieldServicePersistence((options, connection) => options.UseSqlite(connection));
                     // Needed for MapContractorUsLedgerApi's Espelho de Medição dossier endpoint
                     // (XD01-249) to resolve at all, even though none of this file's own tests
                     // call it — same whole-group lazy-metadata-building issue XD01-177 hit.
                     services.AddScoped<IServiceOrderRepository, EFServiceOrderRepository>();
-                    services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
                 });
                 webHost.Configure(app =>
                 {
                     using (var scope = app.ApplicationServices.CreateScope())
+                    {
                         scope.ServiceProvider.GetRequiredService<ServiceOrderDbContext>().Database.EnsureCreated();
+                        FieldServiceSqliteSchema.Create(scope.ServiceProvider.GetRequiredService<FieldServiceDbContext>());
+                    }
 
                     app.Use(async (ctx, next) =>
                     {

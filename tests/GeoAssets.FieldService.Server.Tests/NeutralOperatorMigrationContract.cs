@@ -26,6 +26,12 @@ internal static class NeutralOperatorMigrationContract
     public const string KernelMigrationName = "RemoveOccupancyFromKernelModel";
     public const string LedgerMigrationName = "AddTargetLedgerVertical";
 
+    /// <summary>
+    /// The kernel migrations that follow <see cref="KernelMigrationName"/> and have nothing to do with the occupancy tables:
+    /// XD01-381's, one per history — the Server chain drops the FieldService tables, the FieldService chain only changes its model.
+    /// </summary>
+    private static readonly string[] LaterKernelMigrationNames = ["DropFieldServiceTablesFromKernel", "RemoveFieldServiceTablesFromKernelModel"];
+
     private const string Poles = "field_pole_occupancies";
     private const string Entries = "field_pole_occupancy_entries";
     private const string ChangeSets = "ServiceOrderOccupancyChangeSets";
@@ -343,7 +349,9 @@ internal static class NeutralOperatorMigrationContract
         var migration = chain.Single(id => id.EndsWith("_" + KernelMigrationName, StringComparison.Ordinal));
         var previous = chain[chain.IndexOf(migration) - 1];
         previous.Should().EndWith("_" + LedgerMigrationName, "the migration that carries the model change follows the ledger migration");
-        chain[^1].Should().Be(migration, "nothing in the kernel chain follows it yet");
+        chain.Skip(chain.IndexOf(migration) + 1).Should().OnlyContain(
+            id => LaterKernelMigrationNames.Any(later => id.EndsWith("_" + later, StringComparison.Ordinal)),
+            "nothing but the later kernel migrations that leave the occupancy tables alone (XD01-381 removed the FieldService tables, not these) follows it");
 
         await migrator.MigrateAsync(previous);
         await SeedAsync(db);

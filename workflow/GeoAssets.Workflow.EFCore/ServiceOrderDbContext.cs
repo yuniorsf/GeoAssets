@@ -49,11 +49,6 @@ public class ServiceOrderDbContext(
     internal DbSet<OrderTypeRecipientActionRecord> OrderTypeRecipientActions => Set<OrderTypeRecipientActionRecord>();
     internal DbSet<OutboxMessageRecord> OutboxMessages => Set<OutboxMessageRecord>();
     internal DbSet<InboxProcessedMessageRecord> InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
-    internal DbSet<ContractorUsLedgerEntryRecord> ContractorUsLedgerEntries => Set<ContractorUsLedgerEntryRecord>();
-    internal DbSet<UsCatalogItemRecord> UsCatalogItems => Set<UsCatalogItemRecord>();
-    internal DbSet<ContractorUsPostingRecord> ContractorUsPostings => Set<ContractorUsPostingRecord>();
-    internal DbSet<PavingMeasurementRecord> PavingMeasurements => Set<PavingMeasurementRecord>();
-    internal DbSet<ManholeAuditRecord> ManholeAudits => Set<ManholeAuditRecord>();
     internal DbSet<OrganizationGrantMirrorRecord> OrganizationGrantMirror => Set<OrganizationGrantMirrorRecord>();
     internal DbSet<OrganizationGrantSyncCursorRecord> OrganizationGrantSyncCursor => Set<OrganizationGrantSyncCursorRecord>();
     internal DbSet<ServiceOrderTargetRecord> ServiceOrderTargets => Set<ServiceOrderTargetRecord>();
@@ -83,43 +78,13 @@ public class ServiceOrderDbContext(
         modelBuilder.Entity<ServiceOrderRecord>()
             .HasQueryFilter(o => o.OrganizationId == _tenantContext.CurrentOrganizationId);
 
-        // ContractorUsLedgerEntryRecord has no cross-contractor delegation mechanism (XD01-202
-        // deliberately omits one — "no grant-based exception needed") so, unlike ServiceOrderRecord
-        // above, this filter applies uniformly to every read path, including single-record
-        // fetches: EFContractorUsLedgerRepository never calls IgnoreQueryFilters().
-        modelBuilder.Entity<ContractorUsLedgerEntryRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-
-        // UsCatalogItemRecord (XD01-241) has no cross-contractor delegation mechanism either —
-        // same reasoning and same uniform-filter treatment as ContractorUsLedgerEntryRecord
-        // above: EFUsCatalogRepository never calls IgnoreQueryFilters().
-        modelBuilder.Entity<UsCatalogItemRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-
-        // ContractorUsPostingRecord (XD01-242) — same uniform-filter treatment, scoped by
-        // ContractorOrganizationId: EFContractorUsPostingRepository never calls
-        // IgnoreQueryFilters() either.
-        modelBuilder.Entity<ContractorUsPostingRecord>()
-            .HasQueryFilter(e => e.ContractorOrganizationId == _tenantContext.CurrentOrganizationId);
-
-        // PavingMeasurementRecord (XD01-291) — same uniform-filter treatment as
-        // ContractorUsPostingRecord: EFPavingMeasurementRepository never calls
-        // IgnoreQueryFilters() either.
-        modelBuilder.Entity<PavingMeasurementRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-
-        // ManholeAuditRecord (XD01-265) — same uniform-filter treatment: EFManholeAuditRepository
-        // never calls IgnoreQueryFilters() either.
-        modelBuilder.Entity<ManholeAuditRecord>()
-            .HasQueryFilter(e => e.OrganizationId == _tenantContext.CurrentOrganizationId);
-
         ConfigureServiceOrderTargets(modelBuilder);
     }
 
     private void ConfigureServiceOrderTargets(ModelBuilder modelBuilder)
     {
         // ServiceOrderTargetRecord (XD01-306) follows its parent ServiceOrderRecord, not the
-        // uniform-filter tables above: the filter applies to the one cross-order search
+        // uniform-filter treatment of the verticals' tables: the filter applies to the one cross-order search
         // (EFServiceOrderTargetRepository.FindOpenUsagesAsync, when it has no order to scope by),
         // while every operation addressed to a single order calls IgnoreQueryFilters() — a
         // cross-org grantee authorized on the order by CrossOrgGrantRule must reach its targets

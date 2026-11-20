@@ -2,7 +2,6 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
-using GeoAssets.FieldService.Contractors;
 using GeoAssets.NeutralOperator.Application.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -37,6 +36,10 @@ public static class WorkflowEFCoreServiceExtensions
     /// <see cref="ObservableServiceOrderRepository"/> (tracing/metrics/logging for status
     /// transitions), which requires <see cref="GeoAssetsActivitySource"/>/<see cref="GeoAssetsMeter"/>
     /// to already be registered — call <c>AddGeoAssetsObservability</c> before this method.
+    ///
+    /// It registers no vertical's store: the FieldService vertical's contractor US ledger, US
+    /// catalog, postings, paving and manhole repositories are registered by its own
+    /// <c>AddFieldServicePersistence</c> (XD01-381).
     /// </summary>
     public static IServiceCollection AddWorkflowPersistence(
         this IServiceCollection services,
@@ -68,7 +71,6 @@ public static class WorkflowEFCoreServiceExtensions
         services.AddScoped<IServiceOrderWriter>(sp => sp.GetRequiredService<IServiceOrderRepository>());
 
         services.AddScoped<IOrderTypeRepository, EFOrderTypeRepository>();
-        services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
         services.AddServiceOrderTargetPersistence();
 
         return services;

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.FieldService.Contractors;
 using GeoAssets.FieldService.FieldWork;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Messaging.Protobuf;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
@@ -367,9 +368,9 @@ public sealed class ServiceOrderTargetReleaseTests : IDisposable
     private InspectionCommitService BuildInspectionCommitService() => new(
         _fixture.Context,
         new ValidatingServiceOrderRepository(NewOrders(), _registry),
-        new EFContractorUsPostingRepository(_fixture.Context),
-        new EFUsCatalogRepository(_fixture.Context),
-        new EFPavingMeasurementRepository(_fixture.Context),
+        new EFContractorUsPostingRepository(FieldServiceTestContext.Over(_fixture.Context)),
+        new EFUsCatalogRepository(FieldServiceTestContext.Over(_fixture.Context)),
+        new EFPavingMeasurementRepository(FieldServiceTestContext.Over(_fixture.Context)),
         new EFOutboxStore(_fixture.Context, _clock, new ProtobufIntegrationMessageSerializer(), "test-service"),
         _registry,
         _clock);

@@ -58,6 +58,10 @@ internal sealed class SqliteFixture : IDisposable
                 ",\n    CONSTRAINT \"FK_ServiceOrderOccupancyChangeSets_ServiceOrderTargets_TargetId\" FOREIGN KEY (\"TargetId\") REFERENCES \"ServiceOrderTargets\" (\"Id\") ON DELETE CASCADE"));
         }
 
+        // The FieldService vertical's tables (XD01-381) likewise live in its own context over this connection; its create script
+        // gets the DB-only foreign keys to the kernel's orders (see FieldServiceTestContext.CreateSqliteTables).
+        FieldServiceTestContext.CreateSqliteTables(Context);
+
         // SQLite has no native auto-updating rowversion column — this trigger is what
         // makes ServiceOrders.RowVersion actually change on every UPDATE, so it behaves
         // like the SQL Server target ServiceOrderRecordConfiguration.IsRowVersion() is

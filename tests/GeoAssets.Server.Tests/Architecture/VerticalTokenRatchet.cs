@@ -46,32 +46,12 @@ internal static partial class VerticalTokenRatchet
     public static IReadOnlyDictionary<string, string> Allowlist { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["GeoAssets.Workflow.Persistence.Configurations.ContractorUsLedgerEntryRecordConfiguration"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Configurations.ContractorUsPostingRecordConfiguration"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Configurations.ManholeAuditRecordConfiguration"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Configurations.PavingMeasurementRecordConfiguration"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.ContractorUsLedgerMapper"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.ContractorUsPostingMapper"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.EFContractorUsLedgerRepository"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.EFContractorUsPostingRepository"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.EFManholeAuditRepository"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.EFPavingMeasurementRepository"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Entities.ContractorUsLedgerEntryRecord"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Entities.ContractorUsPostingRecord"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Entities.ManholeAuditRecord"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.Entities.PavingMeasurementRecord"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.InspectionCommitResult"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.InspectionCommitService"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.ManholeAuditMapper"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.PavingMeasurementMapper"] = "XD01-350 (P6) — XD01-381 removes the FieldService tables (paving, manhole audits, contractor US) from the kernel context",
-            ["GeoAssets.Workflow.Persistence.ServiceOrderDbContext"] = "XD01-350 (P6) — XD01-381 moves the remaining vertical DbSets (paving, manhole audits, contractor US) out of the kernel context",
         };
 
     /// <summary>Engine assembly → <c>GeoAssets.Domain.*</c> references that exist today, each with its removing epic.</summary>
     public static IReadOnlyDictionary<string, string> DomainReferenceAllowlist { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["GeoAssets.Workflow.EFCore -> GeoAssets.Domain.Sanitation"] = "XD01-350 (P6) — XD01-381 moves InspectionCommitService's paving spawn (TrenchDimensions) out of the kernel persistence",
         };
 
     private static readonly string[][] TokenWords =

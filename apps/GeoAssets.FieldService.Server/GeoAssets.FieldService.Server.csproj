@@ -69,6 +69,9 @@
     <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Application\GeoAssets.FieldService.Application.csproj" />
     <!-- Pole occupancy (XD01-314) lives in the NeutralOperator vertical's own context since XD01-380. -->
     <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Persistence\GeoAssets.NeutralOperator.Persistence.csproj" />
+    <!-- The contractor US ledger, US catalog, postings, paving measurements and manhole audits live in the FieldService
+         vertical's own context since XD01-381. -->
+    <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Persistence\GeoAssets.FieldService.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

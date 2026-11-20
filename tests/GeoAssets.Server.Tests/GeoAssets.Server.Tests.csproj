@@ -36,6 +36,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
     <ProjectReference Include="..\..\apps\GeoAssets.IpBilling.Server\GeoAssets.IpBilling.Server.csproj" />
+    <!-- XD01-381: the FieldService vertical's persistence — referenced only to name its types: the Server host must never register them. -->
+    <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Persistence\GeoAssets.FieldService.Persistence.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.Kafka\GeoAssets.Workflow.Messaging.Kafka.csproj" />

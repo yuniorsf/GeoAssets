@@ -5,6 +5,7 @@ using GeoAssets.NeutralOperator.Domain.Compliance;
 using GeoAssets.NeutralOperator.Domain.Compliance.PoleAudit;
 using GeoAssets.Core.Messaging;
 using GeoAssets.Core.Services;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization;
@@ -117,13 +118,10 @@ builder.Services.AddDbContext<ServiceOrderDbContext>((sp, options) => options
     .AddInterceptors(
         sp.GetRequiredService<TenantSessionInterceptor>(),
         sp.GetRequiredService<TenantTransactionInterceptor>()));
-builder.Services.AddScoped<IContractorUsLedgerRepository, EFContractorUsLedgerRepository>();
 
-// ── Contractor US postings + catalog (XD01-242/XD01-247/XD01-228) — same ServiceOrderDbContext,
-// same per-request tenant interceptors. ──────────────────────────────────────────────────────
-builder.Services.AddScoped<IUsCatalogRepository, EFUsCatalogRepository>();
-builder.Services.AddScoped<IContractorUsPostingRepository, EFContractorUsPostingRepository>();
-builder.Services.AddScoped<IPavingMeasurementRepository, EFPavingMeasurementRepository>();
+// ── Contractor US ledger, US catalog, postings, paving measurements, manhole audits (XD01-207/
+// XD01-242/XD01-247/XD01-228/XD01-291/XD01-265) — registered by AddFieldServicePersistence below,
+// in the FieldService vertical's own FieldServiceDbContext since XD01-381. ─────────────────────
 
 // ── OrderType registry (XD01-228) — registered (with the "field-work" graph) so
 // IServiceOrderRepository below can actually validate a transition into any FieldWork state
@@ -196,6 +194,13 @@ builder.Services.AddServiceOrderTargetPersistence();
 // shares one transaction with the order transition.
 builder.Services.AddNeutralOperatorPersistence();
 
+// Contractor US ledger, US catalog, postings, paving measurements and manhole audits, and the inspection commit that
+// writes them (XD01-228): in the FieldService vertical's own FieldServiceDbContext since XD01-381 (schema field_service,
+// its own migration chain — apply it to this host's FieldService database after this host's own chain), built over the
+// scoped ServiceOrderDbContext's connection and joining its transaction, so the inspection commit still writes its
+// postings, the order transition, the paving child order and its measurement, and the outbox message in one transaction.
+builder.Services.AddFieldServicePersistence();
+
 // ── Transactional outbox + relay dispatcher (XD01-228/XD01-229) — AddWorkflowOutbox wires
 // IOutboxWriter, IOutboxDispatcherStore, IIdempotentInbox, and the background
 // OutboxRelayProcessor hosted service (claim → publish → mark dispatched/failed with
@@ -241,8 +246,8 @@ builder.Services.AddHttpClient(HttpMaximoAssetLifecycleDispatcher.HttpClientName
 builder.Services.AddScoped<IMaximoAssetLifecycleDispatcher, HttpMaximoAssetLifecycleDispatcher>();
 builder.Services.AddScoped<MaximoAssetLifecycleSyncService>();
 
-// ── Single-DB ACID inspection commit (XD01-228) ───────────────────────────────────────────────
-builder.Services.AddScoped<InspectionCommitService>();
+// ── Single-DB ACID inspection commit (XD01-228) — InspectionCommitService is registered by
+// AddFieldServicePersistence above (XD01-381). ─────────────────────────────────────────────────
 
 // ── Archetype domain modules (XD01-212) — each toggled independently via
 // "Modules:{Name}:Enabled" (default true). NeutralPoleRegistry is this module's only stateful

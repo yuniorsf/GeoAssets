@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.FieldService.Persistence;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -9,8 +10,9 @@ namespace GeoAssets.Workflow.EFCore.Tests;
 
 /// <summary>
 /// Proves the database-level half of ContractorUsLedgerEntries tenant isolation — the native
-/// Row-Level Security policy added by the <c>AddContractorUsLedgerEntriesRowLevelSecurity</c>
-/// migration — independently of <see cref="ServiceOrderDbContext"/>'s EF Core global query
+/// Row-Level Security policy the FieldService chain's <c>AdoptFieldServiceTables</c> baseline creates on
+/// <c>field_service."ContractorUsLedgerEntries"</c> (XD01-381; it was the kernel's
+/// <c>AddContractorUsLedgerEntriesRowLevelSecurity</c> migration before the table moved) — independently of <see cref="ServiceOrderDbContext"/>'s EF Core global query
 /// filter. Equality only, no grant-based exception (contrast with
 /// <see cref="ServiceOrdersRowLevelSecurityPolicyTests"/>), matching XD01-202's AC.
 ///
@@ -46,22 +48,16 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
 
             await using var db = new ServiceOrderDbContext(CreateOptions(_container.GetConnectionString()));
 
-            // EnsureCreatedAsync (not MigrateAsync) — same reasoning as
+            // EnsureCreatedAsync (not MigrateAsync) for the kernel — same reasoning as
             // ServiceOrdersRowLevelSecurityPolicyTests: this test project has no
-            // ProjectReference to GeoAssets.Server, where the real migrations live.
+            // ProjectReference to GeoAssets.Server, where the kernel's real migrations live.
+            // It only has to provide public."ServiceOrders", which the FieldService chain requires.
             await db.Database.EnsureCreatedAsync();
 
-            // Duplicated verbatim from AddContractorUsLedgerEntriesRowLevelSecurity.Up().
-            await db.Database.ExecuteSqlRawAsync(
-                """
-                ALTER TABLE "ContractorUsLedgerEntries" ENABLE ROW LEVEL SECURITY;
-
-                CREATE POLICY tenant_isolation_policy ON "ContractorUsLedgerEntries"
-                    AS PERMISSIVE
-                    FOR ALL
-                    USING ("OrganizationId" = current_setting('app.current_organization_id', true)::uuid)
-                    WITH CHECK ("OrganizationId" = current_setting('app.current_organization_id', true)::uuid);
-                """);
+            // XD01-381: the table now lives in the FieldService context (schema field_service) and the policy is the
+            // one its real baseline migration (AdoptFieldServiceTables) creates — migrated here, not copied.
+            await using var fieldService = new FieldServiceDbContext(CreateFieldServiceOptions(_container.GetConnectionString()));
+            await fieldService.Database.MigrateAsync();
 
             await db.Database.ExecuteSqlRawAsync(
                 $"""
@@ -72,7 +68,8 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
                    END IF;
                 END $$;
 
-                GRANT SELECT, INSERT, UPDATE, DELETE ON "ContractorUsLedgerEntries" TO {ScopedRole};
+                GRANT USAGE ON SCHEMA field_service TO {ScopedRole};
+                GRANT SELECT, INSERT, UPDATE, DELETE ON field_service."ContractorUsLedgerEntries" TO {ScopedRole};
                 """);
 
             _connectionString = _container.GetConnectionString();
@@ -89,6 +86,11 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
             .UseNpgsql(connectionString)
             .Options;
 
+    private static DbContextOptions<FieldServiceDbContext> CreateFieldServiceOptions(string connectionString) =>
+        new DbContextOptionsBuilder<FieldServiceDbContext>()
+            .UseNpgsql(connectionString, FieldServiceDbContext.ConfigureMigrations)
+            .Options;
+
     public Task InitializeAsync() => EnsureContainerAsync();
 
     public Task DisposeAsync()
@@ -99,17 +101,17 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
 
     private static async Task ClearAsync()
     {
-        await using var db = new ServiceOrderDbContext(CreateOptions(await EnsureContainerAsync()));
-        await db.Database.ExecuteSqlRawAsync("""TRUNCATE TABLE "ContractorUsLedgerEntries" CASCADE;""");
+        await using var db = new FieldServiceDbContext(CreateFieldServiceOptions(await EnsureContainerAsync()));
+        await db.Database.ExecuteSqlRawAsync("""TRUNCATE TABLE field_service."ContractorUsLedgerEntries" CASCADE;""");
     }
 
     private static async Task SeedLedgerEntryAsync(Guid id, Guid organizationId)
     {
-        await using var db = new ServiceOrderDbContext(CreateOptions(await EnsureContainerAsync()));
+        await using var db = new FieldServiceDbContext(CreateFieldServiceOptions(await EnsureContainerAsync()));
         await db.Database.OpenConnectionAsync();
         await using var cmd = db.Database.GetDbConnection().CreateCommand();
         cmd.CommandText = """
-            INSERT INTO "ContractorUsLedgerEntries"
+            INSERT INTO field_service."ContractorUsLedgerEntries"
                 ("Id", "OrganizationId", "ServiceOrderId", "UsCode", "Description", "Quantity", "UnitValue", "PhotoProofJson", "CreatedAt")
             VALUES
                 (@id, @orgId, NULL, 'US-001', 'Test entry', 1, 100, '[]', now())
@@ -140,7 +142,7 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
     private static async Task<List<Guid>> ReadLedgerEntryIdsAsync(NpgsqlConnection connection)
     {
         await using var select = connection.CreateCommand();
-        select.CommandText = """SELECT "Id" FROM "ContractorUsLedgerEntries" ORDER BY "Id" """;
+        select.CommandText = """SELECT "Id" FROM field_service."ContractorUsLedgerEntries" ORDER BY "Id" """;
 
         var ids = new List<Guid>();
         await using var reader = await select.ExecuteReaderAsync();
@@ -192,7 +194,7 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
 
         await using var insert = connection.CreateCommand();
         insert.CommandText = """
-            INSERT INTO "ContractorUsLedgerEntries"
+            INSERT INTO field_service."ContractorUsLedgerEntries"
                 ("Id", "OrganizationId", "ServiceOrderId", "UsCode", "Description", "Quantity", "UnitValue", "PhotoProofJson", "CreatedAt")
             VALUES
                 (@id, @orgId, NULL, 'US-002', 'Inserted under own tenant', 1, 100, '[]', now())
@@ -216,7 +218,7 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
 
         await using var insert = connection.CreateCommand();
         insert.CommandText = """
-            INSERT INTO "ContractorUsLedgerEntries"
+            INSERT INTO field_service."ContractorUsLedgerEntries"
                 ("Id", "OrganizationId", "ServiceOrderId", "UsCode", "Description", "Quantity", "UnitValue", "PhotoProofJson", "CreatedAt")
             VALUES
                 (@id, @orgId, NULL, 'US-003', 'Attempted cross-tenant write', 1, 100, '[]', now())
@@ -242,7 +244,7 @@ public sealed class ContractorUsLedgerEntriesRowLevelSecurityPolicyTests : IAsyn
         await SetSessionOrganizationAsync(connection, ContractorB);
 
         await using var delete = connection.CreateCommand();
-        delete.CommandText = """DELETE FROM "ContractorUsLedgerEntries" WHERE "Id" = @id""";
+        delete.CommandText = """DELETE FROM field_service."ContractorUsLedgerEntries" WHERE "Id" = @id""";
         delete.Parameters.Add(new NpgsqlParameter("id", id));
         var affected = await delete.ExecuteNonQueryAsync();
 

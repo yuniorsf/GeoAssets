@@ -100,10 +100,12 @@ public sealed class VerticalTokenRatchetTests
     [Fact]
     public void Evaluate_AllowlistedOwnerWithoutViolation_IsStale()
     {
-        var owner = VerticalTokenRatchet.Allowlist.Keys.First();
+        // The real allowlist is empty (the ratchet reached zero with XD01-381), so the staleness rule is held to a synthetic one.
+        const string owner = "GeoAssets.Workflow.Orders.SyntheticAllowlistedOwner";
+        var allowlist = new Dictionary<string, string>(StringComparer.Ordinal) { [owner] = "XD01-350 (P6) — synthetic entry" };
         var empty = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
 
-        var result = KernelReferenceRatchet.Evaluate(empty, VerticalTokenRatchet.Allowlist);
+        var result = KernelReferenceRatchet.Evaluate(empty, allowlist);
 
         result.StaleAllowlistEntries.Should().Contain(owner);
     }
@@ -127,9 +129,10 @@ public sealed class VerticalTokenRatchetTests
     {
         var pattern = new Regex(@"^XD01-3(4[4-9]|5[01]) \(P[0-7]\)", RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
 
-        VerticalTokenRatchet.Allowlist.Should().NotBeEmpty();
-        VerticalTokenRatchet.DomainReferenceAllowlist.Should().NotBeEmpty();
-        VerticalTokenRatchet.Allowlist.Values.Should().OnlyContain(v => pattern.IsMatch(v));
-        VerticalTokenRatchet.DomainReferenceAllowlist.Values.Should().OnlyContain(v => pattern.IsMatch(v));
+        // XD01-381 removed the last entries: the ratchet is at zero. A future entry must still name the epic that removes it.
+        VerticalTokenRatchet.Allowlist.Should().BeEmpty("the vertical-token ratchet reached zero with XD01-381 — never add an entry back");
+        VerticalTokenRatchet.DomainReferenceAllowlist.Should().BeEmpty("the engine's last GeoAssets.Domain.* reference left with XD01-381 — never add one back");
+        VerticalTokenRatchet.Allowlist.Values.Where(v => !pattern.IsMatch(v)).Should().BeEmpty("every entry names the epic that removes it");
+        VerticalTokenRatchet.DomainReferenceAllowlist.Values.Where(v => !pattern.IsMatch(v)).Should().BeEmpty("every entry names the epic that removes it");
     }
 }

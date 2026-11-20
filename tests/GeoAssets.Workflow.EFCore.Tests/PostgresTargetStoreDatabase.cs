@@ -57,6 +57,11 @@ internal static class PostgresTargetStoreDatabase
                 // The NeutralOperator vertical's tables (XD01-380) come from its own migration chain, on the kernel schema.
                 await using var neutralOperator = NeutralOperatorTestContext.Over(db);
                 await neutralOperator.Database.MigrateAsync();
+
+                // So do the FieldService vertical's (XD01-381): its own chain, on the kernel schema, adding the foreign keys to
+                // the kernel's orders that its model does not map.
+                await using var fieldService = FieldServiceTestContext.Over(db);
+                await fieldService.Database.MigrateAsync();
             }
 
             ConnectionStrings[databaseName] = connectionString;
