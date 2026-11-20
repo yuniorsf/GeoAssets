@@ -1,5 +1,4 @@
 using GeoAssets.Hosting.Abstractions;
-using GeoAssets.Server.Modules.IpBillingBridge;
 using GeoAssets.Server.Modules.NeutralOperator;
 using GeoAssets.Server.Modules.PostgresSpatial;
 
@@ -13,12 +12,13 @@ namespace GeoAssets.Server.Modules;
 ///   <item><see cref="KernelHostedNeutralOperatorModule"/>: shared-use dispatch, pole occupancy staging and the approval
 ///   saga, clandestine attachments, the ISP tenant portal and the GIS export — the rollback
 ///   flag of the cut-over to <c>GeoAssets.NeutralOperator.Server</c>.</item>
-///   <item><see cref="IpBillingBridgeModule"/>: the município↔Prefeitura grant provisioning for IP billing.</item>
 /// </list>
+/// The IP-billing grant bridge left with XD01-385: it is <c>GeoAssets.IpBilling.Server</c>'s, over the kernel's generic
+/// organization-grant API.
 /// </summary>
 public static class ServerModules
 {
     /// <summary>A fresh instance of every built-in module.</summary>
     public static IReadOnlyList<IGeoAssetsModule> BuiltIns() =>
-        [new PostgresSpatialModule(), new KernelHostedNeutralOperatorModule(), new IpBillingBridgeModule()];
+        [new PostgresSpatialModule(), new KernelHostedNeutralOperatorModule()];
 }

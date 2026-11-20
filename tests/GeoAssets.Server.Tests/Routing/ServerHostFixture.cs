@@ -32,7 +32,6 @@ internal static class ServerHostFixture
     private static WebApplicationFactory<HttpTenantContext>? _factory;
     private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorEnabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorDisabledFactory;
-    private static WebApplicationFactory<HttpTenantContext>? _ipBillingBridgeDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
     private static WebApplicationFactory<HttpTenantContext>? _secondCatalogFactory;
 
@@ -52,9 +51,9 @@ internal static class ServerHostFixture
     }
 
     /// <summary>
-    /// The same host on the same database with every built-in module listed explicitly — postgres-spatial, neutral-operator,
-    /// ip-billing-bridge (the cut-over's rollback configuration, XD01-384): what the host maps and registers while it still
-    /// hosts the ISP neutral-operator vertical.
+    /// The same host on the same database with every built-in module listed explicitly — postgres-spatial, neutral-operator
+    /// (the cut-over's rollback configuration, XD01-384): what the host maps and registers while it still hosts the ISP
+    /// neutral-operator vertical.
     /// </summary>
     public static async Task<IServiceProvider> GetNeutralOperatorEnabledServicesAsync()
     {
@@ -62,7 +61,7 @@ internal static class ServerHostFixture
         try
         {
             _neutralOperatorEnabledFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "neutral-operator", "ip-billing-bridge"]);
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "neutral-operator"]);
             return _neutralOperatorEnabledFactory.Services;
         }
         finally
@@ -81,7 +80,7 @@ internal static class ServerHostFixture
         try
         {
             _neutralOperatorDisabledFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "ip-billing-bridge"]);
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial"]);
             return _neutralOperatorDisabledFactory.Services;
         }
         finally
@@ -91,17 +90,16 @@ internal static class ServerHostFixture
     }
 
     /// <summary>
-    /// The same host on the same database with the modules listed explicitly without ip-billing-bridge (XD01-377): what the
-    /// host registers and seeds without the IP-billing vertical.
+    /// A host factory, not started, on the same database with exactly <paramref name="modules"/> listed (XD01-385): reading its
+    /// <see cref="WebApplicationFactory{TEntryPoint}.Services"/> starts the host — or fails, for a module id the host does not
+    /// know. The caller disposes it.
     /// </summary>
-    public static async Task<IServiceProvider> GetIpBillingBridgeDisabledServicesAsync()
+    public static async Task<WebApplicationFactory<HttpTenantContext>> CreateUnstartedFactoryAsync(params string[] modules)
     {
         await StartLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            _ipBillingBridgeDisabledFactory ??= CreateFactory(
-                await GetConnectionStringAsync().ConfigureAwait(false), modules: ["postgres-spatial", "neutral-operator"]);
-            return _ipBillingBridgeDisabledFactory.Services;
+            return CreateFactory(await GetConnectionStringAsync().ConfigureAwait(false), modules);
         }
         finally
         {

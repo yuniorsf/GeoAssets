@@ -46,6 +46,11 @@
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Xlsx\GeoAssets.Provider.Xlsx.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <!-- XD01-385: the kernel's machine-to-machine clients (the generic organization-grant API, the bootstrap
+         registration) and the chassis' caller identity / permission policies / registration loop — the município grant
+         bridge runs here, reaching the kernel over REST only. -->
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Hosting\GeoAssets.Workflow.Hosting.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Infrastructure.Observability\GeoAssets.Infrastructure.Observability.csproj" />
   </ItemGroup>
 

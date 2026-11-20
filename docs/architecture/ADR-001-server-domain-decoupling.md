@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Accepted (2026-11-18) — implementation tracked by Jira epics XD01-344 … XD01-351 (label `server-decoupling`) |
+| **Status** | Implemented (2026-11-20) — accepted 2026-11-18; delivered by Jira epics XD01-344 … XD01-351 (label `server-decoupling`), closed by XD01-385. See *As built* for what each phase left and the known follow-ups. |
 | **Scope** | `apps/GeoAssets.Server`, `core/GeoAssets.Workflow`, `workflow/GeoAssets.Workflow.EFCore`, `core/GeoAssets.Core`, `providers/GeoAssets.Provider.PostgreSQL`, `apps/GeoAssets.Shared` / Web / MAUI clients |
 | **Amends** | `docs/service_order_research/microservices_intersection_evaluation.md` (§8 Amendment A) |
 | **Supersedes** | — |
@@ -323,7 +323,7 @@ This is the step that makes extraction mechanical later.
 - This contract is the order-type chassis that every vertical host uses.
 - Move the existing registrations, unchanged, into modules in a `Modules/` folder of the Server:
   - `NeutralOperatorModule`: shared-use, occupancy, clandestine attachments, tenant portal, in-process mutation apply.
-  - `IpBillingBridgeModule`: Município.
+  - `IpBillingBridgeModule`: Município. *(Retired by XD01-385: the bridge is `GeoAssets.IpBilling.Server`'s.)*
 - Postgres wiring (Program.cs lines 42-73) moves into a `PostgresSpatialModule` in the kernel.
 - Outbox wiring moves into a neutral `WorkflowMessagingHostExtensions`.
 - Program.cs shrinks to kernel wiring plus a single module call.
@@ -388,6 +388,7 @@ Every vertical service will use these. They must exist before extraction, or eac
   - *Decided (XD01-384):* the gateway is the separate host `apps/GeoAssets.Gateway` (not YARP inside the kernel), so the kernel stays unaware of verticals. `/api/v/neutral-operator/**` is rewritten to `/api/**` on its destination; a lowest-precedence catch-all sends every other `/api/**`, `/wms` and `/wfs` to the kernel. The gateway authorizes nothing and is the one CORS authority. Descriptors carry `ApiBaseRoute = /api/v/neutral-operator/workflow/service-orders`; clients route by descriptor (`AddDescriptorRoutedWorkflowRest`) and merge order lists across the routes. The kernel's default modules drop `neutral-operator` (rollback: list it again and point the gateway's NeutralOperator destination at the kernel).
 - **Client UI:** a vertical RCL per vertical (menu items, order-detail panels through a `DynamicComponent` registry keyed by order-type capability), plus the `SchemaDrivenAttributeEditor` for `AttributesSchemaJson`. Clients stop re-registering order types and read the kernel registry instead (smell N). MAUI's single-file page exceptions stay as they are.
 - **Repeat** for FieldService (already partially extracted) and IpBilling. Remove `MunicipioProvisioningService` from the Server.
+  - *Done (XD01-385):* `MunicipioProvisioningService` and its sync/revoke endpoints run on `GeoAssets.IpBilling.Server` (`POST /api/ip-billing/municipio-grants/sync|revoke`, permission `ip-billing:reference-manage`) and provision the grant through the kernel's generic, vertical-agnostic organization-grant API (`GET|PUT /api/identity/organization-grants`, `POST /api/identity/organization-grants/revoke`, `GeoAssets.ServiceCaller` only) with `IOrganizationGrantClient` (`GeoAssets.Workflow.Rest`). The vertical publishes its `ip-billing:*` permissions with the shared bootstrap registration (`VerticalRegistrationService`, now in `GeoAssets.Workflow.Hosting`). `IpBillingBridgeModule` is deleted; the kernel's default `GeoAssets:Modules` is `[ "postgres-spatial" ]`.
 
 ### 3.3 Key risks and mitigations
 - **Losing atomicity (approve → occupancy → asset mutation).** Mitigate with the saga plus idempotent consumers (already present), explicit pending and compensation states, saga timeouts with alerting (observability-conventions), and the inbox for exactly-once effects.
@@ -456,6 +457,28 @@ All tickets carry the label `server-decoupling` (`project = XD01 AND labels = se
 | P5 Assembly split | XD01-349 | XD01-375 NeutralOperator assemblies → XD01-376 FieldWork/ERP/SCADA out of engine · XD01-377 permission contributors → XD01-378 client vertical RCLs · XD01-386 FieldService.Server via `IGeoCoreClient` only (after XD01-376, XD01-362) |
 | P6 Persistence & ledger | XD01-350 | XD01-379 global target ledger → XD01-380 `NeutralOperatorDbContext` → XD01-381 FieldService tables out of kernel |
 | P7 Extraction & saga | XD01-351 | XD01-382 `NeutralOperator.Server` → XD01-383 approval saga → XD01-384 gateway + client re-pointing → XD01-385 Município bridge to IpBilling.Server, ratchets at zero |
+
+## As built (programme closed by XD01-385)
+
+Both ratchets are at zero: `KernelReferenceRatchet.Allowlist` (invariant I1) and `VerticalTokenRatchet.Allowlist` /
+`DomainReferenceAllowlist` (invariant I2) are empty, and the kernel boots with `GeoAssets:Modules = [ "postgres-spatial" ]`
+— or with none (I5, `KernelOnlyBootTests` / `KernelOnlyHostTests`).
+
+| Phase | As built |
+|---|---|
+| P0 | Kernel reference ratchet, vertical-token ratchet, route-inventory snapshot (`tests/GeoAssets.Server.Tests/Snapshots/route-inventory.txt`), smell H/P characterization tests. |
+| P1 | `IGeoAssetsModule` chassis (`core/GeoAssets.Hosting.Abstractions`); the Server's `Modules/` quarantine now holds only `PostgresSpatialModule` and the kernel-hosted NeutralOperator rollback module (`KernelHostedNeutralOperatorModule`, listed explicitly to roll back the XD01-384 cut-over). An unknown module id fails the startup with the known ids — `ip-billing-bridge` is unknown since XD01-385. |
+| P2 | Action-handler registry, occupancy capability, lifecycle hooks, transition guards, DI rules, problem-mapper chain, one order-authorization decision point, extensible action vocabulary. |
+| P3 | `AssetType.Roles`, role-based target policies, the order-type descriptor registry and `/features/{id}/actions`, context-menu actions. |
+| P4 | `PostgresProviderPlugin` + `ICatalogPool`, `IAssetRenderQuery`, `IOrganizationCatalogFactory`, plugin-owned mutation applier; no `Provider.*` reference in the kernel. |
+| P5 | NeutralOperator/FieldService/Integrations assemblies under `verticals/`, permission contributors, client vertical RCLs. SLA reporting (`GeoAssets.Workflow.SlaGuard`) is an engine add-on: the kernel registered `AddSlaBreachReporting()` with no consumer and no route, so XD01-385 removed it and the kernel's SlaGuard reference — the Web client registers its own for the compliance dashboard, and `GeoAssets.FieldService.Server` keeps its configured `SlaGuardEngine`. |
+| P6 | Global target ledger; `NeutralOperatorDbContext` and `FieldServiceDbContext` own their tables. |
+| P7 | `GeoAssets.NeutralOperator.Server` on the chassis, the approval saga, the gateway (`apps/GeoAssets.Gateway`), and the município grant bridge on `GeoAssets.IpBilling.Server` over the kernel's generic organization-grant API. |
+
+**Known follow-ups (not covered by I1–I5, no ratchet yet):**
+- `workflow/GeoAssets.Workflow.EFCore` references `GeoAssets.NeutralOperator.Application` (the shared-use dispatch decorators of XD01-316: `ObservableSharedUseDispatchService`, `ActivitySharedUseFanOutTracer`, their registration), and `workflow/GeoAssets.Workflow.Rest` references NeutralOperator types (`WorkflowProblemTranslator`, `RestSharedUseDispatchClient`, `RestOrderOccupancyStagingService`, the descriptor-routed clients). Neither is the kernel assembly (I1) nor the engine's namespaces or `ServiceOrderDbContext` model (I2 — the vertical-token ratchet scans identifiers and `GeoAssets.Domain.*` references, not `GeoAssets.NeutralOperator.*` assembly references), so they are outside the closed invariants; moving them into the vertical's assemblies (and adding an assembly-reference ratchet for the chassis libraries) is the next step.
+- `plugins/commands/GeoAssets.Plugin.GeoJsonImport` still references `GeoAssets.Provider.PostgreSQL` (`ProviderPostgreSqlReferenceTests.KnownPreExistingViolations`).
+- `GeoAssets.IpBilling.Server`'s município writes do not call the grant sync themselves; callers post to `/api/ip-billing/municipio-grants/sync`. Its `ip-billing:reference-manage` check is the kernel's answer for the caller's forwarded token, so the kernel must accept that token's audience (see the host's `appsettings.json`).
 
 ## Related host deviation (tracked: XD01-386)
 

@@ -67,7 +67,7 @@ dotnet ef database update \
 
 ## Cut-over and rollback (kernel flag + gateway destination)
 
-Since XD01-384 the cut-over is the default: the kernel's `GeoAssets:Modules` is `[ "postgres-spatial", "ip-billing-bridge" ]`,
+Since XD01-384 the cut-over is the default: the kernel's `GeoAssets:Modules` is `[ "postgres-spatial" ]` (XD01-385 retired `ip-billing-bridge`),
 so it maps none of the module's routes (occupancy, shared-use dispatch, the GIS export `GET /api/geoassets/export/gis/v1`)
 and registers none of its services, and clients reach the vertical through the gateway (`apps/GeoAssets.Gateway`):
 
@@ -81,11 +81,11 @@ reach each order type at its descriptor's route on the gateway's origin — they
 
 - **Production / cut over**: `Destinations:NeutralOperator:Shared` (and each silo) = this host; the kernel without the module
   (the default).
-- **Roll back**: list `neutral-operator` again on the kernel (`GeoAssets__Modules__2=neutral-operator`) and restart it — it
+- **Roll back**: list `neutral-operator` again on the kernel (`GeoAssets__Modules__1=neutral-operator`) and restart it — it
   serves the module in process exactly as before — and point `Destinations:NeutralOperator:Shared` at the kernel. The module's
   routes are identical on both hosts, so the same `/api/v/neutral-operator/** → /api/**` rewrite reaches either.
 
-**The local Docker stack keeps the kernel hosting the module** (`deploy/server`: `GeoAssets__Modules__2=neutral-operator` on
+**The local Docker stack keeps the kernel hosting the module** (`deploy/server`: `GeoAssets__Modules__1=neutral-operator` on
 `server`, the gateway's `Destinations__NeutralOperator__Shared=http://server:8080`): it has no `GeoAssets.ServiceCaller`
 credentials (this host's registration stays Degraded, ledger reservations answer 503) and no broker (the approval saga needs
 one). To run the vertical here instead, set in `deploy/server/.env`

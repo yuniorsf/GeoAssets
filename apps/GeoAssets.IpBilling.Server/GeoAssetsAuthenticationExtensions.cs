@@ -11,10 +11,11 @@ namespace GeoAssets.IpBilling.Server;
 /// <see cref="IGeoAuthenticationProvider"/> is passed, and every endpoint requires an
 /// authenticated caller by default via <see cref="AuthorizationOptions.FallbackPolicy"/>.
 ///
-/// This is an authenticated-caller bar only — no fine-grained <c>ip-billing:*</c> permission-code
-/// checks, matching <c>GeoAssets.FieldService.Server</c>'s own ceiling for this class of host
-/// (neither has the EF-backed identity database <c>IGeoAuthorizationService</c> needs; see
-/// <c>IpBillingRestApiExtensions</c>'s doc comment for the resulting scope decision).
+/// This is the authenticated-caller bar every endpoint gets. The <c>ip-billing:*</c> permission
+/// codes an endpoint names with <c>RequireAuthorization("…")</c> (the município grant endpoints,
+/// XD01-385) are evaluated by <c>AddGeoPermissionPolicies</c> against the kernel's answer for the
+/// caller's token (<c>AddKernelIdentity</c>) — this host has no identity database of its own; see
+/// <c>IpBillingRestApiExtensions</c>'s doc comment for the endpoints that keep only this bar.
 /// </summary>
 internal static class GeoAssetsAuthenticationExtensions
 {

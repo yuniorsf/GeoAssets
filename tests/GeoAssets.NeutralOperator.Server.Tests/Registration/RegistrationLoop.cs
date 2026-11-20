@@ -1,5 +1,6 @@
 using GeoAssets.Identity.Authorization.Modules;
 using GeoAssets.NeutralOperator.Modules;
+using GeoAssets.Workflow.Hosting;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rest;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,7 @@ internal sealed class RegistrationLoop : IAsyncDisposable
         _provider = new ServiceCollection().AddScoped<IVerticalRegistrationClient>(_ => Client).BuildServiceProvider();
         _service = new VerticalRegistrationService(
             _provider.GetRequiredService<IServiceScopeFactory>(),
-            OrderTypes,
+            new VerticalRegistrationSource(NeutralOperatorModule.ModuleId, _ => NeutralOperatorModule.PublishedDescriptors(OrderTypes)),
             [new NeutralOperatorPermissionContributor(), .. extraContributors ?? []],
             State,
             Microsoft.Extensions.Options.Options.Create(Options),

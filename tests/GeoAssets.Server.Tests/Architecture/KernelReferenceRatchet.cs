@@ -37,7 +37,6 @@ internal static class KernelReferenceRatchet
     public static IReadOnlyDictionary<string, string> Allowlist { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Program"] = "XD01-345 (P1) — XD01-358/XD01-359 reduce Program.cs to kernel wiring + module bootstrap",
         };
 
     public static bool IsKernelType(Type type)

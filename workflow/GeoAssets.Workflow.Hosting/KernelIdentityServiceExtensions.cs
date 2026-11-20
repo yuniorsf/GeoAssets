@@ -1,7 +1,6 @@
 using GeoAssets.Identity.Authorization.Services;
-using GeoAssets.Workflow.Hosting;
 
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>
 /// The caller's identity as the kernel knows it (XD01-382, ADR-001 D3): this host has no identity database, so
@@ -10,7 +9,7 @@ namespace GeoAssets.NeutralOperator.Server;
 /// <see cref="KernelOwnOrganizationGrantSource"/>, both calling the kernel's caller-scoped identity routes with the
 /// caller's own token. The <c>RequireAuthorization("serviceorders:read")</c> permission policies run on the same service.
 /// </summary>
-internal static class KernelIdentityServiceExtensions
+public static class KernelIdentityServiceExtensions
 {
     /// <summary>The named <see cref="HttpClient"/> of the kernel's identity routes.</summary>
     public const string HttpClientName = "GeoAssetsKernel:identity";

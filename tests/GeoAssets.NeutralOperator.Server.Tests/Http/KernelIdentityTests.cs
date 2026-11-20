@@ -5,6 +5,7 @@ using FluentAssertions;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.NeutralOperator.Server.Tests.Support;
+using GeoAssets.Workflow.Hosting;
 using Xunit;
 
 namespace GeoAssets.NeutralOperator.Server.Tests.Http;

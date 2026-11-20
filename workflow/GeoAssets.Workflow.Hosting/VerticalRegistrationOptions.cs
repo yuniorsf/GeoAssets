@@ -1,4 +1,4 @@
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>
 /// The bootstrap registration's retry schedule (XD01-382), section <c>VerticalRegistration</c>: a failed attempt is retried
@@ -7,7 +7,7 @@ namespace GeoAssets.NeutralOperator.Server;
 /// every <see cref="RefreshInterval"/>, so a kernel that restarted (its descriptor registry is in memory) learns this vertical
 /// again without operator action.
 /// </summary>
-internal sealed record VerticalRegistrationOptions
+public sealed record VerticalRegistrationOptions
 {
     public const string SectionName = "VerticalRegistration";
 

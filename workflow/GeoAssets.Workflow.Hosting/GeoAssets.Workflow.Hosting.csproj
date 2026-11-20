@@ -34,6 +34,9 @@
     <ProjectReference Include="..\..\core\GeoAssets.Identity\GeoAssets.Identity.csproj" />
     <ProjectReference Include="..\..\core\GeoAssets.Workflow\GeoAssets.Workflow.csproj" />
     <ProjectReference Include="..\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
+    <!-- The kernel's machine-to-machine clients (IVerticalRegistrationClient) a vertical host's bootstrap registration
+         publishes through (VerticalRegistrationService, XD01-385). -->
+    <ProjectReference Include="..\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
     <!-- The outbox relay's wire serializer and the two brokers it can publish to, chosen by configuration
          (Workflow:Outbox:Transport — see WorkflowMessagingHostExtensions). -->
     <ProjectReference Include="..\GeoAssets.Workflow.Messaging.Protobuf\GeoAssets.Workflow.Messaging.Protobuf.csproj" />

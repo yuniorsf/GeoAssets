@@ -3,7 +3,7 @@ using System.Text.Json;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Services;
 
-namespace GeoAssets.NeutralOperator.Server;
+namespace GeoAssets.Workflow.Hosting;
 
 /// <summary>
 /// <see cref="IGeoAuthorizationService"/> for this host, which has no identity database (XD01-382): the caller's
@@ -12,7 +12,7 @@ namespace GeoAssets.NeutralOperator.Server;
 /// <c>ServiceOrderRules</c> and the <c>RequireAuthorization("…")</c> permission policies decide here exactly what they decide
 /// in the kernel. Scoped: each request reads its context at most once.
 /// </summary>
-internal sealed class KernelGeoAuthorizationService(HttpClient http) : IGeoAuthorizationService
+public sealed class KernelGeoAuthorizationService(HttpClient http) : IGeoAuthorizationService
 {
     private static readonly JsonSerializerOptions _opts = new(JsonSerializerDefaults.Web);
 

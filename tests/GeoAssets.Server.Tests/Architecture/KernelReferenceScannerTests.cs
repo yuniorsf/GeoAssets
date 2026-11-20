@@ -128,6 +128,8 @@ public sealed class KernelReferenceScannerTests
     {
         var pattern = new Regex(@"^XD01-3(4[4-9]|5[01]) \(P[0-7]\)", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
 
-        KernelReferenceRatchet.Allowlist.Values.Should().OnlyContain(v => pattern.IsMatch(v));
+        // XD01-385 removed the last entry: the ratchet is at zero. A future entry must still name the epic that removes it.
+        KernelReferenceRatchet.Allowlist.Should().BeEmpty("the kernel reference ratchet reached zero with XD01-385 — never add an entry back");
+        KernelReferenceRatchet.Allowlist.Values.Where(v => !pattern.IsMatch(v)).Should().BeEmpty("every entry names the epic that removes it");
     }
 }

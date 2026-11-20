@@ -5,15 +5,16 @@ namespace GeoAssets.Workflow.Rest;
 
 /// <summary>
 /// Registration of a vertical host's machine-to-machine clients of the kernel (XD01-382): the global target ledger
-/// (<see cref="ITargetLedgerClient"/>) and the bootstrap registration (<see cref="IVerticalRegistrationClient"/>), both
-/// against the kernel's root URL and authenticating with the host's registered <see cref="IServiceAuthTokenProvider"/>.
+/// (<see cref="ITargetLedgerClient"/>), the bootstrap registration (<see cref="IVerticalRegistrationClient"/>) and the
+/// generic organization-grant API (<see cref="IOrganizationGrantClient"/>, XD01-385), all against the kernel's root URL and
+/// authenticating with the host's registered <see cref="IServiceAuthTokenProvider"/>.
 /// </summary>
 public static class KernelClientServiceExtensions
 {
-    /// <summary>The named <see cref="HttpClient"/> both clients use, with the kernel's root as its base address.</summary>
+    /// <summary>The named <see cref="HttpClient"/> the clients use, with the kernel's root as its base address.</summary>
     public const string HttpClientName = "GeoAssetsKernel:service-caller";
 
-    /// <summary>Registers both clients against <paramref name="kernelBaseUrl"/> (an absolute HTTP(S) URL).</summary>
+    /// <summary>Registers the clients against <paramref name="kernelBaseUrl"/> (an absolute HTTP(S) URL).</summary>
     /// <exception cref="ArgumentException"><paramref name="kernelBaseUrl"/> is not an absolute HTTP(S) URL.</exception>
     public static IServiceCollection AddKernelServiceCallerClients(this IServiceCollection services, string kernelBaseUrl)
     {
@@ -31,6 +32,9 @@ public static class KernelClientServiceExtensions
             sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName),
             sp.GetService<IServiceAuthTokenProvider>()));
         services.AddTransient<IVerticalRegistrationClient>(sp => new RestVerticalRegistrationClient(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName),
+            sp.GetService<IServiceAuthTokenProvider>()));
+        services.AddTransient<IOrganizationGrantClient>(sp => new RestOrganizationGrantClient(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName),
             sp.GetService<IServiceAuthTokenProvider>()));
 

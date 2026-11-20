@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Workflow.Hosting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;
 

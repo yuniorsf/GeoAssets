@@ -33,8 +33,18 @@ client (`deploy/web`, `GEOASSETS_GATEWAY_URL=http://localhost:8090`) talks to: e
 `/wms`, `/wfs` → `server:8080`) and the NeutralOperator vertical at `/api/v/neutral-operator/**` (rewritten to `/api/**`).
 It forwards the bearer token untouched (it authorizes nothing), answers CORS for `WEB_ORIGIN` (default
 `http://localhost:8081`) and the dev origins, and rate-limits per organization (`GATEWAY_RATE_LIMIT_TOKENS` per 10 s while
-every caller shares one bucket). Here the kernel keeps hosting the NeutralOperator module (`GeoAssets__Modules__2`) and is
+every caller shares one bucket). Here the kernel keeps hosting the NeutralOperator module (`GeoAssets__Modules__1`) and is
 the gateway's NeutralOperator destination — see `deploy/neutral-operator/README.md` to switch to `NeutralOperator.Server`.
+
+The kernel's default `GeoAssets:Modules` is `[ "postgres-spatial" ]` (XD01-385); an unknown module id — such as the retired
+`ip-billing-bridge` — fails the startup with the list of known ids, so remove it from any older configuration. The município
+grant sync/revoke endpoints are `GeoAssets.IpBilling.Server`'s (`POST /api/ip-billing/municipio-grants/sync|revoke`, through
+the gateway's `/api/ip-billing/**` route, `IPBILLING_DESTINATION`); that host is not part of this stack. It needs
+`GeoCoreServer__BaseUrl` = the kernel's **root** (e.g. `http://server:8080`, no `/api/geoassets` suffix) and its
+`GeoAssets.ServiceCaller` credentials (`ServiceAuth__Enabled=true`, `ServiceAuth__TenantId`, `ServiceAuth__ClientId`,
+`ServiceAuth__ClientSecret`, `ServiceAuth__Scope`): it provisions the grants through the kernel's generic
+`/api/identity/organization-grants` API and publishes its `ip-billing:*` permissions
+(`PUT /api/identity/verticals/ip-billing/permissions`) — until it has, its `/readyz` answers 503.
 
 ## First-run database setup
 
@@ -63,7 +73,7 @@ dotnet ef database update \
   --connection "Host=localhost;Port=5433;Database=geoassets;Username=postgres;Password=<POSTGRES_PASSWORD from .env>"
 ```
 
-With the `neutral-operator` module enabled (this stack's default, `GeoAssets__Modules__2=neutral-operator`), also apply `NeutralOperatorDbContext` (XD01-380: pole
+With the `neutral-operator` module enabled (this stack's default, `GeoAssets__Modules__1=neutral-operator`), also apply `NeutralOperatorDbContext` (XD01-380: pole
 occupancies and occupancy change sets, schema `neutral_operator`) — **after** `ServiceOrderDbContext`,
 whose tables its baseline adopts:
 
