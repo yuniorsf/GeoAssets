@@ -1,4 +1,5 @@
 using System.Net;
+using GeoAssets.Workflow.Rest;
 
 namespace GeoAssets.Workflow.Hosting;
 
@@ -12,6 +13,9 @@ namespace GeoAssets.Workflow.Hosting;
 ///   kernel does not accept this host's audience), logged once at Error with what diagnoses it;</item>
 ///   <item>the kernel refusing what this host sent on the caller's behalf (an <see cref="HttpRequestException"/> with 400)
 ///   — 400 <see cref="RejectedProblemCode"/>;</item>
+///   <item>the kernel refusing an organization-grant upsert because concurrent writes of its key raced it
+///   (<see cref="OrganizationGrantConflictException"/>, a kernel 409 <c>organization-grant.conflict</c>, XD01-401) — 409
+///   <see cref="ConflictProblemCode"/>: repeating the request is safe;</item>
 ///   <item>anything else — the kernel unreachable, a 5xx, or the kernel refusing this host's own credentials (401/403) —
 ///   this host's dependency being unavailable, 503 <see cref="UnavailableProblemCode"/>.</item>
 /// </list>
@@ -21,6 +25,7 @@ public static partial class KernelFailureTranslation
     public const string UnavailableProblemCode = "kernel.unavailable";
     public const string RejectedProblemCode = "kernel.rejected";
     public const string TokenRejectedProblemCode = "kernel.token-rejected";
+    public const string ConflictProblemCode = "kernel.conflict";
 
     private const string TokenRejectedCause =
         "The kernel does not accept this token's audience — add it to the kernel's AzureAdCiam:AdditionalAudiences, or use the kernel's API audience.";
@@ -51,6 +56,17 @@ public static partial class KernelFailureTranslation
                         extensions: new Dictionary<string, object?>(StringComparer.Ordinal) { ["code"] = TokenRejectedProblemCode })
                     .ExecuteAsync(context).ConfigureAwait(false);
             }
+            catch (OrganizationGrantConflictException ex) when (!context.Response.HasStarted)
+            {
+                LogKernelConflict(Logger(context), context.Request.Path, ex);
+
+                await Results.Problem(
+                        statusCode: StatusCodes.Status409Conflict,
+                        title: "The kernel refused a concurrent write.",
+                        detail: "Concurrent writes of the same organization grant raced this request; repeat it.",
+                        extensions: new Dictionary<string, object?>(StringComparer.Ordinal) { ["code"] = ConflictProblemCode })
+                    .ExecuteAsync(context).ConfigureAwait(false);
+            }
             catch (HttpRequestException ex) when (!context.Response.HasStarted)
             {
                 var rejected = ex.StatusCode == HttpStatusCode.BadRequest;
@@ -77,6 +93,9 @@ public static partial class KernelFailureTranslation
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "A call to the kernel failed while serving {Path} (kernel status {KernelStatus}).")]
     private static partial void LogKernelFailure(ILogger logger, string path, int? kernelStatus, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The kernel refused a concurrent organization-grant write while serving {Path}; the caller may repeat it.")]
+    private static partial void LogKernelConflict(ILogger logger, string path, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Error, Message =
         "The GeoAssets kernel rejected the caller's token while serving {Path}: {KernelPath} answered 401 " +

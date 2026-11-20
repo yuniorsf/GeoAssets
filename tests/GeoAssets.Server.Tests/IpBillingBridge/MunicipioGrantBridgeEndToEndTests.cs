@@ -300,6 +300,21 @@ public sealed class MunicipioGrantBridgeEndToEndTests
     }
 
     [Fact]
+    public async Task Sync_WhenTheKernelRefusesTheUpsertAsAConflict_Answers409KernelConflict_NotA503()
+    {
+        await using var host = await IpBillingBridgeHost.StartAsync();
+        host.Kernel.GrantUpsertConflicts = true;
+
+        using var client = host.ClientFor(BridgeCallers.ReferenceManagerToken);
+        using var response = await client.PostAsJsonAsync(new Uri(Sync, UriKind.Relative), SyncBody(PrefeituraA));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("\"code\":\"kernel.conflict\"");
+        host.Unhandled.Should().BeEmpty();
+        (await host.Kernel.ActiveGrantsAsync(PrefeituraA, Distribuidora)).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Sync_WhenTheServicePrincipalIsNotAServiceCallerAtTheKernel_Answers503_AndNothingIsGranted()
     {
         await using var host = await IpBillingBridgeHost.StartAsync();

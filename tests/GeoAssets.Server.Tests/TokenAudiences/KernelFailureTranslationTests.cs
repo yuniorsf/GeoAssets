@@ -90,6 +90,7 @@ public sealed class KernelFailureTranslationTests
         KernelFailureTranslation.UnavailableProblemCode.Should().Be("kernel.unavailable");
         KernelFailureTranslation.RejectedProblemCode.Should().Be("kernel.rejected");
         KernelFailureTranslation.TokenRejectedProblemCode.Should().Be("kernel.token-rejected");
+        KernelFailureTranslation.ConflictProblemCode.Should().Be("kernel.conflict");
     }
 
     [Fact]
@@ -131,6 +132,36 @@ public sealed class KernelFailureTranslationTests
         entry.Level.Should().Be(LogLevel.Error);
         entry.Message.Should().Contain("vertical-api").And.Contain("https://issuer.test").And.Contain("/api/identity/me")
             .And.Contain("invalid_token").And.Contain("AzureAdCiam:AdditionalAudiences");
+    }
+
+    [Fact]
+    public async Task AnOrganizationGrantConflict_Answers409KernelConflict_LoggedAtWarning()
+    {
+        var logs = new CapturingLoggerProvider();
+        var exception = new GeoAssets.Workflow.Rest.OrganizationGrantConflictException(
+            new GeoAssets.Identity.Authorization.Services.OrganizationGrantKey(Guid.NewGuid(), Guid.NewGuid(), null, "3550308"), "kernel detail");
+
+        var (status, body, contentType) = await RunAsync(exception, logs);
+
+        status.Should().Be(StatusCodes.Status409Conflict);
+        contentType.Should().StartWith("application/problem+json");
+        body.GetProperty("code").GetString().Should().Be("kernel.conflict");
+        body.GetProperty("title").GetString().Should().Be("The kernel refused a concurrent write.");
+        body.GetProperty("detail").GetString().Should().Be("Concurrent writes of the same organization grant raced this request; repeat it.");
+        logs.Entries.Where(e => e.Level >= LogLevel.Warning).Should().ContainSingle().Which.Level.Should().Be(LogLevel.Warning);
+    }
+
+    [Fact]
+    public Task WhenTheResponseHasAlreadyStarted_AnOrganizationGrantConflict_PassesThrough()
+    {
+        var (pipeline, services, _) = Build(new GeoAssets.Workflow.Rest.OrganizationGrantConflictException(
+            new GeoAssets.Identity.Authorization.Services.OrganizationGrantKey(Guid.NewGuid(), Guid.NewGuid(), null, null), null));
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Features.Set<IHttpResponseFeature>(new StartedResponseFeature());
+
+        var act = async () => await pipeline(context);
+
+        return act.Should().ThrowAsync<GeoAssets.Workflow.Rest.OrganizationGrantConflictException>();
     }
 
     [Fact]

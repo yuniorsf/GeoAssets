@@ -47,6 +47,9 @@ internal sealed class StubKernel : IAsyncDisposable
     /// <summary>Answers the registration PUTs 503 while true (the kernel is up but not ready).</summary>
     public bool RegistrationFails { get; set; }
 
+    /// <summary>Answers the grant upsert (PUT) 409 <c>organization-grant.conflict</c> while true (XD01-394's lost race).</summary>
+    public bool GrantUpsertConflicts { get; set; }
+
     public IReadOnlyList<KernelRequest> Requests => [.. _requests];
 
     public IReadOnlyList<KernelRequest> To(HttpMethod method, string pathContains) =>
@@ -117,6 +120,14 @@ internal sealed class StubKernel : IAsyncDisposable
                         if (RegistrationFails && HttpMethods.IsPut(context.Request.Method) && context.Request.Path.StartsWithSegments("/api/identity/verticals", StringComparison.Ordinal))
                         {
                             context.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
+                            return;
+                        }
+
+                        if (GrantUpsertConflicts && HttpMethods.IsPut(context.Request.Method) && string.Equals(context.Request.Path.Value, "/api/identity/organization-grants", StringComparison.Ordinal))
+                        {
+                            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                            context.Response.ContentType = "application/problem+json";
+                            await context.Response.WriteAsync("""{ "title": "conflict", "status": 409, "code": "organization-grant.conflict", "detail": "Concurrent writes of the same key." }""");
                             return;
                         }
 

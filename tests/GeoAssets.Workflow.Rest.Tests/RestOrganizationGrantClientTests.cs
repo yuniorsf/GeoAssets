@@ -194,6 +194,95 @@ public sealed class RestOrganizationGrantClientTests
     }
 
     [Fact]
+    public async Task UpsertAsync_WhenTheKernelAnswers409OrganizationGrantConflict_ThrowsTheTypedException_WithTheKeyAndTheKernelsDetail()
+    {
+        var sut = Sut(new RecordingKernelHandler(_ => RecordingKernelHandler.Problem(HttpStatusCode.Conflict, "organization-grant.conflict")));
+
+        var act = async () => await sut.UpsertAsync(Upsert, CancellationToken.None);
+
+        var thrown = (await act.Should().ThrowAsync<OrganizationGrantConflictException>()).Which;
+        thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        thrown.Key.Should().Be(Key);
+        thrown.KernelDetail.Should().Be("Detail of organization-grant.conflict");
+        thrown.Should().BeAssignableTo<HttpRequestException>();
+        OrganizationGrantConflictException.ProblemCode.Should().Be("organization-grant.conflict");
+    }
+
+    [Fact]
+    public async Task UpsertAsync_WhenTheConflictProblemHasNoDetail_ThrowsTheTypedException_WithoutKernelDetail()
+    {
+        var sut = Sut(Answers(HttpStatusCode.Conflict, """{ "code": "organization-grant.conflict" }"""));
+
+        var act = async () => await sut.UpsertAsync(Upsert, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<OrganizationGrantConflictException>()).Which.KernelDetail.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not json at all")]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("""{ "title": "no code" }""")]
+    [InlineData("""{ "code": 7 }""")]
+    [InlineData("""{ "code": "target-ledger.conflict" }""")]
+    [InlineData("""{ "code": "Organization-Grant.Conflict" }""")]
+    public async Task UpsertAsync_WhenTheKernelAnswers409WithoutTheGrantConflictCode_ThrowsAPlainHttpRequestException(string body)
+    {
+        var sut = Sut(new RecordingKernelHandler(_ => new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent(body) }));
+
+        var act = async () => await sut.UpsertAsync(Upsert, CancellationToken.None);
+
+        var thrown = (await act.Should().ThrowAsync<HttpRequestException>()).Which;
+        thrown.Should().NotBeOfType<OrganizationGrantConflictException>();
+        thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_WhenTheKernelAnswers409WithoutABody_ThrowsAPlainHttpRequestException()
+    {
+        var sut = Sut(new RecordingKernelHandler(_ => new HttpResponseMessage(HttpStatusCode.Conflict)));
+
+        var act = async () => await sut.UpsertAsync(Upsert, CancellationToken.None);
+
+        var thrown = (await act.Should().ThrowAsync<HttpRequestException>()).Which;
+        thrown.Should().NotBeOfType<OrganizationGrantConflictException>();
+        thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task UpsertAsync_TheGrantConflictCodeOnAnotherStatus_IsAPlainHttpRequestException(HttpStatusCode status)
+    {
+        var sut = Sut(new RecordingKernelHandler(_ => RecordingKernelHandler.Problem(status, "organization-grant.conflict")));
+
+        var act = async () => await sut.UpsertAsync(Upsert, CancellationToken.None);
+
+        var thrown = (await act.Should().ThrowAsync<HttpRequestException>()).Which;
+        thrown.Should().NotBeOfType<OrganizationGrantConflictException>();
+        thrown.StatusCode.Should().Be(status);
+    }
+
+    [Fact]
+    public async Task RevokeAndList_WhenTheKernelAnswers409OrganizationGrantConflict_ThrowAPlainHttpRequestException()
+    {
+        var sut = Sut(new RecordingKernelHandler(_ => RecordingKernelHandler.Problem(HttpStatusCode.Conflict, "organization-grant.conflict")));
+
+        var revoke = async () => await sut.RevokeAsync(Key, CancellationToken.None);
+        var list = async () => await sut.ListActiveAsync(Grantee, Resource, 1, 100, CancellationToken.None);
+
+        var revoked = (await revoke.Should().ThrowAsync<HttpRequestException>()).Which;
+        revoked.Should().NotBeOfType<OrganizationGrantConflictException>();
+        revoked.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var listed = (await list.Should().ThrowAsync<HttpRequestException>()).Which;
+        listed.Should().NotBeOfType<OrganizationGrantConflictException>();
+        listed.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task EveryCall_WhenTheConnectionFails_ThrowsHttpRequestException_WithoutAStatus()
     {
         var sut = Sut(new RecordingKernelHandler(_ => throw new HttpRequestException("connection refused")));

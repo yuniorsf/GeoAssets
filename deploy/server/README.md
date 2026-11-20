@@ -83,6 +83,15 @@ GeoAssets kernel rejected the caller's token.", the detail carries the kernel's 
 `aud` to the kernel's `AzureAdCiam:AdditionalAudiences` and restart the kernel. (Before XD01-390 IpBilling.Server answered
 this as `503 kernel.unavailable` and NeutralOperator.Server as an unhandled 500.)
 
+**What a vertical host answers for a failed kernel call** (`KernelFailureTranslation`, both vertical hosts):
+
+| Kernel answer | Vertical host answers |
+|---|---|
+| 401 to the caller's forwarded token | 502 `kernel.token-rejected` |
+| 400 to what the host sent | 400 `kernel.rejected` |
+| 409 `organization-grant.conflict` (an organization-grant upsert raced by concurrent writes of its key, XD01-394) | 409 `kernel.conflict` — safe to repeat (XD01-401; before, 503) |
+| unreachable, 5xx, or 401/403 to the host's own credentials | 503 `kernel.unavailable` |
+
 ## First-run database setup
 
 `GeoAssetsDbContext` (assets/PostGIS data) migrates itself automatically at
