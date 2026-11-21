@@ -267,7 +267,7 @@ dotnet_diagnostic.CA2227.severity = none
 # requires a public setter; `init` would break every Configure<LocalizationOptions> call site.
 dotnet_diagnostic.CA2227.severity = none
 
-[workflow/GeoAssets.Workflow.Agents/Identity/{AgentIdentityDescriptor.cs,AgentIdentityOptions.cs}]
+[verticals/FieldService/GeoAssets.FieldService.Agents/Identity/{AgentIdentityDescriptor.cs,AgentIdentityOptions.cs}]
 # Same Options-pattern rationale as LocalizationOptions.cs above — both are configuration-bound
 # via IConfiguration.Bind (WorkflowAgentsServiceExtensions.AddWorkflowAgents), which requires a
 # public setter.
@@ -301,7 +301,7 @@ dotnet_diagnostic.CA1515.severity = none
 # definition classes to be public.
 dotnet_diagnostic.CA1515.severity = none
 
-[tests/GeoAssets.Workflow.Agents.Tests/TestDoubles/AgentObservabilityCollection.cs]
+[tests/GeoAssets.FieldService.Agents.Tests/TestDoubles/AgentObservabilityCollection.cs]
 # Same rationale as PostgresCollection.cs — xUnit's own analyzer (xUnit1027) requires collection
 # definition classes to be public.
 dotnet_diagnostic.CA1515.severity = none

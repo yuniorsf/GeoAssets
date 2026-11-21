@@ -2,7 +2,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Integrations.Scada;
-using GeoAssets.Workflow.Agents.Dispatch;
+using GeoAssets.FieldService.Agents.Dispatch;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;

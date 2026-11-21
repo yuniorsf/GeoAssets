@@ -50,7 +50,7 @@
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.EFCore\GeoAssets.Workflow.EFCore.csproj" />
     <!-- Dynamic dispatch advisory endpoint (XD01-256) needs ICrewRoutingEngine's concrete
          Clarke-Wright implementation and DynamicCrewDispatchAdvisorService. -->
-    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Agents\GeoAssets.Workflow.Agents.csproj" />
+    <ProjectReference Include="..\..\verticals\FieldService\GeoAssets.FieldService.Agents\GeoAssets.FieldService.Agents.csproj" />
     <!-- XD01-386: tenant interceptors + statement-timeout helper for this host's OWN FieldService
          database. Deliberately not the core asset provider project — this host never opens the core
          asset database (Invariant 1); core assets are read over IGeoCoreClient. -->

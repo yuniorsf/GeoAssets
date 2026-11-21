@@ -47,7 +47,7 @@ public sealed class GeoAssetsActivitySource : IDisposable
 
     /// <summary>
     /// Starts a span for an AI-agent-driven workflow operation (see
-    /// <c>GeoAssets.Workflow.Agents.Executors</c>), tagged with the order, the acting agent,
+    /// <c>GeoAssets.FieldService.Agents.Executors</c>), tagged with the order, the acting agent,
     /// and — when present — the agent invocation/run that triggered it.
     /// </summary>
     public Activity? StartAgentActivity(string operationName, string orderId, string agentId, string? agentInvocationId = null) =>

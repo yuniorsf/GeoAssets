@@ -59,7 +59,7 @@ public sealed class ChassisVerticalReferenceRatchetTests
     }
 
     [Fact]
-    public void TheSet_CoversEveryWorkflowProjectOfTheChassis_OrNamesItOutOfScope()
+    public void TheSet_CoversEveryWorkflowProjectOfTheChassis()
     {
         var root = RepositoryRoot();
         var projects = new[] { "core", "workflow" }
@@ -71,14 +71,7 @@ public sealed class ChassisVerticalReferenceRatchetTests
 
         projects.Should().Contain(ChassisVerticalReferenceRatchet.ChassisAssemblies, "every chassis assembly has a project");
         projects.Except(ChassisVerticalReferenceRatchet.ChassisAssemblies, StringComparer.Ordinal)
-            .Should().BeEquivalentTo(ChassisVerticalReferenceRatchet.OutOfScope.Keys, "a new GeoAssets.Workflow* project must join the set or be named out of scope with a reason");
-    }
-
-    [Fact]
-    public void TheOutOfScopeProjects_AreNotInTheSet_AndEachHasAReason()
-    {
-        ChassisVerticalReferenceRatchet.OutOfScope.Keys.Should().NotIntersectWith(ChassisVerticalReferenceRatchet.ChassisAssemblies);
-        ChassisVerticalReferenceRatchet.OutOfScope.Values.Should().OnlyContain(reason => !string.IsNullOrWhiteSpace(reason));
+            .Should().BeEmpty("a GeoAssets.Workflow* project is a chassis library and joins the set; a vertical's project lives under verticals/ (XD01-399)");
     }
 
     // ── The ratchet fails, naming the assembly, when a vertical reference is added back ────────────────────────

@@ -1,6 +1,6 @@
 using GeoAssets.Core.Models;
 using GeoAssets.Integrations.Scada;
-using GeoAssets.Workflow.Agents.Dispatch;
+using GeoAssets.FieldService.Agents.Dispatch;
 
 namespace GeoAssets.FieldService.Server.Tests;
 

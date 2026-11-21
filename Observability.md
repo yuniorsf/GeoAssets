@@ -85,7 +85,7 @@ flowchart TB
 
     subgraph WorkflowObs["workflow/* — business-logic instrumentation (server-only)"]
         OrderRepo["ObservableServiceOrderRepository<br/>(GeoAssets.Workflow.EFCore)"]
-        Agents["CreateServiceOrderExecutor ·<br/>DispatchServiceOrderExecutor<br/>(GeoAssets.Workflow.Agents)"]
+        Agents["CreateServiceOrderExecutor ·<br/>DispatchServiceOrderExecutor<br/>(GeoAssets.FieldService.Agents)"]
         Pub["KafkaOrderEventPublisher ·<br/>ServiceBusOrderEventPublisher<br/>(not wired into any host — §8)"]
     end
 
@@ -328,7 +328,7 @@ Order module (`ServiceOrder.md` is the domain-level reference) do:
 | Call site | What it emits | Where |
 |---|---|---|
 | `ObservableServiceOrderRepository` | `ServiceOrder.Transition` span + `geoassets.orders.transitions` counter on every status change; a `LogWarning` for every transition `ValidatingServiceOrderRepository` rejects | `workflow/GeoAssets.Workflow.EFCore/ObservableServiceOrderRepository.cs` |
-| `CreateServiceOrderExecutor` / `DispatchServiceOrderExecutor` | `Agent.Create`/`Agent.Dispatch` spans tagged `order.id`/`agent.id`/`agent.invocation_id`/`decision.allowed`; structured logs for authorization allow/deny and the resulting transition | `workflow/GeoAssets.Workflow.Agents/Executors/` |
+| `CreateServiceOrderExecutor` / `DispatchServiceOrderExecutor` | `Agent.Create`/`Agent.Dispatch` spans tagged `order.id`/`agent.id`/`agent.invocation_id`/`decision.allowed`; structured logs for authorization allow/deny and the resulting transition | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/` |
 | `KafkaOrderEventPublisher` / `ServiceBusOrderEventPublisher` | `Notification.Publish` span (`ActivityKind.Producer`) + `geoassets.notifications.published`/`.duration`; W3C `traceparent` injected into message headers | `workflow/GeoAssets.Workflow.Messaging.{Kafka,ServiceBus}/` |
 
 ```mermaid
@@ -364,7 +364,7 @@ server-only registration) wraps `ObservableServiceOrderRepository` around
 never can without breaking the WASM build — so **Service Order status
 transitions are only observed when the EF-backed persistence path is in
 use** (`GeoAssets.Server`), not when `GeoAssets.Web` runs its default
-in-memory backend. `GeoAssets.Workflow.Agents`, by contrast, has no such
+in-memory backend. `GeoAssets.FieldService.Agents`, by contrast, has no such
 constraint — nothing but its own test project references it yet (§8), so it
 took the `Infrastructure.Observability` project reference directly; both
 executors are constructed via `new` (never DI-resolved, since neither is
@@ -480,7 +480,7 @@ against a local PostGIS container).
 |---|---|---|
 | `GeoAssets.Infrastructure.Observability.Tests` | 19 | `GeoAssetsActivitySource`, `GeoAssetsMeter`, `ObservabilityServiceExtensions` (sampler config), `TelemetryEnrichmentMiddleware`, `ObservabilityApplicationExtensions` (including a `/healthz`-throws-without-`AddHealthChecks` regression test via `Microsoft.AspNetCore.TestHost`) |
 | `GeoAssets.Workflow.EFCore.Tests` | 69 (module total) | Includes `ObservableServiceOrderRepositoryTests` — span/metric emission on valid transitions, `LogWarning` on rejected ones |
-| `GeoAssets.Workflow.Agents.Tests` | 19 (module total) | Includes executor instrumentation — `Agent.Create`/`Agent.Dispatch` spans, `decision.allowed` tag, both authorization outcomes |
+| `GeoAssets.FieldService.Agents.Tests` | 19 (module total) | Includes executor instrumentation — `Agent.Create`/`Agent.Dispatch` spans, `decision.allowed` tag, both authorization outcomes |
 | `GeoAssets.Workflow.Messaging.Kafka.Tests` | 4 | `KafkaOrderEventPublisher`'s `BuildHeaders` — `traceparent` injection alongside existing bespoke headers |
 | `GeoAssets.Workflow.Messaging.ServiceBus.Tests` | 3 | `ServiceBusOrderEventPublisher`'s equivalent header-building path |
 | `GeoAssets.Shared.Tests` (Observability subset) | 1 | `ObservableAssetService.ImportAsync`'s `duration_ms` tag, via `FakeTimeProvider` — see §11 for the coverage gap this leaves |

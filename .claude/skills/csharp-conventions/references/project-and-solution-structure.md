@@ -30,7 +30,8 @@ allowed to depend on:
   `core/`, never on `apps/` or another sibling provider.
 - **`workflow/`** — same shape as `providers/`, scoped to the Workflow
   module's own persistence/messaging backends (EFCore, Kafka, ServiceBus,
-  Rest) plus `GeoAssets.Workflow.Agents`. May depend on `core/`.
+  Rest). May depend on `core/`, never on a vertical (`verticals/` — e.g.
+  FieldService's dispatch agents, `GeoAssets.FieldService.Agents`, XD01-399).
 - **`apps/`** — outermost layer, the only folder allowed to reference
   multiple providers/workflow backends at once and wire them together via
   DI (`GeoAssets.Server`'s `.csproj` references the Postgres provider, Core,
