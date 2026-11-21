@@ -9,7 +9,8 @@
   },
 
   "GeoAssetsIpBillingServer": {
-    "ApiScope": "api://YOUR_IPBILLING_API_CLIENT_ID/access_as_user"
+    "_comment": "XD01-343: the IP-billing API's own scope (its registration, CIAM model (b)), e.g. api://<IpBilling API client id>/access_as_user — consented at sign-in. Blank = the IP-billing client requests GeoAssetsServer:ApiScope, for an IpBilling.Server whose AzureAdCiam:ClientId is the kernel's API (model (a)). See deploy/server/README.md.",
+    "ApiScope": ""
   },
 
   "Observability": {

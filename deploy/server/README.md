@@ -83,6 +83,22 @@ the kernel's, consented at sign-in; a blank `Scope` (the shipped default) is ign
 `deploy/neutral-operator/README.md` "Token audiences". Alternatively (model (a)) a vertical host can use the kernel's API
 audience as its own `ClientId` and the kernel needs no extra audience.
 
+**IP-billing API registration (XD01-343).** Until it exists, leave the Web client's `GeoAssetsIpBillingServer:ApiScope`
+blank (the shipped default): the IP-billing client then requests the kernel's `GeoAssetsServer:ApiScope`, and sign-in asks
+for nothing extra — so `GeoAssets.IpBilling.Server` must validate the kernel's audience (model (a): its
+`AzureAdCiam:ClientId` = the kernel's API). To give it its own audience (model (b)):
+
+1. In the CIAM tenant, create an app registration for the IP-billing API, set its Application ID URI
+   (`api://<IpBilling API client id>`) and expose a delegated `access_as_user` scope.
+2. On the Web client (SPA) registration — and MAUI's, once MAUI calls IP billing — add that scope under *API permissions*
+   and grant admin consent.
+3. Set `GeoAssets.IpBilling.Server`'s `AzureAdCiam:ClientId` to the new client id (user secrets locally, app settings /
+   Key Vault when deployed) and list it in the kernel's `AzureAdCiam:AdditionalAudiences` (table above).
+4. Set the Web client's `GeoAssetsIpBillingServer:ApiScope` to `api://<IpBilling API client id>/access_as_user`
+   (`wwwroot/appsettings.Local.json` locally; it is baked into the WASM bundle like `GeoAssetsServer:ApiScope`). It is
+   consented at sign-in (`AdditionalScopesToConsent`, never a second resource in `DefaultAccessTokenScopes`) and the IP-billing
+   client acquires its token silently. A scope naming a registration that doesn't exist fails sign-in with `AADSTS500011`.
+
 **Symptom of a missing audience**: the vertical host answers **502** with problem code `kernel.token-rejected` ("The
 GeoAssets kernel rejected the caller's token.", the detail carries the kernel's `error_description`, e.g. *The audience
 '…' is invalid*) and logs one Error naming the kernel route, the token's `aud` and `iss` and the kernel's `error` — add that
