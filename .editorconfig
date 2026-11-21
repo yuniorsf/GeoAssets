@@ -269,7 +269,7 @@ dotnet_diagnostic.CA2227.severity = none
 
 [verticals/FieldService/GeoAssets.FieldService.Agents/Identity/{AgentIdentityDescriptor.cs,AgentIdentityOptions.cs}]
 # Same Options-pattern rationale as LocalizationOptions.cs above — both are configuration-bound
-# via IConfiguration.Bind (WorkflowAgentsServiceExtensions.AddWorkflowAgents), which requires a
+# via IConfiguration.Bind (FieldServiceAgentsServiceExtensions.AddFieldServiceAgents), which requires a
 # public setter.
 dotnet_diagnostic.CA2227.severity = none
 
