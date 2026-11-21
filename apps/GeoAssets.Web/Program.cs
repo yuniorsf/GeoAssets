@@ -125,21 +125,13 @@ builder.Services.AddGeoAssetsServerClient(builder.Configuration, geoAssetsServer
 // through the token-carrying "GeoAssetsServer" client above.
 builder.Services.AddFeatureActionsRest(geoAssetsServerBaseUrl);
 
-// GeoAssets.IpBilling.Server base URL (XD01-178) — a separate host/origin/CIAM-app-registration
-// from GeoAssets.Server (XD01-177), so it gets its own AuthorizationMessageHandler scoped to its
-// own URL/API scope, mirroring the "GeoAssetsServer" client above rather than reusing it.
+// GeoAssets.IpBilling.Server base URL (XD01-178) — a separate host/origin from GeoAssets.Server (XD01-177), so it gets
+// its own AuthorizationMessageHandler scoped to its own URL: GeoAssetsIpBillingServer:ApiScope's token, or the kernel's
+// while that is blank (XD01-343); see IpBillingServerClientExtensions.
 var geoAssetsIpBillingServerBaseUrl = builder.Configuration["GeoAssetsIpBillingServer:BaseUrl"]
     ?? throw new InvalidOperationException("GeoAssetsIpBillingServer:BaseUrl is not configured.");
 
-builder.Services.AddHttpClient("GeoAssetsIpBillingServer")
-    .AddHttpMessageHandler(sp =>
-    {
-        var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
-        handler.ConfigureHandler(
-            authorizedUrls: [geoAssetsIpBillingServerBaseUrl],
-            scopes: [builder.Configuration["GeoAssetsIpBillingServer:ApiScope"] ?? ""]);
-        return handler;
-    });
+builder.Services.AddGeoAssetsIpBillingServerClient(builder.Configuration, geoAssetsIpBillingServerBaseUrl);
 
 // ── GeoAssets Identity — HTTP-backed against GeoAssets.Server (XD01-18). InMemory removed
 // as an option (XD01-130) — Rest is the only supported backend.

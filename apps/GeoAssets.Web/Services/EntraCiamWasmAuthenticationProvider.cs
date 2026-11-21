@@ -1,4 +1,5 @@
 using GeoAssets.Identity.Authentication;
+using GeoAssets.Web.Extensions;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 
 namespace GeoAssets.Web.Services;
@@ -23,9 +24,10 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
         // which would break the interactive login itself.
         var serverApiScope = configuration["GeoAssetsServer:ApiScope"];
 
-        // Same placeholder-guard reasoning as above, for GeoAssets.IpBilling.Server's own CIAM
-        // app registration (XD01-178) — a separate audience from GeoAssetsServer:ApiScope.
-        var ipBillingApiScope = configuration["GeoAssetsIpBillingServer:ApiScope"];
+        // GeoAssets.IpBilling.Server's own API scope (XD01-178) — another resource than GeoAssetsServer:ApiScope's, so,
+        // like the route scopes below, it is consented at sign-in and its token requested on its own by the
+        // "GeoAssetsIpBillingServer" client (XD01-343). Blank (the shipped default) = that client uses the kernel's scope.
+        var ipBillingApiScope = IpBillingServerClientExtensions.OwnApiScope(configuration);
 
         // The GeoAssetsServer:RouteScopes scopes (XD01-397) — another resource's API each (e.g. the NeutralOperator
         // host's), whose token RouteScopedAuthorizationMessageHandler requests on its own. A token request carries only
@@ -53,10 +55,8 @@ internal sealed class EntraCiamWasmAuthenticationProvider : IGeoAuthenticationPr
             if (!string.IsNullOrWhiteSpace(serverApiScope))
                 options.ProviderOptions.DefaultAccessTokenScopes.Add(serverApiScope);
 
-            // Same reasoning, for GeoAssets.IpBilling.Server's own API scope (XD01-178) — its
-            // own CIAM app registration/audience, distinct from GeoAssetsServer's.
-            if (!string.IsNullOrWhiteSpace(ipBillingApiScope))
-                options.ProviderOptions.DefaultAccessTokenScopes.Add(ipBillingApiScope);
+            if (ipBillingApiScope is not null && !string.Equals(ipBillingApiScope, serverApiScope, StringComparison.Ordinal))
+                options.ProviderOptions.AdditionalScopesToConsent.Add(ipBillingApiScope);
 
             foreach (var routeScope in routeScopes)
                 options.ProviderOptions.AdditionalScopesToConsent.Add(routeScope);
