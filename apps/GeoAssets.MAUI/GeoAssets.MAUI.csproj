@@ -56,7 +56,10 @@
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
   </ItemGroup>
 
+  <!-- Read only as the embedded resource below (MauiProgram.cs). The Razor SDK's default globbing
+       also adds it as Content, which the Apple bundlers reject as a file outside the app bundle. -->
   <ItemGroup>
+    <Content Remove="appsettings.json" />
     <EmbeddedResource Include="appsettings.json">
       <LogicalName>GeoAssets.MAUI.appsettings.json</LogicalName>
       <Pack>false</Pack>
