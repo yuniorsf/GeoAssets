@@ -83,6 +83,16 @@ the kernel's, consented at sign-in; a blank `Scope` (the shipped default) is ign
 `deploy/neutral-operator/README.md` "Token audiences". Alternatively (model (a)) a vertical host can use the kernel's API
 audience as its own `ClientId` and the kernel needs no extra audience.
 
+**Roles travel in the token.** The kernel takes the caller's roles from the forwarded token's `roles` claim (XD01-19,
+`GeoAuthorizationService`), not from the local role-assignment table — a role name then grants its permissions from the
+local `AppRole`/`RolePermission` tables. A token issued for a vertical API carries only the app roles assigned on *that*
+API, so every vertical API registration (model (b)) needs the kernel API's app roles, matched by `value` (e.g.
+`Administrator`), and the same user assignments. Role sync (`RoleSync:*`, `RoleSyncAzureSetup.md`) keeps them in step when
+the vertical API's client id is in `RoleSync:TargetApplicationClientIds` and the Role Sync service principal is an owner of
+the registration (its `Application.ReadWrite.OwnedBy`, `RoleSyncAzureSetup.md` step 6); without role sync, assign them by
+hand. **Symptom:** sign-in and the token audience work, but every permission check of that host denies (403) — the kernel
+sees the caller with no roles.
+
 **IP-billing API registration (XD01-343).** Until it exists, leave the Web client's `GeoAssetsIpBillingServer:ApiScope`
 blank (the shipped default): the IP-billing client then requests the kernel's `GeoAssetsServer:ApiScope`, and sign-in asks
 for nothing extra — so `GeoAssets.IpBilling.Server` must validate the kernel's audience (model (a): its
@@ -92,9 +102,11 @@ for nothing extra — so `GeoAssets.IpBilling.Server` must validate the kernel's
    (`api://<IpBilling API client id>`) and expose a delegated `access_as_user` scope.
 2. On the Web client (SPA) registration — and MAUI's, once MAUI calls IP billing — add that scope under *API permissions*
    and grant admin consent.
-3. Set `GeoAssets.IpBilling.Server`'s `AzureAdCiam:ClientId` to the new client id (user secrets locally, app settings /
+3. Give it the kernel API's app roles (same `value`s) and the same user assignments, and add it to role sync's targets
+   (*Roles travel in the token* above) — otherwise every `ip-billing:*` permission check denies.
+4. Set `GeoAssets.IpBilling.Server`'s `AzureAdCiam:ClientId` to the new client id (user secrets locally, app settings /
    Key Vault when deployed) and list it in the kernel's `AzureAdCiam:AdditionalAudiences` (table above).
-4. Set the Web client's `GeoAssetsIpBillingServer:ApiScope` to `api://<IpBilling API client id>/access_as_user`
+5. Set the Web client's `GeoAssetsIpBillingServer:ApiScope` to `api://<IpBilling API client id>/access_as_user`
    (`wwwroot/appsettings.Local.json` locally; it is baked into the WASM bundle like `GeoAssetsServer:ApiScope`). It is
    consented at sign-in (`AdditionalScopesToConsent`, never a second resource in `DefaultAccessTokenScopes`) and the IP-billing
    client acquires its token silently. A scope naming a registration that doesn't exist fails sign-in with `AADSTS500011`.
