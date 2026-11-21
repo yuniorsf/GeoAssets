@@ -5,6 +5,9 @@ using GeoAssets.Workflow.Dispatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace GeoAssets.FieldService.Agents;
 
@@ -15,7 +18,7 @@ namespace GeoAssets.FieldService.Agents;
 /// <b>appsettings.json</b>
 /// <code>
 /// {
-///   "WorkflowAgents": {
+///   "FieldServiceAgents": {
 ///     "Agents": {
 ///       "agent-hydro-01": {
 ///         "RoleNames": [ "AutomationAgent" ]
@@ -27,29 +30,34 @@ namespace GeoAssets.FieldService.Agents;
 ///
 /// <b>Program.cs — from configuration</b>
 /// <code>
-/// builder.Services.AddWorkflowAgents(builder.Configuration);
+/// builder.Services.AddFieldServiceAgents(builder.Configuration);
 /// </code>
 ///
 /// <b>Program.cs — inline</b>
 /// <code>
-/// builder.Services.AddWorkflowAgents(opts =>
+/// builder.Services.AddFieldServiceAgents(opts =>
 /// {
 ///     opts.Agents["agent-hydro-01"] = new() { RoleNames = ["AutomationAgent"] };
 /// });
 /// </code>
 /// </example>
-public static class WorkflowAgentsServiceExtensions
+public static class FieldServiceAgentsServiceExtensions
 {
     /// <summary>
     /// Registers <see cref="IAgentIdentityProvider"/> with options read from
-    /// <c>configuration["WorkflowAgents"]</c>.
+    /// <c>configuration["FieldServiceAgents"]</c>. While that section is absent, the legacy
+    /// <c>configuration["WorkflowAgents"]</c> section is read instead and a warning is logged
+    /// (<see cref="AgentIdentityOptions.LegacySectionName"/>).
     /// </summary>
-    public static IServiceCollection AddWorkflowAgents(
+    public static IServiceCollection AddFieldServiceAgents(
         this IServiceCollection services,
         IConfiguration          configuration)
     {
-        services.Configure<AgentIdentityOptions>(opts =>
-            configuration.GetSection(AgentIdentityOptions.SectionName).Bind(opts));
+        services.AddOptions();
+        services.AddSingleton<IConfigureOptions<AgentIdentityOptions>>(sp =>
+            new AgentIdentityOptionsSetup(
+                configuration,
+                sp.GetService<ILogger<AgentIdentityOptions>>() ?? NullLogger<AgentIdentityOptions>.Instance));
 
         services.AddSingleton<IAgentIdentityProvider, ConfiguredAgentIdentityProvider>();
 
@@ -57,7 +65,7 @@ public static class WorkflowAgentsServiceExtensions
     }
 
     /// <summary>Registers <see cref="IAgentIdentityProvider"/> with inline options.</summary>
-    public static IServiceCollection AddWorkflowAgents(
+    public static IServiceCollection AddFieldServiceAgents(
         this IServiceCollection            services,
         Action<AgentIdentityOptions>       configure)
     {
@@ -72,7 +80,7 @@ public static class WorkflowAgentsServiceExtensions
     /// Registers <see cref="ICrewRoutingEngine"/> (Clarke-Wright savings heuristic) and
     /// <see cref="FeederClusterAutoDispatchService"/> for feeder-clustered VRPTW crew dispatch
     /// (XD01-240). Does not itself register <see cref="IAgentIdentityProvider"/> — call one of
-    /// the <see cref="AddWorkflowAgents(IServiceCollection, IConfiguration)"/> overloads too.
+    /// the <see cref="AddFieldServiceAgents(IServiceCollection, IConfiguration)"/> overloads too.
     /// </summary>
     public static IServiceCollection AddFeederClusterAutoDispatch(this IServiceCollection services)
     {

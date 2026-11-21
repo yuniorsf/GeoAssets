@@ -650,13 +650,19 @@ special-casing, because it is the same type.
 ```json
 // appsettings.json
 {
-  "WorkflowAgents": {
+  "FieldServiceAgents": {
     "Agents": {
       "agent-hydro-01": { "OrganizationId": "<the organization it works for>", "RoleNames": [ "AutomationAgent" ] }
     }
   }
 }
 ```
+
+The section was named `WorkflowAgents` before the agents moved into the FieldService
+vertical (XD01-399/XD01-406). `AddFieldServiceAgents(IConfiguration)` still reads
+`WorkflowAgents` while `FieldServiceAgents` is absent, logging a warning that names both;
+when both are present, `FieldServiceAgents` wins and the legacy section is reported as
+ignored. The fallback is to be removed in a later release.
 
 **The organization gate applies to agents too (XD01-332, §5).** An agent has no way
 around it: `CreateServiceOrderExecutor` creates the order under the agent's own
@@ -753,7 +759,7 @@ This makes `GeoAssets.FieldService.Agents` depend on `GeoAssets.Infrastructure.O
 which nothing in this project needed before — safe here because, unlike
 `GeoAssets.Workflow`'s in-memory repository (§7, used from Blazor WASM), nothing in
 `GeoAssets.FieldService.Agents` runs client-side; only its own test project references it today
-(no host wires `AddWorkflowAgents`/`EmergencyRepairAgentWorkflow.Build` in yet).
+(no host wires `AddFieldServiceAgents`/`EmergencyRepairAgentWorkflow.Build` in yet).
 
 ### File map
 
@@ -764,7 +770,7 @@ which nothing in this project needed before — safe here because, unlike
 | Creation executor | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/CreateServiceOrderExecutor.cs` |
 | Dispatch executor | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/DispatchServiceOrderExecutor.cs` |
 | Workflow graph | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/EmergencyRepairAgentWorkflow.cs` |
-| DI registration | `verticals/FieldService/GeoAssets.FieldService.Agents/WorkflowAgentsServiceExtensions.cs` |
+| DI registration | `verticals/FieldService/GeoAssets.FieldService.Agents/FieldServiceAgentsServiceExtensions.cs` |
 
 ---
 
@@ -903,8 +909,8 @@ services.AddWorkflowKafka(opts => { opts.BootstrapServers = "..."; opts.TopicNam
 // or: services.AddWorkflowServiceBus(configuration);
 
 // AI-agent participation — from configuration, or inline.
-services.AddWorkflowAgents(builder.Configuration);
-// or: services.AddWorkflowAgents(opts => opts.Agents["agent-hydro-01"] = new() { RoleNames = ["AutomationAgent"] });
+services.AddFieldServiceAgents(builder.Configuration);
+// or: services.AddFieldServiceAgents(opts => opts.Agents["agent-hydro-01"] = new() { RoleNames = ["AutomationAgent"] });
 ```
 
 `AddWorkflowPersistence()` registers `IServiceOrderRepository` as a
