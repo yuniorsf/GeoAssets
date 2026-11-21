@@ -38,8 +38,12 @@ exactly those routes (XD01-397) — every other request keeps the kernel's scope
    (baked in at build time, like `GeoAssetsServer:ApiScope`) and `apps/GeoAssets.MAUI/appsettings.json`,
    `{ "PathPrefix": "/api/v/neutral-operator/", "Scope": "api://<NeutralOperator API client id>/access_as_user" }`. The
    clients ask consent for it at sign-in and acquire its token separately, one resource per token request.
-4. Set this host's `AzureAdCiam__ClientId` to the NeutralOperator API's client id.
-5. List its audience on the kernel: `AzureAdCiam__AdditionalAudiences__N=<NeutralOperator API client id>`.
+4. Give the NeutralOperator API the kernel API's app roles (same `value`s) and the same user assignments, and add its
+   client id to role sync's `RoleSync:TargetApplicationClientIds` (Role Sync service principal as an owner of the
+   registration). The kernel reads the caller's roles from the forwarded token, so without them every permission check of
+   this host denies — see `deploy/server/README.md` "Roles travel in the token".
+5. Set this host's `AzureAdCiam__ClientId` to the NeutralOperator API's client id.
+6. List its audience on the kernel: `AzureAdCiam__AdditionalAudiences__N=<NeutralOperator API client id>`.
 
 Alternatively (model (a)) set `AzureAdCiam__ClientId` to the kernel's API audience, leave the clients' route scope blank,
 and the kernel needs no extra audience.
