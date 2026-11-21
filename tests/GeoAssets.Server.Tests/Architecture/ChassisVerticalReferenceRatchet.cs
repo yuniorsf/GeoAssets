@@ -10,7 +10,11 @@ namespace GeoAssets.Server.Tests.Architecture;
 /// </summary>
 internal static class ChassisVerticalReferenceRatchet
 {
-    /// <summary>The chassis assemblies the ratchet covers; each is also the name of its project under <c>core/</c> or <c>workflow/</c>.</summary>
+    /// <summary>
+    /// The chassis assemblies the ratchet covers; each is also the name of its project under <c>core/</c> or <c>workflow/</c>,
+    /// and every <c>GeoAssets.Workflow*</c> project there is one of them — none is out of scope since XD01-399 moved the
+    /// FieldService dispatch agents (formerly <c>GeoAssets.Workflow.Agents</c>) into <c>verticals/FieldService</c>.
+    /// </summary>
     public static IReadOnlyList<string> ChassisAssemblies { get; } =
     [
         "GeoAssets.Workflow",
@@ -22,17 +26,6 @@ internal static class ChassisVerticalReferenceRatchet
         "GeoAssets.Workflow.Messaging.Protobuf",
         "GeoAssets.Workflow.SlaGuard",
     ];
-
-    /// <summary>
-    /// <c>GeoAssets.Workflow*</c> projects deliberately outside <see cref="ChassisAssemblies"/>, each with its reason.
-    /// </summary>
-    public static IReadOnlyDictionary<string, string> OutOfScope { get; } =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            // The agent runtime hosts FieldService's work-order agents, so it references GeoAssets.FieldService.Application by
-            // design; it is an application of the chassis rather than a chassis library, and outside XD01-388's set.
-            ["GeoAssets.Workflow.Agents"] = "references FieldService.Application by design",
-        };
 
     /// <summary>Assembly-name prefixes that name a vertical (or a vertical's integration).</summary>
     public static IReadOnlyList<string> ForbiddenAssemblyPrefixes { get; } =

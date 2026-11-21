@@ -3,7 +3,7 @@ namespace GeoAssets.Workflow.Dispatch;
 /// <summary>
 /// Builds a crew's stop sequence for a set of orders already known to be assignable to that
 /// crew (skill/equipment eligibility is the caller's concern — see
-/// <c>GeoAssets.Workflow.Agents.Dispatch.CrewSkillMatcher</c>). Implementations route for
+/// <c>GeoAssets.FieldService.Agents.Dispatch.CrewSkillMatcher</c>). Implementations route for
 /// a single crew/depot at a time so a caller can run eligible-crew selection and clustering
 /// (feeder/pressure-zone grouping, XD01-240) however it needs to upstream of this interface.
 /// </summary>

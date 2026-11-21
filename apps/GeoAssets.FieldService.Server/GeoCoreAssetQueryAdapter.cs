@@ -5,7 +5,7 @@ using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using GeoAssets.FieldService.FieldWork;
 using GeoAssets.Integrations.Scada;
-using GeoAssets.Workflow.Agents.Dispatch;
+using GeoAssets.FieldService.Agents.Dispatch;
 
 namespace GeoAssets.FieldService.Server;
 

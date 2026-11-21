@@ -171,7 +171,7 @@ grows).
 
 - GeoAssets already follows the unit-test-first, near-complete-coverage
   discipline this chapter describes: `GeoAssets.Workflow.Tests` and
-  `GeoAssets.Workflow.Agents.Tests` follow a stated 100%-line/branch-coverage
+  `GeoAssets.FieldService.Agents.Tests` follow a stated 100%-line/branch-coverage
   convention (`ServiceOrder.md`), and the XD01-4 implementation
   (`Authorization.md` §6) added 9 tests alongside the fix itself, including
   explicit non-leakage proofs — the "prove the negative case too" instinct

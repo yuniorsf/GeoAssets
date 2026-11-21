@@ -59,7 +59,8 @@ When `./scripts/verify-agent-worktree.sh` returns a non-zero exit code, intercep
 - `core/` — Core, Commands, Workflow, Identity, IpBilling, Infrastructure.Observability
 - `providers/` — PostgreSQL, Rest, Shapefile, WFS, WMS, Xlsx
 - `plugins/commands/` — Plugin.Hydrology, Plugin.GeoJsonImport
-- `workflow/` — EFCore, Rest, Messaging.Kafka, Messaging.ServiceBus, Agents
+- `workflow/` — EFCore, Rest, Hosting, Messaging.Kafka, Messaging.ServiceBus, Messaging.Protobuf (the chassis; no vertical reference — `ChassisVerticalReferenceRatchet`)
+- `verticals/` — NeutralOperator (Domain, Application, Persistence, Modules, Rest, UI), FieldService (Application, Persistence, Agents — the dispatch agents, formerly `workflow/GeoAssets.Workflow.Agents`, XD01-399), Integrations
 - `ipbilling/` — IpBilling.EFCore
 - `projects/` — Projects.EFCore, Projects.Rest
 - `deploy/` — Docker Compose stacks (`web`, `server`, `otel`)

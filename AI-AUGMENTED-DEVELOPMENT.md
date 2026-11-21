@@ -138,4 +138,4 @@ System prompts are cached with `cache_control: {"type": "ephemeral"}`, reducing 
 | Domain skills (4) | `.claude/skills/` | Contextual / on-demand | Claude Code (local) |
 | Release flow CLI | `.claude/feature_release_controller.py` | `$keyword` | claude-haiku-4-5 |
 
-> The in-process SDK orchestration Layers (both the Microsoft Agent Framework service-order executors in `workflow/GeoAssets.Workflow.Agents` and the Anthropic SDK multi-agent plugin generator in [`examples/MultiAgent/README.md`](examples/MultiAgent/README.md)) are GeoAssets application features documented in [`ServiceOrder.md`](ServiceOrder.md) and [`examples/MultiAgent/README.md`](examples/MultiAgent/README.md).
+> The in-process SDK orchestration Layers (both the Microsoft Agent Framework service-order executors in `verticals/FieldService/GeoAssets.FieldService.Agents` and the Anthropic SDK multi-agent plugin generator in [`examples/MultiAgent/README.md`](examples/MultiAgent/README.md)) are GeoAssets application features documented in [`ServiceOrder.md`](ServiceOrder.md) and [`examples/MultiAgent/README.md`](examples/MultiAgent/README.md).

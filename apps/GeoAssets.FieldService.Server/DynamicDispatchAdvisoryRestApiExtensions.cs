@@ -1,5 +1,5 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Workflow.Agents.Dispatch;
+using GeoAssets.FieldService.Agents.Dispatch;
 
 namespace GeoAssets.FieldService.Server;
 

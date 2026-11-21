@@ -11,7 +11,7 @@ agent-driven).
 The module lives in `core/GeoAssets.Workflow` (domain, rules, selection — no
 infrastructure dependencies), `workflow/GeoAssets.Workflow.EFCore` /
 `workflow/GeoAssets.Workflow.Messaging.*` (persistence and messaging
-infrastructure), `workflow/GeoAssets.Workflow.Agents` (AI-agent orchestration —
+infrastructure), `verticals/FieldService/GeoAssets.FieldService.Agents` (AI-agent orchestration —
 see §9), and `apps/GeoAssets.Web` / `apps/GeoAssets.Shared` (the human-facing
 Blazor UI — see §15).
 
@@ -56,7 +56,7 @@ flowchart TB
         EFCore["GeoAssets.Workflow.EFCore<br/>EFServiceOrderRepository · ServiceOrderDbContext"]
         Kafka["GeoAssets.Workflow.Messaging.Kafka"]
         SvcBus["GeoAssets.Workflow.Messaging.ServiceBus"]
-        Agents["<b>GeoAssets.Workflow.Agents</b> (new)<br/>MAF executors · IAgentIdentityProvider<br/>— references Core only, never EFCore"]
+        Agents["<b>GeoAssets.FieldService.Agents</b> (new)<br/>MAF executors · IAgentIdentityProvider<br/>— references Core only, never EFCore"]
     end
 
     UI -.->|"AddWorkflowInMemory() /<br/>AddWorkflowPersistence()"| Orders
@@ -421,7 +421,7 @@ Evaluated only for a principal that passed the gate above.
 `Role`, `Permission`, `Group`, or `Organization` against a `WorkflowPrincipal` — a
 snapshot record deliberately decoupled from `GeoAssets.Identity`, so the workflow
 core has no dependency on any specific identity system — **and no dependency on
-`GeoAssets.Workflow.Agents` either.** `WorkflowPrincipal.Kind` (§9) means the same
+`GeoAssets.FieldService.Agents` either.** `WorkflowPrincipal.Kind` (§9) means the same
 principal shape represents a human or an agent; `ServiceOrderRules` evaluates both
 identically, never branching on `Kind`.
 
@@ -605,7 +605,7 @@ An AI agent can create and drive a Service Order end to end through **the exact 
 in-process calls a human-driven caller uses** — `IServiceOrderRepository`,
 `ServiceOrderRules`, `ServiceOrderTransitions` — so no domain or authorization code
 branches on whether the actor is human or agent. This is implemented in a new
-project, `workflow/GeoAssets.Workflow.Agents`, built on
+project, `verticals/FieldService/GeoAssets.FieldService.Agents`, built on
 [Microsoft Agent Framework](https://www.nuget.org/packages/Microsoft.Agents.AI.Workflows)
 (`Microsoft.Agents.AI.Workflows` 1.15.0), and it references **only**
 `GeoAssets.Workflow` (core) — never `GeoAssets.Workflow.EFCore` — so the same
@@ -749,22 +749,22 @@ DI-resolved — `EmergencyRepairAgentWorkflow.Build(...)` constructs them direct
 `GeoAssetsActivitySource` and an `ILoggerFactory` (not a pre-resolved logger) and calls
 `loggerFactory.CreateLogger<T>()` itself for each.
 
-This makes `GeoAssets.Workflow.Agents` depend on `GeoAssets.Infrastructure.Observability`,
+This makes `GeoAssets.FieldService.Agents` depend on `GeoAssets.Infrastructure.Observability`,
 which nothing in this project needed before — safe here because, unlike
 `GeoAssets.Workflow`'s in-memory repository (§7, used from Blazor WASM), nothing in
-`GeoAssets.Workflow.Agents` runs client-side; only its own test project references it today
+`GeoAssets.FieldService.Agents` runs client-side; only its own test project references it today
 (no host wires `AddWorkflowAgents`/`EmergencyRepairAgentWorkflow.Build` in yet).
 
 ### File map
 
 | Concept | Path |
 |---|---|
-| Agent identity contract | `workflow/GeoAssets.Workflow.Agents/Identity/IAgentIdentityProvider.cs` |
-| Config-bound provider | `workflow/GeoAssets.Workflow.Agents/Identity/ConfiguredAgentIdentityProvider.cs` |
-| Creation executor | `workflow/GeoAssets.Workflow.Agents/Executors/CreateServiceOrderExecutor.cs` |
-| Dispatch executor | `workflow/GeoAssets.Workflow.Agents/Executors/DispatchServiceOrderExecutor.cs` |
-| Workflow graph | `workflow/GeoAssets.Workflow.Agents/Executors/EmergencyRepairAgentWorkflow.cs` |
-| DI registration | `workflow/GeoAssets.Workflow.Agents/WorkflowAgentsServiceExtensions.cs` |
+| Agent identity contract | `verticals/FieldService/GeoAssets.FieldService.Agents/Identity/IAgentIdentityProvider.cs` |
+| Config-bound provider | `verticals/FieldService/GeoAssets.FieldService.Agents/Identity/ConfiguredAgentIdentityProvider.cs` |
+| Creation executor | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/CreateServiceOrderExecutor.cs` |
+| Dispatch executor | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/DispatchServiceOrderExecutor.cs` |
+| Workflow graph | `verticals/FieldService/GeoAssets.FieldService.Agents/Executors/EmergencyRepairAgentWorkflow.cs` |
+| DI registration | `verticals/FieldService/GeoAssets.FieldService.Agents/WorkflowAgentsServiceExtensions.cs` |
 
 ---
 
@@ -926,7 +926,7 @@ when present.
 
 ## 13. Testing
 
-`GeoAssets.Workflow.Tests` and `GeoAssets.Workflow.Agents.Tests` cover the module
+`GeoAssets.Workflow.Tests` and `GeoAssets.FieldService.Agents.Tests` cover the module
 end to end — 275 and 19 test cases respectively as of this writing, with
 `InMemoryServiceOrderRepository`, `ServiceOrder` (transition logic),
 `ServiceOrderTransitions`, `ServiceOrderRules`, `FeatureSelectionRegistry`
@@ -963,7 +963,7 @@ correctness suite (transition-legality rejection + `ChildOrderIds` derivation) a
 implementation can subclass to opt into (see §7, XD01-27).
 
 These five projects (`GeoAssets.Core.Tests` + `GeoAssets.Workflow.Tests` +
-`GeoAssets.Workflow.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
+`GeoAssets.FieldService.Agents.Tests` + `GeoAssets.Workflow.EFCore.Tests` +
 `GeoAssets.Commands.Tests`) run **653 tests** as of this writing — no longer the
 full solution total, since unrelated modules (`GeoAssets.Identity`, `GeoAssets.
 Infrastructure.Observability`, `GeoAssets.Server`, messaging transports, etc.)

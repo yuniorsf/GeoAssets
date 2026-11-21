@@ -149,7 +149,7 @@ overhead isn't free.
   extended the rule chain's capability by adding a configurable grants map to
   an existing rule rather than modifying the chain's evaluation logic itself.
 - The AI-agent orchestration guidance here maps directly onto
-  `workflow/GeoAssets.Workflow.Agents` (`ServiceOrder.md` §9) — its
+  `verticals/FieldService/GeoAssets.FieldService.Agents` (`ServiceOrder.md` §9) — its
   `CreateServiceOrderExecutor`/`DispatchServiceOrderExecutor` pair, wired into
   a Microsoft Agent Framework graph, is exactly the "simplest workable
   option" scope this chapter recommends starting from (two narrow executors
