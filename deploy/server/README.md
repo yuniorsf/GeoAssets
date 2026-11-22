@@ -80,7 +80,9 @@ deletes finished requests (XD01-400): completed ones after `GrantSync__Completed
 ones only when `GrantSync__FailedRetention` is set (default empty = kept), `GrantSync__PruneBatchSize` (500) rows at a time
 every `GrantSync__PruneInterval` (`01:00:00`, first run soon after start) — never a município's latest request (its
 `grantSyncState`) nor an unfinished one; deletions are counted on `geoassets.ipbilling.grant_sync_pruned`.
-`GrantSync__Enabled=false` stops both.
+`GrantSync__Enabled=false` stops both. Each batch walks the primary key and probes the `(MunicipioId, Id)` index, never a
+sequential scan: at 5,570 municípios, a backlog batch took about 0.5 ms and a run with nothing due about 2 ms (XD01-405,
+plans in `docs/perf/XD01-405-grant-sync-prune-plan.md`).
 
 ## Token audiences of the vertical hosts (XD01-390)
 
