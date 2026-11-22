@@ -65,7 +65,6 @@
       "Bash(terraform fmt *)",
       "Bash(terraform validate *)",
       "Bash(terraform init -backend=false *)",
-      "Bash(terraform test *)",
       "Bash(terraform version)",
       "Bash(tflint *)",
       "Bash(trivy config *)",
@@ -74,7 +73,12 @@
       "Bash(helm version)",
       "Bash(kubeconform *)",
       "Bash(hadolint *)",
-      "Bash(docker compose * config *)",
+      "Bash(docker compose config -q)",
+      "Bash(docker compose -f deploy/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/server/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/neutral-operator/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/web/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/otel/docker-compose.yaml config -q)",
       "Bash(docker buildx build --check *)"
     ],
     "additionalDirectories": [
