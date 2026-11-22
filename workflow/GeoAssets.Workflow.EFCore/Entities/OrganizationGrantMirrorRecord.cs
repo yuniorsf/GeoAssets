@@ -27,6 +27,17 @@ internal sealed class OrganizationGrantMirrorRecord
     public bool IsActive { get; set; }
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>
+    /// The rest of the grant (XD01-328): what the cross-organization rule (<c>CrossOrgGrantMatcher</c>, XD01-326) decides by,
+    /// so this host evaluates <c>ServiceOrderRules</c> over the mirror instead of only the row-level exception. The RLS policy
+    /// reads none of these: the database stays an organization-level backstop, the rule decides per user and order type.
+    /// The two lists are JSON arrays of strings, like <see cref="ServiceOrderRecord.FeatureIdsJson"/>.
+    /// </summary>
+    public string AllowedActionsJson { get; set; } = "[]";
+    public string? RequiredRole { get; set; }
+    public bool RequiresScopedRole { get; set; }
+    public string OrderTypeIdsJson { get; set; } = "[]";
+
     /// <summary>When this mirror row was last written — the staleness bound is "now minus this", not a fixed constant.</summary>
     public DateTime SyncedAtUtc { get; set; }
 }

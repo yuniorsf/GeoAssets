@@ -51,6 +51,8 @@ public class ServiceOrderDbContext(
     internal DbSet<InboxProcessedMessageRecord> InboxProcessedMessages => Set<InboxProcessedMessageRecord>();
     internal DbSet<OrganizationGrantMirrorRecord> OrganizationGrantMirror => Set<OrganizationGrantMirrorRecord>();
     internal DbSet<OrganizationGrantSyncCursorRecord> OrganizationGrantSyncCursor => Set<OrganizationGrantSyncCursorRecord>();
+    internal DbSet<ScopedRoleAssignmentMirrorRecord> ScopedRoleAssignmentMirror => Set<ScopedRoleAssignmentMirrorRecord>();
+    internal DbSet<ScopedRoleAssignmentSyncCursorRecord> ScopedRoleAssignmentSyncCursor => Set<ScopedRoleAssignmentSyncCursorRecord>();
     internal DbSet<ServiceOrderTargetRecord> ServiceOrderTargets => Set<ServiceOrderTargetRecord>();
 
     /// <summary>The organization this context is scoped to — the one its tenant query filters compare against.</summary>

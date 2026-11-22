@@ -97,6 +97,10 @@ public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db, TimeP
                 ScopeId = grant.ScopeId,
                 IsActive = grant.IsActive,
                 ExpiresAt = grant.ExpiresAt,
+                AllowedActions = [.. grant.AllowedActions],
+                RequiredRole = grant.RequiredRole,
+                RequiresScopedRole = grant.RequiresScopedRole,
+                OrderTypeIds = [.. grant.OrderTypeIds],
                 RecordedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
             },
             ct).ConfigureAwait(false);
@@ -167,6 +171,10 @@ public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db, TimeP
                 ScopeId = r.ScopeId,
                 IsActive = r.IsActive,
                 ExpiresAt = r.ExpiresAt,
+                AllowedActions = r.AllowedActions,
+                RequiredRole = r.RequiredRole,
+                RequiresScopedRole = r.RequiresScopedRole,
+                OrderTypeIds = r.OrderTypeIds,
             })
             .ToListAsync(ct)
             .ConfigureAwait(false);

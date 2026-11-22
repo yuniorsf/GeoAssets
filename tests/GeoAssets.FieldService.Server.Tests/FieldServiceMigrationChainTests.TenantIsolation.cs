@@ -42,9 +42,15 @@ public partial class FieldServiceMigrationChainTests
         ["WorkflowInboxProcessedMessages"] = "message deduplication keys, written by background consumers",
         ["OrganizationGrantSyncCursor"] = "the grant sync worker's one-row position",
         [GrantMirrorTable] = "read by the policies themselves on behalf of every organization, written by the grant sync worker",
+        ["ScopedRoleAssignmentSyncCursor"] = "the scoped role assignment sync worker's one-row position (XD01-328)",
+        [ScopedRoleMirrorTable] = "the roles users hold on other organizations, written by the scoped role assignment sync worker and read by the application to build a caller's principal (XD01-328)",
     };
 
     private const string GrantMirrorTable = "OrganizationGrantMirror";
+    private const string ScopedRoleMirrorTable = "ScopedRoleAssignmentMirror";
+
+    /// <summary>The mirrors of the Core Platform's identity data: they name organizations without being any organization's data.</summary>
+    private static readonly HashSet<string> MirrorTables = new(StringComparer.Ordinal) { GrantMirrorTable, ScopedRoleMirrorTable };
 
     /// <summary>The tables with an equality-only policy, and what a fact needs to put a row in each.</summary>
     private static readonly Dictionary<string, TenantTable> EqualityTables = new(StringComparer.Ordinal)
@@ -146,7 +152,7 @@ public partial class FieldServiceMigrationChainTests
         {
             if (TablesWithoutTenantData.TryGetValue(table, out var reason))
             {
-                if (!string.Equals(table, GrantMirrorTable, StringComparison.Ordinal))
+                if (!MirrorTables.Contains(table))
                     organizationColumns.Should().NotContain(table, $"'{table}' is exempt as \"{reason}\", which a column naming an organization contradicts");
                 parentsByTable[table].Where(parent => !TablesWithoutTenantData.ContainsKey(parent)).Should().BeEmpty(
                     $"'{table}' is exempt as \"{reason}\", but a table reachable only through a tenant-scoped one is tenant-scoped itself");

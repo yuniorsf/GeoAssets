@@ -29,6 +29,10 @@ namespace GeoAssets.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("SequenceNumber"));
 
+                    b.Property<string>("AllowedActions")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -41,8 +45,19 @@ namespace GeoAssets.Server.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("OrderTypeIds")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("RecordedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequiredRole")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("RequiresScopedRole")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("ResourceOrganizationId")
                         .HasColumnType("uuid");
@@ -60,6 +75,25 @@ namespace GeoAssets.Server.Migrations
                     b.HasIndex("GrantId");
 
                     b.ToTable("OrganizationGrantSyncOutbox", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.Identity.Authorization.EFCore.Entities.ScopedRoleAssignmentSyncOutboxRecord", b =>
+                {
+                    b.Property<long>("SequenceNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("SequenceNumber"));
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("SequenceNumber");
+
+                    b.ToTable("ScopedRoleAssignmentSyncOutbox", (string)null);
                 });
 
             modelBuilder.Entity("GeoAssets.Identity.Authorization.Models.AppGroup", b =>

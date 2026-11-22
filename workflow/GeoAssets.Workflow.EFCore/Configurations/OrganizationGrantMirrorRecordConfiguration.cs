@@ -13,6 +13,9 @@ internal sealed class OrganizationGrantMirrorRecordConfiguration : IEntityTypeCo
 
         b.Property(r => r.ResourceType).HasMaxLength(128);
         b.Property(r => r.ScopeId).HasMaxLength(128);
+        b.Property(r => r.RequiredRole).HasMaxLength(128);
+        b.Property(r => r.AllowedActionsJson).HasDefaultValue("[]");
+        b.Property(r => r.OrderTypeIdsJson).HasDefaultValue("[]");
 
         // Same shape as the real OrganizationGrants table's own index — the RLS policy's EXISTS
         // subquery filters on exactly these two columns.

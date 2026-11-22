@@ -35,5 +35,13 @@ internal sealed class OrganizationGrantSyncOutboxRecord
     public string? ScopeId { get; set; }
     public bool IsActive { get; set; }
     public DateTime? ExpiresAt { get; set; }
+
+    // XD01-328: the rest of what the cross-organization rule decides by (XD01-326), stored as JSON text like
+    // OrganizationGrants' own columns.
+    public List<string> AllowedActions { get; set; } = [];
+    public string? RequiredRole { get; set; }
+    public bool RequiresScopedRole { get; set; }
+    public List<string> OrderTypeIds { get; set; } = [];
+
     public DateTime RecordedAtUtc { get; set; }
 }
