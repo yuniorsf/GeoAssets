@@ -17,6 +17,12 @@ namespace GeoAssets.FieldService.Server;
 ///
 /// An order of another tenant is reported exactly as an order that does not exist — the same
 /// "404, never 403" answer <c>GeoAssets.Server</c> gives a caller outside the organization.
+///
+/// The mobile sync routes are the one exception (XD01-328): they also serve another
+/// organization's orders the caller is entitled to under a cross-organization grant, decided by
+/// <c>ServiceOrderRules</c> over the mirrored grants and scoped roles — see
+/// <see cref="FieldServiceCrossOrganizationAccess"/>. Every route that uses this class stays
+/// own-tenant only.
 /// </summary>
 internal static class FieldServiceOrderAccess
 {

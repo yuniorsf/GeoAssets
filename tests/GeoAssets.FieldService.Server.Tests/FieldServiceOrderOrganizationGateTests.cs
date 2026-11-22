@@ -12,6 +12,7 @@ using GeoAssets.FieldService.Contractors;
 using GeoAssets.FieldService.Contractors.Governance;
 using GeoAssets.FieldService.FieldWork;
 using GeoAssets.NeutralOperator.Application;
+using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;
@@ -131,6 +132,10 @@ public sealed class FieldServiceOrderOrganizationGateTests : IAsyncLifetime, IDi
                     services.AddFieldServicePersistence((options, connection) => options.UseSqlite(connection));
                     services.AddSingleton<IGeoCoreClient>(_geoCore);
                     services.AddSingleton<IContractorGovernancePortalClient>(_portal);
+                    // As Program.cs registers it (XD01-328): the sync routes' cross-organization access, over empty mirrors.
+                    services.AddServiceOrderRules();
+                    services.AddScoped<IMirroredCrossOrganizationEntitlements, EFMirroredCrossOrganizationEntitlements>();
+                    services.AddFieldServiceCrossOrganizationAccess();
                 });
                 webHost.Configure(app =>
                 {

@@ -3,6 +3,7 @@
 @using GeoAssets.Shared.Services.FieldWork
 @using GeoAssets.Shared.Services.Offline
 @using GeoAssets.FieldService.FieldWork
+@using GeoAssets.Identity.Authentication
 @using GeoAssets.Workflow.Orders
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
@@ -10,6 +11,7 @@
 @inject ILocalServiceOrderStore LocalServiceOrderStore
 @inject IFieldWorkTransitionClient TransitionClient
 @inject TimeProvider TimeProvider
+@inject ICurrentUserAccessor CurrentUserAccessor
 
 @* XD01-295: the crew-facing host for FieldWorkOrderTransitioner/CompositeFieldWorkTransitionGuard's
    already-implemented guarded state machine (XD01-220/221/222/246), which had zero UI anywhere in
@@ -43,6 +45,11 @@
 else
 {
     <p><strong>Order:</strong> @_order.Title (@_order.Id)</p>
+    @if (_otherOwner is { } otherOwner)
+    {
+        @* XD01-328: an order of another organization this technician is entitled to work on. *@
+        <p><strong>Organization:</strong> @otherOwner (another organization's order)</p>
+    }
     <p><strong>Status:</strong> @_order.Status</p>
 
     @if (!string.IsNullOrEmpty(_lastExplanation))
@@ -102,6 +109,7 @@ else
     [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private ServiceOrder? _order;
+    private Guid? _otherOwner;
     private string? _lastExplanation;
     private bool _busy;
 
@@ -125,6 +133,12 @@ else
         _order = orders.FirstOrDefault(o =>
             o.OrderTypeId.StartsWith("field-work", StringComparison.Ordinal)
             && o.Status is not (FieldWorkStatus.Inspected or FieldWorkStatus.ConflictReview or FieldWorkStatus.Cancelled));
+
+        if (_order is not null)
+        {
+            var user = await CurrentUserAccessor.GetCurrentUserAsync();
+            _otherOwner = ServiceOrderOwnership.OtherOwnerOf(_order, user?.OrganizationId ?? Guid.Empty);
+        }
     }
 
     private bool IsElectricalChecklistComplete() =>

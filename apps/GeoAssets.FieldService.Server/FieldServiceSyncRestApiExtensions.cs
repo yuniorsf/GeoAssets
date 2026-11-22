@@ -4,6 +4,7 @@ using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Services;
 using GeoAssets.NeutralOperator.Application;
 using GeoAssets.Workflow.Orders;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GeoAssets.FieldService.Server;
 
@@ -21,18 +22,19 @@ namespace GeoAssets.FieldService.Server;
 /// which this host doesn't register. Pushing an id with no matching existing order is reported
 /// as a per-item failure, not silently created.
 ///
-/// Tenant boundary: <see cref="MapPull"/> relies on <see cref="ServiceOrderDbContext"/>'s global
-/// query filter (same as every other read through <see cref="IServiceOrderRepository.GetAllAsync"/>).
-/// <see cref="MapPush"/> cannot rely on that alone — <c>EFServiceOrderRepository.GetByIdAsync</c>
-/// deliberately calls <c>IgnoreQueryFilters()</c> for ServiceOrders' cross-org-grant exception
-/// (XD01-201), which this host has no <c>OrganizationGrants</c>/<c>ServiceOrderRules</c> wiring to
-/// evaluate — so it checks <see cref="IOrgOwnedResource.OrganizationId"/> against the caller's own
-/// <see cref="ITenantContext.CurrentOrganizationId"/> itself before allowing a write, treating a
-/// mismatch identically to "order not found" rather than a distinguishable 403 (same reasoning as
-/// <c>ContractorUsLedgerRestApiExtensions</c>, XD01-207). <see cref="FieldServiceOrderAccess"/>
-/// states the rule for the whole host (XD01-332). A push never moves an order to another
-/// organization, and the one order this surface creates (a pole census) is created under the
-/// caller's own tenant only — see <see cref="ServiceOrderOrganization"/>.
+/// Tenant boundary: <see cref="MapPull"/> returns the caller's own organization's orders through
+/// <see cref="ServiceOrderDbContext"/>'s global query filter (same as every other read through
+/// <see cref="IServiceOrderRepository.GetAllAsync"/>), plus — since XD01-328 — the orders of other organizations the
+/// caller may view under the cross-organization rule (XD01-326), fetched through an explicit grant-aware path
+/// (<see cref="FieldServiceCrossOrganizationAccess"/>): the tenant filter and row-level security stay on for everything
+/// else. Each order carries its <see cref="IOrgOwnedResource.OrganizationId"/>, so the app tells the two apart.
+/// <see cref="MapPush"/> cannot rely on the filter — <c>EFServiceOrderRepository.GetByIdAsync</c> deliberately calls
+/// <c>IgnoreQueryFilters()</c> — so it accepts a push for an order of the caller's own tenant, as before, or for another
+/// organization's order the rule allows the pushed action on (<see cref="FieldServiceCrossOrganizationAccess.MayPushAsync"/>);
+/// anything else is reported identically to "order not found" rather than a distinguishable 403 (same reasoning as
+/// <c>ContractorUsLedgerRestApiExtensions</c>, XD01-207). A push never moves an order to another organization, and the one
+/// order this surface creates (a pole census) is created under the caller's own tenant only — see
+/// <see cref="ServiceOrderOrganization"/>.
 /// </summary>
 internal static class FieldServiceSyncRestApiExtensions
 {
@@ -56,7 +58,9 @@ internal static class FieldServiceSyncRestApiExtensions
 
     private static void MapPull(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
-        routes.MapGet($"{prefix}/service-orders", async (DateTime sinceUtc, IServiceOrderRepository repo, CancellationToken ct) =>
+        routes.MapGet($"{prefix}/service-orders", async (
+            DateTime sinceUtc, IServiceOrderRepository repo,
+            [FromServices] FieldServiceCrossOrganizationAccess crossOrganizationAccess, CancellationToken ct) =>
         {
             // GetAllAsync(), not a dedicated indexed query — this is the deliberately simple
             // first-cut sync surface the class doc comment describes; a change-feed query
@@ -64,18 +68,20 @@ internal static class FieldServiceSyncRestApiExtensions
             // pattern to optimize for) can replace the in-memory filter below without changing
             // this route's contract.
             var orders = await repo.GetAllAsync(ct).ConfigureAwait(false);
-            var modified = orders.Where(o => o.CreatedAt >= sinceUtc || o.UpdatedAt >= sinceUtc).ToList();
+            var granted = await crossOrganizationAccess.GetViewableOrdersOfOtherOrganizationsAsync(ct).ConfigureAwait(false);
+            var modified = orders.Concat(granted).Where(o => o.CreatedAt >= sinceUtc || o.UpdatedAt >= sinceUtc).ToList();
 
             return Results.Json(modified, opts);
         })
         .WithName("PullServiceOrderDeltas")
-        .WithSummary("Pulls ServiceOrders created or updated since sinceUtc, scoped to the caller's own tenant.");
+        .WithSummary("Pulls ServiceOrders created or updated since sinceUtc: the caller's own tenant's, and other organizations' the caller may view under a cross-organization grant.");
     }
 
     private static void MapPush(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
         routes.MapPost($"{prefix}/service-orders", async (
             HttpRequest req, IServiceOrderRepository repo, ITenantContext tenantContext,
+            [FromServices] FieldServiceCrossOrganizationAccess crossOrganizationAccess,
             IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct) =>
         {
             var incoming = await JsonSerializer.DeserializeAsync<List<PushServiceOrderItem>>(req.Body, opts, ct).ConfigureAwait(false);
@@ -88,19 +94,20 @@ internal static class FieldServiceSyncRestApiExtensions
             var results = new List<PushServiceOrderResult>(incoming.Count);
             foreach (var item in incoming)
             {
-                results.Add(await PushOneAsync(item, repo, tenantContext, geoCoreClient, timeProvider, ct).ConfigureAwait(false));
+                results.Add(await PushOneAsync(item, repo, tenantContext, crossOrganizationAccess, geoCoreClient, timeProvider, ct).ConfigureAwait(false));
             }
 
             return Results.Ok(results);
         })
         .WithName("PushServiceOrderDeltas")
-        .WithSummary("Pushes locally-modified ServiceOrders for orders that already exist under the caller's own tenant, deduped by idempotency key.")
+        .WithSummary("Pushes locally-modified ServiceOrders for orders that already exist under the caller's own tenant, or under another organization whose grant allows the pushed action, deduped by idempotency key.")
         .Produces<List<PushServiceOrderResult>>()
         .Produces(StatusCodes.Status400BadRequest);
     }
 
     private static async Task<PushServiceOrderResult> PushOneAsync(
         PushServiceOrderItem item, IServiceOrderRepository repo, ITenantContext tenantContext,
+        FieldServiceCrossOrganizationAccess crossOrganizationAccess,
         IGeoCoreClient geoCoreClient, TimeProvider timeProvider, CancellationToken ct)
     {
         var order = item.Order;
@@ -121,7 +128,8 @@ internal static class FieldServiceSyncRestApiExtensions
         if (existing is null)
             return new PushServiceOrderResult(order.Id, Success: false, Error: "ServiceOrder not found.");
 
-        if (existing.OrganizationId != tenantContext.CurrentOrganizationId)
+        // XD01-328: the caller's own tenant's order, or another organization's whose grant allows the pushed action.
+        if (!await crossOrganizationAccess.MayPushAsync(existing, order, ct).ConfigureAwait(false))
             return new PushServiceOrderResult(order.Id, Success: false, Error: "ServiceOrder not found.");
 
         // A reconnect burst may replay the same already-applied item (the client never saw the

@@ -130,6 +130,7 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
 
                 GRANT SELECT, INSERT, UPDATE, DELETE ON "ServiceOrders" TO {ScopedRole};
                 GRANT SELECT ON "OrganizationGrants" TO {ScopedRole};
+                GRANT SELECT ON "OrderDispatches", "OrderActionLogs" TO {ScopedRole};
                 """);
 
             _connectionString = _container.GetConnectionString();
@@ -373,5 +374,86 @@ public sealed class ServiceOrdersRowLevelSecurityPolicyTests : IAsyncLifetime
         var ids = await ReadServiceOrderIdsAsync(connection);
 
         ids.Should().Equal(["ungated-grant"], because: "a grant with no ScopeId stays ungated within ResourceType, the original pre-XD01-250 behavior");
+    }
+
+    // ── The grant-aware cross-organization read path (XD01-328) ───────────────
+
+    /// <summary>
+    /// <see cref="EFServiceOrderRepository.GetOfOtherOrganizationsAsync"/> as the non-owner role, the session set to
+    /// <paramref name="sessionOrganization"/> exactly as the tenant interceptors set it: the explicit path asks past the
+    /// tenant filter, and row-level security still decides what comes back.
+    /// </summary>
+    private static async Task<List<string>> ReadOtherOrganizationsThroughTheRepositoryAsync(Guid sessionOrganization, params Guid[] asked)
+    {
+        await using var connection = new NpgsqlConnection(await BuildScopedRoleConnectionStringAsync());
+        await connection.OpenAsync();
+        await SetSessionOrganizationAsync(connection, sessionOrganization);
+
+        await using var db = new ServiceOrderDbContext(
+            new DbContextOptionsBuilder<ServiceOrderDbContext>().UseNpgsql(connection).Options,
+            new FakeTenantContext(sessionOrganization));
+        var orders = await new EFServiceOrderRepository(db).GetOfOtherOrganizationsAsync(asked);
+        return [.. orders.Select(o => o.Id).Order(StringComparer.Ordinal)];
+    }
+
+    [Fact]
+    public async Task CrossOrganizationReadPath_AsScopedRole_ReturnsAGrantingOrganizationsOrders_AndRlsStillHidesAnyOther()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("granted", ConcessionaireOrg);
+        await SeedServiceOrderAsync("unrelated", UnrelatedOrg);
+        await SeedServiceOrderAsync("own", ContractorOrg);
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: "ServiceOrder");
+
+        var ids = await ReadOtherOrganizationsThroughTheRepositoryAsync(ContractorOrg, ConcessionaireOrg, UnrelatedOrg);
+
+        ids.Should().Equal(["granted"], because: "the path asks for the unrelated organization too, and the policy, not the query, refuses it");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task CrossOrganizationReadPath_AsScopedRole_ReturnsNothing_WithoutAnActiveUnexpiredGrant(bool grantIsActive, bool grantIsExpired)
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("not-granted", ConcessionaireOrg);
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: grantIsActive,
+            expiresAt: grantIsExpired ? new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) : null, resourceType: null);
+
+        (await ReadOtherOrganizationsThroughTheRepositoryAsync(ContractorOrg, ConcessionaireOrg)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CrossOrganizationReadPath_AsScopedRole_RevokingTheGrant_ClosesIt_OnTheNextRead()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("granted", ConcessionaireOrg);
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: null);
+        (await ReadOtherOrganizationsThroughTheRepositoryAsync(ContractorOrg, ConcessionaireOrg)).Should().Equal("granted");
+
+        await using (var db = new ServiceOrderDbContext(CreateOptions(await EnsureContainerAsync())))
+            await db.Database.ExecuteSqlRawAsync("""UPDATE "OrganizationGrants" SET "IsActive" = false""");
+
+        (await ReadOtherOrganizationsThroughTheRepositoryAsync(ContractorOrg, ConcessionaireOrg)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CrossOrganizationReadPath_AsScopedRole_TheContextsFilteredReadsStayOwnOrganizationOnly()
+    {
+        await ClearAsync();
+        await SeedServiceOrderAsync("granted", ConcessionaireOrg);
+        await SeedServiceOrderAsync("own", ContractorOrg);
+        await SeedGrantAsync(ConcessionaireOrg, ContractorOrg, isActive: true, expiresAt: null, resourceType: null);
+
+        await using var connection = new NpgsqlConnection(await BuildScopedRoleConnectionStringAsync());
+        await connection.OpenAsync();
+        await SetSessionOrganizationAsync(connection, ContractorOrg);
+        await using var db = new ServiceOrderDbContext(
+            new DbContextOptionsBuilder<ServiceOrderDbContext>().UseNpgsql(connection).Options,
+            new FakeTenantContext(ContractorOrg));
+        var repo = new EFServiceOrderRepository(db);
+
+        (await repo.GetOfOtherOrganizationsAsync([ConcessionaireOrg])).Select(o => o.Id).Should().Equal("granted");
+        (await repo.GetAllAsync()).Select(o => o.Id).Should().Equal(["own"], because: "the tenant filter is not turned off for the context");
     }
 }
