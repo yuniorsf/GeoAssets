@@ -317,6 +317,38 @@ scoped permissions (the REST-backed clients and the vertical hosts, until XD01-3
 scoped grant opens nothing. Routes keep their home-permission route policies (`features:read`,
 `serviceorders:read`) in front of these checks.
 
+### Administering scoped roles (XD01-327, third slice of XD01-324)
+
+An organization's administrator gives and takes away roles on it for named users of the organizations it has
+contracted (`OrganizationScopedRolesRestApiExtensions`, under `/api/identity`):
+
+| Route | Policy | Answers |
+|---|---|---|
+| `GET organizations/{orgId}/scoped-roles` | `users:read` | the assignments on `orgId`: user, user's home organization, role, assigned by, assigned at |
+| `POST organizations/{orgId}/scoped-roles` `{ userId, roleId }` | `users:edit` | `201` the assignment (`200` if it already existed) |
+| `DELETE organizations/{orgId}/scoped-roles/{assignmentId}` | `users:edit` | `204`; the holder loses it on their next request (the context is built per request) |
+| `GET organizations/{orgId}/contracted-users` | `users:read` | the active users of the organizations holding an active, unexpired grant from `orgId` (never the caller) |
+| `GET organizations/{orgId}/issued-grants` | `users:read` | those grants (`OrganizationGrantDto`, with `RequiresScopedRole`/`OrderTypeIds`) |
+| `GET users/{id}/scoped-roles` | `users:read` | the roles the user holds on other organizations: all of them to the user's own organization and to a platform administrator, otherwise only those held on the caller's organization |
+
+Rules, enforced by the server whatever the client sends:
+
+- **Who administers `orgId`**: a caller whose home organization is `orgId`, or a **platform administrator** — the home
+  permission `organizations:manage-all`, seeded but in no built-in role (every organization's administrator holds
+  `Administrator`, so it cannot carry it). Anyone else gets `403` (`code: scoped-role.forbidden`). Both are home
+  permissions: a role held *on* `orgId`, even `Administrator`, never makes its holder an administrator of `orgId`.
+- **Who may be assigned**: an active user whose organization — not `orgId` — holds an active, unexpired grant from `orgId`
+  (any grant; `RequiresScopedRole` only decides whether the grant then needs such a role). Otherwise `409`
+  (`scoped-role.not-contracted`). Naming yourself is `400` (`scoped-role.self-assignment`).
+- `AssignedBy` (the caller's email) and `AssignedAt` (`TimeProvider`) are the server's; the organization is the route's.
+
+The refusal codes are `ScopedRoleAssignmentProblems`; the Web client is `IScopedRoleAdministrationClient`
+(`RestScopedRoleAdministrationClient`). In the admin UI, *Organizations* shows a **Contractor access** panel under the
+selected organization (`ContractorAccessPanel`: the issued grants read-only, the assignments with revoke, and
+`AssignScopedRoleDialog`), and `UserDetail` lists *Roles on other organizations* apart from the home roles. Creating or
+editing a grant from the UI is not part of this slice: grants are still provisioned by the vertical hosts through
+`PUT organization-grants` (§4 above).
+
 ---
 
 ## 5. Federated authentication
