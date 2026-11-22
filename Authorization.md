@@ -283,6 +283,40 @@ decision reads it yet** (`OrgResourceAuthorizationHandler`, `CrossOrgGrantRule` 
   They are not pushed through `IRoleAssignmentProvider`, and `GET /api/identity/me`
   (`AuthorizationContextDto`) does not carry them yet, so the REST-backed clients see none.
 
+### Scoped-role and order-type-restricted grants (XD01-326, second slice of XD01-324)
+
+Two opt-in fields on `OrganizationGrant` (migration `AddOrganizationGrantScopedRoleAndOrderTypes`;
+every existing grant migrates as `false` / `[]` and behaves exactly as before):
+
+- `RequiresScopedRole` (default `false`). `false`: the organization-wide semantics above — the
+  caller's **home** permission, `RequiredRole` against home roles. `true`: the grant is usable only
+  through what the caller holds **on the resource organization** (`HasPermissionOn(O)`); home roles
+  and permissions count for nothing, and `RequiredRole` is matched against the roles held on O.
+  The grant's `AllowedActions` stays the ceiling: an action must be listed *and* held on O.
+- `OrderTypeIds` (default empty = every order type), compared with `IServiceOrder.OrderTypeId`
+  ignoring case. Accepted by `PUT /api/identity/organization-grants` only with
+  `resourceType = "ServiceOrder"`; `OrgResourceAuthorizationHandler` never matches a grant that
+  lists order types (its resources have none).
+
+Both evaluation paths implement it:
+
+| | `OrgResourceAuthorizationHandler` | `ServiceOrderRules` |
+|---|---|---|
+| Scoped grant qualifies when | listed action held on O (`AuthorizationContext.HasPermissionOn`) | same, through `WorkflowPrincipal.HasPermissionOn` (`CrossOrgGrantMatcher`) |
+| Gate | — | a scoped grant covers the order only if the caller holds on O at least one `serviceorders:` action it lists |
+| Rest of the decision | — | a caller reaching the order **only** through scoped grants (not a member, not a dispatch recipient, no organization-wide grant covering it) must have the action covered by such a grant (else `NoRuleGranted`, `ServiceOrderRules.NotGrantedOnOrganizationReason`), and the chain then sees it with its roles/permissions **on O** (`WorkflowPrincipal.OnOrganization`), so the order type's `ActionPermissions` still apply. Otherwise unchanged |
+
+`GeoAssets.Workflow` still references no Identity assembly: `WorkflowOrgGrant` gains
+`RequiresScopedRole`/`OrderTypeIds`, and `WorkflowPrincipal` gains `ScopedRoleNames`/
+`ScopedPermissionCodes` (keyed by organization id) with `RoleNamesOn`/`PermissionCodesOn`/
+`HasRoleOn`/`HasPermissionOn`. Both principal factories (`ServerWorkflowPrincipalFactory`, the
+client's `WorkflowPrincipalFactory`) copy them from `AuthorizationContext`, and
+`OwnOrganizationGrantDto` (`GET …/organization-grants/me`) carries both grant fields, so a vertical
+host or client never reads a scoped grant as organization-wide. Wherever the context carries no
+scoped permissions (the REST-backed clients and the vertical hosts, until XD01-329 exposes them), a
+scoped grant opens nothing. Routes keep their home-permission route policies (`features:read`,
+`serviceorders:read`) in front of these checks.
+
 ---
 
 ## 5. Federated authentication
