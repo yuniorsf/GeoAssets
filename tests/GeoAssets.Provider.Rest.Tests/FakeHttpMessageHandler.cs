@@ -3,7 +3,13 @@ namespace GeoAssets.Provider.Rest.Tests;
 internal sealed class FakeHttpMessageHandler : HttpMessageHandler
 {
     private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _respond;
+    private readonly Lock _requestsGate = new();
 
+    /// <summary>
+    /// Every request sent, in arrival order. Writes are synchronized because concurrent dispatch
+    /// (the tiled fetch's throttle tests) calls <see cref="SendAsync"/> from several threads at once;
+    /// read it only after the requests under test have completed.
+    /// </summary>
     public List<HttpRequestMessage> Requests { get; } = [];
 
     public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)
@@ -23,7 +29,8 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        Requests.Add(request);
+        lock (_requestsGate)
+            Requests.Add(request);
         return _respond(request);
     }
 }
