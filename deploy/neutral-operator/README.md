@@ -64,8 +64,14 @@ cp .env.example .env    # POSTGRES_PASSWORD = the deploy/server one; ServiceAuth
 docker compose up --build
 ```
 
-The one-shot `neutral-operator-db` service creates `geoassets_neutral_operator` when it does not exist. The network is
-`server_default` (the default project name of `deploy/server`); set `KERNEL_NETWORK` otherwise.
+Or start everything at once from the repo root: `docker compose -f deploy/docker-compose.yaml up --build -d` (it includes
+`deploy/server`, this file and `deploy/web`; this file still reads its own `.env`).
+
+The one-shot `neutral-operator-db` service waits up to 60 s for the kernel's Postgres, then creates
+`geoassets_neutral_operator` when it does not exist. Both files declare the Compose project **`geoassets`**, so this stack
+is on the kernel's network, `geoassets_default`, by being in the same project (the former `KERNEL_NETWORK` setting and
+the external `server_default` network are gone): when you override the project name (`-p`), pass the same one to both. The
+service is published on `127.0.0.1:8082` only.
 
 ## Health and readiness
 

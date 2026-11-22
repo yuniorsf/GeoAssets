@@ -1,22 +1,31 @@
 # GeoAssets.NeutralOperator.Server (XD01-382, ADR-001 Phase 7) next to the kernel stack of deploy/server.
-# Start deploy/server first: this stack joins its network (KERNEL_NETWORK, "server_default" for the default project
-# name) and uses its Postgres container with a database of its own, geoassets_neutral_operator. See README.md.
+# Part of the "geoassets" Compose project (started on its own or through deploy/docker-compose.yaml): it shares the
+# project's network, geoassets_default, with deploy/server — start that first when running this file on its own — and
+# uses its Postgres container with a database of its own, geoassets_neutral_operator. See README.md.
+name: geoassets
+
 services:
-  # One-shot: creates the geoassets_neutral_operator database in the kernel stack's Postgres when it does not exist yet.
+  # One-shot: creates the geoassets_neutral_operator database in the kernel stack's Postgres when it does not exist yet
+  # (waiting up to 60 s for it to accept connections).
   neutral-operator-db:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:16-3.5@sha256:94146ac37bc61e2322f88016056c5920729cb8c64c8542ed590af8fc2abdac07
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/neutral-operator/.env (the deploy/server one)}
     entrypoint:
       - sh
       - -c
       - >-
-        until pg_isready -h ${POSTGRES_HOST:-postgres} -U postgres; do sleep 1; done;
+        i=0;
+        until pg_isready -h ${POSTGRES_HOST:-postgres} -U postgres; do
+        i=$$((i + 1)); if [ "$$i" -ge 60 ]; then echo "${POSTGRES_HOST:-postgres} not ready after 60 attempts" >&2; exit 1; fi;
+        sleep 1; done;
         psql -h ${POSTGRES_HOST:-postgres} -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'geoassets_neutral_operator'" | grep -q 1
         || psql -h ${POSTGRES_HOST:-postgres} -U postgres -c "CREATE DATABASE geoassets_neutral_operator"
+    # The image declares VOLUME /var/lib/postgresql/data, unused by this client-only run: a tmpfs keeps each run from
+    # leaving an anonymous volume behind.
+    tmpfs:
+      - /var/lib/postgresql/data
     restart: "no"
-    networks:
-      - kernel
 
   neutral-operator:
     container_name: geoasset-neutral-operator
@@ -47,17 +56,12 @@ services:
       neutral-operator-db:
         condition: service_completed_successfully
     ports:
-      - "8082:8080"
+      - "127.0.0.1:8082:8080"
+    # GET /healthz (liveness, 200 even while the registration is Degraded) over bash's /dev/tcp: the runtime image has no
+    # curl or wget.
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
-    networks:
-      - kernel
-
-networks:
-  kernel:
-    name: ${KERNEL_NETWORK:-server_default}
-    external: true
