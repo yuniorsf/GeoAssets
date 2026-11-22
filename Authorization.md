@@ -349,6 +349,52 @@ selected organization (`ContractorAccessPanel`: the issued grants read-only, the
 editing a grant from the UI is not part of this slice: grants are still provisioned by the vertical hosts through
 `PUT organization-grants` (§4 above).
 
+### Cross-organization mobile sync in FieldService (XD01-328, fourth slice of XD01-324)
+
+`GeoAssets.FieldService.Server` has no identity database, so it decides the XD01-326 rule over
+two local mirrors, fed by the kernel the way grants already were (XD01-290):
+
+| Mirror (FieldService `ServiceOrderDbContext`) | Kernel feed | Written by |
+|---|---|---|
+| `OrganizationGrantMirror` — now with `AllowedActionsJson`, `RequiredRole`, `RequiresScopedRole`, `OrderTypeIdsJson` | `GET /api/identity/organization-grants/sync` (`organizations:read`), from `OrganizationGrantSyncOutbox`, which now carries those fields | `OrganizationGrantSyncWorker` |
+| `ScopedRoleAssignmentMirror` — one row per (user, resource organization): the user's `oid`, role names, permission codes | `GET /api/identity/scoped-role-assignments/sync` (`users:read`), from `ScopedRoleAssignmentSyncOutbox` | `ScopedRoleAssignmentSyncWorker` |
+
+- **Scoped role feed.** `GeoIdentityDbContext` records, in the same save, every (user,
+  organization) pair a change may affect (`ScopedRoleAssignmentChangeCapture`): a scoped
+  `UserRole` added or removed, a role's permission granted or revoked, a role renamed or deleted,
+  an organization deleted, a user deleted or its `ExternalObjectId`/home organization changed. The
+  feed (`EFScopedRoleAssignmentSyncFeed`) resolves each row to what the user holds there **when the
+  batch is read**, exactly as `AuthorizationContext.ScopedRoles`/`ScopedPermissions` resolve it; a
+  pair holding nothing is a **tombstone** (`isActive: false`), and the mirror drops the row.
+- **Grant feed.** The `AddOrganizationGrantSyncRuleFields` migration re-records every existing
+  grant, so each consumer's next poll fills the new mirror columns; a grant mirrored before that
+  opens nothing (its `AllowedActions` reads `[]`).
+- **Principal.** `FieldServiceCrossOrganizationAccess` builds a `WorkflowPrincipal` from the token
+  (`oid` as user id, organization, roles) and the mirrors (`EFMirroredCrossOrganizationEntitlements`:
+  the organization's active, unexpired grants, and the caller's scoped roles/permissions by `oid`).
+  This host has no role-to-permission table, so home `PermissionCodes` are empty: a scoped grant is
+  decided by the mirrored permissions on the resource organization, an organization-wide one by the
+  actions it lists.
+- **Pull** (`GET /api/field-service/sync/service-orders`): own-tenant orders as before, plus the
+  orders of the organizations the caller's grants name, read through
+  `EFServiceOrderRepository.GetOfOtherOrganizationsAsync` — an explicit path past the tenant query
+  filter for those organizations only; the filter stays on for every other read and row-level
+  security is untouched (the session is still the caller's organization, so the database returns
+  only rows a mirrored grant opens to it) — each kept only if `ServiceOrderRules.Evaluate` allows
+  `View`. Each order carries its `OrganizationId`; the MAUI field-work page names the owner of an
+  order that is not the technician's organization.
+- **Push** (`POST …/sync/service-orders`): own-tenant orders as before; another organization's only
+  when the rule allows the pushed action on the stored order **and** on the pushed copy (so a push
+  cannot change the order type or scope out of the grant). The action is the order type's
+  `TriggerAction` for the status move (`Complete`, `Accept`, …), `Complete`/`Cancel` into
+  `Completed`/`Cancelled` for a type without a graph, else `Execute` (an execution update). A refusal
+  is still "ServiceOrder not found." Idempotency keys (XD01-236) are unchanged.
+- **Staleness bound.** Both workers use `OrganizationGrantSync:*`: a grant or a role revoked in the
+  kernel still counts in FieldService for about one `PollInterval` (15 s by default) after the
+  change is recorded, plus the time to drain a backlog. The RLS policy reads none of the new
+  columns: the database stays an organization-level backstop; per-user, per-order-type decisions are
+  the rule's.
+
 ---
 
 ## 5. Federated authentication
