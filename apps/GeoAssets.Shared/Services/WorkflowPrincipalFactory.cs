@@ -41,7 +41,11 @@ public sealed class WorkflowPrincipalFactory(IGeoAuthorizationService authorizat
                 ScopeId: g.ScopeId)
             {
                 ExpiresAt = g.ExpiresAt,
+                RequiresScopedRole = g.RequiresScopedRole,
+                OrderTypeIds = g.OrderTypeIds,
             })],
+            ScopedRoleNames = context.ScopedRoles,
+            ScopedPermissionCodes = context.ScopedPermissions,
         };
     }
 }

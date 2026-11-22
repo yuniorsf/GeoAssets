@@ -20,11 +20,21 @@ public sealed record OrganizationGrantDto(
     DateTime              GrantedAt,
     bool                  IsActive)
 {
+    /// <summary><see cref="OrganizationGrant.RequiresScopedRole"/> (XD01-326); false when the field is absent.</summary>
+    public bool RequiresScopedRole { get; init; }
+
+    /// <summary><see cref="OrganizationGrant.OrderTypeIds"/> (XD01-326); empty (every order type) when the field is absent.</summary>
+    public IReadOnlyList<string> OrderTypeIds { get; init; } = [];
+
     public static OrganizationGrantDto FromModel(OrganizationGrant grant)
     {
         ArgumentNullException.ThrowIfNull(grant);
         return new OrganizationGrantDto(
             grant.Id, grant.GranteeOrganizationId, grant.ResourceOrganizationId, grant.ResourceType, grant.ScopeId,
-            [.. grant.AllowedActions], grant.RequiredRole, grant.ExpiresAt, grant.GrantedBy, grant.GrantedAt, grant.IsActive);
+            [.. grant.AllowedActions], grant.RequiredRole, grant.ExpiresAt, grant.GrantedBy, grant.GrantedAt, grant.IsActive)
+        {
+            RequiresScopedRole = grant.RequiresScopedRole,
+            OrderTypeIds = [.. grant.OrderTypeIds],
+        };
     }
 }

@@ -42,9 +42,29 @@ public sealed class OrganizationGrant
 
     /// <summary>
     /// Restricts the grant to grantee-organization users holding this role.
-    /// Null means any grantee-organization user qualifies.
+    /// Null means any grantee-organization user qualifies. Matched against the user's home
+    /// roles, or — when <see cref="RequiresScopedRole"/> is set — against the roles the user
+    /// holds on <see cref="ResourceOrganizationId"/>.
     /// </summary>
     public string? RequiredRole { get; set; }
+
+    /// <summary>
+    /// How a grantee-organization user qualifies for an action this grant lists (XD01-326).
+    /// False (every grant created before this field existed, and the default): by holding the
+    /// action's permission at home, the original organization-wide behavior. True: only by
+    /// holding it through a role assigned on <see cref="ResourceOrganizationId"/>
+    /// (<c>UserRole.OrganizationId</c>, XD01-325) — home roles and home permissions count for
+    /// nothing, and <see cref="RequiredRole"/> is matched against the roles held there.
+    /// </summary>
+    public bool RequiresScopedRole { get; set; }
+
+    /// <summary>
+    /// Restricts a service-order grant to orders of these order types (XD01-326), compared
+    /// ignoring case. Empty (every grant created before this field existed, and the default)
+    /// means every order type. Only meaningful for <see cref="ResourceType"/> <c>"ServiceOrder"</c>:
+    /// a grant listing order types never matches a resource that has none.
+    /// </summary>
+    public List<string> OrderTypeIds { get; init; } = [];
 
     /// <summary>Null means the grant never expires.</summary>
     public DateTime? ExpiresAt { get; set; }

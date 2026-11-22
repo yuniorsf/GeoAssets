@@ -12,7 +12,8 @@ namespace GeoAssets.Workflow.Rules;
 /// <item>its organization is the order's <see cref="GeoAssets.Core.Interfaces.IOrgOwnedResource.OrganizationId"/>;</item>
 /// <item>its organization holds a cross-organization grant covering the order — exactly what
 /// <see cref="CrossOrgGrantMatcher.CoversOrder"/> defines: resource type, scope, required role
-/// and expiry included, and at least one service-order action listed;</item>
+/// and expiry included, and at least one service-order action listed (for a grant that requires a
+/// scoped role, XD01-326: listed and held by the principal on the order's organization);</item>
 /// <item>the order was dispatched to the principal — to its user id, to a group it belongs to,
 /// or to its organization: the same recipient notion the dispatch-recipient rule uses.</item>
 /// </list>
@@ -56,6 +57,23 @@ internal static class OrderOrganizationGate
 
         return IsMember(context.Principal, owner)
             || CrossOrgGrantMatcher.CoversOrder(context.Principal, context.Order, utcNow);
+    }
+
+    /// <summary>
+    /// Whether the principal reaches the order only as a holder of roles on the order's organization (XD01-326): it is
+    /// neither a recipient of the order's dispatch nor a member of its organization, and every grant covering the order
+    /// requires a scoped role (<see cref="CrossOrgGrantMatcher.CoversOrderOnlyThroughScopedRole"/>). Such a principal is
+    /// decided by what it holds on that organization alone — see <see cref="ServiceOrderRules.Evaluate"/>.
+    /// </summary>
+    public static bool PassesOnlyThroughScopedRole(RuleEvaluationContext context, DateTime utcNow)
+    {
+        if ((context.Relationship & RecipientFlags) != OrderUserRelationship.None)
+            return false;
+
+        var owner = context.Order.OrganizationId;
+        return owner != Guid.Empty
+            && !IsMember(context.Principal, owner)
+            && CrossOrgGrantMatcher.CoversOrderOnlyThroughScopedRole(context.Principal, context.Order, utcNow);
     }
 
     /// <summary>

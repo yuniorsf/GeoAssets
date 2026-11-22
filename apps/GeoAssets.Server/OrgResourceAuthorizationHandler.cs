@@ -14,9 +14,9 @@ namespace GeoAssets.Server;
 /// requirement)</c> once the endpoint has actually loaded the resource — not through
 /// <c>.RequireAuthorization</c> route middleware, which runs before any resource is loaded.
 ///
-/// Evaluation: <see cref="OrgResourceRequirement.PermissionCode"/> passes AND (the caller's
-/// organization equals the resource's <c>OrganizationId</c> OR a matching active
-/// <c>OrganizationGrant</c> exists). A resource with <see cref="Guid.Empty"/>
+/// Evaluation: (<see cref="OrgResourceRequirement.PermissionCode"/> passes AND the caller's
+/// organization equals the resource's <c>OrganizationId</c>) OR a matching active
+/// <c>OrganizationGrant</c> exists that the caller qualifies for (see below). A resource with <see cref="Guid.Empty"/>
 /// <c>OrganizationId</c> (the "no organization assigned" sentinel — see
 /// <see cref="IOrgOwnedResource"/>) is treated as unowned and always passes the org check:
 /// this keeps every feature/asset-type created before XD01-20 (all defaulted to
@@ -29,6 +29,14 @@ namespace GeoAssets.Server;
 /// <see cref="IScopeableResource"/> with an equal <c>ScopeId</c> — a resource type that doesn't
 /// implement it can never satisfy a scoped grant. Null <c>ScopeId</c> (every grant predating
 /// this field) is ungated, exactly as before (XD01-174).
+///
+/// How the caller qualifies for a grant depends on its <c>RequiresScopedRole</c> (XD01-326). False
+/// (every grant predating the field): by holding <see cref="OrgResourceRequirement.PermissionCode"/>
+/// at home, with <c>RequiredRole</c> matched against the home roles — exactly as before. True: only by
+/// holding it through a role assigned on the resource's organization
+/// (<see cref="AuthorizationContext.HasPermissionOn"/>), with <c>RequiredRole</c> matched against the
+/// roles held there; home roles and permissions count for nothing. A grant narrowed to order types
+/// (<c>OrderTypeIds</c>) only ever matches a service order, so it never matches a resource here.
 /// </summary>
 public sealed class OrgResourceAuthorizationHandler(
     IGeoAuthorizationService authorizationService,
@@ -46,12 +54,11 @@ public sealed class OrgResourceAuthorizationHandler(
         // IGeoAuthorizationService throws for an anonymous caller rather than returning false.
         if (context.User.Identity?.IsAuthenticated != true) return;
 
-        if (!await authorizationService.HasPermissionAsync(requirement.PermissionCode).ConfigureAwait(false))
-            return;
+        var hasHomePermission = await authorizationService.HasPermissionAsync(requirement.PermissionCode).ConfigureAwait(false);
 
         if (resource.OrganizationId == Guid.Empty)
         {
-            context.Succeed(requirement);
+            if (hasHomePermission) context.Succeed(requirement);
             return;
         }
 
@@ -60,11 +67,14 @@ public sealed class OrgResourceAuthorizationHandler(
 
         if (userOrganizationId == resource.OrganizationId)
         {
-            context.Succeed(requirement);
+            if (hasHomePermission) context.Succeed(requirement);
             return;
         }
 
-        if (userOrganizationId is null)
+        // Every grant needs the permission somewhere: at home (organization-wide) or on the resource's organization
+        // (scoped role, XD01-326). Holding it in neither place, no grant can help — skip the lookup.
+        var holdsOnResourceOrganization = authContext.HasPermissionOn(resource.OrganizationId, requirement.PermissionCode);
+        if (userOrganizationId is null || (!hasHomePermission && !holdsOnResourceOrganization))
             return;
 
         var resourceType = resource.GetType().Name;
@@ -72,9 +82,12 @@ public sealed class OrgResourceAuthorizationHandler(
 
         var hasGrant = grants.Any(g =>
             OrganizationGrantMatching.CoversResourceType(g.ResourceType, resourceType) &&
+            g.OrderTypeIds.Count == 0 &&
             (g.ScopeId is null || (resource is IScopeableResource scoped && OrganizationGrantMatching.CoversScope(g.ScopeId, scoped.ScopeId))) &&
             OrganizationGrantMatching.AllowsAction(g.AllowedActions, requirement.PermissionCode) &&
-            (g.RequiredRole is null || authContext.HasRole(g.RequiredRole)));
+            (g.RequiresScopedRole
+                ? holdsOnResourceOrganization && (g.RequiredRole is null || authContext.HasRoleOn(resource.OrganizationId, g.RequiredRole))
+                : hasHomePermission && (g.RequiredRole is null || authContext.HasRole(g.RequiredRole))));
 
         if (hasGrant)
             context.Succeed(requirement);

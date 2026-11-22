@@ -56,7 +56,7 @@ public sealed class OrganizationGrantActiveKeyMigrationTests
         var nullKey = new[] { Seed(null, null, 1), Seed(null, null, 2), Seed(null, null, 3) };
         var typedKey = new[] { Seed("ServiceOrder", "3550308", 4), Seed("ServiceOrder", "3550308", 5) };
         var clean = Seed("ServiceOrder", "other", 6);
-        await InsertAsync(connectionString, [.. nullKey, .. typedKey, clean]);
+        await InsertBeforeTheMigrationAsync(connectionString, [.. nullKey, .. typedKey, clean]);
         await using var db = OrganizationGrantsPostgres.NewContext(connectionString);
 
         var act = () => db.GetService<IMigrator>().MigrateAsync();
@@ -78,7 +78,7 @@ public sealed class OrganizationGrantActiveKeyMigrationTests
     {
         var connectionString = await MigratedBeforeAsync();
         var inactive = new[] { Seed(null, null, 1, isActive: false), Seed(null, null, 2, isActive: false), Seed(null, null, 3) };
-        await InsertAsync(connectionString, inactive);
+        await InsertBeforeTheMigrationAsync(connectionString, inactive);
         await using var db = OrganizationGrantsPostgres.NewContext(connectionString);
 
         await db.GetService<IMigrator>().MigrateAsync();
@@ -112,7 +112,7 @@ public sealed class OrganizationGrantActiveKeyMigrationTests
         var sameInstantLowerId = Seed("ServiceOrder", "tie", 1);
         var sameInstantHigherId = Seed("ServiceOrder", "tie", 1);
         if (sameInstantLowerId.Id.CompareTo(sameInstantHigherId.Id) > 0) (sameInstantLowerId, sameInstantHigherId) = (sameInstantHigherId, sameInstantLowerId);
-        await InsertAsync(
+        await InsertBeforeTheMigrationAsync(
             connectionString,
             [Seed(null, null, 3), oldestNull, Seed(null, null, 2), Seed("ServiceOrder", "3550308", 5), oldestTyped, sameInstantHigherId, sameInstantLowerId]);
         await using var db = OrganizationGrantsPostgres.NewContext(connectionString);
@@ -188,6 +188,36 @@ public sealed class OrganizationGrantActiveKeyMigrationTests
         await using var db = OrganizationGrantsPostgres.NewContext(connectionString);
         db.OrganizationGrants.AddRange(grants);
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Seeds the schema as it stands before <see cref="MigrationName"/> — only the columns that existed then, since the
+    /// current model carries later ones (XD01-326's <c>RequiresScopedRole</c>/<c>OrderTypeIds</c>) that schema does not have.
+    /// </summary>
+    private static async Task InsertBeforeTheMigrationAsync(string connectionString, IEnumerable<OrganizationGrant> grants)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        foreach (var grant in grants)
+        {
+            await using var command = new NpgsqlCommand(
+                """
+                INSERT INTO "OrganizationGrants"
+                    ("Id", "GranteeOrganizationId", "ResourceOrganizationId", "ResourceType", "ScopeId", "AllowedActions", "GrantedBy", "GrantedAt", "IsActive")
+                VALUES (@id, @grantee, @resource, @resourceType, @scopeId, @allowedActions, @grantedBy, @grantedAt, @isActive)
+                """,
+                connection);
+            command.Parameters.AddWithValue("id", grant.Id);
+            command.Parameters.AddWithValue("grantee", grant.GranteeOrganizationId);
+            command.Parameters.AddWithValue("resource", grant.ResourceOrganizationId);
+            command.Parameters.AddWithValue("resourceType", (object?)grant.ResourceType ?? DBNull.Value);
+            command.Parameters.AddWithValue("scopeId", (object?)grant.ScopeId ?? DBNull.Value);
+            command.Parameters.AddWithValue("allowedActions", System.Text.Json.JsonSerializer.Serialize(grant.AllowedActions));
+            command.Parameters.AddWithValue("grantedBy", grant.GrantedBy);
+            command.Parameters.AddWithValue("grantedAt", grant.GrantedAt);
+            command.Parameters.AddWithValue("isActive", grant.IsActive);
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     private static async Task RunCleanUpAsync(string connectionString)

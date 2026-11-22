@@ -22,6 +22,12 @@ namespace GeoAssets.Workflow.Hosting;
 ///
 /// A host without the identity database (a vertical microservice, XD01-382) builds it over an
 /// <see cref="IOwnOrganizationGrantSource"/> instead — the kernel's answer for the caller's own token.
+///
+/// The roles and permissions the caller holds on other organizations (XD01-325) are copied from
+/// <see cref="AuthorizationContext.ScopedRoles"/>/<see cref="AuthorizationContext.ScopedPermissions"/>
+/// into <see cref="WorkflowPrincipal.ScopedRoleNames"/>/<see cref="WorkflowPrincipal.ScopedPermissionCodes"/>,
+/// so a grant with <see cref="WorkflowOrgGrant.RequiresScopedRole"/> is decided by them (XD01-326).
+/// Wherever the context carries none, such a grant opens nothing.
 /// </summary>
 public sealed class ServerWorkflowPrincipalFactory
 {
@@ -76,7 +82,11 @@ public sealed class ServerWorkflowPrincipalFactory
                 ScopeId: g.ScopeId)
             {
                 ExpiresAt = g.ExpiresAt,
+                RequiresScopedRole = g.RequiresScopedRole,
+                OrderTypeIds = g.OrderTypeIds,
             })],
+            ScopedRoleNames = context.ScopedRoles,
+            ScopedPermissionCodes = context.ScopedPermissions,
         };
     }
 }

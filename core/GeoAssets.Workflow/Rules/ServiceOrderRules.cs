@@ -14,6 +14,12 @@ namespace GeoAssets.Workflow.Rules;
 /// Creation has no order to gate; a host must only ever create an order under the creating
 /// principal's own organization.
 ///
+/// <b>Scoped-role grants (XD01-326).</b> A principal that reaches the order only through grants
+/// with <see cref="WorkflowOrgGrant.RequiresScopedRole"/> is decided by the roles it holds on the
+/// order's organization, never by its home roles: the action must be one such a grant lists and
+/// the principal holds there, and the chain below then sees it with only those roles and
+/// permissions. Organization-wide grants are unchanged.
+///
 /// Then it evaluates a chain of <see cref="IServiceOrderRule"/> instances using deny-overrides logic:
 ///   • Any explicit DENY wins over all ALLOWs.
 ///   • At least one explicit ALLOW with no DENYs → granted.
@@ -176,14 +182,15 @@ public sealed partial class ServiceOrderRules
             return Anonymous(action);
 
         var context = new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order));
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
 
-        if (!OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, _timeProvider.GetUtcNow().UtcDateTime))
+        if (!OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, utcNow))
         {
             return RuleEvaluationResult.Deny(
                 action, "The order is outside the principal's organization.", RuleDenialCode.OutsideOrganization);
         }
 
-        return LimitToRecipientAccess(EvaluateChain(action, context), context);
+        return LimitToRecipientAccess(EvaluateAdmitted(action, context, utcNow), context);
     }
 
     /// <summary>

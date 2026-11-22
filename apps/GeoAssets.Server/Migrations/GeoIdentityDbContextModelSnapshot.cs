@@ -293,9 +293,16 @@ namespace GeoAssets.Server.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("OrderTypeIds")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("RequiredRole")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("RequiresScopedRole")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("ResourceOrganizationId")
                         .HasColumnType("uuid");
