@@ -9,6 +9,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.FieldService.Server;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.NeutralOperator.Application;
+using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Persistence;
 using Microsoft.AspNetCore.Authentication;
@@ -122,6 +123,12 @@ public sealed class FieldServiceSyncApiTests : IAsyncLifetime, IDisposable
                         new ValidatingServiceOrderRepository(new EFServiceOrderRepository(sp.GetRequiredService<ServiceOrderDbContext>())));
                     services.AddSingleton<IGeoCoreClient>(_geoCoreClient);
                     services.AddSingleton(TimeProvider.System);
+
+                    // XD01-328: the sync routes' cross-organization access, over mirrors left empty here — these
+                    // own-tenant facts are the regression suite; FieldServiceCrossOrganizationSyncApiTests covers the rest.
+                    services.AddServiceOrderRules();
+                    services.AddScoped<IMirroredCrossOrganizationEntitlements, EFMirroredCrossOrganizationEntitlements>();
+                    services.AddFieldServiceCrossOrganizationAccess();
                 });
                 webHost.Configure(app =>
                 {

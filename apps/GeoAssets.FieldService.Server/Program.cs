@@ -237,11 +237,15 @@ builder.Services.AddOrganizationGrantSync();
 builder.Services.Configure<OrganizationGrantSyncOptions>(
     builder.Configuration.GetSection(OrganizationGrantSyncOptions.SectionName));
 
-// ── Scoped role assignment sync (XD01-328) — the roles users hold on other organizations, polled from Core's
-// /api/identity/scoped-role-assignments/sync into ScopedRoleAssignmentMirror on the same OrganizationGrantSync options
-// (one PollInterval, one staleness bound for both mirrors). ─────────────────────────────────────────────────────────────
+// ── Scoped role assignment sync and cross-organization sync access (XD01-328) — the roles users hold on other
+// organizations, polled from Core's /api/identity/scoped-role-assignments/sync into ScopedRoleAssignmentMirror on the same
+// OrganizationGrantSync options (one PollInterval, one staleness bound for both mirrors). The mobile sync routes decide
+// another organization's order with ServiceOrderRules over a principal built from the token and both mirrors, and read
+// such orders through EFServiceOrderRepository's explicit grant-aware path — the tenant filter and RLS stay on. ──────────
 builder.Services.AddSingleton<IScopedRoleAssignmentSyncClient, HttpScopedRoleAssignmentSyncClient>();
 builder.Services.AddScopedRoleAssignmentSync();
+builder.Services.AddServiceOrderRules();
+builder.Services.AddFieldServiceCrossOrganizationAccess();
 
 // ── IBM Maximo MIF asset lifecycle sync (XD01-232) — GeoCoreBridgeEventPublisher offers every
 // claimed AssetMutationBatchRequestedEvent to MaximoAssetLifecycleSyncService after the Core GIS

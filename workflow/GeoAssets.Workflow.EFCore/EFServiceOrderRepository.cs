@@ -13,7 +13,7 @@ namespace GeoAssets.Workflow.Persistence;
 /// when omitted, <see cref="ServiceOrder.Features"/> will be empty and IDs are
 /// still accessible via <see cref="ServiceOrder.FeatureIds"/>.
 /// </summary>
-public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDisposable
+public sealed class EFServiceOrderRepository : IServiceOrderRepository, ICrossOrganizationServiceOrderReader, IAsyncDisposable
 {
     private readonly ServiceOrderDbContext _db;
     private readonly IAssetProvider? _assets;
@@ -140,6 +140,26 @@ public sealed class EFServiceOrderRepository : IServiceOrderRepository, IAsyncDi
 
         var orders = isOwnInbox ? _db.ServiceOrders.IgnoreQueryFilters() : _db.ServiceOrders;
         return await LoadAllAsync(orders.Where(o => orderIds.Contains(o.Id)), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The orders of <paramref name="organizationIds"/> other than this context's own organization (XD01-328) — the one
+    /// explicit path past the tenant filter for a grantee's list. It reaches past the filter for the organizations asked for
+    /// and no other, never for <see cref="Guid.Empty"/>, and leaves row-level security alone: the session is still the
+    /// caller's organization, so the database returns only rows a mirrored grant opens to it. The caller asks only for
+    /// organizations its grants name, and still decides each order with <c>ServiceOrderRules</c>.
+    /// </summary>
+    public async Task<IReadOnlyList<IServiceOrder>> GetOfOtherOrganizationsAsync(
+        IReadOnlyCollection<Guid> organizationIds, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(organizationIds);
+
+        var own = _db.CurrentOrganizationId;
+        var others = organizationIds.Where(o => o != Guid.Empty && o != own).Distinct().ToList();
+        if (others.Count == 0) return [];
+
+        return await LoadAllAsync(
+            _db.ServiceOrders.IgnoreQueryFilters().Where(o => others.Contains(o.OrganizationId)), ct).ConfigureAwait(false);
     }
 
     private bool IsOwnOrganization(string targetId, DispatchTargetType targetType, out string[] spellings)
