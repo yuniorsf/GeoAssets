@@ -1,0 +1,65 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+@if (Visible)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box" @onclick:stopPropagation="true">
+            <h6>@L["admin.contractorAccess.assignTitle"]</h6>
+
+            @if (_loading)
+            {
+                <p>@L["app.loading"]</p>
+            }
+            else if (_users.Count == 0)
+            {
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors" role="alert">@_error</p>
+                }
+                else
+                {
+                    <p class="contractor-no-users">@L["admin.contractorAccess.noContractedUsers"]</p>
+                }
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+                </div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label for="scoped-role-user">@L["admin.contractorAccess.contractedUser"]</label>
+                    <select id="scoped-role-user" class="form-select form-select-sm" @onchange="OnUserChanged" disabled="@_assigning">
+                        <option value="" selected="@(_userId is null)">@L["admin.contractorAccess.chooseUser"]</option>
+                        @foreach (var user in _users)
+                        {
+                            <option value="@user.Id" selected="@(_userId == user.Id)">@user.DisplayName (@user.Email) — @user.OrganizationName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="scoped-role-role">@L["admin.contractorAccess.role"]</label>
+                    <select id="scoped-role-role" class="form-select form-select-sm" @onchange="OnRoleChanged" disabled="@_assigning">
+                        <option value="" selected="@(_roleId is null)">@L["admin.contractorAccess.chooseRole"]</option>
+                        @foreach (var role in _roles)
+                        {
+                            <option value="@role.Id" selected="@(_roleId == role.Id)">@role.Name</option>
+                        }
+                    </select>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors" role="alert">@_error</p>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel" disabled="@_assigning">@L["assets.cancel"]</button>
+                    <button class="btn btn-primary btn-sm contractor-assign-submit" type="button" @onclick="AssignAsync" disabled="@(_assigning || _userId is null || _roleId is null)">
+                        @(_assigning ? L["admin.contractorAccess.assigning"] : L["admin.contractorAccess.assign"])
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}

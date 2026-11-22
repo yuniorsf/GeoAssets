@@ -1,0 +1,141 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Components.Shared
+
+@if (_client is not null)
+{
+    <section class="contractor-access mt-4">
+        <div class="section-header-row">
+            <h5>@L["admin.contractorAccess.title"]</h5>
+            @if (_state == PanelState.Loaded)
+            {
+                <button class="btn btn-primary btn-sm" type="button" @onclick="OpenAssignDialog">@L["admin.contractorAccess.assign"]</button>
+            }
+        </div>
+
+        @switch (_state)
+        {
+            case PanelState.Loading:
+                <div class="empty-state"><p>@L["app.loading"]</p></div>
+                break;
+
+            case PanelState.Forbidden:
+                <div class="empty-state"><p>@L["admin.contractorAccess.forbidden"]</p></div>
+                break;
+
+            case PanelState.Failed:
+                <p class="attribute-errors">@L["admin.contractorAccess.loadError"]</p>
+                break;
+
+            default:
+                <p class="text-body-secondary small">@L["admin.contractorAccess.intro"]</p>
+
+                <div class="permission-group">
+                    <h6>@L["admin.contractorAccess.grantsTitle"]</h6>
+                    @if (_grants.Count == 0)
+                    {
+                        <p class="text-body-secondary small contractor-grants-empty">@L["admin.contractorAccess.grantsEmpty"]</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle contractor-grants">
+                                <thead>
+                                    <tr>
+                                        <th>@L["admin.contractorAccess.grantee"]</th>
+                                        <th>@L["admin.contractorAccess.resourceType"]</th>
+                                        <th>@L["admin.contractorAccess.scope"]</th>
+                                        <th>@L["admin.contractorAccess.orderTypes"]</th>
+                                        <th>@L["admin.contractorAccess.actions"]</th>
+                                        <th>@L["admin.contractorAccess.requiresScopedRole"]</th>
+                                        <th>@L["admin.contractorAccess.expires"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var grant in _grants)
+                                    {
+                                        <tr>
+                                            <td>@OrganizationName(grant.GranteeOrganizationId)</td>
+                                            <td>@(grant.ResourceType ?? L["admin.contractorAccess.all"])</td>
+                                            <td>@(grant.ScopeId ?? L["admin.contractorAccess.all"])</td>
+                                            <td class="contractor-grant-order-types">@(grant.OrderTypeIds.Count == 0 ? L["admin.contractorAccess.all"] : string.Join(", ", grant.OrderTypeIds))</td>
+                                            <td>@string.Join(", ", grant.AllowedActions)</td>
+                                            <td class="contractor-grant-scoped">
+                                                @if (grant.RequiresScopedRole)
+                                                {
+                                                    <span class="badge-builtin">@L["admin.contractorAccess.yes"]</span>
+                                                }
+                                                else
+                                                {
+                                                    @L["admin.contractorAccess.no"]
+                                                }
+                                            </td>
+                                            <td>@(grant.ExpiresAt is { } expiresAt ? expiresAt.ToLocalTime().ToString("d", Culture) : L["admin.contractorAccess.never"])</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <div class="permission-group">
+                    <h6>@L["admin.contractorAccess.assignmentsTitle"]</h6>
+                    @if (_assignments.Count == 0)
+                    {
+                        <p class="text-body-secondary small contractor-assignments-empty">@L["admin.contractorAccess.assignmentsEmpty"]</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle contractor-assignments">
+                                <thead>
+                                    <tr>
+                                        <th>@L["admin.contractorAccess.user"]</th>
+                                        <th>@L["admin.contractorAccess.organization"]</th>
+                                        <th>@L["admin.contractorAccess.role"]</th>
+                                        <th>@L["admin.contractorAccess.assignedBy"]</th>
+                                        <th>@L["admin.contractorAccess.assignedAt"]</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var assignment in _assignments)
+                                    {
+                                        <tr>
+                                            <td>@assignment.UserDisplayName <span class="text-body-secondary small">@assignment.UserEmail</span></td>
+                                            <td>@assignment.UserOrganizationName</td>
+                                            <td>@assignment.RoleName</td>
+                                            <td>@assignment.AssignedBy</td>
+                                            <td>@assignment.AssignedAt.ToLocalTime().ToString("g", Culture)</td>
+                                            <td>
+                                                <button class="btn-icon contractor-revoke" type="button" title="@L["admin.contractorAccess.revoke"]"
+                                                        @onclick="() => RequestRevoke(assignment)">×</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_actionError))
+                    {
+                        <p class="attribute-errors">@_actionError</p>
+                    }
+                </div>
+                break;
+        }
+
+        <AssignScopedRoleDialog Visible="_showAssignDialog"
+                                OrganizationId="OrganizationId"
+                                OnAssigned="OnAssignedAsync"
+                                OnCancel="() => _showAssignDialog = false" />
+
+        <ConfirmDialog Visible="_showRevokeConfirm"
+                       Title="@L["admin.contractorAccess.revokeTitle"]"
+                       Message="@L.GetString("admin.contractorAccess.revokeConfirm", _toRevoke?.UserDisplayName ?? string.Empty, _toRevoke?.RoleName ?? string.Empty)"
+                       ConfirmLabel="@L["admin.contractorAccess.revoke"]"
+                       OnConfirm="ConfirmRevokeAsync"
+                       OnCancel="() => _showRevokeConfirm = false" />
+    </section>
+}

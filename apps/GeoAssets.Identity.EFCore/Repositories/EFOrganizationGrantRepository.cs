@@ -41,6 +41,16 @@ public sealed class EFOrganizationGrantRepository(GeoIdentityDbContext db, TimeP
             .ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsIssuedByAsync(
+        Guid resourceOrganizationId, DateTime utcNow, CancellationToken ct = default)
+        => await db.OrganizationGrants
+            .AsNoTracking()
+            .Where(g => g.ResourceOrganizationId == resourceOrganizationId
+                     && g.IsActive
+                     && (g.ExpiresAt == null || g.ExpiresAt > utcNow))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
     public Task<OrganizationGrant?> FindActiveGrantByKeyAsync(OrganizationGrantKey key, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(key);

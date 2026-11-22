@@ -87,6 +87,10 @@ public static class GeoIdentityRestExtensions
         services.AddScoped<IInvitationClient>(sp =>
             new RestInvitationClient(CreateIdentityClient(sp)));
 
+        // XD01-327: the roles users of contracted organizations hold on an organization.
+        services.AddScoped<IScopedRoleAdministrationClient>(sp =>
+            new RestScopedRoleAdministrationClient(CreateIdentityClient(sp)));
+
         return services;
     }
 

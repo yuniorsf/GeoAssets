@@ -39,6 +39,8 @@
         <OrganizationForm OrganizationId="@_selectedOrganizationId"
                           OnSaved="OnOrganizationSaved"
                           OnCancel="() => _selectedOrganizationId = null" />
+
+        <ContractorAccessPanel OrganizationId="@_selectedOrganizationId.Value" />
     }
     else
     {
