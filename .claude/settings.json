@@ -61,7 +61,25 @@
       "Bash(export PGPASSWORD=*)",
       "Bash(psql -h localhost -p 5432 -U postgres -c \"DROP DATABASE IF EXISTS geoassets_xd139_test;\")",
       "Bash(psql -h localhost -p 5432 -U postgres -c \"CREATE DATABASE geoassets_xd139_test;\")",
-      "Bash(psql -h localhost -p 5432 -U postgres -d geoassets_xd139_test -c \"\\\\d \\\\\"Projects\\\\\"\")"
+      "Bash(psql -h localhost -p 5432 -U postgres -d geoassets_xd139_test -c \"\\\\d \\\\\"Projects\\\\\"\")",
+      "Bash(terraform fmt *)",
+      "Bash(terraform validate *)",
+      "Bash(terraform init -backend=false *)",
+      "Bash(terraform version)",
+      "Bash(tflint *)",
+      "Bash(trivy config *)",
+      "Bash(helm lint *)",
+      "Bash(helm template *)",
+      "Bash(helm version)",
+      "Bash(kubeconform *)",
+      "Bash(hadolint *)",
+      "Bash(docker compose config -q)",
+      "Bash(docker compose -f deploy/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/server/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/neutral-operator/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/web/docker-compose.yaml config -q)",
+      "Bash(docker compose -f deploy/otel/docker-compose.yaml config -q)",
+      "Bash(docker buildx build --check *)"
     ],
     "additionalDirectories": [
       "/tmp"
