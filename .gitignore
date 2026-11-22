@@ -79,3 +79,6 @@ tests/GeoAssets.Workflow.Tests/.local/
 !*.tfvars.example
 crash.log
 crash.*.log
+
+# Per-run QA report written by scripts/run-agentic-qa.py
+.harness/qa-e2e-report.md
