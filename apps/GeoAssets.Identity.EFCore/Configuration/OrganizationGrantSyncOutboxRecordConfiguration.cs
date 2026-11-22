@@ -14,6 +14,9 @@ internal sealed class OrganizationGrantSyncOutboxRecordConfiguration : IEntityTy
 
         b.Property(r => r.ResourceType).HasMaxLength(128);
         b.Property(r => r.ScopeId).HasMaxLength(128);
+        b.Property(r => r.RequiredRole).HasMaxLength(128);
+        OrganizationGrantConfiguration.ConfigureStringList(b.Property(r => r.AllowedActions));
+        OrganizationGrantConfiguration.ConfigureStringList(b.Property(r => r.OrderTypeIds));
 
         b.HasIndex(r => r.GrantId);
     }

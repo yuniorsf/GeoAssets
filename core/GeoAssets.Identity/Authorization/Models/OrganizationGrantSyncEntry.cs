@@ -21,4 +21,21 @@ public sealed record OrganizationGrantSyncEntry
     public string? ScopeId { get; init; }
     public required bool IsActive { get; init; }
     public DateTime? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// The grant's <see cref="OrganizationGrant.AllowedActions"/> (XD01-328) — with the three fields below, what a
+    /// consumer needs to decide the cross-organization rule (XD01-326) itself rather than only the row-level exception.
+    /// An entry recorded before these fields existed carries none of them, and is followed by a fresh snapshot of every
+    /// grant (the <c>AddOrganizationGrantSyncRuleFields</c> migration re-records each one).
+    /// </summary>
+    public IReadOnlyList<string> AllowedActions { get; init; } = [];
+
+    /// <summary>The grant's <see cref="OrganizationGrant.RequiredRole"/> (XD01-328).</summary>
+    public string? RequiredRole { get; init; }
+
+    /// <summary>The grant's <see cref="OrganizationGrant.RequiresScopedRole"/> (XD01-328).</summary>
+    public bool RequiresScopedRole { get; init; }
+
+    /// <summary>The grant's <see cref="OrganizationGrant.OrderTypeIds"/> (XD01-328); empty means every order type.</summary>
+    public IReadOnlyList<string> OrderTypeIds { get; init; } = [];
 }

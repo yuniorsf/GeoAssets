@@ -186,6 +186,43 @@ public class OrganizationGrantSyncWorkerTests
     }
 
     [Fact]
+    public async Task SyncNextBatchAsync_MirrorsWhatTheCrossOrganizationRuleDecidesBy()
+    {
+        using var fixture = new SqliteFixture();
+        var client = new FakeSyncClient();
+        var grantId = Guid.NewGuid();
+        client.Add(new OrganizationGrantSyncEntry
+        {
+            SequenceNumber = 1,
+            GrantId = grantId,
+            GranteeOrganizationId = Guid.NewGuid(),
+            ResourceOrganizationId = Guid.NewGuid(),
+            ResourceType = "ServiceOrder",
+            IsActive = true,
+            AllowedActions = ["serviceorders:view", "serviceorders:execute"],
+            RequiredRole = "Contractor C1",
+            RequiresScopedRole = true,
+            OrderTypeIds = ["cut"],
+        });
+        await using var serviceProvider = BuildScopeProvider(fixture);
+        using var worker = new OrganizationGrantSyncWorker(
+            serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            client,
+            new FakeTimeProvider(FixedStartUtc),
+            Options.Create(new OrganizationGrantSyncOptions()),
+            NullLogger<OrganizationGrantSyncWorker>.Instance);
+
+        await worker.SyncNextBatchAsync();
+
+        // XD01-328: the whole rule's input, not only the row-level exception's.
+        var mirror = fixture.Context.OrganizationGrantMirror.Single(m => m.GrantId == grantId);
+        mirror.AllowedActionsJson.Should().Be("""["serviceorders:view","serviceorders:execute"]""");
+        mirror.RequiredRole.Should().Be("Contractor C1");
+        mirror.RequiresScopedRole.Should().BeTrue();
+        mirror.OrderTypeIdsJson.Should().Be("""["cut"]""");
+    }
+
+    [Fact]
     public async Task SyncNextBatchAsync_NoNewEntries_ReturnsZeroAndLeavesCursorUntouched()
     {
         using var fixture = new SqliteFixture();

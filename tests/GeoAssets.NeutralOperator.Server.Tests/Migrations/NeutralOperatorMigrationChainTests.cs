@@ -26,7 +26,9 @@ public sealed class NeutralOperatorMigrationChainTests
 
         await serviceOrders.Database.MigrateAsync();
         (await serviceOrders.Database.GetPendingMigrationsAsync()).Should().BeEmpty();
-        (await serviceOrders.Database.GetAppliedMigrationsAsync()).Should().ContainSingle().Which.Should().EndWith("_InitialNeutralOperatorIsolation");
+        (await serviceOrders.Database.GetAppliedMigrationsAsync()).Should().SatisfyRespectively(
+            baseline => baseline.Should().EndWith("_InitialNeutralOperatorIsolation"),
+            mirrors => mirrors.Should().EndWith("_AddCrossOrganizationSyncMirrors"));
         (await vertical.Database.GetPendingMigrationsAsync()).Should().NotBeEmpty("the vertical's chain waits for the kernel tables it adopts");
 
         await vertical.Database.MigrateAsync();
@@ -57,6 +59,8 @@ public sealed class NeutralOperatorMigrationChainTests
             "public.OrderTypeTransitions",
             "public.OrganizationGrantMirror",
             "public.OrganizationGrantSyncCursor",
+            "public.ScopedRoleAssignmentMirror",
+            "public.ScopedRoleAssignmentSyncCursor",
             "public.ServiceOrders",
             "public.ServiceOrderTargets",
             "public.WorkflowInboxProcessedMessages",

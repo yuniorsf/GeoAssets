@@ -31,19 +31,11 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
         // stored as JSON text rather than a normalized child table — matching this codebase's
         // established convention for this shape of data (e.g. GeoEntityRow.CustomAttributesJson,
         // ServiceOrderRecord.AttributesJson).
-        b.Property(g => g.AllowedActions)
-         .HasConversion(
-             v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-             v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
-         .Metadata.SetValueComparer(StringListComparer());
+        ConfigureStringList(b.Property(g => g.AllowedActions));
 
         // XD01-326: same JSON-text shape as AllowedActions. Every row that predates the column migrates as "[]" (every
         // order type), and RequiresScopedRole as false (the organization-wide semantics) — see the migration.
-        b.Property(g => g.OrderTypeIds)
-         .HasConversion(
-             v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-             v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
-         .Metadata.SetValueComparer(StringListComparer());
+        ConfigureStringList(b.Property(g => g.OrderTypeIds));
 
         b.HasIndex(g => new { g.GranteeOrganizationId, g.ResourceOrganizationId });
         b.HasIndex(g => g.IsActive);
@@ -52,6 +44,17 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
          .HasFilter("\"IsActive\"")
          .AreNullsDistinct(false);
     }
+
+    /// <summary>
+    /// A list of strings stored as JSON text — the shape of <see cref="OrganizationGrant.AllowedActions"/> and
+    /// <see cref="OrganizationGrant.OrderTypeIds"/>, shared with the grant sync outbox's copies of them (XD01-328).
+    /// </summary>
+    internal static void ConfigureStringList(PropertyBuilder<List<string>> property) =>
+        property
+         .HasConversion(
+             v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+             v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
+         .Metadata.SetValueComparer(StringListComparer());
 
     private static ValueComparer<List<string>> StringListComparer() => new(
         (left, right) => (left ?? new()).SequenceEqual(right ?? new()),

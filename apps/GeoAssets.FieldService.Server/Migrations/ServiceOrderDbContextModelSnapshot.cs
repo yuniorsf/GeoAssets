@@ -367,6 +367,12 @@ namespace GeoAssets.FieldService.Server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AllowedActionsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -374,6 +380,19 @@ namespace GeoAssets.FieldService.Server.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("OrderTypeIdsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("RequiredRole")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("RequiresScopedRole")
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("ResourceOrganizationId")
@@ -501,6 +520,53 @@ namespace GeoAssets.FieldService.Server.Migrations
                     b.HasIndex("Status", "NextRetryAtUtc", "CreatedAtUtc");
 
                     b.ToTable("WorkflowOutboxMessages", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ScopedRoleAssignmentMirrorRecord", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResourceOrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalObjectId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("PermissionCodesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RoleNamesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("SyncedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ResourceOrganizationId");
+
+                    b.HasIndex("ExternalObjectId");
+
+                    b.ToTable("ScopedRoleAssignmentMirror", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ScopedRoleAssignmentSyncCursorRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("LastSequenceNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ScopedRoleAssignmentSyncCursor", (string)null);
                 });
 
             modelBuilder.Entity("GeoAssets.Workflow.Persistence.Entities.ServiceOrderRecord", b =>

@@ -11,10 +11,10 @@ namespace GeoAssets.Tools.NeutralOperatorDataMove;
 internal static class RequiredMigrations
 {
     /// <summary>The kernel <c>ServiceOrderDbContext</c> chain's head (in <c>GeoAssets.Server</c>).</summary>
-    public const string KernelServiceOrders = "20261119221515_DropFieldServiceTablesFromKernel";
+    public const string KernelServiceOrders = "20261122224401_AddCrossOrganizationSyncMirrors";
 
     /// <summary>NeutralOperator.Server's <c>ServiceOrderDbContext</c> chain's head (in <c>GeoAssets.NeutralOperator.Server</c>).</summary>
-    public const string NeutralOperatorServerServiceOrders = "20261120004624_InitialNeutralOperatorIsolation";
+    public const string NeutralOperatorServerServiceOrders = "20261122224327_AddCrossOrganizationSyncMirrors";
 
     /// <summary>The history table of both <c>ServiceOrderDbContext</c> chains (EF's default).</summary>
     public const string ServiceOrderHistoryTable = "__EFMigrationsHistory";

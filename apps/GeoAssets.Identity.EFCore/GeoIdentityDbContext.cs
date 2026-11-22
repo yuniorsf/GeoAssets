@@ -40,6 +40,22 @@ public class GeoIdentityDbContext(DbContextOptions<GeoIdentityDbContext> options
     public DbSet<OrganizationGrant> OrganizationGrants => Set<OrganizationGrant>();
     public DbSet<PendingInvitation> PendingInvitations => Set<PendingInvitation>();
     internal DbSet<OrganizationGrantSyncOutboxRecord> OrganizationGrantSyncOutbox => Set<OrganizationGrantSyncOutboxRecord>();
+    internal DbSet<ScopedRoleAssignmentSyncOutboxRecord> ScopedRoleAssignmentSyncOutbox => Set<ScopedRoleAssignmentSyncOutboxRecord>();
+
+    /// <summary>Saves, recording first which scoped role assignments the save changes (XD01-328, see
+    /// <see cref="ScopedRoleAssignmentChangeCapture"/>) — in the same save, so the feed never misses nor invents one.</summary>
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ScopedRoleAssignmentChangeCapture.Capture(this);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    /// <inheritdoc cref="SaveChanges(bool)"/>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        await ScopedRoleAssignmentChangeCapture.CaptureAsync(this, cancellationToken).ConfigureAwait(false);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

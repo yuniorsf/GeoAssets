@@ -128,7 +128,11 @@ public sealed class OrganizationGrantActiveKeyMigrationTests
         (await verify.OrganizationGrants.AsNoTracking().CountAsync()).Should().Be(7);
         var outbox = await new GeoAssets.Identity.Authorization.EFCore.Repositories.EFOrganizationGrantRepository(verify, TimeProvider.System)
             .GetSyncBatchAsync(0, 100);
-        outbox.Should().HaveCount(4).And.OnlyContain(e => !e.IsActive);
+        // The clean-up's four revocations, then — XD01-328's AddOrganizationGrantSyncRuleFields, later in the chain — every
+        // grant re-recorded once with its rule fields.
+        outbox.Take(4).Should().HaveCount(4).And.OnlyContain(e => !e.IsActive);
+        outbox.Skip(4).Select(e => e.GrantId).Should().BeEquivalentTo(active.Select(g => g.Id).Concat(
+            (await verify.OrganizationGrants.AsNoTracking().Where(g => !g.IsActive).Select(g => g.Id).ToListAsync())));
         (await IndexExistsAsync(connectionString)).Should().BeTrue();
     }
 

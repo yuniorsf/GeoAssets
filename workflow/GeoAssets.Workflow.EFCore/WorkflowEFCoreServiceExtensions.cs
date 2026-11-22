@@ -213,6 +213,25 @@ public static class WorkflowEFCoreServiceExtensions
     }
 
     /// <summary>
+    /// Registers the background <see cref="ScopedRoleAssignmentSyncWorker"/> (XD01-328), which mirrors the roles users hold
+    /// on other organizations into this database, and the scoped <see cref="IMirroredCrossOrganizationEntitlements"/> that
+    /// reads both mirrors back. Shares <see cref="OrganizationGrantSyncOptions"/> with <see cref="AddOrganizationGrantSync"/>
+    /// (one section, one staleness bound); the host must separately register an
+    /// <see cref="IScopedRoleAssignmentSyncClient"/> implementation.
+    /// </summary>
+    public static IServiceCollection AddScopedRoleAssignmentSync(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<OrganizationGrantSyncOptions>();
+        services.AddHostedService<ScopedRoleAssignmentSyncWorker>();
+        services.TryAddScoped<IMirroredCrossOrganizationEntitlements, EFMirroredCrossOrganizationEntitlements>();
+
+        return services;
+    }
+
+    /// <summary>
     /// Loads all <see cref="OrderType"/> rows from the database into the
     /// <see cref="OrderTypeRegistry"/> singleton.
     ///

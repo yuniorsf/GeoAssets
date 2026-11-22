@@ -47,6 +47,7 @@ public static class IdentityRestApiExtensions
         MapInvitationsApi(routes, prefix);
         MapUserClaimsApi(routes, prefix);
         MapOrganizationGrantSyncApi(routes, prefix);
+        ScopedRoleAssignmentSyncRestApiExtensions.MapScopedRoleAssignmentSyncApi(routes, prefix);
         MapModulePermissionsApi(routes, prefix);
 
         return routes;

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GeoAssets.Identity.Authorization;
 using GeoAssets.Workflow.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -66,6 +67,10 @@ public sealed partial class OrganizationGrantSyncWorker(
                 mirror.ScopeId = entry.ScopeId;
                 mirror.IsActive = entry.IsActive;
                 mirror.ExpiresAt = entry.ExpiresAt;
+                mirror.AllowedActionsJson = JsonSerializer.Serialize(entry.AllowedActions);
+                mirror.RequiredRole = entry.RequiredRole;
+                mirror.RequiresScopedRole = entry.RequiresScopedRole;
+                mirror.OrderTypeIdsJson = JsonSerializer.Serialize(entry.OrderTypeIds);
                 mirror.SyncedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
             }
 

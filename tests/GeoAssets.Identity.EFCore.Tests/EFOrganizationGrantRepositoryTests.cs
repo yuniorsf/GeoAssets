@@ -219,6 +219,49 @@ public class EFOrganizationGrantRepositoryTests
     }
 
     [Fact]
+    public async Task AddAsync_SyncOutboxEntry_CarriesWhatTheCrossOrganizationRuleDecidesBy()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
+        var grant = Grant(Guid.NewGuid(), Guid.NewGuid());
+        grant.ResourceType = "ServiceOrder";
+        grant.RequiredRole = "Contractor C1";
+        grant.RequiresScopedRole = true;
+        grant.OrderTypeIds.Add("cut");
+
+        await repo.AddAsync(grant);
+        await repo.SaveChangesAsync();
+
+        // XD01-328: a vertical host decides ServiceOrderRules over the mirrored grant, so the feed carries all of it.
+        var entry = (await repo.GetSyncBatchAsync(afterSequence: 0, take: 10)).Should().ContainSingle().Subject;
+        entry.AllowedActions.Should().Equal("serviceorders:view", "features:read");
+        entry.RequiredRole.Should().Be("Contractor C1");
+        entry.RequiresScopedRole.Should().BeTrue();
+        entry.OrderTypeIds.Should().Equal("cut");
+    }
+
+    [Fact]
+    public async Task AddAsync_SyncOutboxEntry_OfAnOrganizationWideGrant_CarriesTheDefaults()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        var repo = new EFOrganizationGrantRepository(db, TimeProvider.System);
+
+        await repo.AddAsync(Grant(Guid.NewGuid(), Guid.NewGuid()));
+        await repo.SaveChangesAsync();
+
+        var entry = (await repo.GetSyncBatchAsync(afterSequence: 0, take: 10)).Should().ContainSingle().Subject;
+        entry.RequiredRole.Should().BeNull();
+        entry.RequiresScopedRole.Should().BeFalse();
+        entry.OrderTypeIds.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task UpdateAsync_RevokingAGrant_QueuesANewSyncOutboxEntryReflectingRevocation()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");

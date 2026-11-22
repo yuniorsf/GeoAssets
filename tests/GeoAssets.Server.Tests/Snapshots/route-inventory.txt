@@ -49,6 +49,7 @@ GET /api/identity/roles | policy:roles:read
 GET /api/identity/roles/{id} | policy:roles:read
 GET /api/identity/rolesync/status | none
 GET /api/identity/rolesync/users/{externalObjectId}/roles | policy:users:read
+GET /api/identity/scoped-role-assignments/sync | policy:users:read
 GET /api/identity/userclaims | none
 GET /api/identity/userclaims/{claimType} | none
 GET /api/identity/users | policy:users:read

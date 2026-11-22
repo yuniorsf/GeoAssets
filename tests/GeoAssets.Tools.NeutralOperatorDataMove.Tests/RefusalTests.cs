@@ -93,8 +93,8 @@ public sealed class RefusalTests
 
     public static TheoryData<string, string, string> NotAtHead => new()
     {
-        { "kernel", """DELETE FROM public."__EFMigrationsHistory" WHERE "MigrationId" = '20261119221515_DropFieldServiceTablesFromKernel'""", "migrations.service-orders" },
-        { "target", """DELETE FROM public."__EFMigrationsHistory" WHERE "MigrationId" = '20261120004624_InitialNeutralOperatorIsolation'""", "migrations.service-orders" },
+        { "kernel", """DELETE FROM public."__EFMigrationsHistory" WHERE "MigrationId" = '20261122224401_AddCrossOrganizationSyncMirrors'""", "migrations.service-orders" },
+        { "target", """DELETE FROM public."__EFMigrationsHistory" WHERE "MigrationId" = '20261122224327_AddCrossOrganizationSyncMirrors'""", "migrations.service-orders" },
         { "target", """DELETE FROM neutral_operator."__EFMigrationsHistory_neutral_operator" WHERE "MigrationId" = (SELECT max("MigrationId") FROM neutral_operator."__EFMigrationsHistory_neutral_operator")""", "migrations.neutral-operator" },
         { "kernel", """INSERT INTO neutral_operator."__EFMigrationsHistory_neutral_operator" ("MigrationId","ProductVersion") VALUES ('29991231000000_FromTheFuture','10.0.7')""", "migrations.neutral-operator" },
     };

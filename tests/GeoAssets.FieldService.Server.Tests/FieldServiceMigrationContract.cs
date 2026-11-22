@@ -431,7 +431,9 @@ internal static class FieldServiceMigrationContract
         var migration = chain.Single(id => id.EndsWith("_" + FieldServiceModelMigrationName, StringComparison.Ordinal));
         var previous = chain[chain.IndexOf(migration) - 1];
         previous.Should().EndWith("_" + OccupancyMigrationName, "the migration that carries the model change follows XD01-380's");
-        chain[^1].Should().Be(migration, "nothing in the kernel chain follows it yet");
+        chain.Skip(chain.IndexOf(migration) + 1).Should().OnlyContain(
+            later => later.EndsWith("_AddCrossOrganizationSyncMirrors", StringComparison.Ordinal),
+            "nothing in the kernel chain follows it but XD01-328's sync mirrors, which leave these tables alone");
 
         await migrator.MigrateAsync(previous);
         await SeedAsync(db);
