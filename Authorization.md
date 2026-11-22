@@ -395,6 +395,39 @@ two local mirrors, fed by the kernel the way grants already were (XD01-290):
   columns: the database stays an organization-level backstop; per-user, per-order-type decisions are
   the rule's.
 
+### Client entitlements (XD01-329, fifth slice of XD01-324)
+
+`GET /api/identity/me/cross-org-entitlements` (`CrossOrgEntitlementsRestApiExtensions`, kernel only) is where the scoped
+roles leave the server; `GET /api/identity/me` stays home-only (its `roles`/`permissions` are `AuthorizationContext.Roles`/
+`Permissions`). Authenticated only (fallback policy), derived from the caller's own context, never another user's data;
+always 200. Shape (`CrossOrgEntitlementsDto`, `GeoAssets.Identity`, shared by producer and consumers):
+
+```json
+{
+  "grants": [ { "resourceOrganizationId": "…", "resourceOrganizationName": "COELBA", "resourceType": "ServiceOrder",
+                "scopeId": "municipio-123", "orderTypeIds": ["cut"], "allowedActions": ["serviceorders:view", "serviceorders:execute"],
+                "requiredRole": null, "requiresScopedRole": true, "expiresAt": null } ],
+  "scopedRoles": [ { "organizationId": "…", "organizationName": "COELBA", "roles": ["Contractor C1"],
+                     "permissions": ["serviceorders:view", "serviceorders:execute"] } ]
+}
+```
+
+`grants` are the caller's organization's active, unexpired grants (every resource type, not only `ServiceOrder`), the
+ones `ServerWorkflowPrincipalFactory` reads; `scopedRoles` are `AuthorizationContext.ScopedRoles`/`ScopedPermissions`.
+The client reads it through `ICrossOrgEntitlementsService` (`GeoAssets.Identity`; Web: `RestCrossOrgEntitlementsService`,
+MAUI: `NoCrossOrgEntitlementsService`): fetched with the authorization context at sign-in, again by `RefreshAsync` (the
+Service Orders page does so whenever its list reloads), kept in memory only. The Web `RestGeoAuthorizationService` fills
+`OrganizationGrants`/`ScopedRoles`/`ScopedPermissions` from it (it no longer calls `organization-grants/me`), so the
+unchanged client `WorkflowPrincipalFactory` builds the kernel's principal and the action buttons follow the same
+`ServiceOrderRules` answer — proven row by row by one matrix compiled into both suites
+(`tests/GeoAssets.Server.Tests/CrossOrgEntitlements/CrossOrgEntitlementsParityMatrix.cs`). A non-success answer yields
+no entitlement (offer less, never more). The Service Order list and detail name the owning organization of an order
+whose organization the entitlements name.
+
+Not yet: the vertical hosts (`KernelGeoAuthorizationService`, `AddKernelIdentity`) still read `/me` only, so on an order
+a vertical host serves a scoped grant still opens nothing there — the client may then offer an action that host refuses
+(the existing error path shows it). The MAUI app has no entitlement source (XD01-328 covers the mobile flow).
+
 ---
 
 ## 5. Federated authentication
