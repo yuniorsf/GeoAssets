@@ -1,3 +1,4 @@
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Components;
@@ -7,6 +8,7 @@ namespace GeoAssets.Shared.Pages;
 public partial class ServiceOrders
 {
     private WorkflowPrincipal? _principal;
+    private CrossOrgEntitlementsDto? _entitlements;
     private IServiceOrder? _selectedOrder;
     private bool _showCreateForm;
     private bool _createFromSelection;
@@ -33,9 +35,24 @@ public partial class ServiceOrders
     /// <summary>Set by <see cref="CreateFromSelectionUri"/>: open the create form with the map selection as targets.</summary>
     [SupplyParameterFromQuery(Name = FromSelectionQueryName)] public bool FromSelection { get; set; }
 
+    /// <summary>
+    /// The principal carries the viewer's cross-organization entitlements (XD01-329), fetched at sign-in; the page keeps
+    /// them too, to name the owner of another organization's order.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
-        _principal = await PrincipalFactory.CreateAsync();
+        _principal    = await PrincipalFactory.CreateAsync();
+        _entitlements = await EntitlementsService.GetAsync();
+    }
+
+    /// <summary>
+    /// The order list reloaded: the entitlements are fetched again with it (XD01-329) and the principal rebuilt over them,
+    /// so the action buttons follow a grant or role given or revoked since sign-in. The server stays the authority.
+    /// </summary>
+    private async Task OnListReloadedAsync()
+    {
+        _entitlements = await EntitlementsService.RefreshAsync();
+        _principal    = await PrincipalFactory.CreateAsync();
     }
 
     protected override void OnParametersSet()

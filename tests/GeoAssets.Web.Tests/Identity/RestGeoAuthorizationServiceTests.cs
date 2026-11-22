@@ -17,8 +17,9 @@ public class RestGeoAuthorizationServiceTests
         Id: Guid.NewGuid(), Email: "user@example.com", DisplayName: "Test User", OrganizationId: null,
         Roles: ["Supervisor"], Claims: [new ClaimDto("zone", "north")], Permissions: ["features:read"]);
 
+    // The cross-organization entitlements (XD01-329) have their own tests; these are about /me and /policies.
     private static RestGeoAuthorizationService Sut(FakeHttpMessageHandler handler) =>
-        new(new HttpClient(handler) { BaseAddress = new Uri("http://test/") });
+        new(new HttpClient(handler) { BaseAddress = new Uri("http://test/") }, new NoCrossOrgEntitlementsService());
 
     private static HttpResponseMessage JsonResponse<T>(T body) =>
         new(HttpStatusCode.OK) { Content = JsonContent.Create(body, options: _opts) };

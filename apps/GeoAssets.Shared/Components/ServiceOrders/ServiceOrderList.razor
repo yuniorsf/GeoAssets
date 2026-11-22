@@ -1,6 +1,7 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Workflow.Orders
 @using GeoAssets.Shared.Components.Shared
+@using GeoAssets.Shared.Services
 @using GeoAssets.Shared.Services.SharedUse
 @inject IServiceOrderRepository Repository
 
@@ -39,6 +40,10 @@
                     @if (ServiceOrderInbox.IsReceived(order, Principal))
                     {
                         <span class="order-type-badge order-received-badge" title="@L["orders.receivedBadgeTitle"]">@L["orders.receivedBadge"]</span>
+                    }
+                    @if (ServiceOrderOwner.ForeignOwnerName(order, Principal, Entitlements) is { } ownerName)
+                    {
+                        <span class="order-type-badge order-owner-badge" title="@L.GetString("orders.ownerBadgeTitle", ownerName)">@ownerName</span>
                     }
                     <span class="order-priority-badge order-priority-@order.Priority.ToString().ToLowerInvariant()">@order.Priority</span>
                 </div>

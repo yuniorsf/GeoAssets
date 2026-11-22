@@ -1482,6 +1482,8 @@ textarea.form-control { resize: vertical; min-height: 70px; }
 .shared-use-dialog .dialog-actions { margin-top: 16px; }
 
 .order-received-badge { background: var(--accent); color: var(--on-accent); }
+/* XD01-329: the owning organization of another organization's order the viewer is entitled to. */
+.order-owner-badge { background: var(--surface-tint-strong); color: var(--text-primary); }
 
 /* ─── Confirm Dialog ─────────────────────────────────────────────────────── */
 

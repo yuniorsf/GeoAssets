@@ -13,6 +13,12 @@ namespace GeoAssets.Shared.Services;
 /// (<see cref="AuthorizationContext.OrganizationGrants"/>, which the REST-backed authorization
 /// service fills from <c>GET /api/identity/organization-grants/me</c>). The third way through
 /// the gate, being a dispatch recipient, is read from the order itself.
+///
+/// The Web client's authorization service fills the grants and the roles and permissions held on
+/// other organizations (<see cref="AuthorizationContext.ScopedRoles"/>/<see cref="AuthorizationContext.ScopedPermissions"/>)
+/// from <c>GET /api/identity/me/cross-org-entitlements</c> instead (XD01-329), so a grant that
+/// requires a scoped role decides here as on the server. Build the principal again after
+/// <see cref="ICrossOrgEntitlementsService.RefreshAsync"/> to pick up new entitlements.
 /// </summary>
 public sealed class WorkflowPrincipalFactory(IGeoAuthorizationService authorizationService)
 {
