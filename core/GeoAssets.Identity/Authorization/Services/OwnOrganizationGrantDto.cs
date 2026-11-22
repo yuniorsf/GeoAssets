@@ -17,12 +17,25 @@ public sealed record OwnOrganizationGrantDto(
     string?               RequiredRole,
     DateTime?             ExpiresAt)
 {
+    /// <summary>
+    /// <see cref="OrganizationGrant.RequiresScopedRole"/> (XD01-326). A consumer must carry it into its rule evaluation:
+    /// read without it, a grant that only roles held on the resource organization may use would look organization-wide.
+    /// </summary>
+    public bool RequiresScopedRole { get; init; }
+
+    /// <summary><see cref="OrganizationGrant.OrderTypeIds"/> (XD01-326); empty means every order type.</summary>
+    public IReadOnlyList<string> OrderTypeIds { get; init; } = [];
+
     public static OwnOrganizationGrantDto FromModel(OrganizationGrant grant)
     {
         ArgumentNullException.ThrowIfNull(grant);
         return new OwnOrganizationGrantDto(
             grant.ResourceOrganizationId, grant.ResourceType, grant.ScopeId,
-            [.. grant.AllowedActions], grant.RequiredRole, grant.ExpiresAt);
+            [.. grant.AllowedActions], grant.RequiredRole, grant.ExpiresAt)
+        {
+            RequiresScopedRole = grant.RequiresScopedRole,
+            OrderTypeIds = [.. grant.OrderTypeIds],
+        };
     }
 
     /// <summary>The grant as held by <paramref name="granteeOrganizationId"/>, the caller's organization.</summary>
@@ -34,6 +47,8 @@ public sealed record OwnOrganizationGrantDto(
         ScopeId = ScopeId,
         AllowedActions = [.. AllowedActions],
         RequiredRole = RequiredRole,
+        RequiresScopedRole = RequiresScopedRole,
+        OrderTypeIds = [.. OrderTypeIds ?? []],
         ExpiresAt = ExpiresAt,
         IsActive = true,
     };

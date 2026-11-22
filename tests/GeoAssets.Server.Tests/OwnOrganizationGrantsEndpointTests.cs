@@ -23,6 +23,7 @@ public class OwnOrganizationGrantsEndpointTests
     private static readonly Guid OrgA = new("a0a0a0a0-0000-4000-8000-000000000332");
     private static readonly Guid OrgB = new("b0b0b0b0-0000-4000-8000-000000000332");
     private static readonly Uri Route = new("/api/identity/organization-grants/me", UriKind.Relative);
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     private sealed class FixedAuthorizationService(Guid? organizationId) : IGeoAuthorizationService
     {
@@ -107,6 +108,42 @@ public class OwnOrganizationGrantsEndpointTests
         item.GetProperty("requiredRole").GetString().Should().Be("Supervisor");
         item.GetProperty("expiresAt").GetDateTime().Should().Be(new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         text.Should().NotContain("an-administrator-of-a", "who granted it is not the grantee's to read");
+    }
+
+    [Fact]
+    public async Task XD01_326_OwnGrants_CarryRequiresScopedRoleAndOrderTypes_SoAVerticalHostNeverReadsAScopedGrantAsOrganizationWide()
+    {
+        var (server, grants) = await BuildServerAsync(OrgB);
+        using var _ = server;
+        var scoped = Grant(grantee: OrgB, resource: OrgA);
+        scoped.RequiresScopedRole = true;
+        scoped.OrderTypeIds.Add("cut");
+        grants.Active.Add(scoped);
+        grants.Active.Add(Grant(grantee: OrgB, resource: OrgA, scopeId: "organization-wide"));
+        using var client = server.CreateClient();
+
+        var response = await client.GetAsync(Route);
+
+        // Read back the way KernelOwnOrganizationGrantSource reads it.
+        var read = JsonSerializer.Deserialize<List<OwnOrganizationGrantDto>>(
+            await response.Content.ReadAsStringAsync(), WebJson)!;
+        var models = read.Select(g => g.ToModel(OrgB)).ToList();
+        models.Should().HaveCount(2);
+        models.Should().ContainSingle(g => g.RequiresScopedRole).Which.OrderTypeIds.Should().Equal("cut");
+        models.Should().ContainSingle(g => !g.RequiresScopedRole).Which.OrderTypeIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void XD01_326_OwnGrantDto_WithoutTheNewFields_ReadsAsOrganizationWide_ForEveryOrderType()
+    {
+        var read = JsonSerializer.Deserialize<OwnOrganizationGrantDto>(
+            $$"""{"resourceOrganizationId":"{{OrgA}}","allowedActions":["serviceorders:view"]}""",
+            WebJson)!;
+
+        var model = read.ToModel(OrgB);
+
+        model.RequiresScopedRole.Should().BeFalse();
+        model.OrderTypeIds.Should().BeEmpty();
     }
 
     [Fact]

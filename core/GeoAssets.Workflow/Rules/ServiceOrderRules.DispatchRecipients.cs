@@ -136,13 +136,14 @@ public sealed partial class ServiceOrderRules
             return Anonymous(OrderAction.Annotate);
 
         var context = new RuleEvaluationContext(principal, order, ResolveRelationship(principal, order));
-        if (!OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, _timeProvider.GetUtcNow().UtcDateTime))
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!OrderOrganizationGate.Passes(context, _allowOrdersWithoutOrganization, utcNow))
         {
             return RuleEvaluationResult.Deny(
                 OrderAction.Annotate, "The order is outside the principal's organization.", RuleDenialCode.OutsideOrganization);
         }
 
-        var verdict = EvaluateChain(OrderAction.Annotate, context);
+        var verdict = EvaluateAdmitted(OrderAction.Annotate, context, utcNow);
         if (!verdict.Allowed || !IsRecipientOnly(context)) return verdict;
 
         return write == OrderTargetWrite.RecordWork && RecipientAccessOf(order) >= OrderRecipientAccess.Execute

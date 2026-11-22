@@ -92,6 +92,8 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
                 ScopeId = request.Key.ScopeId,
                 AllowedActions = [.. request.AllowedActions],
                 RequiredRole = request.RequiredRole,
+                RequiresScopedRole = request.RequiresScopedRole,
+                OrderTypeIds = [.. request.OrderTypeIds],
                 ExpiresAt = request.ExpiresAt,
                 GrantedBy = request.GrantedBy,
                 GrantedAt = now,
@@ -108,6 +110,9 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
         grant.AllowedActions.Clear();
         grant.AllowedActions.AddRange(request.AllowedActions);
         grant.RequiredRole = request.RequiredRole;
+        grant.RequiresScopedRole = request.RequiresScopedRole;
+        grant.OrderTypeIds.Clear();
+        grant.OrderTypeIds.AddRange(request.OrderTypeIds);
         grant.ExpiresAt = request.ExpiresAt;
         await grants.UpdateAsync(grant, ct).ConfigureAwait(false);
         await grants.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -128,7 +133,12 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
     }
 
     private static bool Matches(OrganizationGrant grant, OrganizationGrantUpsertRequest request) =>
-        grant.AllowedActions.Order(StringComparer.Ordinal).SequenceEqual(request.AllowedActions.Order(StringComparer.Ordinal), StringComparer.Ordinal)
+        SameSet(grant.AllowedActions, request.AllowedActions)
         && string.Equals(grant.RequiredRole, request.RequiredRole, StringComparison.Ordinal)
-        && grant.ExpiresAt == request.ExpiresAt;
+        && grant.ExpiresAt == request.ExpiresAt
+        && grant.RequiresScopedRole == request.RequiresScopedRole
+        && SameSet(grant.OrderTypeIds, request.OrderTypeIds);
+
+    private static bool SameSet(IEnumerable<string> left, IEnumerable<string> right) =>
+        left.Order(StringComparer.Ordinal).SequenceEqual(right.Order(StringComparer.Ordinal), StringComparer.Ordinal);
 }

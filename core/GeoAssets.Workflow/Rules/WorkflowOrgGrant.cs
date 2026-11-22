@@ -27,4 +27,20 @@ public sealed record WorkflowOrgGrant(
     /// as long as a client session (XD01-332).
     /// </summary>
     public DateTime? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// How the principal qualifies for the actions the grant lists (XD01-326). False (the default, and every grant from
+    /// before this field): as today — the grant opens the order to the principal's organization and its home roles decide,
+    /// with <see cref="RequiredRole"/> matched against <see cref="WorkflowPrincipal.RoleNames"/>. True: only through the
+    /// permissions the principal holds on <see cref="ResourceOrganizationId"/>
+    /// (<see cref="WorkflowPrincipal.HasPermissionOn"/>); home roles and permissions count for nothing, and
+    /// <see cref="RequiredRole"/> is matched against <see cref="WorkflowPrincipal.RoleNamesOn"/>.
+    /// </summary>
+    public bool RequiresScopedRole { get; init; }
+
+    /// <summary>
+    /// The order types the grant is narrowed to (XD01-326), compared with <see cref="Orders.IServiceOrder.OrderTypeId"/>
+    /// ignoring case. Empty (the default) means every order type.
+    /// </summary>
+    public IReadOnlyList<string> OrderTypeIds { get; init; } = [];
 }

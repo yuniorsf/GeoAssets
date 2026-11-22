@@ -31,16 +31,19 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
         // stored as JSON text rather than a normalized child table — matching this codebase's
         // established convention for this shape of data (e.g. GeoEntityRow.CustomAttributesJson,
         // ServiceOrderRecord.AttributesJson).
-        var allowedActionsComparer = new ValueComparer<List<string>>(
-            (left, right) => (left ?? new()).SequenceEqual(right ?? new()),
-            v => v.Aggregate(0, (hash, s) => HashCode.Combine(hash, s.GetHashCode(StringComparison.Ordinal))),
-            v => v.ToList());
-
         b.Property(g => g.AllowedActions)
          .HasConversion(
              v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
              v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
-         .Metadata.SetValueComparer(allowedActionsComparer);
+         .Metadata.SetValueComparer(StringListComparer());
+
+        // XD01-326: same JSON-text shape as AllowedActions. Every row that predates the column migrates as "[]" (every
+        // order type), and RequiresScopedRole as false (the organization-wide semantics) — see the migration.
+        b.Property(g => g.OrderTypeIds)
+         .HasConversion(
+             v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+             v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
+         .Metadata.SetValueComparer(StringListComparer());
 
         b.HasIndex(g => new { g.GranteeOrganizationId, g.ResourceOrganizationId });
         b.HasIndex(g => g.IsActive);
@@ -49,4 +52,9 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
          .HasFilter("\"IsActive\"")
          .AreNullsDistinct(false);
     }
+
+    private static ValueComparer<List<string>> StringListComparer() => new(
+        (left, right) => (left ?? new()).SequenceEqual(right ?? new()),
+        v => v.Aggregate(0, (hash, s) => HashCode.Combine(hash, s.GetHashCode(StringComparison.Ordinal))),
+        v => v.ToList());
 }

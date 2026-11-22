@@ -14,7 +14,8 @@ namespace GeoAssets.Workflow.Rules;
 /// case-sensitive match per that interface's own contract. A grant with no
 /// <see cref="WorkflowOrgGrant.ScopeId"/> stays ungated within <c>ResourceType</c>, the
 /// original behavior; a grant that does name one never matches an order whose own ScopeId is
-/// null (there is no subset to match against) or implements no scoping at all.
+/// null (there is no subset to match against) or implements no scoping at all. A grant may also
+/// be narrowed to order types and require a scoped role (XD01-326) — see <see cref="CrossOrgGrantMatcher"/>.
 ///
 /// Same pattern as every other built-in rule: abstains (returns <c>null</c>) rather than
 /// denying when no grant applies, so same-org access via the existing rules (Creator/

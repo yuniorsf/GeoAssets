@@ -177,4 +177,40 @@ public class WorkflowPrincipalFactoryTests
 
         principal.OrgGrants.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task XD01_326_CreateAsync_CarriesAScopedGrantAcrossTheWire_SoTheClientNeverOffersItOrganizationWide()
+    {
+        var scoped = GrantRow();
+        scoped.RequiresScopedRole = true;
+        scoped.OrderTypeIds.Add("any");
+
+        // A home Supervisor with no role held on organization A: the server refuses it, so the client must too.
+        var principal = await ClientPrincipalAsync(OrgB, ["Supervisor"], [scoped]);
+
+        var grant = principal.OrgGrants.Should().ContainSingle().Subject;
+        grant.RequiresScopedRole.Should().BeTrue();
+        grant.OrderTypeIds.Should().Equal("any");
+        var order = new ServiceOrder { Id = "o", OrderTypeId = "any", Status = ServiceOrderStatus.Pending, OrganizationId = OrgA, CreatedBy = "x" };
+        new ServiceOrderRules(timeProvider: new FakeTimeProvider(Now)).CanView(principal, order).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task XD01_326_CreateAsync_CopiesTheContextsScopedRolesAndPermissions()
+    {
+        var context = new AuthorizationContext
+        {
+            User = new AppUser { Id = UserId, Email = "u@example.com", DisplayName = "U", OrganizationId = OrgB, CreatedAt = Now.UtcDateTime },
+            Roles = [],
+            Claims = [],
+            Permissions = [],
+            ScopedRoles = new Dictionary<Guid, IReadOnlyList<string>> { [OrgA] = ["Contractor C1"] },
+            ScopedPermissions = new Dictionary<Guid, IReadOnlyList<string>> { [OrgA] = ["serviceorders:view"] },
+        };
+
+        var principal = await new WorkflowPrincipalFactory(new FixedAuthorizationService(context)).CreateAsync();
+
+        principal.RoleNamesOn(OrgA).Should().Equal("Contractor C1");
+        principal.PermissionCodesOn(OrgA).Should().Equal("serviceorders:view");
+    }
 }
