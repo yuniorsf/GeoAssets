@@ -60,6 +60,22 @@ in `/healthz` being rejected by the FallbackPolicy any
 `GeoAssets.Infrastructure.Observability.ObservabilityApplicationExtensions`,
 not something specific to this chart).
 
+## Pod security
+
+The pod meets the Kubernetes Pod Security Standards `restricted` profile, so it can run in a namespace labelled
+`pod-security.kubernetes.io/enforce: restricted`:
+
+- **User:** it runs as the image's unprivileged `app` user (uid/gid 1654, `podSecurityContext`). The image itself sets
+  `USER $APP_UID` as well.
+- **Container:** privilege escalation is off, every capability is dropped and the root filesystem is read-only
+  (`securityContext`). The only writable path is an `emptyDir` at `/tmp` (`tmpSizeLimit`, 64Mi by default).
+- **Seccomp:** the `RuntimeDefault` profile.
+- **Service account token:** not mounted, since the host never calls the Kubernetes API.
+
+With the read-only filesystem, ASP.NET Core Data Protection keeps its keys in memory and logs a warning at start. That
+is harmless for this bearer-token API: the keys were already lost on every restart, since they lived inside the
+container. The `helm test` pod (`curlimages/curl`, uid 100) runs under the same restrictions.
+
 ## What this doesn't solve
 
 Same caveat as `deploy/server/README.md`: there's still no CI/CD job,
