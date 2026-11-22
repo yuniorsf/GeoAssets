@@ -253,6 +253,10 @@ app.MapOwnOrganizationGrantsApi();
 // cross-organization grants their reference data implies, as GeoAssets.ServiceCaller. See OrganizationGrantsRestApiExtensions.
 app.MapOrganizationGrantsApi();
 
+// The roles users of contracted organizations hold on an organization (XD01-327), under the same prefix: an organization's
+// administrator assigns and revokes them. See OrganizationScopedRolesRestApiExtensions.
+app.MapOrganizationScopedRolesApi();
+
 // Standalone OGC endpoint for external GIS clients (CORS not required for server-to-server or
 // native desktop tools). The WMS routes (/wms, /api/geoassets/wms) render from PostGIS and are
 // PostgresSpatialModule's (XD01-359).

@@ -29,6 +29,20 @@ public interface IOrganizationGrantRepository
         Guid granteeOrganizationId, CancellationToken ct = default);
 
     /// <summary>
+    /// The grants <paramref name="resourceOrganizationId"/> has issued that are active and unexpired at
+    /// <paramref name="utcNow"/> — which organizations it has contracted (XD01-327: their users are the ones eligible for a
+    /// role on it). The default filters <see cref="GetAllAsync"/>; a store should override it with a query.
+    /// </summary>
+    async Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsIssuedByAsync(
+        Guid resourceOrganizationId, DateTime utcNow, CancellationToken ct = default)
+    {
+        var grants = await GetAllAsync(ct).ConfigureAwait(false);
+        return [.. grants.Where(g => g.ResourceOrganizationId == resourceOrganizationId
+                                  && g.IsActive
+                                  && (g.ExpiresAt is null || g.ExpiresAt > utcNow))];
+    }
+
+    /// <summary>
     /// The grant flagged active with exactly <paramref name="key"/> (resource type and scope compared ordinally, null
     /// matching only null), <b>expired or not</b> — the one row the store's one-active-grant-per-key rule
     /// (<c>UX_OrganizationGrants_ActiveKey</c>, XD01-394) allows, so the one a new grant with that key would collide with.

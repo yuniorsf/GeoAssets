@@ -146,6 +146,11 @@ public static class GeoIdentitySeeder
             // precedent as the XD01-55 block above.
             P("organizations:read",     "organizations", "read",       "permissions.organizations.read"),
             P("organizations:edit",     "organizations", "edit",       "permissions.organizations.edit"),
+
+            // XD01-327: the platform administrator — may administer the scoped roles of any organization, not only
+            // its own. Deliberately in no built-in role: every organization's administrator holds Administrator, so
+            // granting it there would let each of them act on every other organization.
+            P("organizations:manage-all", "organizations", "manage-all", "permissions.organizations.manageAll"),
             P("groups:read",            "groups",        "read",       "permissions.groups.read"),
             P("groups:edit",            "groups",        "edit",       "permissions.groups.edit"),
 

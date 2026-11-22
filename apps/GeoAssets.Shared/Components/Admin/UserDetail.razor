@@ -63,5 +63,30 @@
                 }
             </div>
         }
+
+        @if (_scopedRolesAvailable)
+        {
+            <div class="permission-group user-scoped-roles">
+                <h6>@L["admin.contractorAccess.userRoles.title"]</h6>
+                <p class="text-body-secondary small mb-1">@L["admin.contractorAccess.userRoles.hint"]</p>
+                @if (_scopedRolesFailed)
+                {
+                    <p class="attribute-errors">@L["admin.contractorAccess.userRoles.loadError"]</p>
+                }
+                else if (_scopedRoles.Count == 0)
+                {
+                    <p class="text-body-secondary small user-scoped-roles-empty">@L["admin.contractorAccess.userRoles.empty"]</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled small mb-0">
+                        @foreach (var assignment in _scopedRoles)
+                        {
+                            <li class="user-scoped-role"><strong>@(assignment.OrganizationName ?? assignment.OrganizationId.ToString())</strong> — @assignment.RoleName</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
     </div>
 }

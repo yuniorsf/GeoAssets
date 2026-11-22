@@ -6,6 +6,7 @@ DELETE /api/geoassets/layer-rules/{id} | policy:features:delete
 DELETE /api/geoassets/layers/{id} | policy:features:delete
 DELETE /api/identity/groups/{id}/members/{userId} | policy:groups:edit
 DELETE /api/identity/invitations/{id} | policy:users:edit
+DELETE /api/identity/organizations/{orgId}/scoped-roles/{assignmentId} | policy:users:edit
 DELETE /api/identity/roles/{id} | policy:roles:delete
 DELETE /api/identity/roles/{id}/permissions/{permId} | policy:roles:edit
 DELETE /api/identity/rolesync/users/{externalObjectId}/roles/{roleName} | policy:users:edit
@@ -39,6 +40,9 @@ GET /api/identity/organization-grants/sync | policy:organizations:read
 GET /api/identity/organizations | policy:organizations:read
 GET /api/identity/organizations/{id} | policy:organizations:read
 GET /api/identity/organizations/{id}/users | policy:organizations:read
+GET /api/identity/organizations/{orgId}/contracted-users | policy:users:read
+GET /api/identity/organizations/{orgId}/issued-grants | policy:users:read
+GET /api/identity/organizations/{orgId}/scoped-roles | policy:users:read
 GET /api/identity/permissions | policy:permissions:read
 GET /api/identity/policies | none
 GET /api/identity/roles | policy:roles:read
@@ -50,6 +54,7 @@ GET /api/identity/userclaims/{claimType} | none
 GET /api/identity/users | policy:users:read
 GET /api/identity/users/by-external-id/{oid} | policy:users:read
 GET /api/identity/users/{id} | policy:users:read
+GET /api/identity/users/{id}/scoped-roles | policy:users:read
 GET /api/projects | policy:projects:read
 GET /api/projects/organization/{organizationId} | policy:projects:read
 GET /api/projects/{id} | policy:projects:read
@@ -90,6 +95,7 @@ POST /api/identity/invitations | policy:users:edit
 POST /api/identity/invitations/{id}/redeem | none
 POST /api/identity/organization-grants/revoke | authorize, requirement:RolesAuthorizationRequirement
 POST /api/identity/organizations | policy:organizations:edit
+POST /api/identity/organizations/{orgId}/scoped-roles | policy:users:edit
 POST /api/identity/roles | policy:roles:edit
 POST /api/identity/roles/{id}/permissions/{permId} | policy:roles:edit
 POST /api/identity/rolesync/roles/{id} | policy:roles:edit

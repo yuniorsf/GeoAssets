@@ -20,6 +20,11 @@ public partial class UserDetail
     private HashSet<string> _assignedRoleNames = [];
     private Guid? _togglingRoleId;
 
+    // XD01-327: roles held on other organizations, read-only and apart from the home roles above.
+    private bool _scopedRolesAvailable;
+    private bool _scopedRolesFailed;
+    private List<ScopedRoleAssignmentDto> _scopedRoles = [];
+
     protected override async Task OnInitializedAsync() =>
         _organizations = [.. await OrganizationRepository.GetAllAsync()];
 
@@ -36,6 +41,27 @@ public partial class UserDetail
             var roleSync = ServiceProvider.GetRequiredService<IRoleAssignmentProvider>();
             _allRoles = [.. await RoleRepository.GetAllAsync()];
             _assignedRoleNames = [.. await roleSync.GetAssignedRoleNamesAsync(User.ExternalObjectId)];
+        }
+
+        await LoadScopedRolesAsync(User.Id);
+    }
+
+    private async Task LoadScopedRolesAsync(Guid userId)
+    {
+        var client = ServiceProvider.GetService<IScopedRoleAdministrationClient>();
+        _scopedRolesAvailable = client is not null;
+        _scopedRolesFailed = false;
+        _scopedRoles = [];
+        if (client is null) return;
+
+        try
+        {
+            _scopedRoles = [.. await client.GetUserAssignmentsAsync(userId)];
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"[UserDetail] Failed to load the roles of {userId} on other organizations: {ex.Message}");
+            _scopedRolesFailed = true;
         }
     }
 

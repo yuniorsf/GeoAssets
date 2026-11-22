@@ -29,7 +29,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(28);
+        (await db.Permissions.CountAsync()).Should().Be(29);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
@@ -98,7 +98,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(28);
+        (await db.Permissions.CountAsync()).Should().Be(29);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
@@ -300,7 +300,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var permissions = await db.Permissions.ToListAsync();
-        permissions.Should().HaveCount(28);
+        permissions.Should().HaveCount(29);
         foreach (var permission in permissions)
         {
             permission.Description.Should().StartWith("permissions.",
@@ -308,6 +308,25 @@ public class GeoIdentitySeederTests
             permission.Description.Should().NotContainAny([" ", "á", "é", "í", "ó", "ú", "ñ"],
                 $"'{permission.Code}' description should be a key, not literal (possibly Spanish) text");
         }
+    }
+
+    // ── XD01-327: organizations:manage-all ───────────────────────────────────
+
+    [Fact]
+    public async Task SeedAsync_OrganizationsManageAll_IsSeeded_ButInNoBuiltInRole_NotEvenAdministrator()
+    {
+        // Every organization's administrator holds Administrator: the platform administrator's permission there would let
+        // each of them administer every other organization's scoped roles.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var permission = await db.Permissions.SingleAsync(p => p.Code == "organizations:manage-all");
+        permission.Description.Should().Be("permissions.organizations.manageAll");
+        (await db.RolePermissions.AnyAsync(rp => rp.PermissionId == permission.Id)).Should().BeFalse();
     }
 
     // ── XD01-369: registry:manage ────────────────────────────────────────────
