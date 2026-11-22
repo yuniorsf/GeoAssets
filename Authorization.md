@@ -428,6 +428,31 @@ Not yet: the vertical hosts (`KernelGeoAuthorizationService`, `AddKernelIdentity
 a vertical host serves a scoped grant still opens nothing there — the client may then offer an action that host refuses
 (the existing error path shows it). The MAUI app has no entitlement source (XD01-328 covers the mobile flow).
 
+### Reference features of another organization (XD01-330, sixth slice of XD01-324)
+
+A contractor may see the resource organization's assets on the map as a restricted reference — geometry and a
+label, nothing else — through `GET /api/geoassets/organizations/{organizationId}/reference-features?bbox=minLon,minLat,maxLon,maxLat[&assetTypeId=]`
+(`ReferenceFeaturesRestApiExtensions`).
+
+- **Permission** `features:reference` (seeded, Administrator). A grant from the resource organization with
+  `ResourceType = "GeoFeature"` (or none) must list it; the caller holds it at home for an organization-wide grant, or
+  through a role on that organization for a `RequiresScopedRole` grant — the XD01-326 rule above.
+- **Decided before any data is read**, from the organization alone: `OrganizationResourceAccess` is that rule, factored
+  out of `OrgResourceAuthorizationHandler` (which now applies its answer to the resource it is handed). Its answer is
+  *none*, *all*, or the set of the qualifying grants' `ScopeId`s; with a set, only features whose `scopeId` is in it are
+  returned. The route requires an authenticated caller and nothing else — **not** the home `features:read`, unlike the
+  other feature routes. A refused caller gets `403` with the same body whether or not the organization exists or has data.
+- **Five fields** (`ReferenceFeature`): `id`, `geometry` (GeoJSON), `label` (the name), `assetTypeId`, `assetTypeName`.
+  No attributes, topology, organization ids or audit fields. Only features the organization owns (not the shared ones),
+  intersecting the mandatory `bbox` (`400` without one), at most `MaxBoundsFeatureCount` (10 000) by ordinal id, like
+  `GET /features/bounds`. `Cache-Control: private`.
+- **The read** goes through the `IReferenceFeatureQuery` port: PostGIS (`PostgresReferenceFeatureQuery`, registered by
+  the `postgres-spatial` module) opens a short-lived context whose tenant is set to the resource organization for that
+  query only — global query filter, `TenantTransactionInterceptor`'s transaction-local stamp (what the `geo_entity` RLS
+  policy reads) and an explicit predicate, none of them relaxed; the request's own `ITenantContext` is never changed.
+  Without the module, `OrganizationCatalogReferenceFeatureQuery` answers from the organization's catalog.
+- Out of scope: rendering (XD01-331), WMS/WFS exposure, and any write, selection, export or topology traversal.
+
 ---
 
 ## 5. Federated authentication
