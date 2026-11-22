@@ -97,6 +97,8 @@ builder.Services.TryAddScoped<IAssetSpatialQuery, AssetProviderSpatialQuery>();
 // The generic IAssetRenderQuery (XD01-372) over the request's IAssetProvider: what WMS renders with when no module
 // registers a pushdown; PostgresSpatialModule's PostGIS render query replaces it.
 builder.Services.TryAddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
+// The generic IReferenceFeatureQuery (XD01-330) over the organization catalogs; PostgresSpatialModule's PostGIS query replaces it.
+builder.Services.TryAddScoped<IReferenceFeatureQuery, OrganizationCatalogReferenceFeatureQuery>();
 builder.Services.AddOrderTargets();
 builder.Services.AddObservableOrderTargetSelection();
 

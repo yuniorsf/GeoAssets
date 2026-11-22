@@ -27,6 +27,8 @@ public static class GeoAssetsAuthorizationExtensions
         services.AddSingleton<IAuthorizationPolicyProvider, GeoAuthorizationPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, GeoAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, OrgResourceAuthorizationHandler>();
+        // Its decision, for routes that decide from the organization alone before reading anything (XD01-330).
+        services.AddScoped<OrganizationResourceAccess>();
         services.AddScoped<IAuthorizationHandler, RequireOrganizationAuthorizationHandler>();
 
         return services;
