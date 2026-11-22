@@ -1,3 +1,4 @@
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Services.SharedUse;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
@@ -17,6 +18,15 @@ public partial class ServiceOrderList
     [Parameter] public WorkflowPrincipal? Principal { get; set; }
     [Parameter] public EventCallback<IServiceOrder> OnOrderSelected { get; set; }
     [Parameter] public EventCallback OnCreateRequested { get; set; }
+
+    /// <summary>The viewer's cross-organization entitlements (XD01-329): an order of an organization they name shows its owner.</summary>
+    [Parameter] public CrossOrgEntitlementsDto? Entitlements { get; set; }
+
+    /// <summary>
+    /// Raised after the list reloads on a store change (not on its first load), so the page can refresh the viewer's
+    /// entitlements with it (XD01-329).
+    /// </summary>
+    [Parameter] public EventCallback OnReloaded { get; set; }
 
     private static readonly string[] _statuses =
     [
@@ -46,6 +56,7 @@ public partial class ServiceOrderList
         InvokeAsync(async () =>
         {
             await RefreshListAsync();
+            await OnReloaded.InvokeAsync();
             StateHasChanged();
         });
 

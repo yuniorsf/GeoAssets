@@ -6,8 +6,10 @@
 @using GeoAssets.Workflow.Orders
 @using GeoAssets.Shared.Components.ServiceOrders
 @using GeoAssets.Shared.Services
+@using GeoAssets.Identity.Authorization.Services
 @inject IServiceOrderRepository Repository
 @inject WorkflowPrincipalFactory PrincipalFactory
+@inject ICrossOrgEntitlementsService EntitlementsService
 
 <aside class="sidebar">
     <div class="sidebar-header">
@@ -18,8 +20,10 @@
     {
         <ServiceOrderList SelectedOrderId="@_selectedOrder?.Id"
                            Principal="@_principal"
+                           Entitlements="@_entitlements"
                            OnOrderSelected="OnOrderSelected"
-                           OnCreateRequested="OnCreateRequested" />
+                           OnCreateRequested="OnCreateRequested"
+                           OnReloaded="OnListReloadedAsync" />
     }
 </aside>
 
@@ -36,6 +40,7 @@
     {
         <ServiceOrderDetail Order="@_selectedOrder"
                              Principal="@_principal"
+                             Entitlements="@_entitlements"
                              OnClose="() => _selectedOrder = null"
                              OnChanged="ReloadSelectedAsync" />
     }

@@ -48,8 +48,13 @@ public static class GeoIdentityRestExtensions
 {
     public static IServiceCollection AddGeoIdentityRest(this IServiceCollection services)
     {
+        // XD01-329: the caller's cross-organization entitlements, read by the authorization context below and by the
+        // views that name another organization's orders.
+        services.AddScoped<ICrossOrgEntitlementsService>(sp =>
+            new RestCrossOrgEntitlementsService(CreateIdentityClient(sp)));
+
         services.AddScoped<IGeoAuthorizationService>(sp =>
-            new RestGeoAuthorizationService(CreateIdentityClient(sp)));
+            new RestGeoAuthorizationService(CreateIdentityClient(sp), sp.GetRequiredService<ICrossOrgEntitlementsService>()));
 
         services.AddScoped<IUserRepository>(sp =>
             new RestUserRepository(CreateIdentityClient(sp)));

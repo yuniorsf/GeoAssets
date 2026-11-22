@@ -368,6 +368,8 @@
   "occupancy.change.MarkUnidentified": "Marcar como não identificado",
   "orders.receivedBadge": "Recebida",
   "orders.receivedBadgeTitle": "Despachada à sua organização por outra organização",
+  "orders.ownerOrganization": "Organização proprietária",
+  "orders.ownerBadgeTitle": "Pertence a {0}",
   "orderApproval.approve": "Aprovar",
   "orderApproval.approving": "Aprovando…",
   "orderApproval.error.conflict": "A ocupação de um poste mudou depois que suas alterações foram preparadas. Nada foi confirmado: revise os postes e prepare as alterações novamente.",

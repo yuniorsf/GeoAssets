@@ -34,6 +34,7 @@ GET /api/identity/invitations | policy:users:read
 GET /api/identity/invitations/me | none
 GET /api/identity/invitations/status | none
 GET /api/identity/me | none
+GET /api/identity/me/cross-org-entitlements | none
 GET /api/identity/organization-grants | authorize, requirement:RolesAuthorizationRequirement
 GET /api/identity/organization-grants/me | none
 GET /api/identity/organization-grants/sync | policy:organizations:read

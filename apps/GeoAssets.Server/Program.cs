@@ -249,6 +249,10 @@ app.MapIdentityApi();
 // organization gate as this host does. See OwnOrganizationGrantsRestApiExtensions.
 app.MapOwnOrganizationGrantsApi();
 
+// The caller's own cross-organization entitlements — its organization's grants and its scoped roles, with the
+// organizations' names (XD01-329) — under the same prefix. See CrossOrgEntitlementsRestApiExtensions.
+app.MapCrossOrgEntitlementsApi();
+
 // The generic organization-grant API (XD01-385), under the same prefix: vertical hosts upsert, revoke and list the
 // cross-organization grants their reference data implies, as GeoAssets.ServiceCaller. See OrganizationGrantsRestApiExtensions.
 app.MapOrganizationGrantsApi();

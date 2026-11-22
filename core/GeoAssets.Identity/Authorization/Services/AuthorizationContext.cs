@@ -18,7 +18,8 @@ public sealed class AuthorizationContext
     /// <summary>
     /// The active, unexpired cross-organization grants held by the user's own organization
     /// (XD01-332). Filled by the REST-backed clients from
-    /// <c>GET /api/identity/organization-grants/me</c> so that client-side service-order rule
+    /// <c>GET /api/identity/organization-grants/me</c> (the Web client: from
+    /// <c>GET /api/identity/me/cross-org-entitlements</c>, XD01-329) so that client-side service-order rule
     /// evaluation agrees with the server; empty wherever nothing resolves it — a server host
     /// reads grants from <c>IOrganizationGrantRepository</c> instead.
     /// </summary>
@@ -27,6 +28,8 @@ public sealed class AuthorizationContext
     /// <summary>
     /// Role names the user holds on organizations other than their own, keyed by that
     /// organization (XD01-325). Never part of <see cref="Roles"/>; read through <see cref="RolesOn"/>.
+    /// The Web client fills it from <c>GET /api/identity/me/cross-org-entitlements</c> (XD01-329);
+    /// <c>GET /api/identity/me</c> carries home roles only.
     /// </summary>
     public IReadOnlyDictionary<Guid, IReadOnlyList<string>> ScopedRoles { get; init; }
         = ReadOnlyDictionary<Guid, IReadOnlyList<string>>.Empty;

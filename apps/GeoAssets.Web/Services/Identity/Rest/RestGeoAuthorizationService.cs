@@ -21,11 +21,24 @@ namespace GeoAssets.Web.Services.Identity.Rest;
 /// implementation), this type does not update <c>LastLoginAt</c> — that write happens as a
 /// side effect of the server's own <c>GeoAuthorizationService</c> instance when it handles
 /// the <c>/api/identity/me</c> request.
+///
+/// The cross-organization half of the context — <see cref="AuthorizationContext.OrganizationGrants"/>,
+/// <see cref="AuthorizationContext.ScopedRoles"/>, <see cref="AuthorizationContext.ScopedPermissions"/> — comes from
+/// <see cref="ICrossOrgEntitlementsService"/> (<c>GET /api/identity/me/cross-org-entitlements</c>, XD01-329), so the
+/// client's <c>WorkflowPrincipal</c> carries what the server's does. Unlike <c>/me</c>, it is refreshable: after
+/// <see cref="ICrossOrgEntitlementsService.RefreshAsync"/>, the next <see cref="GetAuthorizationContextAsync"/> returns a
+/// context carrying the new entitlements.
 /// </summary>
-public sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthorizationService
+public sealed class RestGeoAuthorizationService(HttpClient http, ICrossOrgEntitlementsService entitlements) : IGeoAuthorizationService
 {
-    private Task<AuthorizationContext>?          _context;
+    private Task<AuthorizationContext>?          _home;
+    private (CrossOrgEntitlementsDto Entitlements, AuthorizationContext Context)? _composed;
     private Task<IReadOnlyList<AppPolicy>>?      _policies;
+
+    /// <summary>Reads the entitlements over <paramref name="http"/> too (<see cref="RestCrossOrgEntitlementsService"/>).</summary>
+    public RestGeoAuthorizationService(HttpClient http) : this(http, new RestCrossOrgEntitlementsService(http))
+    {
+    }
 
     public async Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default)
     {
@@ -60,8 +73,33 @@ public sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthoriza
         return Evaluate(policy, ctx);
     }
 
-    public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default)
-        => _context ??= FetchAuthorizationContextAsync(ct);
+    public async Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default)
+    {
+        var home = await (_home ??= FetchAuthorizationContextAsync(ct));
+        var current = await entitlements.GetAsync(ct);
+
+        if (_composed is { } composed && ReferenceEquals(composed.Entitlements, current))
+            return composed.Context;
+
+        var context = WithEntitlements(home, current);
+        _composed = (current, context);
+        return context;
+    }
+
+    /// <summary>
+    /// <paramref name="home"/> (<c>/me</c>) with the cross-organization entitlements. A caller with no organization holds
+    /// no grant; its scoped roles still count, as on the server.
+    /// </summary>
+    private static AuthorizationContext WithEntitlements(AuthorizationContext home, CrossOrgEntitlementsDto entitlements) => new()
+    {
+        User = home.User,
+        Roles = home.Roles,
+        Claims = home.Claims,
+        Permissions = home.Permissions,
+        OrganizationGrants = home.User.OrganizationId is { } organizationId ? entitlements.ToGrants(organizationId) : [],
+        ScopedRoles = entitlements.ToScopedRoles(),
+        ScopedPermissions = entitlements.ToScopedPermissions(),
+    };
 
     private async Task<AuthorizationContext> FetchAuthorizationContextAsync(CancellationToken ct)
     {
@@ -81,25 +119,7 @@ public sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthoriza
             Roles       = dto.Roles,
             Claims      = dto.Claims.Select(c => new UserClaim { Type = c.Type, Value = c.Value }).ToList(),
             Permissions = dto.Permissions,
-            OrganizationGrants = await FetchOwnOrganizationGrantsAsync(dto.OrganizationId, ct)
         };
-    }
-
-    /// <summary>
-    /// The caller's own organization's active grants (XD01-332), so the service-order
-    /// organization gate evaluates client-side as it does on the server. A caller with no
-    /// organization holds none. A server that does not answer the route yields none as well:
-    /// the client then offers a grantee less than the server would allow, never more.
-    /// </summary>
-    private async Task<IReadOnlyList<OrganizationGrant>> FetchOwnOrganizationGrantsAsync(Guid? organizationId, CancellationToken ct)
-    {
-        if (organizationId is not { } granteeOrganizationId) return [];
-
-        using var response = await http.GetAsync(new Uri("organization-grants/me", UriKind.Relative), ct);
-        if (!response.IsSuccessStatusCode) return [];
-
-        var dtos = await response.Content.ReadFromJsonAsync<List<OwnOrganizationGrantDto>>(ct) ?? [];
-        return [.. dtos.Select(g => g.ToModel(granteeOrganizationId))];
     }
 
     private Task<IReadOnlyList<AppPolicy>> GetPoliciesAsync(CancellationToken ct)

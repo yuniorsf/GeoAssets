@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\apps\GeoAssets.Web\GeoAssets.Web.csproj" />
   </ItemGroup>
 
+  <!-- XD01-329: the client/server cross-organization entitlements matrix, shared with the kernel's suite rather than forked. -->
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.Server.Tests\CrossOrgEntitlements\CrossOrgEntitlementsParityMatrix.cs" Link="Identity\CrossOrgEntitlementsParityMatrix.cs" />
+  </ItemGroup>
+
 </Project>

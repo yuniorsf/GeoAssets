@@ -209,6 +209,9 @@ public static class MauiProgram
 
         builder.Services.AddServiceOrderRules();
         builder.Services.AddScoped<WorkflowPrincipalFactory>();
+        // XD01-329: the shared Service Orders page reads cross-organization entitlements; this app has no source of them
+        // yet, so its views stay as they were.
+        builder.Services.AddSingleton<ICrossOrgEntitlementsService, NoCrossOrgEntitlementsService>();
 
         // The order detail's vertical panels and dispatch dialogs (XD01-378) — same wiring as
         // apps/GeoAssets.Web/Program.cs.

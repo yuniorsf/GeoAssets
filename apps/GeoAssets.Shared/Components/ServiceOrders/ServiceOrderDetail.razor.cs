@@ -1,3 +1,5 @@
+using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.Shared.Services;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Components;
@@ -11,8 +13,14 @@ public partial class ServiceOrderDetail
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    /// <summary>The viewer's cross-organization entitlements (XD01-329): an order of an organization they name shows its owner.</summary>
+    [Parameter] public CrossOrgEntitlementsDto? Entitlements { get; set; }
+
     private bool _dispatchDialogVisible;
     private string _noteText = string.Empty;
+
+    /// <summary>The owning organization's name, for an order of another organization the entitlements name (XD01-329).</summary>
+    private string? OwnerName => Order is null ? null : ServiceOrderOwner.ForeignOwnerName(Order, Principal, Entitlements);
 
     /// <summary>The order's type; null when the client does not know it.</summary>
     private OrderType? OrderType => Order is null ? null : OrderTypes.Find(Order.OrderTypeId);

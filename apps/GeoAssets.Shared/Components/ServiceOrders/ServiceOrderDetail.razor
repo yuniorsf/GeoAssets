@@ -1,6 +1,7 @@
 @inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
 @using GeoAssets.Workflow.Orders
 @using GeoAssets.Workflow.Rules
+@using GeoAssets.Shared.Services
 @using GeoAssets.Shared.Services.OrderDetail
 @inject IServiceOrderRepository Repository
 @inject ServiceOrderRules Rules
@@ -29,6 +30,10 @@
         }
 
         <div class="order-detail-fields">
+            @if (OwnerName is { } ownerName)
+            {
+                <div class="order-owner"><label>@L["orders.ownerOrganization"]</label><span>@ownerName</span></div>
+            }
             <div><label>@L["orders.createdBy"]</label><span>@Order.CreatedBy</span></div>
             <div><label>@L["orders.assignedTo"]</label><span>@(Order.AssignedTo ?? "—")</span></div>
             <div><label>@L["orders.createdAt"]</label><span>@Order.CreatedAt.ToLocalTime()</span></div>
