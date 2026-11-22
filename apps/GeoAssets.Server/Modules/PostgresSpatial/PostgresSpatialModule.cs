@@ -43,6 +43,10 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // WMS (XD01-372): the PostGIS render pushdown behind IAssetRenderQuery, scoped to the request's tenant.
         services.AddPostgresAssetRenderQuery(connectionString);
 
+        // Reference features (XD01-330): another organization's features, geometry and label only, read under that
+        // organization's tenant for the one query.
+        services.AddPostgresReferenceFeatureQuery(connectionString);
+
         // IAssetMutationBatchApplier (XD01-337/XD01-374): the PostgreSQL pushdown the kernel's asset-mutation consumer
         // (XD01-383) applies batches with, reloading the organization catalogs after each batch.
         services.AddPostgresAssetMutationBatchApplier(connectionString);

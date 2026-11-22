@@ -728,6 +728,7 @@
   "permissions.features.read": "Ver activos GIS",
   "permissions.features.edit": "Editar activos GIS",
   "permissions.features.delete": "Eliminar activos GIS",
+  "permissions.features.reference": "Ver los activos GIS de otra organización como referencia en el mapa (solo geometría y etiqueta)",
   "permissions.reports.export": "Exportar reportes",
   "permissions.users.manage": "Gestionar usuarios y roles",
   "permissions.registry.manage": "Publicar descriptores de tipos de orden en el registro",

@@ -49,8 +49,9 @@ public static class GeoAssetsRestApiExtensions
     /// <summary>Upper bound on features returned by <c>GET /features/bounds</c> for a single
     /// request — a large viewport over a dense dataset otherwise has no ceiling on response
     /// size (observed: ~15.9MB for one bbox during XD01-159's audit). Same order of magnitude
-    /// as <c>WfsProviderFactory.DefaultMaxFeatures</c>'s existing per-request cap convention.</summary>
-    private const int MaxBoundsFeatureCount = 10_000;
+    /// as <c>WfsProviderFactory.DefaultMaxFeatures</c>'s existing per-request cap convention. Also the cap of
+    /// <c>GET /organizations/{organizationId}/reference-features</c> (XD01-330).</summary>
+    internal const int MaxBoundsFeatureCount = 10_000;
 
     /// <summary>
     /// The kernel's asset endpoints under <paramref name="prefix"/>, with the WFS alias. The WMS alias
@@ -68,6 +69,7 @@ public static class GeoAssetsRestApiExtensions
         MapAssetTypesApi(routes, prefix, opts);
         MapLayersApi(routes, prefix, opts);
         MapMutationBatchesApi(routes, prefix, opts);
+        ReferenceFeaturesRestApiExtensions.MapReferenceFeaturesApi(routes, prefix, opts);
 
         // WFS 2.0 handler mounted under the same CORS-configured prefix so Blazor WASM clients can
         // reach it without separate CORS origin entries. External OGC clients can also use the

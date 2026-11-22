@@ -1,5 +1,4 @@
 using GeoAssets.Core.Interfaces;
-using GeoAssets.Core.Services;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -37,12 +36,17 @@ namespace GeoAssets.Server;
 /// (<see cref="AuthorizationContext.HasPermissionOn"/>), with <c>RequiredRole</c> matched against the
 /// roles held there; home roles and permissions count for nothing. A grant narrowed to order types
 /// (<c>OrderTypeIds</c>) only ever matches a service order, so it never matches a resource here.
+///
+/// The decision itself is <see cref="OrganizationResourceAccess"/>'s (XD01-330), shared with the routes that decide from
+/// the organization alone before reading anything; this handler applies its answer to the resource it is handed.
 /// </summary>
 public sealed class OrgResourceAuthorizationHandler(
     IGeoAuthorizationService authorizationService,
     IOrganizationGrantRepository grantRepository)
     : AuthorizationHandler<OrgResourceRequirement, IOrgOwnedResource>
 {
+    private readonly OrganizationResourceAccess _access = new(authorizationService, grantRepository);
+
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context, OrgResourceRequirement requirement, IOrgOwnedResource resource)
     {
@@ -54,42 +58,11 @@ public sealed class OrgResourceAuthorizationHandler(
         // IGeoAuthorizationService throws for an anonymous caller rather than returning false.
         if (context.User.Identity?.IsAuthenticated != true) return;
 
-        var hasHomePermission = await authorizationService.HasPermissionAsync(requirement.PermissionCode).ConfigureAwait(false);
+        var access = await _access
+            .ResolveAsync(resource.OrganizationId, resource.GetType().Name, requirement.PermissionCode)
+            .ConfigureAwait(false);
 
-        if (resource.OrganizationId == Guid.Empty)
-        {
-            if (hasHomePermission) context.Succeed(requirement);
-            return;
-        }
-
-        var authContext = await authorizationService.GetAuthorizationContextAsync().ConfigureAwait(false);
-        var userOrganizationId = authContext.User.OrganizationId;
-
-        if (userOrganizationId == resource.OrganizationId)
-        {
-            if (hasHomePermission) context.Succeed(requirement);
-            return;
-        }
-
-        // Every grant needs the permission somewhere: at home (organization-wide) or on the resource's organization
-        // (scoped role, XD01-326). Holding it in neither place, no grant can help — skip the lookup.
-        var holdsOnResourceOrganization = authContext.HasPermissionOn(resource.OrganizationId, requirement.PermissionCode);
-        if (userOrganizationId is null || (!hasHomePermission && !holdsOnResourceOrganization))
-            return;
-
-        var resourceType = resource.GetType().Name;
-        var grants = await grantRepository.GetActiveGrantsAsync(userOrganizationId.Value, resource.OrganizationId).ConfigureAwait(false);
-
-        var hasGrant = grants.Any(g =>
-            OrganizationGrantMatching.CoversResourceType(g.ResourceType, resourceType) &&
-            g.OrderTypeIds.Count == 0 &&
-            (g.ScopeId is null || (resource is IScopeableResource scoped && OrganizationGrantMatching.CoversScope(g.ScopeId, scoped.ScopeId))) &&
-            OrganizationGrantMatching.AllowsAction(g.AllowedActions, requirement.PermissionCode) &&
-            (g.RequiresScopedRole
-                ? holdsOnResourceOrganization && (g.RequiredRole is null || authContext.HasRoleOn(resource.OrganizationId, g.RequiredRole))
-                : hasHomePermission && (g.RequiredRole is null || authContext.HasRole(g.RequiredRole))));
-
-        if (hasGrant)
+        if (access.Covers(resource))
             context.Succeed(requirement);
     }
 }

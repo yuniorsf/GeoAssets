@@ -713,6 +713,7 @@
   "permissions.features.read": "Ver ativos GIS",
   "permissions.features.edit": "Editar ativos GIS",
   "permissions.features.delete": "Excluir ativos GIS",
+  "permissions.features.reference": "Ver os ativos GIS de outra organização como referência no mapa (somente geometria e rótulo)",
   "permissions.reports.export": "Exportar relatórios",
   "permissions.users.manage": "Gerenciar usuários e funções",
   "permissions.registry.manage": "Publicar descritores de tipos de ordem no registro",

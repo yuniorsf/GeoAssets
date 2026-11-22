@@ -131,6 +131,8 @@ public static class GeoIdentitySeeder
             P("features:read",          "features",      "read",     "permissions.features.read"),
             P("features:edit",          "features",      "edit",     "permissions.features.edit"),
             P("features:delete",        "features",      "delete",   "permissions.features.delete"),
+            // XD01-330: another organization's features as a map reference (geometry and label only), through a grant.
+            P("features:reference",     "features",      "reference", "permissions.features.reference"),
             P("reports:export",         "reports",       "export",   "permissions.reports.export"),
             P("users:manage",           "users",         "manage",   "permissions.users.manage"),
 
@@ -178,7 +180,7 @@ public static class GeoIdentitySeeder
         await AddRoleAsync(db, AdminRoleId,      "Administrator",   "Acceso completo al sistema",       isBuiltIn: true, ct,
             "serviceorders:create", "serviceorders:read", "serviceorders:assign",
             "serviceorders:complete", "serviceorders:cancel",
-            "features:read", "features:edit", "features:delete",
+            "features:read", "features:edit", "features:delete", "features:reference",
             "reports:export", "users:manage",
             "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read",
             "organizations:read", "organizations:edit", "groups:read", "groups:edit",

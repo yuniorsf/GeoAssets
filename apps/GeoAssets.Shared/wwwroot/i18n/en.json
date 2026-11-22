@@ -728,6 +728,7 @@
   "permissions.features.read": "View GIS assets",
   "permissions.features.edit": "Edit GIS assets",
   "permissions.features.delete": "Delete GIS assets",
+  "permissions.features.reference": "View another organization's GIS assets as a map reference (geometry and label only)",
   "permissions.reports.export": "Export reports",
   "permissions.users.manage": "Manage users and roles",
   "permissions.registry.manage": "Publish order-type descriptors to the registry",
