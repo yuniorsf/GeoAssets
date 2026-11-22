@@ -64,6 +64,26 @@ resources:
     cpu: "1"
     memory: 512Mi
 
+# Pod Security Standards "restricted": the image runs as its unprivileged "app" user (APP_UID=1654, see
+# apps/GeoAssets.FieldService.Server/Dockerfile), on a read-only root filesystem with an emptyDir at /tmp.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654
+  runAsGroup: 1654
+  fsGroup: 1654
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Size limit of the writable /tmp emptyDir the read-only root filesystem leaves the process.
+tmpSizeLimit: 64Mi
+
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []
