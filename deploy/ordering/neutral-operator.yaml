@@ -1,0 +1,11 @@
+# Start-up order for deploy/neutral-operator when the whole stack runs through deploy/docker-compose.yaml — a depends_on
+# naming deploy/server's services in that file itself would break it when it is started on its own.
+services:
+  neutral-operator-db:
+    depends_on:
+      postgres:
+        condition: service_healthy
+  neutral-operator:
+    depends_on:
+      server:
+        condition: service_healthy

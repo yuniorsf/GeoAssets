@@ -1,0 +1,6 @@
+# Start-up order for deploy/web when the whole stack runs through deploy/docker-compose.yaml (see neutral-operator.yaml).
+services:
+  web:
+    depends_on:
+      gateway:
+        condition: service_healthy

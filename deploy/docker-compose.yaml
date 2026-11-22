@@ -1,0 +1,21 @@
+# The whole local GeoAssets stack as one Compose project, "geoassets": the kernel stack (deploy/server: PostGIS, the kernel,
+# the gateway), GeoAssets.NeutralOperator.Server (deploy/neutral-operator) and the web client (deploy/web), all on the
+# project's network, geoassets_default. Each included file keeps its own directory and reads its own .env for
+# interpolation (deploy/server/.env, deploy/neutral-operator/.env), and each declares the same project name, so it can
+# also be started on its own into the same project.
+#
+#   docker compose -f deploy/docker-compose.yaml up --build -d
+#
+# The Postgres data volume is external (server_geoassets-postgres-data) — see deploy/server/README.md.
+name: geoassets
+
+include:
+  - server/docker-compose.yaml
+  # ordering/*.yaml add the cross-file start-up order (Postgres → the database job, the kernel → NeutralOperator.Server,
+  # the gateway → the web client) on top of the standalone files.
+  - path:
+      - neutral-operator/docker-compose.yaml
+      - ordering/neutral-operator.yaml
+  - path:
+      - web/docker-compose.yaml
+      - ordering/web.yaml

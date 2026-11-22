@@ -14,6 +14,7 @@ Vault-backed file the local OTel Collector uses, not a hardcoded value.
 
 ```bash
 # 1. New Relic license key — pulled from Key Vault, shared with deploy/otel/
+#    (optional: without deploy/otel/.env the stack still starts, exporting no telemetry to a vendor)
 cd ../otel
 az login   # if not already
 ./fetch-secrets.sh
@@ -22,9 +23,34 @@ cd ../server
 # 2. Local Postgres password — not a vendor secret, no Key Vault entry
 cp .env.example .env   # fill in POSTGRES_PASSWORD
 
-# 3. Build and start
+# 3. The Postgres data volume — external, so no `docker compose down -v` can delete it. Once per machine:
+docker volume create server_geoassets-postgres-data
+
+# 4. Build and start
 docker compose up --build
 ```
+
+The stack is part of the Compose project **`geoassets`** (`name: geoassets` in `docker-compose.yaml`), on its network
+`geoassets_default`; `deploy/neutral-operator` and `deploy/web` declare the same project. To run all of them as one, from
+the repo root:
+
+```bash
+docker compose -f deploy/docker-compose.yaml up --build -d   # server + neutral-operator + web (include:)
+docker compose -f deploy/docker-compose.yaml down            # never -v; the data volume is external anyway
+```
+
+Each included file keeps reading its own `.env` (`deploy/server/.env`, `deploy/neutral-operator/.env`). Starting one file
+on its own (`docker compose up` here) works too and lands in the same project: Compose then lists the other files'
+containers as "orphans" — harmless; don't pass `--remove-orphans` unless you mean to stop them. Every published port is
+bound to `127.0.0.1` only: Postgres **5433**, the kernel **8080**, the gateway **8090** (and `deploy/web` **8081**,
+`deploy/neutral-operator` **8082**). The kernel and the gateway have a compose healthcheck on `GET /healthz` (over bash's
+`/dev/tcp`; the images ship no curl), and the gateway starts once the kernel is healthy. The containers run as the
+image's unprivileged `app` user (uid 1654).
+
+A machine that ran this stack before the `geoassets` project name keeps its data: the volume is still
+`server_geoassets-postgres-data` (the old `server` project's), now declared `external`. Stop the old projects first
+(`docker compose -p server down`, likewise `-p neutral-operator` and `-p web`, without `-v`) — their containers carry the
+same `container_name`s.
 
 ## The gateway (XD01-384)
 

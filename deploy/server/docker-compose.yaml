@@ -1,6 +1,11 @@
+# The kernel stack. Part of the "geoassets" Compose project: started on its own or, with deploy/neutral-operator and
+# deploy/web, through deploy/docker-compose.yaml — every service shares the project's network, geoassets_default.
+name: geoassets
+
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    # postgis/postgis publishes linux/amd64 only (its index lists no arm64 image): on Apple Silicon it runs emulated.
+    image: postgis/postgis:16-3.5@sha256:94146ac37bc61e2322f88016056c5920729cb8c64c8542ed590af8fc2abdac07
     container_name: PostgresL
     environment:
       POSTGRES_DB: geoassets
@@ -12,7 +17,8 @@ services:
       # Host-side 5433, not 5432 — avoids colliding with a native Postgres
       # already listening on the host's 5432. Container-to-container traffic
       # (the server service below) still uses the standard 5432 internally.
-      - "5433:5432"
+      # Loopback only, like every published port of this stack.
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -28,9 +34,11 @@ services:
     # same Key Vault-backed .env used by the local OTel Collector — see
     # deploy/otel/README.md "Pulling credentials from Key Vault instead".
     # Run `deploy/otel/fetch-secrets.sh` (or copy deploy/otel/.env.example)
-    # before starting this stack.
+    # before starting this stack to export telemetry; without it the server
+    # still starts, exporting nothing to a vendor.
     env_file:
-      - ../otel/.env
+      - path: ../otel/.env
+        required: false
       - .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -46,7 +54,14 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    # GET /healthz over bash's /dev/tcp: the runtime image has no curl or wget.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # XD01-384: the API gateway (YARP) the web client talks to — kernel APIs unchanged (/api/**, /wms, /wfs) and the
   # NeutralOperator vertical at /api/v/neutral-operator/** (rewritten to /api/**). It authorizes nothing: the bearer token
@@ -63,7 +78,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Destinations__GeoAssets__Shared: http://server:8080
       # The kernel while it hosts the module (the default here, see the server service); http://neutral-operator:8080 for
-      # deploy/neutral-operator's GeoAssets.NeutralOperator.Server (same network, server_default).
+      # deploy/neutral-operator's GeoAssets.NeutralOperator.Server (same network, geoassets_default).
       Destinations__NeutralOperator__Shared: ${NEUTRAL_OPERATOR_DESTINATION:-http://server:8080}
       # Not part of this stack: requests under these prefixes answer 502 until such a host runs at these addresses.
       Destinations__IpBilling__Shared: ${IPBILLING_DESTINATION:-http://ipbilling-server:8080}
@@ -82,15 +97,20 @@ services:
       AzureAdCiam__TenantId: ${AzureAdCiam__TenantId:-}
     depends_on:
       server:
-        condition: service_started
+        condition: service_healthy
     ports:
-      - "8090:8080"
+      - "127.0.0.1:8090:8080"
+    # GET /healthz over bash's /dev/tcp: the runtime image has no curl or wget.
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
 
 volumes:
+  # The live local database, created outside Compose so that no `down -v` can delete it (the name it had when this was the
+  # "server" project). A fresh machine creates it first: docker volume create server_geoassets-postgres-data
   geoassets-postgres-data:
+    name: server_geoassets-postgres-data
+    external: true

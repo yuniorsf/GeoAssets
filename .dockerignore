@@ -1,0 +1,48 @@
+# Version control & IDE/agent metadata
+.git/
+.gitignore
+.github/
+.vscode/
+.claude/
+.agents/
+.antigravity/
+.harness/
+.local/
+.DS_Store
+**/.DS_Store
+
+# Build artifacts & dependencies
+**/bin/
+**/obj/
+**/node_modules/
+**/.vs/
+
+# Secrets & local environment files (never bake into image layers)
+**/.env
+**/.env.*
+!**/.env.example
+# Developer-local, gitignored app settings and certificates (e.g. apps/GeoAssets.Web/wwwroot/appsettings.Local.json —
+# the Web image would otherwise serve it publicly).
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/secrets.json
+**/*.pfx
+**/*.pem
+**/*.key
+
+# Terraform state & IaC tooling artifacts
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Non-runtime directories not needed by app Dockerfiles
+docs/
+tests/
+examples/
+scripts/
+deploy/terraform/
+deploy/helm/
+deploy/otel/
+*.md
