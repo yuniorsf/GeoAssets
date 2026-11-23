@@ -58,7 +58,7 @@ public sealed class GenericVerticalRegistrationTests
         public Loop(VerticalRegistrationSource source, params IModulePermissionContributor[] contributors)
         {
             Client = new FakeVerticalRegistrationClient();
-            Time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
+            Time = new SchedulingAwareTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
             State = new VerticalRegistrationState();
             _provider = new ServiceCollection()
                 .AddScoped<IVerticalRegistrationClient>(_ => Client)
@@ -71,7 +71,7 @@ public sealed class GenericVerticalRegistrationTests
 
         public FakeVerticalRegistrationClient Client { get; }
 
-        public FakeTimeProvider Time { get; }
+        public SchedulingAwareTimeProvider Time { get; }
 
         public VerticalRegistrationState State { get; }
 
@@ -108,7 +108,7 @@ public sealed class GenericVerticalRegistrationTests
         await loop.StartAsync();
         await loop.UntilRegisteredAsync();
 
-        loop.Time.Advance(new VerticalRegistrationOptions().RefreshInterval);
+        await loop.Time.AdvanceWhenScheduledAsync(new VerticalRegistrationOptions().RefreshInterval);
         await RegistrationLoop.UntilAsync(() => loop.Client.Calls.Count == 2);
 
         loop.Client.Kinds.Should().OnlyContain(kind => kind == FakeVerticalRegistrationClient.Permissions);
@@ -123,7 +123,7 @@ public sealed class GenericVerticalRegistrationTests
         await loop.StartAsync();
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Failing);
         loop.Client.Fails = _ => false;
-        loop.Time.Advance(new VerticalRegistrationOptions().MaxDelay);
+        await loop.Time.AdvanceWhenScheduledAsync(new VerticalRegistrationOptions().MaxDelay);
         await loop.UntilRegisteredAsync();
 
         loop.Client.Kinds.Should().Equal(FakeVerticalRegistrationClient.Permissions, FakeVerticalRegistrationClient.Permissions);
@@ -296,7 +296,7 @@ public sealed class GenericVerticalRegistrationTests
     public async Task Readyz_Is503WhileTheRegistrationFails_And200OnceRegistered_WhileHealthzStays200()
     {
         var client = new FakeVerticalRegistrationClient { Fails = _ => true };
-        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
+        var time = new SchedulingAwareTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
         using var host = await new HostBuilder()
             .ConfigureWebHost(web =>
             {
@@ -331,7 +331,7 @@ public sealed class GenericVerticalRegistrationTests
         var failingHealth = await http.GetAsync(new Uri("/healthz", UriKind.Relative));
 
         client.Fails = _ => false;
-        time.Advance(new VerticalRegistrationOptions().MaxDelay);
+        await time.AdvanceWhenScheduledAsync(new VerticalRegistrationOptions().MaxDelay);
         await RegistrationLoop.UntilAsync(() => host.Services.GetRequiredService<VerticalRegistrationState>().Current.Status == VerticalRegistrationStatus.Registered);
         var readyReady = await http.GetAsync(new Uri("/readyz", UriKind.Relative));
 

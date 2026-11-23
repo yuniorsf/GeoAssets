@@ -19,7 +19,7 @@ internal sealed class RegistrationLoop : IAsyncDisposable
     public RegistrationLoop(VerticalRegistrationOptions? options = null, IEnumerable<IModulePermissionContributor>? extraContributors = null)
     {
         Client = new FakeVerticalRegistrationClient();
-        Time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
+        Time = new SchedulingAwareTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
         Options = options ?? new VerticalRegistrationOptions();
         State = new VerticalRegistrationState();
         OrderTypes = new OrderTypeRegistry();
@@ -38,7 +38,7 @@ internal sealed class RegistrationLoop : IAsyncDisposable
 
     public FakeVerticalRegistrationClient Client { get; }
 
-    public FakeTimeProvider Time { get; }
+    public SchedulingAwareTimeProvider Time { get; }
 
     public VerticalRegistrationOptions Options { get; }
 

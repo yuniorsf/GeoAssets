@@ -82,7 +82,7 @@ public sealed class VerticalRegistrationServiceTests
         loop.State.Current.RegisteredAt.Should().BeNull("registered means both were accepted");
 
         loop.Client.Fails = _ => false;
-        loop.Time.Advance(Production.MaxDelay);
+        await loop.Time.AdvanceWhenScheduledAsync(Production.MaxDelay);
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Registered);
 
         loop.Client.Kinds.Should().Equal(
@@ -105,10 +105,10 @@ public sealed class VerticalRegistrationServiceTests
             var cap = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, failure - 1), Production.MaxDelay.TotalSeconds));
             var attempts = loop.Client.Calls.Count;
 
-            loop.Time.Advance(cap / 2 - TimeSpan.FromMilliseconds(10));
+            await loop.Time.AdvanceWhenScheduledAsync(cap / 2 - TimeSpan.FromMilliseconds(10));
             (await loop.SettledCallsAsync()).Should().Be(attempts, $"after failure {failure} the retry waits at least {cap / 2}");
 
-            loop.Time.Advance(cap / 2 + TimeSpan.FromMilliseconds(10));
+            await loop.Time.AdvanceWhenScheduledAsync(cap / 2 + TimeSpan.FromMilliseconds(10));
             await RegistrationLoop.UntilAsync(() => loop.State.Current.ConsecutiveFailures == failure + 1);
         }
 
@@ -151,17 +151,17 @@ public sealed class VerticalRegistrationServiceTests
         await loop.StartAsync();
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Registered);
 
-        loop.Time.Advance(Production.RefreshInterval - TimeSpan.FromSeconds(1));
+        await loop.Time.AdvanceWhenScheduledAsync(Production.RefreshInterval - TimeSpan.FromSeconds(1));
         (await loop.SettledCallsAsync()).Should().Be(2, "nothing is republished before the refresh interval has passed");
 
-        loop.Time.Advance(TimeSpan.FromSeconds(1));
+        await loop.Time.AdvanceWhenScheduledAsync(TimeSpan.FromSeconds(1));
         await RegistrationLoop.UntilAsync(() => loop.Client.Calls.Count == 4);
         loop.Client.Kinds.Should().Equal(
             FakeVerticalRegistrationClient.OrderTypes, FakeVerticalRegistrationClient.Permissions,
             FakeVerticalRegistrationClient.OrderTypes, FakeVerticalRegistrationClient.Permissions);
         loop.State.Current.RegisteredAt.Should().Be(loop.Time.GetUtcNow(), "the registration time follows each republication");
 
-        loop.Time.Advance(Production.RefreshInterval);
+        await loop.Time.AdvanceWhenScheduledAsync(Production.RefreshInterval);
         await RegistrationLoop.UntilAsync(() => loop.Client.Calls.Count == 6);
     }
 
@@ -173,10 +173,10 @@ public sealed class VerticalRegistrationServiceTests
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Registered);
         loop.Client.Fails = _ => true;
 
-        loop.Time.Advance(Production.RefreshInterval);
+        await loop.Time.AdvanceWhenScheduledAsync(Production.RefreshInterval);
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Failing);
         loop.Client.Fails = _ => false;
-        loop.Time.Advance(Production.InitialDelay);
+        await loop.Time.AdvanceWhenScheduledAsync(Production.InitialDelay);
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Registered);
 
         loop.State.Current.ConsecutiveFailures.Should().Be(0);
@@ -195,8 +195,8 @@ public sealed class VerticalRegistrationServiceTests
 
         await failing.StopAsync();
         await healthy.StopAsync();
-        failing.Time.Advance(TimeSpan.FromHours(1));
-        healthy.Time.Advance(TimeSpan.FromHours(1));
+        await failing.Time.AdvanceWhenScheduledAsync(TimeSpan.FromHours(1));
+        await healthy.Time.AdvanceWhenScheduledAsync(TimeSpan.FromHours(1));
 
         (await failing.SettledCallsAsync()).Should().Be(1, "a stopped loop makes no further attempt");
         (await healthy.SettledCallsAsync()).Should().Be(2, "a stopped loop republishes nothing");
@@ -229,16 +229,16 @@ public sealed class VerticalRegistrationServiceTests
         await loop.StartAsync();
         await RegistrationLoop.UntilAsync(() => loop.State.Current.ConsecutiveFailures == 1);
 
-        loop.Time.Advance(TimeSpan.FromSeconds(4));
+        await loop.Time.AdvanceWhenScheduledAsync(TimeSpan.FromSeconds(4));
         (await loop.SettledCallsAsync()).Should().Be(1, "the first retry waits at least half of the 10 s initial delay");
-        loop.Time.Advance(TimeSpan.FromSeconds(6));
+        await loop.Time.AdvanceWhenScheduledAsync(TimeSpan.FromSeconds(6));
         await RegistrationLoop.UntilAsync(() => loop.State.Current.ConsecutiveFailures == 2);
 
         loop.Client.Fails = _ => false;
-        loop.Time.Advance(options.MaxDelay);
+        await loop.Time.AdvanceWhenScheduledAsync(options.MaxDelay);
         await RegistrationLoop.UntilAsync(() => loop.State.Current.Status == VerticalRegistrationStatus.Registered);
         var calls = loop.Client.Calls.Count;
-        loop.Time.Advance(options.RefreshInterval);
+        await loop.Time.AdvanceWhenScheduledAsync(options.RefreshInterval);
         await RegistrationLoop.UntilAsync(() => loop.Client.Calls.Count == calls + 2);
     }
 
