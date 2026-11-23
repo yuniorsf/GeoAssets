@@ -453,6 +453,38 @@ label, nothing else — through `GET /api/geoassets/organizations/{organizationI
   Without the module, `OrganizationCatalogReferenceFeatureQuery` answers from the organization's catalog.
 - Out of scope: rendering (XD01-331), WMS/WFS exposure, and any write, selection, export or topology traversal.
 
+### Reference layer on the map (XD01-331, seventh slice of XD01-324)
+
+The Web map shows those reference features as a labelled, non-interactive layer per organization
+(`GeoAssets.Shared/Services/ReferenceLayers/`).
+
+- **Which organizations are offered** (`ReferenceLayerOffer`): exactly those for which `OrganizationResourceAccess`
+  would open the route, decided from the same inputs — the `/me` home context and the XD01-329 entitlements. Another
+  organization (never the caller's own) is offered when one of its active, unexpired grants covers `GeoFeature` (or no
+  resource type — a grant for `"Feature"` or any other type opens nothing), lists no order type, lists
+  `features:reference`, and the caller qualifies: organization-wide through the home permission (and the named role at
+  home), `RequiresScopedRole` through the permission (and the named role) held on that organization. One matrix compiled
+  into both suites proves it row by row (`tests/GeoAssets.Server.Tests/ReferenceFeatures/ReferenceLayerOfferParityMatrix.cs`).
+  A caller with no candidate grant gets no toggle, and no request is made.
+- **Toggle** "Reference: COELBA" per organization in the layers panel (`ReferenceLayerToggles`), off by default, kept
+  for the session by the scoped `ReferenceLayerService`.
+- **Data flow**: `OnViewportChangedFromJs` → `ReferenceLayerService.OnViewportChangedAsync`, which supersedes every
+  load in flight at once and, 300 ms later (injected `TimeProvider`), asks `IReferenceFeatureClient`
+  (`RestReferenceFeatureClient`, the `GeoAssetsServer` client at `/api/geoassets/`) per switched-on organization. The
+  viewport is normalized first (`ReferenceViewport`: latitudes clamped, a wrapped view moved back into ±180, a view across
+  the antimeridian or a full turn wide asks for every longitude). The body goes to the map unparsed. Reference features
+  never touch `IAssetProvider`, so they are absent from the feature list, auto-save, selection, export and the project
+  session.
+- **Rendering** (`IMapInterop.SetReferenceLayerAsync`/`ClearReferenceLayerAsync`/`GetViewBoundsAsync`,
+  `geoassets.js`): SVG in a pane of its own below the user's features (z 350, labels 390), muted dashed style from
+  theme tokens, labels as permanent tooltips (text nodes, never HTML) from zoom 16 up; `interactive: false`,
+  `pmIgnore`, `snapIgnore`, outside every feature registry — no click, context menu, popup, Geoman editing or
+  snapping, and no draw or selection tool sees them.
+- **Revocation**: a `403` clears that layer and withdraws its toggle for the session, without an error. Other failures
+  are logged and leave the layer as it was.
+- The MAUI app has no entitlement source (`NoCrossOrgEntitlementsService`) and no REST client for the route
+  (`UnavailableReferenceFeatureClient`), so its map is unchanged.
+
 ---
 
 ## 5. Federated authentication
