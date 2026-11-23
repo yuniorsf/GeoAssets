@@ -17,5 +17,11 @@
 
   "Projects": {
     "ApiBaseUrl": "${GEOASSETS_GATEWAY_URL}/api/projects"
+  },
+
+  "Observability": {
+    "AzureMonitor": {
+      "ConnectionString": "${GEOASSETS_APPINSIGHTS_CONNECTION_STRING}"
+    }
   }
 }

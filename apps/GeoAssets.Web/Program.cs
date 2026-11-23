@@ -286,7 +286,18 @@ catch (AccessTokenNotAvailableException)
 // until AzureAdCiam's own gitignored appsettings.Local.json override pattern supplies a real one.
 var appInsightsConnectionString = builder.Configuration["Observability:AzureMonitor:ConnectionString"];
 if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
-    await host.Services.GetRequiredService<IJSRuntime>()
-        .InvokeVoidAsync("appInsightsInterop.init", appInsightsConnectionString);
+{
+    // A malformed connection string makes the SDK throw ("Please provide instrumentation key");
+    // telemetry must never keep the app from starting.
+    try
+    {
+        await host.Services.GetRequiredService<IJSRuntime>()
+            .InvokeVoidAsync("appInsightsInterop.init", appInsightsConnectionString);
+    }
+    catch (JSException ex)
+    {
+        logger.LogWarning(ex, "Application Insights could not be initialized; continuing without browser telemetry.");
+    }
+}
 
 await host.RunAsync();

@@ -12,6 +12,8 @@ services:
       # GeoAssetsServer:BaseUrl, ServiceOrders:ApiBaseUrl, … of appsettings.Production.json are rendered from these at start.
       GEOASSETS_GATEWAY_URL: ${GEOASSETS_GATEWAY_URL:-http://localhost:8090}
       GEOASSETS_IPBILLING_SERVER_URL: ${GEOASSETS_IPBILLING_SERVER_URL:-http://localhost:8090}
+      # Observability:AzureMonitor:ConnectionString — the browser's Application Insights connection string; unset = no telemetry.
+      GEOASSETS_APPINSIGHTS_CONNECTION_STRING: ${GEOASSETS_APPINSIGHTS_CONNECTION_STRING:-}
     ports:
       - "127.0.0.1:8081:8080"
     # BusyBox wget of the nginx-unprivileged (Alpine) image.
