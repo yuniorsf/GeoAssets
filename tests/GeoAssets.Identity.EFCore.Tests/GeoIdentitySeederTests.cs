@@ -29,13 +29,13 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(29);
+        (await db.Permissions.CountAsync()).Should().Be(30);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
 
     [Fact]
-    public async Task SeedAsync_AdministratorRole_IsLinkedToAllTwentyNinePermissions()
+    public async Task SeedAsync_AdministratorRole_IsLinkedToItsTwentyNinePermissions()
     {
         // Guards the ChangeTracker lookup in AddRoleAsync: permissions and roles are
         // added in the *same* SaveChanges batch, so a naive database-only lookup for
@@ -98,7 +98,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(29);
+        (await db.Permissions.CountAsync()).Should().Be(30);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
@@ -300,7 +300,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var permissions = await db.Permissions.ToListAsync();
-        permissions.Should().HaveCount(29);
+        permissions.Should().HaveCount(30);
         foreach (var permission in permissions)
         {
             permission.Description.Should().StartWith("permissions.",
