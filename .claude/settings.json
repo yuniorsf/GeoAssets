@@ -69,7 +69,8 @@
       "Bash(tflint *)",
       "Bash(trivy config *)",
       "Bash(helm lint *)",
-      "Bash(helm template *)",
+      "Bash(helm template deploy/helm/*)",
+      "Bash(helm template * deploy/helm/*)",
       "Bash(helm version)",
       "Bash(kubeconform *)",
       "Bash(hadolint *)",
@@ -80,6 +81,9 @@
       "Bash(docker compose -f deploy/web/docker-compose.yaml config -q)",
       "Bash(docker compose -f deploy/otel/docker-compose.yaml config -q)",
       "Bash(docker buildx build --check *)"
+    ],
+    "ask": [
+      "Bash(helm template *--post-renderer*)"
     ],
     "additionalDirectories": [
       "/tmp"
