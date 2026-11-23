@@ -137,6 +137,63 @@ public class PanelStateServiceExtensionsTests
         scopeB.ServiceProvider.GetRequiredService<MapLayerDisplayService>().Should().NotBeSameAs(first);
     }
 
+    // ── Reference layers (XD01-331) ──────────────────────────────────────────
+
+    private static ServiceProvider ReferenceLayerHost(Action<IServiceCollection>? before = null, Action<IServiceCollection>? after = null)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IMapInterop, RecordingMapInterop>();
+        services.AddSingleton<GeoAssets.Identity.Authorization.Services.ICrossOrgEntitlementsService,
+            GeoAssets.Identity.Authorization.Services.NoCrossOrgEntitlementsService>();
+        services.AddSingleton<GeoAssets.Identity.Authorization.Services.IGeoAuthorizationService>(
+            new GeoAssets.Shared.Tests.Services.ReferenceLayers.FakeAuthorization(null!));
+        before?.Invoke(services);
+        services.AddGeoAssetsPanelState();
+        after?.Invoke(services);
+        return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    [Fact]
+    public void AddGeoAssetsPanelState_RegistersTheReferenceLayerServiceAsScoped_WithTheUnavailableClientByDefault()
+    {
+        using var provider = ReferenceLayerHost();
+        using var scopeA = provider.CreateScope();
+        using var scopeB = provider.CreateScope();
+
+        var first = scopeA.ServiceProvider.GetRequiredService<GeoAssets.Shared.Services.ReferenceLayers.ReferenceLayerService>();
+
+        scopeA.ServiceProvider.GetRequiredService<GeoAssets.Shared.Services.ReferenceLayers.ReferenceLayerService>().Should().BeSameAs(first);
+        scopeB.ServiceProvider.GetRequiredService<GeoAssets.Shared.Services.ReferenceLayers.ReferenceLayerService>().Should().NotBeSameAs(first);
+        scopeA.ServiceProvider.GetRequiredService<GeoAssets.Shared.Services.ReferenceLayers.IReferenceFeatureClient>()
+            .Should().BeOfType<GeoAssets.Shared.Services.ReferenceLayers.UnavailableReferenceFeatureClient>();
+    }
+
+    [Fact]
+    public void AddGeoAssetsPanelState_KeepsAHostsOwnReferenceFeatureClient_RegisteredBefore()
+    {
+        using var provider = ReferenceLayerHost(before: s =>
+            s.AddScoped<GeoAssets.Shared.Services.ReferenceLayers.IReferenceFeatureClient>(
+                _ => new GeoAssets.Shared.Tests.Services.ReferenceLayers.FakeReferenceFeatureClient()));
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService<GeoAssets.Shared.Services.ReferenceLayers.IReferenceFeatureClient>()
+            .Should().BeOfType<GeoAssets.Shared.Tests.Services.ReferenceLayers.FakeReferenceFeatureClient>();
+    }
+
+    [Fact]
+    public async Task AddGeoAssetsPanelState_AHostWithoutEntitlements_OffersNoReferenceLayer()
+    {
+        using var provider = ReferenceLayerHost();
+        using var scope = provider.CreateScope();
+
+        var offered = await scope.ServiceProvider.GetRequiredService<GeoAssets.Shared.Services.ReferenceLayers.ReferenceLayerService>()
+            .LoadOrganizationsAsync();
+
+        offered.Should().BeEmpty("the MAUI app has no entitlement source, so its map stays as it was");
+    }
+
     [Fact]
     public void AddGeoAssetsPanelState_RegistersMapOrderFocusAsScoped()
     {

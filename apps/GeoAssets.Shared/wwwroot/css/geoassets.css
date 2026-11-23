@@ -435,6 +435,62 @@ html, body {
     pointer-events: none;
 }
 
+/* Another organization's reference layer (XD01-331), drawn by geoassets.js's setReferenceLayer
+   in its own panes below the user's features: one muted, uniform, dashed style from the theme
+   tokens (the paths' stroke and fill are `currentColor`), so it reads as "not yours" in Mocha and
+   Latte alike and follows a theme switch without a redraw. Nothing in it takes pointer events. */
+.geoassets-reference-pane,
+.geoassets-reference-pane * {
+    pointer-events: none !important;
+}
+
+.geoassets-reference-feature {
+    color: var(--text-secondary);
+    stroke: var(--text-secondary);
+    fill: var(--text-secondary);
+}
+
+/* Permanent labels: the panel colours as a small pill with a hairline border, so the text stays
+   readable over any base-map tile in either theme. No tooltip arrow — it labels, it doesn't point. */
+.leaflet-tooltip.geoassets-reference-label {
+    padding: 0 4px;
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    background: var(--panel-bg);
+    box-shadow: none;
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    line-height: 1.4;
+    white-space: nowrap;
+    opacity: 0.9;
+}
+
+.leaflet-tooltip.geoassets-reference-label::before {
+    display: none;
+}
+
+/* The per-organization reference toggles in the layers panel (XD01-331). */
+.reference-layers {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--panel-border);
+}
+
+.reference-layers-title {
+    margin-bottom: 4px;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.reference-layers .form-check-label { font-size: 0.87rem; }
+
+.reference-layers .form-check-input:checked {
+    border-color: var(--text-secondary);
+    background-color: var(--text-secondary);
+}
+
 /* ─── Draw Toolbar ───────────────────────────────────────────────────────── */
 
 .draw-toolbar {

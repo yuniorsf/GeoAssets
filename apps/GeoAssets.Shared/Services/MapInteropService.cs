@@ -2,6 +2,7 @@ using GeoAssets.Shared.Interfaces;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
@@ -192,6 +193,27 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     {
         AssetTypeZoomRange.EnsureValid(minZoom, maxZoom);
         return _js.InvokeVoidAsync($"{Ns}.setLayerZoomRange", divId, assetTypeId, minZoom, maxZoom).AsTask();
+    }
+
+    public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(layerId);
+        ArgumentNullException.ThrowIfNull(rawFeaturesJson);
+        ReferenceLayerOptions.EnsureValid(options);
+        // Forwarded as-is, like the raw viewport path: JS parses it natively.
+        return _js.InvokeVoidAsync($"{Ns}.setReferenceLayer", divId, layerId, rawFeaturesJson, options).AsTask();
+    }
+
+    public Task ClearReferenceLayerAsync(string divId, string layerId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(layerId);
+        return _js.InvokeVoidAsync($"{Ns}.clearReferenceLayer", divId, layerId).AsTask();
+    }
+
+    public async Task<BoundingBox?> GetViewBoundsAsync(string divId)
+    {
+        var bounds = await _js.InvokeAsync<double[]?>($"{Ns}.getViewBounds", divId);
+        return bounds is { Length: 4 } ? new BoundingBox(bounds[0], bounds[1], bounds[2], bounds[3]) : null;
     }
 
     public Task FitBoundsAsync(string divId, double[] bbox) =>

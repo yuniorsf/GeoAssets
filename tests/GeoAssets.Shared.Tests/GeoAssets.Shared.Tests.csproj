@@ -32,4 +32,9 @@
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
   </ItemGroup>
 
+  <!-- XD01-331: the client/server reference-layer offer matrix, shared with the kernel's suite rather than forked. -->
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.Server.Tests\ReferenceFeatures\ReferenceLayerOfferParityMatrix.cs" Link="Services\ReferenceLayers\ReferenceLayerOfferParityMatrix.cs" />
+  </ItemGroup>
+
 </Project>

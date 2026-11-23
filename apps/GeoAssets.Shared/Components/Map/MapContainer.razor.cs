@@ -76,6 +76,11 @@ public partial class MapContainer
         Repository.FeatureUpdated    += OnFeatureUpdated;
         Repository.FeatureDeleted    += OnFeatureDeletedFromRepo;
         Repository.CollectionChanged += OnCollectionChanged;
+
+        // Another organization's reference layers (XD01-331) switched on earlier in the session are
+        // drawn on this map for its current view — last, since it may wait on the server. They never
+        // pass through Repository.
+        await ReferenceLayers.AttachAsync(DivId);
     }
 
     // ─── Repository event handlers ────────────────────────────────────────
@@ -303,11 +308,17 @@ public partial class MapContainer
         return OnSelectionClick.InvokeAsync((featureId, additive));
     }
 
+    /// <summary>
+    /// The view settled: re-renders the providers' features for it and, debounced and superseding any load still in
+    /// flight, the switched-on reference layers of other organizations (XD01-331).
+    /// </summary>
     [JSInvokable("OnViewportChangedFromJs")]
     public Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
     {
         _lastViewport = (minLon, minLat, maxLon, maxLat);
-        return RenderViewportAsync(_lastViewport.Value);
+        return Task.WhenAll(
+            RenderViewportAsync(_lastViewport.Value),
+            ReferenceLayers.OnViewportChangedAsync(DivId, minLon, minLat, maxLon, maxLat));
     }
 
     /// <summary>
@@ -407,6 +418,7 @@ public partial class MapContainer
         _bulkRenderCts?.Dispose();
         _viewportRenderCts?.Cancel();
         _viewportRenderCts?.Dispose();
+        ReferenceLayers.Detach(DivId);
 
         Repository.FeatureAdded      -= OnFeatureAdded;
         Repository.FeatureUpdated    -= OnFeatureUpdated;

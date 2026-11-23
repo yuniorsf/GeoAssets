@@ -553,7 +553,8 @@ window.GeoAssets = (function () {
             additive:       false,      // was Shift held on the most recent pointer press on the map?
             hiddenTypes:    new Set(),  // assetTypeIds the user switched off (setLayerVisibility); sticky across re-renders
             zoomRanges:     new Map(),  // assetTypeId → { min, max } (null = open bound) — setLayerZoomRange (XD01-311)
-            selectionOutline: null      // the fence-outline overlay of showSelectionOutline, if any (XD01-311)
+            selectionOutline: null,     // the fence-outline overlay of showSelectionOutline, if any (XD01-311)
+            referenceLayers: new Map()  // layerId → another organization's reference layer (XD01-331)
         };
 
         // A zoom range is re-evaluated whenever the zoom settles. Registered here, not in
@@ -562,6 +563,7 @@ window.GeoAssets = (function () {
         map.on('zoomend', () => {
             const state = _maps[divId];
             if (state && state.zoomRanges.size > 0) _applyTypeVisibility(divId, state);
+            if (state && state.referenceLayers.size > 0) _syncReferenceLabels(state);
         });
 
         if (mode === 'webgl') _initWebGL(divId);
@@ -591,6 +593,7 @@ window.GeoAssets = (function () {
             state.hiddenTypes.clear();
             state.zoomRanges.clear();
             state.selectionOutline = null;
+            state.referenceLayers.clear();
             delete _maps[divId];
         }
     }
@@ -1264,6 +1267,166 @@ window.GeoAssets = (function () {
         state.selectionOutline = null;
     }
 
+    // ─── Reference layers of another organization (XD01-331) ─────────────────
+    // Another organization's assets, shown for orientation only. Like the selection outline they
+    // are not features: they live outside featureLayers / layerGroups / the WebGL feature store,
+    // so clearAllFeatures, layer visibility, zoom ranges, feature states, snap scoping, panToFeature
+    // and the selection tools never see them. Every layer is non-interactive (no click, context
+    // menu, popup or hover tooltip — nothing ever reaches .NET), ignored by Leaflet-Geoman
+    // (pmIgnore: never editable, draggable or removable; snapIgnore: never a snap target), and
+    // drawn as SVG in its own pane below the user's features in every render mode, its colours
+    // coming from CSS theme tokens (.geoassets-reference-*) so a theme switch needs no redraw.
+
+    const _REFERENCE_PANE       = 'geoassetsReference';
+    const _REFERENCE_LABEL_PANE = 'geoassetsReferenceLabels';
+    const _REFERENCE_DEFAULT_LABEL_MIN_ZOOM = 16;
+
+    /** One muted, uniform style for every reference shape; the colour comes from CSS. */
+    const _REFERENCE_STYLE = {
+        color:       'currentColor',   // resolved by .geoassets-reference-feature
+        weight:      1.5,
+        opacity:     1,
+        fillColor:   'currentColor',
+        fillOpacity: 0.12,
+        dashArray:   '4 3'
+    };
+
+    /** Options every reference primitive is built with. className must be set at construction. */
+    const _REFERENCE_LAYER_OPTIONS = {
+        ..._REFERENCE_STYLE,
+        pane:        _REFERENCE_PANE,
+        className:   'geoassets-reference-feature',
+        interactive: false,            // no click, hover, popup, tooltip-on-hover or context menu
+        bubblingMouseEvents: false,
+        pmIgnore:    true,             // Geoman: never editable, draggable or removable
+        snapIgnore:  true              // …and never a snap target
+    };
+
+    /** Shapes above the tiles (200) and below the user's own features (overlayPane, 400); their
+     *  labels just above the shapes, still below the user's features. Neither takes pointer input. */
+    function _ensureReferencePanes(map) {
+        if (map.getPane(_REFERENCE_PANE)) return;
+        const shapes = map.createPane(_REFERENCE_PANE);
+        shapes.style.zIndex = '350';
+        shapes.style.pointerEvents = 'none';
+        shapes.classList.add('geoassets-reference-pane');
+        const labels = map.createPane(_REFERENCE_LABEL_PANE);
+        labels.style.zIndex = '390';
+        labels.style.pointerEvents = 'none';
+        labels.classList.add('geoassets-reference-pane');
+    }
+
+    /** The first vector primitive inside `layer` (an L.geoJSON group), which carries the label. */
+    function _firstPrimitive(layer) {
+        if (!(layer instanceof L.LayerGroup)) return layer;
+        for (const child of layer.getLayers()) {
+            const found = _firstPrimitive(child);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    /** Builds one non-interactive reference shape from a reference feature, or null when its
+     *  geometry is not drawable. */
+    function _referenceShape(feature) {
+        if (!feature || typeof feature !== 'object' || !feature.geometry) return null;
+        try {
+            return L.geoJSON({ type: 'Feature', geometry: feature.geometry, properties: {} }, {
+                ..._REFERENCE_LAYER_OPTIONS,
+                style: () => ({ ..._REFERENCE_STYLE }),
+                pointToLayer: (_f, latlng) => L.circleMarker(latlng, { ..._REFERENCE_LAYER_OPTIONS, radius: 5 })
+            });
+        } catch (e) {
+            console.warn('GeoAssets: reference feature skipped — geometry not drawable.', e);
+            return null;
+        }
+    }
+
+    /** Shows or removes each layer's labels as the zoom crosses its threshold. Labels are bound
+     *  only while shown, so a wide view holds no label elements at all. */
+    function _syncReferenceLabels(state) {
+        const zoom = state.map.getZoom();
+        state.referenceLayers.forEach(entry => {
+            const show = zoom >= entry.labelMinZoom;
+            if (show === entry.labelsShown) return;
+            entry.labelsShown = show;
+            entry.labelled.forEach(({ layer, label }) => {
+                if (!show) { layer.unbindTooltip(); return; }
+                // Another organization's text: always a text node, never parsed as HTML.
+                const content = document.createElement('span');
+                content.textContent = label;
+                const isPoint = layer instanceof L.CircleMarker;
+                layer.bindTooltip(content, {
+                    permanent:   true,
+                    interactive: false,
+                    direction:   isPoint ? 'right' : 'center',
+                    offset:      isPoint ? [6, 0] : [0, 0],
+                    className:   'geoassets-reference-label',
+                    pane:        _REFERENCE_LABEL_PANE,
+                    opacity:     1
+                });
+                if (!layer.isTooltipOpen()) layer.openTooltip();
+            });
+        });
+    }
+
+    /**
+     * Draws `featuresJson` — a JSON array of { id, geometry (RFC 7946), label, assetTypeId,
+     * assetTypeName } — as the reference layer `layerId`, replacing what it showed. `options`:
+     * { labelMinZoom } — labels show from that zoom up. Entries without a drawable geometry are
+     * skipped; anything that is not an array draws an empty layer.
+     */
+    function setReferenceLayer(divId, layerId, featuresJson, options) {
+        const state = _maps[divId];
+        if (!state || !layerId) return;
+
+        let features;
+        try {
+            features = typeof featuresJson === 'string' ? JSON.parse(featuresJson) : featuresJson;
+        } catch (e) {
+            console.warn('GeoAssets: reference layer ignored — not JSON.', e);
+            return;
+        }
+
+        clearReferenceLayer(divId, layerId);
+        _ensureReferencePanes(state.map);
+
+        const group = L.layerGroup([], { pane: _REFERENCE_PANE, pmIgnore: true, snapIgnore: true });
+        const labelled = [];
+        (Array.isArray(features) ? features : []).forEach(feature => {
+            const shape = _referenceShape(feature);
+            if (!shape) return;
+            shape.addTo(group);
+            const label = typeof feature.label === 'string' ? feature.label.trim() : '';
+            const primitive = label ? _firstPrimitive(shape) : null;
+            if (primitive) labelled.push({ layer: primitive, label });
+        });
+        group.addTo(state.map);
+
+        const minZoom = Number.isFinite(options?.labelMinZoom) ? options.labelMinZoom : _REFERENCE_DEFAULT_LABEL_MIN_ZOOM;
+        state.referenceLayers.set(layerId, { group, labelled, labelMinZoom: minZoom, labelsShown: false });
+        _syncReferenceLabels(state);
+    }
+
+    function clearReferenceLayer(divId, layerId) {
+        const state = _maps[divId];
+        if (!state) return;
+        const entry = state.referenceLayers.get(layerId);
+        if (!entry) return;
+        entry.labelled.forEach(({ layer }) => layer.unbindTooltip());
+        entry.group.clearLayers();
+        state.map.removeLayer(entry.group);
+        state.referenceLayers.delete(layerId);
+    }
+
+    /** The current view as [west, south, east, north], or null when the map does not exist. */
+    function getViewBounds(divId) {
+        const state = _maps[divId];
+        if (!state) return null;
+        const b = state.map.getBounds();
+        return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    }
+
     // ─── Per-feature states: public API (XD01-309) ───────────────────────────
 
     /**
@@ -1416,6 +1579,9 @@ window.GeoAssets = (function () {
         setLayerZoomRange,
         showSelectionOutline,
         clearSelectionOutline,
+        setReferenceLayer,
+        clearReferenceLayer,
+        getViewBounds,
         fitBounds,
         panToFeature,
         setFeatureStates,

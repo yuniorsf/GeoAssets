@@ -4,6 +4,7 @@ using FluentAssertions;
 using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Observability;
@@ -51,6 +52,16 @@ public class ObservableMapInteropTests
         public Exception? FailZoomRangeWith { get; init; }
         public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom) =>
             FailZoomRangeWith is { } failure ? Task.FromException(failure) : Record(nameof(SetLayerZoomRangeAsync), divId, assetTypeId, minZoom, maxZoom);
+        public Exception? FailReferenceLayerWith { get; init; }
+        public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options) =>
+            FailReferenceLayerWith is { } failure ? Task.FromException(failure) : Record(nameof(SetReferenceLayerAsync), divId, layerId, rawFeaturesJson, options);
+        public Task ClearReferenceLayerAsync(string divId, string layerId) => Record(nameof(ClearReferenceLayerAsync), divId, layerId);
+        public BoundingBox? ViewBounds { get; init; }
+        public async Task<BoundingBox?> GetViewBoundsAsync(string divId)
+        {
+            await Record(nameof(GetViewBoundsAsync), divId);
+            return ViewBounds;
+        }
         public Task FitBoundsAsync(string divId, double[] bbox) => Record(nameof(FitBoundsAsync), divId, bbox);
         public Task PanToFeatureAsync(string divId, string featureId) => Record(nameof(PanToFeatureAsync), divId, featureId);
         public Task HighlightFeatureAsync(string divId, string featureId) => Record(nameof(HighlightFeatureAsync), divId, featureId);
@@ -599,6 +610,83 @@ public class ObservableMapInteropTests
         await sut.SetLayerVisibilityAsync("map1", "type-a", true);
 
         inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.SetLayerVisibilityAsync));
+    }
+
+    // ── Reference layers (XD01-331) ──────────────────────────────────────────
+
+    [Theory]
+    [InlineData(MapRenderMode.Leaflet, "leaflet")]
+    [InlineData(MapRenderMode.Canvas, "canvas")]
+    [InlineData(MapRenderMode.WebGL, "webgl")]
+    public async Task SetReferenceLayerAsync_ForwardsToInner_AndEmitsSpanWithSizeZoomAndRenderModeOnly(MapRenderMode renderMode, string expectedMode)
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner, renderMode);
+        const string json = """[{"id":"p1","geometry":{"type":"Point","coordinates":[-38.5,-12.9]},"label":"Pole 1"}]""";
+        var options = new ReferenceLayerOptions(LabelMinZoom: 16);
+
+        var spans = await CaptureSpansAsync(() => sut.SetReferenceLayerAsync("map1", "reference-coelba", json, options));
+
+        var call = inner.Calls.Should().ContainSingle().Subject;
+        call.Method.Should().Be(nameof(IMapInterop.SetReferenceLayerAsync));
+        call.Args.Should().Equal("map1", "reference-coelba", json, options);
+        var span = spans.Should().ContainSingle().Subject;
+        span.OperationName.Should().Be(ObservableMapInterop.SetReferenceLayerSpanName).And.Be("Map.SetReferenceLayer");
+        span.GetTagItem("payload.bytes").Should().Be(json.Length);
+        span.GetTagItem("map.label_min_zoom").Should().Be(16);
+        span.GetTagItem("map.render_mode").Should().Be(expectedMode);
+        span.TagObjects.Select(t => t.Value).Should().NotContain("reference-coelba", "the layer id names the organization");
+        span.TagObjects.Select(t => t.Value?.ToString()).Should().NotContain(v => v != null && v.Contains("Pole 1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SetReferenceLayerAsync_InnerFailure_MarksSpanAsErrorAndRethrows()
+    {
+        var inner = new FakeMapInterop { FailReferenceLayerWith = new JSException("boom") };
+        var sut = Sut(inner);
+        Exception? thrown = null;
+
+        var spans = await CaptureSpansAsync(async () =>
+            thrown = await Record.ExceptionAsync(() => sut.SetReferenceLayerAsync("map1", "reference-a", "[]", new ReferenceLayerOptions(16))));
+
+        thrown.Should().BeOfType<JSException>();
+        spans.Should().ContainSingle().Which.Status.Should().Be(ActivityStatusCode.Error);
+    }
+
+    [Fact]
+    public async Task SetReferenceLayerAsync_NullArguments_Throw()
+    {
+        var sut = Sut(new FakeMapInterop());
+
+        await FluentActions.Awaiting(() => sut.SetReferenceLayerAsync("map1", "reference-a", null!, new ReferenceLayerOptions(16)))
+            .Should().ThrowAsync<ArgumentNullException>().WithParameterName("rawFeaturesJson");
+        await FluentActions.Awaiting(() => sut.SetReferenceLayerAsync("map1", "reference-a", "[]", null!))
+            .Should().ThrowAsync<ArgumentNullException>().WithParameterName("options");
+    }
+
+    [Fact]
+    public async Task ClearReferenceLayerAsync_DelegatesToInner()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+
+        await sut.ClearReferenceLayerAsync("map1", "reference-a");
+
+        inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.ClearReferenceLayerAsync))
+            .Which.Args.Should().Equal("map1", "reference-a");
+    }
+
+    [Fact]
+    public async Task GetViewBoundsAsync_DelegatesToInner_AndReturnsItsAnswer()
+    {
+        var bounds = new BoundingBox(-38.6, -13.0, -38.4, -12.8);
+        var inner = new FakeMapInterop { ViewBounds = bounds };
+        var sut = Sut(inner);
+
+        var result = await sut.GetViewBoundsAsync("map1");
+
+        result.Should().Be(bounds);
+        inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.GetViewBoundsAsync));
     }
 
     [Fact]
