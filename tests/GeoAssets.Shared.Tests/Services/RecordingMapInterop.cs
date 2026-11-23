@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Shared.Interfaces;
 using Microsoft.JSInterop;
 
@@ -9,17 +10,47 @@ namespace GeoAssets.Shared.Tests.Services;
 /// <summary>
 /// <see cref="IMapInterop"/> double for the layer-display and view tests (XD01-311): records
 /// <see cref="FitBoundsAsync"/>, <see cref="SetLayerVisibilityAsync"/> and
-/// <see cref="SetLayerZoomRangeAsync"/>; every other member throws, so a test that completes
-/// proves nothing else on the map was touched.
+/// <see cref="SetLayerZoomRangeAsync"/>, and the reference-layer calls (XD01-331:
+/// <see cref="SetReferenceLayerAsync"/>, <see cref="ClearReferenceLayerAsync"/>,
+/// <see cref="GetViewBoundsAsync"/>); every other member throws, so a test that completes
+/// proves nothing else on the map was touched — no feature rendered, removed or cleared.
 /// </summary>
 internal sealed class RecordingMapInterop : IMapInterop
 {
     public List<(string DivId, double[] Bbox)> FitCalls { get; } = [];
     public List<(string DivId, string AssetTypeId, bool Visible)> VisibilityCalls { get; } = [];
     public List<(string DivId, string AssetTypeId, int? MinZoom, int? MaxZoom)> ZoomRangeCalls { get; } = [];
+    public List<(string DivId, string LayerId, string Json, ReferenceLayerOptions Options)> ReferenceSetCalls { get; } = [];
+    public List<(string DivId, string LayerId)> ReferenceClearCalls { get; } = [];
+    public List<string> ViewBoundsCalls { get; } = [];
 
     /// <summary>Asset type ids whose <see cref="SetLayerZoomRangeAsync"/> call fails.</summary>
     public HashSet<string> FailZoomRangeFor { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>What <see cref="GetViewBoundsAsync"/> answers.</summary>
+    public BoundingBox? ViewBounds { get; set; }
+
+    /// <summary>When set, <see cref="SetReferenceLayerAsync"/> fails with it.</summary>
+    public Exception? FailReferenceSetWith { get; set; }
+
+    public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options)
+    {
+        if (FailReferenceSetWith is { } failure) return Task.FromException(failure);
+        ReferenceSetCalls.Add((divId, layerId, rawFeaturesJson, options));
+        return Task.CompletedTask;
+    }
+
+    public Task ClearReferenceLayerAsync(string divId, string layerId)
+    {
+        ReferenceClearCalls.Add((divId, layerId));
+        return Task.CompletedTask;
+    }
+
+    public Task<BoundingBox?> GetViewBoundsAsync(string divId)
+    {
+        ViewBoundsCalls.Add(divId);
+        return Task.FromResult(ViewBounds);
+    }
 
     public Task FitBoundsAsync(string divId, double[] bbox)
     {

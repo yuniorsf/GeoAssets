@@ -1,5 +1,6 @@
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services.OrderTargets;
+using GeoAssets.Shared.Services.ReferenceLayers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -11,7 +12,7 @@ public static class PanelStateServiceExtensions
     /// Registers the cross-cutting state services (<see cref="IFeatureSelectionState"/>,
     /// <see cref="ICurrentMapContext"/>, <see cref="IPendingDrawTypeState"/>,
     /// <see cref="IMapSelectionSet"/>, <see cref="MapLayerDisplayService"/>,
-    /// <see cref="IMapOrderFocus"/>, <see cref="OrderTargetMapStates"/>) that let panel-type
+    /// <see cref="IMapOrderFocus"/>, <see cref="OrderTargetMapStates"/>, <see cref="ReferenceLayerService"/>) that let panel-type
     /// menu items and map-drawing components become self-sufficient via DI instead of receiving
     /// bespoke parameters from whatever page hosts them (XD01-84).
     /// Called from both <c>Program.cs</c> (Web) and <c>MauiProgram.cs</c>.
@@ -43,6 +44,12 @@ public static class PanelStateServiceExtensions
         // The shown order's targets as map feature states (XD01-313); needs IServiceOrderTargetReader
         // from AddWorkflowRest, and like IMapOrderFocus is resolved only by the order UI.
         services.AddScoped<OrderTargetMapStates>();
+
+        // Another organization's assets as a reference layer (XD01-331); needs ICrossOrgEntitlementsService,
+        // IGeoAuthorizationService and TimeProvider from the host. A host that reads reference features registers its
+        // own IReferenceFeatureClient (GeoAssets.Web: AddReferenceFeaturesRest); one that does not gets the fallback.
+        services.AddScoped<ReferenceLayerService>();
+        services.TryAddScoped<IReferenceFeatureClient, UnavailableReferenceFeatureClient>();
 
         return services;
     }

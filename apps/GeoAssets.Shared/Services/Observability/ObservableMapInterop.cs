@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Shared.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -12,8 +13,8 @@ namespace GeoAssets.Shared.Services.Observability;
 /// Observable decorator for <see cref="IMapInterop"/> and <see cref="IMapSelectionInterop"/>.
 /// Instruments <see cref="RenderAllFeaturesAsync"/> with an OpenTelemetry span,
 /// a duration metric, and structured logging, and <see cref="SetFeatureStatesAsync"/>,
-/// <see cref="SetSelectionToolAsync"/>, <see cref="SetLayerZoomRangeAsync"/> and
-/// <see cref="ShowSelectionOutlineAsync"/> with a span; all other calls are forwarded to the inner service without overhead.
+/// <see cref="SetSelectionToolAsync"/>, <see cref="SetLayerZoomRangeAsync"/>,
+/// <see cref="ShowSelectionOutlineAsync"/> and <see cref="SetReferenceLayerAsync"/> with a span; all other calls are forwarded to the inner service without overhead.
 /// </summary>
 public sealed class ObservableMapInterop(
     IMapInterop inner,
@@ -34,6 +35,9 @@ public sealed class ObservableMapInterop(
 
     /// <summary>Span emitted by <see cref="ShowSelectionOutlineAsync"/> (XD01-311).</summary>
     public const string ShowSelectionOutlineSpanName = "Map.ShowSelectionOutline";
+
+    /// <summary>Span emitted by <see cref="SetReferenceLayerAsync"/> (XD01-331).</summary>
+    public const string SetReferenceLayerSpanName = "Map.SetReferenceLayer";
 
     private readonly string _renderModeTag = renderMode switch
     {
@@ -142,7 +146,25 @@ public sealed class ObservableMapInterop(
                                   .SetTag("map.render_mode",          _renderModeTag));
     }
 
+    /// <remarks>Another organization's layer is redrawn on every settled pan, so a slow draw has to be traceable.
+    /// Tags carry the payload size, the label zoom and the render mode — never the layer id (it names the
+    /// organization) or anything from the payload.</remarks>
+    public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(rawFeaturesJson);
+        ArgumentNullException.ThrowIfNull(options);
+        return TrackAsync(
+            SetReferenceLayerSpanName,
+            () => inner.SetReferenceLayerAsync(divId, layerId, rawFeaturesJson, options),
+            before: span => span?.SetTag("payload.bytes",       rawFeaturesJson.Length)
+                                  .SetTag("map.label_min_zoom", options.LabelMinZoom)
+                                  .SetTag("map.render_mode",    _renderModeTag));
+    }
+
     // ── Pass-through ─────────────────────────────────────────────────────────
+
+    public Task ClearReferenceLayerAsync(string divId, string layerId)                      => inner.ClearReferenceLayerAsync(divId, layerId);
+    public Task<BoundingBox?> GetViewBoundsAsync(string divId)                               => inner.GetViewBoundsAsync(divId);
 
     public Task ClearFeatureStatesAsync(string divId)                                       => selectionInner.ClearFeatureStatesAsync(divId);
     public Task ClearSelectionOutlineAsync(string divId)                                    => selectionInner.ClearSelectionOutlineAsync(divId);

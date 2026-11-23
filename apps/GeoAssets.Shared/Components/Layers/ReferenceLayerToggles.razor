@@ -1,0 +1,26 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Shared.Services.ReferenceLayers
+@inject ReferenceLayerService ReferenceLayers
+
+@if (_organizations.Count > 0)
+{
+    <div class="reference-layers" role="group" aria-labelledby="reference-layers-title">
+        <div id="reference-layers-title" class="reference-layers-title">@L["map.layers.reference.title"]</div>
+        @foreach (var organization in _organizations)
+        {
+            var org = organization;
+            var inputId = $"reference-layer-{org.Id:N}";
+            <div class="form-check form-switch">
+                <input id="@inputId"
+                       class="form-check-input"
+                       type="checkbox"
+                       role="switch"
+                       checked="@ReferenceLayers.IsEnabled(org.Id)"
+                       aria-describedby="reference-layers-help"
+                       @onchange="e => ToggleAsync(org, e.Value)" />
+                <label class="form-check-label" for="@inputId">@L.GetString("map.layers.reference.toggle", org.Name)</label>
+            </div>
+        }
+        <div id="reference-layers-help" class="form-text">@L["map.layers.reference.help"]</div>
+    </div>
+}

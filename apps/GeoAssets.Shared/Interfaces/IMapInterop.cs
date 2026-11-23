@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using Microsoft.JSInterop;
 
 namespace GeoAssets.Shared.Interfaces;
@@ -93,6 +94,25 @@ public interface IMapInterop
     /// Client-side only: the provider still returns features of every type for the viewport.
     /// </summary>
     Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom);
+
+    // --- Reference layers of another organization (XD01-331) ---
+
+    /// <summary>
+    /// Draws <paramref name="rawFeaturesJson"/> — a JSON array of <see cref="ReferenceFeature"/>s as
+    /// <c>GET …/organizations/{id}/reference-features</c> answers it, forwarded without parsing — as the reference layer
+    /// <paramref name="layerId"/>, replacing whatever that layer showed. Reference layers live in their own pane below the
+    /// user's features, in a muted theme style, each feature labelled from <see cref="ReferenceLayerOptions.LabelMinZoom"/>
+    /// up. They are not features: fully non-interactive (no click, context menu, popup or tooltip on hover), never
+    /// editable or snappable by Leaflet-Geoman, never part of the draw or selection tools, and untouched by
+    /// <see cref="ClearAllFeaturesAsync"/>, layer visibility, zoom ranges and feature states.
+    /// </summary>
+    Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options);
+
+    /// <summary>Removes the reference layer <paramref name="layerId"/>; a no-op when it is not drawn.</summary>
+    Task ClearReferenceLayerAsync(string divId, string layerId);
+
+    /// <summary>The map's current view as Leaflet reports it (west, south, east, north); null when the map does not exist.</summary>
+    Task<BoundingBox?> GetViewBoundsAsync(string divId);
 
     // --- View ---
     Task FitBoundsAsync(string divId, double[] bbox);

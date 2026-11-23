@@ -6,6 +6,7 @@ using GeoAssets.Shared.Tests;
 using GeoAssets.Shared.Services;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services;
@@ -186,10 +187,13 @@ public class MapInteropServiceTests
     {
         public List<(string Identifier, object?[] Args)> Calls { get; } = [];
 
+        /// <summary>What every call answers (the default of the asked type when null).</summary>
+        public object? Result { get; set; }
+
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
             Calls.Add((identifier, args ?? []));
-            return ValueTask.FromResult<TValue>(default!);
+            return ValueTask.FromResult(Result is TValue value ? value : default!);
         }
 
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) =>
@@ -392,5 +396,159 @@ public class MapInteropServiceTests
         var call = js.Calls.Should().ContainSingle().Subject;
         call.Identifier.Should().Be("GeoAssets.clearSelectionOutline");
         call.Args.Should().Equal("map1");
+    }
+
+    // ── Reference layers of another organization (XD01-331) ──────────────────
+
+    [Fact]
+    public async Task SetReferenceLayerAsync_CallsSetReferenceLayerWithTheRawJsonUnchangedAndTheOptions()
+    {
+        var js = new RecordingJsRuntime();
+        const string json = """[{"id":"p1","geometry":{"type":"Point","coordinates":[-38.5,-12.9]},"label":"Pole 1","assetTypeId":"t","assetTypeName":"Pole"}]""";
+        var options = new ReferenceLayerOptions(LabelMinZoom: 16);
+
+        await Sut(js).SetReferenceLayerAsync("map1", "reference-coelba", json, options);
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.setReferenceLayer");
+        call.Args.Should().HaveCount(4);
+        call.Args[0].Should().Be("map1");
+        call.Args[1].Should().Be("reference-coelba");
+        call.Args[2].Should().BeSameAs(json, "the body is forwarded without a .NET parse");
+        call.Args[3].Should().BeSameAs(options);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(25)]
+    public async Task SetReferenceLayerAsync_LabelZoomOutsideTheMapsZooms_ThrowsAndMakesNoJsCall(int labelMinZoom)
+    {
+        var js = new RecordingJsRuntime();
+
+        var act = () => Sut(js).SetReferenceLayerAsync("map1", "reference-a", "[]", new ReferenceLayerOptions(labelMinZoom));
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>().WithParameterName("options");
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(24)]
+    public async Task SetReferenceLayerAsync_LabelZoomAtTheBounds_IsAccepted(int labelMinZoom)
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).SetReferenceLayerAsync("map1", "reference-a", "[]", new ReferenceLayerOptions(labelMinZoom));
+
+        js.Calls.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task SetReferenceLayerAsync_MissingArguments_ThrowAndMakeNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+        var sut = Sut(js);
+
+        await FluentActions.Awaiting(() => sut.SetReferenceLayerAsync("map1", " ", "[]", new ReferenceLayerOptions(16)))
+            .Should().ThrowAsync<ArgumentException>().WithParameterName("layerId");
+        await FluentActions.Awaiting(() => sut.SetReferenceLayerAsync("map1", "reference-a", null!, new ReferenceLayerOptions(16)))
+            .Should().ThrowAsync<ArgumentNullException>().WithParameterName("rawFeaturesJson");
+        await FluentActions.Awaiting(() => sut.SetReferenceLayerAsync("map1", "reference-a", "[]", null!))
+            .Should().ThrowAsync<ArgumentNullException>().WithParameterName("options");
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearReferenceLayerAsync_CallsClearReferenceLayerWithDivIdAndLayerId()
+    {
+        var js = new RecordingJsRuntime();
+
+        await Sut(js).ClearReferenceLayerAsync("map1", "reference-a");
+
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.clearReferenceLayer");
+        call.Args.Should().Equal("map1", "reference-a");
+    }
+
+    [Fact]
+    public async Task ClearReferenceLayerAsync_BlankLayerId_ThrowsAndMakesNoJsCall()
+    {
+        var js = new RecordingJsRuntime();
+
+        await FluentActions.Awaiting(() => Sut(js).ClearReferenceLayerAsync("map1", ""))
+            .Should().ThrowAsync<ArgumentException>().WithParameterName("layerId");
+        js.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetViewBoundsAsync_MapsWestSouthEastNorth()
+    {
+        var js = new RecordingJsRuntime { Result = new[] { -38.6, -13.0, -38.4, -12.8 } };
+
+        var bounds = await Sut(js).GetViewBoundsAsync("map1");
+
+        bounds.Should().Be(new GeoAssets.Core.Rendering.BoundingBox(-38.6, -13.0, -38.4, -12.8));
+        var call = js.Calls.Should().ContainSingle().Subject;
+        call.Identifier.Should().Be("GeoAssets.getViewBounds");
+        call.Args.Should().Equal("map1");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetViewBoundsAsync_NoMapOrAMalformedAnswer_IsNull(bool malformed)
+    {
+        var js = new RecordingJsRuntime { Result = malformed ? new[] { 1.0, 2.0 } : null };
+
+        (await Sut(js).GetViewBoundsAsync("map1")).Should().BeNull();
+    }
+
+    /// <summary>
+    /// The JS half can't run here (no browser), so its contract is read from the script: the three functions exist and
+    /// are exported, every reference primitive is built non-interactive and ignored by Geoman, labels are text nodes in
+    /// their own pane, and the reference block never calls into .NET nor touches the feature registries the click,
+    /// context-menu, selection and snap-scope paths read.
+    /// </summary>
+    [Fact]
+    public void GeoassetsJs_ReferenceLayers_AreNonInteractiveAndNeverReachDotNet()
+    {
+        var script = File.ReadAllText(Path.Combine(RepositoryRoot(), "apps", "GeoAssets.Shared", "wwwroot", "js", "geoassets.js"));
+        var start = script.IndexOf("// ─── Reference layers of another organization (XD01-331)", StringComparison.Ordinal);
+        var end = script.IndexOf("// ─── Per-feature states: public API (XD01-309)", StringComparison.Ordinal);
+        start.Should().BePositive();
+        end.Should().BeGreaterThan(start);
+        // Code only: the block's comments name the registries it stays out of.
+        var timeout = TimeSpan.FromSeconds(5);
+        var block = Regex.Replace(
+            Regex.Replace(script[start..end], @"/\*.*?\*/", "", RegexOptions.Singleline, timeout),
+            @"//[^\n]*", "", RegexOptions.None, timeout);
+
+        foreach (var function in new[] { "setReferenceLayer", "clearReferenceLayer", "getViewBounds" })
+        {
+            block.Should().Contain($"function {function}(");
+            script[end..].Should().Contain($"        {function},", $"'{function}' must be exported from window.GeoAssets");
+        }
+
+        block.Should().Contain("interactive: false").And.Contain("pmIgnore:    true").And.Contain("snapIgnore:  true")
+            .And.Contain("bubblingMouseEvents: false").And.Contain("pointerEvents = 'none'");
+        block.Should().Contain("..._REFERENCE_LAYER_OPTIONS, radius", "points are built with the same non-interactive options");
+        block.Should().Contain("content.textContent = label").And.NotContain("innerHTML");
+        block.Should().Contain("pane:        _REFERENCE_LABEL_PANE");
+
+        block.Should().NotContain("invokeMethodAsync").And.NotContain("dotNetRef").And.NotContain("_bindEvents")
+            .And.NotContain("featureLayers").And.NotContain("layerGroups").And.NotContain("bindPopup")
+            .And.NotContain(".on(", "no event handler is attached to a reference layer");
+
+        var css = File.ReadAllText(Path.Combine(RepositoryRoot(), "apps", "GeoAssets.Shared", "wwwroot", "css", "geoassets.css"));
+        css.Should().Contain(".geoassets-reference-feature").And.Contain(".geoassets-reference-label")
+            .And.Contain(".geoassets-reference-pane");
+    }
+
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "GeoAssets.sln")))
+            directory = directory.Parent;
+        return directory!.FullName;
     }
 }

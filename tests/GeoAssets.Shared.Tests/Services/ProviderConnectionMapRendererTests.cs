@@ -106,6 +106,9 @@ public class ProviderConnectionMapRendererTests
         public Task RemoveWmsLayerAsync(string divId, string layerId) => throw new NotSupportedException();
         public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => throw new NotSupportedException();
         public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom) => throw new NotSupportedException();
+        public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options) => throw new NotSupportedException();
+        public Task ClearReferenceLayerAsync(string divId, string layerId) => throw new NotSupportedException();
+        public Task<GeoAssets.Core.Rendering.BoundingBox?> GetViewBoundsAsync(string divId) => throw new NotSupportedException();
         public Task FitBoundsAsync(string divId, double[] bbox)
         {
             FitBoundsCalls.Add((divId, bbox));

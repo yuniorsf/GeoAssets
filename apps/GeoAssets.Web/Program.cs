@@ -20,6 +20,7 @@ using GeoAssets.Shared.Navigation;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.OrderDetail;
 using GeoAssets.Shared.Services.Observability;
+using GeoAssets.Shared.Services.ReferenceLayers;
 using GeoAssets.Shared.Theming;
 using GeoAssets.Web;
 using GeoAssets.Web.Extensions;
@@ -124,6 +125,10 @@ builder.Services.AddGeoAssetsServerClient(builder.Configuration, geoAssetsServer
 // The map context menu's feature actions (XD01-370): GET /api/geoassets/features/{id}/actions on GeoAssets.Server,
 // through the token-carrying "GeoAssetsServer" client above.
 builder.Services.AddFeatureActionsRest(geoAssetsServerBaseUrl);
+
+// Another organization's assets as a map reference layer (XD01-331): GET /api/geoassets/organizations/{id}/reference-features
+// on GeoAssets.Server, through the same token-carrying "GeoAssetsServer" client.
+builder.Services.AddReferenceFeaturesRest(geoAssetsServerBaseUrl);
 
 // GeoAssets.IpBilling.Server base URL (XD01-178) — a separate host/origin from GeoAssets.Server (XD01-177), so it gets
 // its own AuthorizationMessageHandler scoped to its own URL: GeoAssetsIpBillingServer:ApiScope's token, or the kernel's
