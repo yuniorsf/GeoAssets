@@ -28,9 +28,12 @@ public sealed class ProductionSettingsTemplateTests
 
     private static string Template() => File.ReadAllText(Path.Combine(Root(), "apps", "GeoAssets.Web", "appsettings.Production.json.template"));
 
-    private static string Rendered() => Template()
+    private const string AppInsightsConnectionString = "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://ingest.example.test/";
+
+    private static string Rendered(string appInsightsConnectionString = AppInsightsConnectionString) => Template()
         .Replace("${GEOASSETS_GATEWAY_URL}", GatewayUrl, StringComparison.Ordinal)
-        .Replace("${GEOASSETS_IPBILLING_SERVER_URL}", IpBillingUrl, StringComparison.Ordinal);
+        .Replace("${GEOASSETS_IPBILLING_SERVER_URL}", IpBillingUrl, StringComparison.Ordinal)
+        .Replace("${GEOASSETS_APPINSIGHTS_CONNECTION_STRING}", appInsightsConnectionString, StringComparison.Ordinal);
 
     private static string ValueOf(JsonElement root, string key)
     {
@@ -52,10 +55,20 @@ public sealed class ProductionSettingsTemplateTests
     }
 
     [Fact]
-    public void TheTemplate_UsesOnlyTheTwoDocumentedVariables()
+    public void TheTemplate_UsesOnlyTheDocumentedVariables()
     {
         Placeholder.Matches(Template()).Select(m => m.Groups["name"].Value).Distinct(StringComparer.Ordinal)
-            .Should().BeEquivalentTo("GEOASSETS_GATEWAY_URL", "GEOASSETS_IPBILLING_SERVER_URL");
+            .Should().BeEquivalentTo("GEOASSETS_GATEWAY_URL", "GEOASSETS_IPBILLING_SERVER_URL", "GEOASSETS_APPINSIGHTS_CONNECTION_STRING");
+    }
+
+    [Theory]
+    [InlineData(AppInsightsConnectionString)]
+    [InlineData("")]
+    public void TheAppInsightsConnectionString_RendersFromItsVariable_BlankWhenUnset(string connectionString)
+    {
+        using var document = JsonDocument.Parse(Rendered(connectionString));
+
+        ValueOf(document.RootElement, "Observability:AzureMonitor:ConnectionString").Should().Be(connectionString);
     }
 
     [Fact]
@@ -104,5 +117,6 @@ public sealed class ProductionSettingsTemplateTests
         dockerfile.Should().Contain("appsettings.Production.json.template /etc/nginx/templates/appsettings.Production.json.template");
         dockerfile.Should().Contain("NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html");
         dockerfile.Should().Contain("GEOASSETS_GATEWAY_URL=");
+        dockerfile.Should().Contain("GEOASSETS_APPINSIGHTS_CONNECTION_STRING=", "envsubst leaves an unset variable's placeholder in place");
     }
 }

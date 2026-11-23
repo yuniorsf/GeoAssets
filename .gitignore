@@ -59,6 +59,9 @@ deploy/server/.env
 # Local secrets (Postgres password, service-principal credentials for deploy/neutral-operator, XD01-382)
 deploy/neutral-operator/.env
 
+# Local secrets (browser Application Insights connection string for deploy/web)
+deploy/web/.env
+
 # Per-developer AzureAdCiam tenant/client IDs for the WASM client (real values kept out of
 # the public repo; dotnet user-secrets covers the equivalent Server-side values)
 apps/GeoAssets.Web/wwwroot/appsettings.Local.json
