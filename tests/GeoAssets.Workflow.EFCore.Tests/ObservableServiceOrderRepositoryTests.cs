@@ -20,7 +20,22 @@ public class ObservableServiceOrderRepositoryTests
             ShouldListenTo = source => string.Equals(source.Name, GeoAssetsActivitySource.SourceName, StringComparison.Ordinal),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
         });
+        ActivitySource.AddActivityListener(new ActivityListener
+        {
+            ShouldListenTo = source => ReferenceEquals(source, TestFlow),
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        });
     }
+
+    /// <summary>
+    /// The "GeoAssets" source and meter are process-global, so another test class running in parallel emits into the same
+    /// listeners (a <c>ServiceOrder.TargetSelection.Preview</c> span once showed up in a test expecting none). Each capture
+    /// therefore opens a root activity on this test-only source and keeps only what happens inside that trace.
+    /// </summary>
+    private static readonly ActivitySource TestFlow = new("GeoAssets.Workflow.EFCore.Tests.ObservableServiceOrderRepositoryTests");
+
+    private static Activity StartTestFlow(string name)
+        => TestFlow.StartActivity(name) ?? throw new InvalidOperationException("The test-flow activity source is not sampled.");
 
     private static ServiceOrder Order(string id, string status = ServiceOrderStatus.Draft, string orderTypeId = "inspection")
         => new() { Id = id, Status = status, OrderTypeId = orderTypeId };
@@ -38,34 +53,48 @@ public class ObservableServiceOrderRepositoryTests
             => Entries.Add((logLevel, formatter(state, exception), exception));
     }
 
-    /// <summary>Captures every span stopped on <see cref="GeoAssetsActivitySource.SourceName"/> while listening.</summary>
+    /// <summary>Captures every span stopped on <see cref="GeoAssetsActivitySource.SourceName"/> within this test's own trace while listening.</summary>
     private sealed class ActivityCapture : IDisposable
     {
+        private readonly Activity _flow;
         private readonly ActivityListener _listener;
         public List<Activity> Activities { get; } = [];
 
         public ActivityCapture()
         {
+            _flow = StartTestFlow(nameof(ActivityCapture));
+            var traceId = _flow.TraceId;
             _listener = new ActivityListener
             {
                 ShouldListenTo = source => string.Equals(source.Name, GeoAssetsActivitySource.SourceName, StringComparison.Ordinal),
                 Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-                ActivityStopped = Activities.Add,
+                ActivityStopped = activity =>
+                {
+                    if (activity.TraceId == traceId) Activities.Add(activity);
+                },
             };
             ActivitySource.AddActivityListener(_listener);
         }
 
-        public void Dispose() => _listener.Dispose();
+        public void Dispose()
+        {
+            _listener.Dispose();
+            _flow.Dispose();
+        }
     }
 
-    /// <summary>Captures every measurement recorded on the given meter/instrument while listening.</summary>
+    /// <summary>Captures every measurement recorded on the given meter/instrument within this test's own trace while listening.</summary>
     private sealed class MeasurementCapture : IDisposable
     {
+        private readonly Activity _flow;
         private readonly MeterListener _listener = new();
         public List<(long Value, KeyValuePair<string, object?>[] Tags)> Measurements { get; } = [];
 
         public MeasurementCapture(string meterName, string instrumentName)
         {
+            // A measurement callback runs synchronously on the recording call, so Activity.Current is the recorder's.
+            _flow = StartTestFlow(nameof(MeasurementCapture));
+            var traceId = _flow.TraceId;
             _listener.InstrumentPublished = (instrument, listener) =>
             {
                 if (string.Equals(instrument.Meter.Name, meterName, StringComparison.Ordinal) &&
@@ -73,11 +102,17 @@ public class ObservableServiceOrderRepositoryTests
                     listener.EnableMeasurementEvents(instrument);
             };
             _listener.SetMeasurementEventCallback<long>((_, measurement, tags, _) =>
-                Measurements.Add((measurement, tags.ToArray())));
+            {
+                if (Activity.Current?.TraceId == traceId) Measurements.Add((measurement, tags.ToArray()));
+            });
             _listener.Start();
         }
 
-        public void Dispose() => _listener.Dispose();
+        public void Dispose()
+        {
+            _listener.Dispose();
+            _flow.Dispose();
+        }
     }
 
     private static (GeoAssetsActivitySource Tracer, GeoAssetsMeter Metrics, CapturingLogger Logger) Dependencies()
