@@ -826,7 +826,10 @@ window.GeoAssets = (function () {
     /** Attaches click / contextmenu callbacks to a Leaflet layer. */
     function _bindEvents(state, layer, id, props) {
         const name = props.name || id;
-        layer.bindTooltip && layer.bindTooltip(name, { permanent: false, direction: 'top' });
+        // User data: Leaflet parses a string tooltip as HTML, so the name goes in as a text node (XD01-412).
+        const tooltip = document.createElement('span');
+        tooltip.textContent = name;
+        layer.bindTooltip && layer.bindTooltip(tooltip, { permanent: false, direction: 'top' });
         layer.on('click', (e) => {
             if (!state.dotNetRef) return;
             // While a box/fence is being drawn the click is a corner of that gesture, not a

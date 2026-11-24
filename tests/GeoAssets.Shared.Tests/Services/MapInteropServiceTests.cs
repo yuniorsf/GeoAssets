@@ -544,6 +544,29 @@ public class MapInteropServiceTests
             .And.Contain(".geoassets-reference-pane");
     }
 
+    /// <summary>
+    /// A user feature's name is user data (edited, imported, shared), and Leaflet parses a string tooltip as HTML. So
+    /// <c>_bindEvents</c> must hand <c>bindTooltip</c> a text node holding the name, never the name itself (XD01-412).
+    /// </summary>
+    [Fact]
+    public void GeoassetsJs_FeatureTooltip_BindsTheNameAsATextNode()
+    {
+        var script = File.ReadAllText(Path.Combine(RepositoryRoot(), "apps", "GeoAssets.Shared", "wwwroot", "js", "geoassets.js"));
+        var start = script.IndexOf("function _bindEvents(", StringComparison.Ordinal);
+        start.Should().BePositive();
+        var end = script.IndexOf("layer.on('click'", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        var timeout = TimeSpan.FromSeconds(5);
+        var block = Regex.Replace(script[start..end], @"//[^\n]*", "", RegexOptions.None, timeout);
+
+        block.Should().Contain("const tooltip = document.createElement('span');")
+            .And.Contain("tooltip.textContent = name;")
+            .And.Contain("layer.bindTooltip(tooltip,")
+            .And.NotContain("bindTooltip(name").And.NotContain("innerHTML");
+        Regex.Matches(script, @"\.bindTooltip\(", RegexOptions.None, timeout).Should()
+            .HaveCount(2, "the feature tooltip and the reference label are the only tooltips; a new one needs the same text-node check");
+    }
+
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
