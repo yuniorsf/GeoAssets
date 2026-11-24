@@ -40,15 +40,28 @@ public static class ServiceOrderInbox
     }
 
     /// <summary>
-    /// Whether <paramref name="order"/> belongs to another organization than the principal's —
-    /// that is, whether it is in the list because it was dispatched to the principal's organization.
+    /// Whether <paramref name="order"/> was dispatched to the principal by another organization: it belongs to an
+    /// organization other than the principal's and carries a dispatch to the principal's organization or to the
+    /// principal. An order of another organization the principal reaches only through an organization grant is not
+    /// received (XD01-410).
     /// </summary>
     public static bool IsReceived(IServiceOrder order, WorkflowPrincipal? principal)
     {
         ArgumentNullException.ThrowIfNull(order);
 
-        return order.OrganizationId != Guid.Empty
-            && Guid.TryParse(principal?.OrganizationId, out var organizationId)
-            && organizationId != order.OrganizationId;
+        if (principal is null
+            || order.OrganizationId == Guid.Empty
+            || !Guid.TryParse(principal.OrganizationId, out var organizationId)
+            || organizationId == order.OrganizationId)
+        {
+            return false;
+        }
+
+        return order.Dispatches.Any(dispatch => dispatch.TargetType switch
+        {
+            DispatchTargetType.Organization => Guid.TryParse(dispatch.TargetId, out var target) && target == organizationId,
+            DispatchTargetType.User => string.Equals(dispatch.TargetId, principal.UserId, StringComparison.Ordinal),
+            _ => false,
+        });
     }
 }
