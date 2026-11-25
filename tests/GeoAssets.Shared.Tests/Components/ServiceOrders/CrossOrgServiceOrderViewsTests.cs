@@ -173,6 +173,57 @@ public sealed class CrossOrgServiceOrderViewsTests : BunitContext
         list.FindAll(".order-owner-badge").Should().BeEmpty();
     }
 
+    private static ServiceOrder DispatchedToBimbo(string id)
+    {
+        var order = Order(id: id);
+        order.Dispatches.Add(new OrderDispatch(Bimbo.ToString("D"), DispatchTargetType.Organization, "coelba-dispatcher", new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc)));
+        return order;
+    }
+
+    private static bool IsBadged(IRenderedComponent<ServiceOrderList> list, string orderId, string badge) =>
+        list.FindAll(".order-list-item")
+            .Single(item => string.Equals(item.QuerySelector(".order-name")!.TextContent, $"Order {orderId}", StringComparison.Ordinal))
+            .QuerySelector(badge) is not null;
+
+    [Fact]
+    public async Task List_AnOrderDispatchedToTheViewersOrganization_WithNoEntitlement_IsReceived_WithNoOwner()
+    {
+        Arrange(new ListedOrderRepository { Received = [DispatchedToBimbo("dispatched")] });
+        var principal = await TechnicianAsync(CrossOrgEntitlementsDto.None);
+
+        var list = Render<ServiceOrderList>(p => p.Add(c => c.Principal, principal).Add(c => c.Entitlements, CrossOrgEntitlementsDto.None));
+
+        IsBadged(list, "dispatched", ".order-received-badge").Should().BeTrue();
+        IsBadged(list, "dispatched", ".order-owner-badge").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task List_AnOrderReachedOnlyThroughAGrant_ShowsItsOwner_AndIsNotReceived()
+    {
+        Arrange(new ListedOrderRepository(Order(id: "granted")));
+        var principal = await TechnicianAsync(Entitled);
+
+        var list = Render<ServiceOrderList>(p => p.Add(c => c.Principal, principal).Add(c => c.Entitlements, Entitled));
+
+        IsBadged(list, "granted", ".order-owner-badge").Should().BeTrue();
+        IsBadged(list, "granted", ".order-received-badge").Should().BeFalse("a grant alone is not a dispatch");
+    }
+
+    [Fact]
+    public async Task List_AnOrderBothDispatchedAndGranted_IsReceived_AndShowsItsOwner()
+    {
+        Arrange(new ListedOrderRepository(Order(id: "granted"), Order(owner: Bimbo, id: "own")) { Received = [DispatchedToBimbo("both")] });
+        var principal = await TechnicianAsync(Entitled);
+
+        var list = Render<ServiceOrderList>(p => p.Add(c => c.Principal, principal).Add(c => c.Entitlements, Entitled));
+
+        IsBadged(list, "both", ".order-received-badge").Should().BeTrue();
+        IsBadged(list, "both", ".order-owner-badge").Should().BeTrue();
+        IsBadged(list, "granted", ".order-received-badge").Should().BeFalse();
+        IsBadged(list, "own", ".order-received-badge").Should().BeFalse();
+        IsBadged(list, "own", ".order-owner-badge").Should().BeFalse();
+    }
+
     [Fact]
     public async Task List_RaisesOnReloaded_WhenTheStoreChanges_NotOnItsFirstLoad()
     {
@@ -228,11 +279,14 @@ public sealed class CrossOrgServiceOrderViewsTests : BunitContext
     {
         private static NotSupportedException Unused() => new("The list must not call this.");
 
+        /// <summary>The orders other organizations dispatched to the viewer's organization (the inbox, XD01-316).</summary>
+        public IReadOnlyList<IServiceOrder> Received { get; init; } = [];
+
         public void RaiseUpdated(IServiceOrder order) => OrderUpdated?.Invoke(this, order);
 
         public Task<IReadOnlyList<IServiceOrder>> GetAllAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<IServiceOrder>>(orders);
         public Task<IReadOnlyList<IServiceOrder>> GetDispatchedToAsync(string targetId, DispatchTargetType targetType, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<IServiceOrder>>([]);
+            Task.FromResult(Received);
 
         public Task AddAsync(IServiceOrder order, CancellationToken ct = default) => throw Unused();
         public Task AppendActionAsync(string orderId, OrderActionLog entry, CancellationToken ct = default) => throw Unused();

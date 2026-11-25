@@ -17,7 +17,11 @@ public sealed class ServiceOrderInboxTests
 
     private static WorkflowPrincipal Principal(string? organizationId) => new("user-1", organizationId, [], [], []);
 
-    private static ServiceOrder Order(string id, Guid organizationId) => new() { Id = id, Title = id, OrganizationId = organizationId };
+    private static ServiceOrder Order(string id, Guid organizationId, params OrderDispatch[] dispatches) =>
+        new() { Id = id, Title = id, OrganizationId = organizationId, Dispatches = [.. dispatches] };
+
+    private static OrderDispatch To(string targetId, DispatchTargetType targetType) =>
+        new(targetId, targetType, "dispatcher", new DateTime(2026, 11, 24, 0, 0, 0, DateTimeKind.Utc));
 
     [Fact]
     public void OrganizationOf_IsThePrincipalsOrganization_InCanonicalForm()
@@ -61,19 +65,43 @@ public sealed class ServiceOrderInboxTests
     }
 
     [Fact]
-    public void IsReceived_IsTrueForAnOrderOfAnotherOrganization_AndFalseForTheViewersOwn()
+    public void IsReceived_IsTrueForAnOrderOfAnotherOrganizationDispatchedToTheViewersOrganization_InAnySpelling()
     {
-        ServiceOrderInbox.IsReceived(Order("r", Other), Principal(Own.ToString())).Should().BeTrue();
+        ServiceOrderInbox.IsReceived(Order("r", Other, To(Own.ToString("D"), DispatchTargetType.Organization)), Principal(Own.ToString())).Should().BeTrue();
+        ServiceOrderInbox.IsReceived(Order("r", Other, To(Own.ToString("D").ToUpperInvariant(), DispatchTargetType.Organization)), Principal(Own.ToString("N"))).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsReceived_IsTrueForAnOrderOfAnotherOrganizationDispatchedToTheViewer()
+    {
+        ServiceOrderInbox.IsReceived(Order("r", Other, To("user-1", DispatchTargetType.User)), Principal(Own.ToString())).Should().BeTrue();
+        ServiceOrderInbox.IsReceived(Order("r", Other, To("USER-1", DispatchTargetType.User)), Principal(Own.ToString())).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsReceived_IsFalse_ForAnOrderOfAnotherOrganizationReachedWithoutADispatchToTheViewer()
+    {
+        ServiceOrderInbox.IsReceived(Order("granted", Other), Principal(Own.ToString())).Should().BeFalse("a grant alone is not a dispatch");
+        ServiceOrderInbox.IsReceived(Order("elsewhere", Other, To(Guid.NewGuid().ToString(), DispatchTargetType.Organization)), Principal(Own.ToString())).Should().BeFalse();
+        ServiceOrderInbox.IsReceived(Order("bad-id", Other, To("not-a-guid", DispatchTargetType.Organization)), Principal(Own.ToString())).Should().BeFalse();
+        ServiceOrderInbox.IsReceived(Order("other-user", Other, To("user-2", DispatchTargetType.User)), Principal(Own.ToString())).Should().BeFalse();
+        ServiceOrderInbox.IsReceived(Order("group", Other, To(Own.ToString(), DispatchTargetType.Group)), Principal(Own.ToString())).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsReceived_IsFalseForTheViewersOwnOrder_EvenWhenDispatchedInsideTheOrganization()
+    {
         ServiceOrderInbox.IsReceived(Order("a", Own), Principal(Own.ToString())).Should().BeFalse();
-        ServiceOrderInbox.IsReceived(Order("a", Own), Principal(Own.ToString().ToUpperInvariant())).Should().BeFalse();
+        ServiceOrderInbox.IsReceived(Order("a", Own, To(Own.ToString(), DispatchTargetType.Organization)), Principal(Own.ToString().ToUpperInvariant())).Should().BeFalse();
     }
 
     [Fact]
     public void IsReceived_IsFalse_ForAnOrderWithNoOrganization_ForAViewerWithNone_AndANullOrderThrows()
     {
-        ServiceOrderInbox.IsReceived(Order("legacy", Guid.Empty), Principal(Own.ToString())).Should().BeFalse();
-        ServiceOrderInbox.IsReceived(Order("r", Other), Principal(null)).Should().BeFalse();
-        ServiceOrderInbox.IsReceived(Order("r", Other), null).Should().BeFalse();
+        var dispatched = To(Own.ToString(), DispatchTargetType.Organization);
+        ServiceOrderInbox.IsReceived(Order("legacy", Guid.Empty, dispatched), Principal(Own.ToString())).Should().BeFalse();
+        ServiceOrderInbox.IsReceived(Order("r", Other, dispatched), Principal(null)).Should().BeFalse();
+        ServiceOrderInbox.IsReceived(Order("r", Other, dispatched), null).Should().BeFalse();
         ((Action)(() => ServiceOrderInbox.IsReceived(null!, Principal(Own.ToString())))).Should().Throw<ArgumentNullException>();
     }
 }

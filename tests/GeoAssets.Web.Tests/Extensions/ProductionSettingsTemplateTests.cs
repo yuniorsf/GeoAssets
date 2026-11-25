@@ -7,8 +7,7 @@ namespace GeoAssets.Web.Tests.Extensions;
 
 /// <summary>
 /// XD01-384: <c>appsettings.Production.json.template</c> — rendered by the Web container's nginx (<c>envsubst</c>) at start —
-/// holds a placeholder for every REST base URL the Web reads, the gateway's for all but IP billing's own, and no hardcoded host;
-/// and for the CIAM sign-in settings, which the image can't take from the git-ignored appsettings.Local.json.
+/// holds a placeholder for every REST base URL the Web reads, the gateway's for all but IP billing's own, and no hardcoded host.
 /// </summary>
 public sealed class ProductionSettingsTemplateTests
 {
@@ -73,19 +72,6 @@ public sealed class ProductionSettingsTemplateTests
     }
 
     [Theory]
-    [InlineData("AzureAdCiam:Authority", CiamAuthority)]
-    [InlineData("AzureAdCiam:ClientId", CiamClientId)]
-    [InlineData("GeoAssetsServer:ApiScope", ApiScope)]
-    [InlineData("GeoAssetsIpBillingServer:ApiScope", IpBillingApiScope)]
-    public void EachCiamSetting_RendersFromItsVariable(string key, string expected)
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        using var document = JsonDocument.Parse(Rendered());
-
-        ValueOf(document.RootElement, key).Should().Be(expected);
-    }
-
-    [Theory]
     [InlineData(AppInsightsConnectionString)]
     [InlineData("")]
     public void TheAppInsightsConnectionString_RendersFromItsVariable_BlankWhenUnset(string connectionString)
@@ -93,6 +79,19 @@ public sealed class ProductionSettingsTemplateTests
         using var document = JsonDocument.Parse(Rendered(connectionString));
 
         ValueOf(document.RootElement, "Observability:AzureMonitor:ConnectionString").Should().Be(connectionString);
+    }
+
+    [Theory]
+    [InlineData("AzureAdCiam:Authority", CiamAuthority)]
+    [InlineData("AzureAdCiam:ClientId", CiamClientId)]
+    [InlineData("GeoAssetsServer:ApiScope", ApiScope)]
+    [InlineData("GeoAssetsIpBillingServer:ApiScope", IpBillingApiScope)]
+    public void EachSignInSetting_RendersFromItsVariable(string key, string expected)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        using var document = JsonDocument.Parse(Rendered());
+
+        ValueOf(document.RootElement, key).Should().Be(expected);
     }
 
     [Fact]
@@ -141,8 +140,7 @@ public sealed class ProductionSettingsTemplateTests
         dockerfile.Should().Contain("appsettings.Production.json.template /etc/nginx/templates/appsettings.Production.json.template");
         dockerfile.Should().Contain("NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html");
         dockerfile.Should().Contain("GEOASSETS_GATEWAY_URL=");
-        dockerfile.Should().Contain("GEOASSETS_APPINSIGHTS_CONNECTION_STRING=", "envsubst leaves an unset variable's placeholder in place");
-        dockerfile.Should().Contain("GEOASSETS_CIAM_AUTHORITY=").And.Contain("GEOASSETS_CIAM_CLIENT_ID=")
-            .And.Contain("GEOASSETS_API_SCOPE=").And.Contain("GEOASSETS_IPBILLING_API_SCOPE=");
+        foreach (var variable in Placeholder.Matches(Template()).Select(m => m.Groups["name"].Value).Distinct(StringComparer.Ordinal))
+            dockerfile.Should().Contain($"{variable}=", "envsubst leaves an unset variable's placeholder in place");
     }
 }
