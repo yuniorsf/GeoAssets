@@ -13,6 +13,10 @@ public sealed class ProductionSettingsTemplateTests
 {
     private const string GatewayUrl = "https://gateway.example.test";
     private const string IpBillingUrl = "https://ipbilling.example.test";
+    private const string CiamAuthority = "https://tenant.ciamlogin.example.test/00000000-0000-0000-0000-000000000001";
+    private const string CiamClientId = "00000000-0000-0000-0000-000000000002";
+    private const string ApiScope = "api://00000000-0000-0000-0000-000000000003/access_as_user";
+    private const string IpBillingApiScope = "api://00000000-0000-0000-0000-000000000004/access_as_user";
 
     private static readonly Regex Placeholder = new(@"\$\{(?<name>[A-Z_]+)\}", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
     private static readonly Regex ConfigurationRead = new("""Configuration\["(?<key>[A-Za-z:]+(?:BaseUrl))"\]""", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, TimeSpan.FromSeconds(1));
@@ -33,7 +37,11 @@ public sealed class ProductionSettingsTemplateTests
     private static string Rendered(string appInsightsConnectionString = AppInsightsConnectionString) => Template()
         .Replace("${GEOASSETS_GATEWAY_URL}", GatewayUrl, StringComparison.Ordinal)
         .Replace("${GEOASSETS_IPBILLING_SERVER_URL}", IpBillingUrl, StringComparison.Ordinal)
-        .Replace("${GEOASSETS_APPINSIGHTS_CONNECTION_STRING}", appInsightsConnectionString, StringComparison.Ordinal);
+        .Replace("${GEOASSETS_APPINSIGHTS_CONNECTION_STRING}", appInsightsConnectionString, StringComparison.Ordinal)
+        .Replace("${GEOASSETS_CIAM_AUTHORITY}", CiamAuthority, StringComparison.Ordinal)
+        .Replace("${GEOASSETS_CIAM_CLIENT_ID}", CiamClientId, StringComparison.Ordinal)
+        .Replace("${GEOASSETS_API_SCOPE}", ApiScope, StringComparison.Ordinal)
+        .Replace("${GEOASSETS_IPBILLING_API_SCOPE}", IpBillingApiScope, StringComparison.Ordinal);
 
     private static string ValueOf(JsonElement root, string key)
     {
@@ -58,7 +66,9 @@ public sealed class ProductionSettingsTemplateTests
     public void TheTemplate_UsesOnlyTheDocumentedVariables()
     {
         Placeholder.Matches(Template()).Select(m => m.Groups["name"].Value).Distinct(StringComparer.Ordinal)
-            .Should().BeEquivalentTo("GEOASSETS_GATEWAY_URL", "GEOASSETS_IPBILLING_SERVER_URL", "GEOASSETS_APPINSIGHTS_CONNECTION_STRING");
+            .Should().BeEquivalentTo(
+                "GEOASSETS_GATEWAY_URL", "GEOASSETS_IPBILLING_SERVER_URL", "GEOASSETS_APPINSIGHTS_CONNECTION_STRING",
+                "GEOASSETS_CIAM_AUTHORITY", "GEOASSETS_CIAM_CLIENT_ID", "GEOASSETS_API_SCOPE", "GEOASSETS_IPBILLING_API_SCOPE");
     }
 
     [Theory]
@@ -69,6 +79,19 @@ public sealed class ProductionSettingsTemplateTests
         using var document = JsonDocument.Parse(Rendered(connectionString));
 
         ValueOf(document.RootElement, "Observability:AzureMonitor:ConnectionString").Should().Be(connectionString);
+    }
+
+    [Theory]
+    [InlineData("AzureAdCiam:Authority", CiamAuthority)]
+    [InlineData("AzureAdCiam:ClientId", CiamClientId)]
+    [InlineData("GeoAssetsServer:ApiScope", ApiScope)]
+    [InlineData("GeoAssetsIpBillingServer:ApiScope", IpBillingApiScope)]
+    public void EachSignInSetting_RendersFromItsVariable(string key, string expected)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        using var document = JsonDocument.Parse(Rendered());
+
+        ValueOf(document.RootElement, key).Should().Be(expected);
     }
 
     [Fact]
@@ -117,6 +140,7 @@ public sealed class ProductionSettingsTemplateTests
         dockerfile.Should().Contain("appsettings.Production.json.template /etc/nginx/templates/appsettings.Production.json.template");
         dockerfile.Should().Contain("NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html");
         dockerfile.Should().Contain("GEOASSETS_GATEWAY_URL=");
-        dockerfile.Should().Contain("GEOASSETS_APPINSIGHTS_CONNECTION_STRING=", "envsubst leaves an unset variable's placeholder in place");
+        foreach (var variable in Placeholder.Matches(Template()).Select(m => m.Groups["name"].Value).Distinct(StringComparer.Ordinal))
+            dockerfile.Should().Contain($"{variable}=", "envsubst leaves an unset variable's placeholder in place");
     }
 }
