@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Services;
+using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Workflow.Targets;
 using GeoAssets.Workflow.TestKit;
 
@@ -12,7 +13,7 @@ namespace GeoAssets.NeutralOperator.Server.Tests.Support;
 
 /// <summary>
 /// The kernel as the NeutralOperator host sees it, in process: an <see cref="HttpMessageHandler"/> that answers the caller's
-/// identity routes (<c>/api/identity/me</c>, <c>/api/identity/organization-grants/me</c>), the global target ledger
+/// identity routes (<c>/api/identity/me</c>, <c>/api/identity/me/cross-org-entitlements</c>, <c>/api/identity/organization-grants/me</c>), the global target ledger
 /// (<c>/api/targets/ledger/{vertical}/{order}/reserve|release|commit|usages</c>) and the bootstrap registration PUTs, and keeps
 /// every request it received. A reservation takes the feature ids named in the selection's <c>featureIds</c> parameter, so a
 /// test decides what a "strategy" selects. Thread-safe: the host calls it from request threads and from its registration loop.
@@ -27,6 +28,15 @@ internal sealed class FakeKernel(IReadOnlyDictionary<string, TestIdentity> ident
     private readonly Dictionary<string, List<TargetLedgerEntry>> _ledger = new(StringComparer.Ordinal);
 
     public IReadOnlyList<RecordedRequest> Requests => [.. _requests];
+
+    /// <summary>
+    /// What <c>/api/identity/me/cross-org-entitlements</c> answers for each bearer token (XD01-409); a token not listed has
+    /// none (<see cref="CrossOrgEntitlementsDto.None"/>), as the kernel answers for a caller holding nothing elsewhere.
+    /// </summary>
+    public ConcurrentDictionary<string, CrossOrgEntitlementsDto> Entitlements { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Makes every <c>/api/identity/me/cross-org-entitlements</c> answer 503 while true.</summary>
+    public bool EntitlementsFail { get; set; }
 
     /// <summary>Makes the registration PUTs answer 503 while true.</summary>
     public bool RegistrationFails { get; set; }
@@ -78,6 +88,8 @@ internal sealed class FakeKernel(IReadOnlyDictionary<string, TestIdentity> ident
         var segments = request.Path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 
         if (request.Method == HttpMethod.Get && string.Equals(request.Path, "/api/identity/me", StringComparison.Ordinal)) return Me(request);
+        if (request.Method == HttpMethod.Get && string.Equals(request.Path, "/api/identity/me/cross-org-entitlements", StringComparison.Ordinal))
+            return CrossOrgEntitlements(request);
         if (request.Method == HttpMethod.Get && string.Equals(request.Path, "/api/identity/organization-grants/me", StringComparison.Ordinal)) return Json(HttpStatusCode.OK, "[]");
         if (request.Method == HttpMethod.Get && string.Equals(request.Path, "/api/identity/policies", StringComparison.Ordinal)) return Json(HttpStatusCode.OK, "[]");
         if (request.Method == HttpMethod.Put && segments is ["api", "registry", "verticals", _, "order-types"]) return Registration();
@@ -114,6 +126,17 @@ internal sealed class FakeKernel(IReadOnlyDictionary<string, TestIdentity> ident
                 permissions = identity.Permissions,
             },
             _web));
+    }
+
+    private HttpResponseMessage CrossOrgEntitlements(RecordedRequest request)
+    {
+        if (EntitlementsFail) return Problem(HttpStatusCode.ServiceUnavailable, "kernel.unavailable", "The kernel is down.");
+        if (IdentityRejection is not null) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
+        var token = request.Authorization?.StartsWith("Bearer ", StringComparison.Ordinal) == true ? request.Authorization["Bearer ".Length..] : null;
+        if (token is null || !identities.ContainsKey(token)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
+        return Json(HttpStatusCode.OK, JsonSerializer.Serialize(Entitlements.GetValueOrDefault(token) ?? CrossOrgEntitlementsDto.None, _web));
     }
 
     private HttpResponseMessage Registration() =>

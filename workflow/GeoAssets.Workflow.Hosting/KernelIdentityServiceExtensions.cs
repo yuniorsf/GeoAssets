@@ -6,8 +6,9 @@ namespace GeoAssets.Workflow.Hosting;
 /// The caller's identity as the kernel knows it (XD01-382, ADR-001 D3): this host has no identity database, so
 /// <see cref="ServerWorkflowPrincipalFactory"/> — and through it every <c>ServiceOrderRules</c> decision, the one
 /// authorization point for a service order — is built over <see cref="KernelGeoAuthorizationService"/> and
-/// <see cref="KernelOwnOrganizationGrantSource"/>, both calling the kernel's caller-scoped identity routes with the
-/// caller's own token. The <c>RequireAuthorization("serviceorders:read")</c> permission policies run on the same service.
+/// <see cref="KernelOwnOrganizationGrantSource"/>, both answered by the kernel's caller-scoped identity routes for the
+/// caller's own token (<c>me</c>, <c>me/cross-org-entitlements</c>, <c>policies</c>; each at most once per request). The
+/// <c>RequireAuthorization("serviceorders:read")</c> permission policies run on the same service.
 /// </summary>
 public static class KernelIdentityServiceExtensions
 {
@@ -27,7 +28,7 @@ public static class KernelIdentityServiceExtensions
         services.AddScoped<IGeoAuthorizationService>(sp =>
             new KernelGeoAuthorizationService(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName)));
         services.AddScoped<IOwnOrganizationGrantSource>(sp =>
-            new KernelOwnOrganizationGrantSource(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName)));
+            new KernelOwnOrganizationGrantSource(sp.GetRequiredService<IGeoAuthorizationService>()));
         services.AddScoped(sp => new ServerWorkflowPrincipalFactory(
             sp.GetRequiredService<IGeoAuthorizationService>(), sp.GetRequiredService<IOwnOrganizationGrantSource>()));
 
