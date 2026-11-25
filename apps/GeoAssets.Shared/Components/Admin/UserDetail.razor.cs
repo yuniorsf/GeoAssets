@@ -3,11 +3,14 @@ using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Components.Admin;
 
 public partial class UserDetail
 {
+    [Inject] private ILogger<UserDetail> Logger { get; set; } = null!;
+
     [Parameter] public AppUser? User { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -60,7 +63,7 @@ public partial class UserDetail
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"[UserDetail] Failed to load the roles of {userId} on other organizations: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to load the roles of user {UserId} on other organizations", userId);
             _scopedRolesFailed = true;
         }
     }

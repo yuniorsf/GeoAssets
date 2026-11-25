@@ -35,4 +35,9 @@
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Shapefile\GeoAssets.Provider.Shapefile.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Browser-only banned APIs (Console.Error shows Blazor's global error banner) — see BannedSymbols.Browser.txt. -->
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)..\..\BannedSymbols.Browser.txt" Visible="false" />
+  </ItemGroup>
+
 </Project>

@@ -7,6 +7,7 @@ using GeoAssets.Shared.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace GeoAssets.Web.Tests.Identity;
@@ -135,7 +136,8 @@ public class UserProvisioningServiceTests
         var sut = new UserProvisioningService(
             new TestAuthenticationStateProvider(),
             provider.GetRequiredService<IServiceScopeFactory>(),
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<UserProvisioningService>.Instance);
 
         return (sut, store, navigation);
     }

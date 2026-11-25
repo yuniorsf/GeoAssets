@@ -1,10 +1,14 @@
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Shared.Components.Admin;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Pages.Admin;
 
 public partial class Users
 {
+    [Inject] private ILogger<Users> Logger { get; set; } = null!;
+
     private UserList? _list;
     private AppUser? _selected;
     private bool? _authorized;
@@ -19,7 +23,7 @@ public partial class Users
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminUsers] Failed to resolve authorization: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to resolve authorization");
             _authorized = false;
         }
     }

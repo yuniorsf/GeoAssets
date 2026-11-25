@@ -1,9 +1,13 @@
 using GeoAssets.IpBilling.Models;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.IpBilling.UI.Pages;
 
 public partial class LampReference
 {
+    [Inject] private ILogger<LampReference> Logger { get; set; } = null!;
+
     private LampType? _selectedLampType;
     private bool? _authorized;
 
@@ -17,7 +21,7 @@ public partial class LampReference
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminIpBillingLampReference] Failed to resolve authorization: {ex.Message}");
+            AuthorizationLog.AuthorizationCheckFailed(Logger, ex);
             _authorized = false;
         }
     }

@@ -4,12 +4,16 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Services;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Components.Layout;
 
 public partial class MainLayout
 {
+    [Inject] private ILogger<MainLayout> Logger { get; set; } = null!;
+
     private string _userDisplayName = string.Empty;
     private string? _organizationName;
     private IReadOnlyList<string> _userRoles = [];
@@ -86,7 +90,7 @@ public partial class MainLayout
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"[MainLayout] Failed to check pending invitation: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to check pending invitation");
         }
     }
 
@@ -108,7 +112,7 @@ public partial class MainLayout
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"[MainLayout] Failed to resolve topbar identity info: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to resolve topbar identity info");
         }
     }
 
@@ -133,7 +137,7 @@ public partial class MainLayout
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"[MainLayout] Failed to auto-open default Project: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to auto-open default Project");
         }
     }
 

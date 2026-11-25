@@ -1,10 +1,12 @@
 using GeoAssets.Workflow.SlaGuard;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Pages.Reporting;
 
 public partial class RegulatoryComplianceDashboard
 {
+    [Inject] private ILogger<RegulatoryComplianceDashboard> Logger { get; set; } = null!;
     [Inject] private ISlaBreachQueryService BreachQuery { get; set; } = null!;
 
     private bool? _authorized;
@@ -20,7 +22,7 @@ public partial class RegulatoryComplianceDashboard
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show reporting data.
-            await Console.Error.WriteLineAsync($"[RegulatoryComplianceDashboard] Failed to resolve authorization: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to resolve authorization");
             _authorized = false;
             return;
         }

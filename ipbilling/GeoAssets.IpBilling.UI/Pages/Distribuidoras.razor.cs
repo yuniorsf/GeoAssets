@@ -1,5 +1,7 @@
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.UI.Components;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.IpBilling.UI.Pages;
 
@@ -9,6 +11,8 @@ namespace GeoAssets.IpBilling.UI.Pages;
 /// </summary>
 public partial class Distribuidoras
 {
+    [Inject] private ILogger<Distribuidoras> Logger { get; set; } = null!;
+
     private DistribuidoraList? _list;
     private Guid? _selectedDistribuidoraId;
     private bool _showCreateForm;
@@ -24,7 +28,7 @@ public partial class Distribuidoras
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminIpBillingDistribuidoras] Failed to resolve authorization: {ex.Message}");
+            AuthorizationLog.AuthorizationCheckFailed(Logger, ex);
             _authorized = false;
         }
     }

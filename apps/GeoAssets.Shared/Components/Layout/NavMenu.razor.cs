@@ -1,11 +1,15 @@
 using GeoAssets.Core.Navigation;
 using GeoAssets.Identity.Authorization.Services;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Components.Layout;
 
 public partial class NavMenu
 {
+    [Inject] private ILogger<NavMenu> Logger { get; set; } = null!;
+
     // Matches AssetListMenuItem.Id — Index.razor's old SidebarPanel.AssetList default (that
     // panel opens on first load, before this ticket).
     private const string DefaultOpenPanelId = "assets";
@@ -30,7 +34,7 @@ public partial class NavMenu
         var authService = ServiceProvider.GetService<IGeoAuthorizationService>();
 
         var fullTree = MenuTreeBuilder.Build(Registry.All);
-        _tree = await FilterByPermissionAsync(fullTree, authService);
+        _tree = await FilterByPermissionAsync(fullTree, authService, Logger);
         _expandedGroupIds = new HashSet<string>(
             MenuTreeBuilder.ComputeExpandedGroupIds(_tree, Nav.ToBaseRelativePath(Nav.Uri)),
             StringComparer.Ordinal);
@@ -45,7 +49,7 @@ public partial class NavMenu
     /// same tradeoff Index.razor's own HasPermissionAsync("users:read") call already made.
     /// </summary>
     public static async Task<IReadOnlyList<MenuNode>> FilterByPermissionAsync(
-        IReadOnlyList<MenuNode> nodes, IGeoAuthorizationService? authService)
+        IReadOnlyList<MenuNode> nodes, IGeoAuthorizationService? authService, ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
         var result = new List<MenuNode>(nodes.Count);
@@ -63,15 +67,15 @@ public partial class NavMenu
                     }
                     catch (Exception ex)
                     {
-                        await Console.Error.WriteLineAsync(
-                            $"[NavMenu] Failed to evaluate permission '{permission}' for item '{node.Item.Id}': {ex.Message}");
+                        logger?.LogWarning(
+                            ex, "Failed to evaluate permission {Permission} for navigation item {ItemId}", permission, node.Item.Id);
                     }
                 }
 
                 if (!allowed) continue;
             }
 
-            var filteredChildren = await FilterByPermissionAsync(node.Children, authService);
+            var filteredChildren = await FilterByPermissionAsync(node.Children, authService, logger);
             result.Add(node with { Children = filteredChildren });
         }
 
