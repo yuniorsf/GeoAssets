@@ -15,5 +15,7 @@ internal static class TestIdentities
         ["owner-admin"] = new(new Guid("00000000-0000-4000-8000-000000000a01"), OwnerOrganization, ["Administrator"], _all),
         ["owner-reader"] = new(new Guid("00000000-0000-4000-8000-000000000a02"), OwnerOrganization, [], ["serviceorders:read"]),
         ["outsider-admin"] = new(new Guid("00000000-0000-4000-8000-000000000b01"), OtherOrganization, ["Administrator"], _all),
+        // XD01-409: a member of the other organization with no home role, who may hold a role on the owner organization.
+        ["contractor"] = new(new Guid("00000000-0000-4000-8000-000000000b02"), OtherOrganization, [], ["serviceorders:read"]),
     };
 }

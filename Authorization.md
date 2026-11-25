@@ -424,9 +424,17 @@ unchanged client `WorkflowPrincipalFactory` builds the kernel's principal and th
 no entitlement (offer less, never more). The Service Order list and detail name the owning organization of an order
 whose organization the entitlements name.
 
-Not yet: the vertical hosts (`KernelGeoAuthorizationService`, `AddKernelIdentity`) still read `/me` only, so on an order
-a vertical host serves a scoped grant still opens nothing there — the client may then offer an action that host refuses
-(the existing error path shows it). The MAUI app has no entitlement source (XD01-328 covers the mobile flow).
+The vertical hosts (NeutralOperator.Server, IpBilling.Server) read the same route since XD01-409:
+`KernelGeoAuthorizationService` (`AddKernelIdentity`) fills the context's `OrganizationGrants`/`ScopedRoles`/
+`ScopedPermissions` from `/me/cross-org-entitlements`. It reads them for the caller's forwarded token, at most once per
+request and in parallel with `/me`, and only when the full context is asked for: role, claim, permission and policy
+checks are home-only and read `/me` alone. `KernelOwnOrganizationGrantSource` takes the grants from that context, so a
+vertical host no longer reads `organization-grants/me`. `ServerWorkflowPrincipalFactory` therefore builds there the
+kernel's principal, and the matrix has a vertical-host row per case (`VerticalHostCrossOrgEntitlementsParityTests`). As
+in the Web client, an entitlements answer that is not a success, or that never arrives (network failure, timeout, a body
+of the wrong shape), means no entitlement: a request that needs none is served as before. A kernel 401 to the forwarded
+token is still `KernelRejectedCallerTokenException` → `502 kernel.token-rejected`. The MAUI app has no entitlement source
+(XD01-328 covers the mobile flow).
 
 ### Reference features of another organization (XD01-330, sixth slice of XD01-324)
 
@@ -495,8 +503,7 @@ the tenant-filtered `GetAllAsync`. The list now adds those orders.
   `GrantedServiceOrderList`, `GeoAssets.Workflow.Hosting`), not on `IServiceOrderRepository`. The repository keeps one
   bypass, XD01-328's `ICrossOrganizationServiceOrderReader.GetOfOtherOrganizationsAsync`, and none of its implementers
   change. A host opts in by registering the reader (`AddCrossOrganizationServiceOrderReader()`, over the scope's
-  `EFServiceOrderRepository`). The kernel does. NeutralOperator.Server does not, so its list is unchanged; the vertical
-  hosts still lack the scoped roles (XD01-409).
+  `EFServiceOrderRepository`). The kernel does. NeutralOperator.Server does not, so its list is unchanged.
 - **Which organizations:** only those named by the caller's organization's own active grants (from
   `ServerWorkflowPrincipalFactory`) whose resource type is `ServiceOrder` or none and that list a `serviceorders:`
   action. The caller's own organization and `Guid.Empty` are never asked.
