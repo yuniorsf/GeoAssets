@@ -14,6 +14,12 @@ services:
       GEOASSETS_IPBILLING_SERVER_URL: ${GEOASSETS_IPBILLING_SERVER_URL:-http://localhost:8090}
       # Observability:AzureMonitor:ConnectionString — the browser's Application Insights connection string; unset = no telemetry.
       GEOASSETS_APPINSIGHTS_CONNECTION_STRING: ${GEOASSETS_APPINSIGHTS_CONNECTION_STRING:-}
+      # The CIAM sign-in settings (AzureAdCiam:Authority/ClientId, GeoAssetsServer:ApiScope, GeoAssetsIpBillingServer:ApiScope)
+      # — set them in .env (see .env.example); unset = appsettings.json's placeholders, and sign-in fails.
+      GEOASSETS_CIAM_AUTHORITY: ${GEOASSETS_CIAM_AUTHORITY:-https://YOUR_TENANT_SUBDOMAIN.ciamlogin.com/YOUR_CIAM_TENANT_ID}
+      GEOASSETS_CIAM_CLIENT_ID: ${GEOASSETS_CIAM_CLIENT_ID:-YOUR_WEB_CLIENT_ID}
+      GEOASSETS_API_SCOPE: ${GEOASSETS_API_SCOPE:-api://YOUR_SERVER_API_CLIENT_ID/access_as_user}
+      GEOASSETS_IPBILLING_API_SCOPE: ${GEOASSETS_IPBILLING_API_SCOPE:-}
     ports:
       - "127.0.0.1:8081:8080"
     # BusyBox wget of the nginx-unprivileged (Alpine) image.

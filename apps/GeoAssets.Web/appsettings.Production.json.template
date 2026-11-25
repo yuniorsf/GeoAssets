@@ -1,6 +1,12 @@
 {
+  "AzureAdCiam": {
+    "Authority": "${GEOASSETS_CIAM_AUTHORITY}",
+    "ClientId": "${GEOASSETS_CIAM_CLIENT_ID}"
+  },
+
   "GeoAssetsServer": {
-    "BaseUrl": "${GEOASSETS_GATEWAY_URL}"
+    "BaseUrl": "${GEOASSETS_GATEWAY_URL}",
+    "ApiScope": "${GEOASSETS_API_SCOPE}"
   },
 
   "Api": {
@@ -8,7 +14,8 @@
   },
 
   "GeoAssetsIpBillingServer": {
-    "BaseUrl": "${GEOASSETS_IPBILLING_SERVER_URL}"
+    "BaseUrl": "${GEOASSETS_IPBILLING_SERVER_URL}",
+    "ApiScope": "${GEOASSETS_IPBILLING_API_SCOPE}"
   },
 
   "ServiceOrders": {

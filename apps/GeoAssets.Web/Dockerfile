@@ -24,14 +24,21 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine@sha256:b5047b9b76845eac124358373c
 # entrypoint runs as. GEOASSETS_GATEWAY_URL is the gateway's public URL (every GeoAssets.Server and vertical API goes
 # through it); the defaults are the local deploy/server stack's. GEOASSETS_APPINSIGHTS_CONNECTION_STRING is the browser's
 # Application Insights connection string; it defaults to empty (envsubst only replaces variables that are set), which
-# leaves browser telemetry off.
+# leaves browser telemetry off. The CIAM sign-in settings (AzureAdCiam:Authority/ClientId, GeoAssetsServer:ApiScope,
+# GeoAssetsIpBillingServer:ApiScope) come from the environment too, since the image never contains the git-ignored
+# appsettings.Local.json (and Production doesn't read it); they default to appsettings.json's placeholders (the
+# IP-billing scope to blank, i.e. the kernel's scope), so an unconfigured container fails sign-in visibly.
 COPY --from=build --chown=101:101 /app/site/ /usr/share/nginx/
 COPY apps/GeoAssets.Web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY apps/GeoAssets.Web/appsettings.Production.json.template /etc/nginx/templates/appsettings.Production.json.template
 ENV NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html \
     GEOASSETS_GATEWAY_URL=http://localhost:8090 \
     GEOASSETS_IPBILLING_SERVER_URL=http://localhost:8090 \
-    GEOASSETS_APPINSIGHTS_CONNECTION_STRING=
+    GEOASSETS_APPINSIGHTS_CONNECTION_STRING= \
+    GEOASSETS_CIAM_AUTHORITY=https://YOUR_TENANT_SUBDOMAIN.ciamlogin.com/YOUR_CIAM_TENANT_ID \
+    GEOASSETS_CIAM_CLIENT_ID=YOUR_WEB_CLIENT_ID \
+    GEOASSETS_API_SCOPE=api://YOUR_SERVER_API_CLIENT_ID/access_as_user \
+    GEOASSETS_IPBILLING_API_SCOPE=
 EXPOSE 8080
 USER 101
 # nginx's graceful shutdown signal (SIGTERM is its fast shutdown), the same as the base image's.
