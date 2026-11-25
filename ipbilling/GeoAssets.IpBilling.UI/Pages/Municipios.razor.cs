@@ -1,10 +1,14 @@
 using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.UI.Components;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.IpBilling.UI.Pages;
 
 public partial class Municipios
 {
+    [Inject] private ILogger<Municipios> Logger { get; set; } = null!;
+
     private MunicipioList? _list;
     private Guid? _selectedMunicipioId;
     private bool _showCreateForm;
@@ -20,7 +24,7 @@ public partial class Municipios
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminIpBillingMunicipios] Failed to resolve authorization: {ex.Message}");
+            AuthorizationLog.AuthorizationCheckFailed(Logger, ex);
             _authorized = false;
         }
     }

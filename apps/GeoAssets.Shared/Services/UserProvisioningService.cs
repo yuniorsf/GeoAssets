@@ -3,6 +3,7 @@ using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Services;
 
@@ -59,15 +60,18 @@ public sealed class UserProvisioningService : IAsyncDisposable
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly IServiceScopeFactory        _scopeFactory;
     private readonly TimeProvider                _timeProvider;
+    private readonly ILogger<UserProvisioningService> _logger;
 
     public UserProvisioningService(
         AuthenticationStateProvider authStateProvider,
         IServiceScopeFactory        scopeFactory,
-        TimeProvider                timeProvider)
+        TimeProvider                timeProvider,
+        ILogger<UserProvisioningService> logger)
     {
         _authStateProvider = authStateProvider;
         _scopeFactory      = scopeFactory;
         _timeProvider      = timeProvider;
+        _logger            = logger;
         _authStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
     }
 
@@ -82,7 +86,7 @@ public sealed class UserProvisioningService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[UserProvisioningService] Error during JIT provisioning: {ex.Message}");
+            _logger.LogWarning(ex, "Error during JIT provisioning");
         }
     }
 

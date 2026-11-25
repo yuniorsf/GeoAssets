@@ -3,6 +3,7 @@ using GeoAssets.Core.Navigation;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.Shared.Components.Layout;
+using GeoAssets.Shared.Tests.Services.OrderTargets;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Components.Layout;
@@ -119,6 +120,20 @@ public class NavMenuTests
         var filtered = await NavMenu.FilterByPermissionAsync(tree, authService);
 
         filtered.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task FilterByPermissionAsync_AuthorizationServiceThrows_LogsAWarning()
+    {
+        // Logged through ILogger, not Console.Error: Blazor WebAssembly shows its global error banner
+        // for anything written to stderr, which a handled failure must not do.
+        var tree = MenuTreeBuilder.Build([new TestPageItem("admin", requiredPermission: "users:read")]);
+        var authService = new StubAuthorizationService(throwOn: new InvalidOperationException("backend down"));
+        var logger = new CountingLogger<NavMenu>();
+
+        await NavMenu.FilterByPermissionAsync(tree, authService, logger);
+
+        logger.Warnings.Should().Be(1);
     }
 
     [Fact]

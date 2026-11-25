@@ -1,0 +1,11 @@
+# ==============================================================================
+# GeoAssets — Banned API Symbols for browser-rendered (Blazor WebAssembly) code
+# ==============================================================================
+# Included (as an AdditionalFiles BannedSymbols.*.txt) only by the projects whose
+# components run in GeoAssets.Web: GeoAssets.Web, GeoAssets.Shared,
+# GeoAssets.IpBilling.UI and GeoAssets.NeutralOperator.UI. The repo-wide list is
+# BannedSymbols.txt.
+# Format: <DocumentationCommentId>;<Justification message>
+# ==============================================================================
+
+P:System.Console.Error;Blazor WebAssembly routes stderr to printErr, which also shows the global #blazor-error-ui banner ("Ha ocurrido un error") — even for an exception the code already handled. Log through an injected ILogger<T> instead.

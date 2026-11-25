@@ -4,11 +4,13 @@ using GeoAssets.IpBilling.Models;
 using GeoAssets.IpBilling.UI.Components;
 using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.IpBilling.UI.Pages;
 
 public partial class Levantamentos
 {
+    [Inject] private ILogger<Levantamentos> Logger { get; set; } = null!;
     [Inject] private ILevantamentoRestClient Client { get; set; } = null!;
     [Inject] private IServiceOrderRepository OrderRepository { get; set; } = null!;
 
@@ -36,7 +38,7 @@ public partial class Levantamentos
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminIpBillingLevantamentos] Failed to resolve authorization: {ex.Message}");
+            AuthorizationLog.AuthorizationCheckFailed(Logger, ex);
             _authorized = false;
             return;
         }

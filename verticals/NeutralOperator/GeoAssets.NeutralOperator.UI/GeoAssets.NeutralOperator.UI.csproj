@@ -19,4 +19,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.7" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Browser-only banned APIs (Console.Error shows Blazor's global error banner) — see BannedSymbols.Browser.txt. -->
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)..\..\..\BannedSymbols.Browser.txt" Visible="false" />
+  </ItemGroup>
+
 </Project>

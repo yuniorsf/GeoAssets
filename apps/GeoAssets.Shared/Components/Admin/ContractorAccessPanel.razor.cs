@@ -4,6 +4,7 @@ using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Components.Admin;
 
@@ -16,6 +17,8 @@ namespace GeoAssets.Shared.Components.Admin;
 /// </summary>
 public partial class ContractorAccessPanel
 {
+    [Inject] private ILogger<ContractorAccessPanel> Logger { get; set; } = null!;
+
     private enum PanelState { Loading, Loaded, Forbidden, Failed }
 
     [Inject] private IServiceProvider ServiceProvider { get; set; } = null!;
@@ -63,7 +66,7 @@ public partial class ContractorAccessPanel
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"[ContractorAccessPanel] Failed to load contractor access: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to load contractor access");
             _state = PanelState.Failed;
         }
     }
@@ -110,7 +113,7 @@ public partial class ContractorAccessPanel
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"[ContractorAccessPanel] Failed to revoke {_toRevoke.Id}: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to revoke contractor access {AssignmentId}", _toRevoke.Id);
             _actionError = L["admin.contractorAccess.revokeError"];
         }
         finally

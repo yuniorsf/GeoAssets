@@ -1,14 +1,16 @@
 using System.ComponentModel.DataAnnotations;
-using GeoAssets.IpBilling.Oficio;
 using GeoAssets.IpBilling.Models;
+using GeoAssets.IpBilling.Oficio;
 using GeoAssets.IpBilling.UI.Components;
 using GeoAssets.Workflow.Orders;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.IpBilling.UI.Pages;
 
 public partial class Oficios
 {
+    [Inject] private ILogger<Oficios> Logger { get; set; } = null!;
     [Inject] private IOficioRestClient Client { get; set; } = null!;
     [Inject] private IServiceOrderRepository OrderRepository { get; set; } = null!;
 
@@ -36,7 +38,7 @@ public partial class Oficios
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminIpBillingOficios] Failed to resolve authorization: {ex.Message}");
+            AuthorizationLog.AuthorizationCheckFailed(Logger, ex);
             _authorized = false;
             return;
         }

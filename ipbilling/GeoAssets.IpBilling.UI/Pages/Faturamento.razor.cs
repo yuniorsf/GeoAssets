@@ -1,11 +1,13 @@
 using GeoAssets.IpBilling.FaturamentoLedger;
 using GeoAssets.IpBilling.Models;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.IpBilling.UI.Pages;
 
 public partial class Faturamento
 {
+    [Inject] private ILogger<Faturamento> Logger { get; set; } = null!;
     [Inject] private IFaturamentoRestClient Client { get; set; } = null!;
 
     private bool? _authorized;
@@ -29,7 +31,7 @@ public partial class Faturamento
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminIpBillingFaturamento] Failed to resolve authorization: {ex.Message}");
+            AuthorizationLog.AuthorizationCheckFailed(Logger, ex);
             _authorized = false;
             return;
         }

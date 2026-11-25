@@ -1,7 +1,12 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
+
 namespace GeoAssets.Shared.Pages.Admin;
 
 public partial class Permissions
 {
+    [Inject] private ILogger<Permissions> Logger { get; set; } = null!;
+
     private bool? _authorized;
 
     protected override async Task OnInitializedAsync()
@@ -14,7 +19,7 @@ public partial class Permissions
         {
             // Fail closed: if the authorization check itself can't be answered (e.g. the
             // identity backend is unreachable), don't show admin functionality.
-            await Console.Error.WriteLineAsync($"[AdminPermissions] Failed to resolve authorization: {ex.Message}");
+            Logger.LogWarning(ex, "Failed to resolve authorization");
             _authorized = false;
         }
     }
