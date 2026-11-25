@@ -58,6 +58,9 @@ builder.Services.AddWorkflowPersistence(o => o.UseNpgsql(
     // see its own doc comment), so migrations targeting Postgres are generated into this
     // (Server) project instead, which already legitimately depends on Npgsql.
     npgsql => npgsql.MigrationsAssembly("GeoAssets.Server")));
+// The grant-aware read path (XD01-328), so GET /api/workflow/service-orders also lists the orders the caller's grants
+// reach (XD01-408) — see GrantedServiceOrderList.
+builder.Services.AddCrossOrganizationServiceOrderReader();
 
 // ── Project persistence (XD01-139) — its own ProjectDbContext (control-plane metadata,
 // not folded into GeoAssetsDbContext), same Postgres database/connection as everything else.

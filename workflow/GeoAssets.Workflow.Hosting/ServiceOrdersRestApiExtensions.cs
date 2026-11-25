@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Services;
 using GeoAssets.Workflow.Orders;
+using GeoAssets.Workflow.Persistence;
 using GeoAssets.Workflow.Rules;
 using GeoAssets.Workflow.Targets;
 
@@ -103,11 +104,31 @@ public static class ServiceOrdersRestApiExtensions
             : [.. orders.Where(o => string.Equals(o.Status, status, StringComparison.Ordinal))];
     }
 
+    /// <summary>
+    /// The caller's orders plus, on a host that registers an <see cref="ICrossOrganizationServiceOrderReader"/> (the kernel),
+    /// the orders its organization's grants reach (XD01-408, see <see cref="GrantedServiceOrderList"/>), each kept by the
+    /// organization gate as the by-id read keeps it. A host without a reader answers exactly as every other list does.
+    /// </summary>
+    private static async Task<IResult> ListAllAsync(
+        IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory,
+        IServiceProvider services, JsonSerializerOptions opts, CancellationToken ct)
+    {
+        var crossOrganization = services.GetService<ICrossOrganizationServiceOrderReader>();
+        if (crossOrganization is null)
+            return await ListAsync(repo.GetAllAsync(ct), rules, principalFactory, opts, ct).ConfigureAwait(false);
+
+        var own = await repo.GetAllAsync(ct).ConfigureAwait(false);
+        var principal = await principalFactory.CreateAsync(ct).ConfigureAwait(false);
+        var orders = await GrantedServiceOrderList.ComposeAsync(own, crossOrganization, rules, principal, ct).ConfigureAwait(false);
+        return Results.Json(orders, opts);
+    }
+
     private static void MapServiceOrderLists(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
     {
         routes.MapGet($"{prefix}/service-orders", (
-            IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>
-            ListAsync(repo.GetAllAsync(ct), rules, principalFactory, opts, ct)).RequireAuthorization(ReadPolicy);
+            IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory,
+            IServiceProvider services, CancellationToken ct) =>
+            ListAllAsync(repo, rules, principalFactory, services, opts, ct)).RequireAuthorization(ReadPolicy);
 
         routes.MapGet($"{prefix}/service-orders/roots", (
             IServiceOrderRepository repo, ServiceOrderRules rules, ServerWorkflowPrincipalFactory principalFactory, CancellationToken ct) =>

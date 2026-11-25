@@ -76,6 +76,20 @@ public static class WorkflowEFCoreServiceExtensions
     }
 
     /// <summary>
+    /// Registers <see cref="ICrossOrganizationServiceOrderReader"/> (XD01-328) as the scope's <see cref="EFServiceOrderRepository"/>
+    /// (needs <see cref="AddWorkflowPersistence"/>). A host that registers it widens <c>MapServiceOrdersApi</c>'s
+    /// <c>GET service-orders</c> with the orders its callers' grants reach (XD01-408); the kernel does, a vertical host does not
+    /// yet. Does nothing when a reader is already registered.
+    /// </summary>
+    public static IServiceCollection AddCrossOrganizationServiceOrderReader(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped<ICrossOrganizationServiceOrderReader>(sp => sp.GetRequiredService<EFServiceOrderRepository>());
+        return services;
+    }
+
+    /// <summary>
     /// Registers the global target ledger's EF Core store (XD01-379): <see cref="ITargetLedgerStore"/> as a scoped
     /// <see cref="EFTargetLedgerStore"/> on the scope's <see cref="ServiceOrderDbContext"/>, and — unless a host already
     /// did — <see cref="IWorkflowUnitOfWork"/> over that same context, so a ledger change and the integration event the

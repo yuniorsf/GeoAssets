@@ -485,6 +485,38 @@ The Web map shows those reference features as a labelled, non-interactive layer 
 - The MAUI app has no entitlement source (`NoCrossOrgEntitlementsService`) and no REST client for the route
   (`UnavailableReferenceFeatureClient`), so its map is unchanged.
 
+### Granted orders in the kernel's list (XD01-408)
+
+Before this, an order a caller reached only through a grant was readable by id (`GetByIdAsync` ignores the tenant
+filter, and the organization gate let the grantee through) but never listed: `GET /api/workflow/service-orders` read
+the tenant-filtered `GetAllAsync`. The list now adds those orders.
+
+- **Where:** in the route that composes the list (`MapServiceOrdersApi`'s `GET service-orders` →
+  `GrantedServiceOrderList`, `GeoAssets.Workflow.Hosting`), not on `IServiceOrderRepository`. The repository keeps one
+  bypass, XD01-328's `ICrossOrganizationServiceOrderReader.GetOfOtherOrganizationsAsync`, and none of its implementers
+  change. A host opts in by registering the reader (`AddCrossOrganizationServiceOrderReader()`, over the scope's
+  `EFServiceOrderRepository`). The kernel does. NeutralOperator.Server does not, so its list is unchanged; the vertical
+  hosts still lack the scoped roles (XD01-409).
+- **Which organizations:** only those named by the caller's organization's own active grants (from
+  `ServerWorkflowPrincipalFactory`) whose resource type is `ServiceOrder` or none and that list a `serviceorders:`
+  action. The caller's own organization and `Guid.Empty` are never asked.
+- **Which orders:** every order of the result, the caller's own included, is kept by
+  `ServiceOrderRules.PassesOrganizationGate`, the decision the by-id read makes (`ServiceOrderRouteAccess.FindReadableAsync`).
+  So a grant's `OrderTypeIds`, `ScopeId`, `RequiredRole`/`RequiresScopedRole` and expiry narrow the list as they narrow
+  that read. The list never holds an order the read would refuse, and never misses one the read returns through a
+  grant. The XD01-329 parity matrix has a list row per case. This is the gate, not `Evaluate(View)` as in the FieldService
+  pull: the by-id read never asked for `View`, and the two must agree.
+- **Row-level security:** no change was needed. The kernel's `ServiceOrders` policy
+  (`service_order_owned_by_or_granted_to_current_organization`) already opens another organization's rows to the session
+  of a grantee that holds an active, unexpired grant whose resource type and scope match. It does not read `OrderTypeIds`,
+  `RequiredRole` or `RequiresScopedRole`, so it is coarser than the gate, never stricter. XD01-328's
+  `ServiceOrdersRowLevelSecurityPolicyTests` prove the read path under it, including revocation on the next read.
+- **Order and size:** oldest first, by `CreatedAt`, as the store orders the caller's own list. An order both paths
+  return is listed once. The route has no paging, for either part of the list.
+- **Revocation:** grants are read per request, so a revoked or expired grant drops its orders from the next response.
+- Out of scope: the other list routes (`roots`, `by-status`, …, which stay tenant-filtered), the vertical hosts, and
+  MAUI. Since XD01-410, the Web's "Received" badge stays off for an order that is listed only through a grant.
+
 ---
 
 ## 5. Federated authentication
