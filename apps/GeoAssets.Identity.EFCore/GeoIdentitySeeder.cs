@@ -153,6 +153,9 @@ public static class GeoIdentitySeeder
             // its own. Deliberately in no built-in role: every organization's administrator holds Administrator, so
             // granting it there would let each of them act on every other organization.
             P("organizations:manage-all", "organizations", "manage-all", "permissions.organizations.manageAll"),
+            // XD01-411: issuing, editing and revoking the grants one's own organization issues to its contractors. In
+            // Administrator: unlike manage-all it never reaches past the holder's own organization.
+            P("organizations:issue-grants", "organizations", "issue-grants", "permissions.organizations.issueGrants"),
             P("groups:read",            "groups",        "read",       "permissions.groups.read"),
             P("groups:edit",            "groups",        "edit",       "permissions.groups.edit"),
 
@@ -183,7 +186,7 @@ public static class GeoIdentitySeeder
             "features:read", "features:edit", "features:delete", "features:reference",
             "reports:export", "users:manage",
             "users:read", "users:edit", "roles:read", "roles:edit", "roles:delete", "permissions:read",
-            "organizations:read", "organizations:edit", "groups:read", "groups:edit",
+            "organizations:read", "organizations:edit", "organizations:issue-grants", "groups:read", "groups:edit",
             "projects:read", "projects:manage-providers", "projects:manage-asset-types",
             "projects:manage-layers", "projects:manage-view", "projects:rename", "projects:delete",
             "registry:manage")

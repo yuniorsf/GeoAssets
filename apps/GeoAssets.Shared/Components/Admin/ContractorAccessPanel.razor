@@ -30,7 +30,10 @@
                 <p class="text-body-secondary small">@L["admin.contractorAccess.intro"]</p>
 
                 <div class="permission-group">
-                    <h6>@L["admin.contractorAccess.grantsTitle"]</h6>
+                    <div class="section-header-row">
+                        <h6>@L["admin.contractorAccess.grantsTitle"]</h6>
+                        <button class="btn btn-outline-primary btn-sm contractor-issue-grant" type="button" @onclick="OpenIssueDialog">@L["admin.contractorAccess.issueGrant"]</button>
+                    </div>
                     @if (_grants.Count == 0)
                     {
                         <p class="text-body-secondary small contractor-grants-empty">@L["admin.contractorAccess.grantsEmpty"]</p>
@@ -48,6 +51,8 @@
                                         <th>@L["admin.contractorAccess.actions"]</th>
                                         <th>@L["admin.contractorAccess.requiresScopedRole"]</th>
                                         <th>@L["admin.contractorAccess.expires"]</th>
+                                        <th>@L["admin.contractorAccess.source"]</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -70,11 +75,33 @@
                                                 }
                                             </td>
                                             <td>@(grant.ExpiresAt is { } expiresAt ? expiresAt.ToLocalTime().ToString("d", Culture) : L["admin.contractorAccess.never"])</td>
+                                            @if (IsAdministratorOwned(grant))
+                                            {
+                                                <td class="contractor-grant-source">@L["admin.contractorAccess.source.administrator"]</td>
+                                                <td class="text-nowrap">
+                                                    <button class="btn-icon contractor-grant-edit" type="button" title="@L["admin.contractorAccess.editGrant"]"
+                                                            @onclick="() => OpenEditDialog(grant)">✎</button>
+                                                    <button class="btn-icon contractor-grant-revoke" type="button" title="@L["admin.contractorAccess.revokeGrant"]"
+                                                            @onclick="() => RequestGrantRevoke(grant)">×</button>
+                                                </td>
+                                            }
+                                            else
+                                            {
+                                                <td class="contractor-grant-source">
+                                                    <span class="badge text-bg-secondary" title="@L["admin.contractorAccess.source.serviceHint"]">@L["admin.contractorAccess.source.service"]</span>
+                                                </td>
+                                                <td></td>
+                                            }
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_grantError))
+                    {
+                        <p class="attribute-errors contractor-grant-error">@_grantError</p>
                     }
                 </div>
 
@@ -130,6 +157,19 @@
                                 OrganizationId="OrganizationId"
                                 OnAssigned="OnAssignedAsync"
                                 OnCancel="() => _showAssignDialog = false" />
+
+        <IssuedGrantDialog Visible="_showGrantDialog"
+                           OrganizationId="OrganizationId"
+                           Grant="_editing"
+                           OnSaved="OnGrantSavedAsync"
+                           OnCancel="CloseGrantDialog" />
+
+        <ConfirmDialog Visible="_showGrantRevokeConfirm"
+                       Title="@L["admin.contractorAccess.revokeGrantTitle"]"
+                       Message="@L.GetString("admin.contractorAccess.revokeGrantConfirm", _grantToRevoke is null ? string.Empty : OrganizationName(_grantToRevoke.GranteeOrganizationId))"
+                       ConfirmLabel="@L["admin.contractorAccess.revokeGrant"]"
+                       OnConfirm="ConfirmGrantRevokeAsync"
+                       OnCancel="() => _showGrantRevokeConfirm = false" />
 
         <ConfirmDialog Visible="_showRevokeConfirm"
                        Title="@L["admin.contractorAccess.revokeTitle"]"

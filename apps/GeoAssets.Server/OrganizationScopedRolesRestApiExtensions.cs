@@ -204,7 +204,7 @@ public static class OrganizationScopedRolesRestApiExtensions
     /// Null when the caller administers <paramref name="organizationId"/> (their own organization, or any existing one for a
     /// platform administrator); otherwise the refusal to answer.
     /// </summary>
-    private static async Task<IResult?> RefuseUnlessAdministratorAsync(
+    internal static async Task<IResult?> RefuseUnlessAdministratorAsync(
         AuthorizationContext ctx, Guid organizationId, IOrganizationRepository orgRepo, CancellationToken ct)
     {
         if (IsPlatformAdministrator(ctx))
@@ -230,7 +230,7 @@ public static class OrganizationScopedRolesRestApiExtensions
         return user.OrganizationId == callerOrganization || assignment.OrganizationId == callerOrganization;
     }
 
-    private static string AssignedBy(AuthorizationContext ctx) =>
+    internal static string AssignedBy(AuthorizationContext ctx) =>
         string.IsNullOrWhiteSpace(ctx.User.Email) ? ctx.User.Id.ToString() : ctx.User.Email;
 
     private static async Task<Dictionary<Guid, string>> OrganizationNamesAsync(IOrganizationRepository orgRepo, CancellationToken ct)

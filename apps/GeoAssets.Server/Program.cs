@@ -78,6 +78,10 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 // OrganizationGrantService (XD01-385) — the generic grant upsert/revoke/list behind MapOrganizationGrantsApi.
 builder.Services.AddScoped<OrganizationGrantService>();
 
+// IssuedOrganizationGrantService (XD01-411) — an organization's administrators issue, edit and revoke the grants it
+// issues, behind MapOrganizationIssuedGrantsApi.
+builder.Services.AddScoped<IssuedOrganizationGrantService>();
+
 // ServiceOrderRules (XD01-16) — same singleton, role-grant configuration as
 // apps/GeoAssets.Web/Program.cs, so server-side enforcement and the client UI agree on
 // who can do what. ServerWorkflowPrincipalFactory builds the WorkflowPrincipal it evaluates
@@ -265,6 +269,10 @@ app.MapOrganizationGrantsApi();
 // The roles users of contracted organizations hold on an organization (XD01-327), under the same prefix: an organization's
 // administrator assigns and revokes them. See OrganizationScopedRolesRestApiExtensions.
 app.MapOrganizationScopedRolesApi();
+
+// The grants an organization issues to its contractors, written by its administrators (XD01-411), under the same prefix.
+// Grants a vertical host provisioned stay read-only there. See OrganizationIssuedGrantsRestApiExtensions.
+app.MapOrganizationIssuedGrantsApi();
 
 // Standalone OGC endpoint for external GIS clients (CORS not required for server-to-server or
 // native desktop tools). The WMS routes (/wms, /api/geoassets/wms) render from PostGIS and are

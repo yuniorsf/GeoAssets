@@ -13,6 +13,15 @@ internal sealed class FakeScopedRoleClient : IScopedRoleAdministrationClient
     public List<(Guid OrganizationId, Guid UserId, Guid RoleId)> Assigned { get; } = [];
     public List<(Guid OrganizationId, Guid AssignmentId)> Revoked { get; } = [];
 
+    public List<(Guid OrganizationId, IssuedGrantCreateRequest Request)> Issued { get; } = [];
+    public List<(Guid OrganizationId, Guid GrantId, IssuedGrantRules Rules)> Updated { get; } = [];
+    public List<(Guid OrganizationId, Guid GrantId)> RevokedGrants { get; } = [];
+
+    /// <summary>Thrown by <see cref="IssueGrantAsync"/> and <see cref="UpdateGrantAsync"/> when set.</summary>
+    public Exception? GrantWriteFailure { get; set; }
+
+    public Exception? GrantRevokeFailure { get; set; }
+
     /// <summary>Thrown by every read when set.</summary>
     public Exception? ReadFailure { get; set; }
 
@@ -49,6 +58,51 @@ internal sealed class FakeScopedRoleClient : IScopedRoleAdministrationClient
 
         Revoked.Add((organizationId, assignmentId));
         Assignments.RemoveAll(a => a.Id == assignmentId);
+        return Task.CompletedTask;
+    }
+
+    public Task<OrganizationGrantDto> IssueGrantAsync(Guid organizationId, IssuedGrantCreateRequest request, CancellationToken ct = default)
+    {
+        if (GrantWriteFailure is not null) return Task.FromException<OrganizationGrantDto>(GrantWriteFailure);
+
+        Issued.Add((organizationId, request));
+        var grant = new OrganizationGrantDto(
+            Guid.NewGuid(), request.GranteeOrganizationId, organizationId, request.ResourceType, request.ScopeId,
+            [.. request.Rules.AllowedActions], request.Rules.RequiredRole, request.Rules.ExpiresAt, "admin@coelba.test",
+            new DateTime(2026, 11, 25, 12, 0, 0, DateTimeKind.Utc), true)
+        {
+            RequiresScopedRole = request.Rules.RequiresScopedRole,
+            OrderTypeIds = [.. request.Rules.OrderTypeIds],
+            Source = "administrator",
+        };
+        IssuedGrants.Add(grant);
+        return Task.FromResult(grant);
+    }
+
+    public Task<OrganizationGrantDto> UpdateGrantAsync(Guid organizationId, Guid grantId, IssuedGrantRules rules, CancellationToken ct = default)
+    {
+        if (GrantWriteFailure is not null) return Task.FromException<OrganizationGrantDto>(GrantWriteFailure);
+
+        Updated.Add((organizationId, grantId, rules));
+        var index = IssuedGrants.FindIndex(g => g.Id == grantId);
+        var grant = IssuedGrants[index] with
+        {
+            AllowedActions = [.. rules.AllowedActions],
+            RequiredRole = rules.RequiredRole,
+            ExpiresAt = rules.ExpiresAt,
+            RequiresScopedRole = rules.RequiresScopedRole,
+            OrderTypeIds = [.. rules.OrderTypeIds],
+        };
+        IssuedGrants[index] = grant;
+        return Task.FromResult(grant);
+    }
+
+    public Task RevokeGrantAsync(Guid organizationId, Guid grantId, CancellationToken ct = default)
+    {
+        if (GrantRevokeFailure is not null) return Task.FromException(GrantRevokeFailure);
+
+        RevokedGrants.Add((organizationId, grantId));
+        IssuedGrants.RemoveAll(g => g.Id == grantId);
         return Task.CompletedTask;
     }
 

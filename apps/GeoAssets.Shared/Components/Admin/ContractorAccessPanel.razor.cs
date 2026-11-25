@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
 using Microsoft.AspNetCore.Components;
@@ -9,9 +10,11 @@ using Microsoft.Extensions.Logging;
 namespace GeoAssets.Shared.Components.Admin;
 
 /// <summary>
-/// "Contractor access" (XD01-327) on the organization admin surface: the grants the organization has issued (read-only,
-/// with <c>RequiresScopedRole</c> and <c>OrderTypeIds</c>), the roles users of those contracted organizations hold on it,
-/// a revoke per role, and <see cref="AssignScopedRoleDialog"/> to give one. Rendered only where
+/// "Contractor access" (XD01-327) on the organization admin surface: the grants the organization has issued (with
+/// <c>RequiresScopedRole</c> and <c>OrderTypeIds</c>), the roles users of those contracted organizations hold on it,
+/// a revoke per role, and <see cref="AssignScopedRoleDialog"/> to give one. Since XD01-411 its administrators issue grants
+/// (<see cref="IssuedGrantDialog"/>), and edit and revoke the ones they issued; a grant a vertical host provisioned
+/// (<see cref="OrganizationGrantSources.Service"/>) shows as managed by an integration and stays read-only. Rendered only where
 /// <see cref="IScopedRoleAdministrationClient"/> resolves (the REST-backed identity stack). The server decides who may
 /// administer the organization; its 403 shows <c>admin.contractorAccess.forbidden</c> instead of the panel.
 /// </summary>
@@ -37,6 +40,11 @@ public partial class ContractorAccessPanel
     private bool _showRevokeConfirm;
     private ScopedRoleAssignmentDto? _toRevoke;
     private string? _actionError;
+    private bool _showGrantDialog;
+    private OrganizationGrantDto? _editing;
+    private bool _showGrantRevokeConfirm;
+    private OrganizationGrantDto? _grantToRevoke;
+    private string? _grantError;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -53,6 +61,7 @@ public partial class ContractorAccessPanel
 
         _state = PanelState.Loading;
         _actionError = null;
+        _grantError = null;
         try
         {
             _grants = [.. await _client.GetIssuedGrantsAsync(OrganizationId)];
@@ -82,6 +91,64 @@ public partial class ContractorAccessPanel
 
     private string OrganizationName(Guid organizationId) =>
         _organizationNames.TryGetValue(organizationId, out var name) ? name : organizationId.ToString();
+
+    private static bool IsAdministratorOwned(OrganizationGrantDto grant) =>
+        string.Equals(grant.Source, OrganizationGrantSources.Administrator, StringComparison.Ordinal);
+
+    private void OpenIssueDialog()
+    {
+        _grantError = null;
+        _editing = null;
+        _showGrantDialog = true;
+    }
+
+    private void OpenEditDialog(OrganizationGrantDto grant)
+    {
+        _grantError = null;
+        _editing = grant;
+        _showGrantDialog = true;
+    }
+
+    private void CloseGrantDialog()
+    {
+        _showGrantDialog = false;
+        _editing = null;
+    }
+
+    private Task OnGrantSavedAsync()
+    {
+        CloseGrantDialog();
+        return RefreshAsync();
+    }
+
+    private void RequestGrantRevoke(OrganizationGrantDto grant)
+    {
+        _grantToRevoke = grant;
+        _showGrantRevokeConfirm = true;
+    }
+
+    private async Task ConfirmGrantRevokeAsync()
+    {
+        _showGrantRevokeConfirm = false;
+        if (_client is null || _grantToRevoke is null) return;
+
+        try
+        {
+            await _client.RevokeGrantAsync(OrganizationId, _grantToRevoke.Id);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to revoke issued grant {GrantId}", _grantToRevoke.Id);
+            _grantError = ex is ScopedRoleAdministrationException { Code: IssuedGrantProblems.ServiceOwned }
+                ? L["admin.contractorAccess.grantForm.error.serviceOwned"]
+                : L["admin.contractorAccess.revokeGrantError"];
+        }
+        finally
+        {
+            _grantToRevoke = null;
+        }
+    }
 
     private void OpenAssignDialog()
     {

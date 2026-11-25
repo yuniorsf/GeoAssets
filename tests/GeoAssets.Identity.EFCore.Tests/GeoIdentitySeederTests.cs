@@ -29,7 +29,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(30);
+        (await db.Permissions.CountAsync()).Should().Be(31);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
     }
@@ -51,7 +51,7 @@ public class GeoIdentitySeederTests
         var adminRolePermissionCount = await db.RolePermissions
             .CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId);
 
-        adminRolePermissionCount.Should().Be(29);
+        adminRolePermissionCount.Should().Be(30);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class GeoIdentitySeederTests
             .SingleAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "users:read");
         db.RolePermissions.Remove(usersReadGrant);
         await db.SaveChangesAsync();
-        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(28);
+        (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId)).Should().Be(29);
 
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
@@ -82,7 +82,7 @@ public class GeoIdentitySeederTests
             .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
             .ToListAsync();
         adminCodes.Should().Contain("users:read");
-        adminCodes.Should().HaveCount(29);
+        adminCodes.Should().HaveCount(30);
     }
 
     [Fact]
@@ -98,11 +98,11 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, time);
 
         (await db.Organizations.CountAsync()).Should().Be(1);
-        (await db.Permissions.CountAsync()).Should().Be(30);
+        (await db.Permissions.CountAsync()).Should().Be(31);
         (await db.Roles.CountAsync()).Should().Be(4);
         (await db.Policies.CountAsync()).Should().Be(5);
         (await db.RolePermissions.CountAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId))
-            .Should().Be(29);
+            .Should().Be(30);
     }
 
     [Fact]
@@ -300,7 +300,7 @@ public class GeoIdentitySeederTests
         await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
 
         var permissions = await db.Permissions.ToListAsync();
-        permissions.Should().HaveCount(30);
+        permissions.Should().HaveCount(31);
         foreach (var permission in permissions)
         {
             permission.Description.Should().StartWith("permissions.",
@@ -327,6 +327,51 @@ public class GeoIdentitySeederTests
         var permission = await db.Permissions.SingleAsync(p => p.Code == "organizations:manage-all");
         permission.Description.Should().Be("permissions.organizations.manageAll");
         (await db.RolePermissions.AnyAsync(rp => rp.PermissionId == permission.Id)).Should().BeFalse();
+    }
+
+    // ── XD01-411: organizations:issue-grants ─────────────────────────────────
+
+    [Fact]
+    public async Task SeedAsync_OrganizationsIssueGrants_IsSeededAndGrantedToAdministratorOnly()
+    {
+        // Unlike manage-all it never reaches past the holder's own organization, so every organization's administrator may
+        // hold it.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var permission = await db.Permissions.SingleAsync(p => p.Code == "organizations:issue-grants");
+        permission.Description.Should().Be("permissions.organizations.issueGrants");
+        var holders = await db.RolePermissions
+            .Where(rp => rp.PermissionId == permission.Id)
+            .Select(rp => rp.RoleId)
+            .ToListAsync();
+        holders.Should().Equal(GeoIdentitySeeder.AdminRoleId);
+    }
+
+    [Fact]
+    public async Task SeedAsync_ExistingAdministratorMissingIssueGrants_BackfillsIt()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var db = NewContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        var grant = await db.RolePermissions
+            .Include(rp => rp.Permission)
+            .SingleAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "organizations:issue-grants");
+        db.RolePermissions.Remove(grant);
+        await db.SaveChangesAsync();
+
+        await GeoIdentitySeeder.SeedAsync(db, new FakeTimeProvider());
+
+        (await db.RolePermissions.Include(rp => rp.Permission)
+            .AnyAsync(rp => rp.RoleId == GeoIdentitySeeder.AdminRoleId && rp.Permission!.Code == "organizations:issue-grants"))
+            .Should().BeTrue();
     }
 
     // ── XD01-369: registry:manage ────────────────────────────────────────────

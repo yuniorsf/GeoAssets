@@ -6,6 +6,7 @@ DELETE /api/geoassets/layer-rules/{id} | policy:features:delete
 DELETE /api/geoassets/layers/{id} | policy:features:delete
 DELETE /api/identity/groups/{id}/members/{userId} | policy:groups:edit
 DELETE /api/identity/invitations/{id} | policy:users:edit
+DELETE /api/identity/organizations/{orgId}/issued-grants/{grantId} | policy:organizations:issue-grants
 DELETE /api/identity/organizations/{orgId}/scoped-roles/{assignmentId} | policy:users:edit
 DELETE /api/identity/roles/{id} | policy:roles:delete
 DELETE /api/identity/roles/{id}/permissions/{permId} | policy:roles:edit
@@ -98,6 +99,7 @@ POST /api/identity/invitations | policy:users:edit
 POST /api/identity/invitations/{id}/redeem | none
 POST /api/identity/organization-grants/revoke | authorize, requirement:RolesAuthorizationRequirement
 POST /api/identity/organizations | policy:organizations:edit
+POST /api/identity/organizations/{orgId}/issued-grants | policy:organizations:issue-grants
 POST /api/identity/organizations/{orgId}/scoped-roles | policy:users:edit
 POST /api/identity/roles | policy:roles:edit
 POST /api/identity/roles/{id}/permissions/{permId} | policy:roles:edit
@@ -122,6 +124,7 @@ PUT /api/geoassets/features/{id} | policy:features:edit
 PUT /api/identity/groups/{id} | policy:groups:edit
 PUT /api/identity/organization-grants | authorize, requirement:RolesAuthorizationRequirement
 PUT /api/identity/organizations/{id} | policy:organizations:edit
+PUT /api/identity/organizations/{orgId}/issued-grants/{grantId} | policy:organizations:issue-grants
 PUT /api/identity/roles/{id} | policy:roles:edit
 PUT /api/identity/userclaims/{claimId} | none
 PUT /api/identity/users/{id} | policy:users:edit

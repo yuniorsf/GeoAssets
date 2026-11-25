@@ -55,6 +55,9 @@ public class OrganizationGrantScopedRoleMigrationTests
         (await QueryAsync(db, ColumnsSql)).Should().Equal(
             "OrderTypeIds:text:NO:'[]'::text",
             "RequiresScopedRole:boolean:NO:false");
+        // The repository reads through the current model, which has columns later migrations add (XD01-411's "Source"):
+        // bring the database to the end of the chain before reading the grant back.
+        await migrator.MigrateAsync();
         var grant = (await new EFOrganizationGrantRepository(db, TimeProvider.System).GetActiveGrantsAsync(Bimbo, Coelba))
             .Should().ContainSingle().Subject;
         grant.RequiresScopedRole.Should().BeFalse();

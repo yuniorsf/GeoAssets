@@ -26,6 +26,12 @@ public sealed record OrganizationGrantDto(
     /// <summary><see cref="OrganizationGrant.OrderTypeIds"/> (XD01-326); empty (every order type) when the field is absent.</summary>
     public IReadOnlyList<string> OrderTypeIds { get; init; } = [];
 
+    /// <summary>
+    /// <see cref="OrganizationGrant.Source"/> (XD01-411): one of <see cref="OrganizationGrantSources"/>;
+    /// <see cref="OrganizationGrantSources.Service"/> when the field is absent.
+    /// </summary>
+    public string Source { get; init; } = OrganizationGrantSources.Service;
+
     public static OrganizationGrantDto FromModel(OrganizationGrant grant)
     {
         ArgumentNullException.ThrowIfNull(grant);
@@ -35,6 +41,7 @@ public sealed record OrganizationGrantDto(
         {
             RequiresScopedRole = grant.RequiresScopedRole,
             OrderTypeIds = [.. grant.OrderTypeIds],
+            Source = grant.Source,
         };
     }
 }

@@ -1,0 +1,128 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+
+@if (Visible)
+{
+    <div class="dialog-backdrop" @onclick="Cancel">
+        <div class="dialog-box issued-grant-dialog" @onclick:stopPropagation="true">
+            <h6>@(IsEdit ? L["admin.contractorAccess.grantForm.editTitle"] : L["admin.contractorAccess.grantForm.issueTitle"])</h6>
+
+            @if (_loading)
+            {
+                <p>@L["app.loading"]</p>
+            }
+            else if (!IsEdit && _grantees.Count == 0)
+            {
+                <p class="issued-grant-no-grantees">@L["admin.contractorAccess.grantForm.noGrantees"]</p>
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel">@L["assets.cancel"]</button>
+                </div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <label for="issued-grant-grantee">@L["admin.contractorAccess.grantee"]</label>
+                    @if (IsEdit)
+                    {
+                        <input id="issued-grant-grantee" class="form-control form-control-sm" value="@GranteeName" disabled />
+                    }
+                    else
+                    {
+                        <select id="issued-grant-grantee" class="form-select form-select-sm" @onchange="OnGranteeChanged" disabled="@_saving">
+                            <option value="" selected="@(_granteeId is null)">@L["admin.contractorAccess.grantForm.chooseGrantee"]</option>
+                            @foreach (var organization in _grantees)
+                            {
+                                <option value="@organization.Id" selected="@(_granteeId == organization.Id)">@organization.Name</option>
+                            }
+                        </select>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label for="issued-grant-resource-type">@L["admin.contractorAccess.resourceType"]</label>
+                    <select id="issued-grant-resource-type" class="form-select form-select-sm" @onchange="OnResourceTypeChanged" disabled="@(IsEdit || _saving)">
+                        <option value="" selected="@(_resourceType.Length == 0)">@L["admin.contractorAccess.grantForm.resourceAll"]</option>
+                        @foreach (var resourceType in ResourceTypes)
+                        {
+                            <option value="@resourceType" selected="@(_resourceType == resourceType)">@L[$"admin.contractorAccess.grantForm.resource.{resourceType}"]</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="issued-grant-scope">@L["admin.contractorAccess.scope"]</label>
+                    <input id="issued-grant-scope" class="form-control form-control-sm" @bind="_scopeId" disabled="@(IsEdit || _saving)" />
+                    <div class="form-text">@L["admin.contractorAccess.grantForm.scopeHint"]</div>
+                </div>
+
+                <fieldset class="form-group">
+                    <legend class="form-label fs-6">@L["admin.contractorAccess.actions"]</legend>
+                    <div class="issued-grant-actions">
+                        @foreach (var permission in _permissions)
+                        {
+                            var id = $"issued-grant-action-{permission.Code.Replace(':', '-')}";
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="@id" value="@permission.Code"
+                                       checked="@_actions.Contains(permission.Code)" disabled="@_saving"
+                                       @onchange="e => ToggleAction(permission.Code, e)" />
+                                <label class="form-check-label" for="@id">
+                                    <code>@permission.Code</code>
+                                    @if (!string.IsNullOrEmpty(permission.Description))
+                                    {
+                                        <span class="text-body-secondary small">@L[permission.Description]</span>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </fieldset>
+
+                @if (IsServiceOrder)
+                {
+                    <div class="form-group">
+                        <label for="issued-grant-order-types">@L["admin.contractorAccess.orderTypes"]</label>
+                        <input id="issued-grant-order-types" class="form-control form-control-sm" @bind="_orderTypes" disabled="@_saving" />
+                        <div class="form-text">@L["admin.contractorAccess.grantForm.orderTypesHint"]</div>
+                    </div>
+                }
+
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="issued-grant-requires-scoped-role" @bind="_requiresScopedRole" disabled="@_saving" />
+                    <label class="form-check-label" for="issued-grant-requires-scoped-role">@L["admin.contractorAccess.requiresScopedRole"]</label>
+                    <div class="form-text">@L["admin.contractorAccess.grantForm.requiresScopedRoleHint"]</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="issued-grant-required-role">@L["admin.contractorAccess.grantForm.requiredRole"]</label>
+                    <select id="issued-grant-required-role" class="form-select form-select-sm" @bind="_requiredRole" disabled="@_saving">
+                        <option value="">@L["admin.contractorAccess.grantForm.anyRole"]</option>
+                        @foreach (var role in _roles)
+                        {
+                            <option value="@role.Name">@role.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="issued-grant-expires">@L["admin.contractorAccess.grantForm.expiresOn"]</label>
+                    <input id="issued-grant-expires" type="date" class="form-control form-control-sm" value="@_expiresOn"
+                           @onchange="e => _expiresOn = e.Value as string" disabled="@_saving" />
+                    <div class="form-text">@L["admin.contractorAccess.grantForm.expiresHint"]</div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="attribute-errors" role="alert">@_error</p>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="Cancel" disabled="@_saving">@L["assets.cancel"]</button>
+                    <button class="btn btn-primary btn-sm issued-grant-submit" type="button" @onclick="SaveAsync" disabled="@(_saving || !CanSave)">
+                        @(_saving
+                            ? L["admin.contractorAccess.grantForm.saving"]
+                            : IsEdit ? L["admin.contractorAccess.grantForm.save"] : L["admin.contractorAccess.grantForm.issue"])
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
