@@ -72,5 +72,13 @@ public sealed class OrganizationGrant
     public string   GrantedBy { get; set; } = string.Empty;
     public DateTime GrantedAt { get; set; }
 
+    /// <summary>
+    /// Who owns the grant (XD01-411): <see cref="OrganizationGrantSources.Service"/> (every grant created before this field
+    /// existed, and every one a vertical host writes through the kernel's <c>organization-grants</c> routes) or
+    /// <see cref="OrganizationGrantSources.Administrator"/> (issued by an administrator of the resource organization). A
+    /// service-owned grant is read-only to administrators; a service write of an administrator's key takes it over.
+    /// </summary>
+    public string Source { get; set; } = OrganizationGrantSources.Service;
+
     public bool IsActive { get; set; } = true;
 }

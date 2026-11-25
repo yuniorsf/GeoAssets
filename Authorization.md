@@ -346,8 +346,52 @@ The refusal codes are `ScopedRoleAssignmentProblems`; the Web client is `IScoped
 (`RestScopedRoleAdministrationClient`). In the admin UI, *Organizations* shows a **Contractor access** panel under the
 selected organization (`ContractorAccessPanel`: the issued grants read-only, the assignments with revoke, and
 `AssignScopedRoleDialog`), and `UserDetail` lists *Roles on other organizations* apart from the home roles. Creating or
-editing a grant from the UI is not part of this slice: grants are still provisioned by the vertical hosts through
-`PUT organization-grants` (§4 above).
+editing a grant from the UI was not part of this slice. XD01-411 added it (next section).
+
+### Issuing grants from the admin UI (XD01-411)
+
+An organization's administrators issue, edit and revoke the grants it gives its contractors
+(`OrganizationIssuedGrantsRestApiExtensions` over `IssuedOrganizationGrantService`, under `/api/identity`):
+
+| Route | Answers |
+|---|---|
+| `POST organizations/{orgId}/issued-grants` `{ granteeOrganizationId, resourceType, scopeId, rules }` | `201` the grant |
+| `PUT organizations/{orgId}/issued-grants/{grantId}` `{ rules }` | `200` the grant, its rules replaced |
+| `DELETE organizations/{orgId}/issued-grants/{grantId}` | `204`; the grant is deactivated, never deleted |
+
+`rules` is `IssuedGrantRules`: `allowedActions`, `requiredRole`, `requiresScopedRole`, `orderTypeIds`, `expiresAt`. The
+grantee, resource type and scope are the grant's key (`OrganizationGrantKey`) and never change: to move a grant, revoke
+it and issue another.
+
+- **Who may (decided 2026-11-25):** the home permission **`organizations:issue-grants`**, seeded and in the built-in
+  `Administrator` role (backfilled into existing ones), and the XD01-327 rule that the caller administers `orgId` (their
+  home organization, or a platform administrator with `organizations:manage-all`; otherwise `403
+  scoped-role.forbidden`). Unlike `organizations:manage-all` it never reaches past the holder's own organization, so every
+  organization's administrator may hold it.
+- **What is valid:** at least one action, each an existing permission code; a required role, when given, an existing
+  role; order types only on a `ServiceOrder` grant; an expiry in the future (taken as UTC when it names no zone); a
+  grantee that exists and is not `orgId`. Otherwise `400 issued-grant.invalid`. `GrantedBy` (the caller's email) and
+  `GrantedAt` (`TimeProvider`) are the server's and are kept on edit.
+- **Who owns a grant (decided 2026-11-25):** `OrganizationGrant.Source`, `service` or `administrator`
+  (`OrganizationGrantSources`, migration `AddOrganizationGrantSource`; every earlier grant migrates as `service`). The
+  issued-grant routes write only administrator-owned grants. A **service-owned** grant, which a vertical host provisioned
+  through `PUT organization-grants`, is read-only to administrators: editing or revoking it, or issuing its key again,
+  answers `409 issued-grant.service-owned`, and the panel shows it as managed by an integration, with no actions.
+  **The vertical wins a collision:** `PUT organization-grants` on a key an administrator issued takes the grant over
+  (it becomes `service`, with the vertical's rules), so a vertical's sync, such as the município grants, never fails on
+  an administrator's grant. `POST organization-grants/revoke` revokes whatever grant has the key. The option where admin
+  edits win and the vertical stops re-syncing was rejected: it would need every vertical to handle a new refusal.
+- **Collisions between administrators:** issuing a key that already has an active administrator's grant answers `409
+  issued-grant.exists` (edit that grant instead). An expired grant still flagged active is retired first, as the service
+  upsert does. A create that loses a race for its key (`UX_OrganizationGrants_ActiveKey`, XD01-394) answers `409
+  organization-grant.conflict`, safe to repeat. A grant another organization issued, or one no longer active, is `404
+  issued-grant.not-found`.
+
+The refusal codes are `IssuedGrantProblems`; `IScopedRoleAdministrationClient` gained `IssueGrantAsync`,
+`UpdateGrantAsync` and `RevokeGrantAsync`, and `OrganizationGrantDto` carries `Source`. In the **Contractor access** panel,
+*Issue grant* opens `IssuedGrantDialog` (contractor, resource type, scope, allowed actions, order types, *Requires a role
+here*, required role, expiry date: the end of that day in the viewer's time zone). Each administrator-owned grant has
+edit and revoke actions; a grant edited, revoked or issued changes what its grantee's users can do on their next request.
 
 ### Cross-organization mobile sync in FieldService (XD01-328, fourth slice of XD01-324)
 

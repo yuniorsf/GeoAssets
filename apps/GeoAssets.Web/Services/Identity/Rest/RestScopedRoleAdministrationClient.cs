@@ -6,7 +6,8 @@ namespace GeoAssets.Web.Services.Identity.Rest;
 
 /// <summary>
 /// <see cref="IScopedRoleAdministrationClient"/> backed by <c>GeoAssets.Server</c>'s scoped-role administration routes
-/// (XD01-327, <c>OrganizationScopedRolesRestApiExtensions</c>). Every non-success answer becomes a
+/// (XD01-327, <c>OrganizationScopedRolesRestApiExtensions</c>) and its issued-grant writes (XD01-411,
+/// <c>OrganizationIssuedGrantsRestApiExtensions</c>). Every non-success answer becomes a
 /// <see cref="ScopedRoleAdministrationException"/> carrying its status and, from the problem body, its
 /// <see cref="ScopedRoleAssignmentProblems"/> code and detail.
 /// </summary>
@@ -39,6 +40,32 @@ public sealed class RestScopedRoleAdministrationClient(HttpClient http) : IScope
     public async Task RevokeAsync(Guid organizationId, Guid assignmentId, CancellationToken ct = default)
     {
         using var response = await http.DeleteAsync(new Uri($"organizations/{organizationId}/scoped-roles/{assignmentId}", UriKind.Relative), ct);
+        await EnsureSuccessAsync(response, ct);
+    }
+
+    public async Task<OrganizationGrantDto> IssueGrantAsync(Guid organizationId, IssuedGrantCreateRequest request, CancellationToken ct = default)
+    {
+        using var response = await http.PostAsJsonAsync(
+            new Uri($"organizations/{organizationId}/issued-grants", UriKind.Relative), request, WebJson, ct);
+        await EnsureSuccessAsync(response, ct);
+
+        return await response.Content.ReadFromJsonAsync<OrganizationGrantDto>(WebJson, ct)
+            ?? throw new InvalidOperationException($"POST organizations/{organizationId}/issued-grants returned an empty response.");
+    }
+
+    public async Task<OrganizationGrantDto> UpdateGrantAsync(Guid organizationId, Guid grantId, IssuedGrantRules rules, CancellationToken ct = default)
+    {
+        using var response = await http.PutAsJsonAsync(
+            new Uri($"organizations/{organizationId}/issued-grants/{grantId}", UriKind.Relative), new IssuedGrantUpdateRequest(rules), WebJson, ct);
+        await EnsureSuccessAsync(response, ct);
+
+        return await response.Content.ReadFromJsonAsync<OrganizationGrantDto>(WebJson, ct)
+            ?? throw new InvalidOperationException($"PUT organizations/{organizationId}/issued-grants/{grantId} returned an empty response.");
+    }
+
+    public async Task RevokeGrantAsync(Guid organizationId, Guid grantId, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync(new Uri($"organizations/{organizationId}/issued-grants/{grantId}", UriKind.Relative), ct);
         await EnsureSuccessAsync(response, ct);
     }
 

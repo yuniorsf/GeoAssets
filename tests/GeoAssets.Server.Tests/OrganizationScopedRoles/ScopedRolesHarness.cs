@@ -7,6 +7,8 @@ using GeoAssets.Identity.Authorization.EFCore.Repositories;
 using GeoAssets.Identity.Authorization.Models;
 using GeoAssets.Identity.Authorization.Repositories;
 using GeoAssets.Identity.Authorization.Services;
+using GeoAssets.Workflow.Hosting;
+using GeoAssets.Workflow.Rules;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -31,10 +33,11 @@ namespace GeoAssets.Server.Tests.OrganizationScopedRoles;
 /// COELBA has contracted BIMBO (an active grant, from COELBA to BIMBO, that requires a scoped role) and once contracted
 /// THIRD (an expired grant). Each organization has an administrator (role <see cref="AdministratorRole"/>: <c>users:read</c>,
 /// <c>users:edit</c>); BIMBO has two technicians and an inactive user; <see cref="PlatformAdmin"/> holds
-/// <c>organizations:manage-all</c>.
+/// <c>organizations:manage-all</c>. Since XD01-411 both administrator roles also hold <c>organizations:issue-grants</c>,
+/// and the host maps the issued-grant writes; <c>contracted: false</c> seeds no grant to BIMBO.
 /// </para>
 /// </summary>
-internal sealed class ScopedRolesHarness : IAsyncDisposable
+internal sealed class ScopedRolesHarness(bool contracted = true) : IAsyncDisposable
 {
     public const string UserHeader = "X-Test-User";
 
@@ -109,13 +112,22 @@ internal sealed class ScopedRolesHarness : IAsyncDisposable
                     services.AddScoped<IPolicyRepository, EFPolicyRepository>();
                     services.AddScoped<ICurrentUserAccessor, HeaderCurrentUserAccessor>();
                     services.AddScoped<IGeoAuthorizationService, GeoAuthorizationService>();
+                    services.AddScoped<IPermissionRepository, EFPermissionRepository>();
+                    services.AddScoped<OrganizationGrantService>();
+                    services.AddScoped<IssuedOrganizationGrantService>();
+                    services.AddScoped<ServerWorkflowPrincipalFactory>(sp => new ServerWorkflowPrincipalFactory(
+                        sp.GetRequiredService<IGeoAuthorizationService>(), sp.GetRequiredService<IOrganizationGrantRepository>()));
                 });
                 webHost.Configure(app =>
                 {
                     app.UseRouting();
                     app.UseAuthentication();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapOrganizationScopedRolesApi());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapOrganizationScopedRolesApi();
+                        endpoints.MapOrganizationIssuedGrantsApi();
+                    });
                 });
             })
             .StartAsync();
@@ -134,7 +146,27 @@ internal sealed class ScopedRolesHarness : IAsyncDisposable
         SendAsync(HttpMethod.Post, $"/api/identity/organizations/{organizationId}/scoped-roles", asUser, new { userId, roleId });
 
     /// <summary>The authorization context <paramref name="userId"/>'s next request would be evaluated with.</summary>
-    public async Task<AuthorizationContext> ContextOfNextRequestAsync(Guid userId)
+    public Task<AuthorizationContext> ContextOfNextRequestAsync(Guid userId) =>
+        AsUserAsync(userId, sp => sp.GetRequiredService<IGeoAuthorizationService>().GetAuthorizationContextAsync());
+
+    /// <summary>The workflow principal (grants included) <paramref name="userId"/>'s next service-order request would be evaluated as.</summary>
+    public Task<WorkflowPrincipal> PrincipalOfNextRequestAsync(Guid userId) =>
+        AsUserAsync(userId, sp => sp.GetRequiredService<ServerWorkflowPrincipalFactory>().CreateAsync());
+
+    /// <summary>What a vertical host's <c>PUT organization-grants</c> does: the kernel's service upsert.</summary>
+    public async Task<OrganizationGrantUpsertResult> UpsertAsServiceAsync(OrganizationGrantUpsertRequest request)
+    {
+        using var scope = _host!.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<OrganizationGrantService>().UpsertAsync(request, CancellationToken.None);
+    }
+
+    public async Task<IReadOnlyList<OrganizationGrant>> GrantRowsAsync()
+    {
+        await using var db = NewContext();
+        return await db.OrganizationGrants.AsNoTracking().ToListAsync();
+    }
+
+    private async Task<T> AsUserAsync<T>(Guid userId, Func<IServiceProvider, Task<T>> evaluate)
     {
         using var scope = _host!.Services.CreateScope();
         var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
@@ -143,7 +175,7 @@ internal sealed class ScopedRolesHarness : IAsyncDisposable
         accessor.HttpContext = http;
         try
         {
-            return await scope.ServiceProvider.GetRequiredService<IGeoAuthorizationService>().GetAuthorizationContextAsync();
+            return await evaluate(scope.ServiceProvider);
         }
         finally
         {
@@ -194,11 +226,12 @@ internal sealed class ScopedRolesHarness : IAsyncDisposable
         var usersEdit = Permission("users:edit");
         var manageAll = Permission("organizations:manage-all");
         var ordersRead = Permission("serviceorders:read");
-        db.Permissions.AddRange(usersRead, usersEdit, manageAll, ordersRead);
+        var issueGrants = Permission("organizations:issue-grants");
+        db.Permissions.AddRange(usersRead, usersEdit, manageAll, ordersRead, issueGrants);
 
         db.Roles.AddRange(
-            Role(AdministratorRoleId, AdministratorRole, usersRead, usersEdit),
-            Role(PlatformAdministratorRoleId, PlatformAdministratorRole, usersRead, usersEdit, manageAll),
+            Role(AdministratorRoleId, AdministratorRole, usersRead, usersEdit, issueGrants),
+            Role(PlatformAdministratorRoleId, PlatformAdministratorRole, usersRead, usersEdit, manageAll, issueGrants),
             Role(ContractorRoleId, ContractorRole, ordersRead),
             Role(ReaderRoleId, ReaderRole, usersRead));
 
@@ -217,8 +250,8 @@ internal sealed class ScopedRolesHarness : IAsyncDisposable
         scoped.ResourceType = "ServiceOrder";
         scoped.RequiresScopedRole = true;
         scoped.OrderTypeIds.Add("cut");
+        if (contracted) db.OrganizationGrants.Add(scoped);
         db.OrganizationGrants.AddRange(
-            scoped,
             Grant(Third, Coelba, expiresAt: Time.GetUtcNow().UtcDateTime.AddDays(-1), isActive: true));
     }
 

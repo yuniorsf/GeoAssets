@@ -115,4 +115,66 @@ public sealed class RestScopedRoleAdministrationClientTests
             $"/api/identity/organizations/{Org}/issued-grants",
             $"/api/identity/users/{User}/scoped-roles");
     }
+
+    // ── XD01-411: the issued-grant writes ────────────────────────────────────
+
+    private static OrganizationGrantDto IssuedGrant(Guid id) =>
+        new(id, Guid.NewGuid(), Org, "ServiceOrder", null, ["serviceorders:read"], null, null, "admin@coelba.test",
+            new DateTime(2026, 11, 25, 12, 0, 0, DateTimeKind.Utc), true) { Source = "administrator", OrderTypeIds = ["cut"] };
+
+    [Fact]
+    public async Task IssueGrantAsync_PostsTheGrant_ToTheOrganizationsRoute_AndReadsIt()
+    {
+        var bimbo = Guid.NewGuid();
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(IssuedGrant(Guid.NewGuid())) });
+        var request = new IssuedGrantCreateRequest(bimbo, "ServiceOrder", "2927408",
+            new IssuedGrantRules(["serviceorders:read"], "Contractor C1", true, ["cut"], new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc)));
+
+        var issued = await Sut(handler).IssueGrantAsync(Org, request);
+
+        issued.Source.Should().Be("administrator");
+        issued.OrderTypeIds.Should().Equal("cut");
+        var sent = handler.Requests.Single();
+        sent.Method.Should().Be(HttpMethod.Post);
+        sent.RequestUri!.AbsolutePath.Should().Be($"/api/identity/organizations/{Org}/issued-grants");
+        var body = (await sent.Content!.ReadFromJsonAsync<IssuedGrantCreateRequest>())!;
+        body.GranteeOrganizationId.Should().Be(bimbo);
+        body.ScopeId.Should().Be("2927408");
+        body.Rules.RequiresScopedRole.Should().BeTrue();
+        body.Rules.OrderTypeIds.Should().Equal("cut");
+        body.Rules.RequiredRole.Should().Be("Contractor C1");
+    }
+
+    [Fact]
+    public async Task UpdateGrantAsync_PutsTheRules_ToTheGrantsRoute_AndRevokeGrantAsync_DeletesIt()
+    {
+        var grantId = Guid.NewGuid();
+        var handler = new FakeHttpMessageHandler(request => request.Method == HttpMethod.Delete
+            ? new HttpResponseMessage(HttpStatusCode.NoContent)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(IssuedGrant(grantId)) });
+        var sut = Sut(handler);
+
+        var updated = await sut.UpdateGrantAsync(Org, grantId, new IssuedGrantRules(["serviceorders:read"], null, false, [], null));
+        await sut.RevokeGrantAsync(Org, grantId);
+
+        updated.Id.Should().Be(grantId);
+        handler.Requests.Select(r => (r.Method, r.RequestUri!.AbsolutePath)).Should().Equal(
+            (HttpMethod.Put, $"/api/identity/organizations/{Org}/issued-grants/{grantId}"),
+            (HttpMethod.Delete, $"/api/identity/organizations/{Org}/issued-grants/{grantId}"));
+        var body = (await handler.Requests[0].Content!.ReadFromJsonAsync<IssuedGrantUpdateRequest>())!;
+        body.Rules.AllowedActions.Should().Equal("serviceorders:read");
+    }
+
+    [Fact]
+    public async Task AGrantWriteRefusal_RaisesItsIssuedGrantCode()
+    {
+        var handler = new FakeHttpMessageHandler(_ => Problem(HttpStatusCode.Conflict,
+            """{"status":409,"detail":"This grant is provisioned by an integration and can't be changed here.","code":"issued-grant.service-owned"}"""));
+
+        var act = () => Sut(handler).RevokeGrantAsync(Org, Guid.NewGuid());
+
+        var refusal = (await act.Should().ThrowAsync<ScopedRoleAdministrationException>()).Which;
+        refusal.StatusCode.Should().Be(409);
+        refusal.Code.Should().Be(IssuedGrantProblems.ServiceOwned);
+    }
 }

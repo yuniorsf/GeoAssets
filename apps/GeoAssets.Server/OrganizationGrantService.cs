@@ -9,7 +9,9 @@ namespace GeoAssets.Server;
 /// idempotent upsert and a revoke, both keyed by <see cref="OrganizationGrantKey"/>, and the paged list of one organization
 /// pair's active grants — over <see cref="IOrganizationGrantRepository"/>, so every write also lands on the grant-sync feed
 /// (XD01-290). It knows no vertical: what a grant means is the caller's business. The store keeps one active grant per key
-/// (<c>UX_OrganizationGrants_ActiveKey</c>, XD01-394).
+/// (<c>UX_OrganizationGrants_ActiveKey</c>, XD01-394). Every grant it writes is service-owned
+/// (<see cref="OrganizationGrantSources.Service"/>, XD01-411): an upsert of a key an administrator issued takes the grant
+/// over, so a vertical's sync never fails on it and the administrator can no longer edit it.
 /// </summary>
 public sealed class OrganizationGrantService(IOrganizationGrantRepository grants, TimeProvider timeProvider)
 {
@@ -98,6 +100,7 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
                 GrantedBy = request.GrantedBy,
                 GrantedAt = now,
                 IsActive = true,
+                Source = OrganizationGrantSources.Service,
             };
             await grants.AddAsync(created, ct).ConfigureAwait(false);
             await grants.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -114,6 +117,7 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
         grant.OrderTypeIds.Clear();
         grant.OrderTypeIds.AddRange(request.OrderTypeIds);
         grant.ExpiresAt = request.ExpiresAt;
+        grant.Source = OrganizationGrantSources.Service;
         await grants.UpdateAsync(grant, ct).ConfigureAwait(false);
         await grants.SaveChangesAsync(ct).ConfigureAwait(false);
         return new OrganizationGrantUpsertResult(OrganizationGrantDto.FromModel(grant), OrganizationGrantUpsertOutcome.Updated);
@@ -137,7 +141,8 @@ public sealed class OrganizationGrantService(IOrganizationGrantRepository grants
         && string.Equals(grant.RequiredRole, request.RequiredRole, StringComparison.Ordinal)
         && grant.ExpiresAt == request.ExpiresAt
         && grant.RequiresScopedRole == request.RequiresScopedRole
-        && SameSet(grant.OrderTypeIds, request.OrderTypeIds);
+        && SameSet(grant.OrderTypeIds, request.OrderTypeIds)
+        && string.Equals(grant.Source, OrganizationGrantSources.Service, StringComparison.Ordinal);
 
     private static bool SameSet(IEnumerable<string> left, IEnumerable<string> right) =>
         left.Order(StringComparer.Ordinal).SequenceEqual(right.Order(StringComparer.Ordinal), StringComparer.Ordinal);

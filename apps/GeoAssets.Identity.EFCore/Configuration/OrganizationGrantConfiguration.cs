@@ -27,6 +27,9 @@ internal sealed class OrganizationGrantConfiguration : IEntityTypeConfiguration<
         b.Property(g => g.GrantedBy).IsRequired().HasMaxLength(256);
         b.Property(g => g.GrantedAt).IsRequired();
 
+        // XD01-411: every row that predates the column was written by a vertical host, so it migrates as "service".
+        b.Property(g => g.Source).IsRequired().HasMaxLength(32);
+
         // AllowedActions is a flat list of permission codes (no navigation semantics), so it's
         // stored as JSON text rather than a normalized child table — matching this codebase's
         // established convention for this shape of data (e.g. GeoEntityRow.CustomAttributesJson,
