@@ -127,6 +127,73 @@ public sealed class PostgresAssetRenderQueryTests(PostgresContainerFixture fixtu
         (await InfoIdsAsync(sut, world.Whole)).Should().NotContain(world.GeometrylessId);
     }
 
+    // ── Zoom and MaxCount in SQL (XD01-430) ───────────────────────────────────
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(10)]
+    [InlineData(12)]
+    [InlineData(14)]
+    [InlineData(18)]
+    public async Task GetRenderableAsync_Zoom_LeavesOutTheTypesItHides(int zoom)
+    {
+        await using var world = await RenderQueryWorld.SeedAsync(fixture);
+        var sut = NewSut(world, world.OrgA);
+
+        var ids = await RenderedIdsAsync(sut, world.Whole, new RenderQueryOptions { Zoom = zoom });
+
+        ids.Should().BeEquivalentTo(world.VisibleToAAt(zoom));
+    }
+
+    [Fact]
+    public async Task GetRenderableAsync_Zoom_AsOrganizationB_StillNeverSeesOrganizationAs()
+    {
+        await using var world = await RenderQueryWorld.SeedAsync(fixture);
+        var sut = NewSut(world, world.OrgB);
+
+        var ids = await RenderedIdsAsync(sut, world.Whole, new RenderQueryOptions { Zoom = 18 });
+
+        ids.Should().BeEquivalentTo([world.OrgBId, world.SharedId]);
+    }
+
+    [Fact]
+    public async Task GetRenderableAsync_MaxCount_TakesTheFirstFeaturesByOrdinalId()
+    {
+        await using var world = await RenderQueryWorld.SeedAsync(fixture);
+        var sut = NewSut(world, world.OrgA);
+
+        var result = await sut.GetRenderableAsync(world.Whole, new RenderQueryOptions { MaxCount = 3 }, CancellationToken.None);
+
+        result.Select(f => f.Id).Should().Equal(world.VisibleToA.Order(StringComparer.Ordinal).Take(3));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task GetRenderableAsync_NonPositiveMaxCount_ReturnsEmptyWithoutTouchingTheDatabase(int maxCount)
+    {
+        await using var world = await RenderQueryWorld.SeedAsync(fixture);
+
+        var result = await NewUnreachableSut(world).GetRenderableAsync(world.Whole, new RenderQueryOptions { MaxCount = maxCount }, CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetRenderableAsync_ZoomAndMaxCount_RunInTheSql()
+    {
+        await using var world = await RenderQueryWorld.SeedAsync(fixture);
+        var interceptor = new CommandCapturingInterceptor();
+        var options = new DbContextOptionsBuilder<GeoAssetsDbContext>(fixture.CreateOptions()).AddInterceptors(interceptor).Options;
+        var sut = new PostgresAssetRenderQuery(options, new FakeTenantContext(world.OrgA), world.Catalogs.For(world.OrgA), TimeProvider.System);
+
+        await sut.GetRenderableAsync(world.Whole, new RenderQueryOptions { Zoom = 12, MaxCount = 50 }, CancellationToken.None);
+
+        interceptor.CommandTexts.Should().Contain(sql => sql.Contains("asset_type", StringComparison.Ordinal) && sql.Contains("MinZoom", StringComparison.Ordinal));
+        var read = interceptor.CommandTexts.Should().ContainSingle(sql => sql.Contains("geo_entity", StringComparison.Ordinal)).Subject;
+        read.Should().Contain("ST_Intersects").And.Contain("ANY").And.Contain("ORDER BY").And.Contain("COLLATE \"C\"").And.Contain("LIMIT");
+    }
+
     // ── Tenant scoping ────────────────────────────────────────────────────────
 
     [Fact]

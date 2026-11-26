@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 
 namespace GeoAssets.Provider.PostgreSQL.Repositories;
 
@@ -19,8 +20,8 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///   the in-memory spatial predicates and, through <see cref="GetAll"/>, the topology queries)
 ///   combine both parts.</item>
 ///   <item>Reads pushed down to PostgreSQL (<see cref="GetInBoundsAsync"/>,
-///   <see cref="GetPageAsync"/>) are one query over both by the organization's provider, so paging
-///   and the total count stay exact.</item>
+///   <see cref="GetInViewportAsync"/>, <see cref="GetPageAsync"/>) are one query over both by the
+///   organization's provider, so paging, the viewport's <c>LIMIT</c> and the total count stay exact.</item>
 ///   <item>A write to an existing shared feature goes to the shared catalog and the feature stays
 ///   shared; any other feature write goes to the organization's provider and is stamped with the
 ///   organization, whatever organization the feature states (XD01-340) — so a new feature is
@@ -86,6 +87,9 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
     public IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(
         double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default) =>
         Queried.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
+
+    public Task<IReadOnlyList<GeoFeature>> GetInViewportAsync(ViewportQuery viewport, int maxCount, CancellationToken ct = default) =>
+        Queried.GetInViewportAsync(viewport, maxCount, ct);
 
     public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees)
     {

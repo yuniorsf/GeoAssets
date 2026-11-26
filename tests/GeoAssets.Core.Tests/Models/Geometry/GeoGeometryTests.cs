@@ -1,6 +1,10 @@
+using System.Text.Json;
 using FluentAssertions;
+using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Services;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.IO.Converters;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Models.Geometry;
@@ -314,5 +318,87 @@ public class GeoGeometryTests
         var multiPoint = factory.CreateMultiPoint(
             [factory.CreatePoint(new Coordinate(0.0, 0.0))]);
         GeoGeometry.FromNts(multiPoint).Should().BeOfType<GeoRawGeometry>();
+    }
+
+    // ── FromNts: Multi* without a GeoJSON round-trip (XD01-430) ───────────────
+
+    private static readonly GeometryFactory Factory4326 = new(new PrecisionModel(), 4326);
+    private static readonly JsonSerializerOptions NtsJson = new() { Converters = { new GeoJsonConverterFactory() } };
+
+    private static Polygon Square(double x, double y, double size) => Factory4326.CreatePolygon(
+    [
+        new Coordinate(x, y), new Coordinate(x + size, y), new Coordinate(x + size, y + size),
+        new Coordinate(x, y + size), new Coordinate(x, y),
+    ]);
+
+    private static LineString Line(params (double X, double Y)[] points) =>
+        Factory4326.CreateLineString([.. points.Select(p => new Coordinate(p.X, p.Y))]);
+
+    public static TheoryData<string> MultiGeometryKinds => ["MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection"];
+
+    private static GeometryCollection Multi(string kind) => kind switch
+    {
+        "MultiPoint" => Factory4326.CreateMultiPointFromCoords([new Coordinate(-46.6, -23.5), new Coordinate(-46.5, -23.4)]),
+        "MultiLineString" => Factory4326.CreateMultiLineString([Line((0, 0), (1, 1)), Line((2, 2), (3, 2.5), (4, 2))]),
+        "MultiPolygon" => Factory4326.CreateMultiPolygon([Square(0, 0, 1), Square(5, 5, 2)]),
+        _ => Factory4326.CreateGeometryCollection([Factory4326.CreatePoint(new Coordinate(1, 2)), Line((0, 0), (1, 1))]),
+    };
+
+    [Theory]
+    [MemberData(nameof(MultiGeometryKinds))]
+    public void FromNts_MultiGeometry_WrapsTheSameNtsObject_WithoutReparsingIt(string kind)
+    {
+        var nts = Multi(kind);
+
+        var wrapped = GeoGeometry.FromNts(nts);
+
+        wrapped.Should().BeOfType<GeoRawGeometry>();
+        wrapped.Type.Should().Be(kind);
+        wrapped.NtsGeometry.Should().BeSameAs(nts, "the NTS geometry is the source of truth, not a copy parsed back from GeoJSON");
+    }
+
+    [Fact]
+    public void FromNts_MultiGeometryInAProjectedCrs_KeepsItsSrid()
+    {
+        var projected = new GeometryFactory(new PrecisionModel(), 31983)
+            .CreateMultiPointFromCoords([new Coordinate(333_000, 7_394_000), new Coordinate(334_000, 7_395_000)]);
+
+        var wrapped = GeoGeometry.FromNts(projected);
+
+        wrapped.Srid.Should().Be(31983, "a GeoJSON round-trip would have reset it to 4326");
+    }
+
+    [Theory]
+    [MemberData(nameof(MultiGeometryKinds))]
+    public void FromNts_MultiGeometry_SerializesAsTheNtsGeoJson_AndRoundTrips(string kind)
+    {
+        var nts = Multi(kind);
+        var feature = new GeoFeature { Id = "multi", Geometry = GeoGeometry.FromNts(nts) };
+
+        var json = GeoJsonSerializer.SerializeFeature(feature);
+        var compact = JsonSerializer.Serialize(feature, GeoJsonSerializer.CompactOptions);
+
+        using (var document = JsonDocument.Parse(compact))
+        {
+            document.RootElement.GetProperty("geometry").GetRawText()
+                .Should().Be(JsonSerializer.Serialize<NetTopologySuite.Geometries.Geometry>(nts, NtsJson));
+        }
+
+        foreach (var body in new[] { json, compact })
+        {
+            var back = GeoJsonSerializer.DeserializeFeature(body)!.Geometry;
+            back.Should().BeOfType<GeoRawGeometry>().Which.Type.Should().Be(kind);
+            back!.NtsGeometry.EqualsExact(nts).Should().BeTrue("{0} survives the trip", kind);
+        }
+    }
+
+    [Fact]
+    public void FromNts_MultiPolygon_SupportsSpatialPredicatesOnTheWrappedGeometry()
+    {
+        var wrapped = GeoGeometry.FromNts(Multi("MultiPolygon"));
+
+        wrapped.Contains(new GeoPoint(0.5, 0.5)).Should().BeTrue();
+        wrapped.Contains(new GeoPoint(3, 3)).Should().BeFalse();
+        wrapped.Area.Should().BeApproximately(5.0, 1e-9);
     }
 }

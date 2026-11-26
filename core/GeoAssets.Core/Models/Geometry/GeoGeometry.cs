@@ -109,17 +109,16 @@ public abstract class GeoGeometry
     /// <summary>
     /// Wraps an NTS geometry as a <see cref="GeoGeometry"/>.
     /// Point, LineString, and Polygon map to their typed subclasses.
-    /// All other types (MultiPolygon, GeometryCollection, …) are serialized
-    /// to GeoJSON and stored as <see cref="GeoRawGeometry"/> for pass-through
-    /// rendering — spatial predicates are not supported on raw geometries.
+    /// All other types (MultiPolygon, GeometryCollection, …) are wrapped as
+    /// <see cref="GeoRawGeometry"/> around the same NTS object — no GeoJSON
+    /// round-trip (XD01-430): it is written to JSON only when serialized, and
+    /// its <see cref="NtsGeometry"/> is the original, SRID included.
     /// </summary>
     public static GeoGeometry FromNts(NtsGeometry nts) => nts switch
     {
         NtsPoint      p    => new GeoPoint(p),
         NtsLineString ls   => new GeoLineString(ls),
         NtsPolygon    poly => new GeoPolygon(poly),
-        _ => new GeoRawGeometry(
-                nts.GeometryType,
-                JsonSerializer.Serialize(nts, _ntsJsonOpts))
+        _ => new GeoRawGeometry(nts)
     };
 }

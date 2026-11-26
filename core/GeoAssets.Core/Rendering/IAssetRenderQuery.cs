@@ -8,7 +8,10 @@ namespace GeoAssets.Core.Rendering;
 /// </summary>
 public interface IAssetRenderQuery
 {
-    /// <summary>The features with a geometry intersecting <paramref name="bbox"/>, colored by <see cref="RenderStyle"/>.</summary>
+    /// <summary>
+    /// The features with a geometry intersecting <paramref name="bbox"/> that <paramref name="options"/> admits (asset
+    /// type, zoom), at most <see cref="RenderQueryOptions.MaxCount"/> by ordinal id, colored by <see cref="RenderStyle"/>.
+    /// </summary>
     Task<IReadOnlyList<RenderableFeature>> GetRenderableAsync(BoundingBox bbox, RenderQueryOptions options, CancellationToken ct);
 
     /// <summary>At most <paramref name="maxCount"/> features with a geometry intersecting <paramref name="bbox"/>, by ordinal id.</summary>

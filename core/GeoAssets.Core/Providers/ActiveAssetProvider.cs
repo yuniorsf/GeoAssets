@@ -82,6 +82,7 @@ public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
         => _current.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
     public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(ViewportQuery viewport, CancellationToken ct = default)          => _current.GetInBoundsJsonAsync(viewport, ct);
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(ViewportQuery viewport, CancellationToken ct = default) => _current.GetInBoundsRawJsonChunksAsync(viewport, ct);
+    public Task<IReadOnlyList<GeoFeature>>          GetInViewportAsync(ViewportQuery viewport, int maxCount, CancellationToken ct = default) => _current.GetInViewportAsync(viewport, maxCount, ct);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees) => _current.GetNearby(center, distanceDegrees);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                   => _current.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)                 => _current.GetDescendants(featureId);

@@ -1,6 +1,8 @@
+using System.IO.Compression;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
@@ -12,8 +14,8 @@ namespace GeoAssets.Bench.Render.Tests;
 
 /// <summary>
 /// The tool on a real PostGIS (Testcontainers) migrated with the kernel's chain: the seed writes the documented dataset
-/// deterministically, and the reproduced bounds read answers exactly what <c>PostgresAssetProvider.GetInBoundsAsync</c>
-/// serialized by the endpoint answers — so a change to the provider's read that the bench does not follow fails here.
+/// deterministically, and the reproduced bounds read answers exactly what <c>PostgresAssetProvider.GetInViewportAsync</c>
+/// serialized by the endpoint answers (XD01-430) — so a change to the provider's read that the bench does not follow fails here.
 /// One class: the tests share (and one re-seeds) the same table.
 /// </summary>
 public sealed class PostgresRenderBenchTests : IAsyncLifetime
@@ -95,23 +97,23 @@ public sealed class PostgresRenderBenchTests : IAsyncLifetime
         var layout = new DatasetLayout(DatasetGenerator.DefaultSeed);
         var viewports = ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, 16, 4, 1580, 1020)
             .Concat(ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, 12, 2, 1580, 1020))
+            .Concat(ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, 8, 1, 1580, 1020))
             .ToList();
         var pipeline = new BoundsEndpointPipeline(DataSource, TimeProvider.System);
         var nonEmpty = 0;
 
         foreach (var viewport in viewports)
         {
-            var bench = await pipeline.GetAsync(viewport.Bounds, CancellationToken.None);
-            var provider = await ProviderBodyAsync(viewport.Bounds);
+            var bench = await pipeline.GetAsync(viewport.Bounds, viewport.Zoom, CancellationToken.None);
+            var provider = await ProviderBodyAsync(viewport.Bounds, viewport.Zoom);
 
-            bench.MatchedRows.Should().Be(provider.Count);
-            bench.ReturnedFeatures.Should().Be(Math.Min(provider.Count, BoundsEndpointPipeline.MaxBoundsFeatureCount));
-            if (provider.Count <= BoundsEndpointPipeline.MaxBoundsFeatureCount)
-            {
-                var expected = JsonSerializer.SerializeToUtf8Bytes<IReadOnlyList<GeoFeature>>(provider, GeoJsonSerializer.Options);
-                bench.Payload.Length.Should().Be(expected.Length, "the same features, serialized the same way, whatever their order");
-                ById(bench.Payload).Should().BeEquivalentTo(ById(expected));
-            }
+            bench.ReturnedFeatures.Should().Be(provider.Count);
+            bench.MatchedRows.Should().BeGreaterThanOrEqualTo(bench.ReturnedFeatures);
+            bench.Payload.Should().Equal(
+                JsonSerializer.SerializeToUtf8Bytes<IReadOnlyList<GeoFeature>>(provider, GeoJsonSerializer.CompactOptions),
+                "the same features in the same order, serialized the same way, at z{0}", viewport.Zoom);
+            Features(bench.Payload).Select(f => DatasetComposition.Find(f.AssetTypeId)!)
+                .Should().OnlyContain(t => t.IsDrawnAt(viewport.Zoom), "the zoom's hidden types never reach the body");
 
             if (provider.Count > 0) nonEmpty++;
         }
@@ -120,20 +122,37 @@ public sealed class PostgresRenderBenchTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task BoundsRead_ReadsEveryMatch_ThenCapsTheBodyAtTheEndpointsLimit()
+    public async Task BoundsRead_ReadsOnlyTheFirstMatchesByOrdinalId_UpToTheEndpointsLimit()
     {
         var extent = DatasetLayout.Extent;
         var everything = new GeoBounds(extent.MinLon - 1, extent.MinLat - 1, extent.MaxLon + 1, extent.MaxLat + 1);
+        var drawnAt16 = DatasetComposition.Counts(PostgresBenchDatabase.FeatureCount).Where(c => c.Type.IsDrawnAt(16)).Sum(c => c.Count);
 
-        var bench = await new BoundsEndpointPipeline(DataSource, TimeProvider.System).GetAsync(everything, CancellationToken.None);
-        var provider = await ProviderBodyAsync(everything);
+        var bench = await new BoundsEndpointPipeline(DataSource, TimeProvider.System).GetAsync(everything, 16, CancellationToken.None);
+        var provider = await ProviderBodyAsync(everything, 16);
 
-        bench.MatchedRows.Should().Be(PostgresBenchDatabase.FeatureCount);
+        drawnAt16.Should().BeGreaterThan(BoundsEndpointPipeline.MaxBoundsFeatureCount, "the case needs more matches than the cap");
+        bench.MatchedRows.Should().Be(drawnAt16);
         bench.ReturnedFeatures.Should().Be(BoundsEndpointPipeline.MaxBoundsFeatureCount);
-        provider.Should().HaveCount(PostgresBenchDatabase.FeatureCount, "the provider returns every match; GET /features/bounds caps afterwards");
-        ById(bench.Payload).Keys.Should().BeSubsetOf(provider.Select(f => f.Id));
+        provider.Should().HaveCount(BoundsEndpointPipeline.MaxBoundsFeatureCount, "the provider's LIMIT is the endpoint's cap");
+        var ids = Features(bench.Payload).ConvertAll(f => f.Id);
+        ids.Should().Equal(provider.Select(f => f.Id)).And.BeInAscendingOrder(StringComparer.Ordinal);
         bench.Database.Should().BePositive();
         bench.Total.Should().BeGreaterThanOrEqualTo(bench.Database);
+    }
+
+    [Fact]
+    public async Task BoundsRead_BrotliBody_DecodesToTheBody()
+    {
+        var viewport = ViewportPlan.For(new DatasetLayout(DatasetGenerator.DefaultSeed), DatasetGenerator.DefaultSeed, 12, 1, 1580, 1020)[0];
+
+        var bench = await new BoundsEndpointPipeline(DataSource, TimeProvider.System).GetAsync(viewport.Bounds, viewport.Zoom, CancellationToken.None);
+
+        await using var decoder = new BrotliStream(new MemoryStream(bench.BrotliPayload), CompressionMode.Decompress);
+        using var decoded = new MemoryStream();
+        await decoder.CopyToAsync(decoded);
+        decoded.ToArray().Should().Equal(bench.Payload);
+        bench.BrotliPayload.Length.Should().BeLessThan(bench.Payload.Length);
     }
 
     [Fact]
@@ -155,21 +174,26 @@ public sealed class PostgresRenderBenchTests : IAsyncLifetime
         markdown.Should().Contain("| z12 |").And.Contain("| z16 |").And.Contain("#### z16 — per viewport");
     }
 
-    private async Task<IReadOnlyList<GeoFeature>> ProviderBodyAsync(GeoBounds bounds)
+    /// <summary>What the endpoint answers: <c>GetInViewportAsync</c> with the viewport's zoom and the endpoint's cap.</summary>
+    private async Task<IReadOnlyList<GeoFeature>> ProviderBodyAsync(GeoBounds bounds, int zoom)
     {
         var options = PostgresBenchDatabase.CreateOptions(_connectionString);
         await using var db = new GeoAssetsDbContext(options);
         await using var provider = new PostgresAssetProvider(db, options, NullLogger<PostgresAssetProvider>.Instance, TimeProvider.System);
-        return await provider.GetInBoundsAsync(bounds.MinLon, bounds.MinLat, bounds.MaxLon, bounds.MaxLat);
+        return await provider.GetInViewportAsync(
+            new ViewportQuery(new BoundingBox(bounds.MinLon, bounds.MinLat, bounds.MaxLon, bounds.MaxLat), zoom),
+            BoundsEndpointPipeline.MaxBoundsFeatureCount);
     }
 
-    private static Dictionary<string, string> ById(byte[] body)
+    /// <summary>The body's features' ids and asset types, in body order.</summary>
+    private static List<(string Id, string AssetTypeId)> Features(byte[] body)
     {
         using var document = JsonDocument.Parse(body);
-        return document.RootElement.EnumerateArray().ToDictionary(
-            f => f.GetProperty("id").GetString()!,
-            f => JsonSerializer.Serialize(f),
-            StringComparer.Ordinal);
+        return
+        [
+            .. document.RootElement.EnumerateArray().Select(f =>
+                (f.GetProperty("id").GetString()!, f.GetProperty("properties").GetProperty("assetTypeId").GetString()!)),
+        ];
     }
 
     private Task<string> TableDigestAsync() => ScalarAsync<string>(

@@ -63,12 +63,12 @@ internal sealed record BenchReport(BenchEnvironment Environment, BenchSettings S
         var inv = CultureInfo.InvariantCulture;
         var md = new StringBuilder();
 
-        md.AppendLine("| Zoom | Matched rows | Returned features | Drawn features | Payload (uncompressed) | Payload (gzip, informational) | Server ms | ↳ DB query + read ms | Client render ms (simulated) |");
-        md.AppendLine("|---|---|---|---|---|---|---|---|---|");
+        md.AppendLine("| Zoom | Matched rows | Returned features | Drawn features | Payload (uncompressed) | Payload (Brotli, on the wire) | Payload (gzip) | Server ms | ↳ DB query + read ms | Client render ms (simulated) |");
+        md.AppendLine("|---|---|---|---|---|---|---|---|---|---|");
         foreach (var z in Zooms)
         {
             md.Append(inv, $"| z{z.Zoom} | {Count(z.MatchedRows)} | {Count(z.ReturnedFeatures)} | {Count(z.DrawnFeatures)} | ")
-              .Append(inv, $"{Bytes(z.PayloadBytes)} | {Bytes(z.GzipBytes)} | {Ms(z.ServerMs)} | {Ms(z.DatabaseMs)} | {Ms(z.ClientMs)} |")
+              .Append(inv, $"{Bytes(z.PayloadBytes)} | {Bytes(z.BrotliBytes)} | {Bytes(z.GzipBytes)} | {Ms(z.ServerMs)} | {Ms(z.DatabaseMs)} | {Ms(z.ClientMs)} |")
               .AppendLine();
         }
 
@@ -80,13 +80,13 @@ internal sealed record BenchReport(BenchEnvironment Environment, BenchSettings S
         {
             md.AppendLine(inv, $"#### z{z.Zoom} — per viewport (first measured pass; ms = the viewport's p50)");
             md.AppendLine();
-            md.AppendLine("| # | Center (lon, lat) | Matched | Returned | Drawn | Path vertices | Payload | gzip | Server ms | Client ms |");
-            md.AppendLine("|---|---|---|---|---|---|---|---|---|---|");
+            md.AppendLine("| # | Center (lon, lat) | Matched | Returned | Drawn | Path vertices | Payload | Brotli | gzip | Server ms | Client ms |");
+            md.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
             for (var i = 0; i < z.Viewports.Count; i++)
             {
                 var v = z.Viewports[i];
                 md.Append(inv, $"| {i + 1} | {v.CenterLon:F4}, {v.CenterLat:F4} | {v.MatchedRows:N0} | {v.ReturnedFeatures:N0} | {v.DrawnFeatures:N0} | ")
-                  .Append(inv, $"{v.PathVertices:N0} | {Megabytes(v.PayloadBytes)} | {Megabytes(v.GzipBytes)} | {v.ServerMsP50:F1} | {v.ClientMsP50:F1} |")
+                  .Append(inv, $"{v.PathVertices:N0} | {Megabytes(v.PayloadBytes)} | {Megabytes(v.BrotliBytes)} | {Megabytes(v.GzipBytes)} | {v.ServerMsP50:F1} | {v.ClientMsP50:F1} |")
                   .AppendLine();
             }
 

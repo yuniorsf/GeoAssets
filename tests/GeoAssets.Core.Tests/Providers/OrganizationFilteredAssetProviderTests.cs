@@ -3,6 +3,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using Xunit;
 
@@ -101,6 +102,18 @@ public sealed class OrganizationFilteredAssetProviderTests
 
         var ids = elements.Select(e => e.GetProperty("id").GetString()).Order(StringComparer.Ordinal);
         ids.Should().Equal("a1", "s1");
+    }
+
+    [Fact]
+    public async Task GetInViewportAsync_NeverForwardsToTheInnersPushdown_AndExcludesForeign()
+    {
+        var inner = new UnfilteredViewportAssetProvider(_inner);
+        IAssetProvider sut = new OrganizationFilteredAssetProvider(OrgA, inner);
+
+        var features = await sut.GetInViewportAsync(new ViewportQuery(new BoundingBox(-1, -1, 1, 1), 12), 100);
+
+        features.Select(f => f.Id).Should().Equal("a1", "s1");
+        inner.ViewportCalls.Should().Be(0, "the inner's own viewport read would bypass the organization filter");
     }
 
     [Fact]

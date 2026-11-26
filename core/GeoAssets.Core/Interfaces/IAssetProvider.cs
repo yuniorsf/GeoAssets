@@ -138,6 +138,34 @@ public interface IAssetProvider
     }
 
     /// <summary>
+    /// What a map draws in a viewport (XD01-430, <c>GET /features/bounds</c>): the features of
+    /// <see cref="GetInBoundsAsync"/> for <see cref="ViewportQuery.Bounds"/> whose asset type is drawn at
+    /// <see cref="ViewportQuery.Zoom"/> (<see cref="AssetTypeZoomRange.TypeIdsHiddenAt"/> over <see cref="GetAssetTypes"/>;
+    /// every type when the zoom is unknown, and features of an unknown type always), the first
+    /// <paramref name="maxCount"/> by ordinal id — the same answer on every call; none for a <paramref name="maxCount"/>
+    /// of zero or less. The default filters, sorts and caps in memory over the provider's own (scoped) reads, and can only
+    /// refuse to start once <paramref name="ct"/> is cancelled; a provider backed by a queryable store overrides it to do
+    /// it all in the query, and a decorator that forwards its reads forwards this too — one that narrows them (e.g. to an
+    /// organization) keeps this default, so the narrowing applies.
+    /// </summary>
+    async Task<IReadOnlyList<GeoFeature>> GetInViewportAsync(ViewportQuery viewport, int maxCount, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (maxCount <= 0) return [];
+
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+        var hidden = viewport.Zoom is { } zoom ? AssetTypeZoomRange.TypeIdsHiddenAt(GetAssetTypes(), zoom) : null;
+        return
+        [
+            .. features
+                .Where(f => hidden is null || !hidden.Contains(f.Properties.AssetTypeId))
+                .OrderBy(f => f.Id, StringComparer.Ordinal)
+                .Take(maxCount),
+        ];
+    }
+
+    /// <summary>
     /// Returns features whose geometry is within <paramref name="distanceDegrees"/> of
     /// <paramref name="center"/>, ordered by ascending distance.
     /// </summary>

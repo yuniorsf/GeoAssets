@@ -132,6 +132,56 @@ public sealed class WmsEndpointRenderQueryTests
         options.AssetTypeId.Should().Be(typeId);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(8)]
+    [InlineData(12)]
+    [InlineData(16)]
+    [InlineData(19)]
+    public async Task GetMap_LeafletTileOfAZoom_AsksForThatZoom_Capped(int zoom)
+    {
+        await using var host = await HostAsync();
+        var span = 360.0 / Math.Pow(2, zoom);
+        var uri = new Uri(string.Create(
+            CultureInfo.InvariantCulture,
+            $"/wms?SERVICE=WMS&REQUEST=GetMap&LAYERS=geoassets&BBOX={-46.0},{-23.0},{-46.0 + span},{-23.0 + span}&WIDTH=256&HEIGHT=256"),
+            UriKind.Relative);
+
+        using var response = await host.Client.GetAsync(uri);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var options = host.Query.Renders.Should().ContainSingle().Subject.Options;
+        options.Zoom.Should().Be(zoom, "Leaflet's EPSG:4326 tile of zoom z spans 360 / 2^z degrees over 256 px");
+        options.MaxCount.Should().Be(RenderQueryOptions.DefaultMaxCount);
+    }
+
+    [Theory]
+    [InlineData("-180,-90,180,90", 256, 0)]
+    [InlineData("-180,-90,180,90", 64, 0)]
+    [InlineData("0,0,0.00001,0.00001", 4096, 24)]
+    [InlineData("-39,-13.5,-38,-12.5", 200, 8)]
+    public async Task GetMap_AnyOtherScale_AsksForTheNearestZoom_ClampedToTheZoomLevels(string bbox, int width, int expected)
+    {
+        await using var host = await HostAsync();
+        var uri = new Uri($"/wms?SERVICE=WMS&REQUEST=GetMap&LAYERS=geoassets&BBOX={bbox}&WIDTH={width}&HEIGHT={width}", UriKind.Relative);
+
+        using var response = await host.Client.GetAsync(uri);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        host.Query.Renders.Should().ContainSingle().Which.Options.Zoom.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task GetMap_BoxWithoutWidth_AsksWithoutAZoom()
+    {
+        await using var host = await HostAsync();
+
+        using var response = await host.Client.GetAsync(new Uri("/wms?SERVICE=WMS&REQUEST=GetMap&BBOX=-38,-13,-38,-12&WIDTH=256&HEIGHT=256", UriKind.Relative));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        host.Query.Renders.Should().ContainSingle().Which.Options.Zoom.Should().BeNull();
+    }
+
     [Fact]
     public async Task GetMap_PlainLayer_AsksForEveryAssetType()
     {

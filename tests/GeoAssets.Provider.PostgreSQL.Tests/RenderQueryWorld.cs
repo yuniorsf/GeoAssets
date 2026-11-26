@@ -26,6 +26,12 @@ internal sealed class RenderQueryWorld : IAsyncDisposable
 
     private const double PlainOffset = 0.005;
 
+    /// <summary>The default-layer type is drawn up to this zoom (XD01-430); the ruled type from <see cref="RuledMinZoom"/>; the plain type at every zoom.</summary>
+    public const int DefaultLayerMaxZoom = 10;
+
+    /// <summary>The ruled type is drawn from this zoom on (XD01-430).</summary>
+    public const int RuledMinZoom = 14;
+
     private readonly PostgresContainerFixture _fixture;
     private readonly List<string> _featureIds = [];
     private readonly List<Guid> _assetTypeIds = [];
@@ -64,6 +70,18 @@ internal sealed class RenderQueryWorld : IAsyncDisposable
         [OverrideId, RuleId, RuledNoMatchId, DefaultLayerId, PlainId, SharedId];
 
     public BoundingBox Whole => new(Lon - 0.1, Lat - 0.1, Lon + 0.1, Lat + 0.1);
+
+    /// <summary>
+    /// What organization A sees with a geometry at <paramref name="zoom"/> (XD01-430): the plain type's features at every
+    /// zoom, the default-layer one up to <see cref="DefaultLayerMaxZoom"/>, the ruled ones from <see cref="RuledMinZoom"/>.
+    /// </summary>
+    public IReadOnlyList<string> VisibleToAAt(int zoom) =>
+    [
+        .. zoom >= RuledMinZoom ? new[] { OverrideId, RuleId, RuledNoMatchId } : [],
+        .. zoom <= DefaultLayerMaxZoom ? new[] { DefaultLayerId } : [],
+        PlainId,
+        SharedId,
+    ];
 
     /// <summary>A box holding only the plain feature (see <see cref="PlainId"/>).</summary>
     public BoundingBox AroundPlain => BoundingBox.Around(Lon + PlainOffset, Lat + PlainOffset, 0.0005, 0.0005);
@@ -117,8 +135,8 @@ internal sealed class RenderQueryWorld : IAsyncDisposable
         var ruleLayer = NewLayer(provider, RuleColor);
         var defaultLayer = NewLayer(provider, DefaultLayerColor);
 
-        DefaultLayerType = NewType(provider, "default-layer", "#aaaaaa", defaultLayer.Id);
-        RuledType = NewType(provider, "ruled", RuledTypeColor, null);
+        DefaultLayerType = NewType(provider, "default-layer", "#aaaaaa", defaultLayer.Id, maxZoom: DefaultLayerMaxZoom);
+        RuledType = NewType(provider, "ruled", RuledTypeColor, null, minZoom: RuledMinZoom);
         PlainType = NewType(provider, "plain", PlainTypeColor, null);
 
         var rule = new LayerRule
@@ -164,9 +182,13 @@ internal sealed class RenderQueryWorld : IAsyncDisposable
         return layer;
     }
 
-    private AssetType NewType(PostgresAssetProvider provider, string name, string color, Guid? defaultLayerId)
+    private AssetType NewType(
+        PostgresAssetProvider provider, string name, string color, Guid? defaultLayerId, int? minZoom = null, int? maxZoom = null)
     {
-        var type = new AssetType { Name = $"render-{name}-{Guid.NewGuid():N}", Color = color, DefaultLayerId = defaultLayerId };
+        var type = new AssetType
+        {
+            Name = $"render-{name}-{Guid.NewGuid():N}", Color = color, DefaultLayerId = defaultLayerId, MinZoom = minZoom, MaxZoom = maxZoom,
+        };
         _assetTypeIds.Add(type.Id);
         provider.AddAssetType(type);
         return type;

@@ -65,7 +65,7 @@ public class GeoAssetsRestApiExtensionsTests
         Properties = { AssetTypeId = AssetType.Point.Id.ToString() }
     };
 
-    private static async Task<TestServer> BuildServerAsync(IAssetProvider provider, bool mapGisExport = false)
+    private static async Task<TestServer> BuildServerAsync(IAssetProvider provider, bool mapGisExport = false, bool compress = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -83,9 +83,11 @@ public class GeoAssetsRestApiExtensionsTests
                     services.AddSingleton(provider);
                     services.AddSingleton<IDbContextFactory<GeoAssetsDbContext>, NeverCalledDbContextFactory>();
                     services.AddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
+                    if (compress) services.AddKernelResponseCompression();
                 });
                 webHost.Configure(app =>
                 {
+                    if (compress) app.UseResponseCompression();
                     app.Use(async (ctx, next) =>
                     {
                         ctx.User = new ClaimsPrincipal(new ClaimsIdentity(
@@ -139,6 +141,108 @@ public class GeoAssetsRestApiExtensionsTests
         using var doc = JsonDocument.Parse(json);
 
         doc.RootElement.GetArrayLength().Should().Be(10_000);
+    }
+
+    // ── Zoom, LIMIT, compact JSON, compression (XD01-430) ─────────────────────
+
+    private const string BoundsUri = "/api/geoassets/features/bounds?minLon=0&minLat=0&maxLon=1&maxLat=1";
+
+    private static TestAssetProvider ZoomedWorld()
+    {
+        var provider = new TestAssetProvider();
+        var poles = new AssetType { Name = "poles", MinZoom = 15 };
+        var districts = new AssetType { Name = "districts", MinZoom = 8, MaxZoom = 13 };
+        provider.AddAssetType(poles);
+        provider.AddAssetType(districts);
+        provider.Add(new GeoFeature { Id = "pole", Geometry = new GeoPoint(0.1, 0.1), Properties = { AssetTypeId = poles.Id.ToString() } });
+        provider.Add(new GeoFeature { Id = "district", Geometry = new GeoPoint(0.2, 0.2), Properties = { AssetTypeId = districts.Id.ToString() } });
+        provider.Add(new GeoFeature { Id = "area", Geometry = new GeoPoint(0.3, 0.3), Properties = { AssetTypeId = AssetType.Area.Id.ToString() } });
+        return provider;
+    }
+
+    private static async Task<string[]> BoundsIdsAsync(HttpClient client, string uri)
+    {
+        using var doc = JsonDocument.Parse(await client.GetStringAsync(new Uri(uri, UriKind.Relative)));
+        return [.. doc.RootElement.EnumerateArray().Select(f => f.GetProperty("id").GetString()!)];
+    }
+
+    [Theory]
+    [InlineData("", new[] { "area", "district", "pole" })]
+    [InlineData("&zoom=10", new[] { "area", "district" })]
+    [InlineData("&zoom=14", new[] { "area" })]
+    [InlineData("&zoom=16", new[] { "area", "pole" })]
+    public async Task GetBounds_Zoom_LeavesOutTheAssetTypesTheMapHidesThere(string zoom, string[] expected)
+    {
+        using var server = await BuildServerAsync(ZoomedWorld());
+        using var client = server.CreateClient();
+
+        (await BoundsIdsAsync(client, BoundsUri + zoom)).Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task GetBounds_MoreFeaturesThanCap_ReturnsTheFirstByOrdinalId()
+    {
+        var provider = new TestAssetProvider();
+        for (var i = 10_001; i >= 0; i--)
+            provider.Add(new GeoFeature { Id = $"f{i:D5}", Geometry = new GeoPoint(0.5, 0.5), Properties = { AssetTypeId = AssetType.Point.Id.ToString() } });
+
+        using var server = await BuildServerAsync(provider);
+        using var client = server.CreateClient();
+
+        var ids = await BoundsIdsAsync(client, BoundsUri);
+
+        ids.Should().HaveCount(10_000).And.BeInAscendingOrder(StringComparer.Ordinal);
+        ids[0].Should().Be("f00000");
+        ids[^1].Should().Be("f09999");
+    }
+
+    [Fact]
+    public async Task GetBounds_WritesCompactJson()
+    {
+        using var server = await BuildServerAsync(ZoomedWorld());
+        using var client = server.CreateClient();
+
+        var body = await client.GetStringAsync(new Uri(BoundsUri, UriKind.Relative));
+
+        body.Should().StartWith("[{\"").And.NotContain("\n").And.NotContain(": ");
+    }
+
+    [Theory]
+    [InlineData("br")]
+    [InlineData("gzip")]
+    public async Task GetBounds_CallerAcceptsAnEncoding_GetsTheSameBodyCompressed(string encoding)
+    {
+        using var server = await BuildServerAsync(ZoomedWorld(), compress: true);
+        using var client = server.CreateClient();
+        var plain = await client.GetByteArrayAsync(new Uri(BoundsUri, UriKind.Relative));
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BoundsUri, UriKind.Relative));
+        request.Headers.AcceptEncoding.ParseAdd(encoding);
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        response.Content.Headers.ContentEncoding.Should().Equal(encoding);
+        response.Headers.Vary.Should().Contain("Accept-Encoding");
+        await using var compressed = await response.Content.ReadAsStreamAsync();
+        await using Stream decoder = string.Equals(encoding, "br", StringComparison.Ordinal)
+            ? new System.IO.Compression.BrotliStream(compressed, System.IO.Compression.CompressionMode.Decompress)
+            : new System.IO.Compression.GZipStream(compressed, System.IO.Compression.CompressionMode.Decompress);
+        using var decoded = new MemoryStream();
+        await decoder.CopyToAsync(decoded);
+        decoded.ToArray().Should().Equal(plain);
+    }
+
+    [Fact]
+    public async Task GetBounds_CallerAcceptsNoEncoding_GetsTheBodyAsIs()
+    {
+        using var server = await BuildServerAsync(ZoomedWorld(), compress: true);
+        using var client = server.CreateClient();
+
+        using var response = await client.GetAsync(new Uri(BoundsUri, UriKind.Relative));
+
+        response.Content.Headers.ContentEncoding.Should().BeEmpty();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        doc.RootElement.GetArrayLength().Should().Be(3);
     }
 
     [Fact]

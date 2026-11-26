@@ -40,7 +40,7 @@ public static class WfsEndpointExtensions
     private static readonly XNamespace _ows = "http://www.opengis.net/ows/1.1";
     private static readonly XNamespace _xlink = "http://www.w3.org/1999/xlink";
 
-    private static readonly JsonSerializerOptions _geoOpts = GeoJsonSerializer.Options;
+    private static readonly JsonSerializerOptions _geoOpts = GeoJsonSerializer.CompactOptions;
     private static readonly JsonSerializerOptions _schemaOpts = new()
     {
         WriteIndented = true,

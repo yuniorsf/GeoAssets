@@ -200,6 +200,9 @@ builder.Services.AddCors(opts =>
          .AllowAnyHeader()
          .AllowAnyMethod()));
 
+// ── Response compression (XD01-430): Brotli/gzip for JSON/XML bodies ──────────
+builder.Services.AddKernelResponseCompression();
+
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
@@ -215,6 +218,9 @@ await app.Services.SeedGeoIdentityAsync().ConfigureAwait(false);
 // Seed a default Project per organization (idempotent, XD01-144) — must run after identity
 // seeding above, since it needs the organizations that seeder creates.
 await app.Services.SeedDefaultProjectsAsync().ConfigureAwait(false);
+
+// First, so every body below it — the feature reads' GeoJSON above all — goes out compressed when the caller accepts it.
+app.UseResponseCompression();
 
 app.UseCors();
 

@@ -4,6 +4,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Tests;
 using Xunit;
@@ -42,6 +43,20 @@ public class ValidatingAssetProviderTests
     }
 
     // ── Read pass-through ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetInViewportAsync_ForwardsToTheInnersOwnRead()
+    {
+        var store = new TestAssetProvider();
+        store.Add(Feature("f1", AssetType.Point.Id.ToString()));
+        var inner = new UnfilteredViewportAssetProvider(store);
+        var sut = new ValidatingAssetProvider(inner);
+
+        var features = await sut.GetInViewportAsync(new ViewportQuery(new BoundingBox(0, 0, 1, 1), 12), 10);
+
+        features.Select(f => f.Id).Should().Equal("f1");
+        inner.ViewportCalls.Should().Be(1);
+    }
 
     [Fact]
     public void GetById_DelegatesToInner()

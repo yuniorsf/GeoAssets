@@ -14,7 +14,9 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// <summary>
 /// The PostGIS pushdown of <see cref="IAssetRenderQuery"/> (XD01-372): one <c>ST_Intersects</c> query per tile that
 /// projects only what drawing needs — id, name, asset type, layer override, custom attributes (the layer-rule inputs) and
-/// geometry; no topology. Tenant-scoped like <see cref="PostgresAssetSpatialQuery"/>: each read runs in a transaction
+/// geometry; no topology. <see cref="RenderQueryOptions"/> runs in the SQL too (XD01-430): the asset type, the zoom's
+/// hidden types (<see cref="ZoomRangeQueries"/>) and <c>ORDER BY "Id" COLLATE "C" LIMIT</c>
+/// <see cref="RenderQueryOptions.MaxCount"/>. Tenant-scoped like <see cref="PostgresAssetSpatialQuery"/>: each read runs in a transaction
 /// stamped by <see cref="TenantTransactionInterceptor"/> on a <see cref="GeoAssetsDbContext"/> built for the request's
 /// <see cref="ITenantContext"/>, reading its organization's features plus the shared ones. Colors come from
 /// <see cref="RenderStyle"/> over the request's catalog (<paramref name="styling"/>).
@@ -53,17 +55,20 @@ public sealed class PostgresAssetRenderQuery : IAssetRenderQuery
     public async Task<IReadOnlyList<RenderableFeature>> GetRenderableAsync(BoundingBox bbox, RenderQueryOptions options, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(options);
-        if (ct.IsCancellationRequested) return [];
+        if (ct.IsCancellationRequested || options.MaxCount <= 0) return [];
 
         var envelope = Envelope(bbox);
         var rows = await ReadAsync(
             async (db, token) =>
             {
-                var query = Visible(db).AsNoTracking().Where(e => e.Geom != null && e.Geom.Intersects(envelope));
+                var hidden = await ZoomRangeQueries.HiddenAssetTypeIdsAsync(db, options.Zoom, token).ConfigureAwait(false);
+                var query = Visible(db).AsNoTracking().WithoutAssetTypes(hidden).Where(e => e.Geom != null && e.Geom.Intersects(envelope));
                 if (!string.IsNullOrEmpty(options.AssetTypeId))
                     query = query.Where(e => e.AssetTypeId == options.AssetTypeId);
 
                 return await query
+                    .OrderBy(e => EF.Functions.Collate(e.Id, "C"))
+                    .Take(options.MaxCount)
                     .Select(e => new RenderInputs(e.Id, e.Name, e.AssetTypeId, e.LayerId, e.CustomAttributesJson, e.Geom!))
                     .ToListAsync(token)
                     .ConfigureAwait(false);
