@@ -38,8 +38,10 @@ Files:
 - The .NET 10 SDK and the EF Core tool: `dotnet tool install --global dotnet-ef`.
 - `curl` and `jq`, for the organization call below.
 - A CIAM app registration with the kernel API's `GeoAssets.ServiceCaller` app role, for the CLI (see [Credentials](#credentials-the-geoassetsservicecaller-registration)).
-- Disk and memory: every silo is one more .NET process. The kernel loads an organization's catalog into memory
-  (see [Measurements](#measurements-xd01-448)), so give Docker Desktop enough memory before you import a large delivery.
+- Disk and memory: every silo is one more .NET process. Until XD01-449, the kernel loads an organization's whole catalog
+  into memory on its first read, about 9.3 KiB per feature (see [Measurements](#measurements-xd01-448)): an organization
+  of 547 k features takes 5.1 GiB, and COELBA's METROPOLITANA (784 k) does not fit in a 6 GiB silo. The database needs
+  about 11 KB per feature (8.5 GB for METROPOLITANA).
 
 ## Provision a company (COELBA)
 
@@ -130,8 +132,8 @@ roles and permissions. Create the company's own organization with the kernel's i
   creates the organization's default project.
 
 ```bash
-# A GeoAssets.ServiceCaller token: client credentials, the same flow as the CLI (MSAL WithTenantId).
-TOKEN=$(curl -fsS "https://login.microsoftonline.com/$GEOASSETS_SERVICEAUTH_TENANT_ID/oauth2/v2.0/token" \
+# A GeoAssets.ServiceCaller token: client credentials, the same flow and the same CIAM authority as the CLI.
+TOKEN=$(curl -fsS "${GEOASSETS_SERVICEAUTH_INSTANCE%/}/$GEOASSETS_SERVICEAUTH_TENANT_ID/oauth2/v2.0/token" \
   --data-urlencode grant_type=client_credentials \
   --data-urlencode "client_id=$GEOASSETS_SERVICEAUTH_CLIENT_ID" \
   --data-urlencode "client_secret=$GEOASSETS_SERVICEAUTH_CLIENT_SECRET" \
@@ -163,7 +165,8 @@ The CLI reads (`tools/GeoAssets.Tools.NetworkImport/AccessTokenSources.cs`):
 
 | Variable | Value |
 |---|---|
-| `GEOASSETS_NETWORK_IMPORT_TOKEN` | A bearer token. When set, it is used instead of the four below. It expires after about an hour. |
+| `GEOASSETS_NETWORK_IMPORT_TOKEN` | A bearer token. When set, it is used instead of the five below. It expires after about an hour. |
+| `GEOASSETS_SERVICEAUTH_INSTANCE` | The kernel's `AzureAdCiam__Instance`, e.g. `https://<tenant subdomain>.ciamlogin.com/`. The token is asked from `<instance><tenant id>`, never from `login.microsoftonline.com` (see *Symptoms*). |
 | `GEOASSETS_SERVICEAUTH_TENANT_ID` | The CIAM tenant id |
 | `GEOASSETS_SERVICEAUTH_CLIENT_ID` | The importer registration's client id |
 | `GEOASSETS_SERVICEAUTH_CLIENT_SECRET` | Its client secret |
@@ -209,6 +212,7 @@ az rest --method POST \
 
 # 5. The rest of the CLI's environment.
 cat >> deploy/distributor-silo/network-import.env <<EOF
+GEOASSETS_SERVICEAUTH_INSTANCE=<the kernel's AzureAdCiam__Instance, e.g. https://<tenant subdomain>.ciamlogin.com/>
 GEOASSETS_SERVICEAUTH_TENANT_ID=<CIAM tenant id>
 GEOASSETS_SERVICEAUTH_CLIENT_ID=$IMPORTER_APP_ID
 GEOASSETS_SERVICEAUTH_SCOPE=api://$KERNEL_API_APP_ID/.default
@@ -220,7 +224,10 @@ Load the variables with `set -a; source deploy/distributor-silo/network-import.e
 separate registration for the importer keeps its secret and its audit trail apart.
 
 **Symptoms:** a `401` on every call means the silo's `AzureAdCiam__*` are unset or different from the kernel's, or the
-token's scope names another API. A `403` on `feature-imports` means the token carries no `GeoAssets.ServiceCaller` in
+token's scope names another API, or the token was asked from `login.microsoftonline.com`: the kernel validates the issuer of
+its CIAM instance (`https://<tenant id>.ciamlogin.com/<tenant id>/v2.0`), so the silo's log shows `IDX40001: Issuer:
+'https://login.microsoftonline.com/<tenant id>/v2.0', does not match` and the answer is `WWW-Authenticate: Bearer
+error="invalid_token", error_description="The issuer '(null)' is invalid"`. A `403` on `feature-imports` means the token carries no `GeoAssets.ServiceCaller` in
 `roles` (step 4 is missing, or a user token was used). The CLI exits with `3` and names the route and the status.
 
 ## Route the gateway to the silo
@@ -289,12 +296,12 @@ set -a; source deploy/distributor-silo/network-import.env; set +a
 $NI inventory --root "$ROOT" --profile neoenergia-gse --out "$OUT/inventory"
 
 # 2. A dry run into features.ndjson + report.json (counts per asset class, references by method, issues).
-$NI plan --root "$ROOT" --profile neoenergia-gse --scope-prefix coelba --regions METROPOLITANA \
+$NI plan --root "$ROOT" --profile neoenergia-gse --scope-prefix coelba --regions METROPOLITANA --include-geometry-only \
   --proj-data "$PROJ_DATA" --out "$OUT/plan-metro"
 
 # 3. The import into the silo's organization. A re-run with the same --import-id and --checkpoint skips the chunks
 #    already sent. --replace-scope deletes the scope's rows from other imports (a later, complete delivery).
-$NI import --root "$ROOT" --profile neoenergia-gse --scope-prefix coelba --regions METROPOLITANA \
+$NI import --root "$ROOT" --profile neoenergia-gse --scope-prefix coelba --regions METROPOLITANA --include-geometry-only \
   --proj-data "$PROJ_DATA" --out "$OUT/import-metro" \
   --kernel-url http://127.0.0.1:8180 --organization "$ORG_ID" \
   --import-id coelba-metro-20261126 --checkpoint "$OUT/import-metro/checkpoint.json"
@@ -303,6 +310,13 @@ $NI import --root "$ROOT" --profile neoenergia-gse --scope-prefix coelba --regio
 $NI verify --kernel-url http://127.0.0.1:8180 --organization "$ORG_ID" \
   --features "$OUT/plan-metro/features.ndjson" --sample 50
 ```
+
+`--include-geometry-only` also imports the layers `inventory` reports `geometryOnly` (a `.shp` without its `.dbf`).
+COELBA's METROPOLITANA `REDE_BT` is one: without the flag its 236,659 LV segments are skipped and the import holds no LV
+network at all (547,168 features instead of 783,827). Their ends are then resolved by snapping to the nearest pole, and
+the features carry `import.completeness=geometry-only` until the delivery's `.dbf` arrives. Without `--proj-data` (or
+with a PROJ install that lacks the IBGE grid) the CLI says `position accuracy helmert` at the end: about 4.9 m away from
+the IBGE grid's reference transformation.
 
 Through the gateway, add `--tenant-domain coelba.local` and use `--kernel-url http://127.0.0.1:8090`. Scopes are
 `<scope-prefix>/<region>/<layer>` (for example `coelba/METROPOLITANA/REDE_MT`). Keep one `--scope-prefix` per company.
@@ -352,26 +366,15 @@ silo's database lives in that volume, next to the shared kernel's.
 
 ## Measurements (XD01-448)
 
-Measure the scale gate with the silo, because it is isolated from the shared kernel:
+The scale gate's results and how to re-measure them are in
+[`docs/perf/XD01-448-metropolitana-scale-gate.md`](../../docs/perf/XD01-448-metropolitana-scale-gate.md). In short:
 
-```bash
-# Memory and CPU of the silo (and of Postgres) before, during and after an import.
-docker stats --no-stream geoasset-server-coelba PostgresL
-
-# Start-up: the catalog pool loads and warms the organization catalogs before /healthz answers.
-$SILO restart && time (until curl -fsS -o /dev/null http://127.0.0.1:8180/healthz; do sleep 1; done)
-
-# The first request after start or after an import's complete (the catalog reload), then a warm one.
-curl -fsS -o /dev/null -w 'first %{http_code} %{time_total}s\n' -H "Authorization: Bearer $TOKEN" \
-  "http://127.0.0.1:8180/api/geoassets/organizations/$ORG_ID/features/<a feature id from features.ndjson>"
-curl -fsS -o /dev/null -w 'warm  %{http_code} %{time_total}s\n' -H "Authorization: Bearer $TOKEN" \
-  "http://127.0.0.1:8180/api/geoassets/organizations/$ORG_ID/features/<the same id>"
-
-# Database size per company.
-docker exec PostgresL psql -U postgres -d postgres -tAc \
-  "SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database WHERE datname LIKE 'geoassets_%'"
-```
-
-Record also the import's wall time per chunk and for `complete`, from the CLI output and `report.json`. The known risk
-is that `complete` reloads the organization's whole catalog into memory (`PostgresOrganizationAssetCatalogs.RefreshAsync`,
-XD01-448/XD01-449).
+- `import` handles METROPOLITANA (783,827 features, 160 chunks) at about 1,100 features/s when inserting and 690/s when
+  upserting, and resumes from its checkpoint. The database then matches the plan exactly.
+- The silo starts in about 3.5 s and loads no organization at boot. The organization's **first read** loads its whole
+  catalog: 9.1 s and 5.1 GiB for 547 k features. For the 784 k features of METROPOLITANA it fails with
+  `OutOfMemoryException` (500) in a 6 GiB silo, retries the load on every request, and `/healthz` stays 200.
+- So until XD01-449 (bounded/lazy organization catalog) ships, a silo can **store** a region of this size but not
+  **serve** it. Cap the silo's memory (`docker update --memory 6g --memory-swap 6g geoasset-server-<company>`, then
+  restart it so the GC sees the cap): an uncapped silo that runs out of memory makes the Docker VM kill a process, and that
+  can be the shared Postgres.
