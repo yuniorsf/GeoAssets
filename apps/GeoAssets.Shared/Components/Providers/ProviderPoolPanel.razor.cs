@@ -40,7 +40,7 @@ public partial class ProviderPoolPanel
     // FilterByPermissionAsync, so this panel still renders there with gating simply switched off.
     private IProjectSessionService? Session => Services.GetService<IProjectSessionService>();
 
-    // IShapefileExportService is only registered where AddGeoAssetsShapefile() runs (Web today,
+    // IShapefileExportService is only registered where AddGeoAssetsShapefileTools() runs (Web today,
     // not MAUI) — resolved optionally so the Shapefile export button simply doesn't render
     // rather than wiring to a service that isn't there, same pattern as Session above.
     private IShapefileExportService? ShapefileExporter => Services.GetService<IShapefileExportService>();
