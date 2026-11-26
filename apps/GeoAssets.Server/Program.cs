@@ -11,6 +11,7 @@ using GeoAssets.Projects;
 using GeoAssets.Server;
 using GeoAssets.Server.Catalogs;
 using GeoAssets.Server.Modules;
+using GeoAssets.Server.Rendering;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Orders;
 using GeoAssets.Workflow.Registry;
@@ -105,6 +106,9 @@ builder.Services.TryAddScoped<IAssetSpatialQuery, AssetProviderSpatialQuery>();
 // The generic IAssetRenderQuery (XD01-372) over the request's IAssetProvider: what WMS renders with when no module
 // registers a pushdown; PostgresSpatialModule's PostGIS render query replaces it.
 builder.Services.TryAddScoped<IAssetRenderQuery>(sp => new AssetProviderRenderQuery(sp.GetRequiredService<IAssetProvider>()));
+// Raster tiles (XD01-433): the SkiaSharp source over whichever IAssetRenderQuery the request resolves — the PostGIS
+// pushdown with postgres-spatial, the generic query above otherwise.
+builder.Services.AddSkiaRasterTileSource();
 // The generic IReferenceFeatureQuery (XD01-330) over the organization catalogs; PostgresSpatialModule's PostGIS query replaces it.
 builder.Services.TryAddScoped<IReferenceFeatureQuery, OrganizationCatalogReferenceFeatureQuery>();
 builder.Services.AddOrderTargets();
