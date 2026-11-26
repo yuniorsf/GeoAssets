@@ -215,6 +215,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Bench.Render", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Bench.Render.Tests", "tests\GeoAssets.Bench.Render.Tests\GeoAssets.Bench.Render.Tests.csproj", "{37C08B6C-10F5-41A0-A3DA-A5230E523E96}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.PluginModules.Tests", "tests\GeoAssets.Provider.PluginModules.Tests\GeoAssets.Provider.PluginModules.Tests.csproj", "{A09B3C36-30CB-485A-A570-7D49E51A0881}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -1341,6 +1343,18 @@ Global
 		{37C08B6C-10F5-41A0-A3DA-A5230E523E96}.Release|x64.Build.0 = Release|Any CPU
 		{37C08B6C-10F5-41A0-A3DA-A5230E523E96}.Release|x86.ActiveCfg = Release|Any CPU
 		{37C08B6C-10F5-41A0-A3DA-A5230E523E96}.Release|x86.Build.0 = Release|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Debug|x64.Build.0 = Debug|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Debug|x86.Build.0 = Debug|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Release|x64.ActiveCfg = Release|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Release|x64.Build.0 = Release|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Release|x86.ActiveCfg = Release|Any CPU
+		{A09B3C36-30CB-485A-A570-7D49E51A0881}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1441,5 +1455,6 @@ Global
 		{B2C9DA33-BE31-4E82-90A2-44A6CD081BDD} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{F4A020D8-90B8-4DFB-A334-3BD0EBD515D7} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{37C08B6C-10F5-41A0-A3DA-A5230E523E96} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{A09B3C36-30CB-485A-A570-7D49E51A0881} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 	EndGlobalSection
 EndGlobal
