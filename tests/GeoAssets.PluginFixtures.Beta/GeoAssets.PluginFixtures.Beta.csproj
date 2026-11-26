@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-427 test fixture, never shipped: a provider plugin built the way a drop-in server plugin is
+       (EnableDynamicLoading: its private dependencies and .deps.json in its output; the shared contracts referenced
+       but not copied). GeoAssets.Hosting.Abstractions.Tests copies its build output into plugin-fixtures/GeoAssets.PluginFixtures.Beta/. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\GeoAssets.PluginFixtures.PrivateDependency.V2\GeoAssets.PluginFixtures.PrivateDependency.V2.csproj" />
+  </ItemGroup>
+
+</Project>

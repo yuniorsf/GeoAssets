@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-427 test fixture, never shipped: a provider plugin built the way a drop-in server plugin is
+       (EnableDynamicLoading: its private dependencies and .deps.json in its output; the shared contracts referenced
+       but not copied). GeoAssets.Hosting.Abstractions.Tests copies its build output into plugin-fixtures/GeoAssets.PluginFixtures.Alpha/. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\GeoAssets.PluginFixtures.PrivateDependency.V1\GeoAssets.PluginFixtures.PrivateDependency.V1.csproj" />
+  </ItemGroup>
+
+  <!-- A real native library (libe_sqlite3) under runtimes/<rid>/native/, listed in the .deps.json, for the
+       native-resolution tests. No managed code: the package only carries the native binaries. -->
+  <ItemGroup>
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
+  </ItemGroup>
+
+</Project>
