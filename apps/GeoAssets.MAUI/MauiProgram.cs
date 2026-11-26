@@ -26,6 +26,7 @@ using GeoAssets.Shared.Services.FieldWork;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.Offline;
 using GeoAssets.Shared.Services.OrderDetail;
+using GeoAssets.Shared.Services.Rendering;
 using GeoAssets.Workflow;
 using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -115,6 +116,7 @@ public static class MauiProgram
         // apps/GeoAssets.Web/Program.cs (XD01-84).
         builder.Services.AddGeoAssetsPanelState();
         builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+        builder.Services.AddProviderMapLayerRenderers();
 
         // Left-nav menu (XD01-79/85) — same wiring as apps/GeoAssets.Web/Program.cs, the vertical
         // UI libraries' items included (XD01-378). NavMenu tolerates the absence of

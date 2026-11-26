@@ -15,8 +15,9 @@ namespace GeoAssets.Core.Services;
 /// regardless of <see cref="ISyncProvider"/> classification — the marker (checked via
 /// <see cref="AssetProviderExtensions.UnwrapToConcrete"/>) only tags the span for telemetry, kept
 /// general at the provider level instead of special-casing individual providers at call sites
-/// (XD01-160). Callers must keep their own <c>is IWmsProvider</c> short-circuit ahead of any call
-/// here — WMS providers render as raster tiles, not through <see cref="IAssetProvider.GetAll"/>.
+/// (XD01-160). Only providers with <see cref="ProviderRenderCapabilities.VectorFeatures"/> belong
+/// here — the map's layer renderers (XD01-422) send raster-tile providers such as WMS elsewhere,
+/// since they render as tiles, not through <see cref="IAssetProvider.GetAll"/>.
 /// </summary>
 public sealed class FeatureRenderPipeline
 {

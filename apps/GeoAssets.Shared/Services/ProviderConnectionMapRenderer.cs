@@ -1,6 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services.Rendering;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Services;
@@ -22,17 +23,20 @@ public sealed class ProviderConnectionMapRenderer : IDisposable
     private readonly IProviderPool _pool;
     private readonly IMapInterop _mapInterop;
     private readonly ICurrentMapContext _mapContext;
+    private readonly ProviderMapLayerRendererChain _renderers;
     private readonly ILogger<ProviderConnectionMapRenderer> _logger;
 
     public ProviderConnectionMapRenderer(
         IProviderPool pool,
         IMapInterop mapInterop,
         ICurrentMapContext mapContext,
+        ProviderMapLayerRendererChain renderers,
         ILogger<ProviderConnectionMapRenderer> logger)
     {
         _pool       = pool;
         _mapInterop = mapInterop;
         _mapContext = mapContext;
+        _renderers  = renderers;
         _logger     = logger;
 
         _pool.EntryAdded += OnEntryAdded;
@@ -46,26 +50,24 @@ public sealed class ProviderConnectionMapRenderer : IDisposable
     {
         try
         {
-            if (entry.Provider is IWmsProvider wms)
+            var renderer = _renderers.Resolve(entry.Provider);
+            if (renderer is null)
             {
-                await _mapInterop.AddWmsLayerAsync(_mapContext.MapDivId, entry.Id.ToString(),
-                    wms.WmsBaseUrl,
-                    new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
+                _logger.LogDebug("No map layer renderer draws newly-connected provider '{Name}'", entry.Name);
+                return;
             }
-            else
-            {
-                var features = entry.Provider.GetAll();
-                foreach (var f in features)
-                    await _mapInterop.RenderFeatureAsync(_mapContext.MapDivId, f);
 
-                // Without this, newly-connected features render wherever they geographically are,
-                // which is very often nowhere near the map's current view (e.g. its default
-                // Caribbean-centered startup position) — they're drawn, but invisible until the
-                // user happens to pan/zoom to them. Fit the view to what was just connected instead.
-                var bbox = UnionBoundingBox(features);
-                if (bbox is not null)
-                    await _mapInterop.FitBoundsAsync(_mapContext.MapDivId, bbox);
-            }
+            var rendered = await renderer.RenderAsync(MapLayerRenderRequest.For(_mapContext.MapDivId, entry));
+
+            // Without this, newly-connected features render wherever they geographically are,
+            // which is very often nowhere near the map's current view (e.g. its default
+            // Caribbean-centered startup position) — they're drawn, but invisible until the
+            // user happens to pan/zoom to them. Fit the view to what was just connected instead.
+            // A tile layer draws no discrete features, so there's nothing to fit to.
+            if (rendered == 0) return;
+            var bbox = UnionBoundingBox(entry.Provider.GetAll());
+            if (bbox is not null)
+                await _mapInterop.FitBoundsAsync(_mapContext.MapDivId, bbox);
         }
         catch (Exception ex)
         {

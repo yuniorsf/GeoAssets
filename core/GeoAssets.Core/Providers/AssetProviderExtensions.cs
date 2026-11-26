@@ -20,4 +20,33 @@ public static class AssetProviderExtensions
             provider = decorator.Inner;
         return provider;
     }
+
+    /// <summary>
+    /// What a provider that doesn't implement <see cref="IProviderCapabilities"/> (nor
+    /// <see cref="IWmsProvider"/>) is taken to support: discrete features with every vector action.
+    /// </summary>
+    public const ProviderRenderCapabilities DefaultVectorCapabilities =
+        ProviderRenderCapabilities.VectorFeatures
+        | ProviderRenderCapabilities.VectorExport
+        | ProviderRenderCapabilities.VectorImport
+        | ProviderRenderCapabilities.InteractiveEditing;
+
+    /// <summary>
+    /// The concrete provider's <see cref="ProviderRenderCapabilities"/> (XD01-422): looks through
+    /// every decorator first (<see cref="UnwrapToConcrete"/>) — a decorator such as
+    /// <c>ValidatingAssetProvider</c> or <c>ActiveAssetProvider</c> implements neither interface
+    /// itself — then answers the provider's own <see cref="IProviderCapabilities"/>, else
+    /// <see cref="ProviderRenderCapabilities.RasterTiles"/> for an <see cref="IWmsProvider"/>,
+    /// else <see cref="DefaultVectorCapabilities"/>.
+    /// </summary>
+    public static ProviderRenderCapabilities GetRenderCapabilities(this IAssetProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        return provider.UnwrapToConcrete() switch
+        {
+            IProviderCapabilities declared => declared.RenderCapabilities,
+            IWmsProvider                   => ProviderRenderCapabilities.RasterTiles,
+            _                              => DefaultVectorCapabilities,
+        };
+    }
 }

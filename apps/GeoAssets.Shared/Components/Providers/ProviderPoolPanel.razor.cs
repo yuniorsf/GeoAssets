@@ -1,7 +1,9 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services.Rendering;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,10 +16,10 @@ public partial class ProviderPoolPanel
     private const string ManageProvidersPermission = "projects:manage-providers";
 
     /// <summary>Chunk size for <see cref="FeatureRenderPipeline.StreamAllAsync"/> when this panel
-    /// walks a whole pool entry's features (toggle/export/remove) — matches
-    /// <c>MapContainer.BulkRenderChunkSize</c> (XD01-162) for consistency across the epic's
-    /// pipeline consumers.</summary>
-    private const int PipelineChunkSize = 1500;
+    /// walks a whole pool entry's features for an export — matches
+    /// <see cref="VectorFeatureMapLayerRenderer.ChunkSize"/> (XD01-162) for consistency across the
+    /// epic's pipeline consumers.</summary>
+    private const int PipelineChunkSize = VectorFeatureMapLayerRenderer.ChunkSize;
 
     private readonly Dictionary<Guid, string> _messages = [];
 
@@ -104,31 +106,38 @@ public partial class ProviderPoolPanel
     public static bool ShouldHintAsForkOnWrite(ProjectKind? openProjectKind, bool canManage) =>
         openProjectKind == ProjectKind.General && !canManage;
 
+    /// <summary>Whether an entry offers the Export GeoJSON / Shapefile actions — only a provider
+    /// with <see cref="ProviderRenderCapabilities.VectorExport"/>; a raster-tile provider such as
+    /// WMS has no discrete features to export (XD01-422).</summary>
+    public static bool CanExportVector(ProviderEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return entry.Provider.GetRenderCapabilities().HasFlag(ProviderRenderCapabilities.VectorExport);
+    }
+
+    /// <summary>Whether an entry offers the Import GeoJSON action — only a provider with
+    /// <see cref="ProviderRenderCapabilities.VectorImport"/> (XD01-422).</summary>
+    public static bool CanImportVector(ProviderEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return entry.Provider.GetRenderCapabilities().HasFlag(ProviderRenderCapabilities.VectorImport);
+    }
+
     // ── Show / Hide ───────────────────────────────────────────────────────────
 
     private async Task ToggleEnabledAsync(ProviderEntry entry)
     {
+        var renderer = Renderers.Resolve(entry.Provider);
+        var request  = MapLayerRenderRequest.For(MapContext.MapDivId, entry);
         if (entry.IsEnabled)
         {
             Pool.Disable(entry.Id);
-            if (entry.Provider is IWmsProvider)
-                await MapInterop.RemoveWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString());
-            else
-                await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
-                    foreach (var f in chunk)
-                        await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
+            if (renderer is not null) await renderer.RemoveAsync(request);
         }
         else
         {
             Pool.Enable(entry.Id);
-            if (entry.Provider is IWmsProvider wms)
-                await MapInterop.AddWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString(),
-                    wms.WmsBaseUrl,
-                    new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
-            else
-                await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
-                    foreach (var f in chunk)
-                        await MapInterop.RenderFeatureAsync(MapContext.MapDivId, f);
+            if (renderer is not null) await renderer.RenderAsync(request);
         }
     }
 
@@ -177,11 +186,11 @@ public partial class ProviderPoolPanel
 
     private async Task ExportEntryAsShapefileAsync(ProviderEntry entry)
     {
-        // WMS entries have no discrete features to export (raster tiles only, see
-        // IWmsProvider's doc comment) — Pipeline.StreamAllAsync would just yield nothing and
-        // ExportToZip would throw "No exportable geometries found." The button is already
-        // hidden for these entries in markup; this guard covers any other call site.
-        if (ShapefileExporter is null || entry.Provider is IWmsProvider) return;
+        // Raster-tile entries (e.g. WMS) have no discrete features to export —
+        // Pipeline.StreamAllAsync would just yield nothing and ExportToZip would throw "No
+        // exportable geometries found." The button is already hidden for these entries in
+        // markup; this guard covers any other call site.
+        if (ShapefileExporter is null || !CanExportVector(entry)) return;
 
         _messages[entry.Id] = string.Empty;
         try
@@ -281,12 +290,8 @@ public partial class ProviderPoolPanel
     private async Task RemoveEntryAsync(ProviderEntry entry)
     {
         if (entry.IsActive) return;
-        if (entry.Provider is IWmsProvider)
-            await MapInterop.RemoveWmsLayerAsync(MapContext.MapDivId, entry.Id.ToString());
-        else
-            await foreach (var chunk in Pipeline.StreamAllAsync(entry.Provider, PipelineChunkSize))
-                foreach (var f in chunk)
-                    await MapInterop.RemoveFeatureAsync(MapContext.MapDivId, f.Id);
+        if (Renderers.Resolve(entry.Provider) is { } renderer)
+            await renderer.RemoveAsync(MapLayerRenderRequest.For(MapContext.MapDivId, entry));
         _messages.Remove(entry.Id);
         Pool.Remove(entry.Id);
     }
