@@ -93,6 +93,8 @@ POST /api/geoassets/features/topology/neighbors-batch | policy:features:read
 POST /api/geoassets/layer-rules | policy:features:edit
 POST /api/geoassets/layers | policy:features:edit
 POST /api/geoassets/mutation-batches | policy:features:edit
+POST /api/geoassets/organizations/{organizationId:guid}/feature-imports/{importId}/chunks | authorize, requirement:RolesAuthorizationRequirement
+POST /api/geoassets/organizations/{organizationId:guid}/feature-imports/{importId}/complete | authorize, requirement:RolesAuthorizationRequirement
 POST /api/identity/groups | policy:groups:edit
 POST /api/identity/groups/{id}/members/{userId} | policy:groups:edit
 POST /api/identity/invitations | policy:users:edit

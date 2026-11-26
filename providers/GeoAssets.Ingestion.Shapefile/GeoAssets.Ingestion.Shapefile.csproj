@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shapefile adapter of the network import pipeline: delivery inventory (sidecars, orphan .dbf pairing,
+       duplicate files, geometry sanity) and a streaming record reader. Unlike GeoAssets.Provider.Shapefile's
+       ShapefileParser it never loads a layer in memory and never reprojects (that is a pipeline stage). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Ingestion.Shapefile</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Ingestion.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Ingestion\GeoAssets.Ingestion.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetTopologySuite.IO.ShapeFile" Version="2.1.0" />
+  </ItemGroup>
+
+</Project>

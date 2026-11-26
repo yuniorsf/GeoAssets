@@ -233,6 +233,10 @@ app.MapGeoAssetsApi();
 // OrganizationScopedFeaturesRestApiExtensions.
 app.MapOrganizationScopedFeaturesApi();
 
+// Chunked bulk feature imports for trusted service callers, over the IFeatureBulkImporter the postgres-spatial module
+// registers — see FeatureImportRestApiExtensions.
+app.MapFeatureImportApi();
+
 // Service Order + Order Type REST endpoints under /api/workflow (XD01-8) —
 // see ServiceOrdersRestApiExtensions for the full endpoint list.
 app.MapServiceOrdersApi();

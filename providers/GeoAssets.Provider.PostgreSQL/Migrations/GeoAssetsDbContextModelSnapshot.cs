@@ -196,7 +196,7 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             IsProtected = false,
                             Name = "Poste",
                             OrganizationId = new Guid("00000000-0000-0000-0000-000000000000"),
-                            Roles = new List<string> { "occupiable-support", "isp:pole" }
+                            Roles = new List<string> { "occupiable-support", "isp:pole", "electric:pole" }
                         },
                         new
                         {
@@ -209,7 +209,7 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             IsProtected = false,
                             Name = "Transformador",
                             OrganizationId = new Guid("00000000-0000-0000-0000-000000000000"),
-                            Roles = new List<string>()
+                            Roles = new List<string> { "electric:transformer" }
                         },
                         new
                         {
@@ -222,7 +222,7 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             IsProtected = false,
                             Name = "Línea de baja tensión",
                             OrganizationId = new Guid("00000000-0000-0000-0000-000000000000"),
-                            Roles = new List<string>()
+                            Roles = new List<string> { "electric:lv-segment" }
                         },
                         new
                         {
@@ -248,7 +248,7 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                             IsProtected = false,
                             Name = "Interruptor",
                             OrganizationId = new Guid("00000000-0000-0000-0000-000000000000"),
-                            Roles = new List<string>()
+                            Roles = new List<string> { "electric:breaker" }
                         });
                 });
 
