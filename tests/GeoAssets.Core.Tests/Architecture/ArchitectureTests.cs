@@ -30,6 +30,11 @@ public class ArchitectureTests
         referencedNames.Should().NotContain(
             name => name.StartsWith("GeoAssets.Provider.", StringComparison.Ordinal),
             because: "Provider implementations depend on GeoAssets.Core, never the reverse");
+
+        referencedNames.Should().NotContain(
+            name => name.StartsWith("System.ComponentModel.Composition", StringComparison.Ordinal)
+                    || name.StartsWith("System.Composition", StringComparison.Ordinal),
+            because: "provider plugins compose through IProviderPluginModule and MS.DI, never MEF (ADR-002 D1)");
     }
 
     [Fact]
