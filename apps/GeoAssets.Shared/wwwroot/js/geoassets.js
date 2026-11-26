@@ -554,7 +554,10 @@ window.GeoAssets = (function () {
             hiddenTypes:    new Set(),  // assetTypeIds the user switched off (setLayerVisibility); sticky across re-renders
             zoomRanges:     new Map(),  // assetTypeId → { min, max } (null = open bound) — setLayerZoomRange (XD01-311)
             selectionOutline: null,     // the fence-outline overlay of showSelectionOutline, if any (XD01-311)
-            referenceLayers: new Map()  // layerId → another organization's reference layer (XD01-331)
+            referenceLayers: new Map(), // layerId → another organization's reference layer (XD01-331)
+            renderGeneration: 0,        // bumped by beginViewportRender/clearAllFeatures; a batch drawn under an older one stops (XD01-429)
+            viewportPass:   null,       // { generation, seen: Set<featureId> } while a viewport pass is open (XD01-429)
+            featureSignatures: new Map() // featureId → signature of the data + style a batch last drew it with (XD01-429)
         };
 
         // A zoom range is re-evaluated whenever the zoom settles. Registered here, not in
@@ -637,14 +640,21 @@ window.GeoAssets = (function () {
 
         _bindSelectionInput(state);
 
-        // Viewport change events — fire after pan/zoom settles
+        // Viewport change events — fire after pan/zoom settles. A zoom fires zoomend and moveend back to back: both
+        // become one call, carrying the zoom; MapContainer debounces the calls before fetching (XD01-429).
+        let viewportQueued = false;
         function emitViewport() {
-            const b = map.getBounds();
-            dotNetRef.invokeMethodAsync('OnViewportChangedFromJs',
-                b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+            if (viewportQueued) return;
+            viewportQueued = true;
+            queueMicrotask(() => {
+                viewportQueued = false;
+                if (_maps[divId] !== state) return; // destroyed meanwhile
+                const b = map.getBounds();
+                dotNetRef.invokeMethodAsync('OnViewportChangedFromJs',
+                    b.getWest(), b.getSouth(), b.getEast(), b.getNorth(), Math.round(map.getZoom()));
+            });
         }
-        map.on('moveend', emitViewport);
-        map.on('zoomend', emitViewport);
+        map.on('moveend zoomend', emitViewport);
 
         map.on('pm:edit', ({ layer }) => {
             const feature = layer.toGeoJSON();
@@ -964,16 +974,48 @@ window.GeoAssets = (function () {
         if (!state) return;
 
         const feature = typeof featureJson === 'string' ? JSON.parse(featureJson) : featureJson;
-        const style   = _effectiveStyle(feature, colorMap, resolvedStyle);
+        // A single render always redraws; the next batch carrying this feature redraws it once more.
+        state.featureSignatures.delete(feature.id);
+        _drawFeature(divId, state, feature, _effectiveStyle(feature, colorMap, resolvedStyle));
+    }
+
+    function _drawFeature(divId, state, feature, style) {
+        if (state.viewportPass) state.viewportPass.seen.add(feature.id);
 
         if (state.renderMode === 'webgl') {
             // WebGL mode only varies by color today (see _addWebGLFeature) — weight/radius/
             // fillOpacity/dashArray/icon stay at their existing hardcoded values in that mode.
             _addWebGLFeature(divId, state, feature, style.color);
-            _scheduleRedraw(divId);
+            _scheduleRedraw(divId); // at most one RAF draw is queued, however many features a batch adds
         } else {
             _renderLeaflet(state, feature, style);
         }
+    }
+
+    /**
+     * FNV-1a hash of a feature's data and resolved style — what a batch compares to skip a feature
+     * already drawn exactly so (XD01-429). A hash, not the JSON itself, so the registry stays small.
+     */
+    function _featureSignature(feature, style) {
+        const text = JSON.stringify(feature) + '|' + JSON.stringify(style);
+        let hash = 0x811c9dc5;
+        for (let i = 0; i < text.length; i++) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 0x01000193);
+        }
+        return (hash >>> 0).toString(36) + ':' + text.length;
+    }
+
+    /** Draws one feature of a batch, unless the same data in the same style is already on the map (XD01-429). */
+    function _renderBatchFeature(divId, state, feature, colorMap, styleMap) {
+        const style     = _effectiveStyle(feature, colorMap, styleMap && styleMap[feature.id]);
+        const signature = _featureSignature(feature, style);
+        if (state.featureLayers.has(feature.id) && state.featureSignatures.get(feature.id) === signature) {
+            if (state.viewportPass) state.viewportPass.seen.add(feature.id);
+            return;
+        }
+        _drawFeature(divId, state, feature, style);
+        state.featureSignatures.set(feature.id, signature);
     }
 
     function renderAllFeatures(divId, featuresJson) {
@@ -1005,23 +1047,22 @@ window.GeoAssets = (function () {
         if (!features?.length) return;
 
         if (state.renderMode === 'webgl') {
-            features.forEach(f => {
-                const style = _effectiveStyle(f, colorMap, styleMap && styleMap[f.id]);
-                _addWebGLFeature(divId, state, f, style.color);
-            });
-            _scheduleRedraw(divId); // one RAF draw covers the entire batch
+            features.forEach(f => _renderBatchFeature(divId, state, f, colorMap, styleMap));
             return;
         }
 
+        // A newer viewport pass or a clear supersedes this batch: its sub-chunks still waiting for a frame are
+        // dropped instead of painting a stale viewport (XD01-429).
+        const generation = state.renderGeneration;
         return new Promise(resolve => {
             const _batchStart = performance.now();
             let i = 0;
             function renderNextSubChunk() {
-                if (!_maps[divId]) { resolve(); return; } // map destroyed mid-render
+                if (_maps[divId] !== state) { resolve(); return; } // map destroyed mid-render
+                if (state.renderGeneration !== generation) { resolve(); return; } // superseded mid-render
                 const end = Math.min(i + _RAF_SUB_CHUNK_SIZE, features.length);
                 for (; i < end; i++) {
-                    const f = features[i];
-                    renderFeature(divId, f, colorMap, styleMap && styleMap[f.id]);
+                    _renderBatchFeature(divId, state, features[i], colorMap, styleMap);
                 }
                 if (i < features.length) {
                     requestAnimationFrame(renderNextSubChunk);
@@ -1046,6 +1087,7 @@ window.GeoAssets = (function () {
             state.map.removeLayer(layer);
             state.featureLayers.delete(featureId);
         }
+        state.featureSignatures.delete(featureId);
         if (state.webgl) {
             state.webgl.features.delete(featureId);
             _scheduleRedraw(divId);
@@ -1055,14 +1097,46 @@ window.GeoAssets = (function () {
     function clearAllFeatures(divId) {
         const state = _maps[divId];
         if (!state) return;
+        state.renderGeneration++;
+        state.viewportPass = null;
         state.featureLayers.forEach(l => state.map.removeLayer(l));
         state.featureLayers.clear();
+        state.featureSignatures.clear();
         state.layerGroups.forEach(g => { g.clearLayers(); state.map.removeLayer(g); });
         state.layerGroups.clear();
         if (state.webgl) {
             state.webgl.features.clear();
             _scheduleRedraw(divId);
         }
+    }
+
+    // ─── Viewport diff rendering (XD01-429) ──────────────────────────────────
+    // A viewport refresh no longer clears the map. beginViewportRender opens a pass; every feature drawn while it is
+    // open — by a batch or by a single renderFeature — is marked seen (a batch skips one already drawn with the same
+    // data and style, keeping its layer, its per-feature state and any edit in progress); endViewportRender then
+    // removes only the features the pass did not see. Opening a pass, or clearAllFeatures, supersedes the open one:
+    // its batches stop at their next frame and its end removes nothing. Reference layers, tile/WMS layers and the
+    // per-feature state registry are never touched.
+
+    function beginViewportRender(divId) {
+        const state = _maps[divId];
+        if (!state) return 0;
+        state.renderGeneration++;
+        state.viewportPass = { generation: state.renderGeneration, seen: new Set() };
+        return state.renderGeneration;
+    }
+
+    function endViewportRender(divId, generation) {
+        const state = _maps[divId];
+        const pass  = state?.viewportPass;
+        if (!pass || pass.generation !== generation) return;
+        state.viewportPass = null;
+        const stale = [];
+        state.featureLayers.forEach((_layer, id) => { if (!pass.seen.has(id)) stale.push(id); });
+        state.webgl?.features.forEach((_entry, id) => {
+            if (!pass.seen.has(id) && !state.featureLayers.has(id)) stale.push(id);
+        });
+        stale.forEach(id => removeFeature(divId, id));
     }
 
     // ─── Tile / WMS Layers ───────────────────────────────────────────────────
@@ -1694,6 +1768,8 @@ window.GeoAssets = (function () {
         renderFeatureBatch,
         removeFeature,
         clearAllFeatures,
+        beginViewportRender,
+        endViewportRender,
         addTileLayer,
         removeTileLayer,
         addWmsLayer,

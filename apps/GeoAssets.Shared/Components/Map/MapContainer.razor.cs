@@ -36,20 +36,20 @@ public partial class MapContainer
     private DotNetObjectReference<object>? _dotNetRef;
     private bool _initialized;
 
-    /// <summary>The most recent viewport bounds reported by <see cref="OnViewportChangedFromJs"/>,
+    /// <summary>The most recent viewport (bounds and zoom) reported by <see cref="OnViewportChangedFromJs"/>,
     /// if any — lets <see cref="OnCollectionChanged"/> prefer a bounds-filtered re-render over an
     /// unbounded full-dataset one once the map has panned at least once.</summary>
-    private (double MinLon, double MinLat, double MaxLon, double MaxLat)? _lastViewport;
+    private ViewportQuery? _lastViewport;
 
     /// <summary>Cancelled at the top of <see cref="RenderViewportAsync"/> so a pan always wins over
     /// an in-flight full-dataset bulk render (<see cref="RenderAllViaPipelineAsync"/>).</summary>
     private CancellationTokenSource? _bulkRenderCts;
 
-    /// <summary>Cancelled and replaced at the top of every <see cref="RenderViewportAsync"/> call so
-    /// a newer pan always supersedes a still-in-flight older one (XD01-170 finding #2) — without
-    /// this, rapid pans could leave multiple bounds fetches in flight concurrently, each eventually
-    /// rendering its (possibly stale) result on top of whatever the latest pan already drew.</summary>
-    private CancellationTokenSource? _viewportRenderCts;
+    /// <summary>This map's viewport passes (XD01-429): a newer pan always supersedes a still-in-flight
+    /// older one (XD01-170 finding #2), aborting its fetches so its stale result is never drawn.</summary>
+    private MapViewportRenderer? _viewportRenderer;
+
+    private MapViewportRenderer Viewports => _viewportRenderer ??= new MapViewportRenderer(MapInterop, Renderers, TimeProvider);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -99,7 +99,7 @@ public partial class MapContainer
         {
             await SyncZoomRangesAsync();
             await (ShouldRenderLastViewport(_lastViewport)
-                ? RenderViewportAsync(_lastViewport!.Value)
+                ? RenderViewportAsync(_lastViewport!.Value, debounce: false)
                 : RenderAllViaPipelineAsync());
         });
 
@@ -116,7 +116,7 @@ public partial class MapContainer
     /// full-dataset pipeline render. Pure decision, factored out for direct testability — same
     /// reasoning as <see cref="ResolveDrawnAssetTypeId"/> (this repo has no bUnit yet).
     /// </summary>
-    public static bool ShouldRenderLastViewport((double MinLon, double MinLat, double MaxLon, double MaxLat)? lastViewport) =>
+    public static bool ShouldRenderLastViewport(ViewportQuery? lastViewport) =>
         lastViewport is not null;
 
     /// <summary>
@@ -302,66 +302,59 @@ public partial class MapContainer
         MapTileAccessLookup.GetAsync(TileAccess, tileUrl, Logger);
 
     /// <summary>
-    /// The view settled: re-renders the providers' features for it and, debounced and superseding any load still in
-    /// flight, the switched-on reference layers of other organizations (XD01-331).
+    /// The view settled (<c>geoassets.js</c> reports a zoom's <c>zoomend</c> and <c>moveend</c> as one call, with the
+    /// zoom — XD01-429): re-renders the providers' features for it once it stays put for
+    /// <see cref="MapViewportRenderer.DebounceInterval"/> and, debounced and superseding any load still in flight, the
+    /// switched-on reference layers of other organizations (XD01-331).
     /// </summary>
     [JSInvokable("OnViewportChangedFromJs")]
-    public Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat)
+    public Task OnViewportChangedFromJs(double minLon, double minLat, double maxLon, double maxLat, int zoom)
     {
-        _lastViewport = (minLon, minLat, maxLon, maxLat);
+        var viewport = new ViewportQuery(new BoundingBox(minLon, minLat, maxLon, maxLat), zoom);
+        _lastViewport = viewport;
         return Task.WhenAll(
-            RenderViewportAsync(_lastViewport.Value),
+            RenderViewportAsync(viewport, debounce: true),
             ReferenceLayers.OnViewportChangedAsync(DivId, minLon, minLat, maxLon, maxLat));
     }
 
     /// <summary>
     /// Bounds-filtered render for the given viewport — used both by a live pan
-    /// (<see cref="OnViewportChangedFromJs"/>) and by <see cref="OnCollectionChanged"/> once a
+    /// (<see cref="OnViewportChangedFromJs"/>, debounced) and by <see cref="OnCollectionChanged"/> once a
     /// viewport is known, so a bulk mutation re-renders only what's visible instead of the whole
     /// dataset. Cancels any in-flight full-dataset bulk render first, so a pan always wins.
     /// Walks every open-and-not-hidden entry in the pool (see <see cref="ShouldShowOnMap"/>),
-    /// not just the active one, clearing once up front and asking each entry's
-    /// <see cref="IProviderMapLayerRenderer"/> to render its viewport additively so providers don't
-    /// erase each other. A WMS tile layer draws nothing here — it isn't touched by
-    /// <see cref="IMapInterop.ClearAllFeaturesAsync"/> and fetches its own tiles on pan.
+    /// not just the active one, as one diffing pass of <see cref="MapViewportRenderer"/> (XD01-429):
+    /// the map is not cleared, each entry's <see cref="IProviderMapLayerRenderer"/> renders its
+    /// viewport additively so providers don't erase each other, and what no entry drew any more is
+    /// removed once the pass completes. A WMS tile layer draws nothing here — it fetches its own
+    /// tiles on pan.
     /// </summary>
-    private async Task RenderViewportAsync((double MinLon, double MinLat, double MaxLon, double MaxLat) bounds)
+    private async Task RenderViewportAsync(ViewportQuery viewport, bool debounce)
     {
         if (_bulkRenderCts is { } existingBulk) await existingBulk.CancelAsync();
 
-        if (_viewportRenderCts is { } existingViewport) await existingViewport.CancelAsync();
-        var cts = new CancellationTokenSource();
-        _viewportRenderCts = cts;
-        var ct = cts.Token;
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
+        var outcome = debounce
+            ? await Viewports.RenderDebouncedAsync(DivId, viewport, ViewportRenderRequests)
+            : await Viewports.RenderNowAsync(DivId, viewport, ViewportRenderRequests);
 
-        var (minLon, minLat, maxLon, maxLat) = bounds;
-        var sw = Stopwatch.StartNew();
-
-        try
+        if (outcome is { } drawn)
         {
-            await MapInterop.ClearAllFeaturesAsync(DivId);
-
-            var totalCount = 0;
-            var viewport = new BoundingBox(minLon, minLat, maxLon, maxLat);
-            foreach (var entry in Pool.All.Where(ShouldShowOnMap))
-            {
-                ct.ThrowIfCancellationRequested();
-                if (Renderers.Resolve(entry.Provider) is not { } renderer) continue;
-                totalCount += await renderer.RenderViewportAsync(RenderRequestFor(entry), viewport, ct);
-            }
-
-            sw.Stop();
             Logger.LogInformation(
-                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — {Count} features in {ElapsedMs:F1} ms",
-                minLon, minLat, maxLon, maxLat, totalCount, sw.Elapsed.TotalMilliseconds);
+                "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] at zoom {Zoom} — {Count} features in {ElapsedMs:F1} ms",
+                minLon, minLat, maxLon, maxLat, viewport.Zoom, drawn.Count, drawn.Elapsed.TotalMilliseconds);
         }
-        catch (OperationCanceledException)
+        else
         {
             Logger.LogDebug(
                 "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — cancelled (superseded by a newer viewport change)",
                 minLon, minLat, maxLon, maxLat);
         }
     }
+
+    /// <summary>The render requests of every entry a viewport pass draws (<see cref="ShouldShowOnMap"/>).</summary>
+    private IEnumerable<MapLayerRenderRequest> ViewportRenderRequests() =>
+        Pool.All.Where(ShouldShowOnMap).Select(RenderRequestFor);
 
     public Task PanToFeatureAsync(string featureId) =>
         MapInterop.PanToFeatureAsync(DivId, featureId);
@@ -380,8 +373,7 @@ public partial class MapContainer
 
         _bulkRenderCts?.Cancel();
         _bulkRenderCts?.Dispose();
-        _viewportRenderCts?.Cancel();
-        _viewportRenderCts?.Dispose();
+        _viewportRenderer?.Dispose();
         ReferenceLayers.Detach(DivId);
 
         Repository.FeatureAdded      -= OnFeatureAdded;

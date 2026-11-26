@@ -2,7 +2,7 @@ namespace GeoAssets.Provider.Rest.Tests;
 
 internal sealed class FakeHttpMessageHandler : HttpMessageHandler
 {
-    private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _respond;
+    private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _respond;
     private readonly Lock _requestsGate = new();
 
     /// <summary>
@@ -24,13 +24,22 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
     /// concurrent requests and control their completion order (e.g. XD01-172's tiled fetch) —
     /// a synchronous, blocking <c>respond</c> would serialize dispatch itself.
     /// </summary>
-    public FakeHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) =>
+    public FakeHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond)
+        : this((request, _) => respond(request))
+    {
+    }
+
+    /// <summary>
+    /// Variant that sees the request's <see cref="CancellationToken"/> — for tests proving a superseded fetch is
+    /// aborted mid-flight (XD01-429).
+    /// </summary>
+    public FakeHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) =>
         _respond = respond;
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         lock (_requestsGate)
             Requests.Add(request);
-        return _respond(request);
+        return _respond(request, ct);
     }
 }

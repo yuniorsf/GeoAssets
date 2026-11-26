@@ -4,6 +4,7 @@ using GeoAssets.Core.Diagnostics;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Shared.Services.Observability;
@@ -76,6 +77,20 @@ public sealed class ObservableAssetProvider(
                     result.Count, elapsedMs, minLon, minLat, maxLon, maxLat, inner.GetType().FullName);
             });
 
+    public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(ViewportQuery viewport, CancellationToken ct = default) =>
+        TrackAsync(
+            "repository.get_in_bounds_json",
+            async () => await inner.GetInBoundsJsonAsync(viewport, ct),
+            after: (span, result, elapsedMs) =>
+            {
+                span?.SetTag("feature.count", result.Count);
+                ImportDiagnostics.GetInBoundsDurationMs.Record(elapsedMs);
+                Logger.LogInformation(
+                    "Repository.GetInBoundsJson — {FeatureCount} features in {ElapsedMs} ms for bounds [{MinLon}, {MinLat}, {MaxLon}, {MaxLat}] at zoom {Zoom} (provider: {ProviderType})",
+                    result.Count, elapsedMs, viewport.Bounds.MinLon, viewport.Bounds.MinLat, viewport.Bounds.MaxLon, viewport.Bounds.MaxLat,
+                    viewport.Zoom, inner.GetType().FullName);
+            });
+
     public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query) =>
         TrackAsync(
             "repository.get_page",
@@ -94,6 +109,8 @@ public sealed class ObservableAssetProvider(
 
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default)
         => inner.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
+    public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(ViewportQuery viewport, CancellationToken ct = default)
+        => inner.GetInBoundsRawJsonChunksAsync(viewport, ct);
     public GeoFeature?                              GetById(string id)                                    => inner.GetById(id);
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)                   => inner.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                                  => inner.Search(query);

@@ -178,6 +178,8 @@ public sealed class ObservableMapInterop(
     public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features)   => inner.RenderFeatureBatchAsync(divId, features);
     public Task RemoveFeatureAsync(string divId, string featureId)                    => inner.RemoveFeatureAsync(divId, featureId);
     public Task ClearAllFeaturesAsync(string divId)                                   => inner.ClearAllFeaturesAsync(divId);
+    public Task<int> BeginViewportRenderAsync(string divId)                           => inner.BeginViewportRenderAsync(divId);
+    public Task EndViewportRenderAsync(string divId, int generation)                  => inner.EndViewportRenderAsync(divId, generation);
     public Task EnableDrawModeAsync(string divId, GeometryType mode)                  => inner.EnableDrawModeAsync(divId, mode);
     public Task DisableDrawModeAsync(string divId)                                    => inner.DisableDrawModeAsync(divId);
     public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) => inner.SetSnapTargetLayerAsync(divId, allowedTargetAssetTypeIds);

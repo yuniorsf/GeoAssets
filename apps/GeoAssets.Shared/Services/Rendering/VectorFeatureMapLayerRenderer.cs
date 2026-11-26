@@ -57,27 +57,28 @@ public sealed class VectorFeatureMapLayerRenderer(IMapInterop mapInterop, Featur
     /// GetInBoundsRawJsonChunksAsync — which is the signal to fall back to the JSON-element path.
     /// A provider that does support it never yields zero for a real (possibly empty) result: even
     /// an empty bbox response is a non-null "[]" chunk. Returns the number of raw chunks rendered,
-    /// or the feature count on the fallback path.
+    /// or the feature count on the fallback path. Both reads take the viewport's zoom and
+    /// <paramref name="cancellationToken"/> (XD01-429): a superseded viewport aborts its fetch where
+    /// the provider can, and a chunk or result that lands after the cancellation is never painted.
     /// </summary>
-    public async Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default)
+    public async Task<int> RenderViewportAsync(MapLayerRenderRequest request, ViewportQuery viewport, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var (minLon, minLat, maxLon, maxLat) = viewport;
         var provider = request.Source;
 
         var chunkCount = 0;
-        await foreach (var chunk in provider.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, cancellationToken))
+        await foreach (var chunk in provider.GetInBoundsRawJsonChunksAsync(viewport, cancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await mapInterop.RenderFeatureBatchRawJsonAsync(request.MapDivId, chunk);
             chunkCount++;
         }
         if (chunkCount > 0) return chunkCount;
 
-        // GetInBoundsJsonAsync has no CancellationToken overload (not every provider's fetch
-        // supports mid-flight abort — e.g. a plain HTTP GET without one plumbed through), so a
-        // superseded call here can't be aborted early, but it must not paint its (now stale)
-        // result over whatever a newer pan already rendered.
-        var features = await provider.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+        // Not every provider's fetch can be aborted mid-flight (the default overload only refuses
+        // to start once cancelled), so a superseded result may still arrive — it must not paint
+        // over whatever a newer pan already rendered.
+        var features = await provider.GetInBoundsJsonAsync(viewport, cancellationToken);
         if (cancellationToken.IsCancellationRequested) return 0;
         await mapInterop.RenderFeatureBatchAsync(request.MapDivId, features);
         return features.Count;

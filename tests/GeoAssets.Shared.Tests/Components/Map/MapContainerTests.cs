@@ -1,6 +1,7 @@
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Shared.Components.Map;
 using Xunit;
 
@@ -64,7 +65,7 @@ public class MapContainerTests
     public void ShouldRenderLastViewport_ViewportKnown_PrefersViewportRender()
     {
         // Literal acceptance criterion: OnCollectionChanged prefers _lastViewport when set.
-        MapContainer.ShouldRenderLastViewport((0, 0, 1, 1)).Should().BeTrue();
+        MapContainer.ShouldRenderLastViewport(new ViewportQuery(new BoundingBox(0, 0, 1, 1), 12)).Should().BeTrue();
     }
 
     [Fact]

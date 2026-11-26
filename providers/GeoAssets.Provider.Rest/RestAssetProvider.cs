@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 
 namespace GeoAssets.Provider.Rest;
@@ -100,7 +102,7 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
     public async Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(
         double minLon, double minLat, double maxLon, double maxLat)
     {
-        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
+        var url = BoundsUrl(new ViewportQuery(new BoundingBox(minLon, minLat, maxLon, maxLat)));
         return await _http.GetFromJsonAsync<GeoFeature[]>(url, _opts).ConfigureAwait(false) ?? [];
     }
 
@@ -108,13 +110,28 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
     /// Returns the raw HTTP response body as a JSON string without any C# parsing,
     /// so JavaScript can parse it natively (avoids the WASM JSON-parsing bottleneck).
     /// </summary>
-    public async Task<string?> GetInBoundsRawJsonAsync(
-        double minLon, double minLat, double maxLon, double maxLat)
+    public Task<string?> GetInBoundsRawJsonAsync(
+        double minLon, double minLat, double maxLon, double maxLat) =>
+        FetchRawJsonAsync(new ViewportQuery(new BoundingBox(minLon, minLat, maxLon, maxLat)), CancellationToken.None);
+
+    /// <summary>
+    /// The <c>features/bounds</c> request for <paramref name="viewport"/> (XD01-429): coordinates always written with
+    /// <see cref="CultureInfo.InvariantCulture"/> (a <c>pt-BR</c> client would otherwise send <c>-38,5</c>), and the
+    /// zoom appended when known.
+    /// </summary>
+    private static string BoundsUrl(ViewportQuery viewport)
     {
-        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
-        var response = await _http.GetAsync(new Uri(url, UriKind.RelativeOrAbsolute)).ConfigureAwait(false);
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
+        var url = string.Create(CultureInfo.InvariantCulture,
+            $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}");
+        return viewport.Zoom is { } zoom ? string.Create(CultureInfo.InvariantCulture, $"{url}&zoom={zoom}") : url;
+    }
+
+    private async Task<string?> FetchRawJsonAsync(ViewportQuery viewport, CancellationToken ct)
+    {
+        using var response = await _http.GetAsync(new Uri(BoundsUrl(viewport), UriKind.RelativeOrAbsolute), ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -148,14 +165,27 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
     /// yielded twice (once per intersecting tile); <c>geoassets.js</c>'s <c>renderFeature</c> keys
     /// its Leaflet layer by feature id, so a repeat render just replaces the same layer.
     /// </summary>
-    public async IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(
+    public IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(
         double minLon, double minLat, double maxLon, double maxLat,
+        CancellationToken ct = default) =>
+        GetInBoundsRawJsonChunksAsync(new ViewportQuery(new BoundingBox(minLon, minLat, maxLon, maxLat)), ct);
+
+    /// <summary>
+    /// <see cref="GetInBoundsRawJsonChunksAsync(double, double, double, double, CancellationToken)"/> for a map viewport
+    /// (XD01-429): every tile request carries the viewport's zoom, and cancelling <paramref name="ct"/> aborts the tile
+    /// requests still in flight (and those still waiting for the throttle) instead of letting them finish.
+    /// </summary>
+    public async IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(
+        ViewportQuery viewport,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
         var area = (maxLon - minLon) * (maxLat - minLat);
         var gridDivisions = area > TileAreaThresholdDegSq ? TileGridDivisions : 1;
         var tiles = SplitIntoTiles(minLon, minLat, maxLon, maxLat, gridDivisions);
-        var tasks = tiles.Select(t => FetchTileThrottledAsync(t.MinLon, t.MinLat, t.MaxLon, t.MaxLat, ct)).ToList();
+        var tasks = tiles
+            .Select(t => FetchTileThrottledAsync(viewport with { Bounds = new BoundingBox(t.MinLon, t.MinLat, t.MaxLon, t.MaxLat) }, ct))
+            .ToList();
 
         await foreach (var completed in Task.WhenEach(tasks).WithCancellation(ct).ConfigureAwait(false))
         {
@@ -164,13 +194,14 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
         }
     }
 
-    private async Task<string?> FetchTileThrottledAsync(
-        double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct)
+    private async Task<string?> FetchTileThrottledAsync(ViewportQuery tile, CancellationToken ct)
     {
         await _boundsFetchThrottle.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+            // A release racing the cancellation can still hand a superseded tile the slot; it must not send.
+            ct.ThrowIfCancellationRequested();
+            return await FetchRawJsonAsync(tile, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -183,14 +214,20 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
     /// The HTTP response body (a JSON array of features) is parsed once into <see cref="JsonElement"/> objects
     /// and forwarded as-is to the map renderer.
     /// </summary>
-    public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
-        double minLon, double minLat, double maxLon, double maxLat)
+    public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
+        double minLon, double minLat, double maxLon, double maxLat) =>
+        GetInBoundsJsonAsync(new ViewportQuery(new BoundingBox(minLon, minLat, maxLon, maxLat)), CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="GetInBoundsJsonAsync(double, double, double, double)"/> for a map viewport (XD01-429): the request
+    /// carries the viewport's zoom, and cancelling <paramref name="ct"/> aborts it mid-flight.
+    /// </summary>
+    public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(ViewportQuery viewport, CancellationToken ct = default)
     {
-        var url = $"features/bounds?minLon={minLon}&minLat={minLat}&maxLon={maxLon}&maxLat={maxLat}";
-        var response = await _http.GetAsync(new Uri(url, UriKind.RelativeOrAbsolute)).ConfigureAwait(false);
+        using var response = await _http.GetAsync(new Uri(BoundsUrl(viewport), UriKind.RelativeOrAbsolute), ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        using var doc = await JsonDocument.ParseAsync(stream).ConfigureAwait(false);
+        var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("Expected JSON array from server");
         // Clone each element so they own their own memory and survive the document disposal.

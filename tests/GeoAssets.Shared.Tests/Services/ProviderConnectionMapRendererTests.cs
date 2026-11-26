@@ -37,7 +37,7 @@ public class ProviderConnectionMapRendererTests
         }
 
         public Task RemoveAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, ViewportQuery viewport, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private static ProviderMapLayerRendererChain RealChain(IMapInterop map) =>

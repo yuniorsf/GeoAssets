@@ -2,6 +2,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using Xunit;
 
 namespace GeoAssets.Core.Tests;
@@ -51,6 +52,47 @@ public class IAssetProviderDefaultsTests
             chunks.Add(chunk);
 
         chunks.Should().ContainSingle().Which.Should().Be("[]");
+    }
+
+    // ── ViewportQuery reads (XD01-429) ───────────────────────────────────────
+
+    private static readonly ViewportQuery Viewport = new(new BoundingBox(0, 0, 1, 1), 12);
+
+    [Fact]
+    public async Task GetInBoundsJsonAsync_Viewport_ForwardsItsBoundsToTheBboxRead()
+    {
+        var provider = new TestAssetProvider();
+        provider.Add(new GeoFeature { Id = "in", Geometry = new GeoPoint(0.5, 0.5) });
+        provider.Add(new GeoFeature { Id = "out", Geometry = new GeoPoint(5, 5) });
+        IAssetProvider sut = provider;
+
+        var features = await sut.GetInBoundsJsonAsync(Viewport);
+
+        features.Select(f => f.GetProperty("id").GetString()).Should().Equal("in");
+    }
+
+    [Fact]
+    public async Task GetInBoundsJsonAsync_Viewport_AlreadyCancelled_RefusesToStart()
+    {
+        IAssetProvider sut = new TestAssetProvider();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => sut.GetInBoundsJsonAsync(Viewport, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task GetInBoundsRawJsonChunksAsync_Viewport_ForwardsItsBoundsToTheBboxRead()
+    {
+        IAssetProvider sut = new TestAssetProvider { RawJsonResult = "[]" };
+
+        var chunks = new List<string>();
+        await foreach (var chunk in sut.GetInBoundsRawJsonChunksAsync(Viewport))
+            chunks.Add(chunk);
+
+        chunks.Should().Equal("[]");
     }
 
     // ── IsWithinDistanceAsync (XD01-221) ─────────────────────────────────────
