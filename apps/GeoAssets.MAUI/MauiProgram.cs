@@ -2,6 +2,7 @@ using GeoAssets.Shared.Services.FeatureActions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Localization;
 using GeoAssets.Core.Navigation;
+using GeoAssets.Core.Plugins;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
 using GeoAssets.Identity.Authentication;
@@ -227,6 +228,13 @@ public static class MauiProgram
 
     private static void AddAssetsAndMap(MauiAppBuilder builder)
     {
+        // Provider plugins (XD01-428, ADR-002 D2) — the bundled REST module, named here so the trimmer keeps it, discovered
+        // for the mobile/desktop host, with the plugin registry.
+        builder.Services.AddDiscoveredProviderPlugins(
+            builder.Configuration,
+            ProviderHostTargets.MobileDesktop,
+            new StaticAssemblyPluginSource().Add<RestProviderPluginModule>());
+
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
             new ValidatingAssetProvider(sp.GetRequiredService<ActiveAssetProvider>()),

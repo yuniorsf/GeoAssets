@@ -1,0 +1,76 @@
+<Project>
+
+  <!--
+    Drop-in provider plugin packaging (ADR-002 D2, XD01-428). Opt-in: a server host imports this file at the end of its
+    project file and lists the plugin projects it ships from its plugin directory:
+
+      <ItemGroup>
+        <ProviderPlugin Include="..\..\providers\GeoAssets.Provider.X\GeoAssets.Provider.X.csproj" />
+      </ItemGroup>
+      <Import Project="..\..\build\GeoAssets.ProviderPlugins.targets" />
+
+    Each plugin is built before the host but not referenced (its assemblies must never load into the host's own context),
+    and its whole build output - .deps.json, private dependencies and runtimes/ included - is copied to
+    $(ProviderPluginsDirectory)/<EntryAssemblyName>/ in the host's build output and in its publish output, the layout
+    DirectoryPluginAssemblySource reads (GeoAssets:ProviderPlugins:Directory, default plugins/providers).
+
+    A plugin project must build as a drop-in plugin, or the packaging fails:
+      - <EnableDynamicLoading>true</EnableDynamicLoading> (its NuGet dependencies copied, a .runtimeconfig.json written);
+      - its references to the shared contracts (GeoAssets.Core, GeoAssets.Identity, GeoAssets.Hosting.Abstractions) with
+        <Private>false</Private><ExcludeAssets>runtime;native</ExcludeAssets>, so the host's copies are the ones loaded.
+  -->
+
+  <PropertyGroup>
+    <ProviderPluginsDirectory Condition="'$(ProviderPluginsDirectory)' == ''">plugins/providers</ProviderPluginsDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="@(ProviderPlugin)" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <Target Name="_ResolveProviderPluginFiles" Condition="'@(ProviderPlugin)' != ''" DependsOnTargets="ResolveProjectReferences">
+    <MSBuild Projects="@(ProviderPlugin)"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained">
+      <Output TaskParameter="TargetOutputs" ItemName="_ProviderPluginTargetPath" />
+    </MSBuild>
+
+    <ItemGroup>
+      <_ProviderPluginTargetPath PluginDirectory="%(RootDir)%(Directory)" PluginName="%(Filename)" />
+      <_ProviderPluginFile Include="%(_ProviderPluginTargetPath.PluginDirectory)**\*"
+                           PluginName="%(_ProviderPluginTargetPath.PluginName)" />
+      <_ProviderPluginFile PluginRelativePath="$(ProviderPluginsDirectory)/%(PluginName)/%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <Error Condition="!Exists('%(_ProviderPluginTargetPath.PluginDirectory)%(_ProviderPluginTargetPath.PluginName).runtimeconfig.json')"
+           Text="Provider plugin '%(_ProviderPluginTargetPath.PluginName)' is not built as a drop-in plugin: set &lt;EnableDynamicLoading&gt;true&lt;/EnableDynamicLoading&gt; in its project (ADR-002, XD01-428)." />
+    <Error Condition="!Exists('%(_ProviderPluginTargetPath.PluginDirectory)%(_ProviderPluginTargetPath.PluginName).deps.json')"
+           Text="Provider plugin '%(_ProviderPluginTargetPath.PluginName)' has no %(_ProviderPluginTargetPath.PluginName).deps.json: its load context resolves its dependencies through it (ADR-002, XD01-428)." />
+    <Error Condition="Exists('%(_ProviderPluginTargetPath.PluginDirectory)GeoAssets.Core.dll') or Exists('%(_ProviderPluginTargetPath.PluginDirectory)GeoAssets.Identity.dll') or Exists('%(_ProviderPluginTargetPath.PluginDirectory)GeoAssets.Hosting.Abstractions.dll')"
+           Text="Provider plugin '%(_ProviderPluginTargetPath.PluginName)' copies a shared contract (GeoAssets.Core, GeoAssets.Identity or GeoAssets.Hosting.Abstractions) into its output: reference it with &lt;Private&gt;false&lt;/Private&gt;&lt;ExcludeAssets&gt;runtime;native&lt;/ExcludeAssets&gt; (ADR-002, XD01-428)." />
+  </Target>
+
+  <Target Name="CopyProviderPluginsToOutputDirectory"
+          AfterTargets="CopyFilesToOutputDirectory"
+          DependsOnTargets="_ResolveProviderPluginFiles"
+          Condition="'@(ProviderPlugin)' != ''">
+    <Copy SourceFiles="@(_ProviderPluginFile)"
+          DestinationFiles="@(_ProviderPluginFile->'$(OutDir)%(PluginRelativePath)')"
+          SkipUnchangedFiles="true">
+      <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
+    </Copy>
+  </Target>
+
+  <Target Name="AddProviderPluginsToPublish"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          DependsOnTargets="_ResolveProviderPluginFiles"
+          Condition="'@(ProviderPlugin)' != ''">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_ProviderPluginFile)"
+                             RelativePath="%(_ProviderPluginFile.PluginRelativePath)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

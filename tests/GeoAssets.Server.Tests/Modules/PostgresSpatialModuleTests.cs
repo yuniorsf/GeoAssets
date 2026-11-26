@@ -1,6 +1,8 @@
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Plugins;
 using GeoAssets.Core.Rendering;
+using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Server.Modules.PostgresSpatial;
 using GeoAssets.Server.Tests.Routing;
@@ -64,6 +66,36 @@ public sealed class PostgresSpatialModuleTests
 
         services.Where(d => d.ServiceType == typeof(IProviderPlugin)).Should().ContainSingle()
             .Which.ImplementationType.Should().Be<PostgresProviderPlugin>();
+    }
+
+    [Fact]
+    public void ConfigureServices_RegistersThePostgresPluginThroughItsModule_Once()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["ConnectionStrings:GeoAssets"] = "Host=localhost;Database=unused" })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAssetProvider>(new TestAssetProvider());
+
+        new PostgresSpatialModule().ConfigureServices(services, configuration);
+
+        services.Where(d => d.ServiceType == typeof(PostgresProviderFactory)).Should().ContainSingle();
+        services.Where(d => d.ServiceType == typeof(ProviderPluginRegistry)).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ConfigureServices_AfterADropInPluginClaimedThePostgresId_FailsFast()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["ConnectionStrings:GeoAssets"] = "Host=localhost;Database=unused" })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddDiscoveredProviderPlugins(
+            configuration, ProviderHostTargets.Server, new StaticAssemblyPluginSource().Add<DropInPostgresPluginModule>());
+
+        var act = () => new PostgresSpatialModule().ConfigureServices(services, configuration);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("Duplicate provider plugin module id 'postgres'*earlier*");
     }
 
     [Fact]

@@ -13,8 +13,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 # Restore from the solution-level build files and every project file only (their directory layout kept), so the restore
-# layer is reused until a .csproj or Directory.Build.props changes; packages live in the BuildKit cache mount.
-COPY --parents GeoAssets.sln Directory.Build.props BannedSymbols.txt .editorconfig global.json **/*.csproj ./
+# layer is reused until a .csproj or Directory.Build.props changes; packages live in the BuildKit cache mount. The provider
+# plugin packaging targets the project imports (XD01-428) come along: publish copies the listed drop-in plugins to
+# plugins/providers/ of /app/publish.
+COPY --parents GeoAssets.sln Directory.Build.props BannedSymbols.txt .editorconfig global.json build/GeoAssets.ProviderPlugins.targets **/*.csproj ./
 # Explicit RID is required even for a framework-dependent publish — without it,
 # SkiaSharp.NativeAssets.Linux.NoDependencies' libSkiaSharp.so never gets copied
 # into the output, and WmsEndpointExtensions' GetMap throws DllNotFoundException

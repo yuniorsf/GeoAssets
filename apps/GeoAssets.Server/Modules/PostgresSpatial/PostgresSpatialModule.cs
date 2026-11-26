@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Plugins;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Provider.PostgreSQL;
 
@@ -27,7 +28,9 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
 
         // The "postgres" provider plugin (XD01-371): the kernel's catalog pool builds the asset store with it, migrated
         // and pre-warmed before the host serves — PostgresAssetProvider's ISyncProvider marker stays honest (XD01-173).
-        services.AddGeoAssetsPostgres();
+        // Composed through its plugin module (XD01-428), so a drop-in plugin claiming the same id fails the startup.
+        services.AddDiscoveredProviderPlugins(
+            configuration, ProviderHostTargets.Server, new StaticAssemblyPluginSource().Add<PostgresProviderPluginModule>());
 
         // Organization-scoped asset reads (XD01-338), natively: one cache per organization over the pool's default catalog
         // (the host's singleton IAssetProvider, the shared catalog), registered as the host's IOrganizationCatalogFactory

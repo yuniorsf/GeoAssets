@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- XD01-428: the packaged fixture plugin lands in provider-plugin-fixtures/, not the default plugins/providers/, so
+         only the tests that point GeoAssets:ProviderPlugins:Directory at it load it. -->
+    <ProviderPluginsDirectory>provider-plugin-fixtures</ProviderPluginsDirectory>
   </PropertyGroup>
 
   <ItemGroup>
@@ -68,5 +71,12 @@
   <ItemGroup>
     <Compile Include="..\GeoAssets.NeutralOperator.Server.Tests\Support\NeutralOperatorDatabase.cs" Link="TokenAudiences\NeutralOperatorDatabase.cs" />
   </ItemGroup>
+
+  <!-- XD01-428: a drop-in provider plugin packaged by the same targets the Server uses, for the host-composition tests that
+       boot the real Program with a plugin directory (ProviderPluginDirectoryHostTests, ProviderPluginPackagingTests). -->
+  <ItemGroup>
+    <ProviderPlugin Include="..\GeoAssets.PluginFixtures.Beta\GeoAssets.PluginFixtures.Beta.csproj" />
+  </ItemGroup>
+  <Import Project="..\..\build\GeoAssets.ProviderPlugins.targets" />
 
 </Project>
