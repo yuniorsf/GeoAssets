@@ -5,19 +5,20 @@ namespace GeoAssets.Tools.NetworkImport;
 /// <summary>
 /// App-only tokens through MSAL.NET's client-credentials flow, like <c>GeoAssets.NeutralOperator.Server</c>'s
 /// <c>EntraCiamServiceAuthTokenProvider</c>: the tool calls the kernel as a service caller. MSAL caches each token for
-/// its lifetime, so asking before every request is cheap.
+/// its lifetime, so asking before every request is cheap. The authority is the kernel's CIAM instance + tenant id, so the
+/// token carries the issuer the kernel validates.
 /// </summary>
 internal sealed class ClientCredentialsAccessTokenSource : IAccessTokenSource
 {
     private readonly IConfidentialClientApplication _app;
     private readonly string[] _scopes;
 
-    public ClientCredentialsAccessTokenSource(string tenantId, string clientId, string clientSecret, string scope)
+    public ClientCredentialsAccessTokenSource(Uri authority, string clientId, string clientSecret, string scope)
     {
         _app = ConfidentialClientApplicationBuilder
             .Create(clientId)
             .WithClientSecret(clientSecret)
-            .WithTenantId(tenantId)
+            .WithAuthority(authority)
             .Build();
         _scopes = [scope];
     }

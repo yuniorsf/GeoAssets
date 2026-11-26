@@ -32,8 +32,9 @@ services:
       Observability__ServiceName: geoassets-server-${COMPANY}
       Observability__Otlp__Endpoint: ${Observability__Otlp__Endpoint:-https://otlp.nr-data.net:4317}
       Observability__Otlp__Protocol: ${Observability__Otlp__Protocol:-Grpc}
-      # The company's own database on the deploy/server Postgres (service "postgres" on geoassets_default).
-      ConnectionStrings__GeoAssets: Host=${POSTGRES_HOST:-postgres};Port=5432;Database=geoassets_${COMPANY};Username=postgres;Password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (the deploy/server one) in the silo env file}
+      # The company's own database on the deploy/server Postgres (service "postgres" on geoassets_default). POSTGRES_PASSWORD
+      # is the deploy/server one, from the silo env file; provision-database.sh refuses to run without it.
+      ConnectionStrings__GeoAssets: Host=${POSTGRES_HOST:-postgres};Port=5432;Database=geoassets_${COMPANY};Username=postgres;Password=${POSTGRES_PASSWORD}
       # The asset store only: no NeutralOperator module (appsettings.json lists nothing else; index 1 stays unset).
       GeoAssets__Modules__0: postgres-spatial
       # The kernel API's own CIAM registration (the deploy/server .env values), so a token for the kernel API — a

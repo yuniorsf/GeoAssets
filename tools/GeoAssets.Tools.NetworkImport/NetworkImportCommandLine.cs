@@ -25,10 +25,10 @@ internal static class NetworkImportCommandLine
                     [--tenant-domain <domain>]
               Checks the first <n> (default 50) features of a plan exist in the kernel with the same asset type.
 
-        Profiles: neoenergia-gse.
+        Profiles: neoenergia-gse, equatorial-qgis-municipal.
         Authentication (import, verify): GEOASSETS_NETWORK_IMPORT_TOKEN (a bearer token), else the client credentials
-        GEOASSETS_SERVICEAUTH_TENANT_ID, GEOASSETS_SERVICEAUTH_CLIENT_ID, GEOASSETS_SERVICEAUTH_CLIENT_SECRET and
-        GEOASSETS_SERVICEAUTH_SCOPE.
+        GEOASSETS_SERVICEAUTH_INSTANCE (the kernel's AzureAdCiam:Instance), GEOASSETS_SERVICEAUTH_TENANT_ID,
+        GEOASSETS_SERVICEAUTH_CLIENT_ID, GEOASSETS_SERVICEAUTH_CLIENT_SECRET and GEOASSETS_SERVICEAUTH_SCOPE.
         Exit codes: 0 ok, 1 usage error, 2 input error, 3 kernel failure.
         """;
 
