@@ -34,14 +34,18 @@ services:
     # same Key Vault-backed .env used by the local OTel Collector — see
     # deploy/otel/README.md "Pulling credentials from Key Vault instead".
     # Run `deploy/otel/fetch-secrets.sh` (or copy deploy/otel/.env.example)
-    # before starting this stack to export telemetry; without it the server
-    # still starts, exporting nothing to a vendor.
+    # and start the stack with GEOASSETS_TELEMETRY_EXPORT=true to export
+    # telemetry; without both the server still starts, exporting nothing to a
+    # vendor.
     env_file:
       - path: ../otel/.env
         required: false
       - .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Telemetry export to the vendors of ../otel/.env stays off until you start the stack with
+      # GEOASSETS_TELEMETRY_EXPORT=true (e.g. `GEOASSETS_TELEMETRY_EXPORT=true docker compose up -d`).
+      Observability__ExportEnabled: ${GEOASSETS_TELEMETRY_EXPORT:-false}
       ConnectionStrings__GeoAssets: Host=postgres;Port=5432;Database=geoassets;Username=postgres;Password=${POSTGRES_PASSWORD}
       # XD01-384: appsettings.json no longer lists 'neutral-operator' (the cut-over to GeoAssets.NeutralOperator.Server), but
       # this local stack keeps the kernel hosting it: it has no GeoAssets.ServiceCaller credentials (NeutralOperator.Server's
@@ -76,6 +80,9 @@ services:
         required: false
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Telemetry export to the vendors of ../otel/.env stays off until you start the stack with
+      # GEOASSETS_TELEMETRY_EXPORT=true (e.g. `GEOASSETS_TELEMETRY_EXPORT=true docker compose up -d`).
+      Observability__ExportEnabled: ${GEOASSETS_TELEMETRY_EXPORT:-false}
       Destinations__GeoAssets__Shared: http://server:8080
       # The kernel while it hosts the module (the default here, see the server service); http://neutral-operator:8080 for
       # deploy/neutral-operator's GeoAssets.NeutralOperator.Server (same network, geoassets_default).

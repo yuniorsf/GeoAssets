@@ -81,7 +81,8 @@ public static class ObservabilityServiceExtensions
         // ── ILogger → OpenTelemetry bridge ───────────────────────────────────
         // Ensures ILogger output is funnelled into the OTel pipeline and
         // therefore into the OTLP exporter below.  The bridge is always
-        // registered; when Otlp.Endpoint is empty, logs go to the console only.
+        // registered; when export is off (ExportEnabled false or Otlp.Endpoint
+        // empty), logs go to the console only.
         services.AddLogging(logging => ConfigureLoggingBridge(logging, opts, configureOtlp));
 
         return services;
@@ -108,6 +109,13 @@ public static class ObservabilityServiceExtensions
 
         return opts;
     }
+
+    /// <summary>
+    /// Whether an OTLP exporter is added: only when <see cref="ObservabilityOptions.ExportEnabled"/> is on and an
+    /// endpoint is configured.
+    /// </summary>
+    private static bool ShouldExport(ObservabilityOptions opts) =>
+        opts.ExportEnabled && !string.IsNullOrWhiteSpace(opts.Otlp.Endpoint);
 
     private static void ConfigureOtlp(OtlpExporterOptions o, ObservabilityOptions opts)
     {
@@ -164,7 +172,7 @@ public static class ObservabilityServiceExtensions
         // as-is by the OTLP backend (see XD01-31).
         tracing.SetSampler(new AlwaysOnSampler());
 
-        if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
+        if (ShouldExport(opts))
             tracing.AddOtlpExporter(configureOtlp);
     }
 
@@ -182,7 +190,7 @@ public static class ObservabilityServiceExtensions
         if (opts.Instrumentation.EnableProcess)
             metrics.AddProcessInstrumentation();
 
-        if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
+        if (ShouldExport(opts))
             metrics.AddOtlpExporter(configureOtlp);
     }
 
@@ -195,7 +203,7 @@ public static class ObservabilityServiceExtensions
             otelLogging.ParseStateValues        = true;
             otelLogging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(opts.ServiceName, opts.ServiceVersion));
 
-            if (!string.IsNullOrWhiteSpace(opts.Otlp.Endpoint))
+            if (ShouldExport(opts))
                 otelLogging.AddOtlpExporter(configureOtlp);
         });
     }

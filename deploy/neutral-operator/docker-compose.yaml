@@ -41,6 +41,9 @@ services:
         required: false
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Telemetry export to the vendors of ../otel/.env stays off until you start the stack with
+      # GEOASSETS_TELEMETRY_EXPORT=true (e.g. `GEOASSETS_TELEMETRY_EXPORT=true docker compose up -d`).
+      Observability__ExportEnabled: ${GEOASSETS_TELEMETRY_EXPORT:-false}
       ConnectionStrings__NeutralOperator: Host=${POSTGRES_HOST:-postgres};Port=5432;Database=geoassets_neutral_operator;Username=postgres;Password=${POSTGRES_PASSWORD}
       # The kernel's root URL on the shared network (the deploy/server "server" service).
       GeoCoreServer__BaseUrl: ${GEOCORE_SERVER_BASE_URL:-http://server:8080}
