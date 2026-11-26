@@ -1,4 +1,5 @@
 using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles.Electric;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
 
@@ -55,7 +56,7 @@ public sealed class NeoenergiaGseProfile : ISourceProfile
         },
     ];
 
-    public IReadOnlyList<AssetClassDefinition> AssetClasses => GseAssetClasses.All;
+    public IReadOnlyList<AssetClassDefinition> AssetClasses => ElectricAssetClasses.All;
 
     public IReadOnlyDictionary<string, string> FallbackFieldAliases(string layer)
     {

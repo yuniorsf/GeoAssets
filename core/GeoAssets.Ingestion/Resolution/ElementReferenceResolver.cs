@@ -6,7 +6,8 @@ namespace GeoAssets.Ingestion.Resolution;
 
 /// <summary>
 /// Resolves every reference of an element through the resolver chain, counting each by method; a reference no
-/// resolver answers is counted unresolved and reported as <see cref="ImportIssueCodes.DanglingReference"/> (warning).
+/// resolver answers is counted unresolved and reported as <see cref="ImportIssueCodes.DanglingReference"/> (warning),
+/// except group-anchor references, whose outcome <see cref="AnchorReferenceResolver"/> reports once per group.
 /// </summary>
 internal sealed class ElementReferenceResolver(IReferenceResolver resolver, ImportStatistics statistics, IssueLog issues)
 {
@@ -24,6 +25,11 @@ internal sealed class ElementReferenceResolver(IReferenceResolver resolver, Impo
             if (result is null)
             {
                 statistics.CountUnresolved();
+                if (GroupAnchorKey.IsGroupAnchor(reference))
+                {
+                    continue;
+                }
+
                 issues.Add(
                     IssueSeverity.Warning,
                     ImportIssueCodes.DanglingReference,

@@ -6,8 +6,9 @@ namespace GeoAssets.Ingestion.Resolution;
 
 /// <summary>
 /// Pass 1: streams every index layer, maps its records and indexes each element under the layer's
-/// <see cref="LayerDefinition.IndexKeys"/> (present, non-zero values) and, for snap-target layers, in the STRtree.
-/// Mapping skips are not reported here (pass 2 reports them for the imported layers).
+/// <see cref="LayerDefinition.IndexKeys"/> (present, non-zero values), for snap-target layers in the STRtree, for
+/// layers with an <see cref="LayerDefinition.AnchorNamespace"/> as an anchor candidate of that namespace and, for
+/// <see cref="LayerDefinition.CollectsGroupAnchors"/> layers, as nodes of its group-anchor groups. Mapping skips are not reported here (pass 2 reports them for the imported layers).
 /// </summary>
 internal sealed class ReferenceIndexBuilder(IFeatureSource source, ISourceProfile profile)
 {
@@ -35,7 +36,17 @@ internal sealed class ReferenceIndexBuilder(IFeatureSource source, ISourceProfil
     private static void Index(ReferenceIndex index, LayerDefinition definition, RawRecord record, MappingResult mapping)
     {
         var element = mapping.Element;
-        if (element is null || !RepresentativePoint.TryGet(element.Geometry, out var x, out var y))
+        if (element is null)
+        {
+            return;
+        }
+
+        if (definition.CollectsGroupAnchors)
+        {
+            GroupNodeCollector.Collect(index.Anchors, element);
+        }
+
+        if (!RepresentativePoint.TryGet(element.Geometry, out var x, out var y))
         {
             return;
         }
@@ -53,6 +64,11 @@ internal sealed class ReferenceIndexBuilder(IFeatureSource source, ISourceProfil
         if (definition.SnapTarget)
         {
             index.AddSnapTarget(entry);
+        }
+
+        if (!string.IsNullOrWhiteSpace(definition.AnchorNamespace))
+        {
+            index.Anchors.AddCandidate(definition.AnchorNamespace, entry);
         }
     }
 }

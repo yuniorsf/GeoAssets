@@ -1,4 +1,6 @@
 using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles.Common;
+using GeoAssets.Ingestion.Profiles.Electric;
 using GeoAssets.Ingestion.Sources;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
@@ -13,17 +15,17 @@ internal sealed class RedeMtLayerMapper : ILayerMapper
 {
     public MappingResult Map(RawRecord record, string scope) =>
         GseSegments.Map(
-            record, scope, GseFields.NamespaceTrechoMt, GseFields.MvSegmentId, "MT", GseAssetClasses.MvSegment,
+            record, scope, GseFields.NamespaceTrechoMt, GseFields.MvSegmentId, "MT", ElectricAssetClasses.MvSegment,
             Classify,
             attributes => GseSegments.PositiveReference(attributes, ReferenceRole.MemberOf, GseFields.NamespaceInst, GseFields.InstallationId, GseFields.FeederHead)
                 .Concat(GseSegments.PositiveReference(attributes, ReferenceRole.MemberOf, GseFields.NamespaceChave, GseFields.SwitchId, GseFields.ProtectionZone)));
 
     private static string Classify(IReadOnlyDictionary<string, object?> attributes)
     {
-        var start = GseValues.Key(attributes, GseFields.StartPgId);
+        var start = SourceValues.Key(attributes, GseFields.StartPgId);
         var jumper = start is not null
-            && string.Equals(start, GseValues.Key(attributes, GseFields.EndPgId), StringComparison.Ordinal)
-            && GseValues.Node(attributes, GseFields.StartNode) == GseValues.Node(attributes, GseFields.EndNode);
-        return jumper ? GseAssetClasses.MvJumper : GseAssetClasses.MvSegment;
+            && string.Equals(start, SourceValues.Key(attributes, GseFields.EndPgId), StringComparison.Ordinal)
+            && SourceValues.Node(attributes, GseFields.StartNode) == SourceValues.Node(attributes, GseFields.EndNode);
+        return jumper ? ElectricAssetClasses.MvJumper : ElectricAssetClasses.MvSegment;
     }
 }

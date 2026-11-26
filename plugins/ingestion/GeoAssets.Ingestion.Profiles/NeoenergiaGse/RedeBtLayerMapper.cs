@@ -1,4 +1,5 @@
 using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles.Electric;
 using GeoAssets.Ingestion.Sources;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
@@ -11,6 +12,6 @@ internal sealed class RedeBtLayerMapper : ILayerMapper
 {
     public MappingResult Map(RawRecord record, string scope) =>
         GseSegments.Map(
-            record, scope, GseFields.NamespaceTrechoBt, GseFields.LvSegmentId, "BT", GseAssetClasses.LvSegment,
+            record, scope, GseFields.NamespaceTrechoBt, GseFields.LvSegmentId, "BT", ElectricAssetClasses.LvSegment,
             extraReferences: attributes => GseSegments.PositiveReference(attributes, ReferenceRole.FedBy, GseFields.NamespaceInst, GseFields.InstallationId));
 }

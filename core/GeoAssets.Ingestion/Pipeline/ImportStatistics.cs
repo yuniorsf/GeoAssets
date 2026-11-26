@@ -10,6 +10,7 @@ internal sealed class ImportStatistics
     {
         [ResolutionMethodLabels.Key] = 0,
         [ResolutionMethodLabels.Snap] = 0,
+        [ResolutionMethodLabels.Anchor] = 0,
     };
 
     public IReadOnlyDictionary<string, long> ElementsByAssetClass => _elementsByAssetClass;

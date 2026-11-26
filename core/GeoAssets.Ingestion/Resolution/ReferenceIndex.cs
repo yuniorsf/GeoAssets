@@ -4,13 +4,15 @@ using NetTopologySuite.Index.Strtree;
 namespace GeoAssets.Ingestion.Resolution;
 
 /// <summary>
-/// The pass-1 reference index: elements by (namespace, key) — first one indexed wins — and an STRtree of
-/// snap-target points, both in the source's native (projected, metre) CRS.
+/// The pass-1 reference index: elements by (namespace, key) — first one indexed wins — an STRtree of
+/// snap-target points and the group-anchor <see cref="Anchors"/>, all in the source's native (projected, metre) CRS.
 /// </summary>
 internal sealed class ReferenceIndex
 {
     private readonly Dictionary<IndexKey, IndexEntry> _byKey = [];
     private readonly STRtree<IndexEntry> _snapTargets = new();
+
+    public AnchorIndex Anchors { get; } = new();
 
     public void AddKey(IndexKey key, IndexEntry entry) => _byKey.TryAdd(key, entry);
 

@@ -12,7 +12,7 @@ internal static class CompletenessLabels
         _ => "full",
     };
 
-    /// <summary>A geometry-only element that resolved at least one reference by snap is <see cref="Completeness.Recovered"/>.</summary>
+    /// <summary>A geometry-only element that resolved at least one reference by snap or anchor is <see cref="Completeness.Recovered"/>.</summary>
     public static Completeness Effective(Completeness declared, IReadOnlyList<ResolvedReference> resolved)
     {
         if (declared != Completeness.GeometryOnly)
@@ -22,7 +22,7 @@ internal static class CompletenessLabels
 
         foreach (var reference in resolved)
         {
-            if (reference.Method == ResolutionMethod.Snap)
+            if (reference.Method is ResolutionMethod.Snap or ResolutionMethod.Anchor)
             {
                 return Completeness.Recovered;
             }

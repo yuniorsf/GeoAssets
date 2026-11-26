@@ -1,10 +1,10 @@
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Ingestion.Model;
 
-namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
+namespace GeoAssets.Ingestion.Profiles.Electric;
 
-/// <summary>The canonical asset classes of the <c>neoenergia-gse</c> profile.</summary>
-internal static class GseAssetClasses
+/// <summary>The canonical electric-network asset classes the built-in distributor profiles share.</summary>
+internal static class ElectricAssetClasses
 {
     public const string Pole = "Pole";
     public const string GeographicPoint = "GeographicPoint";

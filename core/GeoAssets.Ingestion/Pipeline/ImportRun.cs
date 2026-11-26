@@ -7,7 +7,7 @@ using GeoAssets.Ingestion.Validation;
 namespace GeoAssets.Ingestion.Pipeline;
 
 /// <summary>
-/// The state and steps of one <see cref="ImportPipeline"/> run: inventory issues, pass 1 (reference index), asset
+/// The state and steps of one <see cref="ImportPipeline"/> run: inventory issues, pass 1 (reference and anchor index), asset
 /// types, pass 2 (stream, process, chunk), completion and the report.
 /// </summary>
 internal sealed class ImportRun(IFeatureSource source, ICoordinateTransformerFactory transformerFactory, ImportRequest request, IFeatureSink sink)
@@ -61,7 +61,7 @@ internal sealed class ImportRun(IFeatureSource source, ICoordinateTransformerFac
         new(
             registry,
             new ElementShapeValidator(request.Profile.AssetClasses),
-            new ElementReferenceResolver(ReferenceResolverChain.KeyThenSnap(index), _statistics, _issues),
+            new ElementReferenceResolver(ReferenceResolverChain.KeySnapAnchor(index, _issues), _statistics, _issues),
             [new EndpointDistanceRule(index), new SelfLoopRule()],
             topology,
             new GeoFeatureProjector(request.Profile.Id, request.OrganizationId, sink),

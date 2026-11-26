@@ -6,13 +6,16 @@ namespace GeoAssets.Ingestion.Pipeline;
 /// <summary>
 /// Selects and orders the layers of each pass. Both passes read only layers a profile defines, never
 /// <see cref="LayerVerdict.Unusable"/> ones, and <see cref="LayerVerdict.GeometryOnly"/> ones only when the request
-/// includes them. Pass 1 reads every region and layer that has index keys or is a snap target; pass 2 the requested
-/// regions and layers. Order: <see cref="LayerDefinition.ProcessingOrder"/>, then region, then layer name.
+/// includes them. Pass 1 reads every region and layer that has index keys, is a snap target, has an anchor namespace or
+/// collects group anchors; pass 2 the requested regions and layers. Order: <see cref="LayerDefinition.ProcessingOrder"/>, then region, then layer name.
 /// </summary>
 internal static class LayerPlanner
 {
     public static IReadOnlyList<PlannedLayer> IndexLayers(ImportRequest request) =>
-        Plan(request, static (definition, _) => definition.IndexKeys.Count > 0 || definition.SnapTarget);
+        Plan(request, static (definition, _) => definition.IndexKeys.Count > 0
+            || definition.SnapTarget
+            || !string.IsNullOrWhiteSpace(definition.AnchorNamespace)
+            || definition.CollectsGroupAnchors);
 
     public static IReadOnlyList<PlannedLayer> ImportLayers(ImportRequest request) =>
         Plan(request, (_, fileSet) => IsSelected(request.Regions, fileSet.Region) && IsSelected(request.Layers, fileSet.Layer));

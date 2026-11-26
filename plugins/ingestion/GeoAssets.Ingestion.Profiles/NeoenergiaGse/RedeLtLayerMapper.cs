@@ -1,3 +1,4 @@
+using GeoAssets.Ingestion.Profiles.Electric;
 using GeoAssets.Ingestion.Sources;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
@@ -6,5 +7,5 @@ namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
 internal sealed class RedeLtLayerMapper : ILayerMapper
 {
     public MappingResult Map(RawRecord record, string scope) =>
-        GseSegments.Map(record, scope, GseFields.NamespaceTrechoLt, GseFields.HvSegmentId, "LT", GseAssetClasses.HvSegment);
+        GseSegments.Map(record, scope, GseFields.NamespaceTrechoLt, GseFields.HvSegmentId, "LT", ElectricAssetClasses.HvSegment);
 }

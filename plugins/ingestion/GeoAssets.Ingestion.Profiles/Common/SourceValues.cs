@@ -1,9 +1,9 @@
 using System.Globalization;
 
-namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
+namespace GeoAssets.Ingestion.Profiles.Common;
 
-/// <summary>Reads GSE attribute values: keys (integers without decimals, 0/blank = absent), nodes, text, strings.</summary>
-internal static class GseValues
+/// <summary>Reads source attribute values: keys (integers without decimals, 0/blank = absent), nodes, text, strings.</summary>
+internal static class SourceValues
 {
     /// <summary>The value as a key: integers formatted invariant without decimals; <c>null</c> when absent, 0 or blank.</summary>
     public static string? Key(IReadOnlyDictionary<string, object?> attributes, string field) =>

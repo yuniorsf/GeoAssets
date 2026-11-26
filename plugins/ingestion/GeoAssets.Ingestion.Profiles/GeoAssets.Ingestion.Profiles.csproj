@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Built-in source profiles of the network import pipeline. neoenergia-gse: COELBA's GSE (NEOSDE) export —
-       geographic points, MV installations, MV/LV/HV segments, keyed topology (PG + local node). -->
+       geographic points, MV installations, MV/LV/HV segments, keyed topology (PG + local node).
+       equatorial-qgis-municipal: CEMAR's municipal QGIS extracts — poles, transformers, MV/LV segments, snapped topology
+       and LV circuits anchored to their transformer. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

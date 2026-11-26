@@ -1,4 +1,6 @@
 using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles.Common;
+using GeoAssets.Ingestion.Profiles.Electric;
 using GeoAssets.Ingestion.Sources;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
@@ -14,11 +16,11 @@ internal sealed class PosteLayerMapper : ILayerMapper
         ArgumentNullException.ThrowIfNull(record);
         var key = GseElements.Key(record, GseFields.NamespacePg, GseFields.PgId);
         if (GseElements.IsGeometryOnly(record))
-            return MappingResult.Mapped(GseElements.Create(record, scope, key, ElementKind.Structure, GseAssetClasses.Pole, null, []));
+            return MappingResult.Mapped(GseElements.Create(record, scope, key, ElementKind.Structure, ElectricAssetClasses.Pole, null, []));
 
-        var id = GseValues.Key(record.Attributes, GseFields.PgId);
-        var geographic = GseValues.Key(record.Attributes, GseFields.PgType) is "90" or "91";
-        var assetClass = geographic ? GseAssetClasses.GeographicPoint : GseAssetClasses.Pole;
+        var id = SourceValues.Key(record.Attributes, GseFields.PgId);
+        var geographic = SourceValues.Key(record.Attributes, GseFields.PgType) is "90" or "91";
+        var assetClass = geographic ? ElectricAssetClasses.GeographicPoint : ElectricAssetClasses.Pole;
         var name = id is null ? null : (geographic ? "Ponto " : "Poste ") + id;
         return MappingResult.Mapped(GseElements.Create(record, scope, key, ElementKind.Structure, assetClass, name, []));
     }
