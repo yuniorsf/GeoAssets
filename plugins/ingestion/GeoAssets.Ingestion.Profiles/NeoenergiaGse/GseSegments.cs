@@ -1,4 +1,5 @@
 using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles.Common;
 using GeoAssets.Ingestion.Sources;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
@@ -23,8 +24,8 @@ internal static class GseSegments
     {
         ArgumentNullException.ThrowIfNull(record);
         var key = GseElements.Key(record, keyNamespace, idField);
-        var start = GseGeometry.Start(record.Geometry);
-        var end = GseGeometry.End(record.Geometry);
+        var start = SourceGeometry.Start(record.Geometry);
+        var end = SourceGeometry.End(record.Geometry);
         if (GseElements.IsGeometryOnly(record))
         {
             ElementReference[] snapped =
@@ -38,13 +39,13 @@ internal static class GseSegments
         var attributes = record.Attributes;
         var references = new List<ElementReference>
         {
-            new(ReferenceRole.Start, GseFields.NamespacePg, GseValues.Key(attributes, GseFields.StartPgId), GseValues.Node(attributes, GseFields.StartNode), start),
-            new(ReferenceRole.End, GseFields.NamespacePg, GseValues.Key(attributes, GseFields.EndPgId), GseValues.Node(attributes, GseFields.EndNode), end),
+            new(ReferenceRole.Start, GseFields.NamespacePg, SourceValues.Key(attributes, GseFields.StartPgId), SourceValues.Node(attributes, GseFields.StartNode), start),
+            new(ReferenceRole.End, GseFields.NamespacePg, SourceValues.Key(attributes, GseFields.EndPgId), SourceValues.Node(attributes, GseFields.EndNode), end),
         };
         if (extraReferences is not null)
             references.AddRange(extraReferences(attributes));
 
-        var id = GseValues.Key(attributes, idField);
+        var id = SourceValues.Key(attributes, idField);
         var name = id is null ? null : $"{namePrefix} {id}";
         var assetClass = classify?.Invoke(attributes) ?? defaultClass;
         return MappingResult.Mapped(GseElements.Create(record, scope, key, ElementKind.Segment, assetClass, name, references));
@@ -54,7 +55,7 @@ internal static class GseSegments
     public static IEnumerable<ElementReference> PositiveReference(
         IReadOnlyDictionary<string, object?> attributes, ReferenceRole role, string targetNamespace, string field, string? qualifier = null)
     {
-        var target = GseValues.Key(attributes, field);
+        var target = SourceValues.Key(attributes, field);
         if (target is not null && !target.StartsWith('-'))
             yield return new ElementReference(role, targetNamespace, target, Qualifier: qualifier);
     }

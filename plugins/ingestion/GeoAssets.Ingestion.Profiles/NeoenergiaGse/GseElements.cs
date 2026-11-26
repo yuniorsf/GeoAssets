@@ -1,4 +1,5 @@
 using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles.Common;
 using GeoAssets.Ingestion.Sources;
 
 namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
@@ -15,10 +16,10 @@ internal static class GseElements
     /// </summary>
     public static SourceKey Key(RawRecord record, string keyNamespace, string keyField)
     {
-        if (GseValues.Key(record.Attributes, keyField) is { } naturalKey)
+        if (SourceValues.Key(record.Attributes, keyField) is { } naturalKey)
             return new SourceKey(GseFields.ProfileId, keyNamespace, naturalKey);
 
-        var point = GseGeometry.Representative(record.Geometry);
+        var point = SourceGeometry.Representative(record.Geometry);
         return SourceKey.ForCoordinates(GseFields.ProfileId, keyNamespace, point.X, point.Y);
     }
 
@@ -39,7 +40,7 @@ internal static class GseElements
             Scope = scope,
             Name = name,
             Completeness = IsGeometryOnly(record) ? Completeness.GeometryOnly : Completeness.Full,
-            Attributes = GseValues.Attributes(record.Attributes),
+            Attributes = SourceValues.Attributes(record.Attributes),
             References = references,
         };
 }

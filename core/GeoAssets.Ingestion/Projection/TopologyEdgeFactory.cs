@@ -6,8 +6,8 @@ using GeoAssets.Ingestion.Pipeline;
 namespace GeoAssets.Ingestion.Projection;
 
 /// <summary>
-/// Builds the <see cref="TopoEdge"/> of a resolved reference (weight 1, metadata <c>resolution</c> and, for snaps,
-/// <c>distance</c>): Start/End → <c>connected-to</c> with <c>terminal</c> and <c>node</c>; Location →
+/// Builds the <see cref="TopoEdge"/> of a resolved reference (weight 1, metadata <c>resolution</c> and, for snaps and
+/// anchors, <c>distance</c>): Start/End → <c>connected-to</c> with <c>terminal</c> and <c>node</c>; Location →
 /// <c>mounted-on</c>; Connection → <c>connected-to</c> with <c>node</c>; MemberOf → <c>member-of</c> with
 /// <c>group</c>; FedBy → <c>feeds</c>, owned by the target and pointing back at the declaring element.
 /// </summary>
@@ -58,7 +58,7 @@ internal static class TopologyEdgeFactory
     {
         var edge = new TopoEdge { TargetId = targetId, Kind = kind, Weight = 1.0 };
         edge.Metadata["resolution"] = ResolutionMethodLabels.For(resolved.Method);
-        if (resolved.Method == ResolutionMethod.Snap && resolved.DistanceMeters is { } distance)
+        if ((resolved.Method is ResolutionMethod.Snap or ResolutionMethod.Anchor) && resolved.DistanceMeters is { } distance)
         {
             edge.Metadata["distance"] = distance.ToString("F2", CultureInfo.InvariantCulture);
         }

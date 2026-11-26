@@ -16,4 +16,5 @@ public static class ImportIssueCodes
     public const string GeometryMismatch = "geometry-mismatch";
     public const string HelmertFallback = "helmert-fallback";
     public const string Rejected = "rejected";
+    public const string AmbiguousAnchor = "ambiguous-anchor";
 }

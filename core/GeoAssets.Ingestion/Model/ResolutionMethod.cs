@@ -5,4 +5,7 @@ public enum ResolutionMethod
 {
     Key,
     Snap,
+
+    /// <summary>A group-anchor reference (<see cref="ElementReference.GroupKey"/>) resolved to its group's single anchor.</summary>
+    Anchor,
 }

@@ -1,9 +1,9 @@
 using NetTopologySuite.Geometries;
 
-namespace GeoAssets.Ingestion.Profiles.NeoenergiaGse;
+namespace GeoAssets.Ingestion.Profiles.Common;
 
 /// <summary>Representative points of native-CRS record geometries (for snap references and coordinate keys).</summary>
-internal static class GseGeometry
+internal static class SourceGeometry
 {
     /// <summary>The point itself for points (the first one of a multi-point), else the centroid.</summary>
     public static Point Representative(Geometry geometry) => geometry switch

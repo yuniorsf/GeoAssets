@@ -19,17 +19,19 @@ internal sealed class RegionInspection(
 
     public async Task<IReadOnlyList<LayerFileSet>> InspectAsync(CancellationToken cancellationToken)
     {
-        var layers = new List<(LayerDefinition Definition, LayerFileSet Layer)>();
+        var layers = new List<(LayerDefinition Definition, string Stem, LayerFileSet Layer)>();
         foreach (var definition in profile.Layers)
         {
-            var layerFiles = files
-                .Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), definition.FileStem, StringComparison.OrdinalIgnoreCase)
-                    && LayerExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
-                .ToList();
-            if (layerFiles.Count == 0)
+            var stems = MatchingStems(definition);
+            if (stems.Count == 0)
                 continue;
 
-            layers.Add((definition, await InspectLayerAsync(definition, layerFiles, cancellationToken).ConfigureAwait(false)));
+            foreach (var ignored in stems.Skip(1))
+                Report(IssueSeverity.Warning, ImportIssueCodes.DuplicateFile, SubjectFileOf(ignored),
+                    $"Also names the {definition.Name} layer, which uses '{stems[0]}' in this region; this file set is ignored.");
+
+            var layerFiles = FilesOf(stems[0]);
+            layers.Add((definition, stems[0], await InspectLayerAsync(definition, stems[0], layerFiles, cancellationToken).ConfigureAwait(false)));
         }
 
         // Orphan tables go first to the layer whose stem they start with, then to any layer by record count alone.
@@ -38,10 +40,10 @@ internal sealed class RegionInspection(
         {
             for (var i = 0; i < layers.Count; i++)
             {
-                var (definition, layer) = layers[i];
+                var (_, stem, layer) = layers[i];
                 if (layer.Verdict == LayerVerdict.Unusable || layer.AttributeTablePath is not null || orphanFor.ContainsKey(i))
                     continue;
-                if (FindOrphanTable(layer.RecordCount, byName ? definition.FileStem : null) is { } orphan)
+                if (FindOrphanTable(layer.RecordCount, byName ? stem : null) is { } orphan)
                 {
                     _pairedOrphans.Add(orphan);
                     orphanFor[i] = orphan;
@@ -52,16 +54,38 @@ internal sealed class RegionInspection(
         var result = new List<LayerFileSet>(layers.Count);
         for (var i = 0; i < layers.Count; i++)
         {
-            var (definition, layer) = layers[i];
+            var (definition, stem, layer) = layers[i];
             result.Add(layer.Verdict == LayerVerdict.Unusable
                 ? layer
-                : await PairAttributesAsync(definition, layer, orphanFor.GetValueOrDefault(i), cancellationToken).ConfigureAwait(false));
+                : await PairAttributesAsync(definition, stem, layer, orphanFor.GetValueOrDefault(i), cancellationToken).ConfigureAwait(false));
         }
 
         return result;
     }
 
-    private async Task<LayerFileSet> InspectLayerAsync(LayerDefinition definition, List<string> layerFiles, CancellationToken cancellationToken)
+    private List<string> MatchingStems(LayerDefinition definition) =>
+        files
+            .Where(file => LayerExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+            .Select(Path.GetFileNameWithoutExtension)
+            .OfType<string>()
+            .Where(stem => LayerStemMatcher.Matches(definition, stem))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+    private List<string> FilesOf(string stem) =>
+        files
+            .Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), stem, StringComparison.OrdinalIgnoreCase)
+                && LayerExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+    private string SubjectFileOf(string stem)
+    {
+        var stemFiles = FilesOf(stem);
+        return Path.GetFileName(Find(stemFiles, ".shp") ?? stemFiles.Order(StringComparer.Ordinal).First());
+    }
+
+    private async Task<LayerFileSet> InspectLayerAsync(LayerDefinition definition, string stem, List<string> layerFiles, CancellationToken cancellationToken)
     {
         var shp = Find(layerFiles, ".shp");
         var shx = Find(layerFiles, ".shx");
@@ -82,7 +106,7 @@ internal sealed class RegionInspection(
 
         if (shp is null)
         {
-            Report(IssueSeverity.Error, ImportIssueCodes.MissingSidecar, definition.FileStem + ".shp", "The layer has no .shp geometry file; it cannot be imported.");
+            Report(IssueSeverity.Error, ImportIssueCodes.MissingSidecar, stem + ".shp", "The layer has no .shp geometry file; it cannot be imported.");
             return layer with { RecordCount = dbf is null ? 0 : DbaseHeaderInfo.Read(dbf).RecordCount, Verdict = LayerVerdict.Unusable };
         }
 
@@ -106,7 +130,7 @@ internal sealed class RegionInspection(
     }
 
     private async Task<LayerFileSet> PairAttributesAsync(
-        LayerDefinition definition, LayerFileSet layer, string? orphan, CancellationToken cancellationToken)
+        LayerDefinition definition, string stem, LayerFileSet layer, string? orphan, CancellationToken cancellationToken)
     {
         var table = layer.AttributeTablePath;
         if (table is null && orphan is not null)
@@ -120,7 +144,7 @@ internal sealed class RegionInspection(
 
         if (table is null)
         {
-            Report(IssueSeverity.Warning, ImportIssueCodes.MissingSidecar, definition.FileStem + ".dbf",
+            Report(IssueSeverity.Warning, ImportIssueCodes.MissingSidecar, stem + ".dbf",
                 "The layer has no attribute table; only its geometry can be imported.");
             return layer with { Verdict = LayerVerdict.GeometryOnly, FieldAliases = Fallback(definition) };
         }
@@ -157,7 +181,7 @@ internal sealed class RegionInspection(
             .Where(file => string.Equals(Path.GetExtension(file), ".dbf", StringComparison.OrdinalIgnoreCase)
                 && !_pairedOrphans.Contains(file)
                 && (stemPrefix is null || Path.GetFileName(file).StartsWith(stemPrefix, StringComparison.OrdinalIgnoreCase))
-                && !profile.Layers.Any(layer => string.Equals(layer.FileStem, Path.GetFileNameWithoutExtension(file), StringComparison.OrdinalIgnoreCase)))
+                && !profile.Layers.Any(layer => LayerStemMatcher.IsKnown(layer, Path.GetFileNameWithoutExtension(file))))
             .Order(StringComparer.Ordinal)
             .FirstOrDefault(file => DbaseHeaderInfo.Read(file).RecordCount == recordCount);
 

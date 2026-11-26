@@ -8,7 +8,9 @@ namespace GeoAssets.Ingestion.Shapefile;
 /// Inventories a Shapefile delivery: every directory under the root (recursively) holding files is a region, named by
 /// its path relative to the root with <c>/</c> separators (<c>""</c> for the root). Within a region, a layer's file
 /// set is the <c>.shp/.shx/.dbf/.prj/.cpg</c> files whose stem is the layer's <see cref="LayerDefinition.FileStem"/>
-/// (case-insensitive). Each set is checked (sidecars, orphan <c>.dbf</c> pairing, duplicates across regions, geometry
+/// (case-insensitive) — or, when the layer has a <see cref="LayerDefinition.FileStemPattern"/>, whose whole stem matches
+/// it (the ordinal-first matching stem is used; every other one is a <see cref="ImportIssueCodes.DuplicateFile"/>
+/// warning and is ignored). Each set is checked (sidecars, orphan <c>.dbf</c> pairing, duplicates across regions, geometry
 /// sanity) and gets a <see cref="LayerVerdict"/>; findings become <see cref="ImportIssue"/>s.
 /// </summary>
 public sealed class ShapefileDeliveryInventory : ISourceInventory
