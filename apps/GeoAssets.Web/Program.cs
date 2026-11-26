@@ -294,10 +294,11 @@ catch (AccessTokenNotAvailableException)
 // Application Insights (XD01-53) — initialized from configuration instead of the connection
 // string being hardcoded in wwwroot/index.html, which (unlike appsettings.json) is served
 // verbatim with zero fetch/parse step, so a hardcoded value there is committed and live the
-// moment anyone opens the page source. No-op (appInsightsInterop.init checks for a falsy arg)
-// until AzureAdCiam's own gitignored appsettings.Local.json override pattern supplies a real one.
-var appInsightsConnectionString = builder.Configuration["Observability:AzureMonitor:ConnectionString"];
-if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+// moment anyone opens the page source. Off until Observability:ExportEnabled is true (XD01-440's
+// switch, the same one the hosts' OTLP export obeys) and a connection string is supplied (the
+// gitignored appsettings.Local.json in development, GEOASSETS_APPINSIGHTS_CONNECTION_STRING in the image).
+var appInsightsConnectionString = AppInsightsActivation.ConnectionStringToInitialize(builder.Configuration);
+if (appInsightsConnectionString is not null)
 {
     // A malformed connection string makes the SDK throw ("Please provide instrumentation key");
     // telemetry must never keep the app from starting.

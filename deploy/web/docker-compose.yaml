@@ -14,6 +14,9 @@ services:
       GEOASSETS_IPBILLING_SERVER_URL: ${GEOASSETS_IPBILLING_SERVER_URL:-http://localhost:8090}
       # Observability:AzureMonitor:ConnectionString — the browser's Application Insights connection string; unset = no telemetry.
       GEOASSETS_APPINSIGHTS_CONNECTION_STRING: ${GEOASSETS_APPINSIGHTS_CONNECTION_STRING:-}
+      # Browser telemetry stays off until you start the stack with GEOASSETS_TELEMETRY_EXPORT=true (Observability:ExportEnabled,
+      # the same switch as the server stacks' OTLP export).
+      GEOASSETS_TELEMETRY_EXPORT: ${GEOASSETS_TELEMETRY_EXPORT:-false}
       # The CIAM sign-in settings (AzureAdCiam:Authority/ClientId, GeoAssetsServer:ApiScope, GeoAssetsIpBillingServer:ApiScope)
       # — set them in .env (see .env.example); unset = appsettings.json's placeholders, and sign-in fails.
       GEOASSETS_CIAM_AUTHORITY: ${GEOASSETS_CIAM_AUTHORITY:-https://YOUR_TENANT_SUBDOMAIN.ciamlogin.com/YOUR_CIAM_TENANT_ID}

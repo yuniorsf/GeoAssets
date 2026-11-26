@@ -27,6 +27,7 @@
   },
 
   "Observability": {
+    "ExportEnabled": "${GEOASSETS_TELEMETRY_EXPORT}",
     "AzureMonitor": {
       "ConnectionString": "${GEOASSETS_APPINSIGHTS_CONNECTION_STRING}"
     }
