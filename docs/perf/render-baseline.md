@@ -145,6 +145,116 @@ Each cell is p50 / p95.
 
 </details>
 
+## After XD01-430 — Track 3 server quick wins (2026-11-26)
+
+Same dataset (seed 420, 200,000 rows, 3,366,132 vertices), viewports, settings and machine as the baseline (Apple M5,
+.NET 10.0.7 Release + server GC, `postgis/postgis:16-3.4` amd64-emulated on Docker Desktop 29.8.2, run under the
+heavy-run lock), measured on branch `feat/xd01-430-server-render-quick-wins` (base `develop` @ `fdbc8df8`). Raw results:
+`tools/GeoAssets.Bench.Render/after-xd01-430.json`.
+
+What changed in the measured read (`BoundsEndpointPipeline` follows it; `PostgresRenderBenchTests` asserts its body is
+byte-for-byte the provider's):
+
+- The zoom the client sends since XD01-429 (`&zoom=N`) reaches the SQL: one small query for the asset types hidden at
+  that zoom (`"MinZoom" > @zoom OR "MaxZoom" < @zoom`), then `NOT ("AssetTypeId" = ANY(@hidden))` on the features.
+- The cap is the query's `ORDER BY "Id" COLLATE "C" LIMIT 10000`, so only the returned rows are read and mapped, and
+  a capped answer is always the same rows.
+- The body is compact JSON (`GeoJsonSerializer.CompactOptions`), and the kernel compresses it (Brotli, else gzip, both
+  `Fastest`). **Server ms now includes the Brotli step**, which the endpoint pays and the baseline did not.
+
+Columns as in the baseline, except: *Matched rows* = rows the read's filter matches (bbox, scope **and** the zoom's
+types) before the `LIMIT`, counted by a separate untimed query; *Payload (Brotli, on the wire)* is what a browser gets;
+*Payload (gzip)* is what a client that accepts gzip but not Brotli gets.
+
+Each cell is p50 / p95.
+
+| Zoom | Matched rows | Returned features | Drawn features | Payload (uncompressed) | Payload (Brotli, on the wire) | Payload (gzip) | Server ms | ↳ DB query + read ms | Client render ms (simulated) |
+|---|---|---|---|---|---|---|---|---|---|
+| z8 | 5,000 / 5,000 | 5,000 / 5,000 | 5,000 / 5,000 | 23.55 MB / 23.55 MB | 7.38 MB / 7.38 MB | 10.74 MB / 10.74 MB | 386.5 / 436.1 | 220.1 / 244.4 | 145.1 / 154.9 |
+| z12 | 1,364 / 2,911 | 1,364 / 2,911 | 1,364 / 2,911 | 5.13 MB / 10.90 MB | 1.47 MB / 3.13 MB | 2.16 MB / 4.60 MB | 138.4 / 229.2 | 100.4 / 156.9 | 34.7 / 71.7 |
+| z16 | 29 / 818 | 29 / 818 | 29 / 818 | 30.6 kB / 864.0 kB | 7.3 kB / 170.9 kB | 9.3 kB / 248.5 kB | 1.1 / 8.6 | 0.9 / 4.8 | 0.1 / 3.5 |
+
+### Before → after (p50 / p95)
+
+| Zoom | Wire bytes: baseline (uncompressed) → after (Brotli) | Server ms | Returned → drawn, baseline | Returned → drawn, after |
+|---|---|---|---|---|
+| z8 | 18.15 MB → 7.38 MB (2.5×) | 1372.6 / 2388.0 → 386.5 / 436.1 (3.6× / 5.5×) | 10,000 → 235 | 5,000 → 5,000 |
+| z12 | 18.79 / 20.31 MB → 1.47 / 3.13 MB (12.8× / 6.5×) | 170.6 / 263.2 → 138.4 / 229.2 | 10,000 → 992 | 1,364 → 1,364 |
+| z16 | 92.5 kB / 2.72 MB → 7.3 / 170.9 kB (12.7× / 15.9×) | 1.0 / 11.0 → 1.1 / 8.6 | 32 → 29 | 29 → 29 |
+
+### What it shows
+
+- **Every returned feature is now drawn**, at every zoom and viewport: the hidden types never leave the database, and
+  no viewport reaches the 10,000 cap any more (z12's densest, #9, returns 2,911 of what used to be 27,589 matches).
+- **z8 is complete, but not small.** The baseline drew 235 of the 5,000 districts (`Setor`, the only type drawn at
+  z8) — whichever happened to be in its arbitrary 10,000; it now sends all 5,000, which are the dataset's largest
+  polygons (64–256 vertices each). So the uncompressed body *grew* (18.15 → 23.55 MB) while the bytes on the wire fell
+  2.5× (7.38 MB Brotli) and the server time 3.6× / 5.5× (no more reading and mapping 200,000 rows to cut 190,000). The
+  simulated client cost rises with it (41 → 145 ms), because it now draws 21× the features. ADR-002 Part 4's z8 gate
+  (≥ 10× fewer bytes, ≤ 1.8 MB) is **not** met by Track 3 and was not expected to be: 5,000 full-resolution polygons
+  per overview is the case for vector/raster tiles with simplification (Tracks 4–5).
+- **z12 and z16 shrink ~13× on the wire** (p50): at z16 it is mostly compact JSON (92.5 → 30.6 kB uncompressed, 32
+  → 29 features — the 3 left out are hidden districts), at z12 mostly the zoom filter (~19 MB → ~5 MB uncompressed);
+  Brotli then takes another ~3.5–4×.
+- **Server time at z12/z16 is flat to slightly lower**; at z12 most of it is still reading the drawn features'
+  geometry (the `MinZoom` 10 feeders, 64–160 vertices each), plus the Brotli step the baseline did not pay.
+
+<details>
+<summary>Per-viewport results after XD01-430 (first measured pass; ms = the viewport's p50)</summary>
+
+#### z8
+
+| # | Center (lon, lat) | Matched | Returned | Drawn | Path vertices | Payload | Brotli | gzip | Server ms | Client ms |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | -46.7468, -23.5309 | 5,000 | 5,000 | 5,000 | 48,575 | 23.55 MB | 7.38 MB | 10.74 MB | 392.3 | 151.9 |
+| 2 | -46.7617, -23.4770 | 5,000 | 5,000 | 5,000 | 48,573 | 23.55 MB | 7.38 MB | 10.74 MB | 379.1 | 149.8 |
+| 3 | -46.3412, -22.5534 | 5,000 | 5,000 | 5,000 | 48,534 | 23.55 MB | 7.38 MB | 10.74 MB | 380.2 | 138.5 |
+| 4 | -45.6628, -23.3672 | 5,000 | 5,000 | 5,000 | 48,577 | 23.55 MB | 7.38 MB | 10.74 MB | 392.8 | 145.1 |
+| 5 | -45.5599, -22.1990 | 5,000 | 5,000 | 5,000 | 48,529 | 23.55 MB | 7.38 MB | 10.74 MB | 392.3 | 147.8 |
+| 6 | -45.4998, -22.2362 | 5,000 | 5,000 | 5,000 | 48,538 | 23.55 MB | 7.38 MB | 10.74 MB | 389.2 | 145.5 |
+| 7 | -46.6450, -23.0692 | 5,000 | 5,000 | 5,000 | 48,550 | 23.55 MB | 7.38 MB | 10.74 MB | 379.1 | 141.9 |
+| 8 | -45.0971, -22.5257 | 5,000 | 5,000 | 5,000 | 48,567 | 23.55 MB | 7.38 MB | 10.74 MB | 389.4 | 149.6 |
+| 9 | -46.1336, -23.0456 | 5,000 | 5,000 | 5,000 | 48,546 | 23.55 MB | 7.38 MB | 10.74 MB | 386.5 | 151.2 |
+| 10 | -46.6977, -23.4957 | 5,000 | 5,000 | 5,000 | 48,575 | 23.55 MB | 7.38 MB | 10.74 MB | 390.0 | 134.9 |
+| 11 | -45.3450, -22.2220 | 5,000 | 5,000 | 5,000 | 48,536 | 23.55 MB | 7.38 MB | 10.74 MB | 375.6 | 144.5 |
+| 12 | -45.6222, -23.2969 | 5,000 | 5,000 | 5,000 | 48,569 | 23.55 MB | 7.38 MB | 10.74 MB | 398.1 | 141.5 |
+
+#### z12
+
+| # | Center (lon, lat) | Matched | Returned | Drawn | Path vertices | Payload | Brotli | gzip | Server ms | Client ms |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | -46.0546, -22.9418 | 1,769 | 1,769 | 1,769 | 62,739 | 6.67 MB | 1.94 MB | 2.82 MB | 197.9 | 59.2 |
+| 2 | -45.1899, -23.7373 | 159 | 159 | 159 | 6,621 | 627.3 kB | 182.8 kB | 270.2 kB | 97.5 | 8.0 |
+| 3 | -46.2892, -23.3176 | 1,364 | 1,364 | 1,364 | 49,436 | 5.13 MB | 1.47 MB | 2.16 MB | 141.5 | 33.3 |
+| 4 | -46.4704, -23.1546 | 1,518 | 1,518 | 1,518 | 57,551 | 5.70 MB | 1.65 MB | 2.42 MB | 140.3 | 37.3 |
+| 5 | -46.0670, -22.2774 | 1,564 | 1,564 | 1,564 | 53,116 | 5.94 MB | 1.71 MB | 2.49 MB | 147.0 | 37.5 |
+| 6 | -47.2049, -22.8610 | 959 | 959 | 959 | 33,742 | 3.63 MB | 1.03 MB | 1.50 MB | 121.2 | 22.5 |
+| 7 | -46.2796, -23.2883 | 1,259 | 1,259 | 1,259 | 44,719 | 4.71 MB | 1.35 MB | 1.98 MB | 133.3 | 30.6 |
+| 8 | -46.3051, -23.3351 | 1,514 | 1,514 | 1,514 | 55,130 | 5.70 MB | 1.64 MB | 2.40 MB | 144.1 | 36.1 |
+| 9 | -46.6491, -23.4364 | 2,911 | 2,911 | 2,911 | 98,955 | 10.90 MB | 3.13 MB | 4.60 MB | 231.8 | 77.4 |
+| 10 | -46.9668, -22.5645 | 207 | 207 | 207 | 6,970 | 779.6 kB | 228.3 kB | 334.1 kB | 99.0 | 5.4 |
+| 11 | -45.5262, -22.2781 | 992 | 992 | 992 | 34,356 | 3.69 MB | 1.05 MB | 1.53 MB | 131.5 | 27.6 |
+| 12 | -46.1278, -22.9329 | 1,765 | 1,765 | 1,765 | 63,249 | 6.67 MB | 1.94 MB | 2.82 MB | 200.7 | 59.6 |
+
+#### z16
+
+| # | Center (lon, lat) | Matched | Returned | Drawn | Path vertices | Payload | Brotli | gzip | Server ms | Client ms |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | -46.0856, -22.2488 | 222 | 222 | 222 | 1,665 | 244.8 kB | 49.8 kB | 72.9 kB | 3.2 | 1.0 |
+| 2 | -46.0833, -22.3288 | 818 | 818 | 818 | 5,454 | 864.0 kB | 170.9 kB | 248.5 kB | 8.6 | 3.5 |
+| 3 | -46.6197, -22.8717 | 63 | 63 | 63 | 508 | 72.0 kB | 15.0 kB | 22.4 kB | 1.6 | 0.3 |
+| 4 | -45.9215, -23.3346 | 602 | 602 | 602 | 3,999 | 635.5 kB | 125.5 kB | 181.8 kB | 7.5 | 2.6 |
+| 5 | -46.9435, -23.9813 | 3 | 3 | 3 | 3 | 1.7 kB | 0.6 kB | 0.7 kB | 0.9 | 0.0 |
+| 6 | -46.9950, -23.0116 | 5 | 5 | 5 | 63 | 9.5 kB | 3.0 kB | 3.8 kB | 0.9 | 0.1 |
+| 7 | -46.2734, -22.4417 | 14 | 14 | 14 | 67 | 12.8 kB | 3.1 kB | 3.9 kB | 0.8 | 0.1 |
+| 8 | -46.6655, -22.8303 | 29 | 29 | 29 | 273 | 37.4 kB | 8.0 kB | 12.3 kB | 1.1 | 0.2 |
+| 9 | -46.2093, -23.5036 | 5 | 5 | 5 | 40 | 6.8 kB | 2.0 kB | 2.6 kB | 0.7 | 0.0 |
+| 10 | -46.3676, -23.5558 | 29 | 29 | 29 | 237 | 30.6 kB | 7.3 kB | 9.3 kB | 1.0 | 0.1 |
+| 11 | -45.8866, -23.2974 | 451 | 451 | 451 | 3,218 | 471.3 kB | 94.3 kB | 137.5 kB | 5.2 | 1.9 |
+| 12 | -45.4009, -22.3429 | 5 | 5 | 5 | 36 | 5.4 kB | 1.5 kB | 1.9 kB | 0.8 | 0.0 |
+
+</details>
+
 ## Re-running
 
 From the repository root, against the benchmark's own container (never the dev stack — `seed` empties `geo_entity`, and
@@ -177,11 +287,10 @@ and record the machine and image with the numbers — timings only compare withi
 Keep the dataset, seed and viewports unchanged, and add the new run's table under its own dated heading below the
 baseline (don't overwrite it):
 
-- **Track 3 (XD01-429 / XD01-430)** — zoom-aware SQL (`MinZoom`/`MaxZoom` + `LIMIT`), compact JSON, compression,
-  debounced/cancellable fetches. `BoundsEndpointPipeline` reproduces today's read; when XD01-430 changes
-  `PostgresAssetProvider.GetInBoundsAsync` or the endpoint, update the pipeline (and pass the zoom it now sends) in the
-  same change — `PostgresRenderBenchTests.BoundsRead_AnswersTheProvidersBody_ForTheMeasuredViewports` fails until they
-  agree. Report wire bytes with whatever encoding the endpoint then negotiates.
+- **Track 3 (XD01-429 / XD01-430)** — done: see [After XD01-430](#after-xd01-430--track-3-server-quick-wins-2026-11-26).
+  `BoundsEndpointPipeline` now reproduces `PostgresAssetProvider.GetInViewportAsync` (zoom, `LIMIT`, compact JSON,
+  Brotli); when the read changes again, update the pipeline in the same change —
+  `PostgresRenderBenchTests.BoundsRead_AnswersTheProvidersBody_ForTheMeasuredViewports` fails until they agree.
 - **Track 4 (XD01-431…XD01-434)** — `ST_AsMVT` vector tiles and Skia raster tiles: add a tile scenario that requests the
   256-px tiles covering each of these viewports (z8: ~40 tiles at 1580 × 1020) and reports bytes per viewport and server
   p95 **per tile** — ADR-002's `< 50 ms` gate is per tile, while the baseline's server ms is per viewport request.
