@@ -111,22 +111,7 @@ public sealed class ProviderPluginModuleTests
     private static IConfiguration EmptyConfiguration() => new ConfigurationBuilder().Build();
 
     private static List<string> Signatures(IServiceCollection services) =>
-        services.Select(Signature).ToList();
-
-    private static string Signature(ServiceDescriptor d)
-    {
-        var implementationType = d.IsKeyedService ? d.KeyedImplementationType : d.ImplementationType;
-        var instance = d.IsKeyedService ? d.KeyedImplementationInstance : d.ImplementationInstance;
-        var factory = d.IsKeyedService ? (Delegate?)d.KeyedImplementationFactory : d.ImplementationFactory;
-        return string.Join(
-            " | ",
-            d.ServiceType.FullName,
-            d.ServiceKey?.ToString() ?? "-",
-            d.Lifetime.ToString(),
-            implementationType?.FullName ?? "-",
-            instance?.GetType().FullName ?? "-",
-            factory is null ? "-" : $"{factory.Method.DeclaringType?.FullName}.{factory.Method.Name}");
-    }
+        ServiceSignatures.Of(services);
 
     /// <summary>A configuration that fails any read, so a module that reads one fails the test.</summary>
     private sealed class ThrowingConfiguration : IConfiguration
