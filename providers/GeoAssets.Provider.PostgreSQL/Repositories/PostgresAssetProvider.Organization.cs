@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Entities;
@@ -37,8 +38,9 @@ public sealed partial class PostgresAssetProvider
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         Guid organizationId,
         ILogger<PostgresAssetProvider> logger,
-        TimeProvider timeProvider)
-        : this(dbOptions, OrganizationOf(organizationId), logger, timeProvider)
+        TimeProvider timeProvider,
+        ITileInvalidation? tileInvalidation = null)
+        : this(dbOptions, OrganizationOf(organizationId), logger, timeProvider, tileInvalidation)
     {
     }
 
@@ -46,8 +48,9 @@ public sealed partial class PostgresAssetProvider
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         ITenantContext organization,
         ILogger<PostgresAssetProvider> logger,
-        TimeProvider timeProvider)
-        : this(new GeoAssetsDbContext(dbOptions, organization), dbOptions, logger, timeProvider)
+        TimeProvider timeProvider,
+        ITileInvalidation? tileInvalidation)
+        : this(new GeoAssetsDbContext(dbOptions, organization), dbOptions, logger, timeProvider, tileInvalidation)
     {
         _organization = organization;
     }

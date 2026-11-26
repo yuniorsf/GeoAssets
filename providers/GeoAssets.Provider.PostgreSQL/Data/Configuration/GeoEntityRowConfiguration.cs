@@ -21,11 +21,11 @@ internal sealed class GeoEntityRowConfiguration : IEntityTypeConfiguration<GeoEn
         e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
         e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
 
-        // PostGIS geometry column — no SRID constraint, accepts any CRS.
-        // The SRID is stored per-row inside the geometry binary (PostGIS standard).
-        // Use ST_SRID(geom) / ST_Transform in queries when CRS conversion is needed.
+        // SRID 4326, any geometry type (XD01-432): another SRID is refused, none (0) takes the column's. Its stored generated
+        // Web Mercator copy geom_3857 (GiST-indexed, AddGeoEntityGeom3857) is not mapped: only PostgresVectorTileSource's
+        // SQL reads it, and mapping it would load it with every entity.
         e.Property(x => x.Geom)
-         .HasColumnType("geometry")
+         .HasColumnType("geometry(Geometry,4326)")
          .HasColumnName("geom");
 
         // JSONB columns

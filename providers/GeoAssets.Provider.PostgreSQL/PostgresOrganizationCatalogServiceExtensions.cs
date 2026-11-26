@@ -1,5 +1,6 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,8 @@ public static class PostgresOrganizationCatalogServiceExtensions
     /// Makes the host's <see cref="IAssetProvider"/> organization-scoped natively (XD01-338): the singleton
     /// <see cref="IAssetProvider"/> already registered becomes the shared catalog (moved under <see cref="SharedCatalogKey"/>,
     /// <see cref="OrganizationCatalogServiceCollectionExtensions.MoveSharedAssetCatalogToKey"/>), and
-    /// <see cref="PostgresOrganizationAssetCatalogs"/> — one cache per organization — is registered as the host's
+    /// <see cref="PostgresOrganizationAssetCatalogs"/> — one cache per organization, its writes reporting their dirty tiles to
+    /// the host's <see cref="ITileInvalidation"/> when it registers one (XD01-432) — is registered as the host's
     /// <see cref="IOrganizationCatalogFactory"/> (XD01-373). Each request's <see cref="IAssetProvider"/> is the factory's
     /// catalog for the request's <see cref="ITenantContext"/>: that organization's features plus the shared ones; the shared
     /// ones alone for <see cref="Guid.Empty"/> or when no <see cref="ITenantContext"/> is registered. Each organization's
@@ -45,7 +47,8 @@ public static class PostgresOrganizationCatalogServiceExtensions
             options,
             sp.GetRequiredKeyedService<IAssetProvider>(SharedCatalogKey),
             sp.GetRequiredService<ILoggerFactory>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<ITileInvalidation>()));
         services.AddSingleton<IOrganizationCatalogFactory>(sp => sp.GetRequiredService<PostgresOrganizationAssetCatalogs>());
         services.AddScoped(sp => sp.GetRequiredService<IOrganizationCatalogFactory>()
             .GetForOrganization(sp.GetService<ITenantContext>()?.CurrentOrganizationId ?? Guid.Empty));
