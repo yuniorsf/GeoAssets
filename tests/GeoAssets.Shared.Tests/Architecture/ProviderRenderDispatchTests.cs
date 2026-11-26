@@ -9,6 +9,8 @@ namespace GeoAssets.Shared.Tests.Architecture;
 /// decides how to draw a provider from its capabilities through the <c>IProviderMapLayerRenderer</c> chain — no
 /// source outside <c>Services/Rendering/</c> (the strategies themselves) tests a provider for
 /// <c>IWmsProvider</c>, so a new kind of provider never needs a new branch in the map or the pool panel.
+/// This is also XD01-424's guardrail of zero <c>is [not] IWmsProvider</c> in <c>GeoAssets.Shared/Components/</c>: the
+/// scan covers every component, and the components that used to branch on it must stay in the scan.
 /// </summary>
 [Trait("Category", "Architecture")]
 public sealed partial class ProviderRenderDispatchTests
@@ -40,7 +42,13 @@ public sealed partial class ProviderRenderDispatchTests
             .Where(relative => !relative.Split(Path.DirectorySeparatorChar)
                 .Any(segment => SkippedDirectories.Contains(segment, StringComparer.Ordinal)))
             .ToList();
-        sources.Should().Contain(Path.Combine("Components", "Map", "MapContainer.razor.cs"), "the scan must actually find the Shared sources");
+        sources.Should().Contain(
+            [
+                Path.Combine("Components", "Map", "MapContainer.razor.cs"),
+                Path.Combine("Components", "Providers", "ProviderPoolPanel.razor"),
+                Path.Combine("Components", "Providers", "ProviderPoolPanel.razor.cs"),
+            ],
+            "the scan must actually find the Shared components that used to type-test for IWmsProvider");
 
         var offenders = sources
             .Where(relative => !relative.StartsWith(rendering, StringComparison.Ordinal))

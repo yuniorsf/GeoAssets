@@ -270,12 +270,13 @@ builder.Services.AddSingleton<NeutralPoleRegistry>();
 builder.Services.AddSingleton<IOtdrFaultCorrelationEngine, OtdrFaultCorrelationEngine>();
 builder.Services.AddSingleton<OtdrEmergencyFaultDispatchService>();
 
-// Concessionaire compliance dossier exporter (XD01-284) — AddGeoAssetsShapefile also registers
-// IShapefileExportService, which DisNor056Exporter consumes via the interface Core already owns
+// Concessionaire compliance dossier exporter (XD01-284) — AddGeoAssetsShapefileTools registers
+// IShapefileExportService (and no Shapefile IProviderPlugin — this host opens no catalogs, XD01-424),
+// which DisNor056Exporter consumes via the interface Core already owns
 // (Onion layering stays intact: Core never references GeoAssets.Provider.Shapefile directly).
 // Adding a third distributor's exporter is exactly one more AddSingleton<IDossierExporter, …>()
 // line here — neither existing exporter nor the registry needs to change (XD01-284's AC3).
-builder.Services.AddGeoAssetsShapefile();
+builder.Services.AddGeoAssetsShapefileTools();
 builder.Services.AddSingleton<IDossierExporter, DisNor056Exporter>();
 builder.Services.AddSingleton<IDossierExporter, JoinAsExporter>();
 builder.Services.AddSingleton<DossierExporterRegistry>();

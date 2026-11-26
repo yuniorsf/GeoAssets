@@ -83,6 +83,18 @@ public sealed class FieldServiceHostBootTests
     }
 
     [Fact]
+    public void Host_RegistersTheShapefileToolsButNoProviderPlugin()
+    {
+        using var factory = CreateFactory();
+
+        factory.Services.GetRequiredService<IShapefileExportService>().Should().NotBeNull(
+            "DisNor056Exporter writes its dossier's Shapefiles through it");
+        factory.Services.GetRequiredService<IBdgdPonnotImportService>().Should().NotBeNull();
+        factory.Services.GetServices<IProviderPlugin>().Should().BeEmpty(
+            "the host opens no provider catalogs, so it registers the Shapefile tools without the plugin (XD01-424)");
+    }
+
+    [Fact]
     public void Host_StatementTimeoutConfigured_IsAppliedToTheFieldServiceConnectionString()
     {
         using var factory = CreateFactory(statementTimeoutMs: 4_500);
