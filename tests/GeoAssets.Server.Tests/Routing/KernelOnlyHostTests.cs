@@ -19,8 +19,8 @@ public sealed class KernelOnlyHostTests
 {
     private static readonly string[] ExpectedRemoved =
     [
-        "GET /api/geoassets/wms | anonymous",
-        "GET /wms | anonymous",
+        "GET /api/geoassets/wms | policy:features:read",
+        "GET /wms | policy:features:read",
     ];
 
     [Fact]

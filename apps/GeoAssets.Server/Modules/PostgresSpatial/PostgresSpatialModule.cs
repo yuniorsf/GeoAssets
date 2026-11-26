@@ -15,9 +15,6 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
 {
     public const string ModuleId = "postgres-spatial";
 
-    /// <summary>Configuration key: whether the WMS routes require an authenticated caller (default <see langword="false"/>, XD01-95).</summary>
-    public const string WmsRequireAuthenticationKey = "Wms:RequireAuthentication";
-
     public string Id => ModuleId;
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
@@ -61,12 +58,9 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        // WMS is anonymous by default (Wms:RequireAuthentication; XD01-95's open decision) — see MapWmsApi's doc comment.
-        var requireAuthentication = endpoints.ServiceProvider.GetRequiredService<IConfiguration>()
-            .GetValue(WmsRequireAuthenticationKey, defaultValue: false);
-
-        // The WMS alias under the CORS-configured asset prefix (Blazor WASM clients), and the standalone OGC route.
-        endpoints.MapWmsApi(route: "/api/geoassets/wms", requireAuthentication: requireAuthentication);
-        endpoints.MapWmsApi(requireAuthentication: requireAuthentication);
+        // The WMS alias under the CORS-configured asset prefix (Blazor WASM clients), and the standalone OGC route; both
+        // require features:read (XD01-96).
+        endpoints.MapWmsApi(route: "/api/geoassets/wms");
+        endpoints.MapWmsApi();
     }
 }

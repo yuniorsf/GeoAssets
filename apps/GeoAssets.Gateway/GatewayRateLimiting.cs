@@ -47,8 +47,9 @@ internal static class GatewayRateLimiting
     public static readonly RateLimitBucketOptions DefaultApi = new(TokenLimit: 500, TokensPerPeriod: 10, ReplenishmentPeriodSeconds: 1);
 
     /// <summary>
-    /// <c>RateLimiting:Tiles</c> when not configured — per client address (tiles are anonymous): a 1000-tile burst for
-    /// a few users zooming behind one NAT, refilled at 100 tiles/s. See <c>docs/perf/gateway-rate-limits.md</c>.
+    /// <c>RateLimiting:Tiles</c> when not configured — per caller, like the API's: a 1000-tile burst, sized for a few
+    /// users zooming behind one NAT when tiles were anonymous (the in-app map's carry the user's token since XD01-96, so
+    /// the bucket is per user now), refilled at 100 tiles/s. See <c>docs/perf/gateway-rate-limits.md</c>.
     /// </summary>
     public static readonly RateLimitBucketOptions DefaultTiles = new(TokenLimit: 1000, TokensPerPeriod: 100, ReplenishmentPeriodSeconds: 1);
 

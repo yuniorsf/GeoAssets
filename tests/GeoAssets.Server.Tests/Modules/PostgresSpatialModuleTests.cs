@@ -67,17 +67,9 @@ public sealed class PostgresSpatialModuleTests
     }
 
     [Fact]
-    public async Task MapEndpoints_MapsBothWmsRoutes_AnonymousByDefault()
+    public async Task MapEndpoints_MapsBothWmsRoutes_RequiringFeaturesRead()
     {
         var routes = await MappedRoutesAsync();
-
-        routes.Should().BeEquivalentTo(["GET /api/geoassets/wms | anonymous", "GET /wms | anonymous"]);
-    }
-
-    [Fact]
-    public async Task MapEndpoints_WithWmsRequireAuthentication_RequiresAuthorization()
-    {
-        var routes = await MappedRoutesAsync((PostgresSpatialModule.WmsRequireAuthenticationKey, "true"));
 
         routes.Should().BeEquivalentTo(["GET /api/geoassets/wms | policy:features:read", "GET /wms | policy:features:read"]);
     }

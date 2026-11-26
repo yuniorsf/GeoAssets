@@ -72,10 +72,7 @@ public class EndpointAuthorizationTests
         public Task<AuthorizationContext> GetAuthorizationContextAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private static Task<TestServer> BuildServerAsync(params string[] grantedPermissions) =>
-        BuildServerAsync(wmsRequireAuthentication: true, grantedPermissions);
-
-    private static async Task<TestServer> BuildServerAsync(bool wmsRequireAuthentication, params string[] grantedPermissions)
+    private static async Task<TestServer> BuildServerAsync(params string[] grantedPermissions)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -110,8 +107,8 @@ public class EndpointAuthorizationTests
                     {
                         endpoints.MapGeoAssetsApi();
                         endpoints.MapWfsApi();
-                        endpoints.MapWmsApi(route: "/api/geoassets/wms", requireAuthentication: wmsRequireAuthentication);
-                        endpoints.MapWmsApi(requireAuthentication: wmsRequireAuthentication);
+                        endpoints.MapWmsApi(route: "/api/geoassets/wms");
+                        endpoints.MapWmsApi();
                     });
                 });
             })
@@ -322,46 +319,57 @@ public class EndpointAuthorizationTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // ── GET /wms (features:read) — capabilities only; GetMap needs a real Postgres-backed
-    // render query, out of scope for this authorization-gating test ─────────────────
+    // ── GET /wms and /api/geoassets/wms (features:read, every operation; XD01-96) ─────
 
-    [Fact]
-    public async Task Wms_Unauthenticated_Returns401()
+    public static TheoryData<string, string> WmsRequests()
+    {
+        const string Bbox = "BBOX=-39,-13.5,-38,-12.5&WIDTH=256&HEIGHT=256";
+        var data = new TheoryData<string, string>();
+        foreach (var route in new[] { "/wms", "/api/geoassets/wms" })
+        {
+            data.Add(route, "SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities");
+            data.Add(route, $"SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoassets:feature&FORMAT=image/png&{Bbox}");
+            data.Add(route, $"SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo&{Bbox}&I=128&J=128");
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(WmsRequests))]
+    public async Task Wms_Unauthenticated_Returns401(string route, string query)
     {
         using var server = await BuildServerAsync("features:read");
         using var client = server.CreateClient();
 
-        var response = await client.GetAsync(new Uri("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities", UriKind.Relative));
+        var response = await client.GetAsync(new Uri($"{route}?{query}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    [Fact]
-    public async Task Wms_MissingReadPermission_Returns403()
+    [Theory]
+    [MemberData(nameof(WmsRequests))]
+    public async Task Wms_MissingReadPermission_Returns403(string route, string query)
     {
         using var server = await BuildServerAsync(); // authenticated, no permissions granted
         using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync(new Uri("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities", UriKind.Relative));
+        var response = await client.GetAsync(new Uri($"{route}?{query}", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    [Fact]
-    public async Task Wms_RequireAuthenticationDisabled_AllowsAnonymousAccess()
+    [Theory]
+    [MemberData(nameof(WmsRequests))]
+    public async Task Wms_WithReadPermission_AnswersAndForbidsSharedCaches(string route, string query)
     {
-        // Interim toggle (XD01-95): the in-app Leaflet map can't attach a bearer token to its
-        // <img>-based tile requests, so Wms:RequireAuthentication=false must actually let an
-        // anonymous caller reach the handler, not just change the default. An unsupported
-        // REQUEST value needs no database access (unlike GetCapabilities/GetMap/GetFeatureInfo —
-        // out of scope for this authorization-gating test, see the class comment above), so a
-        // 400 here proves the request got past authorization; a 401/403 would mean the flag had
-        // no effect.
-        using var server = await BuildServerAsync(wmsRequireAuthentication: false);
-        using var client = server.CreateClient();
+        using var server = await BuildServerAsync("features:read");
+        using var client = AuthenticatedClient(server);
 
-        var response = await client.GetAsync(new Uri("/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=Nonsense", UriKind.Relative));
+        var response = await client.GetAsync(new Uri($"{route}?{query}", UriKind.Relative));
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Headers.CacheControl.Should().NotBeNull();
+        response.Headers.CacheControl!.Private.Should().BeTrue();
     }
 }

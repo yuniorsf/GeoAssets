@@ -122,6 +122,10 @@ var geoAssetsServerBaseUrl = builder.Configuration["GeoAssetsServer:BaseUrl"]
 // entry's for a request under that route (XD01-397); see GeoAssetsServerClientExtensions.
 builder.Services.AddGeoAssetsServerClient(builder.Configuration, geoAssetsServerBaseUrl);
 
+// The token the map fetches WMS tiles from the gateway with (XD01-96), from the same MSAL token provider and scope routes
+// as the "GeoAssetsServer" client; a WMS server elsewhere gets none. Replaces AddGeoAssetsPanelState's fallback.
+builder.Services.AddScoped<IMapTileAccessProvider, MsalMapTileAccessProvider>();
+
 // The map context menu's feature actions (XD01-370): GET /api/geoassets/features/{id}/actions on GeoAssets.Server,
 // through the token-carrying "GeoAssetsServer" client above.
 builder.Services.AddFeatureActionsRest(geoAssetsServerBaseUrl);

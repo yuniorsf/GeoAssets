@@ -37,22 +37,20 @@ public static class WmsEndpointExtensions
     private static readonly byte[] _emptyTilePng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
 
-    /// <param name="requireAuthentication">
-    /// Temporary interim toggle (XD01-95): the in-app Leaflet map loads tiles via plain
-    /// <c>&lt;img&gt;</c> elements, which can never carry a bearer token, so
-    /// <c>features:read</c> can't actually be enforced against this app's own map today.
-    /// Driven by <c>Wms:RequireAuthentication</c> in configuration (defaults to <c>false</c> —
-    /// open — until a real fix is designed and implemented in the follow-up ticket XD01-95
-    /// links to). Defaults to <c>true</c> here so any other caller of this method stays
-    /// secure-by-default unless it explicitly opts out.
-    /// </param>
+    /// <summary>
+    /// Maps the endpoint at <paramref name="route"/>. Every operation requires <c>features:read</c>; nothing opens it
+    /// (XD01-96 replaced the interim switch XD01-95 added to serve it anonymously). The in-app map fetches its tiles with
+    /// the caller's bearer token. Every response is marked <c>Cache-Control: private</c>: it shows the caller's
+    /// organization's features, so no shared cache may store it.
+    /// </summary>
     public static IEndpointRouteBuilder MapWmsApi(
         this IEndpointRouteBuilder routes,
-        string route = "/wms",
-        bool   requireAuthentication = true)
+        string route = "/wms")
     {
-        var group = routes.MapGet(route, async (HttpRequest req, IAssetRenderQuery renderer, IAssetProvider catalog, CancellationToken ct) =>
+        routes.MapGet(route, async (HttpRequest req, IAssetRenderQuery renderer, IAssetProvider catalog, CancellationToken ct) =>
         {
+            req.HttpContext.Response.Headers.CacheControl = "private";
+
             string Param(string key)
             {
                 foreach (var k in new[] { key, key.ToUpperInvariant(), key.ToLowerInvariant() })
@@ -78,12 +76,7 @@ public static class WmsEndpointExtensions
                 // Return a transparent 1×1 PNG so the browser doesn't log a network error.
                 return Results.Bytes(_emptyTilePng, "image/png");
             }
-        });
-
-        if (requireAuthentication)
-            group.RequireAuthorization("features:read");
-        else
-            group.AllowAnonymous();
+        }).RequireAuthorization("features:read");
 
         return routes;
     }

@@ -34,12 +34,12 @@ using Xunit;
 namespace GeoAssets.Security.Tests;
 
 /// <summary>
-/// The WMS endpoint's tenant scoping contract (XD01-372, ADR-001 smell P): anonymous and organization-less callers see
-/// the shared features only; an organization's caller sees its organization's features plus the shared ones — the same
+/// The WMS endpoint's tenant scoping contract (XD01-372, ADR-001 smell P): an anonymous caller is refused (XD01-96); an
+/// organization-less caller sees the shared features only; an organization's caller sees its organization's features plus the shared ones — the same
 /// view as the feature API (XD01-338) — for both painted pixels (GetMap) and GetFeatureInfo. Runs on a database built by
 /// the production migrations and with <c>Program.cs</c> + <c>PostgresSpatialModule</c>'s wiring: organization-scoped
 /// catalogs, <c>AddPostgresAssetRenderQuery</c>, <see cref="HttpTenantContext"/> and
-/// <c>MapWmsApi(requireAuthentication: false)</c> (the <c>Wms:RequireAuthentication</c> default), in the
+/// <c>MapWmsApi()</c> (which requires <c>features:read</c>), in the
 /// <c>Production</c> environment the deployed stack runs in. The application connects as the tables' owner, as the
 /// deployed stack does, so row-level security is not in play and the tenant-stamped transaction plus
 /// <see cref="GeoAssetsDbContext"/>'s query filter is the only scoping.
@@ -75,7 +75,6 @@ public sealed class WmsTenantScopingTests
         var observed = new Dictionary<string, (string[] FeatureInfo, string[] Painted)>(StringComparer.Ordinal);
         foreach (var (caller, organization) in new (string, string?)[]
                  {
-                     ("anonymous", null),
                      ("organization-less", NoOrganization),
                      ("organization A", OrganizationA.ToString()),
                      ("organization B", OrganizationB.ToString()),
@@ -88,14 +87,30 @@ public sealed class WmsTenantScopingTests
         var report = string.Join("; ", observed.Select(kv =>
             $"{kv.Key}: GetFeatureInfo=[{string.Join(",", kv.Value.FeatureInfo)}] GetMap=[{string.Join(",", kv.Value.Painted)}]"));
 
-        observed["anonymous"].FeatureInfo.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
-        observed["anonymous"].Painted.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
         observed["organization-less"].FeatureInfo.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
         observed["organization-less"].Painted.Should().BeEquivalentTo([SharedPole.Id], because: "observed {0}", report);
         observed["organization A"].FeatureInfo.Should().BeEquivalentTo([PoleOfA.Id, SharedPole.Id], because: "observed {0}", report);
         observed["organization A"].Painted.Should().BeEquivalentTo([PoleOfA.Id, SharedPole.Id], because: "observed {0}", report);
         observed["organization B"].FeatureInfo.Should().BeEquivalentTo([PoleOfB.Id, SharedPole.Id], because: "observed {0}", report);
         observed["organization B"].Painted.Should().BeEquivalentTo([PoleOfB.Id, SharedPole.Id], because: "observed {0}", report);
+    }
+
+    [Fact]
+    public async Task Wms_RefusesAnAnonymousCaller_ForEveryOperation()
+    {
+        await using var host = await HostAsync();
+        using var client = host.ClientFor(organization: null);
+
+        foreach (var request in new[]
+                 {
+                     "REQUEST=GetCapabilities",
+                     "REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=TRUE",
+                     "REQUEST=GetFeatureInfo&I=50&J=50&FEATURE_COUNT=10&INFO_FORMAT=application/json",
+                 })
+        {
+            using var response = await client.GetAsync(WmsUri(request));
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized, because: "{0} is not served to an anonymous caller", request);
+        }
     }
 
     // ── Probes ────────────────────────────────────────────────────────────────
@@ -221,7 +236,7 @@ public sealed class WmsTenantScopingTests
         await web.Services.WarmPostgresAssetProviderAsync();
         web.UseGeoAssetsAuthentication();
         web.UseOrganizationAssetCatalogs();
-        web.MapWmsApi(requireAuthentication: false);
+        web.MapWmsApi();
         await web.StartAsync();
         return new Host(web);
     }
