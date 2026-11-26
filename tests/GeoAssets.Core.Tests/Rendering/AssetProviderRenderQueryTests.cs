@@ -49,6 +49,57 @@ public class AssetProviderRenderQueryTests
         feature.Geometry.Should().BeOfType<GeoPoint>();
     }
 
+    // ── Zoom and MaxCount (XD01-430) ──────────────────────────────────────────
+
+    [Theory]
+    [InlineData(null, new[] { "box", "pole" })]
+    [InlineData(10, new[] { "box" })]
+    [InlineData(15, new[] { "box", "pole" })]
+    [InlineData(18, new[] { "pole" })]
+    public async Task GetRenderableAsync_Zoom_LeavesOutTheTypesItHides(int? zoom, string[] expected)
+    {
+        _poles.MinZoom = 15;
+        _boxes.MaxZoom = 16;
+        Seed("pole", _poles, new GeoPoint(1, 1));
+        Seed("box", _boxes, new GeoPoint(2, 2));
+
+        var result = await NewSut().GetRenderableAsync(Whole, new RenderQueryOptions { Zoom = zoom }, CancellationToken.None);
+
+        result.Select(f => f.Id).Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task GetRenderableAsync_MaxCount_TakesTheFirstByOrdinalId()
+    {
+        foreach (var id in new[] { "c", "a", "B", "b" })
+            Seed(id, _poles, new GeoPoint(1, 1));
+
+        var result = await NewSut().GetRenderableAsync(Whole, new RenderQueryOptions { MaxCount = 3 }, CancellationToken.None);
+
+        result.Select(f => f.Id).Should().Equal("B", "a", "b");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task GetRenderableAsync_NonPositiveMaxCount_ReturnsNothing(int maxCount)
+    {
+        Seed("pole", _poles, new GeoPoint(1, 1));
+
+        var result = await NewSut().GetRenderableAsync(Whole, new RenderQueryOptions { MaxCount = maxCount }, CancellationToken.None);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RenderQueryOptions_ByDefault_AreCappedAtTheBoundsReadsLimit()
+    {
+        var options = new RenderQueryOptions();
+
+        options.MaxCount.Should().Be(RenderQueryOptions.DefaultMaxCount).And.Be(10_000);
+        options.Zoom.Should().BeNull();
+    }
+
     [Fact]
     public async Task GetRenderableAsync_GeometrylessFeatures_AreDropped()
     {

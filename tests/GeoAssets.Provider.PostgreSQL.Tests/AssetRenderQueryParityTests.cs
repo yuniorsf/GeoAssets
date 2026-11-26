@@ -83,6 +83,27 @@ public sealed class AssetRenderQueryParityTests(PostgresContainerFixture fixture
     }
 
     [Fact]
+    public async Task GetRenderableAsync_ForEveryZoomAndSeveralCaps_ReturnsTheSameFeaturesInTheSameOrder()
+    {
+        await using var world = await RenderQueryWorld.SeedAsync(fixture);
+        var (pushdown, generic) = QueriesOf(world, fixture);
+
+        foreach (var zoom in Enumerable.Range(0, 21).Cast<int?>().Append(null))
+        {
+            foreach (var maxCount in new[] { 1, 3, 100 })
+            {
+                var options = new RenderQueryOptions { Zoom = zoom, MaxCount = maxCount };
+
+                var fromPushdown = await pushdown.GetRenderableAsync(world.Whole, options, CancellationToken.None);
+                var fromGeneric = await generic.GetRenderableAsync(world.Whole, options, CancellationToken.None);
+
+                fromPushdown.Select(f => (f.Id, f.Color)).Should().Equal(
+                    fromGeneric.Select(f => (f.Id, f.Color)), "at zoom {0} with at most {1}", zoom, maxCount);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Render_FeatureWithoutLayer_KeepsItsAssetTypeColor()
     {
         await using var world = await RenderQueryWorld.SeedAsync(fixture);

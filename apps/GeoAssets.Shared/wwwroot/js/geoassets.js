@@ -1375,8 +1375,9 @@ window.GeoAssets = (function () {
 
     /**
      * Draws `assetTypeId` only while `min <= zoom <= max` (null/undefined bound = open; both open
-     * removes the range). Evaluated now and on every `zoomend`. Client-side only: .NET still
-     * sends features of every type for the viewport — they are kept, just not on the map.
+     * removes the range). Evaluated now and on every `zoomend`. A provider may still send features
+     * of every type for the viewport (the kernel leaves the hidden ones out since XD01-430) — any
+     * that arrive are kept, just not on the map.
      */
     function setLayerZoomRange(divId, assetTypeId, min, max) {
         const state = _maps[divId];

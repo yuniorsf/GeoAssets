@@ -220,4 +220,56 @@ public class GeoJsonSerializerTests
         GeoJsonSerializer.DeserializeFeature(json)!.Geometry
             .Should().BeOfType<GeoRawGeometry>().Which.Type.Should().Be("MultiPolygon");
     }
+
+    [Fact]
+    public void Write_GeoRawGeometryReadFromJson_WritesTheOriginalTextVerbatim()
+    {
+        var feature = new GeoFeature { Geometry = GeoJsonSerializer.DeserializeGeometry(MultiPolygonJson) };
+
+        JsonSerializer.Serialize(feature, GeoJsonSerializer.CompactOptions).Should().Contain(MultiPolygonJson);
+    }
+
+    // ── Converter-less inner options, made once per options instance (XD01-430) ─
+
+    private static JsonSerializerOptions CallerOptions(bool indented) => new()
+    {
+        WriteIndented = indented,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new GeoGeometryConverter() },
+    };
+
+    [Fact]
+    public void Converter_UnderACallersOwnOptions_AppliesTheirSettings_OnEveryCall()
+    {
+        var indented = CallerOptions(indented: true);
+        var compact = CallerOptions(indented: false);
+        GeoGeometry point = new GeoPoint(1.5, 2.5);
+
+        var first = JsonSerializer.Serialize(point, indented);
+        var second = JsonSerializer.Serialize(point, indented);
+        var flat = JsonSerializer.Serialize(point, compact);
+
+        second.Should().Be(first);
+        first.Should().Contain("\n", "the inner options copy the caller's WriteIndented");
+        flat.Should().NotContain("\n").And.Contain("\"coordinates\":[1.5,2.5]");
+    }
+
+    [Fact]
+    public async Task Converter_UsedConcurrently_WritesAndReadsEveryGeometryTheSame()
+    {
+        var options = CallerOptions(indented: false);
+        GeoGeometry[] geometries =
+        [
+            new GeoPoint(1, 2),
+            new GeoLineString([(0.0, 0.0), (1.0, 1.0)]),
+            new GeoPolygon([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]),
+            new GeoRawGeometry("MultiPolygon", MultiPolygonJson),
+        ];
+        var expected = geometries.Select(g => JsonSerializer.Serialize(g, GeoJsonSerializer.CompactOptions)).ToArray();
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
+            geometries.Select(g => JsonSerializer.Serialize(JsonSerializer.Deserialize<GeoGeometry>(JsonSerializer.Serialize(g, options), options), options)).ToArray())));
+
+        results.Should().OnlyContain(r => r.SequenceEqual(expected));
+    }
 }

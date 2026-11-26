@@ -54,6 +54,79 @@ public class IAssetProviderDefaultsTests
         chunks.Should().ContainSingle().Which.Should().Be("[]");
     }
 
+    // ── GetInViewportAsync (XD01-430) ────────────────────────────────────────
+
+    private static readonly AssetType PoleType = new() { Name = "pole", MinZoom = 15 };
+    private static readonly AssetType DistrictType = new() { Name = "district", MinZoom = 8, MaxZoom = 13 };
+
+    private static GeoFeature Feature(string id, AssetType? type, double lon = 0.5, double lat = 0.5, string? assetTypeId = null) => new()
+    {
+        Id = id,
+        Geometry = new GeoPoint(lon, lat),
+        Properties = new GeoFeatureProperties { AssetTypeId = assetTypeId ?? type?.Id.ToString() ?? string.Empty },
+    };
+
+    private static TestAssetProvider ViewportWorld()
+    {
+        var provider = new TestAssetProvider();
+        provider.AddAssetType(PoleType);
+        provider.AddAssetType(DistrictType);
+        provider.Add(Feature("pole-b", PoleType));
+        provider.Add(Feature("pole-a", PoleType));
+        provider.Add(Feature("district", DistrictType));
+        provider.Add(Feature("untyped", null, assetTypeId: "not-a-stored-type"));
+        provider.Add(Feature("outside", DistrictType, lon: 5, lat: 5));
+        return provider;
+    }
+
+    private static async Task<string[]> ViewportIdsAsync(IAssetProvider sut, int? zoom, int maxCount = 100) =>
+        [.. (await sut.GetInViewportAsync(new ViewportQuery(new BoundingBox(0, 0, 1, 1), zoom), maxCount)).Select(f => f.Id)];
+
+    [Theory]
+    [InlineData(7, new[] { "untyped" })]
+    [InlineData(12, new[] { "district", "untyped" })]
+    [InlineData(14, new[] { "untyped" })]
+    [InlineData(16, new[] { "pole-a", "pole-b", "untyped" })]
+    public async Task GetInViewportAsync_Zoom_LeavesOutTheTypesItHides_KeepsUnknownTypes_InOrdinalIdOrder(int zoom, string[] expected)
+    {
+        (await ViewportIdsAsync(ViewportWorld(), zoom)).Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task GetInViewportAsync_NoZoom_ReturnsEveryFeatureInTheBounds()
+    {
+        (await ViewportIdsAsync(ViewportWorld(), zoom: null)).Should().Equal("district", "pole-a", "pole-b", "untyped");
+    }
+
+    [Fact]
+    public async Task GetInViewportAsync_MaxCount_TakesTheFirstByOrdinalId_AfterTheZoomFilter()
+    {
+        var sut = ViewportWorld();
+
+        (await ViewportIdsAsync(sut, zoom: 16, maxCount: 2)).Should().Equal("pole-a", "pole-b");
+        (await ViewportIdsAsync(sut, zoom: null, maxCount: 1)).Should().Equal("district");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    public async Task GetInViewportAsync_NonPositiveMaxCount_ReturnsNothing(int maxCount)
+    {
+        (await ViewportIdsAsync(ViewportWorld(), zoom: 16, maxCount)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetInViewportAsync_AlreadyCancelled_RefusesToStart()
+    {
+        IAssetProvider sut = ViewportWorld();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => sut.GetInViewportAsync(new ViewportQuery(new BoundingBox(0, 0, 1, 1), 12), 10, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
     // ── ViewportQuery reads (XD01-429) ───────────────────────────────────────
 
     private static readonly ViewportQuery Viewport = new(new BoundingBox(0, 0, 1, 1), 12);

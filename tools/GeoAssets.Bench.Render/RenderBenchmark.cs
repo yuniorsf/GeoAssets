@@ -18,6 +18,7 @@ internal sealed record ViewportResult(
     double CenterLat,
     GeoBounds Bounds,
     long PayloadBytes,
+    long BrotliBytes,
     long GzipBytes,
     int MatchedRows,
     int ReturnedFeatures,
@@ -33,6 +34,7 @@ internal sealed record ViewportResult(
 internal sealed record ZoomResult(
     int Zoom,
     PercentileSummary PayloadBytes,
+    PercentileSummary BrotliBytes,
     PercentileSummary GzipBytes,
     PercentileSummary MatchedRows,
     PercentileSummary ReturnedFeatures,
@@ -73,7 +75,7 @@ internal sealed class RenderBenchmark(BoundsEndpointPipeline server, SimulatedCl
             await log.WriteLineAsync($"z{zoom}: warm-up {pass + 1}/{settings.WarmupIterations}").ConfigureAwait(false);
             foreach (var viewport in viewports)
             {
-                var warm = await server.GetAsync(viewport.Bounds, cancellationToken).ConfigureAwait(false);
+                var warm = await server.GetAsync(viewport.Bounds, viewport.Zoom, cancellationToken).ConfigureAwait(false);
                 client.Render(warm.Payload, viewport);
             }
         }
@@ -88,7 +90,7 @@ internal sealed class RenderBenchmark(BoundsEndpointPipeline server, SimulatedCl
             await log.WriteLineAsync($"z{zoom}: pass {pass + 1}/{settings.Iterations}").ConfigureAwait(false);
             for (var v = 0; v < viewports.Count; v++)
             {
-                var response = await server.GetAsync(viewports[v].Bounds, cancellationToken).ConfigureAwait(false);
+                var response = await server.GetAsync(viewports[v].Bounds, viewports[v].Zoom, cancellationToken).ConfigureAwait(false);
                 var render = client.Render(response.Payload, viewports[v]);
                 serverMs[v].Add(response.Total.TotalMilliseconds);
                 databaseMs.Add(response.Database.TotalMilliseconds);
@@ -102,6 +104,7 @@ internal sealed class RenderBenchmark(BoundsEndpointPipeline server, SimulatedCl
             viewport.CenterLat,
             viewport.Bounds,
             first[v].Response.Payload.LongLength,
+            first[v].Response.BrotliPayload.LongLength,
             GzipLength(first[v].Response.Payload),
             first[v].Response.MatchedRows,
             first[v].Response.ReturnedFeatures,
@@ -113,6 +116,7 @@ internal sealed class RenderBenchmark(BoundsEndpointPipeline server, SimulatedCl
         return new ZoomResult(
             zoom,
             PercentileSummary.Of(perViewport.Select(r => (double)r.PayloadBytes)),
+            PercentileSummary.Of(perViewport.Select(r => (double)r.BrotliBytes)),
             PercentileSummary.Of(perViewport.Select(r => (double)r.GzipBytes)),
             PercentileSummary.Of(perViewport.Select(r => (double)r.MatchedRows)),
             PercentileSummary.Of(perViewport.Select(r => (double)r.ReturnedFeatures)),
@@ -123,7 +127,7 @@ internal sealed class RenderBenchmark(BoundsEndpointPipeline server, SimulatedCl
             perViewport);
     }
 
-    /// <summary>The body's size if the response were gzip-compressed at ASP.NET Core's default level (<c>Fastest</c>) — informational: neither the kernel nor the gateway compresses today.</summary>
+    /// <summary>The body's size gzip-compressed at <c>Fastest</c> — what the kernel sends a caller that accepts gzip but not Brotli (XD01-430).</summary>
     internal static long GzipLength(byte[] payload)
     {
         using var buffer = new MemoryStream();

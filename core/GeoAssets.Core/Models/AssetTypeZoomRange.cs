@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace GeoAssets.Core.Models;
 
 /// <summary>
@@ -34,4 +36,19 @@ public static class AssetTypeZoomRange
     /// <summary>Whether a type with this range is drawn at <paramref name="zoom"/> (bounds inclusive, null = open).</summary>
     public static bool Contains(int? minZoom, int? maxZoom, int zoom) =>
         (minZoom is null || zoom >= minZoom) && (maxZoom is null || zoom <= maxZoom);
+
+    /// <summary>
+    /// The ids of the <paramref name="types"/> not drawn at <paramref name="zoom"/>, as features name their type
+    /// (<see cref="GeoFeatureProperties.AssetTypeId"/>: the id's <c>D</c> form, compared ordinally — as the map does).
+    /// A feature whose type is not among them, unknown types included, is drawn (XD01-430).
+    /// </summary>
+    public static FrozenSet<string> TypeIdsHiddenAt(IEnumerable<AssetType> types, int zoom)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+
+        return types
+            .Where(t => !Contains(t.MinZoom, t.MaxZoom, zoom))
+            .Select(t => t.Id.ToString())
+            .ToFrozenSet(StringComparer.Ordinal);
+    }
 }

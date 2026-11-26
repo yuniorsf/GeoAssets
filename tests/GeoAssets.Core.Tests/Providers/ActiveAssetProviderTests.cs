@@ -4,6 +4,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Tests;
 using Xunit;
@@ -39,6 +40,22 @@ public class ActiveAssetProviderTests
     }
 
     // ── Read pass-through ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetInViewportAsync_DelegatesToCurrentsOwnRead()
+    {
+        var pool = new ProviderPool();
+        var sut = new ActiveAssetProvider(pool);
+        var store = new TestAssetProvider();
+        store.Add(Feature("f1", AssetType.Point.Id.ToString()));
+        var inner = new UnfilteredViewportAssetProvider(store);
+        pool.SetActive(pool.Add("A", inner).Id);
+
+        var features = await sut.GetInViewportAsync(new ViewportQuery(new BoundingBox(0, 0, 1, 1), 12), 10);
+
+        features.Select(f => f.Id).Should().Equal("f1");
+        inner.ViewportCalls.Should().Be(1);
+    }
 
     [Fact]
     public void GetById_DelegatesToCurrent()

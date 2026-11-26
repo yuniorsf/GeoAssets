@@ -22,7 +22,9 @@ namespace GeoAssets.Server;
 /// Supported operations:
 /// <list type="bullet">
 ///   <item><term>GetCapabilities</term><description>WMS 1.1.1 service metadata XML.</description></item>
-///   <item><term>GetMap</term><description>PNG raster image rendered with SkiaSharp from the render query's features.</description></item>
+///   <item><term>GetMap</term><description>PNG raster image rendered with SkiaSharp from the render query's features —
+///   those whose asset type is drawn at the zoom of the request's scale (<see cref="ZoomOf"/>), at most
+///   <see cref="RenderQueryOptions.DefaultMaxCount"/> (XD01-430).</description></item>
 ///   <item><term>GetFeatureInfo</term><description>JSON properties for features at a clicked pixel.</description></item>
 /// </list>
 ///
@@ -36,6 +38,9 @@ public static class WmsEndpointExtensions
     // Pre-computed so we never spin up SkiaSharp for a cancelled request.
     private static readonly byte[] _emptyTilePng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+
+    // One instance for every GetFeatureInfo answer (XD01-430), not one per request.
+    private static readonly JsonSerializerOptions _featureInfoJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     /// <summary>
     /// Maps the endpoint at <paramref name="route"/>. Every operation requires <c>features:read</c>; nothing opens it
@@ -174,8 +179,8 @@ public static class WmsEndpointExtensions
             ? layerParam["geoassets:feature:".Length..]
             : null;
 
-        var rows = await renderer.GetRenderableAsync(
-            new BoundingBox(minLon, minLat, maxLon, maxLat), new RenderQueryOptions { AssetTypeId = assetTypeId }, ct).ConfigureAwait(false);
+        var options = new RenderQueryOptions { AssetTypeId = assetTypeId, Zoom = ZoomOf(maxLon - minLon, width) };
+        var rows = await renderer.GetRenderableAsync(new BoundingBox(minLon, minLat, maxLon, maxLat), options, ct).ConfigureAwait(false);
 
         var pngBytes = RenderToPng(rows, width, height, minLon, minLat, maxLon, maxLat, transparent);
         return Results.Bytes(pngBytes, "image/png");
@@ -212,7 +217,7 @@ public static class WmsEndpointExtensions
                 assetTypeId= r.AssetTypeId,
                 description= r.Description
             })
-        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }, _featureInfoJson);
     }
 
     // ── SkiaSharp renderer ────────────────────────────────────────────────────
@@ -343,6 +348,21 @@ public static class WmsEndpointExtensions
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The map zoom a GetMap request draws at (XD01-430), from its scale: the Web Mercator zoom whose 256-px tiles span
+    /// <paramref name="lonSpan"/> degrees of longitude over <paramref name="widthPx"/> pixels — exactly the tile's zoom for
+    /// the map's own WMS layer (Leaflet asks EPSG:4326 boxes of 360 / 2^z degrees per 256-px tile), the nearest one for
+    /// any other client. Clamped to <see cref="AssetTypeZoomRange"/>'s levels; <c>null</c> (no zoom filtering) for a box
+    /// without width.
+    /// </summary>
+    private static int? ZoomOf(double lonSpan, int widthPx)
+    {
+        if (!(lonSpan > 0) || widthPx <= 0) return null;
+
+        var zoom = Math.Round(Math.Log2(360.0 * widthPx / (256.0 * lonSpan)), MidpointRounding.AwayFromZero);
+        return (int)Math.Clamp(zoom, AssetTypeZoomRange.LowestZoom, AssetTypeZoomRange.HighestZoom);
+    }
 
     private static bool TryParseBbox(string raw,
         out double minLon, out double minLat, out double maxLon, out double maxLat)

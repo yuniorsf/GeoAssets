@@ -14,7 +14,7 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// <para>Built for one organization, the provider opens every context — the long-lived one its
 /// writes use and the short-lived ones its reads use — for that organization, so its in-memory
 /// cache holds that organization's own features only (the context's query filter). The reads it
-/// pushes down to PostgreSQL (<see cref="GetInBoundsAsync"/>, <see cref="GetPageAsync"/>) return
+/// pushes down to PostgreSQL (<see cref="GetInBoundsAsync"/>, <see cref="GetInViewportAsync"/>, <see cref="GetPageAsync"/>) return
 /// that organization's features plus the organization-less (shared) ones in one query, so their
 /// paging and counting stay in SQL; <see cref="OrganizationAssetCatalog"/> adds the shared
 /// features to the cache-backed reads from the shared catalog.</para>

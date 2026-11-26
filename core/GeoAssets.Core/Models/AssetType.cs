@@ -45,9 +45,9 @@ public sealed class AssetType : IOrgOwnedResource
 
     /// <summary>
     /// Lowest map zoom level at which features of this type are drawn (inclusive). <c>null</c>
-    /// leaves the bound open. An interim, client-side level of detail (XD01-311): the map hides
-    /// the type outside its range, the provider still returns its features. Bounds are checked by
-    /// <see cref="AssetTypeZoomRange"/>.
+    /// leaves the bound open. An interim level of detail (XD01-311): the map hides the type outside
+    /// its range, and the kernel's viewport read (<c>GET /features/bounds?zoom=</c>) and WMS leave
+    /// its features out there too (XD01-430). Bounds are checked by <see cref="AssetTypeZoomRange"/>.
     /// </summary>
     public int? MinZoom { get; set; }
 

@@ -111,6 +111,8 @@ public sealed class ObservableAssetProvider(
         => inner.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(ViewportQuery viewport, CancellationToken ct = default)
         => inner.GetInBoundsRawJsonChunksAsync(viewport, ct);
+    public Task<IReadOnlyList<GeoFeature>>          GetInViewportAsync(ViewportQuery viewport, int maxCount, CancellationToken ct = default)
+        => inner.GetInViewportAsync(viewport, maxCount, ct);
     public GeoFeature?                              GetById(string id)                                    => inner.GetById(id);
     public IReadOnlyList<GeoFeature>                GetByAssetType(string assetTypeId)                   => inner.GetByAssetType(assetTypeId);
     public IReadOnlyList<GeoFeature>                Search(string query)                                  => inner.Search(query);

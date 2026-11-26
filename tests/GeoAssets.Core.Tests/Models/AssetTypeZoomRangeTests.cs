@@ -173,4 +173,40 @@ public class AssetTypeZoomRangeTests
         (types[bounded.Id].MinZoom, types[bounded.Id].MaxZoom).Should().Be((8, 14));
         (types[AssetType.Point.Id].MinZoom, types[AssetType.Point.Id].MaxZoom).Should().Be((null, null));
     }
+
+    // ── TypeIdsHiddenAt (XD01-430) ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData(7, new[] { "pole", "feeder" })]
+    [InlineData(8, new[] { "pole" })]
+    [InlineData(14, new[] { "pole" })]
+    [InlineData(15, new[] { "feeder" })]
+    [InlineData(20, new[] { "feeder" })]
+    public void TypeIdsHiddenAt_ListsTheTypesWhoseRangeExcludesTheZoom_BoundsInclusive(int zoom, string[] hidden)
+    {
+        var pole = new AssetType { Name = "pole", MinZoom = 15 };
+        var feeder = new AssetType { Name = "feeder", MinZoom = 8, MaxZoom = 14 };
+        var open = new AssetType { Name = "open" };
+        var byName = new Dictionary<string, AssetType>(StringComparer.Ordinal) { ["pole"] = pole, ["feeder"] = feeder };
+
+        var result = AssetTypeZoomRange.TypeIdsHiddenAt([pole, feeder, open], zoom);
+
+        result.Should().BeEquivalentTo(hidden.Select(name => byName[name].Id.ToString()));
+        result.Should().NotContain(open.Id.ToString(), "an open range is drawn at every zoom");
+    }
+
+    [Fact]
+    public void TypeIdsHiddenAt_ComparesIdsAsFeaturesStoreThem_Ordinally()
+    {
+        var pole = new AssetType { Name = "pole", MinZoom = 15 };
+
+        var result = AssetTypeZoomRange.TypeIdsHiddenAt([pole], 10);
+
+        result.Should().Contain(pole.Id.ToString());
+        result.Should().NotContain(pole.Id.ToString().ToUpperInvariant(), "the map matches type ids exactly, so the server does too");
+    }
+
+    [Fact]
+    public void TypeIdsHiddenAt_NoTypes_HidesNothing() =>
+        AssetTypeZoomRange.TypeIdsHiddenAt([], 3).Should().BeEmpty();
 }

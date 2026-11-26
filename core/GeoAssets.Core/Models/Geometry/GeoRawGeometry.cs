@@ -8,15 +8,17 @@ namespace GeoAssets.Core.Models.Geometry;
 /// Pass-through geometry for GeoJSON types that have no native domain class
 /// (MultiPoint, MultiLineString, MultiPolygon, GeometryCollection, …).
 ///
-/// The original JSON text is stored verbatim and round-tripped on
-/// serialization so that Leaflet can render it correctly.
+/// Read from GeoJSON, the original JSON text is stored verbatim and round-tripped on
+/// serialization so that Leaflet can render it correctly; NTS spatial operations are parsed
+/// lazily from the raw JSON so that persistence to PostGIS works correctly for all geometry types.
 ///
-/// NTS spatial operations are parsed lazily from the raw JSON so that
-/// persistence to PostGIS works correctly for all geometry types.
+/// Wrapped from an NTS geometry (<see cref="GeoGeometry.FromNts"/>), the NTS object is the source
+/// of truth, as for the typed geometries: it is kept as is — SRID included — and written straight
+/// to the JSON output, with no intermediate GeoJSON text (XD01-430).
 /// </summary>
 public sealed class GeoRawGeometry : GeoGeometry
 {
-    private readonly string _rawJson;
+    private readonly string? _rawJson;
     private readonly string _type;
     private NtsGeometry? _ntsGeometry;
 
@@ -26,6 +28,13 @@ public sealed class GeoRawGeometry : GeoGeometry
         _rawJson = rawJson;
     }
 
+    /// <summary>Wraps an existing NTS geometry — no copy, no GeoJSON text until one is asked for.</summary>
+    internal GeoRawGeometry(NtsGeometry geometry)
+    {
+        _type        = geometry.GeometryType;
+        _ntsGeometry = geometry;
+    }
+
     [JsonPropertyName("type")]
     public override string Type => _type;
 
@@ -33,8 +42,8 @@ public sealed class GeoRawGeometry : GeoGeometry
     public override GeometryType GeometryType => GeometryType.Raw;
 
     /// <summary>
-    /// Parses the raw GeoJSON into an NTS geometry so that PostGIS persistence
-    /// stores the actual geometry instead of an empty collection.
+    /// The wrapped NTS geometry, or — read from GeoJSON — the raw GeoJSON parsed into one so that
+    /// PostGIS persistence stores the actual geometry instead of an empty collection.
     /// Falls back to an empty geometry collection if parsing fails.
     /// </summary>
     [JsonIgnore]
@@ -45,7 +54,7 @@ public sealed class GeoRawGeometry : GeoGeometry
             if (_ntsGeometry is not null) return _ntsGeometry;
             try
             {
-                _ntsGeometry = JsonSerializer.Deserialize<NtsGeometry>(_rawJson, _ntsJsonOpts)
+                _ntsGeometry = JsonSerializer.Deserialize<NtsGeometry>(_rawJson!, _ntsJsonOpts)
                                ?? GeoFactory.Wgs84.CreateGeometryCollection([]);
             }
             catch
@@ -56,6 +65,12 @@ public sealed class GeoRawGeometry : GeoGeometry
         }
     }
 
-    /// <summary>The original GeoJSON text, used to write the geometry back without modification.</summary>
-    internal string RawJson => _rawJson;
+    /// <summary>Writes the geometry: the original GeoJSON text verbatim, or the wrapped NTS geometry directly.</summary>
+    internal void WriteTo(Utf8JsonWriter writer)
+    {
+        if (_rawJson is not null)
+            writer.WriteRawValue(_rawJson);
+        else
+            JsonSerializer.Serialize(writer, _ntsGeometry, _ntsJsonOpts);
+    }
 }

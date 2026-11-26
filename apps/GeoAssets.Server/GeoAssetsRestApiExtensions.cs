@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 
@@ -63,7 +64,8 @@ public static class GeoAssetsRestApiExtensions
         this IEndpointRouteBuilder routes,
         string prefix = "/api/geoassets")
     {
-        var opts = GeoJsonSerializer.Options;
+        // Compact JSON (XD01-430): indentation only added bytes to every body, the bounds read's largest of all.
+        var opts = GeoJsonSerializer.CompactOptions;
 
         MapFeaturesApi(routes, prefix, opts);
         MapAssetTypesApi(routes, prefix, opts);
@@ -101,12 +103,13 @@ public static class GeoAssetsRestApiExtensions
         })
             .RequireAuthorization("features:read");
 
+        // XD01-430: the zoom the map sends (XD01-429) leaves out the asset types it does not draw, and the cap is the
+        // query's LIMIT (the first features by ordinal id) — never every match read and mapped, then cut.
         routes.MapGet($"{prefix}/features/bounds",
-            async (double minLon, double minLat, double maxLon, double maxLat, IAssetProvider provider) =>
+            async (double minLon, double minLat, double maxLon, double maxLat, int? zoom, IAssetProvider provider, CancellationToken ct) =>
             {
-                var features = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
-                if (features.Count > MaxBoundsFeatureCount)
-                    features = [.. features.Take(MaxBoundsFeatureCount)];
+                var viewport = new ViewportQuery(new BoundingBox(minLon, minLat, maxLon, maxLat), zoom);
+                var features = await provider.GetInViewportAsync(viewport, MaxBoundsFeatureCount, ct).ConfigureAwait(false);
                 return Results.Json(features, opts);
             })
             .RequireAuthorization("features:read");
