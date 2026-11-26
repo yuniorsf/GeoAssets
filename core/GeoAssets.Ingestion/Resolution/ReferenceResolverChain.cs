@@ -1,0 +1,25 @@
+using GeoAssets.Ingestion.Model;
+using GeoAssets.Ingestion.Profiles;
+
+namespace GeoAssets.Ingestion.Resolution;
+
+/// <summary>Tries each resolver in order (key, then snap); the first that resolves wins.</summary>
+internal sealed class ReferenceResolverChain(IReadOnlyList<IReferenceResolver> resolvers) : IReferenceResolver
+{
+    public static ReferenceResolverChain KeyThenSnap(ReferenceIndex index) =>
+        new([new KeyReferenceResolver(index), new SnapReferenceResolver(index)]);
+
+    public ResolvedReference? Resolve(ElementReference reference, LayerDefinition declaringLayer)
+    {
+        foreach (var resolver in resolvers)
+        {
+            var resolved = resolver.Resolve(reference, declaringLayer);
+            if (resolved is not null)
+            {
+                return resolved;
+            }
+        }
+
+        return null;
+    }
+}

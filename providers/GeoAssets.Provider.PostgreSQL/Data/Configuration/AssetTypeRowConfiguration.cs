@@ -56,13 +56,14 @@ internal sealed class AssetTypeRowConfiguration : IEntityTypeConfiguration<Asset
         // defaults above, these are deletable — they're a starting catalog, not a hard requirement).
         // Roles (XD01-367) are seeded where a vertical consumes the type today: the pole is the
         // shared-use occupancy support. The IP-billing types are seeded by SeedIpBillingAssetTypes
-        // (raw InsertData, outside this model) and get their roles in AddAssetTypeRoles.
+        // (raw InsertData, outside this model) and get their roles in AddAssetTypeRoles. The electric
+        // network roles let a distribution network import reuse these types (AddElectricRolesToSeededAssetTypes).
         e.HasData(
-            new AssetTypeRow { Id = DomainAssetTypeIds.Pole,               Name = "Poste",                     AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Pole,               IsBuiltIn = true, IsProtected = false, Roles = ["occupiable-support", "isp:pole"] },
-            new AssetTypeRow { Id = DomainAssetTypeIds.Transformer,        Name = "Transformador",              AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Transformer,        IsBuiltIn = true, IsProtected = false },
-            new AssetTypeRow { Id = DomainAssetTypeIds.LowTensionWire,     Name = "Línea de baja tensión",      AllowedGeometryType = GeometryType.LineString, DefaultLayerId = DomainLayerIds.LowTensionWire,     IsBuiltIn = true, IsProtected = false },
+            new AssetTypeRow { Id = DomainAssetTypeIds.Pole,               Name = "Poste",                     AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Pole,               IsBuiltIn = true, IsProtected = false, Roles = ["occupiable-support", "isp:pole", "electric:pole"] },
+            new AssetTypeRow { Id = DomainAssetTypeIds.Transformer,        Name = "Transformador",              AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Transformer,        IsBuiltIn = true, IsProtected = false, Roles = ["electric:transformer"] },
+            new AssetTypeRow { Id = DomainAssetTypeIds.LowTensionWire,     Name = "Línea de baja tensión",      AllowedGeometryType = GeometryType.LineString, DefaultLayerId = DomainLayerIds.LowTensionWire,     IsBuiltIn = true, IsProtected = false, Roles = ["electric:lv-segment"] },
             new AssetTypeRow { Id = DomainAssetTypeIds.WaterDischargePoint, Name = "Punto de descarga de agua", AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.WaterDischargePoint, IsBuiltIn = true, IsProtected = false },
-            new AssetTypeRow { Id = DomainAssetTypeIds.Breaker,            Name = "Interruptor",                AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Breaker,             IsBuiltIn = true, IsProtected = false }
+            new AssetTypeRow { Id = DomainAssetTypeIds.Breaker,            Name = "Interruptor",                AllowedGeometryType = GeometryType.Point,      DefaultLayerId = DomainLayerIds.Breaker,             IsBuiltIn = true, IsProtected = false, Roles = ["electric:breaker"] }
         );
     }
 }

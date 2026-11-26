@@ -8,8 +8,9 @@ namespace GeoAssets.Server.Modules.PostgresSpatial;
 /// The PostgreSQL/PostGIS spatial plane as a module of this host (XD01-359, ADR-001 Phase 1): the <c>"postgres"</c>
 /// provider plugin the kernel's catalog pool builds the asset store with (XD01-371), organization-scoped catalogs and
 /// their middleware over the pool's default catalog, the PostGIS spatial query, the PostGIS render query behind
-/// <c>IAssetRenderQuery</c> (XD01-372), the applied-batch store, and both WMS routes. Without it the kernel boots on whatever
-/// <see cref="IAssetProvider"/> the host registers (invariant I5).
+/// <c>IAssetRenderQuery</c> (XD01-372), the applied-batch store, the bulk feature importer behind
+/// <c>IFeatureBulkImporter</c>, and both WMS routes. Without it the kernel boots on whatever <see cref="IAssetProvider"/>
+/// the host registers (invariant I5).
 /// </summary>
 public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
 {
@@ -50,6 +51,10 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
 
         // IAppliedMutationBatchStore (XD01-229): a scoped per-request DbContext.
         services.AddPostgresAppliedMutationBatchStore(connectionString);
+
+        // IFeatureBulkImporter: chunked bulk feature imports (binary COPY + upsert), reloading the organization catalog on
+        // completion.
+        services.AddPostgresFeatureBulkImporter(connectionString);
     }
 
     public void UseMiddleware(IApplicationBuilder app) => app.UseOrganizationAssetCatalogs();

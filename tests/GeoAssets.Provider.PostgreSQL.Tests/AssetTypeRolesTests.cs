@@ -86,7 +86,7 @@ public sealed class AssetTypeRolesTests(PostgresContainerFixture fixture)
     public async Task SeededAssetTypes_WithoutRoles_ReadAsEmpty()
     {
         await using var sut = CreateSut(fixture.CreateOptions());
-        var withRoles = new[] { "0004", "0009", "000a", "000b" }.Select(s => Guid.Parse($"00000000-0000-0000-0000-00000000{s}"));
+        var withRoles = new[] { "0004", "0005", "0006", "0008", "0009", "000a", "000b" }.Select(s => Guid.Parse($"00000000-0000-0000-0000-00000000{s}"));
 
         var others = sut.GetAssetTypes().Where(t => t.IsBuiltIn && !withRoles.Contains(t.Id)).ToList();
 

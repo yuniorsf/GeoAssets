@@ -264,9 +264,9 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     {
         ArgumentNullException.ThrowIfNull(feature);
         StampOrganization(feature);
-        var row = MapToRow(feature);
+        var row = GeoEntityRowMapper.MapToRow(feature);
         _db.GeoEntities.Add(row);
-        _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
+        _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(feature));
         SaveChanges();
         InvalidateCache();
         FeatureAdded?.Invoke(this, feature);
@@ -279,11 +279,11 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         RefuseRowsOfAnotherOrganization([feature.Id]);
         StampOrganization(feature);
         feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
-        var row = MapToRow(feature);
+        var row = GeoEntityRowMapper.MapToRow(feature);
         SaveChangesInTransaction(() =>
         {
             _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
-            _db.GeoEntityAttributes.AddRange(MapToAttributeRows(feature));
+            _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(feature));
             _db.GeoEntities.Update(row);
         });
         InvalidateCache();
@@ -308,12 +308,12 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             _db.GeoEntityAttributes.Where(a => ids.Contains(a.EntityId)).ExecuteDelete();
             foreach (var f in list)
             {
-                var row = MapToRow(f);
+                var row = GeoEntityRowMapper.MapToRow(f);
                 if (existing.Contains(f.Id))
                     _db.GeoEntities.Update(row);
                 else
                     _db.GeoEntities.Add(row);
-                _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
+                _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(f));
             }
         });
         InvalidateCache();
@@ -349,8 +349,8 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         foreach (var f in list)
         {
             StampOrganization(f);
-            _db.GeoEntities.Add(MapToRow(f));
-            _db.GeoEntityAttributes.AddRange(MapToAttributeRows(f));
+            _db.GeoEntities.Add(GeoEntityRowMapper.MapToRow(f));
+            _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(f));
         }
         SaveChanges();
         InvalidateCache();
@@ -547,26 +547,6 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             }
         };
     }
-
-    private static GeoEntityRow MapToRow(GeoFeature f) =>
-        new()
-        {
-            Id                   = f.Id,
-            Name                 = f.Properties.Name,
-            AssetTypeId          = f.Properties.AssetTypeId,
-            Description          = f.Properties.Description,
-            LayerId              = string.IsNullOrEmpty(f.Properties.LayerId) ? null : Guid.Parse(f.Properties.LayerId),
-            OrganizationId       = f.Properties.OrganizationId,
-            CreatedAt            = f.Properties.CreatedAt,
-            UpdatedAt            = f.Properties.UpdatedAt,
-            Geom                 = f.Geometry?.NtsGeometry,
-            CustomAttributesJson = JsonSerializer.Serialize(f.Properties.CustomAttributes, _json),
-            TopologyJson         = JsonSerializer.Serialize(f.Topology, _json)
-        };
-
-    private static IEnumerable<GeoEntityAttributeRow> MapToAttributeRows(GeoFeature feature) =>
-        feature.Properties.CustomAttributes.Select(kv =>
-            new GeoEntityAttributeRow { EntityId = feature.Id, Key = kv.Key, Value = kv.Value });
 
     /// <summary>
     /// Saves the long-lived <see cref="_db"/>'s pending changes, then stops tracking every entity,
