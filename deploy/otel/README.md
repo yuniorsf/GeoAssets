@@ -6,11 +6,34 @@ Collector, and let the Collector fan out to New Relic, Datadog, and Azure
 Monitor via config only — swapping/adding a backend never touches app code.
 
 This is **local/dev scaffolding only**, separate from `GeoAssets.Server`'s
-normal path. `GeoAssets.Server` already emits OTLP directly to New Relic out
-of the box (XD01-29/XD01-30 landed 2026-08-14) — see "Configuring
-GeoAssets.Server directly against a vendor (no Collector)" below for that
-path. This Collector exists for local multi-vendor fan-out and testing
+normal path. `GeoAssets.Server` can emit OTLP directly to New Relic
+(XD01-29/XD01-30 landed 2026-08-14) — see "Configuring GeoAssets.Server
+directly against a vendor (no Collector)" below for that path. This Collector exists for local multi-vendor fan-out and testing
 (XD01-33), not because production needs one.
+
+## Export is off until you turn it on
+
+No host sends telemetry anywhere by default. `Observability:ExportEnabled`
+(`false` in every host's `appsettings.json`) is the master switch: while it is
+off, `AddGeoAssetsObservability` registers no OTLP exporter for traces,
+metrics or logs — whatever `Observability:Otlp:Endpoint`,
+`NEW_RELIC_LICENSE_KEY` or `OTEL_EXPORTER_OTLP_HEADERS` say. Instrumentation
+still runs in process (spans, meters, trace ids in log scopes); it just
+reaches no backend.
+
+Turn it on explicitly:
+
+| Where | Command / setting |
+|---|---|
+| `deploy/server`, `deploy/neutral-operator` | `GEOASSETS_TELEMETRY_EXPORT=true docker compose up -d` (a plain `docker compose up -d` recreates the containers with export off again) |
+| Any host, any environment | `Observability__ExportEnabled=true` |
+| Helm (`geoassets-fieldservice`) | `--set observability.exportEnabled=true` (plus `observability.otlpEndpoint`) |
+
+Export also needs an endpoint: the hosts' `appsettings.json` point at New
+Relic's US gRPC intake, `appsettings.Development.json` blanks it. To reach
+Datadog, point `Observability__Otlp__Endpoint` at this Collector or a
+Datadog Agent (see "Datadog" below) — the hosts have no Datadog exporter
+of their own.
 
 ## Running it
 

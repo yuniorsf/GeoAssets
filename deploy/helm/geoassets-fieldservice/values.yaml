@@ -49,6 +49,7 @@ modules:
 observability:
   serviceName: geoassets-fieldservice-server
   serviceVersion: "1.0.0"
+  exportEnabled: false # telemetry leaves the pod only when true (and otlpEndpoint is set)
   otlpEndpoint: ""     # e.g. https://otlp.nr-data.net:4317 — see deploy/otel/README.md
   otlpProtocol: Grpc
 

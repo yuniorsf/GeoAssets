@@ -54,6 +54,8 @@ spec:
               value: {{ .Values.observability.serviceName | quote }}
             - name: Observability__ServiceVersion
               value: {{ .Values.observability.serviceVersion | quote }}
+            - name: Observability__ExportEnabled
+              value: {{ .Values.observability.exportEnabled | default false | quote }}
             {{- if .Values.observability.otlpEndpoint }}
             - name: Observability__Otlp__Endpoint
               value: {{ .Values.observability.otlpEndpoint | quote }}

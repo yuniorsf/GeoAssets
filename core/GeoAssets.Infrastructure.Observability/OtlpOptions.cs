@@ -5,8 +5,9 @@ public sealed class OtlpOptions
     /// <summary>
     /// OTLP collector/backend endpoint, e.g. <c>https://otlp.nr-data.net:4317</c>
     /// (New Relic, US region, gRPC) or <c>http://localhost:4317</c> for a local
-    /// OpenTelemetry Collector. Leave empty to disable the OTLP exporter
-    /// (useful for local dev).
+    /// OpenTelemetry Collector. Used only when
+    /// <see cref="ObservabilityOptions.ExportEnabled"/> is on; leave empty to
+    /// disable the OTLP exporter even then (useful for local dev).
     /// </summary>
     public string Endpoint { get; set; } = string.Empty;
 
