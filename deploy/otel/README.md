@@ -25,9 +25,14 @@ Turn it on explicitly:
 
 | Where | Command / setting |
 |---|---|
-| `deploy/server`, `deploy/neutral-operator` | `GEOASSETS_TELEMETRY_EXPORT=true docker compose up -d` (a plain `docker compose up -d` recreates the containers with export off again) |
+| `deploy/server`, `deploy/neutral-operator`, `deploy/web` | `GEOASSETS_TELEMETRY_EXPORT=true docker compose up -d` (a plain `docker compose up -d` recreates the containers with export off again) |
 | Any host, any environment | `Observability__ExportEnabled=true` |
 | Helm (`geoassets-fieldservice`) | `--set observability.exportEnabled=true` (plus `observability.otlpEndpoint`) |
+
+The Web client obeys the same switch for its browser Application Insights:
+the SDK is initialized only when `Observability:ExportEnabled` is `true` *and*
+`Observability:AzureMonitor:ConnectionString` is set (`appsettings.Local.json`
+in development, `GEOASSETS_APPINSIGHTS_CONNECTION_STRING` in the image).
 
 Export also needs an endpoint: the hosts' `appsettings.json` point at New
 Relic's US gRPC intake, `appsettings.Development.json` blanks it. To reach

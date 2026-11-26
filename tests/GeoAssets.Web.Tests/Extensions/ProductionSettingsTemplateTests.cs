@@ -34,7 +34,8 @@ public sealed class ProductionSettingsTemplateTests
 
     private const string AppInsightsConnectionString = "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://ingest.example.test/";
 
-    private static string Rendered(string appInsightsConnectionString = AppInsightsConnectionString) => Template()
+    private static string Rendered(string appInsightsConnectionString = AppInsightsConnectionString, string telemetryExport = "false") => Template()
+        .Replace("${GEOASSETS_TELEMETRY_EXPORT}", telemetryExport, StringComparison.Ordinal)
         .Replace("${GEOASSETS_GATEWAY_URL}", GatewayUrl, StringComparison.Ordinal)
         .Replace("${GEOASSETS_IPBILLING_SERVER_URL}", IpBillingUrl, StringComparison.Ordinal)
         .Replace("${GEOASSETS_APPINSIGHTS_CONNECTION_STRING}", appInsightsConnectionString, StringComparison.Ordinal)
@@ -67,7 +68,7 @@ public sealed class ProductionSettingsTemplateTests
     {
         Placeholder.Matches(Template()).Select(m => m.Groups["name"].Value).Distinct(StringComparer.Ordinal)
             .Should().BeEquivalentTo(
-                "GEOASSETS_GATEWAY_URL", "GEOASSETS_IPBILLING_SERVER_URL", "GEOASSETS_APPINSIGHTS_CONNECTION_STRING",
+                "GEOASSETS_GATEWAY_URL", "GEOASSETS_IPBILLING_SERVER_URL", "GEOASSETS_APPINSIGHTS_CONNECTION_STRING", "GEOASSETS_TELEMETRY_EXPORT",
                 "GEOASSETS_CIAM_AUTHORITY", "GEOASSETS_CIAM_CLIENT_ID", "GEOASSETS_API_SCOPE", "GEOASSETS_IPBILLING_API_SCOPE");
     }
 
@@ -79,6 +80,24 @@ public sealed class ProductionSettingsTemplateTests
         using var document = JsonDocument.Parse(Rendered(connectionString));
 
         ValueOf(document.RootElement, "Observability:AzureMonitor:ConnectionString").Should().Be(connectionString);
+    }
+
+    [Theory]
+    [InlineData("false")]
+    [InlineData("true")]
+    public void TheTelemetryExportSwitch_RendersFromItsVariable(string telemetryExport)
+    {
+        using var document = JsonDocument.Parse(Rendered(telemetryExport: telemetryExport));
+
+        ValueOf(document.RootElement, "Observability:ExportEnabled").Should().Be(telemetryExport);
+    }
+
+    [Fact]
+    public void TheWebContainer_DefaultsTheTelemetryExportSwitchToOff()
+    {
+        var dockerfile = File.ReadAllText(Path.Combine(Root(), "apps", "GeoAssets.Web", "Dockerfile"));
+
+        dockerfile.Should().Contain("GEOASSETS_TELEMETRY_EXPORT=false");
     }
 
     [Theory]
