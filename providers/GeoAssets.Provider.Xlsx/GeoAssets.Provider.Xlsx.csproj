@@ -12,4 +12,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- XD01-423: IWorkbookReader is a shared contract owned by GeoAssets.Core (ADR-002 D3). -->
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+  </ItemGroup>
+
 </Project>

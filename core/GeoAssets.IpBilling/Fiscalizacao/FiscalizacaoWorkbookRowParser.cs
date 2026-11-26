@@ -3,7 +3,7 @@ using System.Globalization;
 namespace GeoAssets.IpBilling.Fiscalizacao;
 
 /// <summary>
-/// Parses the raw cell rows <c>IWorkbookReader.ReadRows</c> (<c>GeoAssets.Provider.Xlsx</c>)
+/// Parses the raw cell rows <c>IWorkbookReader.ReadRows</c> (<c>GeoAssets.Core.Interfaces</c>)
 /// returns into <see cref="FiscalizacaoWorkbookRow"/>s, collecting every malformed row as a
 /// structured <see cref="FiscalizacaoUploadRowError"/> instead of failing on the first one —
 /// same "reports all together, not one at a time" convention as

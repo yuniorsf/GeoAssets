@@ -1,3 +1,4 @@
+using GeoAssets.Core.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GeoAssets.Provider.Xlsx;

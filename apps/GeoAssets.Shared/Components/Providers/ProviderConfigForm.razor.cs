@@ -57,15 +57,16 @@ public partial class ProviderConfigForm
     /// MAUI-only counterpart to <see cref="HandleBinaryFileAsync"/> — also captures the picked
     /// file's real full path under <c>&lt;key&gt;_path</c>, which survives into
     /// <see cref="ProviderConfig.ToReconnectValues"/> (unlike <c>_content</c>) so a plugin can
-    /// reopen the file directly from disk on a later reconnect instead of requiring a re-pick.
+    /// reopen the file directly from disk on a later reconnect instead of requiring a re-pick. The
+    /// picker offers the extensions the field declares in <see cref="ProviderConfigField.Accept"/>.
     /// </summary>
-    private async Task PickNativeBinaryFileAsync(string key)
+    private async Task PickNativeBinaryFileAsync(ProviderConfigField f)
     {
-        var result = await NativePicker!.PickZipArchiveAsync();
+        var result = await NativePicker!.PickBinaryFileAsync(f.GetAcceptedExtensions());
         if (result is null) return;
 
-        Config.Set(key + "_content", Convert.ToBase64String(result.Content));
-        Config.Set(key + "_name", result.FileName);
-        Config.Set(key + "_path", result.FullPath);
+        Config.Set(f.Key + "_content", Convert.ToBase64String(result.Content));
+        Config.Set(f.Key + "_name", result.FileName);
+        Config.Set(f.Key + "_path", result.FullPath);
     }
 }

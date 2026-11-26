@@ -45,14 +45,14 @@
         {
             @if (NativePicker is not null)
             {
-                <button type="button" class="btn btn-outline-secondary pcf-file" @onclick="() => PickNativeBinaryFileAsync(f.Key)">
+                <button type="button" class="btn btn-outline-secondary pcf-file" @onclick="() => PickNativeBinaryFileAsync(f)">
                     @L["pool.browseFile"]
                 </button>
             }
             else
             {
                 <InputFile class="form-control pcf-file"
-                           accept="@(f.Accept ?? ".zip")"
+                           accept="@f.Accept"
                            OnChange="e => HandleBinaryFileAsync(e, f.Key)" />
             }
             @if (!string.IsNullOrEmpty(Config.Get(f.Key + "_name")))
