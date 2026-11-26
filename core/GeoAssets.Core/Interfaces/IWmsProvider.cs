@@ -5,8 +5,10 @@ namespace GeoAssets.Core.Interfaces;
 /// an OGC WMS endpoint and render features as raster image tiles rather than as Leaflet
 /// vector layers.
 ///
-/// When the pool panel detects this interface on a connected provider it calls
-/// <c>IMapInterop.AddWmsLayerAsync</c> instead of iterating <c>GetAll()</c>.
+/// Read as <see cref="ProviderRenderCapabilities.RasterTiles"/> by
+/// <see cref="Providers.AssetProviderExtensions.GetRenderCapabilities"/>; the map's
+/// <c>WmsMapLayerRenderer</c> (the one place that reads these members) calls
+/// <c>IMapInterop.AddWmsLayerAsync</c> instead of iterating <c>GetAll()</c> (XD01-422).
 /// </summary>
 public interface IWmsProvider
 {

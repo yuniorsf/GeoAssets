@@ -1,129 +1,51 @@
-using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
+using GeoAssets.Shared.Services.Rendering;
+using GeoAssets.Shared.Tests.Services.Rendering;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.JSInterop;
 using Xunit;
 
 namespace GeoAssets.Shared.Tests.Services;
 
 public class ProviderConnectionMapRendererTests
 {
-    private class FakeAssetProvider(IReadOnlyList<GeoFeature> features) : IAssetProvider
-    {
-        public IReadOnlyList<GeoFeature> GetAll() => features;
-
-        public GeoFeature? GetById(string id) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> Search(string query) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) => throw new NotSupportedException();
-        public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat) => throw new NotSupportedException();
-        public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetNeighbors(string featureId) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetDescendants(string featureId) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> GetAncestors(string featureId) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> FindPath(string fromId, string toId) => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> FindShortestPath(string fromId, string toId) => throw new NotSupportedException();
-        public IReadOnlyList<IReadOnlyList<GeoFeature>> GetConnectedComponents() => throw new NotSupportedException();
-        public bool HasCycles() => throw new NotSupportedException();
-        public IReadOnlyList<GeoFeature> TopologicalSort() => throw new NotSupportedException();
-        public void Add(GeoFeature feature) => throw new NotSupportedException();
-        public void Update(GeoFeature feature) => throw new NotSupportedException();
-        public void AddRange(IEnumerable<GeoFeature> features) => throw new NotSupportedException();
-        public void Delete(string id) => throw new NotSupportedException();
-        public void Clear() => throw new NotSupportedException();
-        public void LoadAll(IEnumerable<GeoFeature> features) => throw new NotSupportedException();
-        public IReadOnlyList<AssetType> GetAssetTypes() => throw new NotSupportedException();
-        public void AddAssetType(AssetType assetType) => throw new NotSupportedException();
-        public void DeleteAssetType(Guid id) => throw new NotSupportedException();
-        public IReadOnlyList<Layer> GetLayers() => throw new NotSupportedException();
-        public void AddLayer(Layer layer) => throw new NotSupportedException();
-        public void DeleteLayer(Guid id) => throw new NotSupportedException();
-        public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) => throw new NotSupportedException();
-        public void AddLayerRule(LayerRule layerRule) => throw new NotSupportedException();
-        public void DeleteLayerRule(Guid id) => throw new NotSupportedException();
-
-        // Never fire — this test double tracks no subscribers (empty accessors), no test relies on these.
-        public event EventHandler<GeoFeature>? FeatureAdded { add { } remove { } }
-        public event EventHandler<GeoFeature>? FeatureUpdated { add { } remove { } }
-        public event EventHandler<string>? FeatureDeleted { add { } remove { } }
-        public event EventHandler? CollectionChanged { add { } remove { } }
-    }
-
-    private sealed class FakeWmsAssetProvider(IReadOnlyList<GeoFeature> features)
-        : FakeAssetProvider(features), IWmsProvider
-    {
-        public string WmsBaseUrl => "https://wms.example.com/geoassets/wms";
-        public string WmsLayerName => "geoassets:layer";
-        public string WmsFormat => "image/png";
-    }
-
-    private sealed class FakeMapInterop : IMapInterop
-    {
-        public List<(string DivId, string LayerId, string BaseUrl, WmsLayerOptions Options)> WmsLayerCalls { get; } = [];
-        public List<(string DivId, GeoFeature Feature)> RenderedFeatures { get; } = [];
-        public List<(string DivId, double[] Bbox)> FitBoundsCalls { get; } = [];
-        public bool ThrowOnRenderFeature { get; init; }
-
-        public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options)
-        {
-            WmsLayerCalls.Add((divId, layerId, wmsBaseUrl, options));
-            return Task.CompletedTask;
-        }
-
-        public Task RenderFeatureAsync(string divId, GeoFeature feature)
-        {
-            if (ThrowOnRenderFeature) throw new InvalidOperationException("Simulated JS interop failure.");
-            RenderedFeatures.Add((divId, feature));
-            return Task.CompletedTask;
-        }
-
-        public Task InitializeMapAsync(string divId, double lat, double lon, int zoom) => throw new NotSupportedException();
-        public Task DestroyMapAsync(string divId) => throw new NotSupportedException();
-        public Task InvalidateSizeAsync(string divId) => throw new NotSupportedException();
-        public Task SetViewAsync(string divId, double lat, double lon, int zoom) => throw new NotSupportedException();
-        public Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features) => throw new NotSupportedException();
-        public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features) => throw new NotSupportedException();
-        public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) => throw new NotSupportedException();
-        public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson) => throw new NotSupportedException();
-        public Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features) => throw new NotSupportedException();
-        public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features) => throw new NotSupportedException();
-        public Task RemoveFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
-        public Task ClearAllFeaturesAsync(string divId) => throw new NotSupportedException();
-        public Task EnableDrawModeAsync(string divId, GeometryType mode) => throw new NotSupportedException();
-        public Task DisableDrawModeAsync(string divId) => throw new NotSupportedException();
-        public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) => throw new NotSupportedException();
-        public Task ClearSnapTargetScopeAsync(string divId) => throw new NotSupportedException();
-        public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) => throw new NotSupportedException();
-        public Task RemoveTileLayerAsync(string divId, string layerId) => throw new NotSupportedException();
-        public Task RemoveWmsLayerAsync(string divId, string layerId) => throw new NotSupportedException();
-        public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) => throw new NotSupportedException();
-        public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom) => throw new NotSupportedException();
-        public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options) => throw new NotSupportedException();
-        public Task ClearReferenceLayerAsync(string divId, string layerId) => throw new NotSupportedException();
-        public Task<GeoAssets.Core.Rendering.BoundingBox?> GetViewBoundsAsync(string divId) => throw new NotSupportedException();
-        public Task FitBoundsAsync(string divId, double[] bbox)
-        {
-            FitBoundsCalls.Add((divId, bbox));
-            return Task.CompletedTask;
-        }
-        public Task PanToFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
-        public Task HighlightFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
-        public Task ClearHighlightAsync(string divId, string featureId) => throw new NotSupportedException();
-        public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) => throw new NotSupportedException();
-    }
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
     private sealed class FakeMapContext(string mapDivId = "test-map") : ICurrentMapContext
     {
         public string MapDivId => mapDivId;
     }
+
+    /// <summary>Draws synchronously, answering <paramref name="rendered"/>, or fails with <paramref name="failure"/>.</summary>
+    private sealed class StubRenderer(int rendered, Exception? failure = null) : IProviderMapLayerRenderer
+    {
+        public List<MapLayerRenderRequest> Rendered { get; } = [];
+        public bool ClearedWithFeatures => true;
+        public bool CanRender(IAssetProvider provider) => true;
+
+        public Task<int> RenderAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default)
+        {
+            if (failure is not null) throw failure;
+            Rendered.Add(request);
+            return Task.FromResult(rendered);
+        }
+
+        public Task RemoveAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private static ProviderMapLayerRendererChain RealChain(IMapInterop map) =>
+        new([new WmsMapLayerRenderer(map), new VectorFeatureMapLayerRenderer(map, new FeatureRenderPipeline())]);
+
+    private static ProviderConnectionMapRenderer Sut(
+        IProviderPool pool, IMapInterop map, ProviderMapLayerRendererChain chain, string divId = "my-map") =>
+        new(pool, map, new FakeMapContext(divId), chain, NullLogger<ProviderConnectionMapRenderer>.Instance);
 
     private static GeoFeature NewFeature() => new() { Id = Guid.NewGuid().ToString() };
 
@@ -133,96 +55,105 @@ public class ProviderConnectionMapRendererTests
         // XD01-83 regression: fails without the fix — the pool has no EntryAdded event to
         // subscribe to, or this renderer never subscribes in its constructor.
         var pool = new ProviderPool();
-        var mapInterop = new FakeMapInterop();
-        var mapContext = new FakeMapContext("my-map");
-        using var sut = new ProviderConnectionMapRenderer(
-            pool, mapInterop, mapContext, NullLogger<ProviderConnectionMapRenderer>.Instance);
+        var map = new LayerRecordingMapInterop();
+        using var sut = Sut(pool, map, RealChain(map));
 
-        var entry = pool.Add("WMS Layer", new FakeWmsAssetProvider([]));
+        var entry = pool.Add("WMS Layer", new FakeWmsLayerProvider());
 
-        mapInterop.WmsLayerCalls.Should().ContainSingle();
-        var call = mapInterop.WmsLayerCalls[0];
+        map.WmsAdds.Should().ContainSingle();
+        var call = map.WmsAdds[0];
         call.DivId.Should().Be("my-map");
         call.LayerId.Should().Be(entry.Id.ToString());
         call.BaseUrl.Should().Be("https://wms.example.com/geoassets/wms");
         call.Options.Layers.Should().Be("geoassets:layer");
         call.Options.Format.Should().Be("image/png");
-        mapInterop.RenderedFeatures.Should().BeEmpty();
+        map.FeatureBatches.Should().BeEmpty();
+        map.FitCalls.Should().BeEmpty("a tile layer draws no discrete features to fit the view to");
     }
 
     [Fact]
-    public void EntryAdded_NonWmsEntry_RendersEachFeature()
+    public void EntryAdded_DrawsTheEntryThroughItsRenderer_OnTheCurrentMap()
     {
         var pool = new ProviderPool();
-        var mapInterop = new FakeMapInterop();
-        var mapContext = new FakeMapContext("my-map");
-        using var sut = new ProviderConnectionMapRenderer(
-            pool, mapInterop, mapContext, NullLogger<ProviderConnectionMapRenderer>.Instance);
+        var map = new LayerRecordingMapInterop();
+        var renderer = new StubRenderer(rendered: 2);
+        using var sut = Sut(pool, map, new ProviderMapLayerRendererChain([renderer]));
 
-        var f1 = NewFeature();
-        var f2 = NewFeature();
-        var provider = new FakeAssetProvider([f1, f2]);
+        var entry = pool.Add("Local", new FakeLayerProvider(NewFeature(), NewFeature()));
 
-        pool.Add("Local", provider);
-
-        mapInterop.WmsLayerCalls.Should().BeEmpty();
-        mapInterop.RenderedFeatures.Select(r => r.Feature.Id).Should().BeEquivalentTo([f1.Id, f2.Id]);
-        mapInterop.RenderedFeatures.Should().OnlyContain(r => r.DivId == "my-map");
+        renderer.Rendered.Should().ContainSingle();
+        renderer.Rendered[0].MapDivId.Should().Be("my-map");
+        renderer.Rendered[0].Entry.Should().BeSameAs(entry);
+        renderer.Rendered[0].Source.Should().BeSameAs(entry.Provider);
         // Neither feature carries a geometry, so there's nothing to fit a view to.
-        mapInterop.FitBoundsCalls.Should().BeEmpty();
+        map.FitCalls.Should().BeEmpty();
     }
 
     [Fact]
-    public void EntryAdded_FeaturesWithGeometry_FitsMapToTheirUnionBoundingBox()
+    public async Task EntryAdded_VectorFeaturesWithGeometry_RenderedAndMapFitToTheirUnionBoundingBox()
     {
         // A newly-connected provider's features render wherever they geographically are, which is
         // very often nowhere near the map's current (e.g. default startup) view — they'd be drawn
         // but invisible until the view is moved to them. This locks in that the renderer fits the
         // map to the imported data instead of leaving that to chance.
         var pool = new ProviderPool();
-        var mapInterop = new FakeMapInterop();
-        var mapContext = new FakeMapContext("my-map");
-        using var sut = new ProviderConnectionMapRenderer(
-            pool, mapInterop, mapContext, NullLogger<ProviderConnectionMapRenderer>.Instance);
+        var map = new LayerRecordingMapInterop();
+        using var sut = Sut(pool, map, RealChain(map));
 
         var f1 = new GeoFeature { Id = Guid.NewGuid().ToString(), Geometry = new GeoPoint(-51.2, -30.0) };
         var f2 = new GeoFeature { Id = Guid.NewGuid().ToString(), Geometry = new GeoPoint(-50.3, -29.5) };
-        var provider = new FakeAssetProvider([f1, f2]);
 
-        pool.Add("Shapefile", provider);
+        pool.Add("Shapefile", new FakeLayerProvider(f1, f2));
+        await map.Fitted.WaitAsync(Patience);
 
-        mapInterop.FitBoundsCalls.Should().ContainSingle();
-        var call = mapInterop.FitBoundsCalls[0];
+        map.RenderedFeatureIds.Should().BeEquivalentTo([f1.Id, f2.Id]);
+        map.FeatureBatches.Should().OnlyContain(b => b.DivId == "my-map");
+        map.WmsAdds.Should().BeEmpty();
+        map.FitCalls.Should().ContainSingle();
+        var call = map.FitCalls[0];
         call.DivId.Should().Be("my-map");
         call.Bbox.Should().BeEquivalentTo([-51.2, -30.0, -50.3, -29.5]);
+    }
+
+    [Fact]
+    public void EntryAdded_NoRendererDrawsIt_TouchesNothing()
+    {
+        var pool = new ProviderPool();
+        var map = new LayerRecordingMapInterop();
+        using var sut = Sut(pool, map, RealChain(map));
+
+        var act = () => pool.Add("Nothing", new CapabilityDeclaringLayerProvider(ProviderRenderCapabilities.None, NewFeature()));
+
+        act.Should().NotThrow();
+        map.WmsAdds.Should().BeEmpty();
+        map.FeatureBatches.Should().BeEmpty();
+        map.FitCalls.Should().BeEmpty();
     }
 
     [Fact]
     public void Dispose_UnsubscribesFromEntryAdded()
     {
         var pool = new ProviderPool();
-        var mapInterop = new FakeMapInterop();
-        var sut = new ProviderConnectionMapRenderer(
-            pool, mapInterop, new FakeMapContext(), NullLogger<ProviderConnectionMapRenderer>.Instance);
+        var map = new LayerRecordingMapInterop();
+        var sut = Sut(pool, map, RealChain(map));
 
         sut.Dispose();
-        pool.Add("WMS Layer", new FakeWmsAssetProvider([]));
+        pool.Add("WMS Layer", new FakeWmsLayerProvider());
 
-        mapInterop.WmsLayerCalls.Should().BeEmpty();
+        map.WmsAdds.Should().BeEmpty();
     }
 
     [Fact]
     public void EntryAdded_RenderThrows_ExceptionIsCaughtAndDoesNotPropagateToAdd()
     {
         var pool = new ProviderPool();
-        var mapInterop = new FakeMapInterop { ThrowOnRenderFeature = true };
-        using var sut = new ProviderConnectionMapRenderer(
-            pool, mapInterop, new FakeMapContext(), NullLogger<ProviderConnectionMapRenderer>.Instance);
+        var map = new LayerRecordingMapInterop();
+        using var sut = Sut(pool, map, new ProviderMapLayerRendererChain(
+            [new StubRenderer(0, new InvalidOperationException("Simulated JS interop failure."))]));
 
-        var provider = new FakeAssetProvider([NewFeature()]);
-
-        var act = () => pool.Add("Local", provider);
+        var act = () => pool.Add("Local", new FakeLayerProvider(NewFeature()));
 
         act.Should().NotThrow();
+        map.FitCalls.Should().BeEmpty();
     }
 }

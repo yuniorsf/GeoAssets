@@ -1,10 +1,12 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.MapTiles;
+using GeoAssets.Shared.Services.Rendering;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -29,11 +31,6 @@ public partial class MapContainer
 
     /// <summary>A feature was clicked while the click-toggle selection tool was armed (XD01-310).</summary>
     [Parameter] public EventCallback<(string FeatureId, bool Additive)> OnSelectionClick { get; set; }
-
-    /// <summary>Feature count per <see cref="FeatureRenderPipeline.StreamAllAsync"/> chunk for a
-    /// full-dataset bulk render — coarser than <c>MapInteropService</c>'s own <c>BatchSize</c>
-    /// JS-batch chunking, which further subdivides each pipeline chunk.</summary>
-    private const int BulkRenderChunkSize = 1500;
 
     // Use DotNetObjectReference<object> to avoid generic covariance issue
     private DotNetObjectReference<object>? _dotNetRef;
@@ -148,10 +145,12 @@ public partial class MapContainer
     /// Full-dataset bulk render (initial load, or a collection change with no known viewport yet).
     /// Walks every pool entry (not just the active one) so every open-and-not-hidden provider —
     /// vector or WMS — is rendered, not only whichever entry happens to be active for editing.
-    /// Vector entries stream through <see cref="FeatureRenderPipeline"/> in <see cref="BulkRenderChunkSize"/>-feature
-    /// chunks so a large import doesn't block the UI thread with one unbounded render call — see
-    /// XD01-159's audit and XD01-160. Cancelled by <see cref="RenderViewportAsync"/> if a pan arrives
-    /// mid-render.
+    /// Each entry is drawn by the <see cref="IProviderMapLayerRenderer"/> its provider resolves to
+    /// (XD01-422) — vector entries stream through <see cref="FeatureRenderPipeline"/> in
+    /// <see cref="VectorFeatureMapLayerRenderer.ChunkSize"/>-feature chunks so a large import doesn't
+    /// block the UI thread with one unbounded render call (XD01-159's audit and XD01-160). A hidden
+    /// entry whose layer survives <see cref="IMapInterop.ClearAllFeaturesAsync"/> (a WMS tile layer)
+    /// is removed explicitly. Cancelled by <see cref="RenderViewportAsync"/> if a pan arrives mid-render.
     /// </summary>
     private async Task RenderAllViaPipelineAsync()
     {
@@ -169,19 +168,13 @@ public partial class MapContainer
             {
                 ct.ThrowIfCancellationRequested();
 
-                if (entry.Provider is IWmsProvider wms)
-                {
-                    await ReconcileWmsLayerAsync(entry, wms);
-                    continue;
-                }
+                if (Renderers.Resolve(entry.Provider) is not { } renderer) continue;
+                var request = RenderRequestFor(entry);
 
-                if (!ShouldShowOnMap(entry)) continue;
-
-                await foreach (var chunk in Pipeline.StreamAllAsync(ProviderFor(entry), BulkRenderChunkSize, ct))
-                {
-                    await MapInterop.RenderFeatureBatchAsync(DivId, chunk);
-                    count += chunk.Count;
-                }
+                if (ShouldShowOnMap(entry))
+                    count += await renderer.RenderAsync(request, ct);
+                else if (!renderer.ClearedWithFeatures)
+                    await renderer.RemoveAsync(request, ct);
             }
             sw.Stop();
             Logger.LogInformation(
@@ -196,18 +189,9 @@ public partial class MapContainer
         }
     }
 
-    /// <summary>
-    /// Adds or removes a WMS entry's tile layer so it matches <see cref="ShouldShowOnMap"/> —
-    /// both JS-side calls are idempotent (see <c>geoassets.js</c>'s <c>addWmsLayer</c>/<c>removeWmsLayer</c>),
-    /// and WMS tile layers are never touched by <see cref="IMapInterop.ClearAllFeaturesAsync"/>
-    /// (that only clears vector features), so this only needs to run once per bulk render, not on
-    /// every pan.
-    /// </summary>
-    private Task ReconcileWmsLayerAsync(ProviderEntry entry, IWmsProvider wms) =>
-        ShouldShowOnMap(entry)
-            ? MapInterop.AddWmsLayerAsync(DivId, entry.Id.ToString(), wms.WmsBaseUrl,
-                new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat))
-            : MapInterop.RemoveWmsLayerAsync(DivId, entry.Id.ToString());
+    /// <summary>The render request for <paramref name="entry"/> on this map, reading through
+    /// <see cref="ProviderFor"/>.</summary>
+    private MapLayerRenderRequest RenderRequestFor(ProviderEntry entry) => new(DivId, entry, ProviderFor(entry));
 
     // ─── JS → .NET callbacks ─────────────────────────────────────────────
 
@@ -335,10 +319,11 @@ public partial class MapContainer
     /// (<see cref="OnViewportChangedFromJs"/>) and by <see cref="OnCollectionChanged"/> once a
     /// viewport is known, so a bulk mutation re-renders only what's visible instead of the whole
     /// dataset. Cancels any in-flight full-dataset bulk render first, so a pan always wins.
-    /// Walks every open-and-not-hidden vector entry in the pool (see <see cref="ShouldShowOnMap"/>),
-    /// not just the active one, clearing once up front and rendering each entry additively so
-    /// providers don't erase each other. WMS entries are skipped here — their tile layers aren't
-    /// touched by <see cref="IMapInterop.ClearAllFeaturesAsync"/> and don't need re-fetching on pan.
+    /// Walks every open-and-not-hidden entry in the pool (see <see cref="ShouldShowOnMap"/>),
+    /// not just the active one, clearing once up front and asking each entry's
+    /// <see cref="IProviderMapLayerRenderer"/> to render its viewport additively so providers don't
+    /// erase each other. A WMS tile layer draws nothing here — it isn't touched by
+    /// <see cref="IMapInterop.ClearAllFeaturesAsync"/> and fetches its own tiles on pan.
     /// </summary>
     private async Task RenderViewportAsync((double MinLon, double MinLat, double MaxLon, double MaxLat) bounds)
     {
@@ -357,10 +342,12 @@ public partial class MapContainer
             await MapInterop.ClearAllFeaturesAsync(DivId);
 
             var totalCount = 0;
-            foreach (var entry in Pool.All.Where(e => e.Provider is not IWmsProvider && ShouldShowOnMap(e)))
+            var viewport = new BoundingBox(minLon, minLat, maxLon, maxLat);
+            foreach (var entry in Pool.All.Where(ShouldShowOnMap))
             {
                 ct.ThrowIfCancellationRequested();
-                totalCount += await RenderEntryViewportAsync(ProviderFor(entry), minLon, minLat, maxLon, maxLat, ct);
+                if (Renderers.Resolve(entry.Provider) is not { } renderer) continue;
+                totalCount += await renderer.RenderViewportAsync(RenderRequestFor(entry), viewport, ct);
             }
 
             sw.Stop();
@@ -374,38 +361,6 @@ public partial class MapContainer
                 "Viewport changed [{MinLon},{MinLat},{MaxLon},{MaxLat}] — cancelled (superseded by a newer viewport change)",
                 minLon, minLat, maxLon, maxLat);
         }
-    }
-
-    /// <summary>
-    /// Fetches and additively renders one entry's features within <paramref name="minLon"/>..<paramref name="maxLat"/>.
-    /// Prefers the raw-JSON chunked path: the provider streams the HTTP response body(s) as-is, JS
-    /// parses each chunk natively and renders it immediately (no WASM JSON parsing bottleneck, no
-    /// waiting for one giant payload before anything appears). Providers that don't support raw
-    /// JSON (e.g. Postgres) yield zero chunks — see IAssetProvider's default
-    /// GetInBoundsRawJsonChunksAsync — which is the signal to fall back to the JSON-element path.
-    /// A provider that does support it never yields zero for a real (possibly empty) result: even
-    /// an empty bbox response is a non-null "[]" chunk. Returns the number of raw chunks rendered,
-    /// or the feature count on the fallback path, purely for the aggregate log line above.
-    /// </summary>
-    private async Task<int> RenderEntryViewportAsync(
-        IAssetProvider provider, double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct)
-    {
-        var chunkCount = 0;
-        await foreach (var chunk in provider.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct))
-        {
-            await MapInterop.RenderFeatureBatchRawJsonAsync(DivId, chunk);
-            chunkCount++;
-        }
-        if (chunkCount > 0) return chunkCount;
-
-        // GetInBoundsJsonAsync has no CancellationToken overload (not every provider's fetch
-        // supports mid-flight abort — e.g. a plain HTTP GET without one plumbed through), so a
-        // superseded call here can't be aborted early, but it must not paint its (now stale)
-        // result over whatever a newer pan already rendered.
-        var features = await provider.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
-        if (ct.IsCancellationRequested) return 0;
-        await MapInterop.RenderFeatureBatchAsync(DivId, features);
-        return features.Count;
     }
 
     public Task PanToFeatureAsync(string featureId) =>

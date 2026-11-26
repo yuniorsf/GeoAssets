@@ -5,6 +5,7 @@
 @inject IMapInterop MapInterop
 @inject ICurrentMapContext MapContext
 @inject FeatureRenderPipeline Pipeline
+@inject GeoAssets.Shared.Services.Rendering.ProviderMapLayerRendererChain Renderers
 @inject IStorageService Storage
 @inject IAnalyticsService Analytics
 @inject ILogger<ProviderPoolPanel> Logger
@@ -59,24 +60,31 @@
                     }
 
                     <span class="pool-entry-actions">
-                        <!-- Export GeoJSON -->
-                        <button class="btn-icon" title="@L["import.export"]"
-                                @onclick="() => ExportEntryAsync(e)">📤</button>
-
-                        @if (ShapefileExporter is not null && e.Provider is not IWmsProvider)
+                        <!-- Vector actions only for providers with the VectorExport/VectorImport -->
+                        <!-- capability — raster-tile entries (e.g. WMS) have no discrete features. -->
+                        @if (CanExportVector(e))
                         {
-                            <!-- Export Shapefile — WMS entries have no discrete features to -->
-                            <!-- export (raster tiles only, see IWmsProvider's doc comment). -->
-                            <button class="btn-icon" title="@L["import.exportShapefile"]"
-                                    @onclick="() => ExportEntryAsShapefileAsync(e)">📦</button>
+                            <!-- Export GeoJSON -->
+                            <button class="btn-icon pool-export-geojson" title="@L["import.export"]"
+                                    @onclick="() => ExportEntryAsync(e)">📤</button>
+
+                            @if (ShapefileExporter is not null)
+                            {
+                                <!-- Export Shapefile -->
+                                <button class="btn-icon pool-export-shapefile" title="@L["import.exportShapefile"]"
+                                        @onclick="() => ExportEntryAsShapefileAsync(e)">📦</button>
+                            }
                         }
 
-                        <!-- Import -->
-                        <label class="btn-icon" style="cursor:pointer" title="@L["import.import"]">
-                            📥
-                            <InputFile OnChange="ev => ImportFileAsync(ev, e)"
-                                       accept=".geojson,.json" style="display:none" />
-                        </label>
+                        @if (CanImportVector(e))
+                        {
+                            <!-- Import -->
+                            <label class="btn-icon pool-import-geojson" style="cursor:pointer" title="@L["import.import"]">
+                                📥
+                                <InputFile OnChange="ev => ImportFileAsync(ev, e)"
+                                           accept=".geojson,.json" style="display:none" />
+                            </label>
+                        }
 
                         <!-- Show / Hide -->
                         <button class="btn-icon" title="@(e.IsEnabled ? L["pool.disable"] : L["pool.enable"])"

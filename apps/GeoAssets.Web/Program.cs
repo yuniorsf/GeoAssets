@@ -21,6 +21,7 @@ using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.OrderDetail;
 using GeoAssets.Shared.Services.Observability;
 using GeoAssets.Shared.Services.ReferenceLayers;
+using GeoAssets.Shared.Services.Rendering;
 using GeoAssets.Shared.Theming;
 using GeoAssets.Web;
 using GeoAssets.Web.Extensions;
@@ -177,6 +178,8 @@ builder.Services.AddScoped<IBootLoader, BootLoaderService>();
 // subscription — merely registering it here isn't enough to make it run.
 builder.Services.AddGeoAssetsPanelState();
 builder.Services.AddScoped<ProviderConnectionMapRenderer>();
+// The map layer renderer strategy chain (XD01-422) the map, the pool panel and the renderer above draw through.
+builder.Services.AddProviderMapLayerRenderers();
 
 // Left-nav menu (XD01-79/85) — discovers every concrete MenuItemBase in the assembly holding
 // OverviewMenuItem/LayersMenuItem/etc., and in the vertical UI libraries (XD01-378), and assembles

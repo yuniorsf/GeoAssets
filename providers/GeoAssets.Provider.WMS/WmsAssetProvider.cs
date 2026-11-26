@@ -12,14 +12,17 @@ namespace GeoAssets.Provider.WMS;
 /// nothing to load into a local feature cache.  All feature-query methods return empty
 /// collections.  Write methods are silently ignored.
 ///
-/// The pool panel detects <see cref="IWmsProvider"/> and calls
-/// <c>IMapInterop.AddWmsLayerAsync</c> rather than iterating <c>GetAll()</c>.
+/// It declares <see cref="ProviderRenderCapabilities.RasterTiles"/> only, so the map's
+/// <c>WmsMapLayerRenderer</c> adds it as a WMS tile layer rather than iterating <c>GetAll()</c>,
+/// and its pool entry offers no vector import/export (XD01-422).
 /// </summary>
-public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider
+public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider, IProviderCapabilities
 {
     public string WmsBaseUrl   { get; }
     public string WmsLayerName { get; }
     public string WmsFormat    { get; }
+
+    public ProviderRenderCapabilities RenderCapabilities => ProviderRenderCapabilities.RasterTiles;
 
     public WmsAssetProvider(string wmsBaseUrl, string layerName, string format = "image/png")
     {
@@ -28,13 +31,11 @@ public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider
         WmsFormat    = format;
     }
 
-    // ── Events — never fire (no features are held locally) ───────────────────
-#pragma warning disable CS0067
-    public event EventHandler<GeoFeature>? FeatureAdded;
-    public event EventHandler<GeoFeature>? FeatureUpdated;
-    public event EventHandler<string>?     FeatureDeleted;
-    public event EventHandler?             CollectionChanged;
-#pragma warning restore CS0067
+    // ── Events — never fire (no features are held locally), so no subscriber is kept ──
+    public event EventHandler<GeoFeature>? FeatureAdded      { add { } remove { } }
+    public event EventHandler<GeoFeature>? FeatureUpdated    { add { } remove { } }
+    public event EventHandler<string>?     FeatureDeleted    { add { } remove { } }
+    public event EventHandler?             CollectionChanged { add { } remove { } }
 
     // ── Feature reads — always empty ─────────────────────────────────────────
     public GeoFeature?                              GetById(string id)                              => null;

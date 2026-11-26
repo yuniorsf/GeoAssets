@@ -16,8 +16,8 @@ namespace GeoAssets.Provider.WMS;
 ///
 /// Because features are rendered server-side as PNG tiles, the connected provider
 /// returns no features (<see cref="IAssetProvider.GetAll"/> is always empty).
-/// The pool panel detects <see cref="IWmsProvider"/> and adds a Leaflet WMS tile layer
-/// instead of iterating features.
+/// The map's <c>WmsMapLayerRenderer</c> adds a Leaflet WMS tile layer for it instead of
+/// iterating features (XD01-422).
 /// </summary>
 public sealed class WmsProviderPlugin : IProviderPlugin
 {
