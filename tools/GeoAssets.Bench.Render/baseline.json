@@ -1,0 +1,813 @@
+{
+  "Environment": {
+    "MeasuredAtUtc": "2026-11-26T17:45:18.76828+00:00",
+    "OperatingSystem": "macOS 27.2.1",
+    "Architecture": "Arm64",
+    "ProcessorCount": 10,
+    "Framework": ".NET 10.0.7",
+    "ServerGc": true,
+    "PostgresVersion": "PostgreSQL 16.4 (Debian 16.4-1.pgdg110\u002B2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 10.2.1-6) 10.2.1 20210110, 64-bit",
+    "PostGisVersion": "3.4.3",
+    "DatasetFeatures": 200000,
+    "DatasetVertices": 3366132,
+    "GeoEntityTotalSize": "225 MB"
+  },
+  "Settings": {
+    "Seed": 420,
+    "Zooms": [
+      8,
+      12,
+      16
+    ],
+    "ViewportsPerZoom": 12,
+    "Iterations": 5,
+    "WarmupIterations": 1,
+    "WidthPx": 1580,
+    "HeightPx": 1020
+  },
+  "Zooms": [
+    {
+      "Zoom": 8,
+      "PayloadBytes": {
+        "P50": 18151282,
+        "P95": 18151282,
+        "Count": 12
+      },
+      "GzipBytes": {
+        "P50": 3045466,
+        "P95": 3045466,
+        "Count": 12
+      },
+      "MatchedRows": {
+        "P50": 200000,
+        "P95": 200000,
+        "Count": 12
+      },
+      "ReturnedFeatures": {
+        "P50": 10000,
+        "P95": 10000,
+        "Count": 12
+      },
+      "DrawnFeatures": {
+        "P50": 235,
+        "P95": 235,
+        "Count": 12
+      },
+      "ServerMs": {
+        "P50": 1372.5553,
+        "P95": 2387.9613,
+        "Count": 60
+      },
+      "DatabaseMs": {
+        "P50": 1033.4614,
+        "P95": 1790.8705,
+        "Count": 60
+      },
+      "ClientMs": {
+        "P50": 41.2924,
+        "P95": 80.725,
+        "Count": 60
+      },
+      "Viewports": [
+        {
+          "CenterLon": -46.746784165046975,
+          "CenterLat": -23.530949020847864,
+          "Bounds": {
+            "MinLon": -51.08642578125,
+            "MinLat": -26.07158645317098,
+            "MaxLon": -42.4072265625,
+            "MaxLat": -20.93578924489373
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2409,
+          "ServerMsP50": 1481.3519,
+          "ClientMsP50": 41.2468
+        },
+        {
+          "CenterLon": -46.76169239502608,
+          "CenterLat": -23.477046799479098,
+          "Bounds": {
+            "MinLon": -51.1029052734375,
+            "MinLat": -26.022233955988998,
+            "MaxLon": -42.4237060546875,
+            "MaxLat": -20.884475328885348
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2408,
+          "ServerMsP50": 1402.7877,
+          "ClientMsP50": 42.4952
+        },
+        {
+          "CenterLon": -46.34116010842667,
+          "CenterLat": -22.55344688487227,
+          "Bounds": {
+            "MinLon": -50.679931640625,
+            "MinLat": -25.115445397061947,
+            "MaxLon": -42.000732421875,
+            "MaxLat": -19.94236918954201
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2403,
+          "ServerMsP50": 1338.7755,
+          "ClientMsP50": 40.3143
+        },
+        {
+          "CenterLon": -45.6627755571691,
+          "CenterLat": -23.3671545657286,
+          "Bounds": {
+            "MinLon": -50.0042724609375,
+            "MinLat": -25.9135854161898,
+            "MaxLon": -41.3250732421875,
+            "MaxLat": -20.771523019513364
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2408,
+          "ServerMsP50": 1333.7707,
+          "ClientMsP50": 40.4119
+        },
+        {
+          "CenterLon": -45.559896111379636,
+          "CenterLat": -22.198997042033856,
+          "Bounds": {
+            "MinLon": -49.89990234375,
+            "MinLat": -24.76678452287444,
+            "MaxLon": -41.220703125,
+            "MaxLat": -19.58049347920253
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2398,
+          "ServerMsP50": 1471.8317,
+          "ClientMsP50": 42.1978
+        },
+        {
+          "CenterLon": -45.49982062631272,
+          "CenterLat": -22.236204733977367,
+          "Bounds": {
+            "MinLon": -49.8394775390625,
+            "MinLat": -24.806681353851975,
+            "MaxLon": -41.1602783203125,
+            "MaxLat": -19.621892180319367
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2403,
+          "ServerMsP50": 1154.9402,
+          "ClientMsP50": 42.6086
+        },
+        {
+          "CenterLon": -46.64495923191622,
+          "CenterLat": -23.069228409337605,
+          "Bounds": {
+            "MinLon": -50.9820556640625,
+            "MinLat": -25.62171595984574,
+            "MaxLon": -42.3028564453125,
+            "MaxLat": -20.46818922264095
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2408,
+          "ServerMsP50": 1503.0349,
+          "ClientMsP50": 40.9976
+        },
+        {
+          "CenterLon": -45.09705417208935,
+          "CenterLat": -22.525665721283346,
+          "Bounds": {
+            "MinLon": -49.4384765625,
+            "MinLat": -25.09057381946099,
+            "MaxLon": -40.75927734375,
+            "MaxLat": -19.91654821519282
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2403,
+          "ServerMsP50": 1176.1397,
+          "ClientMsP50": 42.3397
+        },
+        {
+          "CenterLon": -46.13363129232215,
+          "CenterLat": -23.045583118312113,
+          "Bounds": {
+            "MinLon": -50.47119140625,
+            "MinLat": -25.59694832328612,
+            "MaxLon": -41.7919921875,
+            "MaxLat": -20.44245526026024
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2404,
+          "ServerMsP50": 1453.761,
+          "ClientMsP50": 42.0822
+        },
+        {
+          "CenterLon": -46.69774050813851,
+          "CenterLat": -23.495685712146575,
+          "Bounds": {
+            "MinLon": -51.0369873046875,
+            "MinLat": -26.037041886515834,
+            "MaxLon": -42.3577880859375,
+            "MaxLat": -20.899871347076424
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2408,
+          "ServerMsP50": 1284.6122,
+          "ClientMsP50": 40.2996
+        },
+        {
+          "CenterLon": -45.34504042876353,
+          "CenterLat": -22.221957308640203,
+          "Bounds": {
+            "MinLon": -49.6856689453125,
+            "MinLat": -24.791721545708786,
+            "MaxLon": -41.0064697265625,
+            "MaxLat": -19.606368915776002
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2398,
+          "ServerMsP50": 1372.5553,
+          "ClientMsP50": 41.3684
+        },
+        {
+          "CenterLon": -45.62215667040887,
+          "CenterLat": -23.296896691867918,
+          "Bounds": {
+            "MinLon": -49.9603271484375,
+            "MinLat": -25.844393250195136,
+            "MaxLon": -41.2811279296875,
+            "MaxLat": -20.69960024605033
+          },
+          "PayloadBytes": 18151282,
+          "GzipBytes": 3045466,
+          "MatchedRows": 200000,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 235,
+          "PathVertices": 2408,
+          "ServerMsP50": 1243.5113,
+          "ClientMsP50": 41.6317
+        }
+      ]
+    },
+    {
+      "Zoom": 12,
+      "PayloadBytes": {
+        "P50": 18791433,
+        "P95": 20310107,
+        "Count": 12
+      },
+      "GzipBytes": {
+        "P50": 3163376,
+        "P95": 3494250,
+        "Count": 12
+      },
+      "MatchedRows": {
+        "P50": 12882,
+        "P95": 27589,
+        "Count": 12
+      },
+      "ReturnedFeatures": {
+        "P50": 10000,
+        "P95": 10000,
+        "Count": 12
+      },
+      "DrawnFeatures": {
+        "P50": 992,
+        "P95": 1186,
+        "Count": 12
+      },
+      "ServerMs": {
+        "P50": 170.6373,
+        "P95": 263.1541,
+        "Count": 60
+      },
+      "DatabaseMs": {
+        "P50": 125.6329,
+        "P95": 202.1042,
+        "Count": 60
+      },
+      "ClientMs": {
+        "P50": 50.955,
+        "P95": 57.7896,
+        "Count": 60
+      },
+      "Viewports": [
+        {
+          "CenterLon": -46.05461767763883,
+          "CenterLat": -22.94182611738644,
+          "Bounds": {
+            "MinLon": -46.32591247558594,
+            "MinLat": -23.10310213321666,
+            "MaxLon": -45.78346252441406,
+            "MaxLat": -22.780613159383744
+          },
+          "PayloadBytes": 18718193,
+          "GzipBytes": 3149746,
+          "MatchedRows": 17942,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 983,
+          "PathVertices": 35881,
+          "ServerMsP50": 227.2156,
+          "ClientMsP50": 51.1608
+        },
+        {
+          "CenterLon": -45.189890337352274,
+          "CenterLat": -23.73732254103383,
+          "Bounds": {
+            "MinLon": -45.461082458496094,
+            "MinLat": -23.89745216505988,
+            "MaxLon": -44.91863250732422,
+            "MaxLat": -23.576888969514943
+          },
+          "PayloadBytes": 2922510,
+          "GzipBytes": 510244,
+          "MatchedRows": 1430,
+          "ReturnedFeatures": 1430,
+          "DrawnFeatures": 159,
+          "PathVertices": 6621,
+          "ServerMsP50": 111.7464,
+          "ClientMsP50": 7.991
+        },
+        {
+          "CenterLon": -46.28920950116755,
+          "CenterLat": -23.31761080283671,
+          "Bounds": {
+            "MinLon": -46.560401916503906,
+            "MinLat": -23.4783623622725,
+            "MaxLon": -46.01795196533203,
+            "MaxLat": -23.156775418370405
+          },
+          "PayloadBytes": 19095944,
+          "GzipBytes": 3232074,
+          "MatchedRows": 12927,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 1042,
+          "PathVertices": 36903,
+          "ServerMsP50": 164.3856,
+          "ClientMsP50": 50.955
+        },
+        {
+          "CenterLon": -46.47041410271692,
+          "CenterLat": -23.1546194462339,
+          "Bounds": {
+            "MinLon": -46.741676330566406,
+            "MinLat": -23.315459151601093,
+            "MaxLon": -46.19922637939453,
+            "MaxLat": -22.993478927085015
+          },
+          "PayloadBytes": 20310107,
+          "GzipBytes": 3494250,
+          "MatchedRows": 12882,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 1186,
+          "PathVertices": 44096,
+          "ServerMsP50": 170.842,
+          "ClientMsP50": 57.3692
+        },
+        {
+          "CenterLon": -46.06695677719562,
+          "CenterLat": -22.27736469331732,
+          "Bounds": {
+            "MinLon": -46.33827209472656,
+            "MinLat": -22.439273581597682,
+            "MaxLon": -45.79582214355469,
+            "MaxLat": -22.11522295834465
+          },
+          "PayloadBytes": 19221284,
+          "GzipBytes": 3248120,
+          "MatchedRows": 14930,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 1046,
+          "PathVertices": 34951,
+          "ServerMsP50": 167.3517,
+          "ClientMsP50": 53.1948
+        },
+        {
+          "CenterLon": -47.20491342944254,
+          "CenterLat": -22.86101854800909,
+          "Bounds": {
+            "MinLon": -47.476043701171875,
+            "MinLat": -23.02223600607764,
+            "MaxLon": -46.93359375,
+            "MaxLat": -22.69955446760384
+          },
+          "PayloadBytes": 18604784,
+          "GzipBytes": 3101393,
+          "MatchedRows": 10025,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 958,
+          "PathVertices": 33736,
+          "ServerMsP50": 163.3909,
+          "ClientMsP50": 49.9995
+        },
+        {
+          "CenterLon": -46.27958193610471,
+          "CenterLat": -23.28834472044057,
+          "Bounds": {
+            "MinLon": -46.55078887939453,
+            "MinLat": -23.449073480469075,
+            "MaxLon": -46.008338928222656,
+            "MaxLat": -23.12741563493624
+          },
+          "PayloadBytes": 19104946,
+          "GzipBytes": 3232035,
+          "MatchedRows": 11920,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 1046,
+          "PathVertices": 36989,
+          "ServerMsP50": 178.0885,
+          "ClientMsP50": 52.3367
+        },
+        {
+          "CenterLon": -46.3050675252995,
+          "CenterLat": -23.335090540037573,
+          "Bounds": {
+            "MinLon": -46.576194763183594,
+            "MinLat": -23.495680684756575,
+            "MaxLon": -46.03374481201172,
+            "MaxLat": -23.174135704200793
+          },
+          "PayloadBytes": 19241155,
+          "GzipBytes": 3263992,
+          "MatchedRows": 14090,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 1066,
+          "PathVertices": 37431,
+          "ServerMsP50": 167.0394,
+          "ClientMsP50": 53.3805
+        },
+        {
+          "CenterLon": -46.64907977256171,
+          "CenterLat": -23.436382716497242,
+          "Bounds": {
+            "MinLon": -46.920204162597656,
+            "MinLat": -23.59702589455772,
+            "MaxLon": -46.37775421142578,
+            "MaxLat": -23.27572707057901
+          },
+          "PayloadBytes": 19156372,
+          "GzipBytes": 3243864,
+          "MatchedRows": 27589,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 1046,
+          "PathVertices": 34280,
+          "ServerMsP50": 261.9738,
+          "ClientMsP50": 51.4733
+        },
+        {
+          "CenterLon": -46.966767152325765,
+          "CenterLat": -22.564461718031932,
+          "Bounds": {
+            "MinLon": -47.238121032714844,
+            "MinLat": -22.72615714815323,
+            "MaxLon": -46.69567108154297,
+            "MaxLat": -22.402776071459716
+          },
+          "PayloadBytes": 3621725,
+          "GzipBytes": 633185,
+          "MatchedRows": 1827,
+          "ReturnedFeatures": 1827,
+          "DrawnFeatures": 207,
+          "PathVertices": 6970,
+          "ServerMsP50": 115.0095,
+          "ClientMsP50": 10.0226
+        },
+        {
+          "CenterLon": -45.526154544055835,
+          "CenterLat": -22.27810239104001,
+          "Bounds": {
+            "MinLon": -45.79753875732422,
+            "MinLat": -22.439908236021807,
+            "MaxLon": -45.255088806152344,
+            "MaxLat": -22.115859084972815
+          },
+          "PayloadBytes": 18650733,
+          "GzipBytes": 3135170,
+          "MatchedRows": 9873,
+          "ReturnedFeatures": 9873,
+          "DrawnFeatures": 992,
+          "PathVertices": 34356,
+          "ServerMsP50": 173.6093,
+          "ClientMsP50": 49.4067
+        },
+        {
+          "CenterLon": -46.12781136189604,
+          "CenterLat": -22.932860522544242,
+          "Bounds": {
+            "MinLon": -46.39904022216797,
+            "MinLat": -23.093943958701512,
+            "MaxLon": -45.856590270996094,
+            "MaxLat": -22.77143314434012
+          },
+          "PayloadBytes": 18791433,
+          "GzipBytes": 3163376,
+          "MatchedRows": 17913,
+          "ReturnedFeatures": 10000,
+          "DrawnFeatures": 983,
+          "PathVertices": 36932,
+          "ServerMsP50": 221.1802,
+          "ClientMsP50": 49.9545
+        }
+      ]
+    },
+    {
+      "Zoom": 16,
+      "PayloadBytes": {
+        "P50": 92454,
+        "P95": 2724651,
+        "Count": 12
+      },
+      "GzipBytes": {
+        "P50": 17515,
+        "P95": 493417,
+        "Count": 12
+      },
+      "MatchedRows": {
+        "P50": 32,
+        "P95": 897,
+        "Count": 12
+      },
+      "ReturnedFeatures": {
+        "P50": 32,
+        "P95": 897,
+        "Count": 12
+      },
+      "DrawnFeatures": {
+        "P50": 29,
+        "P95": 818,
+        "Count": 12
+      },
+      "ServerMs": {
+        "P50": 0.9522,
+        "P95": 10.9569,
+        "Count": 60
+      },
+      "DatabaseMs": {
+        "P50": 0.8013,
+        "P95": 4.9543,
+        "Count": 60
+      },
+      "ClientMs": {
+        "P50": 0.273,
+        "P95": 7.6034,
+        "Count": 60
+      },
+      "Viewports": [
+        {
+          "CenterLon": -46.08559387045111,
+          "CenterLat": -22.248752079551615,
+          "Bounds": {
+            "MinLon": -46.102538108825684,
+            "MinLat": -22.258874762854816,
+            "MaxLon": -46.06863498687744,
+            "MaxLat": -22.23861743807152
+          },
+          "PayloadBytes": 907548,
+          "GzipBytes": 167038,
+          "MatchedRows": 253,
+          "ReturnedFeatures": 253,
+          "DrawnFeatures": 222,
+          "PathVertices": 1665,
+          "ServerMsP50": 4.1372,
+          "ClientMsP50": 2.4187
+        },
+        {
+          "CenterLon": -46.083332362682434,
+          "CenterLat": -22.328769367403314,
+          "Bounds": {
+            "MinLon": -46.100285053253174,
+            "MinLat": -22.33888236891468,
+            "MaxLon": -46.06638193130493,
+            "MaxLat": -22.318636636616056
+          },
+          "PayloadBytes": 2724651,
+          "GzipBytes": 493417,
+          "MatchedRows": 897,
+          "ReturnedFeatures": 897,
+          "DrawnFeatures": 818,
+          "PathVertices": 5454,
+          "ServerMsP50": 11.6453,
+          "ClientMsP50": 7.6067
+        },
+        {
+          "CenterLon": -46.619692656082606,
+          "CenterLat": -22.87167122961008,
+          "Bounds": {
+            "MinLon": -46.63664102554321,
+            "MinLat": -22.881750208637342,
+            "MaxLon": -46.60273790359497,
+            "MaxLat": -22.861584175453395
+          },
+          "PayloadBytes": 269386,
+          "GzipBytes": 50239,
+          "MatchedRows": 73,
+          "ReturnedFeatures": 73,
+          "DrawnFeatures": 63,
+          "PathVertices": 508,
+          "ServerMsP50": 2.1212,
+          "ClientMsP50": 0.744
+        },
+        {
+          "CenterLon": -45.92147242151888,
+          "CenterLat": -23.334554852232035,
+          "Bounds": {
+            "MinLon": -45.938429832458496,
+            "MinLat": -23.344600287742104,
+            "MaxLon": -45.904526710510254,
+            "MaxLat": -23.324503636509117
+          },
+          "PayloadBytes": 2023250,
+          "GzipBytes": 364947,
+          "MatchedRows": 667,
+          "ReturnedFeatures": 667,
+          "DrawnFeatures": 602,
+          "PathVertices": 3999,
+          "ServerMsP50": 8.4421,
+          "ClientMsP50": 5.489
+        },
+        {
+          "CenterLon": -46.94354063006406,
+          "CenterLat": -23.981338403269206,
+          "Bounds": {
+            "MinLon": -46.9605016708374,
+            "MinLat": -23.991330104704048,
+            "MaxLon": -46.92659854888916,
+            "MaxLat": -23.9713325952431
+          },
+          "PayloadBytes": 2393,
+          "GzipBytes": 763,
+          "MatchedRows": 3,
+          "ReturnedFeatures": 3,
+          "DrawnFeatures": 3,
+          "PathVertices": 3,
+          "ServerMsP50": 0.8528,
+          "ClientMsP50": 0.0104
+        },
+        {
+          "CenterLon": -46.995009787962125,
+          "CenterLat": -23.0115769638435,
+          "Bounds": {
+            "MinLon": -47.0119571685791,
+            "MinLat": -23.021643545695646,
+            "MaxLon": -46.97805404663086,
+            "MaxLat": -23.001498344149862
+          },
+          "PayloadBytes": 33797,
+          "GzipBytes": 7009,
+          "MatchedRows": 6,
+          "ReturnedFeatures": 6,
+          "DrawnFeatures": 5,
+          "PathVertices": 63,
+          "ServerMsP50": 0.6695,
+          "ClientMsP50": 0.1072
+        },
+        {
+          "CenterLon": -46.27335311619869,
+          "CenterLat": -22.44170217513572,
+          "Bounds": {
+            "MinLon": -46.29031419754028,
+            "MinLat": -22.45180746884827,
+            "MaxLon": -46.25641107559204,
+            "MaxLat": -22.431578165716733
+          },
+          "PayloadBytes": 60298,
+          "GzipBytes": 11412,
+          "MatchedRows": 17,
+          "ReturnedFeatures": 17,
+          "DrawnFeatures": 14,
+          "PathVertices": 67,
+          "ServerMsP50": 0.7387,
+          "ClientMsP50": 0.1513
+        },
+        {
+          "CenterLon": -46.66547988806274,
+          "CenterLat": -22.83034611601313,
+          "Bounds": {
+            "MinLon": -46.68243169784546,
+            "MinLat": -22.840426394567242,
+            "MaxLon": -46.64852857589722,
+            "MaxLat": -22.820254230818755
+          },
+          "PayloadBytes": 130247,
+          "GzipBytes": 24558,
+          "MatchedRows": 34,
+          "ReturnedFeatures": 34,
+          "DrawnFeatures": 29,
+          "PathVertices": 273,
+          "ServerMsP50": 1.0077,
+          "ClientMsP50": 0.3794
+        },
+        {
+          "CenterLon": -46.20930691015672,
+          "CenterLat": -23.503553427148088,
+          "Bounds": {
+            "MinLon": -46.22626304626465,
+            "MinLat": -23.513587011578938,
+            "MaxLon": -46.192359924316406,
+            "MaxLat": -23.493516018851842
+          },
+          "PayloadBytes": 26018,
+          "GzipBytes": 5198,
+          "MatchedRows": 6,
+          "ReturnedFeatures": 6,
+          "DrawnFeatures": 5,
+          "PathVertices": 40,
+          "ServerMsP50": 0.5444,
+          "ClientMsP50": 0.0745
+        },
+        {
+          "CenterLon": -46.367622269248926,
+          "CenterLat": -23.55577199250176,
+          "Bounds": {
+            "MinLon": -46.38457775115967,
+            "MinLat": -23.565796609400348,
+            "MaxLon": -46.350674629211426,
+            "MaxLat": -23.54573357936548
+          },
+          "PayloadBytes": 92454,
+          "GzipBytes": 17515,
+          "MatchedRows": 32,
+          "ReturnedFeatures": 32,
+          "DrawnFeatures": 29,
+          "PathVertices": 237,
+          "ServerMsP50": 0.8786,
+          "ClientMsP50": 0.2481
+        },
+        {
+          "CenterLon": -45.886634878148136,
+          "CenterLat": -23.297391629444128,
+          "Bounds": {
+            "MinLon": -45.90358257293701,
+            "MinLat": -23.307438799464638,
+            "MaxLon": -45.86967945098877,
+            "MaxLat": -23.287336529174038
+          },
+          "PayloadBytes": 1631243,
+          "GzipBytes": 300906,
+          "MatchedRows": 509,
+          "ReturnedFeatures": 509,
+          "DrawnFeatures": 451,
+          "PathVertices": 3218,
+          "ServerMsP50": 7.6202,
+          "ClientMsP50": 4.2155
+        },
+        {
+          "CenterLon": -45.400948180534364,
+          "CenterLat": -22.34289413287618,
+          "Bounds": {
+            "MinLon": -45.41790962219238,
+            "MinLat": -22.35301294217076,
+            "MaxLon": -45.38400650024414,
+            "MaxLat": -22.33276926138657
+          },
+          "PayloadBytes": 17866,
+          "GzipBytes": 3728,
+          "MatchedRows": 6,
+          "ReturnedFeatures": 6,
+          "DrawnFeatures": 5,
+          "PathVertices": 36,
+          "ServerMsP50": 0.8522,
+          "ClientMsP50": 0.0541
+        }
+      ]
+    }
+  ]
+}
