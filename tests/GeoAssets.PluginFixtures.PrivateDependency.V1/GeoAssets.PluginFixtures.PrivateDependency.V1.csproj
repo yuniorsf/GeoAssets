@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-427 test fixture, never shipped: version 1 of a provider plugin's private dependency. V1 and V2 build the
+       same assembly (GeoAssets.PluginFixtures.PrivateDependency) at different versions, so
+       GeoAssets.Hosting.Abstractions.Tests can load both side by side, each in its own plugin's load context. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>GeoAssets.PluginFixtures.PrivateDependency</AssemblyName>
+    <RootNamespace>GeoAssets.PluginFixtures.PrivateDependency</RootNamespace>
+    <PackageId>GeoAssets.PluginFixtures.PrivateDependency.V1</PackageId>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+</Project>

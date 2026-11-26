@@ -26,4 +26,26 @@
     <ProjectReference Include="..\..\core\GeoAssets.Hosting.Abstractions\GeoAssets.Hosting.Abstractions.csproj" />
   </ItemGroup>
 
+  <!-- XD01-427: fixture provider plugins, built first but not referenced (their assemblies must never load into the
+       test host's own context); their build output is copied to plugin-fixtures/<Project>/ — a plugin directory in
+       the folder-per-plugin layout — for the PluginLoadContext/DirectoryPluginAssemblySource tests. -->
+  <ItemGroup>
+    <PluginFixture Include="..\GeoAssets.PluginFixtures.Alpha\GeoAssets.PluginFixtures.Alpha.csproj" />
+    <PluginFixture Include="..\GeoAssets.PluginFixtures.Beta\GeoAssets.PluginFixtures.Beta.csproj" />
+    <ProjectReference Include="@(PluginFixture)" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyPluginFixtures" AfterTargets="Build">
+    <MSBuild Projects="@(PluginFixture)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_PluginFixtureTargetPath" />
+    </MSBuild>
+    <ItemGroup>
+      <_PluginFixtureFile Include="%(_PluginFixtureTargetPath.RootDir)%(_PluginFixtureTargetPath.Directory)**\*.*"
+                          PluginName="%(_PluginFixtureTargetPath.Filename)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PluginFixtureFile)"
+          DestinationFiles="@(_PluginFixtureFile->'$(OutDir)plugin-fixtures\%(PluginName)\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

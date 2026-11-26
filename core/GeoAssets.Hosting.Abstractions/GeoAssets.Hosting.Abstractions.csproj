@@ -15,4 +15,15 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- XD01-427 (ADR-002 D2/D3): the directory plugin loader (Plugins/) hands IProviderPluginModule types to
+       GeoAssets.Core's discovery (IPluginAssemblySource), so it references the shared contracts it loads plugins
+       against. -->
+  <ItemGroup>
+    <ProjectReference Include="..\GeoAssets.Core\GeoAssets.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Hosting.Abstractions.Tests" />
+  </ItemGroup>
+
 </Project>
