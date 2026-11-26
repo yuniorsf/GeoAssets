@@ -315,7 +315,7 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         .HasDefaultValue("");
 
                     b.Property<Geometry>("Geom")
-                        .HasColumnType("geometry")
+                        .HasColumnType("geometry(Geometry,4326)")
                         .HasColumnName("geom");
 
                     b.Property<Guid?>("LayerId")

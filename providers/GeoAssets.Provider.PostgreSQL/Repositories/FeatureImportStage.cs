@@ -1,4 +1,5 @@
 using GeoAssets.Core.FeatureImport;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL.Entities;
 using Npgsql;
 using NpgsqlTypes;
@@ -73,6 +74,14 @@ internal static class FeatureImportStage
         WHERE "OrganizationId" = @organizationId
           AND custom_attributes @> jsonb_build_object(@scopeKey, @scope)
           AND custom_attributes ->> @importIdKey <> @importId
+        RETURNING ST_XMin(geom), ST_YMin(geom), ST_XMax(geom), ST_YMax(geom)
+        """;
+
+    private const string StoredBoundsSql = """
+        SELECT ST_XMin(e.geom), ST_YMin(e.geom), ST_XMax(e.geom), ST_YMax(e.geom)
+        FROM geo_entity e
+        JOIN feature_import_stage s ON s."Id" = e."Id"
+        WHERE e."OrganizationId" = @organizationId AND e.geom IS NOT NULL
         """;
 
     /// <summary>Stamps <paramref name="organizationId"/> on the open transaction (<c>set_config(…, is_local: true)</c>).</summary>
@@ -143,10 +152,25 @@ internal static class FeatureImportStage
     }
 
     /// <summary>
-    /// Deletes the organization's features of <paramref name="scope"/> that another import than <paramref name="importId"/>
-    /// wrote (their <c>geo_entity_attribute</c> rows cascade); answers how many.
+    /// The boxes the staged ids' stored rows of <paramref name="organizationId"/> have now — before the upsert rewrites them
+    /// (XD01-432); another organization's rows are left out, as the upsert leaves them.
     /// </summary>
-    internal static async Task<int> DeleteScopeAsync(
+    internal static async Task<IReadOnlyList<BoundingBox?>> StoredBoundsAsync(NpgsqlConnection connection, Guid organizationId, CancellationToken ct)
+    {
+        var command = new NpgsqlCommand(StoredBoundsSql, connection);
+        await using (command.ConfigureAwait(false))
+        {
+            command.Parameters.Add(new NpgsqlParameter("organizationId", NpgsqlDbType.Uuid) { Value = organizationId });
+            return await ReadBoundsAsync(command, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Deletes the organization's features of <paramref name="scope"/> that another import than <paramref name="importId"/>
+    /// wrote (their <c>geo_entity_attribute</c> rows cascade); answers each removed feature's box (<c>null</c> without a
+    /// geometry), so how many is its count.
+    /// </summary>
+    internal static async Task<IReadOnlyList<BoundingBox?>> DeleteScopeAsync(
         NpgsqlConnection connection, Guid organizationId, string scope, string importId, CancellationToken ct)
     {
         var command = new NpgsqlCommand(DeleteScopeSql, connection);
@@ -157,8 +181,26 @@ internal static class FeatureImportStage
             command.Parameters.Add(new NpgsqlParameter("scope", NpgsqlDbType.Text) { Value = scope });
             command.Parameters.Add(new NpgsqlParameter("importIdKey", NpgsqlDbType.Text) { Value = FeatureImportAttributes.ImportId });
             command.Parameters.Add(new NpgsqlParameter("importId", NpgsqlDbType.Text) { Value = importId });
-            return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            return await ReadBoundsAsync(command, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>One box per row of <paramref name="command"/>'s (xmin, ymin, xmax, ymax) answer; <c>null</c> for a row without one.</summary>
+    private static async Task<IReadOnlyList<BoundingBox?>> ReadBoundsAsync(NpgsqlCommand command, CancellationToken ct)
+    {
+        var bounds = new List<BoundingBox?>();
+        var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        await using (reader.ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                bounds.Add(await reader.IsDBNullAsync(0, ct).ConfigureAwait(false)
+                    ? null
+                    : DirtyTileRegions.BoundsOf(reader.GetDouble(0), reader.GetDouble(1), reader.GetDouble(2), reader.GetDouble(3)));
+            }
+        }
+
+        return bounds;
     }
 
     private static NpgsqlParameter IdsParameter(string[] ids) =>

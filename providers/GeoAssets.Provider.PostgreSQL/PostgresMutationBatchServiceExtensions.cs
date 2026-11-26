@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,8 @@ public static class PostgresMutationBatchServiceExtensions
     /// a host can decorate it) and as <see cref="IAssetMutationBatchApplier"/> (XD01-337), over
     /// <paramref name="connectionString"/> — followed by a reload of the batch's organization's cached catalog when the
     /// host serves <see cref="PostgresOrganizationAssetCatalogs"/> (XD01-338, XD01-374). Each batch opens its own context, so the singleton is
-    /// safe to share; <see cref="TimeProvider.System"/> is added when no clock is registered.
+    /// safe to share; <see cref="TimeProvider.System"/> is added when no clock is registered. Committed batches report their
+    /// dirty tiles to the host's <see cref="ITileInvalidation"/> when it registers one (XD01-432).
     /// </summary>
     public static IServiceCollection AddPostgresAssetMutationBatchApplier(
         this IServiceCollection services, string connectionString)
@@ -31,7 +33,7 @@ public static class PostgresMutationBatchServiceExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(sp => new PostgresAssetMutationBatchApplier(
-            options, sp.GetRequiredService<ILoggerFactory>(), sp.GetRequiredService<TimeProvider>()));
+            options, sp.GetRequiredService<ILoggerFactory>(), sp.GetRequiredService<TimeProvider>(), sp.GetService<ITileInvalidation>()));
         // When the host serves PostgreSQL organization catalogs (XD01-338), each applied batch reloads its organization's
         // cached catalog; the host decorates this applier, it does not build it (XD01-374).
         services.AddSingleton<IAssetMutationBatchApplier>(sp =>

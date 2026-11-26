@@ -1,6 +1,7 @@
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Messaging.Events;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Persistence.Postgres.Interceptors;
 using GeoAssets.Provider.PostgreSQL.Data;
@@ -33,12 +34,18 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// its cache on first use, so each batch reads that organization's catalog once. The Server
 /// host's singleton provider is not used: it is built without a tenant and only ever sees
 /// organization-less rows.</para>
+///
+/// <para><b>Dirty tiles (XD01-432).</b> With an <see cref="ITileInvalidation"/>, the regions the
+/// batch's writes changed are handed to it once, after the transaction commits — never for a batch
+/// that rolls back or that was already applied (it writes nothing) — and its failure never fails the
+/// batch.</para>
 /// </summary>
 public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchApplier
 {
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
     private readonly ILoggerFactory _loggerFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly ITileInvalidation? _tileInvalidation;
 
     /// <param name="dbOptions">
     /// Options for the per-batch contexts. Must not enable a retrying execution strategy: each
@@ -46,8 +53,12 @@ public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchAppli
     /// </param>
     /// <param name="loggerFactory">Creates the per-batch <see cref="PostgresAssetProvider"/>'s logger.</param>
     /// <param name="timeProvider">Stamps the features' update time and the batch record.</param>
+    /// <param name="tileInvalidation">Where a committed batch reports its dirty tiles; <c>null</c> = nowhere.</param>
     public PostgresAssetMutationBatchApplier(
-        DbContextOptions<GeoAssetsDbContext> dbOptions, ILoggerFactory loggerFactory, TimeProvider timeProvider)
+        DbContextOptions<GeoAssetsDbContext> dbOptions,
+        ILoggerFactory loggerFactory,
+        TimeProvider timeProvider,
+        ITileInvalidation? tileInvalidation = null)
     {
         ArgumentNullException.ThrowIfNull(dbOptions);
         ArgumentNullException.ThrowIfNull(loggerFactory);
@@ -56,6 +67,7 @@ public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchAppli
         _dbOptions = dbOptions;
         _loggerFactory = loggerFactory;
         _timeProvider = timeProvider;
+        _tileInvalidation = tileInvalidation;
     }
 
     public async Task<AssetBatchAppliedEvent> ApplyAsync(AssetMutationBatchRequestedEvent batch, CancellationToken ct)
@@ -73,7 +85,8 @@ public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchAppli
         // The provider, its validating decorator and the batch store all share — and on disposal
         // dispose — the one context, so the batch and its record go through one transaction.
         var db = new GeoAssetsDbContext(options, tenant);
-        var postgres = new PostgresAssetProvider(db, options, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider);
+        var postgres = new PostgresAssetProvider(
+            db, options, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider, _tileInvalidation);
         var catalog = new ValidatingAssetProvider(postgres);
         var store = new EFAppliedMutationBatchStore(db);
         await using (db.ConfigureAwait(false))
@@ -89,6 +102,7 @@ public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchAppli
                     .ConfigureAwait(false);
 
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
+                await postgres.PublishDeferredDirtyTilesAsync(AfterCommitTileInvalidation.MutationBatchWriter).ConfigureAwait(false);
                 return applied;
             }
         }

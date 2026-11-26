@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -33,6 +34,7 @@ public sealed class PostgresOrganizationAssetCatalogs : IOrganizationCatalogFact
     private readonly IAssetProvider _shared;
     private readonly ILoggerFactory _loggerFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly ITileInvalidation? _tileInvalidation;
     private readonly OrganizationAssetCatalog _sharedOnly;
     private readonly ConcurrentDictionary<Guid, Lazy<Entry>> _entries = new();
 
@@ -40,11 +42,13 @@ public sealed class PostgresOrganizationAssetCatalogs : IOrganizationCatalogFact
     /// <param name="shared">The shared catalog: the host's provider built without a tenant.</param>
     /// <param name="loggerFactory">Creates the organizations' providers' loggers.</param>
     /// <param name="timeProvider">The organizations' providers' clock.</param>
+    /// <param name="tileInvalidation">Where the organizations' providers report their committed feature writes' dirty tiles (XD01-432); <c>null</c> = nowhere.</param>
     public PostgresOrganizationAssetCatalogs(
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         IAssetProvider shared,
         ILoggerFactory loggerFactory,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ITileInvalidation? tileInvalidation = null)
     {
         ArgumentNullException.ThrowIfNull(dbOptions);
         ArgumentNullException.ThrowIfNull(shared);
@@ -55,6 +59,7 @@ public sealed class PostgresOrganizationAssetCatalogs : IOrganizationCatalogFact
         _shared = shared;
         _loggerFactory = loggerFactory;
         _timeProvider = timeProvider;
+        _tileInvalidation = tileInvalidation;
         _sharedOnly = new OrganizationAssetCatalog(Guid.Empty, shared, own: null);
     }
 
@@ -125,7 +130,7 @@ public sealed class PostgresOrganizationAssetCatalogs : IOrganizationCatalogFact
     }
 
     private PostgresAssetProvider NewProvider(Guid organizationId) =>
-        new(_dbOptions, organizationId, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider);
+        new(_dbOptions, organizationId, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider, _tileInvalidation);
 
     private static ValidatingAssetProvider Validating(PostgresAssetProvider provider) => new(provider);
 

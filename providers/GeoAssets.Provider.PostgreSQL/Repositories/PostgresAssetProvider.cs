@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Entities;
@@ -41,12 +42,19 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     public event EventHandler<string>? FeatureDeleted;
     public event EventHandler? CollectionChanged;
 
-    public PostgresAssetProvider(GeoAssetsDbContext db, DbContextOptions<GeoAssetsDbContext> dbOptions, ILogger<PostgresAssetProvider> logger, TimeProvider timeProvider)
+    /// <param name="tileInvalidation">Where committed feature writes report their dirty tiles (XD01-432); <c>null</c> = nowhere, nothing tracked.</param>
+    public PostgresAssetProvider(
+        GeoAssetsDbContext db,
+        DbContextOptions<GeoAssetsDbContext> dbOptions,
+        ILogger<PostgresAssetProvider> logger,
+        TimeProvider timeProvider,
+        ITileInvalidation? tileInvalidation = null)
     {
         _db           = db;
         _dbOptions    = dbOptions;
         _logger       = logger;
         _timeProvider = timeProvider;
+        _tiles        = AfterCommitTileInvalidation.For(tileInvalidation, logger);
     }
 
     // ── Cache helpers ──────────────────────────────────────────────────────────
@@ -268,6 +276,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         _db.GeoEntities.Add(row);
         _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(feature));
         SaveChanges();
+        PublishDirtyTiles([BoundsOf(feature)]);
         InvalidateCache();
         FeatureAdded?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
@@ -280,12 +289,14 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         StampOrganization(feature);
         feature.Properties.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         var row = GeoEntityRowMapper.MapToRow(feature);
+        var before = StoredBounds([feature.Id]);
         SaveChangesInTransaction(() =>
         {
             _db.GeoEntityAttributes.Where(a => a.EntityId == feature.Id).ExecuteDelete();
             _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(feature));
             _db.GeoEntities.Update(row);
         });
+        PublishDirtyTiles([.. before, BoundsOf(feature)]);
         InvalidateCache();
         FeatureUpdated?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
@@ -298,6 +309,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         RefuseRowsOfAnotherOrganization(ids);
         foreach (var f in list)
             StampOrganization(f);
+        var before = StoredBounds(ids);
         SaveChangesInTransaction(() =>
         {
             // Upsert: the ids already stored are updated, the others inserted (XD01-341).
@@ -316,6 +328,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                 _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(f));
             }
         });
+        PublishDirtyTiles([.. before, .. list.Select(BoundsOf)]);
         InvalidateCache();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -327,6 +340,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         // geo_entity_attribute rows for this id are cleaned up via DB-level FK cascade.
         _db.GeoEntities.Remove(row);
         SaveChanges();
+        PublishDirtyTiles([BoundsOf(row)]);
         InvalidateCache();
         FeatureDeleted?.Invoke(this, id);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
@@ -334,8 +348,10 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
 
     public void Clear()
     {
-        _db.GeoEntities.RemoveRange(_db.GeoEntities);
+        var removed = _db.GeoEntities.ToList();
+        _db.GeoEntities.RemoveRange(removed);
         SaveChanges();
+        PublishDirtyTiles(removed.Select(BoundsOf));
         InvalidateCache();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -345,7 +361,8 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         ArgumentNullException.ThrowIfNull(features);
         var list = features.ToList();
         RefuseRowsOfAnotherOrganization([.. list.Select(f => f.Id)]);
-        _db.GeoEntities.RemoveRange(_db.GeoEntities);
+        var removed = _db.GeoEntities.ToList();
+        _db.GeoEntities.RemoveRange(removed);
         foreach (var f in list)
         {
             StampOrganization(f);
@@ -353,6 +370,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(f));
         }
         SaveChanges();
+        PublishDirtyTiles([.. removed.Select(BoundsOf), .. list.Select(BoundsOf)]);
         InvalidateCache();
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }

@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL.Data;
 using GeoAssets.Provider.PostgreSQL.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -8,9 +9,11 @@ namespace GeoAssets.Provider.PostgreSQL;
 
 /// <summary>
 /// Builds <see cref="PostgresAssetProvider"/>s: the host's catalogs through <see cref="PostgresProviderPlugin"/>
-/// (XD01-371), and one-off connections such as the GeoJSON importer's.
+/// (XD01-371), and one-off connections such as the GeoJSON importer's — each reporting its committed feature writes' dirty
+/// tiles to <paramref name="tileInvalidation"/>, when the host has one (XD01-432).
 /// </summary>
-public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimeProvider timeProvider)
+public sealed class PostgresProviderFactory(
+    ILoggerFactory loggerFactory, TimeProvider timeProvider, ITileInvalidation? tileInvalidation = null)
     : IPostgresProviderFactory
 {
     public IAssetProvider Create(string connectionString)
@@ -27,7 +30,7 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimePr
         // Apply any pending migrations (idempotent)
         db.Database.Migrate();
 
-        return new PostgresAssetProvider(db, options, logger, timeProvider);
+        return new PostgresAssetProvider(db, options, logger, timeProvider, tileInvalidation);
     }
 
     /// <summary>
@@ -55,7 +58,7 @@ public sealed class PostgresProviderFactory(ILoggerFactory loggerFactory, TimePr
 
         await db.Database.MigrateAsync(ct).ConfigureAwait(false);
 
-        var provider = new PostgresAssetProvider(db, options, logger, timeProvider);
+        var provider = new PostgresAssetProvider(db, options, logger, timeProvider, tileInvalidation);
         if (warmCache) await provider.WarmCacheAsync(ct).ConfigureAwait(false);
         return provider;
     }

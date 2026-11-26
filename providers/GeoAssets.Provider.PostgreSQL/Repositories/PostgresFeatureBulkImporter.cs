@@ -1,8 +1,11 @@
 using GeoAssets.Core.FeatureImport;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PostgreSQL.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 
 namespace GeoAssets.Provider.PostgreSQL.Repositories;
@@ -22,20 +25,29 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///
 /// <para><b>Catalog.</b> <see cref="CompleteAsync"/> reloads the organization's cached catalog in
 /// <see cref="PostgresOrganizationAssetCatalogs"/> once, when the host serves one; chunks do not.</para>
+///
+/// <para><b>Dirty tiles (XD01-432).</b> With an <see cref="ITileInvalidation"/>, each committed chunk reports the boxes its
+/// written features had before and have after it, and a completion that replaced its scope the boxes of the features it
+/// removed (<see cref="DirtyTileRegions"/>) — after the commit, never failing the import.</para>
 /// </summary>
 public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
 {
     private readonly DbContextOptions<GeoAssetsDbContext> _dbOptions;
     private readonly TimeProvider _timeProvider;
     private readonly PostgresOrganizationAssetCatalogs? _catalogs;
+    private readonly AfterCommitTileInvalidation? _tiles;
 
     /// <param name="dbOptions">Options for the per-call contexts (Npgsql with NetTopologySuite).</param>
     /// <param name="timeProvider">Stamps the written features' creation and update times.</param>
     /// <param name="catalogs">The host's organization catalogs to reload after an import completes; <c>null</c> when it has none.</param>
+    /// <param name="tileInvalidation">Where committed writes report their dirty tiles; <c>null</c> = nowhere, nothing tracked.</param>
+    /// <param name="logger">Logs a failed tile invalidation; <c>null</c> = not logged (still counted).</param>
     public PostgresFeatureBulkImporter(
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         TimeProvider timeProvider,
-        PostgresOrganizationAssetCatalogs? catalogs = null)
+        PostgresOrganizationAssetCatalogs? catalogs = null,
+        ITileInvalidation? tileInvalidation = null,
+        ILogger<PostgresFeatureBulkImporter>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(dbOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -43,6 +55,7 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
         _dbOptions = dbOptions;
         _timeProvider = timeProvider;
         _catalogs = catalogs;
+        _tiles = AfterCommitTileInvalidation.For(tileInvalidation, logger ?? NullLogger<PostgresFeatureBulkImporter>.Instance);
     }
 
     public async Task<FeatureImportChunkResult> ImportChunkAsync(FeatureImportChunkRequest request, CancellationToken cancellationToken)
@@ -60,9 +73,11 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
         var db = new GeoAssetsDbContext(_dbOptions);
         await using (db.ConfigureAwait(false))
         {
-            return await db.Database.CreateExecutionStrategy()
+            var (result, dirty) = await db.Database.CreateExecutionStrategy()
                 .ExecuteAsync(ct => WriteChunkAsync(db, request, ct), cancellationToken)
                 .ConfigureAwait(false);
+            await PublishDirtyTilesAsync(dirty).ConfigureAwait(false);
+            return result;
         }
     }
 
@@ -77,9 +92,11 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
             var db = new GeoAssetsDbContext(_dbOptions);
             await using (db.ConfigureAwait(false))
             {
-                removed = await db.Database.CreateExecutionStrategy()
+                var removedBounds = await db.Database.CreateExecutionStrategy()
                     .ExecuteAsync(ct => DeleteScopeAsync(db, completion, ct), cancellationToken)
                     .ConfigureAwait(false);
+                removed = removedBounds.Count;
+                await PublishDirtyTilesAsync(removedBounds).ConfigureAwait(false);
             }
         }
 
@@ -89,7 +106,8 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
         return new FeatureImportCompletionResult(removed);
     }
 
-    private async Task<FeatureImportChunkResult> WriteChunkAsync(
+    /// <summary>The chunk's result, and the boxes its written features had before and have after it (none when nothing is tracked).</summary>
+    private async Task<(FeatureImportChunkResult Result, IReadOnlyList<BoundingBox?> Dirty)> WriteChunkAsync(
         GeoAssetsDbContext db, FeatureImportChunkRequest request, CancellationToken ct)
     {
         var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -104,7 +122,7 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
             if (chunk.Accepted.Count == 0)
             {
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
-                return new FeatureImportChunkResult(0, 0, rejected);
+                return (new FeatureImportChunkResult(0, 0, rejected), []);
             }
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -113,6 +131,9 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
                 .ToList();
 
             await FeatureImportStage.StageAsync(connection, rows, ct).ConfigureAwait(false);
+            var before = _tiles is null
+                ? []
+                : await FeatureImportStage.StoredBoundsAsync(connection, request.OrganizationId, ct).ConfigureAwait(false);
             var written = await FeatureImportStage.UpsertAsync(connection, ct).ConfigureAwait(false);
             rejected.AddRange(rows
                 .Where(row => !written.ContainsKey(row.Id))
@@ -123,12 +144,16 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
 
             await transaction.CommitAsync(ct).ConfigureAwait(false);
 
+            IReadOnlyList<BoundingBox?> dirty = _tiles is null
+                ? []
+                : [.. before, .. rows.Where(row => written.ContainsKey(row.Id)).Select(row => DirtyTileRegions.BoundsOf(row.Geom?.EnvelopeInternal))];
             var inserted = written.Values.Count(wasInserted => wasInserted);
-            return new FeatureImportChunkResult(inserted, written.Count - inserted, rejected);
+            return (new FeatureImportChunkResult(inserted, written.Count - inserted, rejected), dirty);
         }
     }
 
-    private static async Task<int> DeleteScopeAsync(GeoAssetsDbContext db, FeatureImportCompletion completion, CancellationToken ct)
+    /// <summary>Deletes the scope's features another import wrote; answers each removed feature's box (<c>null</c> without a geometry).</summary>
+    private static async Task<IReadOnlyList<BoundingBox?>> DeleteScopeAsync(GeoAssetsDbContext db, FeatureImportCompletion completion, CancellationToken ct)
     {
         var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
         await using (transaction.ConfigureAwait(false))
@@ -142,6 +167,11 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
             return removed;
         }
     }
+
+    private Task PublishDirtyTilesAsync(IReadOnlyList<BoundingBox?> bounds) =>
+        _tiles is null || bounds.Count == 0
+            ? Task.CompletedTask
+            : _tiles.PublishAsync(DirtyTileRegions.Of(bounds), AfterCommitTileInvalidation.BulkImportWriter);
 
     /// <summary>The organization's own asset types and the shared ones (<see cref="Guid.Empty"/>), with their allowed geometry.</summary>
     private static async Task<IReadOnlyDictionary<Guid, GeometryType?>> VisibleAssetTypesAsync(
