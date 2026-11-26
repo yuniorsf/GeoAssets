@@ -52,6 +52,12 @@ A machine that ran this stack before the `geoassets` project name keeps its data
 (`docker compose -p server down`, likewise `-p neutral-operator` and `-p web`, without `-v`) — their containers carry the
 same `container_name`s.
 
+**Distributor silos (XD01-447).** `deploy/distributor-silo` runs one more `GeoAssets.Server` per distribution company
+(container `geoasset-server-<company>`, its own Compose project `geoassets-silo-<company>`) on this stack's network and
+Postgres container, with its own database `geoassets_<company>` (`provision-database.sh <company>` creates it and applies
+the migrations below). `gateway.override.yaml` adds `X-Tenant-Domain` silo routes to this stack's gateway without editing
+this file. See `deploy/distributor-silo/README.md`.
+
 ## The gateway (XD01-384)
 
 The stack also runs `GeoAssets.Gateway` (service `gateway`, host port **8090**, `GET /healthz`), the one origin the web

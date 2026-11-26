@@ -1,0 +1,66 @@
+# One GeoAssets.Server kernel silo per distribution company (XD01-447), next to the local deploy/server stack. See
+# README.md. Every value comes from the company's env file — one per company, git-ignored:
+#
+#   docker compose -f deploy/distributor-silo/docker-compose.yaml --env-file deploy/distributor-silo/coelba.env up --build -d
+#
+# The Compose project is geoassets-silo-${COMPANY} (or whatever -p names), so each company is a project of its own: a
+# second company is another env file, never an edit here, and `down` of one company never touches another company or the
+# geoassets project (Postgres, the shared kernel, the gateway). The silo joins that project's network, geoassets_default
+# (deploy/server declares `name: geoassets`), as an external network: deploy/server must be up first, and this file
+# creates no network, volume or database of its own — provision-database.sh creates geoassets_${COMPANY} in the
+# deploy/server Postgres container and applies the migrations the kernel does not run at startup.
+name: geoassets-silo-${COMPANY:?set COMPANY in the silo env file (pass it with --env-file)}
+
+services:
+  # Not "server": on geoassets_default a service name is a DNS alias, and the gateway reaches the shared kernel as
+  # http://server:8080. Address a silo by its container name, geoasset-server-${COMPANY}, never by this service name
+  # (every company's silo carries it).
+  kernel-silo:
+    container_name: geoasset-server-${COMPANY}
+    build:
+      context: ../..
+      dockerfile: apps/GeoAssets.Server/Dockerfile
+    # One image for every company's silo (built from the same checkout); deploy/server's own kernel image is untouched.
+    image: ${SILO_IMAGE:-geoassets-server-silo:local}
+    # The same Key Vault-backed vendor credentials as deploy/server (NEW_RELIC_LICENSE_KEY, …), when present.
+    env_file:
+      - path: ../otel/.env
+        required: false
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Observability__ExportEnabled: ${GEOASSETS_TELEMETRY_EXPORT:-false}
+      Observability__ServiceName: geoassets-server-${COMPANY}
+      Observability__Otlp__Endpoint: ${Observability__Otlp__Endpoint:-https://otlp.nr-data.net:4317}
+      Observability__Otlp__Protocol: ${Observability__Otlp__Protocol:-Grpc}
+      # The company's own database on the deploy/server Postgres (service "postgres" on geoassets_default).
+      ConnectionStrings__GeoAssets: Host=${POSTGRES_HOST:-postgres};Port=5432;Database=geoassets_${COMPANY};Username=postgres;Password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (the deploy/server one) in the silo env file}
+      # The asset store only: no NeutralOperator module (appsettings.json lists nothing else; index 1 stays unset).
+      GeoAssets__Modules__0: postgres-spatial
+      # The kernel API's own CIAM registration (the deploy/server .env values), so a token for the kernel API — a
+      # GeoAssets.ServiceCaller client-credentials token of tools/GeoAssets.Tools.NetworkImport — is valid on every silo.
+      AzureAdCiam__Instance: ${AzureAdCiam__Instance:-}
+      AzureAdCiam__TenantId: ${AzureAdCiam__TenantId:-}
+      AzureAdCiam__ClientId: ${AzureAdCiam__ClientId:-}
+      # Blank entries are dropped (KernelAudiences.Resolve).
+      AzureAdCiam__AdditionalAudiences__0: ${AzureAdCiam__AdditionalAudiences__0:-}
+      AzureAdCiam__AdditionalAudiences__1: ${AzureAdCiam__AdditionalAudiences__1:-}
+    labels:
+      geoassets.silo.company: ${COMPANY}
+      geoassets.silo.tenant-domain: ${TENANT_DOMAIN:?set TENANT_DOMAIN in the silo env file}
+    networks:
+      - geoassets
+    ports:
+      - "127.0.0.1:${SILO_PORT:-8180}:8080"
+    # GET /healthz over bash's /dev/tcp: the runtime image has no curl or wget.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  # deploy/server's project network (project "geoassets"): Postgres, the shared kernel and the gateway.
+  geoassets:
+    name: geoassets_default
+    external: true
