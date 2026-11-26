@@ -32,8 +32,11 @@ public interface IProviderMapLayerRenderer
     Task RemoveAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Draws what the entry shows inside <paramref name="viewport"/>, after the map's features were
-    /// cleared for a pan; answers how many chunks or features were drawn, for the caller's log line.
+    /// Draws what the entry shows inside <paramref name="viewport"/> during a viewport pass
+    /// (<see cref="IMapInterop.BeginViewportRenderAsync"/> … <see cref="IMapInterop.EndViewportRenderAsync"/>, XD01-429):
+    /// the map is not cleared first, so a feature drawn again replaces its own layer and one the pass never draws is
+    /// removed when the pass ends. Answers how many chunks or features were drawn, for the caller's log line. Once
+    /// <paramref name="cancellationToken"/> is cancelled — a newer viewport superseded this one — nothing more is drawn.
     /// </summary>
-    Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default);
+    Task<int> RenderViewportAsync(MapLayerRenderRequest request, ViewportQuery viewport, CancellationToken cancellationToken = default);
 }

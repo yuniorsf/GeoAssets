@@ -144,7 +144,7 @@ public sealed class ProviderMapLayerRendererChainTests
 
         public Task<int> RenderAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task RemoveAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default) => Task.FromResult(0);
+        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, ViewportQuery viewport, CancellationToken cancellationToken = default) => Task.FromResult(0);
     }
 
     /// <summary>A renderer a host adds for a new capability — no switch anywhere is edited for it.</summary>
@@ -154,6 +154,6 @@ public sealed class ProviderMapLayerRendererChainTests
         public bool CanRender(IAssetProvider provider) => provider.GetRenderCapabilities().HasFlag(ProviderRenderCapabilities.VectorTiles);
         public Task<int> RenderAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task RemoveAsync(MapLayerRenderRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default) => Task.FromResult(0);
+        public Task<int> RenderViewportAsync(MapLayerRenderRequest request, ViewportQuery viewport, CancellationToken cancellationToken = default) => Task.FromResult(0);
     }
 }

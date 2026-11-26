@@ -2,6 +2,7 @@ using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 
 namespace GeoAssets.Core.Providers;
 
@@ -79,6 +80,8 @@ public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
     public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => _current.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default)
         => _current.GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
+    public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(ViewportQuery viewport, CancellationToken ct = default)          => _current.GetInBoundsJsonAsync(viewport, ct);
+    public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(ViewportQuery viewport, CancellationToken ct = default) => _current.GetInBoundsRawJsonChunksAsync(viewport, ct);
     public IReadOnlyList<GeoFeature>                GetNearby(GeoPoint center, double distanceDegrees) => _current.GetNearby(center, distanceDegrees);
     public IReadOnlyList<GeoFeature>                GetNeighbors(string featureId)                   => _current.GetNeighbors(featureId);
     public IReadOnlyList<GeoFeature>                GetDescendants(string featureId)                 => _current.GetDescendants(featureId);

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 
 namespace GeoAssets.Core.Interfaces;
@@ -109,6 +110,31 @@ public interface IAssetProvider
     {
         var raw = await GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
         if (raw is not null) yield return raw;
+    }
+
+    /// <summary>
+    /// <see cref="GetInBoundsJsonAsync(double, double, double, double)"/> for a map viewport, cancellable (XD01-429): a
+    /// superseded viewport's fetch is abandoned instead of painting a stale result. The default ignores
+    /// <see cref="ViewportQuery.Zoom"/> and can only refuse to start once <paramref name="ct"/> is cancelled; a provider
+    /// whose fetch can be aborted mid-flight (e.g. REST) overrides it, and a decorator that forwards its reads forwards
+    /// this too.
+    /// </summary>
+    Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(ViewportQuery viewport, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
+        return GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
+    }
+
+    /// <summary>
+    /// <see cref="GetInBoundsRawJsonChunksAsync(double, double, double, double, CancellationToken)"/> for a map viewport
+    /// (XD01-429). The default ignores <see cref="ViewportQuery.Zoom"/>; a provider that can pass the zoom on (e.g. REST)
+    /// overrides it, and a decorator that forwards its reads forwards this too.
+    /// </summary>
+    IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(ViewportQuery viewport, CancellationToken ct = default)
+    {
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
+        return GetInBoundsRawJsonChunksAsync(minLon, minLat, maxLon, maxLat, ct);
     }
 
     /// <summary>

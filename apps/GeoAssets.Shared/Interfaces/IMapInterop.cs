@@ -58,6 +58,22 @@ public interface IMapInterop
     Task RemoveFeatureAsync(string divId, string featureId);
     Task ClearAllFeaturesAsync(string divId);
 
+    /// <summary>
+    /// Opens a viewport pass (XD01-429) — a viewport refresh that diffs instead of clearing the map: every feature
+    /// rendered while the pass is open is kept (one already drawn with the same data and style keeps its layer), and
+    /// <see cref="EndViewportRenderAsync"/> removes only those it did not render. Opening a pass, or
+    /// <see cref="ClearAllFeaturesAsync"/>, supersedes the open one: a batch of it still being drawn stops, and its end
+    /// removes nothing. Answers the pass's generation, for <see cref="EndViewportRenderAsync"/>.
+    /// </summary>
+    Task<int> BeginViewportRenderAsync(string divId);
+
+    /// <summary>
+    /// Closes the viewport pass <paramref name="generation"/> opened by <see cref="BeginViewportRenderAsync"/>, removing
+    /// every feature it did not render. A no-op when that pass was superseded. Reference layers, WMS/tile layers and the
+    /// per-feature states are untouched.
+    /// </summary>
+    Task EndViewportRenderAsync(string divId, int generation);
+
     // --- Draw tools ---
     Task EnableDrawModeAsync(string divId, GeometryType mode);
     Task DisableDrawModeAsync(string divId);

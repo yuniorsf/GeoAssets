@@ -27,6 +27,13 @@ internal sealed class LayerRecordingMapInterop : IMapInterop
     public List<(string DivId, string FeatureId)> RemovedFeatures { get; } = [];
     public List<(string DivId, double[] Bbox)> FitCalls { get; } = [];
 
+    /// <summary>Every viewport pass call, in order: <c>("begin", divId, generation)</c> / <c>("end", divId, generation)</c>.</summary>
+    public List<(string Call, string DivId, int Generation)> ViewportPasses { get; } = [];
+    private int _generation;
+
+    /// <summary>Runs inside every raw-JSON chunk render, before it is recorded (e.g. a newer pan cancelling this one).</summary>
+    public Func<Task>? WhileRenderingRawJson { get; init; }
+
     /// <summary>When set, every feature batch render fails with it.</summary>
     public Exception? FailBatchWith { get; init; }
 
@@ -64,9 +71,25 @@ internal sealed class LayerRecordingMapInterop : IMapInterop
         return Task.CompletedTask;
     }
 
-    public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson)
+    public async Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson)
     {
+        if (WhileRenderingRawJson is { } rendering) await rendering();
         lock (_gate) RawJsonBatches.Add((divId, rawFeaturesJson));
+    }
+
+    public Task<int> BeginViewportRenderAsync(string divId)
+    {
+        lock (_gate)
+        {
+            _generation++;
+            ViewportPasses.Add(("begin", divId, _generation));
+            return Task.FromResult(_generation);
+        }
+    }
+
+    public Task EndViewportRenderAsync(string divId, int generation)
+    {
+        lock (_gate) ViewportPasses.Add(("end", divId, generation));
         return Task.CompletedTask;
     }
 

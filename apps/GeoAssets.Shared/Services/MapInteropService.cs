@@ -74,7 +74,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         var styleMap = BuildStyleMap(_repo, featureList);
         var featuresAsJsonString = featureList.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
         await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
-        await RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
+        await RenderFeatureBatchesAsync(divId, featuresAsJsonString, featureList.Select(f => f.Id).ToList(), styleMap);
     }
 
     public Task RenderFeatureBatchAsync(string divId, IEnumerable<GeoFeature> features)
@@ -82,48 +82,74 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         var featureList = features as IReadOnlyList<GeoFeature> ?? [.. features];
         var styleMap = BuildStyleMap(_repo, featureList);
         var featuresAsJsonString = featureList.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
-        return RenderFeatureBatchesAsync(divId, featuresAsJsonString, styleMap);
+        return RenderFeatureBatchesAsync(divId, featuresAsJsonString, featureList.Select(f => f.Id).ToList(), styleMap);
     }
 
     /// <summary>
-    /// Renders features from pre-serialized <see cref="JsonElement"/> objects. Unlike the other
-    /// overloads, this one does not resolve each feature's <see cref="Layer"/> via
-    /// <see cref="LayerResolver"/> — doing so would require re-parsing the very JSON this overload
-    /// exists to avoid round-tripping, and it currently has no caller in the app. Features render
-    /// with the generic per-<see cref="AssetType"/> default style, same as before this ticket.
+    /// Renders features from pre-serialized <see cref="JsonElement"/> objects. Each feature's
+    /// <see cref="Layer"/> is resolved via <see cref="LayerResolver"/> from its id and properties
+    /// alone (<see cref="FeatureStyleKeys"/>, XD01-429) — never its geometry — and only when the
+    /// repository has a layer any feature could resolve to.
     /// </summary>
     public async Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features)
     {
+        ArgumentNullException.ThrowIfNull(features);
         var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
+        var keys = StyleKeys(() => [.. features.Select(FeatureStyleKeys.Read)]);
         await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
-        await RenderFeatureBatchesAsync(divId, featuresAsJsonString);
+        await RenderFeatureBatchesAsync(divId, featuresAsJsonString, keys?.Select(f => f.Id).ToList(), StyleMapOf(keys));
     }
 
     public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features)
     {
+        ArgumentNullException.ThrowIfNull(features);
         var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
-        return RenderFeatureBatchesAsync(divId, featuresAsJsonString);
+        var keys = StyleKeys(() => [.. features.Select(FeatureStyleKeys.Read)]);
+        return RenderFeatureBatchesAsync(divId, featuresAsJsonString, keys?.Select(f => f.Id).ToList(), StyleMapOf(keys));
     }
 
     public async Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson)
     {
         var colorMap = BuildColorMap();
+        var styleMap = RawStyleMap(rawFeaturesJson);
         await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
         // Pass the raw JSON string directly — JS parses it natively via JSON.parse, avoiding WASM parsing entirely.
-        // No per-feature style resolution here either, for the same reason as the JsonElement overload above.
-        await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap);
+        await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap, styleMap);
     }
 
+    /// <summary>
+    /// Same JS call as <see cref="RenderAllFeaturesRawJsonAsync"/>, minus the clearAllFeatures —
+    /// additive, safe to call once per chunk while progressively
+    /// streaming a large result. The chunk's styles travel with it (XD01-429: the raw pan path used to
+    /// drop them): resolved from each feature's id and properties (<see cref="FeatureStyleKeys"/>), and
+    /// only when the repository has a layer any feature could resolve to — otherwise the string goes
+    /// to JS unread, as before.
+    /// </summary>
     public Task RenderFeatureBatchRawJsonAsync(string divId, string rawFeaturesJson)
     {
         var colorMap = BuildColorMap();
-        // Same JS call as RenderAllFeaturesRawJsonAsync, minus the clearAllFeatures — additive,
-        // safe to call once per chunk while progressively streaming a large result.
-        return _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap).AsTask();
+        var styleMap = RawStyleMap(rawFeaturesJson);
+        return _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap, styleMap).AsTask();
     }
 
+    public async Task<int> BeginViewportRenderAsync(string divId) =>
+        await _js.InvokeAsync<int>($"{Ns}.beginViewportRender", divId);
+
+    public Task EndViewportRenderAsync(string divId, int generation) =>
+        _js.InvokeVoidAsync($"{Ns}.endViewportRender", divId, generation).AsTask();
+
+    /// <summary>
+    /// Sends the features to JS, in one call (<see cref="MapInteropOptions.SinglePass"/>) or in
+    /// <see cref="MapInteropOptions.BatchSize"/> batches. Each call carries only its own features'
+    /// styles (XD01-429 — the whole map used to be re-sent with every batch); none when the batch
+    /// has no resolved style. <paramref name="featureIds"/> lines up with
+    /// <paramref name="featuresAsJsonString"/> and is only read when there is a <paramref name="styleMap"/>.
+    /// </summary>
     private async Task RenderFeatureBatchesAsync(
-        string divId, List<string> featuresAsJsonString, IReadOnlyDictionary<string, LayerStyleOptions>? styleMap = null)
+        string divId,
+        List<string> featuresAsJsonString,
+        IReadOnlyList<string>? featureIds,
+        IReadOnlyDictionary<string, LayerStyleOptions>? styleMap)
     {
         var colorMap = BuildColorMap();
 
@@ -136,25 +162,64 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
                 sb.Append(featuresAsJsonString[i]);
             }
             sb.Append(']');
-            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap, styleMap);
+            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap,
+                StylesFor(styleMap, featureIds, 0, featuresAsJsonString.Count));
         }
         else
         {
             int batchSize = _options.BatchSize;
             for (int i = 0; i < featuresAsJsonString.Count; i += batchSize)
             {
+                var count = Math.Min(batchSize, featuresAsJsonString.Count - i);
                 var sb = new StringBuilder("[");
-                for (int j = 0; j < Math.Min(batchSize, featuresAsJsonString.Count - i); j++)
+                for (int j = 0; j < count; j++)
                 {
                     if (j > 0) sb.Append(',');
                     sb.Append(featuresAsJsonString[i + j]);
                 }
                 sb.Append(']');
-                await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap, styleMap);
+                await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap,
+                    StylesFor(styleMap, featureIds, i, count));
                 await Task.Delay(1); // yield to the browser event loop between batches
             }
         }
     }
+
+    /// <summary>
+    /// The styles of the features <paramref name="start"/> … <paramref name="start"/> + <paramref name="count"/> − 1
+    /// of <paramref name="featureIds"/> (XD01-429); <c>null</c> when none of them has one, so a batch
+    /// never carries another batch's styles.
+    /// </summary>
+    public static Dictionary<string, LayerStyleOptions>? StylesFor(
+        IReadOnlyDictionary<string, LayerStyleOptions>? styleMap, IReadOnlyList<string>? featureIds, int start, int count)
+    {
+        if (styleMap is null || featureIds is null || styleMap.Count == 0) return null;
+
+        Dictionary<string, LayerStyleOptions>? batch = null;
+        for (var i = start; i < start + count; i++)
+        {
+            if (styleMap.TryGetValue(featureIds[i], out var style))
+                (batch ??= new Dictionary<string, LayerStyleOptions>(StringComparer.Ordinal))[featureIds[i]] = style;
+        }
+        return batch;
+    }
+
+    /// <summary>The style keys <paramref name="read"/> produces, or <c>null</c> — without reading
+    /// anything — when the repository has no layer, since then no feature resolves a style.</summary>
+    private IReadOnlyList<GeoFeature>? StyleKeys(Func<IReadOnlyList<GeoFeature>> read) =>
+        _repo.GetLayers().Count == 0 ? null : read();
+
+    private Dictionary<string, LayerStyleOptions>? StyleMapOf(IReadOnlyList<GeoFeature>? keys) =>
+        keys is null ? null : NullIfEmpty(BuildStyleMap(_repo, keys));
+
+    private Dictionary<string, LayerStyleOptions>? RawStyleMap(string rawFeaturesJson)
+    {
+        ArgumentNullException.ThrowIfNull(rawFeaturesJson);
+        return StyleMapOf(StyleKeys(() => FeatureStyleKeys.Read(rawFeaturesJson)));
+    }
+
+    private static Dictionary<string, LayerStyleOptions>? NullIfEmpty(Dictionary<string, LayerStyleOptions> map) =>
+        map.Count == 0 ? null : map;
 
     public Task RemoveFeatureAsync(string divId, string featureId) =>
         _js.InvokeVoidAsync($"{Ns}.removeFeature", divId, featureId).AsTask();

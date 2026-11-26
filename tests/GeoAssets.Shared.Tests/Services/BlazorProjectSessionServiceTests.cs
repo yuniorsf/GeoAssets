@@ -202,6 +202,8 @@ public class BlazorProjectSessionServiceTests
         public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features) => throw new NotSupportedException();
         public Task RemoveFeatureAsync(string divId, string featureId) => throw new NotSupportedException();
         public Task ClearAllFeaturesAsync(string divId) => throw new NotSupportedException();
+        public Task<int> BeginViewportRenderAsync(string divId) => throw new NotSupportedException();
+        public Task EndViewportRenderAsync(string divId, int generation) => throw new NotSupportedException();
         public Task EnableDrawModeAsync(string divId, GeometryType mode) => throw new NotSupportedException();
         public Task DisableDrawModeAsync(string divId) => throw new NotSupportedException();
         public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) => throw new NotSupportedException();

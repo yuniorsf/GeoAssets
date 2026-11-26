@@ -40,6 +40,12 @@ public class ObservableMapInteropTests
         public Task RenderFeatureBatchAsync(string divId, IReadOnlyList<JsonElement> features) => Record(nameof(RenderFeatureBatchAsync), divId, features);
         public Task RemoveFeatureAsync(string divId, string featureId) => Record(nameof(RemoveFeatureAsync), divId, featureId);
         public Task ClearAllFeaturesAsync(string divId) => Record(nameof(ClearAllFeaturesAsync), divId);
+        public async Task<int> BeginViewportRenderAsync(string divId)
+        {
+            await Record(nameof(BeginViewportRenderAsync), divId);
+            return 7;
+        }
+        public Task EndViewportRenderAsync(string divId, int generation) => Record(nameof(EndViewportRenderAsync), divId, generation);
         public Task EnableDrawModeAsync(string divId, GeometryType mode) => Record(nameof(EnableDrawModeAsync), divId, mode);
         public Task DisableDrawModeAsync(string divId) => Record(nameof(DisableDrawModeAsync), divId);
         public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) => Record(nameof(SetSnapTargetLayerAsync), divId, allowedTargetAssetTypeIds);
@@ -511,6 +517,21 @@ public class ObservableMapInteropTests
         await sut.ClearAllFeaturesAsync("map1");
 
         inner.Calls.Should().ContainSingle(c => c.Method == nameof(IMapInterop.ClearAllFeaturesAsync));
+    }
+
+    [Fact]
+    public async Task ViewportPass_DelegatesToInner()
+    {
+        var inner = new FakeMapInterop();
+        var sut = Sut(inner);
+
+        var generation = await sut.BeginViewportRenderAsync("map1");
+        await sut.EndViewportRenderAsync("map1", generation);
+
+        generation.Should().Be(7);
+        inner.Calls.Select(c => c.Method).Should().Equal(
+            nameof(IMapInterop.BeginViewportRenderAsync), nameof(IMapInterop.EndViewportRenderAsync));
+        inner.Calls[1].Args.Should().Equal("map1", 7);
     }
 
     [Fact]

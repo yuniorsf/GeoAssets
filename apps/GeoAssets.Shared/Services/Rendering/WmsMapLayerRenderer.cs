@@ -38,7 +38,7 @@ public sealed class WmsMapLayerRenderer(IMapInterop mapInterop) : IProviderMapLa
         return mapInterop.RemoveWmsLayerAsync(request.MapDivId, request.LayerId);
     }
 
-    public Task<int> RenderViewportAsync(MapLayerRenderRequest request, BoundingBox viewport, CancellationToken cancellationToken = default) =>
+    public Task<int> RenderViewportAsync(MapLayerRenderRequest request, ViewportQuery viewport, CancellationToken cancellationToken = default) =>
         Task.FromResult(0);
 
     // The tile layer's parameters belong to the entry's own provider, not to whichever decorated

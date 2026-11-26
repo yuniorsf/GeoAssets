@@ -19,7 +19,7 @@ namespace GeoAssets.Shared.Tests.Services.Rendering;
 public sealed class VectorFeatureMapLayerRendererTests
 {
     private const string Div = "geoassets-map";
-    private static readonly BoundingBox Viewport = new(-38.6, -13.05, -38.4, -12.8);
+    private static readonly ViewportQuery Viewport = new(new BoundingBox(-38.6, -13.05, -38.4, -12.8), 14);
 
     private readonly LayerRecordingMapInterop _map = new();
 
@@ -136,7 +136,7 @@ public sealed class VectorFeatureMapLayerRendererTests
         rendered.Should().Be(1, "even an empty bbox response is one non-null chunk");
         _map.RawJsonBatches.Should().Equal((Div, "[]"));
         _map.JsonBatches.Should().BeEmpty();
-        provider.LastBounds.Should().Be((Viewport.MinLon, Viewport.MinLat, Viewport.MaxLon, Viewport.MaxLat));
+        provider.LastBounds.Should().Be((Viewport.Bounds.MinLon, Viewport.Bounds.MinLat, Viewport.Bounds.MaxLon, Viewport.Bounds.MaxLat));
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class VectorFeatureMapLayerRendererTests
         rendered.Should().Be(2);
         _map.RawJsonBatches.Should().BeEmpty();
         _map.JsonBatches.Should().ContainSingle().Which.Features.Should().HaveCount(2);
-        provider.LastBounds.Should().Be((Viewport.MinLon, Viewport.MinLat, Viewport.MaxLon, Viewport.MaxLat));
+        provider.LastBounds.Should().Be((Viewport.Bounds.MinLon, Viewport.Bounds.MinLat, Viewport.Bounds.MaxLon, Viewport.Bounds.MaxLat));
     }
 
     [Fact]
@@ -169,6 +169,58 @@ public sealed class VectorFeatureMapLayerRendererTests
 
         rendered.Should().Be(0);
         _map.JsonBatches.Should().BeEmpty("a superseded fetch must not paint its stale result");
+    }
+
+    [Fact]
+    public async Task RenderViewportAsync_PassesTheViewportAndItsTokenToTheProvider()
+    {
+        // XD01-429: the zoom reaches the provider (REST forwards it), and so does the token that aborts the fetch.
+        using var cts = new CancellationTokenSource();
+        var provider = new ViewportAwareLayerProvider(["[]"]);
+
+        await Renderer().RenderViewportAsync(Request(provider), Viewport, cts.Token);
+
+        provider.ChunkViewport.Should().Be(Viewport);
+        provider.ChunkToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
+    public async Task RenderViewportAsync_FallbackReadsTheViewportWithItsToken()
+    {
+        using var cts = new CancellationTokenSource();
+        var provider = new ViewportAwareLayerProvider([]);
+
+        await Renderer().RenderViewportAsync(Request(provider), Viewport, cts.Token);
+
+        provider.JsonViewport.Should().Be(Viewport);
+        provider.JsonToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
+    public async Task RenderViewportAsync_ChunkArrivingAfterASupersedingPan_IsNotPainted()
+    {
+        // XD01-429: the first chunk's render is where a newer pan lands; the second chunk is already
+        // fetched, but must not be painted over the newer viewport.
+        using var cts = new CancellationTokenSource();
+        var map = new LayerRecordingMapInterop { WhileRenderingRawJson = cts.CancelAsync };
+        var provider = new ViewportAwareLayerProvider(["[1]", "[2]"]);
+
+        var act = () => new VectorFeatureMapLayerRenderer(map, new FeatureRenderPipeline())
+            .RenderViewportAsync(Request(provider), Viewport, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        map.RawJsonBatches.Should().Equal((Div, "[1]"));
+    }
+
+    [Fact]
+    public async Task RenderViewportAsync_DefaultViewportOverloads_ForwardTheBoundsToTheBboxReads()
+    {
+        // A provider that knows nothing of ViewportQuery is read through IAssetProvider's defaults.
+        var provider = new FakeLayerProvider { RawJson = "[]" };
+
+        await Renderer().RenderViewportAsync(Request(provider), Viewport);
+
+        provider.LastBounds.Should().Be((Viewport.Bounds.MinLon, Viewport.Bounds.MinLat, Viewport.Bounds.MaxLon, Viewport.Bounds.MaxLat));
     }
 
     [Fact]

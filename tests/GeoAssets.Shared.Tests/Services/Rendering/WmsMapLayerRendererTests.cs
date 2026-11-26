@@ -136,7 +136,7 @@ public sealed class WmsMapLayerRendererTests
     {
         var entry = new ProviderEntry { Name = "WMS", Provider = new FakeWmsLayerProvider() };
 
-        var rendered = await Renderer().RenderViewportAsync(MapLayerRenderRequest.For(Div, entry), new BoundingBox(-1, -1, 1, 1));
+        var rendered = await Renderer().RenderViewportAsync(MapLayerRenderRequest.For(Div, entry), new ViewportQuery(new BoundingBox(-1, -1, 1, 1), 12));
 
         rendered.Should().Be(0);
         _map.WmsAdds.Should().BeEmpty();
