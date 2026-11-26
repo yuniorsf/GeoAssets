@@ -73,4 +73,10 @@
     <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Messaging.ServiceBus\GeoAssets.Workflow.Messaging.ServiceBus.csproj" />
   </ItemGroup>
 
+  <!-- Drop-in provider plugins (ADR-002 D2, XD01-428): a <ProviderPlugin Include="…csproj" /> item here is built and
+       copied, with its dependencies, to plugins/providers/<Name>/ of the build and publish output (and so of the Docker
+       image), where AddProviderPluginsFromDirectory loads it. None yet: the kernel's own provider, PostgreSQL, is
+       composed statically by the postgres-spatial module. -->
+  <Import Project="..\..\build\GeoAssets.ProviderPlugins.targets" />
+
 </Project>

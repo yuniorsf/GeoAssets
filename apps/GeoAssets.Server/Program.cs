@@ -3,6 +3,7 @@ using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Hosting.Abstractions;
+using GeoAssets.Hosting.Abstractions.Plugins;
 using GeoAssets.Identity;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Infrastructure.Observability;
@@ -119,6 +120,11 @@ builder.Services.AddServerWorkflowMessaging(builder.Configuration);
 // plugin it names once the host is built (InitializeCatalogPoolAsync below); the "primary" one is the host's
 // IAssetProvider. Registered before the modules: they contribute the plugins, and may scope that IAssetProvider.
 builder.Services.AddServerCatalogPool(builder.Configuration);
+
+// ── Drop-in provider plugins (XD01-428, ADR-002 D2) — the plugins of GeoAssets:ProviderPlugins:Directory (default
+// plugins/providers, skipped while absent), each in its own load context. The kernel's own "postgres" plugin stays the
+// postgres-spatial module's; a dropped-in plugin with an id already registered fails the startup.
+builder.Services.AddProviderPluginsFromDirectory(builder.Configuration, ProviderHostTargets.Server);
 
 // ── Order-type registry (XD01-369) — the verticals' order-type descriptors (feature actions as data); the in-process
 // modules contribute theirs while they are enabled below, remote verticals PUT theirs.

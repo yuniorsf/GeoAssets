@@ -8,7 +8,8 @@ namespace GeoAssets.Server.Tests.Architecture;
 /// XD01-386, Invariant 1 — Core Database Encapsulation: the core asset database is opened by
 /// <c>GeoAssets.Server</c> alone. Any other host reads core assets over the Core GeoAssets Server's
 /// API (<c>IGeoCoreClient</c>), so no other production project may reference
-/// <c>GeoAssets.Provider.PostgreSQL</c> (the project that owns <c>GeoAssetsDbContext</c>).
+/// <c>GeoAssets.Provider.PostgreSQL</c> (the project that owns <c>GeoAssetsDbContext</c>) — nor ship it as a drop-in
+/// provider plugin (a <c>ProviderPlugin</c> item, XD01-428).
 /// </summary>
 [Trait("Category", "Architecture")]
 public sealed class ProviderPostgreSqlReferenceTests
@@ -122,7 +123,8 @@ public sealed class ProviderPostgreSqlReferenceTests
             {
                 var projectDirectory = Path.GetDirectoryName(project)!;
                 var references = XDocument.Load(project)
-                    .Descendants("ProjectReference")
+                    .Descendants()
+                    .Where(e => e.Name.LocalName is "ProjectReference" or "ProviderPlugin")
                     .Select(e => (string?)e.Attribute("Include"))
                     .OfType<string>()
                     .Select(include => Path.GetFileName(Path.GetFullPath(Path.Combine(projectDirectory, include.Replace('\\', '/')))));

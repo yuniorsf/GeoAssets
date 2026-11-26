@@ -9,10 +9,6 @@ using GeoAssets.IpBilling.UI.Navigation;
 using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.NeutralOperator.UI;
 using GeoAssets.NeutralOperator.UI.Navigation;
-using GeoAssets.Provider.Rest;
-using GeoAssets.Provider.WFS;
-using GeoAssets.Provider.WMS;
-using GeoAssets.Provider.Shapefile;
 using GeoAssets.Projects.Rest;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Localization;
@@ -160,13 +156,9 @@ builder.Services.AddIspTenantPortalRest();
 // are already registered above.
 builder.Services.AddScoped<InvitationRedirectGate>();
 
-builder.Services.AddGeoAssetsRest();
-builder.Services.AddGeoAssetsWfs();
-builder.Services.AddGeoAssetsWms();
-builder.Services.AddGeoAssetsShapefile();
-
-// Plugin registry — collects all IProviderPlugin registrations for the UI.
-builder.Services.AddSingleton<ProviderPluginRegistry>();
+// Provider plugins (XD01-428, ADR-002 D2) — the bundled REST/WFS/WMS/Shapefile modules, discovered for the browser host,
+// with the plugin registry the UI reads and the Shapefile export/import tools.
+builder.Services.AddWebProviderPlugins(builder.Configuration);
 
 // Boot loader — orchestrates the first-run provider selection flow.
 builder.Services.AddScoped<IBootLoader, BootLoaderService>();

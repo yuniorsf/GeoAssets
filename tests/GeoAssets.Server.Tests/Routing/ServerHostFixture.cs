@@ -1,4 +1,5 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Hosting.Abstractions.Plugins;
 using GeoAssets.Identity.Authorization.EFCore;
 using GeoAssets.Projects.Persistence;
 using GeoAssets.Server.Catalogs;
@@ -34,6 +35,7 @@ internal static class ServerHostFixture
     private static WebApplicationFactory<HttpTenantContext>? _neutralOperatorDisabledFactory;
     private static WebApplicationFactory<HttpTenantContext>? _kernelOnlyFactory;
     private static WebApplicationFactory<HttpTenantContext>? _secondCatalogFactory;
+    private static WebApplicationFactory<HttpTenantContext>? _providerPluginDirectoryFactory;
 
     /// <summary>The host as <c>appsettings.json</c> composes it — since the XD01-384 cut-over, without the neutral-operator module.</summary>
     public static async Task<IServiceProvider> GetServicesAsync()
@@ -148,11 +150,33 @@ internal static class ServerHostFixture
         }
     }
 
+    /// <summary>
+    /// The same host on the same database with <c>GeoAssets:ProviderPlugins:Directory</c> set to
+    /// <paramref name="directory"/> (XD01-428), relative to the host's base directory: the drop-in provider plugins it
+    /// holds are loaded next to the postgres-spatial module's <c>postgres</c> plugin.
+    /// </summary>
+    public static async Task<WebApplicationFactory<HttpTenantContext>> GetProviderPluginDirectoryFactoryAsync(string directory)
+    {
+        await StartLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _providerPluginDirectoryFactory ??= CreateFactory(
+                await GetConnectionStringAsync().ConfigureAwait(false), modules: null, providerPluginDirectory: directory);
+            _ = _providerPluginDirectoryFactory.Services; // start the host inside the lock: every host seeds the same database on startup
+            return _providerPluginDirectoryFactory;
+        }
+        finally
+        {
+            StartLock.Release();
+        }
+    }
+
     private static async Task<string> GetConnectionStringAsync() =>
         _connectionString ??= await StartDatabaseAsync().ConfigureAwait(false);
 
     private static WebApplicationFactory<HttpTenantContext> CreateFactory(
-        string connectionString, string[]? modules, bool kernelTestDoubles = false, bool secondCatalogPlugin = false) =>
+        string connectionString, string[]? modules, bool kernelTestDoubles = false, bool secondCatalogPlugin = false,
+        string? providerPluginDirectory = null) =>
         new WebApplicationFactory<HttpTenantContext>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Testing");
@@ -174,6 +198,11 @@ internal static class ServerHostFixture
                 host.UseSetting($"{CatalogConfiguration.ProvidersKey}:1:Id", "secondary");
                 host.UseSetting($"{CatalogConfiguration.ProvidersKey}:1:Plugin", TestProviderPlugin.DefaultId);
                 host.ConfigureTestServices(services => services.AddSingleton<IProviderPlugin>(new TestProviderPlugin()));
+            }
+
+            if (providerPluginDirectory is not null)
+            {
+                host.UseSetting(DirectoryPluginAssemblySource.DirectoryConfigurationKey, providerPluginDirectory);
             }
 
             if (kernelTestDoubles)
