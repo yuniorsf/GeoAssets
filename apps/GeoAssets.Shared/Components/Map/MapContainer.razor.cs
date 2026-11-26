@@ -4,6 +4,7 @@ using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Services;
 using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services;
+using GeoAssets.Shared.Services.MapTiles;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -307,6 +308,14 @@ public partial class MapContainer
 
         return OnSelectionClick.InvokeAsync((featureId, additive));
     }
+
+    /// <summary>
+    /// How a WMS layer's tiles are requested (XD01-96): <c>geoassets.js</c> asks once per layer, and again shortly before
+    /// the token expires or after a tile is refused with 401. See <see cref="MapTileAccessLookup"/>.
+    /// </summary>
+    [JSInvokable("GetTileAccessFromJs")]
+    public Task<MapTileAccess> GetTileAccessFromJs(string tileUrl) =>
+        MapTileAccessLookup.GetAsync(TileAccess, tileUrl, Logger);
 
     /// <summary>
     /// The view settled: re-renders the providers' features for it and, debounced and superseding any load still in

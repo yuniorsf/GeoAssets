@@ -153,6 +153,10 @@ public static class MauiProgram
         builder.Services.AddTransient<MsalAuthorizationHandler>();
         builder.Services.AddHttpClient("GeoAssetsServer")
             .AddHttpMessageHandler<MsalAuthorizationHandler>();
+
+        // The token the map fetches WMS tiles from GeoAssetsServer:BaseUrl with (XD01-96), acquired like
+        // MsalAuthorizationHandler's; a WMS server elsewhere gets none. Replaces AddGeoAssetsPanelState's fallback.
+        builder.Services.AddScoped<IMapTileAccessProvider, MsalMapTileAccessProvider>();
     }
 
     /// <summary>

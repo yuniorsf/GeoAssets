@@ -7,7 +7,7 @@ is where the default bucket sizes in `apps/GeoAssets.Gateway/appsettings.json` c
 
 | Policy | Requests | Configuration | Default bucket |
 |---|---|---|---|
-| `tiles` | `/wms`, `/wfs` (the kernel's OGC endpoints; Leaflet tile requests are anonymous) | `RateLimiting:Tiles:{TokenLimit,TokensPerPeriod,ReplenishmentPeriodSeconds}` | 1000 burst, refilled 100/s |
+| `tiles` | `/wms`, `/wfs` (the kernel's OGC endpoints; the in-app map fetches its WMS tiles with the user's bearer token since XD01-96, so they key by subject like API calls) | `RateLimiting:Tiles:{TokenLimit,TokensPerPeriod,ReplenishmentPeriodSeconds}` | 1000 burst, refilled 100/s |
 | `api` | everything else except `/healthz` | `RateLimiting:Api:{…}` (the pre-XD01-393 flat `RateLimiting:{TokenLimit,TokensPerPeriod,ReplenishmentPeriodSeconds}` override it when set) | 500 burst, refilled 10/s |
 
 Each policy has its own bucket **per caller**, so exhausting the tile bucket never rejects an API call, and one caller

@@ -39,7 +39,7 @@ internal static class GatewayRouteCatalog
     /// </summary>
     public const int KernelCatchAllFirstOrder = 10_000;
 
-    /// <summary>The kernel's OGC WMS endpoint — the anonymous map-tile traffic the <c>tiles</c> rate-limit policy covers (XD01-393).</summary>
+    /// <summary>The kernel's OGC WMS endpoint — the map-tile traffic the <c>tiles</c> rate-limit policy covers (XD01-393); its requests carry a bearer token since XD01-96.</summary>
     public const string WmsPath = "/wms";
 
     /// <summary>The kernel's OGC WFS endpoint — rate-limited with <see cref="WmsPath"/> by the <c>tiles</c> policy (XD01-393).</summary>

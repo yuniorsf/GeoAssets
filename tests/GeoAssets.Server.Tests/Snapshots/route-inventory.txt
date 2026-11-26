@@ -28,7 +28,7 @@ GET /api/geoassets/organizations/{organizationId:guid}/features/{id} | authorize
 GET /api/geoassets/organizations/{organizationId:guid}/features/{id}/descendants | authorize, requirement:RolesAuthorizationRequirement
 GET /api/geoassets/organizations/{organizationId:guid}/reference-features | authorize
 GET /api/geoassets/wfs | policy:features:read
-GET /api/geoassets/wms | anonymous
+GET /api/geoassets/wms | policy:features:read
 GET /api/identity/groups | policy:groups:read
 GET /api/identity/groups/{id} | policy:groups:read
 GET /api/identity/groups/{id}/members | policy:groups:read
@@ -82,7 +82,7 @@ GET /api/workflow/service-orders/{id}/targets/count | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/targets/extent | policy:serviceorders:read
 GET /api/workflow/service-orders/{id}/targets/{targetId} | policy:serviceorders:read
 GET /wfs | policy:features:read
-GET /wms | anonymous
+GET /wms | policy:features:read
 PATCH /api/workflow/service-orders/{id}/targets/{targetId} | none
 POST /api/geoassets/asset-types | policy:features:edit
 POST /api/geoassets/features | policy:features:edit

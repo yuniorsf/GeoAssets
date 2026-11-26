@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Security.Claims;
 using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
@@ -19,7 +20,7 @@ namespace GeoAssets.Server.Tests.Wms;
 /// The WMS endpoint over the provider abstraction (XD01-372): it reads the request's <see cref="IAssetProvider"/> for
 /// its capabilities' layers and the request's <see cref="IAssetRenderQuery"/> for the pixels and the click lookups —
 /// nothing else — so it works over any provider's pushdown. Runs a TestServer with a fake query that records what the
-/// endpoint asks it.
+/// endpoint asks it, for a signed-in caller holding <c>features:read</c> (which the endpoint requires, XD01-96).
 /// </summary>
 public sealed class WmsEndpointRenderQueryTests
 {
@@ -74,8 +75,15 @@ public sealed class WmsEndpointRenderQueryTests
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<IAssetRenderQuery>(query);
         builder.Services.AddSingleton<IAssetProvider>(catalog);
+        builder.Services.AddAuthorization(options => options.AddPolicy("features:read", policy => policy.RequireAuthenticatedUser()));
         var web = builder.Build();
-        web.MapWmsApi(requireAuthentication: false);
+        web.Use((context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "test-user")], "Test"));
+            return next(context);
+        });
+        web.UseAuthorization();
+        web.MapWmsApi();
         await web.StartAsync();
         return new Host(web, query, catalog);
     }
