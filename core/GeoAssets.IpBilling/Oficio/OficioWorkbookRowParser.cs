@@ -3,7 +3,7 @@ using System.Globalization;
 namespace GeoAssets.IpBilling.Oficio;
 
 /// <summary>
-/// Parses the raw cell rows <c>IWorkbookReader.ReadRows</c> (<c>GeoAssets.Provider.Xlsx</c>)
+/// Parses the raw cell rows <c>IWorkbookReader.ReadRows</c> (<c>GeoAssets.Core.Interfaces</c>)
 /// returns into <see cref="OficioWorkbookRow"/>s, collecting every malformed row as a structured
 /// <see cref="OficioUploadRowError"/> instead of failing on the first one — same convention as
 /// <c>Fiscalizacao.FiscalizacaoWorkbookRowParser</c> (XD01-183/186).

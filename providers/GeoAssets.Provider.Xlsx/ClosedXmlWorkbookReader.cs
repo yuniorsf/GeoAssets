@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using GeoAssets.Core.Interfaces;
 
 namespace GeoAssets.Provider.Xlsx;
 

@@ -1,4 +1,4 @@
-namespace GeoAssets.Provider.Xlsx;
+namespace GeoAssets.Core.Interfaces;
 
 /// <summary>
 /// Generic tabular-row reader over an Excel workbook stream. Scaffolded for XD01-176

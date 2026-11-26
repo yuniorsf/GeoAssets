@@ -4,7 +4,7 @@ using GeoAssets.IpBilling.Models;
 namespace GeoAssets.IpBilling.Levantamento;
 
 /// <summary>
-/// Parses the raw cell rows <c>IWorkbookReader.ReadRows</c> (<c>GeoAssets.Provider.Xlsx</c>)
+/// Parses the raw cell rows <c>IWorkbookReader.ReadRows</c> (<c>GeoAssets.Core.Interfaces</c>)
 /// returns into <see cref="LevantamentoWorkbookRow"/>s, collecting every malformed row as a
 /// structured <see cref="LevantamentoUploadRowError"/> instead of failing on the first one —
 /// per this ticket's "reports all ... together, not one at a time" convention (XD01-179/180).
