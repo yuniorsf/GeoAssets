@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-425 (ADR-002 Track 2): tests of every spatial provider's IProviderPluginModule and the contract that each
+       provider assembly exposes exactly one, with a unique id. A test project may reference
+       GeoAssets.Provider.PostgreSQL; production projects other than GeoAssets.Server may not (Invariant 1). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.7" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.WFS\GeoAssets.Provider.WFS.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.WMS\GeoAssets.Provider.WMS.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Shapefile\GeoAssets.Provider.Shapefile.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
+  </ItemGroup>
+
+</Project>
