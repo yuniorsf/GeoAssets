@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XD01-420 (ADR-002 Track 0): the GIS render baseline — a deterministic 200k-feature PostGIS dataset and the
+       z8/z12/z16 viewport measurements recorded in docs/perf/render-baseline.md. Reads the database with Npgsql
+       directly: only GeoAssets.Server may reference GeoAssets.Provider.PostgreSQL (Invariant 1), so the schema is
+       applied with `dotnet ef database update` and the bounds read is reproduced here (its parity with the provider's
+       is asserted by tests/GeoAssets.Bench.Render.Tests). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Bench.Render</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- The kernel host runs ASP.NET Core's default server GC; measure its pipeline under the same collector. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.NetTopologySuite" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Bench.Render.Tests" />
+  </ItemGroup>
+
+</Project>
