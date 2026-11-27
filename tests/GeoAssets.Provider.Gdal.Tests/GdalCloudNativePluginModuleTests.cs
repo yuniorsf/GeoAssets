@@ -49,6 +49,7 @@ public sealed class GdalCloudNativePluginModuleTests : IDisposable
         provider.GetRequiredService<IFileGeodatabaseExportService>().Should().BeOfType<FileGeodatabaseExportService>();
         provider.GetRequiredService<IVectorFileReader>().Should().BeOfType<OgrVectorFileReader>();
         provider.GetRequiredService<IVectorFileWriter>().Should().BeOfType<OgrVectorFileWriter>();
+        provider.GetRequiredService<IVectorTileArchiveWriter>().Should().BeOfType<OgrPMTilesArchiveWriter>();
         provider.GetService<IVectorTileSource>().Should().BeNull("the module never replaces a host's unkeyed tile source");
         provider.GetService<IRasterTileSource>().Should().BeNull();
         services.Should().NotContain(d => d.ServiceType == typeof(IProviderPlugin));
@@ -88,6 +89,7 @@ public sealed class GdalCloudNativePluginModuleTests : IDisposable
         provider.GetService<IFileGeodatabaseExportService>().Should().BeNull();
         provider.GetService<IVectorFileReader>().Should().BeNull();
         provider.GetService<IVectorFileWriter>().Should().BeNull();
+        provider.GetService<IVectorTileArchiveWriter>().Should().BeNull();
     }
 
     [Fact]

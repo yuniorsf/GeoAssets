@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GeoAssets.Provider.PMTiles.Tests" />
+    <!-- XD01-472: the GDAL plugin's PMTiles writer tests decode the tiles they wrote with this reader's MVT decoder. -->
+    <InternalsVisibleTo Include="GeoAssets.Provider.Gdal.Tests" />
   </ItemGroup>
 
 </Project>
