@@ -16,7 +16,8 @@ namespace GeoAssets.Gateway;
 ///   rewritten to <c>/api/**</c> (query string kept): <c>/api/v/neutral-operator/workflow/service-orders</c> reaches the
 ///   destination's <c>/api/workflow/service-orders</c>. The destination is configuration — <c>NeutralOperator.Server</c>
 ///   in production, the kernel itself while it still hosts the module (the rollback), whose routes are the same.</item>
-///   <item>The kernel catch-all — every other <c>/api/**</c> and the OGC <c>/wms</c>/<c>/wfs</c> endpoints, at the
+///   <item>The kernel catch-all — every other <c>/api/**</c>, the OGC <c>/wms</c>/<c>/wfs</c> endpoints and the tile
+///   endpoints <c>/tiles/**</c> (XD01-434), at the
 ///   highest <c>Order</c> (lowest precedence) of the table, so the kernel's APIs answer through the gateway unchanged.</item>
 /// </list>
 /// Every route forwards the caller's <c>Authorization</c> header untouched (the gateway authorizes nothing; each backend
@@ -44,6 +45,12 @@ internal static class GatewayRouteCatalog
 
     /// <summary>The kernel's OGC WFS endpoint — rate-limited with <see cref="WmsPath"/> by the <c>tiles</c> policy (XD01-393).</summary>
     public const string WfsPath = "/wfs";
+
+    /// <summary>
+    /// The kernel's MapLibre tile endpoints (XD01-434): <c>/tiles/style.json</c> and <c>/tiles/{set}/{v}/{z}/{x}/{y}.mvt|.png</c>,
+    /// forwarded as they are — bearer token included — and rate-limited by the <c>tiles</c> policy with <see cref="WmsPath"/>.
+    /// </summary>
+    public const string TilesPathPrefix = "/tiles";
 
     /// <summary>Organization headers no caller may hand a backend: dropped from every proxied request.</summary>
     public static readonly IReadOnlyList<string> UntrustedOrganizationHeaders = ["X-GeoAssets-Organization-Id", "X-Organization-Id"];
@@ -95,6 +102,7 @@ internal static class GatewayRouteCatalog
         AddRoutes(routes, "kernel-api", "geoassets", $"/api/{CatchAll}", geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
         AddRoutes(routes, "kernel-wms", "geoassets", WmsPath, geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
         AddRoutes(routes, "kernel-wfs", "geoassets", WfsPath, geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
+        AddRoutes(routes, "kernel-tiles", "geoassets", $"{TilesPathPrefix}/{CatchAll}", geoAssets, KernelCatchAllFirstOrder, pathPattern: null);
 
         return (routes, clusters);
     }

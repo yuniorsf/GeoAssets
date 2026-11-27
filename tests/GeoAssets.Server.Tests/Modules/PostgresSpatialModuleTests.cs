@@ -99,10 +99,33 @@ public sealed class PostgresSpatialModuleTests
     }
 
     [Fact]
-    public async Task MapEndpoints_MapsBothWmsRoutes_RequiringFeaturesRead()
+    public async Task MapEndpoints_MapsBothWmsRoutesAndTheTileRoutes_RequiringFeaturesRead()
     {
         var routes = await MappedRoutesAsync();
 
-        routes.Should().BeEquivalentTo(["GET /api/geoassets/wms | policy:features:read", "GET /wms | policy:features:read"]);
+        routes.Should().BeEquivalentTo(
+        [
+            "GET /api/geoassets/wms | policy:features:read",
+            "GET /wms | policy:features:read",
+            "GET /tiles/style.json | policy:features:read",
+            "GET /tiles/{layer}/{v}/{z}/{x}/{y}.mvt | policy:features:read",
+            "GET /tiles/{layer}/{v}/{z}/{x}/{y}.png | policy:features:read",
+        ]);
+    }
+
+    [Fact]
+    public void ConfigureServices_RegistersTheTileServing_AndItsInvalidationForTheWriters()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["ConnectionStrings:GeoAssets"] = "Host=localhost;Database=x" })
+            .Build();
+        services.AddSingleton<IAssetProvider>(new TestAssetProvider());
+
+        new PostgresSpatialModule().ConfigureServices(services, configuration);
+
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITileInvalidation));
+        services.Should().ContainSingle(d => d.ServiceType == typeof(ITileCache));
+        services.Should().ContainSingle(d => d.ServiceType == typeof(GeoAssets.Server.Tiles.TileServing));
     }
 }

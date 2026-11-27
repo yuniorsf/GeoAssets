@@ -37,7 +37,7 @@ namespace GeoAssets.Server.Rendering;
 ///
 /// <para><b>Scope.</b> The render query's: the caller's ambient tenant scope. Scoped like it.</para>
 /// </summary>
-public sealed class SkiaRasterTileSource : IRasterTileSource
+public sealed class SkiaRasterTileSource : IRasterTileSource, IRasterMetatileSource
 {
     /// <summary>The width and height of a tile, in pixels.</summary>
     public const int TileSize = 256;

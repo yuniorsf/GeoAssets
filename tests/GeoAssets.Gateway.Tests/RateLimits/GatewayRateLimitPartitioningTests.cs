@@ -184,6 +184,27 @@ public sealed class GatewayRateLimitPartitioningTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheTileEndpoints_ShareTheTilesBucket_WithWms_PerCaller()
+    {
+        await using var factory = Create(_backend, Join(Bucket("Tiles", 3), Bucket("Api", 1)));
+        using var client = factory.CreateClient();
+        var alice = Token(("oid", "alice"));
+        var bob = Token(("oid", "bob"));
+
+        var aliceTiles = await BurstAsync(client, "/tiles/assets/v/8/94/146.mvt", 2, alice, "203.0.113.55");
+        var aliceStyle = await BurstAsync(client, "/tiles/style.json", 1, alice, "203.0.113.55");
+        var aliceWms = await BurstAsync(client, TilesPath, 1, alice, "203.0.113.55");
+        var bobTiles = await BurstAsync(client, "/tiles/assets/v/8/94/146.png", 1, bob, "203.0.113.55");
+        var aliceApi = await BurstAsync(client, ApiPath, 1, alice, "203.0.113.55");
+
+        aliceTiles.Should().AllBeEquivalentTo(HttpStatusCode.OK);
+        aliceStyle.Should().Equal(HttpStatusCode.OK);
+        aliceWms.Should().Equal(new[] { HttpStatusCode.TooManyRequests }, "/tiles and /wms spend one tiles bucket");
+        bobTiles.Should().Equal(new[] { HttpStatusCode.OK }, "each caller has its own bucket");
+        aliceApi.Should().Equal(new[] { HttpStatusCode.OK }, "the API budget is separate");
+    }
+
+    [Fact]
     public async Task Healthz_IsNeverLimited_EvenWithBothPoliciesExhausted()
     {
         await using var factory = Create(_backend, Join(Bucket("Tiles", 1), Bucket("Api", 1)));

@@ -98,6 +98,28 @@ public sealed class GatewayProxyBehaviourTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("/tiles/style.json")]
+    [InlineData("/tiles/assets/0123456789ab-0a1b2c3d-0.7/8/94/146.mvt")]
+    [InlineData("/tiles/assets/0123456789ab-0a1b2c3d-0.7/12/1515/2335.png")]
+    public async Task TheTileEndpoints_ReachTheKernel_AsTheyAre_WithTheCallersBearerAndAcceptEncoding(string path)
+    {
+        await using var factory = Gateway();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, Relative(path));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "caller-token");
+        request.Headers.AcceptEncoding.ParseAdd("gzip");
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var seen = _kernel.Requests.Should().ContainSingle().Subject;
+        seen.Path.Should().Be(path);
+        seen.Headers["Authorization"].Should().Be("Bearer caller-token", "the gateway authorizes nothing and forwards the token untouched");
+        seen.Headers["Accept-Encoding"].Should().Contain("gzip", "the kernel picks the tile's content coding");
+        _neutralOperator.Requests.Should().BeEmpty();
+    }
+
+    [Theory]
     [InlineData("/api/geoassets/features")]
     [InlineData("/api/ip-billing/x")]
     [InlineData("/api/field-service/x")]

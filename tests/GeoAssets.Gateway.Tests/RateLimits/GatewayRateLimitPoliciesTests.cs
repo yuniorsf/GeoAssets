@@ -14,7 +14,10 @@ public sealed class GatewayRateLimitPoliciesTests
     [InlineData("/wms/")]
     [InlineData("/wms/x")]
     [InlineData("/wfs/layer/1")]
-    public void Classify_AWmsOrWfsPath_IsTiles(string path)
+    [InlineData("/tiles/style.json")]
+    [InlineData("/tiles/assets/0123abcd-0-0.0/8/94/146.mvt")]
+    [InlineData("/TILES/assets/v/12/1/2.png")]
+    public void Classify_AWmsWfsOrTilesPath_IsTiles(string path)
     {
         GatewayRateLimitPolicies.Classify(new PathString(path)).Should().Be(GatewayRateLimitPolicy.Tiles);
     }
@@ -24,6 +27,8 @@ public sealed class GatewayRateLimitPoliciesTests
     [InlineData("/wfsx")]
     [InlineData("/api/wms")]
     [InlineData("/api/geoassets/wfs")]
+    [InlineData("/tilesx/style.json")]
+    [InlineData("/api/tiles/style.json")]
     [InlineData("/")]
     [InlineData("")]
     [InlineData("/api/v/neutral-operator/workflow/service-orders")]

@@ -16,13 +16,22 @@ namespace GeoAssets.Server.Tests;
 internal class TestAssetProvider : IAssetProvider
 {
     private readonly Dictionary<string, GeoFeature> _features = [];
-    private readonly List<AssetType> _assetTypes = [.. AssetType.Defaults];
+    private readonly List<AssetType> _assetTypes;
     private readonly List<Layer> _layers = [];
     private readonly List<LayerRule> _layerRules = [];
     private readonly TimeProvider _timeProvider;
 
-    public TestAssetProvider(TimeProvider? timeProvider = null) =>
+    public TestAssetProvider(TimeProvider? timeProvider = null)
+        : this(AssetType.Defaults, timeProvider)
+    {
+    }
+
+    /// <summary>A catalog of exactly <paramref name="assetTypes"/> (no built-in defaults).</summary>
+    public TestAssetProvider(IEnumerable<AssetType> assetTypes, TimeProvider? timeProvider = null)
+    {
+        _assetTypes = [.. assetTypes];
         _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public event EventHandler<GeoFeature>? FeatureAdded;
     public event EventHandler<GeoFeature>? FeatureUpdated;

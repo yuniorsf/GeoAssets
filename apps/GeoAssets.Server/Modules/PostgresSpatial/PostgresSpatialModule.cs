@@ -2,6 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Plugins;
 using GeoAssets.Hosting.Abstractions;
 using GeoAssets.Provider.PostgreSQL;
+using GeoAssets.Server.Tiles;
 
 namespace GeoAssets.Server.Modules.PostgresSpatial;
 
@@ -10,7 +11,8 @@ namespace GeoAssets.Server.Modules.PostgresSpatial;
 /// provider plugin the kernel's catalog pool builds the asset store with (XD01-371), organization-scoped catalogs and
 /// their middleware over the pool's default catalog, the PostGIS spatial query, the PostGIS render query behind
 /// <c>IAssetRenderQuery</c> (XD01-372), the PostGIS vector tile source behind <c>IVectorTileSource</c> (XD01-432), the
-/// applied-batch store, the bulk feature importer behind <c>IFeatureBulkImporter</c>, and both WMS routes. Without it the kernel boots on whatever <see cref="IAssetProvider"/>
+/// applied-batch store, the bulk feature importer behind <c>IFeatureBulkImporter</c>, both WMS routes and the tile endpoints
+/// with their cache and dirty-tile invalidation (XD01-434). Without it the kernel boots on whatever <see cref="IAssetProvider"/>
 /// the host registers (invariant I5).
 /// </summary>
 public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
@@ -47,6 +49,10 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // Vector tiles (XD01-432): the PostGIS ST_AsMVT source behind IVectorTileSource, scoped to the request's tenant.
         services.AddPostgresVectorTileSource(connectionString);
 
+        // The tile endpoints' state (XD01-434): GeoAssets:Tiles settings and LOD policy, the server tile cache, the layer
+        // versions, and the ITileInvalidation the PostGIS writers below report their committed writes' dirty tiles to.
+        services.AddTileServing(configuration);
+
         // Reference features (XD01-330): another organization's features, geometry and label only, read under that
         // organization's tenant for the one query.
         services.AddPostgresReferenceFeatureQuery(connectionString);
@@ -73,5 +79,9 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // require features:read (XD01-96).
         endpoints.MapWmsApi(route: "/api/geoassets/wms");
         endpoints.MapWmsApi();
+
+        // The authenticated MapLibre tile endpoints (XD01-434): /tiles/style.json and /tiles/{set}/{v}/{z}/{x}/{y}.mvt|.png,
+        // features:read, without the organization catalog warm-up.
+        endpoints.MapTileApi();
     }
 }

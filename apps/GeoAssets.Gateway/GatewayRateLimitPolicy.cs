@@ -9,6 +9,6 @@ internal enum GatewayRateLimitPolicy
     /// <summary>Every proxied API call — <c>RateLimiting:Api</c>.</summary>
     Api,
 
-    /// <summary>The anonymous OGC map traffic (<see cref="GatewayRouteCatalog.WmsPath"/>, <see cref="GatewayRouteCatalog.WfsPath"/>) a pan issues by the dozen — <c>RateLimiting:Tiles</c>.</summary>
+    /// <summary>The map traffic a pan issues by the dozen — the OGC <see cref="GatewayRouteCatalog.WmsPath"/>, <see cref="GatewayRouteCatalog.WfsPath"/> and the <see cref="GatewayRouteCatalog.TilesPathPrefix"/> tiles (XD01-434) — <c>RateLimiting:Tiles</c>.</summary>
     Tiles,
 }

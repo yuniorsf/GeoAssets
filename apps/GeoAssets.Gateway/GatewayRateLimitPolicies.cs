@@ -3,8 +3,8 @@ namespace GeoAssets.Gateway;
 /// <summary>Which <see cref="GatewayRateLimitPolicy"/> a request is limited by, and each policy's name (XD01-393).</summary>
 internal static class GatewayRateLimitPolicies
 {
-    /// <summary>The paths of <see cref="GatewayRateLimitPolicy.Tiles"/>: the kernel catch-all's OGC routes of <see cref="GatewayRouteCatalog"/>.</summary>
-    public static readonly IReadOnlyList<string> TilePaths = [GatewayRouteCatalog.WmsPath, GatewayRouteCatalog.WfsPath];
+    /// <summary>The paths of <see cref="GatewayRateLimitPolicy.Tiles"/>: the kernel catch-all's OGC routes and its tile endpoints (XD01-434) of <see cref="GatewayRouteCatalog"/>.</summary>
+    public static readonly IReadOnlyList<string> TilePaths = [GatewayRouteCatalog.WmsPath, GatewayRouteCatalog.WfsPath, GatewayRouteCatalog.TilesPathPrefix];
 
     /// <summary><see cref="GatewayRateLimitPolicy.Tiles"/> for a <see cref="TilePaths"/> request (case-insensitive, like the route match), <see cref="GatewayRateLimitPolicy.Api"/> otherwise.</summary>
     public static GatewayRateLimitPolicy Classify(PathString path)
