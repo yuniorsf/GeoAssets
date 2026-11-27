@@ -78,6 +78,12 @@ services:
     env_file:
       - path: ../otel/.env
         required: false
+      # The distributor silos' routes (XD01-447/XD01-454): one Destinations__GeoAssets__Silos__<tenant domain> line per
+      # company silo, in the git-ignored deploy/distributor-silo/gateway-silos.env (copy its .example). Read on every `up`,
+      # so a redeploy keeps them; absent = no silo route. Relative to this file, also when deploy/docker-compose.yaml
+      # includes it.
+      - path: ../distributor-silo/gateway-silos.env
+        required: false
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       # Telemetry export to the vendors of ../otel/.env stays off until you start the stack with
