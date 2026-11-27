@@ -11,7 +11,10 @@
  *     periodically) and, when only the tile URLs changed, swaps them on the existing sources — no map reload, no clear;
  *     MapLibre keeps each old tile on screen until its replacement arrives.
  *   • the features the providers render (renderFeature / renderFeatureBatch, unchanged): one GeoJSON source over the
- *     tiles, with the viewport passes of XD01-429.
+ *     tiles, with the viewport passes of XD01-429. For the kernel's own entry (HybridLodMapLayerRenderer, XD01-436) that
+ *     is only its selected and just-written features, whose tile copies setHiddenTileFeatures filters out until a {v}
+ *     carrying the write is drawn (refreshTileStyle answers once the swapped tiles loaded); show/hideTileLayers follow
+ *     the entry's Show/Hide.
  *   • click, hover and context menu: GPU feature queries (queryRenderedFeatures) over the feature and tile layers — no
  *     per-feature DOM or SVG layer.
  *   • draw, edit and snap: terra-draw with its MapLibre adapter; drawn and edited geometries reach .NET as RFC 7946
@@ -73,6 +76,9 @@ const SNAP_DISTANCE_PX = 15;     // Geoman's snapDistance in Leaflet mode
 const FEATURE_FOCUS_ZOOM = 16;   // panToFeature's maxZoom, Leaflet scale
 const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
 const TOKEN_UNAVAILABLE_HOLD_MS = 30 * 1000;
+const MAX_STYLE_ZOOM = 24;
+const TILE_SETTLE_TIMEOUT_MS = 10 * 1000;   // how long a {v} swap waits for its tiles before reporting it anyway
+const PENDING_OVERLAY_MS = 5 * 1000;        // how long an edit or pan waits for the overlay of a tile-only feature
 
 // Per-feature visual states (XD01-309): the same table and CSS tokens as geoassets.js. Colour, opacity and width only.
 const STATE_STYLES = Object.freeze({
@@ -314,6 +320,61 @@ export function featureIdOf(feature) {
     return id === undefined || id === null || id === '' ? null : String(id);
 }
 
+/**
+ * The style's raster tier (XD01-436): the tile zooms its raster layer covers, { minZoom, maxZoom } inclusive, or null
+ * when it publishes none (the default LOD policy — vector at every zoom). `maxzoom` is exclusive in the style spec.
+ */
+export function rasterTierOf(style) {
+    const layer = (style?.layers || []).find(l => l && l.source === TILE_RASTER_SOURCE && l.type === 'raster');
+    if (!layer || !style?.sources?.[TILE_RASTER_SOURCE]) return null;
+    const minZoom = Number.isFinite(layer.minzoom) ? layer.minzoom : 0;
+    const maxZoom = Number.isFinite(layer.maxzoom) ? layer.maxzoom - 1 : MAX_STYLE_ZOOM;
+    return maxZoom >= minZoom ? { minZoom, maxZoom } : null;
+}
+
+/** What showTileLayers answers .NET (MapTileStyleInfo): the {v}, the raster tier and the map's Leaflet-scale zoom. */
+export function tileStyleInfo(style, zoom) {
+    const tier = rasterTierOf(style);
+    return {
+        version: tileVersionOf(style),
+        rasterMinZoom: tier ? tier.minZoom : null,
+        rasterMaxZoom: tier ? tier.maxZoom : null,
+        zoom: Math.round(Number(zoom) || 0)
+    };
+}
+
+/**
+ * A vector tile layer's filter with the hidden feature ids taken out (XD01-436): `base` (the style's own filter, or
+ * none) and the tiles' promoted `id` not among `ids`. A hidden copy is neither drawn nor hit by queryRenderedFeatures.
+ */
+export function withoutHiddenIds(base, ids) {
+    if (!ids || ids.length === 0) return base ?? null;
+    const notHidden = ['!', ['in', ['to-string', ['get', 'id']], ['literal', ids.map(String)]]];
+    return base ? ['all', base, notHidden] : notHidden;
+}
+
+/** [west, south, east, north] of the XYZ tile z/x/y, in degrees. */
+export function tileBoundsOf(z, x, y) {
+    const n = 2 ** z;
+    const lon = c => c / n * 360 - 180;
+    const lat = r => Math.atan(Math.sinh(Math.PI * (1 - 2 * r / n))) * 180 / Math.PI;
+    return [lon(x), lat(y + 1), lon(x + 1), lat(y)];
+}
+
+/**
+ * The positions of a feature MapLibre read from a vector tile that are real vertices: a tile's geometry is clipped at
+ * its edge plus a buffer, and the clipped ends are vertices the feature doesn't have — so only the positions inside the
+ * tile itself (`_z/_x/_y`, the tile MapLibre read it from) are snap candidates. A feature without its tile keeps all.
+ */
+export function tileVertices(feature) {
+    const positions = positionsOf(feature?.geometry);
+    const { _z: z, _x: x, _y: y } = feature || {};
+    if (![z, x, y].every(Number.isInteger)) return positions;
+    const [w, s, e, n] = tileBoundsOf(z, x, y);
+    const eps = 1e-9;
+    return positions.filter(([lon, lat]) => lon >= w - eps && lon <= e + eps && lat >= s - eps && lat <= n + eps);
+}
+
 /** Rounds every position to `digits` decimals (terra-draw refuses more than its coordinate precision). */
 export function roundGeometry(geometry, digits = 9) {
     const factor = 10 ** digits;
@@ -495,20 +556,51 @@ function addTileStyle(state, style) {
     });
 }
 
-/** Applies `next` as the map's tile style; answers its {v}. */
+/**
+ * Resolves once the tile sources reloaded after a swap (a 'sourcedata' of a tile source, then the map idle), or after
+ * `timeoutMs` — a map that doesn't render (hidden) never goes idle.
+ */
+function whenTilesSettle(state, timeoutMs) {
+    const map = state.map;
+    return new Promise(resolve => {
+        let reloading = false;
+        let timer = null;
+        const onData = e => { if (isTileSource(e.sourceId)) reloading = true; };
+        const finish = () => {
+            clearTimeout(timer);
+            map.off('sourcedata', onData);
+            map.off('idle', onIdle);
+            resolve();
+        };
+        const onIdle = () => { if (reloading) finish(); };
+        timer = setTimeout(finish, timeoutMs);
+        map.on('sourcedata', onData);
+        map.on('idle', onIdle);
+    });
+}
+
+/**
+ * Applies `next` as the map's tile style; answers its {v} — after a swap of a style already on the map, once the new
+ * tiles are drawn (XD01-436: .NET then shows the tile copies of the features it wrote again, which must not flash
+ * their old drawing).
+ */
 function applyTileStyle(state, next) {
-    const plan = planStyleUpdate(state.tileStyle, next);
+    const previous = state.tileStyle;
+    const plan = planStyleUpdate(previous, next);
+    const settled = previous && plan.kind !== 'none' ? whenTilesSettle(state, TILE_SETTLE_TIMEOUT_MS) : null;
     if (plan.kind === 'tiles') {
         plan.tiles.forEach(({ sourceId, tiles }) => state.map.getSource(sourceId)?.setTiles(tiles));
     } else if (plan.kind === 'rebuild') {
         removeTileStyle(state);
         addTileStyle(state, next);
         applyVisibility(state);
+        applyTileMask(state);
         applyStates(state);
     }
     state.tileStyle = next;
     state.tileVersion = tileVersionOf(next);
-    return state.tileVersion;
+    const version = state.tileVersion;
+    return settled ? settled.then(() => version) : version;
 }
 
 /** Re-reads the style; one read per map at a time (a call meanwhile shares it). Answers the current {v}, or null. */
@@ -642,9 +734,28 @@ function commitFeatures(state) {
         const features = [];
         state.features.forEach(f => { if (f.geometry) features.push(f); });
         state.map.getSource(FEATURE_SOURCE)?.setData({ type: 'FeatureCollection', features });
+        resumePending(state);
     });
     _commitScheduled.set(state, pending);
     return pending;
+}
+
+/** The pending { id, until } when its feature is in the overlay now (and it didn't expire), else null; clears it. */
+function takePending(state, key) {
+    const pending = state[key];
+    if (!pending) return null;
+    if (Date.now() > pending.until) { state[key] = null; return null; }
+    if (!state.features.has(pending.id)) return null;
+    state[key] = null;
+    return pending.id;
+}
+
+/** An edit or pan asked for a tile-only feature runs once its overlay arrived (XD01-436). */
+function resumePending(state) {
+    const pan = takePending(state, 'pendingPan');
+    if (pan) panToFeature(state.divId, pan);
+    const edit = takePending(state, 'pendingEdit');
+    if (edit && !isBusy(state)) startEdit(state, edit);
 }
 
 // ─── Visibility (user toggle + zoom ranges, XD01-311) ────────────────────────────────────────────────────────────────
@@ -667,8 +778,23 @@ function applyVisibility(state) {
     const hidden = hiddenTypes(state);
     state.featureLayers.forEach(def => { if (map.getLayer(def.id)) map.setFilter(def.id, featureFilter(state, def)); });
     state.tileLayers.forEach(layer => {
-        if (!layer['source-layer'] || !map.getLayer(layer.id)) return;
-        map.setLayoutProperty(layer.id, 'visibility', hidden.has(layer['source-layer']) ? 'none' : 'visible');
+        if (!map.getLayer(layer.id)) return;
+        // hideTileLayers (XD01-436) takes every tile layer off, the raster one too; a type hidden takes off its own.
+        const off = state.tilesHidden || (!!layer['source-layer'] && hidden.has(layer['source-layer']));
+        map.setLayoutProperty(layer.id, 'visibility', off ? 'none' : 'visible');
+    });
+}
+
+/** The vector tile layers whose features have ids (aggregates have none). */
+function idTileLayers(state) {
+    return state.tileLayers.filter(l => l.source === TILE_VECTOR_SOURCE && !l.id.endsWith('-aggregate'));
+}
+
+/** Filters the tile copies of setHiddenTileFeatures' ids out of the vector tile layers (XD01-436). */
+function applyTileMask(state) {
+    const map = state.map;
+    idTileLayers(state).forEach(layer => {
+        if (map.getLayer(layer.id)) map.setFilter(layer.id, withoutHiddenIds(layer.filter, state.hiddenTileIds));
     });
 }
 
@@ -734,13 +860,21 @@ function bindPointerEvents(state) {
         invoke(state, 'OnFeatureContextMenuFromJs', hit.id, e.originalEvent.clientX, e.originalEvent.clientY);
     });
 
-    // A double-click on a feature the providers rendered edits it (terra-draw select mode) instead of zooming.
+    // A double-click on a feature the providers rendered edits it (terra-draw select mode) instead of zooming. On a
+    // tile-only one (XD01-436) it selects it — .NET then draws its GeoJSON overlay — and the edit starts once it arrives.
     map.on('dblclick', e => {
         if (isBusy(state)) return;
         const hit = hitTest(state, e.point, true);
-        if (!hit || !state.features.has(hit.id)) return;
+        if (hit && state.features.has(hit.id)) {
+            e.preventDefault();
+            startEdit(state, hit.id);
+            return;
+        }
+        const tileHit = hitTest(state, e.point);
+        if (!tileHit) return;
         e.preventDefault();
-        startEdit(state, hit.id);
+        state.pendingEdit = { id: tileHit.id, until: Date.now() + PENDING_OVERLAY_MS };
+        invoke(state, 'OnFeatureClickedFromJs', tileHit.id);
     });
 
     let hoverQueued = null;
@@ -778,7 +912,16 @@ function snapTo(state, event) {
     if (!layers.length) return undefined;
     const point = { x: event.containerX, y: event.containerY };
     const box = [[point.x - SNAP_DISTANCE_PX, point.y - SNAP_DISTANCE_PX], [point.x + SNAP_DISTANCE_PX, point.y + SNAP_DISTANCE_PX]];
-    const candidates = map.queryRenderedFeatures(box, { layers });
+    // XD01-436: an overlay feature snaps to its own geometry (the GeoJSON source's rendering is clipped and simplified);
+    // the kernel's features to the MVT features rendered at this zoom — the vector tier's zooms, where a tile carries the
+    // vertices themselves — minus the tile copies hidden for their overlay and the ends a tile's clipping made.
+    const candidates = map.queryRenderedFeatures(box, { layers }).map(f => {
+        if (f.source === FEATURE_SOURCE) {
+            const own = state.features.get(featureIdOf(f));
+            return own ? { geometry: own.geometry, properties: own.properties } : f;
+        }
+        return { geometry: { type: 'MultiPoint', coordinates: tileVertices(f) }, properties: f.properties, sourceLayer: f.sourceLayer };
+    });
     const scope = state.snapScope;
     return nearestVertex(point, candidates, p => map.project(p), SNAP_DISTANCE_PX,
         f => !scope || scope.has(String(f.properties?.assetTypeId ?? f.sourceLayer ?? '')));
@@ -943,6 +1086,10 @@ async function initializeMap(divId, lat, lon, zoom, _renderMode, options) {
             tileStyle: null,
             tileVersion: null,
             tileLayers: [],
+            tilesHidden: false,         // hideTileLayers (XD01-436)
+            hiddenTileIds: [],          // setHiddenTileFeatures: ids whose tile copy is filtered out (XD01-436)
+            pendingEdit: null,          // { id, until }: a tile-only feature double-clicked, edited once its overlay arrives
+            pendingPan: null,           // { id, until }: panToFeature of a feature neither drawn nor rendered yet
             styleLoad: null,
             unauthorizedRetry: false,
             lastUnauthorizedRefresh: 0,
@@ -1028,6 +1175,35 @@ function registerHandlers(divId, dotNetRef) {
 function refreshTileStyle(divId) {
     const state = _maps[divId];
     return state ? loadTileStyle(state) : Promise.resolve(null);
+}
+
+/**
+ * Shows the kernel's tile layers (HybridLodMapLayerRenderer, XD01-436), reading the style first when the map has none
+ * yet; answers tileStyleInfo, or null when the style can't be read. The style URL is the map's own (initializeMap).
+ */
+async function showTileLayers(divId, _styleUrl) {
+    const state = _maps[divId];
+    if (!state) return null;
+    state.tilesHidden = false;
+    if (!state.tileStyle) await loadTileStyle(state);
+    if (_maps[divId] !== state) return null;
+    applyVisibility(state);
+    return state.tileStyle ? tileStyleInfo(state.tileStyle, leafletZoom(state)) : null;
+}
+
+function hideTileLayers(divId) {
+    const state = _maps[divId];
+    if (!state) return;
+    state.tilesHidden = true;
+    applyVisibility(state);
+}
+
+/** Hides the tile copy of each feature in `featureIds` (replacing the previous set): its overlay is drawn instead. */
+function setHiddenTileFeatures(divId, featureIds) {
+    const state = _maps[divId];
+    if (!state) return;
+    state.hiddenTileIds = [...new Set((featureIds || []).map(String))];
+    applyTileMask(state);
 }
 
 // ─── Public API: features ────────────────────────────────────────────────────────────────────────────────────────────
@@ -1347,7 +1523,11 @@ function panToFeature(divId, featureId) {
         geometry = rendered?.geometry;
     }
     const bounds = geometry && boundsOf(geometry);
-    if (!bounds) return;
+    if (!bounds) {
+        // A kernel feature off screen is only a tile elsewhere (XD01-436): its overlay, drawn on selection, brings it.
+        state.pendingPan = { id, until: Date.now() + PENDING_OVERLAY_MS };
+        return;
+    }
     const maxZoom = toMapLibreZoom(FEATURE_FOCUS_ZOOM);
     if (bounds[0] === bounds[2] && bounds[1] === bounds[3]) state.map.easeTo({ center: [bounds[0], bounds[1]], zoom: maxZoom });
     else state.map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 20, maxZoom });
@@ -1400,6 +1580,9 @@ const api = Object.freeze({
     setView,
     registerHandlers,
     refreshTileStyle,
+    showTileLayers,
+    hideTileLayers,
+    setHiddenTileFeatures,
     enableDraw,
     disableDraw,
     setSnapTargetLayer,

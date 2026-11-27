@@ -1240,9 +1240,43 @@ window.GeoAssets = (function () {
                 continue;
             }
             if (response.status === 401) tileAccess.reject(access);
-            if (!response.ok) return { error: 'The WMS tile request failed with HTTP ' + response.status + '.' };
+            if (!response.ok) return { error: 'The tile request failed with HTTP ' + response.status + '.' };
             return { blob: await response.blob() };
         }
+    }
+
+    // A tile of a layer whose requests may need the bearer token (the WMS layers above, and the kernel's raster tiles of
+    // XD01-436 below): fetched with the Authorization header and shown as an object URL, or requested as a plain image
+    // when the layer needs no token.
+    function createAuthenticatedTile(coords, done) {
+        const tile = document.createElement('img');
+        tile.alt = '';
+        tile.setAttribute('role', 'presentation');
+        L.DomEvent.on(tile, 'load', L.Util.bind(this._tileOnLoad, this, done, tile));
+        L.DomEvent.on(tile, 'error', L.Util.bind(this._tileOnError, this, done, tile));
+        // The decoded image stays on screen; its object URL isn't needed once the image loaded or failed.
+        L.DomEvent.on(tile, 'load error', () => {
+            if (tile._geoObjectUrl) { URL.revokeObjectURL(tile._geoObjectUrl); tile._geoObjectUrl = null; }
+        });
+
+        const url        = this.getTileUrl(coords);
+        const controller = new AbortController();
+        tile._geoAbort = controller;
+        fetchWmsTile(this._geoTileAccess, url, controller.signal)
+            .then(result => {
+                if (controller.signal.aborted) return;
+                tile._geoAbort = null;
+                if (result.direct) { tile.src = url; return; }
+                if (result.error) { done(new Error(result.error), tile); return; }
+                tile._geoObjectUrl = URL.createObjectURL(result.blob);
+                tile.src = tile._geoObjectUrl;
+            })
+            .catch(err => {
+                if (controller.signal.aborted) return;
+                tile._geoAbort = null;
+                done(err, tile);
+            });
+        return tile;
     }
 
     const AuthenticatedWmsLayer = L.TileLayer.WMS.extend({
@@ -1253,36 +1287,18 @@ window.GeoAssets = (function () {
             this.on('tileunload tileabort', e => releaseWmsTile(e.tile));
         },
 
-        createTile: function (coords, done) {
-            const tile = document.createElement('img');
-            tile.alt = '';
-            tile.setAttribute('role', 'presentation');
-            L.DomEvent.on(tile, 'load', L.Util.bind(this._tileOnLoad, this, done, tile));
-            L.DomEvent.on(tile, 'error', L.Util.bind(this._tileOnError, this, done, tile));
-            // The decoded image stays on screen; its object URL isn't needed once the image loaded or failed.
-            L.DomEvent.on(tile, 'load error', () => {
-                if (tile._geoObjectUrl) { URL.revokeObjectURL(tile._geoObjectUrl); tile._geoObjectUrl = null; }
-            });
+        createTile: createAuthenticatedTile
+    });
 
-            const url        = this.getTileUrl(coords);
-            const controller = new AbortController();
-            tile._geoAbort = controller;
-            fetchWmsTile(this._geoTileAccess, url, controller.signal)
-                .then(result => {
-                    if (controller.signal.aborted) return;
-                    tile._geoAbort = null;
-                    if (result.direct) { tile.src = url; return; }
-                    if (result.error) { done(new Error(result.error), tile); return; }
-                    tile._geoObjectUrl = URL.createObjectURL(result.blob);
-                    tile.src = tile._geoObjectUrl;
-                })
-                .catch(err => {
-                    if (controller.signal.aborted) return;
-                    tile._geoAbort = null;
-                    done(err, tile);
-                });
-            return tile;
-        }
+    // An XYZ layer whose tiles are fetched as the WMS layers' are (XD01-436: the kernel's raster tiles).
+    const AuthenticatedXyzLayer = L.TileLayer.extend({
+        initialize: function (url, options, tileAccess) {
+            L.TileLayer.prototype.initialize.call(this, url, options);
+            this._geoTileAccess = tileAccess;
+            this.on('tileunload tileabort', e => releaseWmsTile(e.tile));
+        },
+
+        createTile: createAuthenticatedTile
     });
 
     function addWmsLayer(divId, layerId, wmsBaseUrl, options) {
@@ -1313,6 +1329,155 @@ window.GeoAssets = (function () {
             state.map.removeLayer(layer);
             state.tileLayers.delete(layerId);
         }
+    }
+
+    // ─── The kernel's tiles: the interim Leaflet split (XD01-436) ─────────────
+    // HybridLodMapLayerRenderer draws the kernel's provider entry in the Leaflet modes (MapInterop:LeafletTileSplit) as
+    // the raster tiles of /tiles/style.json (XD01-434) at the zooms of its raster tier, and as features at the others —
+    // .NET decides which from what showTileLayers answers. The style and every tile are fetched with the bearer token
+    // GetTileAccessFromJs answers for the style's URL (the tiles are shown as object URLs): the token is never in a URL.
+    // A style with no raster tier (the default LOD policy) adds no layer, and the features stay at every zoom.
+
+    const KERNEL_RASTER_SOURCE   = 'geoassets-raster';
+    const KERNEL_VERSION_KEY     = 'geoassets:version';
+    const KERNEL_MAX_STYLE_ZOOM  = 24;
+    const KERNEL_SWAP_TIMEOUT_MS = 10 * 1000;
+
+    // { template, minZoom, maxZoom } of the style's raster tier (maxzoom is exclusive in the style spec), or null.
+    function _kernelRasterTier(style) {
+        const source = style?.sources?.[KERNEL_RASTER_SOURCE];
+        const layer  = (style?.layers || []).find(l => l && l.source === KERNEL_RASTER_SOURCE && l.type === 'raster');
+        const template = Array.isArray(source?.tiles) ? source.tiles[0] : null;
+        if (!layer || !template) return null;
+        const minZoom = Number.isFinite(layer.minzoom) ? layer.minzoom : 0;
+        const maxZoom = Number.isFinite(layer.maxzoom) ? layer.maxzoom - 1 : KERNEL_MAX_STYLE_ZOOM;
+        return maxZoom >= minZoom ? { template, minZoom, maxZoom } : null;
+    }
+
+    async function _fetchKernelStyle(kernel) {
+        let access = await kernel.access.get();
+        for (let attempt = 0; ; attempt++) {
+            if (access.requiresToken && !access.accessToken) return { error: 'no access token is available for ' + kernel.styleUrl };
+            const headers = access.accessToken ? { Authorization: 'Bearer ' + access.accessToken } : {};
+            // no-cache: the browser revalidates its copy with the style's ETag (304 when {v} did not move).
+            const response = await fetch(kernel.styleUrl, { headers, cache: 'no-cache', credentials: 'omit' });
+            if (response.status === 401 && attempt === 0) {
+                access = await kernel.access.get(access);
+                continue;
+            }
+            if (response.status === 401) kernel.access.reject(access);
+            if (!response.ok) return { error: kernel.styleUrl + ' answered HTTP ' + response.status };
+            return { style: await response.json() };
+        }
+    }
+
+    function _kernelLayer(kernel, tier) {
+        return new AuthenticatedXyzLayer(tier.template, {
+            minZoom: tier.minZoom,
+            maxZoom: Math.min(tier.maxZoom, 19),
+            tileSize: 256,
+            attribution: ''
+        }, kernel.access);
+    }
+
+    function _sameTier(a, b) {
+        return (!a && !b) || (!!a && !!b && a.template === b.template && a.minZoom === b.minZoom && a.maxZoom === b.maxZoom);
+    }
+
+    // Applies a (re-)read style; resolves once a swapped layer drew its first tiles (or after a timeout), so the old {v}'s
+    // tiles stay on screen until the new ones are there — no blank.
+    function _applyKernelStyle(state, kernel, style) {
+        kernel.style   = style;
+        kernel.version = typeof style?.metadata?.[KERNEL_VERSION_KEY] === 'string' ? style.metadata[KERNEL_VERSION_KEY] : null;
+        const tier = _kernelRasterTier(style);
+        if (_sameTier(kernel.tier, tier)) return Promise.resolve();
+
+        const old  = kernel.layer;
+        const next = tier ? _kernelLayer(kernel, tier) : null;
+        kernel.tier  = tier;
+        kernel.layer = next;
+        if (kernel.hidden || !next) {
+            if (old && state.map.hasLayer(old)) state.map.removeLayer(old);
+            return Promise.resolve();
+        }
+        next.addTo(state.map);
+        if (!old) return Promise.resolve();
+        return new Promise(resolve => {
+            let timer = null;
+            const swap = () => {
+                clearTimeout(timer);
+                if (state.map.hasLayer(old)) state.map.removeLayer(old);
+                resolve();
+            };
+            timer = setTimeout(swap, KERNEL_SWAP_TIMEOUT_MS);
+            next.once('load', swap);
+        });
+    }
+
+    function _kernelInfo(state, kernel) {
+        return {
+            version:       kernel.version,
+            rasterMinZoom: kernel.tier ? kernel.tier.minZoom : null,
+            rasterMaxZoom: kernel.tier ? kernel.tier.maxZoom : null,
+            zoom:          Math.round(state.map.getZoom())
+        };
+    }
+
+    // Shows the kernel's raster tiles (reading the style first when the map has none yet); answers
+    // { version, rasterMinZoom, rasterMaxZoom, zoom } (.NET's MapTileStyleInfo), or null when the style can't be read.
+    async function showTileLayers(divId, styleUrl) {
+        const state = _maps[divId];
+        if (!state || !styleUrl) return null;
+        const url = new URL(styleUrl, document.baseURI).href;
+        let kernel = state.kernelTiles;
+        if (!kernel || kernel.styleUrl !== url) {
+            if (kernel?.layer && state.map.hasLayer(kernel.layer)) state.map.removeLayer(kernel.layer);
+            kernel = state.kernelTiles = {
+                styleUrl: url, access: createWmsTileAccess(state, url),
+                style: null, version: null, tier: null, layer: null, hidden: false, loading: null
+            };
+        }
+        kernel.hidden = false;
+        if (!kernel.style) {
+            kernel.loading = kernel.loading || _fetchKernelStyle(kernel).finally(() => { kernel.loading = null; });
+            const result = await kernel.loading.catch(err => ({ error: String(err) }));
+            if (_maps[divId] !== state || state.kernelTiles !== kernel) return null;
+            if (result.error) {
+                console.warn('GeoAssets: the kernel tile style was not loaded — ' + result.error);
+                return null;
+            }
+            if (!kernel.style) _applyKernelStyle(state, kernel, result.style);
+        }
+        if (!kernel.hidden && kernel.layer && !state.map.hasLayer(kernel.layer)) kernel.layer.addTo(state.map);
+        return _kernelInfo(state, kernel);
+    }
+
+    function hideTileLayers(divId) {
+        const state  = _maps[divId];
+        const kernel = state?.kernelTiles;
+        if (!kernel) return;
+        kernel.hidden = true;
+        if (kernel.layer && state.map.hasLayer(kernel.layer)) state.map.removeLayer(kernel.layer);
+    }
+
+    // A raster tile can't hide one feature: nothing to filter in the Leaflet split.
+    function setHiddenTileFeatures(_divId, _featureIds) { }
+
+    // Re-reads the style (MapTileStyleRefresher: after this client's writes and periodically) and follows a new {v} by
+    // swapping the raster layer; answers the current {v} once the new tiles are drawn.
+    async function refreshTileStyle(divId) {
+        const state  = _maps[divId];
+        const kernel = state?.kernelTiles;
+        if (!kernel) return null;
+        let result;
+        try { result = await _fetchKernelStyle(kernel); } catch (err) { result = { error: String(err) }; }
+        if (_maps[divId] !== state || state.kernelTiles !== kernel) return null;
+        if (result.error) {
+            console.warn('GeoAssets: re-reading the kernel tile style failed — ' + result.error);
+            return kernel.version;
+        }
+        await _applyKernelStyle(state, kernel, result.style);
+        return kernel.version;
     }
 
     // ─── Layer Visibility ────────────────────────────────────────────────────
@@ -1775,6 +1940,10 @@ window.GeoAssets = (function () {
         removeTileLayer,
         addWmsLayer,
         removeWmsLayer,
+        showTileLayers,
+        hideTileLayers,
+        setHiddenTileFeatures,
+        refreshTileStyle,
         setLayerVisibility,
         setLayerZoomRange,
         showSelectionOutline,

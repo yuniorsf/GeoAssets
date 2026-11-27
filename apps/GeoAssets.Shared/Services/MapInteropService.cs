@@ -23,9 +23,11 @@ namespace GeoAssets.Shared.Services;
 /// Leaflet map never loads it. In that mode it also keeps the map's tiles current: every
 /// <see cref="IAssetProvider.FeatureAdded"/>, <see cref="IAssetProvider.FeatureUpdated"/>,
 /// <see cref="IAssetProvider.FeatureDeleted"/> and <see cref="IAssetProvider.CollectionChanged"/> schedules a re-read
-/// of the tile style (<see cref="MapTileStyleRefresher"/>), as does its periodic timer.
+/// of the tile style (<see cref="MapTileStyleRefresher"/>), as does its periodic timer. The Leaflet modes do the same for a
+/// map once its kernel tile layer is shown (<see cref="ShowTileLayersAsync"/>, the interim Leaflet split of XD01-436), so a
+/// Leaflet map without one re-reads nothing.
 /// </summary>
-public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyncDisposable
+public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapTileLayerInterop, IAsyncDisposable
 {
     /// <summary>Maximum feature ids sent to <c>GeoAssets.setFeatureStates</c> in one JS call (XD01-309).</summary>
     public const int FeatureStateBatchSize = 2000;
@@ -42,8 +44,11 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     private readonly IJSRuntime _js;
     private readonly IAssetProvider _repo;
     private readonly MapInteropOptions _options;
+    private readonly MapLibreOptions _mapLibreOptions;
     private readonly bool _mapLibre;
-    private readonly MapTileStyleRefresher? _styleRefresher;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
+    private MapTileStyleRefresher? _styleRefresher;
     private Task? _mapLibreLoad;
 
     /// <summary>
@@ -75,24 +80,23 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         _repo = repo;
         _options = options.Value;
         _mapLibre = _options.RenderMode == MapRenderMode.MapLibre;
+        _mapLibreOptions = _options.MapLibre ?? new MapLibreOptions();
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _logger = (ILogger?)logger ?? NullLogger.Instance;
+        TileStyleUrl = MapLibreOptions.ResolveStyleUrl(_mapLibreOptions.StyleUrl, routes?.BaseUrl);
         if (!_mapLibre) return;
 
-        var mapLibre = _options.MapLibre ?? new MapLibreOptions();
-        MapLibreMap = new MapLibreMapOptions(
-            MapLibreOptions.ResolveStyleUrl(mapLibre.StyleUrl, routes?.BaseUrl),
-            routes?.BaseUrl.AbsoluteUri);
-        _styleRefresher = new MapTileStyleRefresher(
-            RefreshTileStyleAsync, mapLibre, timeProvider ?? TimeProvider.System,
-            (ILogger?)logger ?? NullLogger.Instance);
-
-        _repo.FeatureAdded += OnFeatureWritten;
-        _repo.FeatureUpdated += OnFeatureWritten;
-        _repo.FeatureDeleted += OnFeatureDeleted;
-        _repo.CollectionChanged += OnCollectionChanged;
+        MapLibreMap = new MapLibreMapOptions(TileStyleUrl, routes?.BaseUrl.AbsoluteUri);
+        EnsureStyleRefresher();
     }
 
     /// <summary>What a MapLibre map is initialized with; <c>null</c> in the other modes.</summary>
     public MapLibreMapOptions? MapLibreMap { get; }
+
+    /// <summary>The kernel's tile style (<see cref="MapLibreOptions.ResolveStyleUrl"/>), in every mode.</summary>
+    public string TileStyleUrl { get; }
+
+    public event EventHandler<MapTileStyleRefreshedEventArgs>? TileStyleRefreshed;
 
     public async Task InitializeMapAsync(string divId, double lat, double lon, int zoom)
     {
@@ -381,6 +385,29 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) =>
         CallAsync("registerHandlers", divId, handlerRef);
 
+    // ── Kernel tile layers (XD01-436) ─────────────────────────────────────────
+
+    public async Task<MapTileStyleInfo?> ShowTileLayersAsync(string divId)
+    {
+        var info = await CallAsync<MapTileStyleInfo?>("showTileLayers", divId, TileStyleUrl);
+        // A MapLibre map follows {v} from its initialization; a Leaflet map only while its tile layer is shown.
+        if (!_mapLibre) EnsureStyleRefresher().Attach(divId);
+        return info;
+    }
+
+    public Task HideTileLayersAsync(string divId)
+    {
+        if (!_mapLibre) _styleRefresher?.Detach(divId);
+        return CallAsync("hideTileLayers", divId);
+    }
+
+    public Task SetHiddenTileFeaturesAsync(string divId, IReadOnlyCollection<string> featureIds)
+    {
+        ArgumentNullException.ThrowIfNull(featureIds);
+        // A raster tile can't hide one feature: the Leaflet split has nothing to filter.
+        return _mapLibre ? CallAsync("setHiddenTileFeatures", divId, featureIds) : Task.CompletedTask;
+    }
+
     public ValueTask DisposeAsync()
     {
         if (_styleRefresher is null) return ValueTask.CompletedTask;
@@ -432,10 +459,32 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         }
     }
 
+    /// <summary>The refresher of the tile style — created, and subscribed to the provider's writes, on first need.</summary>
+    private MapTileStyleRefresher EnsureStyleRefresher()
+    {
+        if (_styleRefresher is { } existing) return existing;
+        _styleRefresher = new MapTileStyleRefresher(RefreshTileStyleAsync, _mapLibreOptions, _timeProvider, _logger);
+        _repo.FeatureAdded += OnFeatureWritten;
+        _repo.FeatureUpdated += OnFeatureWritten;
+        _repo.FeatureDeleted += OnFeatureDeleted;
+        _repo.CollectionChanged += OnCollectionChanged;
+        return _styleRefresher;
+    }
+
     private async Task RefreshTileStyleAsync(string divId, CancellationToken cancellationToken)
     {
-        await EnsureMapLibreLoadedAsync();
-        await _js.InvokeAsync<string?>($"{MapLibreNamespace}.refreshTileStyle", cancellationToken, [divId]);
+        var startedAt = _timeProvider.GetUtcNow();
+        string? version;
+        if (_mapLibre)
+        {
+            await EnsureMapLibreLoadedAsync();
+            version = await _js.InvokeAsync<string?>($"{MapLibreNamespace}.refreshTileStyle", cancellationToken, [divId]);
+        }
+        else
+        {
+            version = await _js.InvokeAsync<string?>($"{LeafletNamespace}.refreshTileStyle", cancellationToken, [divId]);
+        }
+        TileStyleRefreshed?.Invoke(this, new MapTileStyleRefreshedEventArgs(divId, version, startedAt));
     }
 
     private void OnFeatureWritten(object? sender, GeoFeature feature) => _styleRefresher?.NotifyWrite();

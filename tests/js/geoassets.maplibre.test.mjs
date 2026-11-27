@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
     planStyleUpdate, tileVersionOf, tokenScopeOf, isUnder, stateGroups, stateExpression, dashArrayOf, effectiveStyle,
     toSourceFeature, wmsTileUrl, expandSubdomains, boundsOf, nearestVertex, featureIdOf, roundGeometry, toMapLibreZoom,
-    fromMapLibreZoom, LIBRARIES
+    fromMapLibreZoom, LIBRARIES, rasterTierOf, tileStyleInfo, withoutHiddenIds, tileBoundsOf, tileVertices
 } from '../../apps/GeoAssets.Shared/wwwroot/js/geoassets.maplibre.js';
 
 const style = (v, layers = [{ id: 't-point', type: 'circle', source: 'geoassets', 'source-layer': 't' }], raster = false) => ({
@@ -161,4 +161,55 @@ test('every CDN library is an exact version with SRI', () => {
         assert.match(url, /^https:\/\/unpkg\.com\/[a-z-]+@\d+\.\d+\.\d+\//);
         assert.match(lib.integrity, /^sha384-[A-Za-z0-9+/=]{64}$/);
     }
+});
+
+// ─── XD01-436: the hybrid LOD renderer's helpers ─────────────────────────────────────────────────────────────────────
+
+const rasterLayer = (minzoom, maxzoom) => Object.assign({ id: 'geoassets-raster', type: 'raster', source: 'geoassets-raster' },
+    minzoom === undefined ? {} : { minzoom }, maxzoom === undefined ? {} : { maxzoom });
+
+test('the raster tier is the raster layer\'s zooms, maxzoom exclusive', () => {
+    assert.deepEqual(rasterTierOf(style('v', [rasterLayer(0, 14)], true)), { minZoom: 0, maxZoom: 13 });
+    assert.deepEqual(rasterTierOf(style('v', [rasterLayer(4, 12)], true)), { minZoom: 4, maxZoom: 11 });
+    assert.deepEqual(rasterTierOf(style('v', [rasterLayer(10)], true)), { minZoom: 10, maxZoom: 24 }, 'no maxzoom = up to the top');
+});
+
+test('no raster layer, or no raster source, is no raster tier (the default LOD policy)', () => {
+    assert.equal(rasterTierOf(style('v')), null);
+    assert.equal(rasterTierOf(style('v', [rasterLayer(0, 14)], false)), null);
+    assert.equal(rasterTierOf(style('v', [rasterLayer(5, 5)], true)), null, 'an empty run');
+    assert.equal(rasterTierOf(null), null);
+});
+
+test('the style info carries {v}, the raster tier and the rounded zoom', () => {
+    assert.deepEqual(tileStyleInfo(style('a-1-0.2', [rasterLayer(0, 14)], true), 12.6),
+        { version: 'a-1-0.2', rasterMinZoom: 0, rasterMaxZoom: 13, zoom: 13 });
+    assert.deepEqual(tileStyleInfo(style('a-1-0.2'), 15),
+        { version: 'a-1-0.2', rasterMinZoom: null, rasterMaxZoom: null, zoom: 15 });
+});
+
+test('hidden ids are filtered out of a vector tile layer, keeping its own filter', () => {
+    const own = ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false];
+    assert.equal(withoutHiddenIds(own, []), own);
+    assert.equal(withoutHiddenIds(undefined, []), null);
+    assert.deepEqual(withoutHiddenIds(own, ['a', 7]),
+        ['all', own, ['!', ['in', ['to-string', ['get', 'id']], ['literal', ['a', '7']]]]]);
+    assert.deepEqual(withoutHiddenIds(null, ['a']), ['!', ['in', ['to-string', ['get', 'id']], ['literal', ['a']]]]);
+});
+
+test('tile bounds in degrees', () => {
+    assert.deepEqual(tileBoundsOf(0, 0, 0).map(n => +n.toFixed(6)), [-180, -85.051129, 180, 85.051129]);
+    const [w, s, e, n] = tileBoundsOf(1, 1, 0);
+    assert.deepEqual([w, e], [0, 180]);
+    assert.ok(s === 0 && n > 85);
+});
+
+test('a tile feature\'s snap vertices are the ones inside its own tile (not its clipped ends)', () => {
+    // Tile 1/1/0 is the north-east quarter: [0, 0] … [180, 85]. A line clipped at the buffer: its west end is past x = 0.
+    const clipped = { _z: 1, _x: 1, _y: 0, geometry: { type: 'LineString', coordinates: [[-0.5, 10], [10, 10], [20, 20]] } };
+    assert.deepEqual(tileVertices(clipped), [[10, 10], [20, 20]]);
+    const onTheEdge = { _z: 1, _x: 1, _y: 0, geometry: { type: 'Point', coordinates: [0, 10] } };
+    assert.deepEqual(tileVertices(onTheEdge), [[0, 10]]);
+    const noTile = { geometry: { type: 'LineString', coordinates: [[-0.5, 10], [10, 10]] } };
+    assert.deepEqual(tileVertices(noTile), [[-0.5, 10], [10, 10]], 'a feature without its tile keeps every position');
 });

@@ -20,6 +20,15 @@ public interface IProviderMapLayerRenderer
     /// </summary>
     bool ClearedWithFeatures { get; }
 
+    /// <summary>
+    /// Where <see cref="ProviderMapLayerRendererChain"/> asks this renderer (XD01-436): a higher precedence is asked first,
+    /// equal ones in registration order. A renderer that refines another one for some of its providers — as
+    /// <see cref="HybridLodMapLayerRenderer"/> refines <see cref="VectorFeatureMapLayerRenderer"/> for a provider whose
+    /// server serves tiles — declares <see cref="MapLayerRendererPrecedence.Refining"/>, so it wins whatever order the
+    /// renderers were registered in. Defaults to <see cref="MapLayerRendererPrecedence.Default"/>.
+    /// </summary>
+    int Precedence => MapLayerRendererPrecedence.Default;
+
     /// <summary>Whether this renderer draws <paramref name="provider"/> — decided from its
     /// <see cref="Core.Providers.AssetProviderExtensions.GetRenderCapabilities"/>, which looks
     /// through the decorator chain.</summary>
