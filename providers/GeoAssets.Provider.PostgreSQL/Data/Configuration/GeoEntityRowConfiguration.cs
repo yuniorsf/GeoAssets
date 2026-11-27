@@ -39,6 +39,13 @@ internal sealed class GeoEntityRowConfiguration : IEntityTypeConfiguration<GeoEn
          .HasColumnName("topology")
          .HasDefaultValue("[]");
 
+        ConfigureIndexes(e);
+
+        // Spatial index (GiST) — added via raw SQL in migration
+    }
+
+    private static void ConfigureIndexes(EntityTypeBuilder<GeoEntityRow> e)
+    {
         e.HasIndex(x => x.AssetTypeId);
         e.HasIndex(x => x.LayerId);
         e.HasIndex(x => x.OrganizationId);
@@ -60,12 +67,14 @@ internal sealed class GeoEntityRowConfiguration : IEntityTypeConfiguration<GeoEn
         // as the ticket itself flagged as a separate, larger effort (XD01-171).
         e.HasIndex(x => x.CustomAttributesJson, "IX_geo_entity_custom_attributes").HasMethod("gin");
 
+        // A store-served organization's ancestors walk the edges backwards (XD01-449): which rows have an edge whose
+        // targetId is a given id — topology @> '[{"targetId": …}]', a containment this jsonb_path_ops GIN index serves.
+        e.HasIndex(x => x.TopologyJson, "IX_geo_entity_topology").HasMethod("gin").HasOperators("jsonb_path_ops");
+
         // B-tree indexes for GetPageAsync's non-default SortBy paths ("name"/"createdAt"/
         // "updatedAt") — only the default Id sort was index-backed via the PK (XD01-171).
         e.HasIndex(x => x.Name, "IX_geo_entity_Name");
         e.HasIndex(x => x.CreatedAt);
         e.HasIndex(x => x.UpdatedAt);
-
-        // Spatial index (GiST) — added via raw SQL in migration
     }
 }

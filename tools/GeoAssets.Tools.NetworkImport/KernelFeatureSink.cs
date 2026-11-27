@@ -30,9 +30,7 @@ internal sealed class KernelFeatureSink(
         var catalog = await client.GetAssetTypesAsync(cancellationToken).ConfigureAwait(false);
         foreach (var assetClass in classes)
         {
-            var existing = catalog.FirstOrDefault(type => type.Roles.Contains(assetClass.Role, StringComparer.Ordinal))
-                ?? catalog.FirstOrDefault(type => type.Id == assetClass.TypeId)
-                ?? catalog.FirstOrDefault(type => assetClass.ReuseRoles.Any(role => type.Roles.Contains(role, StringComparer.Ordinal)));
+            var existing = AssetTypeResolution.Existing(catalog, assetClass);
             if (existing is null)
             {
                 existing = new AssetType

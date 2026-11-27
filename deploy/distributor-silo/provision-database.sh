@@ -20,6 +20,9 @@
 #   POSTGRES_PASSWORD   used instead of reading SERVER_ENV_FILE
 #   POSTGRES_CONTAINER  the deploy/server Postgres container                   (default: PostgresL)
 #   POSTGRES_HOST_PORT  its published host port, for dotnet ef               (default: 5433)
+#   MIGRATION_COMMAND_TIMEOUT  seconds one migration statement may run (default: 1800; 0 = no limit). Npgsql's default
+#                       30 s is too short for a migration that rewrites geo_entity on a large company (XD01-449: the
+#                       geom_3857 generated column of XD01-432 on COELBA's 784 k features).
 #
 # Requires docker and the dotnet-ef tool (`dotnet tool install --global dotnet-ef`). Prints no secret.
 set -euo pipefail
@@ -87,7 +90,7 @@ fi
 # The silo database as ConnectionStrings:GeoAssets, which both design-time paths read: GeoAssetsDbContextFactory (the
 # provider project) and GeoAssets.Server's own host (dotnet ef builds and starts its Program up to Build()) — the latter
 # with Production settings and no module (the module list reader skips blank entries).
-connection="Host=localhost;Port=${postgres_host_port};Database=${database};Username=postgres;Password=${password}"
+connection="Host=localhost;Port=${postgres_host_port};Database=${database};Username=postgres;Password=${password};Command Timeout=${MIGRATION_COMMAND_TIMEOUT:-1800}"
 export ASPNETCORE_ENVIRONMENT=Production
 export DOTNET_ENVIRONMENT=Production
 export GeoAssets__Modules__0=

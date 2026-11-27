@@ -45,6 +45,38 @@ public sealed class VerifyCommandTests
     }
 
     [Fact]
+    public async Task Verify_AClassImportMappedOntoAnExistingTypeByRole_ExpectsThatType()
+    {
+        using var temp = new TempDirectory();
+        var lvSegment = NetworkImportInputs.Profile("neoenergia-gse").AssetClasses.Single(c => string.Equals(c.Name, "LvSegment", StringComparison.Ordinal));
+        var seeded = new AssetType { Id = Guid.Parse("00000000-0000-0000-0000-000000000006"), Name = "Low tension wire", Roles = [lvSegment.Role] };
+        var planned = new[] { Feature("lv-1", lvSegment.TypeId.ToString()) };
+        var handler = new FakeKernelHandler { FeatureLookup = id => Feature(id, seeded.Id.ToString()) };
+        handler.ExistingAssetTypes.Add(seeded);
+
+        var result = await CliRunner.RunAsync(handler, VerifyArgs(await WriteFeaturesAsync(temp, planned)));
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("Verified 1 of 1");
+    }
+
+    [Fact]
+    public async Task Verify_AClassStoredUnderItsOwnTypeInsteadOfTheReusedOne_IsAMismatch()
+    {
+        using var temp = new TempDirectory();
+        var lvSegment = NetworkImportInputs.Profile("neoenergia-gse").AssetClasses.Single(c => string.Equals(c.Name, "LvSegment", StringComparison.Ordinal));
+        var seeded = new AssetType { Id = Guid.Parse("00000000-0000-0000-0000-000000000006"), Name = "Low tension wire", Roles = [lvSegment.Role] };
+        var planned = new[] { Feature("lv-1", lvSegment.TypeId.ToString()) };
+        var handler = new FakeKernelHandler { FeatureLookup = id => Feature(id, lvSegment.TypeId.ToString()) };
+        handler.ExistingAssetTypes.Add(seeded);
+
+        var result = await CliRunner.RunAsync(handler, VerifyArgs(await WriteFeaturesAsync(temp, planned)));
+
+        result.ExitCode.Should().Be(3);
+        result.Output.Should().Contain($"expected {seeded.Id}");
+    }
+
+    [Fact]
     public async Task Verify_SendsTheBearerTokenAndTenantHeader()
     {
         using var temp = new TempDirectory();

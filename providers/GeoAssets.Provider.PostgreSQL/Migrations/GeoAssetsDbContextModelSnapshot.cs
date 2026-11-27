@@ -373,6 +373,11 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "CustomAttributesJson" }, "IX_geo_entity_custom_attributes"), "gin");
 
+                    b.HasIndex(new[] { "TopologyJson" }, "IX_geo_entity_topology");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "TopologyJson" }, "IX_geo_entity_topology"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "TopologyJson" }, "IX_geo_entity_topology"), new[] { "jsonb_path_ops" });
+
                     b.ToTable("geo_entity", (string)null);
                 });
 

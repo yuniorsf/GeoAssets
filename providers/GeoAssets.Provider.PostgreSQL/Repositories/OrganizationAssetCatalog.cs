@@ -3,6 +3,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Rendering;
+using GeoAssets.Core.Services;
 
 namespace GeoAssets.Provider.PostgreSQL.Repositories;
 
@@ -34,6 +35,12 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///   carry no organization and are the shared catalog's, as before.</item>
 /// </list>
 ///
+/// <para><b>A large organization (XD01-449).</b> When the organization's own provider serves its features from
+/// PostgreSQL rather than from a whole cache, the reads above still combine both parts (its enumerating ones refused beyond
+/// its enumeration limit), and the topology queries (<see cref="GetNeighbors(string)"/>, <see cref="GetDescendants(string)"/>,
+/// <see cref="GetAncestors"/>) run in SQL over the organization's and the shared rows instead of over
+/// <see cref="GetAll"/>, with the same answers.</para>
+///
 /// <para><b>No organization.</b> Built without an organization's provider, every member is the
 /// shared catalog's, unchanged — what an unauthenticated or organization-less caller had before
 /// (its writes keep the organization the feature states; only the shared catalog's own refusal
@@ -46,14 +53,17 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
 {
     private readonly IAssetProvider _shared;
     private readonly IAssetProvider? _own;
+    private readonly PostgresAssetProvider? _ownStore;
 
-    internal OrganizationAssetCatalog(Guid organizationId, IAssetProvider shared, IAssetProvider? own)
+    /// <param name="ownStore">The PostgreSQL provider behind <paramref name="own"/>, whose topology queries run in SQL once it serves from PostgreSQL (XD01-449).</param>
+    internal OrganizationAssetCatalog(Guid organizationId, IAssetProvider shared, IAssetProvider? own, PostgresAssetProvider? ownStore = null)
     {
         ArgumentNullException.ThrowIfNull(shared);
 
         OrganizationId = organizationId;
         _shared = shared;
         _own = own;
+        _ownStore = own is null ? null : ownStore;
     }
 
     /// <summary>The organization this view is for; <see cref="Guid.Empty"/> for the shared-only view.</summary>
@@ -102,6 +112,27 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
             .Concat(_shared.GetNearby(center, distanceDegrees))
             .OrderBy(f => f.Geometry!.Distance(center))];
     }
+
+    // ── Topology ───────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<GeoFeature> GetNeighbors(string featureId) => GetNeighbors(featureId, null);
+
+    public IReadOnlyList<GeoFeature> GetNeighbors(string featureId, string? edgeKind, string? targetAssetTypeId = null) =>
+        StoreServing() is { } store
+            ? store.StoreNeighbors(featureId, edgeKind, targetAssetTypeId)
+            : TopoGraph.GetNeighbors(featureId, GetAll(), edgeKind, targetAssetTypeId);
+
+    public IReadOnlyList<GeoFeature> GetDescendants(string featureId) => GetDescendants(featureId, null);
+
+    public IReadOnlyList<GeoFeature> GetDescendants(string featureId, string? edgeKind, string? targetAssetTypeId = null) =>
+        StoreServing() is { } store
+            ? store.StoreDescendants(featureId, edgeKind, targetAssetTypeId)
+            : TopoGraph.GetDescendants(featureId, GetAll(), edgeKind, targetAssetTypeId);
+
+    public IReadOnlyList<GeoFeature> GetAncestors(string featureId) =>
+        StoreServing() is { } store
+            ? store.StoreAncestors(featureId)
+            : TopoGraph.GetAncestors(featureId, GetAll());
 
     // ── Write ──────────────────────────────────────────────────────────────────
 
@@ -261,6 +292,10 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    /// <summary>The organization's PostgreSQL provider when it serves from PostgreSQL; <c>null</c> while it caches whole.</summary>
+    private PostgresAssetProvider? StoreServing() =>
+        _ownStore is not null && _ownStore.UsesStoreReads() ? _ownStore : null;
 
     /// <summary>The part whose SQL covers both the organization's and the shared rows.</summary>
     private IAssetProvider Queried => _own ?? _shared;

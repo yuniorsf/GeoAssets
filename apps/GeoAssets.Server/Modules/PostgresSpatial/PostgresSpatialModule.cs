@@ -37,6 +37,8 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // (the host's singleton IAssetProvider, the shared catalog), registered as the host's IOrganizationCatalogFactory
         // (XD01-373); each request's IAssetProvider is the caller's organization's view.
         services.AddPostgresOrganizationAssetCatalogs(connectionString);
+        // Only an organization with few enough features is cached whole; a larger one is served from PostGIS (XD01-449).
+        services.AddOptions<OrganizationCatalogOptions>().BindConfiguration(OrganizationCatalogOptions.SectionName);
 
         // IAssetSpatialQuery (XD01-307): area/attribute selection pushed down to PostGIS, scoped to the request's tenant.
         services.AddPostgresAssetSpatialQuery(connectionString);
@@ -63,7 +65,12 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         services.AddPostgresFeatureBulkImporter(connectionString);
     }
 
-    public void UseMiddleware(IApplicationBuilder app) => app.UseOrganizationAssetCatalogs();
+    public void UseMiddleware(IApplicationBuilder app)
+    {
+        // A read too large for a PostGIS-served organization catalog answers 422, not 500 (XD01-449).
+        app.UseCatalogEnumerationLimitTranslation();
+        app.UseOrganizationAssetCatalogs();
+    }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
