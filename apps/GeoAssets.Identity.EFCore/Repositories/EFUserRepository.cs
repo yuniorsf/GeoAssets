@@ -51,6 +51,31 @@ public sealed class EFUserRepository(GeoIdentityDbContext db, TimeProvider timeP
     public async Task AddAsync(AppUser user, CancellationToken ct = default)
         => await db.Users.AddAsync(user, ct).ConfigureAwait(false);
 
+    /// <summary>
+    /// Adds and saves the just-provisioned user. Concurrent first requests of one user all find no row and all insert;
+    /// <c>IX_Users_ExternalObjectId</c> lets one through (XD01-475). A losing insert is discarded and the stored user read
+    /// back. A failure that left no such user is rethrown.
+    /// </summary>
+    public async Task<AppUser> ProvisionAsync(AppUser user, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var entry = await db.Users.AddAsync(user, ct).ConfigureAwait(false);
+        try
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            return user;
+        }
+        catch (DbUpdateException)
+        {
+            entry.State = EntityState.Detached;
+            var stored = await GetByExternalObjectIdAsync(user.ExternalObjectId, ct).ConfigureAwait(false);
+            if (stored is null)
+                throw;
+
+            return stored;
+        }
+    }
+
     public Task UpdateAsync(AppUser user, CancellationToken ct = default)
     {
         db.Users.Update(user);

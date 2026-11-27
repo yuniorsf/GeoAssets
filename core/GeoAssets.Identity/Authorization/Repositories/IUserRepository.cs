@@ -24,6 +24,19 @@ public interface IUserRepository
     Task AddAsync(AppUser user, CancellationToken ct = default);
     Task UpdateAsync(AppUser user, CancellationToken ct = default);
 
+    /// <summary>
+    /// Adds and saves <paramref name="user"/>, provisioned just in time on its first request. When a concurrent first
+    /// request already provisioned the same <see cref="AppUser.ExternalObjectId"/>, returns that stored user instead of
+    /// failing (XD01-475). The default only adds and saves, for a repository without concurrent writers.
+    /// </summary>
+    async Task<AppUser> ProvisionAsync(AppUser user, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        await AddAsync(user, ct).ConfigureAwait(false);
+        await SaveChangesAsync(ct).ConfigureAwait(false);
+        return user;
+    }
+
     Task AssignRoleAsync(Guid userId, Guid roleId, string? assignedBy = null, CancellationToken ct = default);
     Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
 
