@@ -25,4 +25,7 @@ public sealed class MapInteropOptions
     /// Defaults to <see cref="MapRenderMode.Leaflet"/> (SVG).
     /// </summary>
     public MapRenderMode RenderMode { get; set; } = MapRenderMode.Leaflet;
+
+    /// <summary>The <see cref="MapRenderMode.MapLibre"/> settings (XD01-435); ignored by the other modes.</summary>
+    public MapLibreOptions MapLibre { get; set; } = new();
 }

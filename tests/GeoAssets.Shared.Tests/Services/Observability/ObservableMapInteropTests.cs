@@ -169,6 +169,7 @@ public class ObservableMapInteropTests
     [InlineData(MapFeatureState.Selected, MapRenderMode.Leaflet, "selected", "leaflet")]
     [InlineData(MapFeatureState.Conflict, MapRenderMode.Canvas, "conflict", "canvas")]
     [InlineData(MapFeatureState.Default, MapRenderMode.WebGL, "default", "webgl")]
+    [InlineData(MapFeatureState.Pending, MapRenderMode.MapLibre, "pending", "maplibre")]
     public async Task SetFeatureStatesAsync_EmitsSpanWithCountStateAndRenderModeTags(
         MapFeatureState state, MapRenderMode renderMode, string expectedState, string expectedMode)
     {
@@ -258,6 +259,7 @@ public class ObservableMapInteropTests
     [InlineData(MapSelectionTool.ClickToggle, MapRenderMode.Canvas, "click", "canvas")]
     [InlineData(MapSelectionTool.Box, MapRenderMode.WebGL, "box", "webgl")]
     [InlineData(MapSelectionTool.Fence, MapRenderMode.Leaflet, "fence", "leaflet")]
+    [InlineData(MapSelectionTool.Box, MapRenderMode.MapLibre, "box", "maplibre")]
     public async Task SetSelectionToolAsync_ForwardsToInner_AndEmitsSpanWithToolAndRenderModeTags(
         MapSelectionTool tool, MapRenderMode renderMode, string expectedTool, string expectedMode)
     {
@@ -299,6 +301,7 @@ public class ObservableMapInteropTests
     [InlineData(15, null, MapRenderMode.Canvas, "canvas")]
     [InlineData(null, 13, MapRenderMode.WebGL, "webgl")]
     [InlineData(null, null, MapRenderMode.Leaflet, "leaflet")]
+    [InlineData(12, 18, MapRenderMode.MapLibre, "maplibre")]
     public async Task SetLayerZoomRangeAsync_ForwardsToInner_AndEmitsSpanWithBoundsAndRenderModeTags(
         int? min, int? max, MapRenderMode renderMode, string expectedMode)
     {
@@ -639,6 +642,7 @@ public class ObservableMapInteropTests
     [InlineData(MapRenderMode.Leaflet, "leaflet")]
     [InlineData(MapRenderMode.Canvas, "canvas")]
     [InlineData(MapRenderMode.WebGL, "webgl")]
+    [InlineData(MapRenderMode.MapLibre, "maplibre")]
     public async Task SetReferenceLayerAsync_ForwardsToInner_AndEmitsSpanWithSizeZoomAndRenderModeOnly(MapRenderMode renderMode, string expectedMode)
     {
         var inner = new FakeMapInterop();
