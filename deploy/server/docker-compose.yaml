@@ -7,6 +7,7 @@ services:
     # postgis/postgis publishes linux/amd64 only (its index lists no arm64 image): on Apple Silicon it runs emulated.
     image: postgis/postgis:16-3.5@sha256:94146ac37bc61e2322f88016056c5920729cb8c64c8542ed590af8fc2abdac07
     container_name: PostgresL
+    restart: unless-stopped
     environment:
       POSTGRES_DB: geoassets
       POSTGRES_USER: postgres
@@ -27,6 +28,7 @@ services:
 
   server:
     container_name: geoasset-server
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: apps/GeoAssets.Server/Dockerfile
@@ -72,6 +74,7 @@ services:
   # goes through untouched, CORS is answered here for the web origin.
   gateway:
     container_name: geoasset-gateway
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: apps/GeoAssets.Gateway/Dockerfile
