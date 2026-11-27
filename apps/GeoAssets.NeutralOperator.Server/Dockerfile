@@ -40,6 +40,12 @@ WORKDIR /app
 # No curl: the compose healthcheck (GET /healthz) uses bash's /dev/tcp.
 COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
+# XD01-469: GeoAssets never reaches PostgreSQL over Kerberos, and this image has no libgssapi_krb5.so.2, so Npgsql's
+# default GSS encryption probe (GSS Encryption Mode=Prefer) only wrote "Cannot load library libgssapi_krb5.so.2" to the
+# log on the first connection. PGGSSENCMODE, the libpq variable Npgsql reads as that setting's default, turns the probe
+# off for every connection the process opens, whatever supplies its connection string; a connection string's own
+# GSS Encryption Mode still wins.
+ENV PGGSSENCMODE=disable
 EXPOSE 8080
 # The image's unprivileged "app" user (APP_UID=1654).
 USER $APP_UID

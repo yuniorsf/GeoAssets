@@ -44,6 +44,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0.15@sha256:12b1135f5f8b3c0a214f2a680ff2
 WORKDIR /app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
+# XD01-469: GeoAssets never reaches PostgreSQL over Kerberos, and this image has no libgssapi_krb5.so.2, so Npgsql's
+# default GSS encryption probe (GSS Encryption Mode=Prefer) only wrote "Cannot load library libgssapi_krb5.so.2" to the
+# log on the first connection. PGGSSENCMODE, the libpq variable Npgsql reads as that setting's default, turns the probe
+# off for every connection the process opens, whatever supplies its connection string; a connection string's own
+# GSS Encryption Mode still wins.
+ENV PGGSSENCMODE=disable
 EXPOSE 8080
 # The image's unprivileged "app" user (APP_UID=1654).
 USER $APP_UID
