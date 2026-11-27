@@ -102,4 +102,105 @@ public sealed class PMTilesPackStorageTests : IDisposable
 
         act.Should().Throw<ArgumentException>();
     }
+
+    [Theory]
+    [InlineData(PMTilesTileType.Png)]
+    [InlineData(PMTilesTileType.Webp)]
+    public async Task ARasterPack_IsValidatedAndStreamedInLikeAVectorPack(PMTilesTileType tileType)
+    {
+        var source = TestRasterTiles.Archive(tileType, [new TileAddress(0, 0, 0)]).WriteTo(_picked.Path);
+        var storage = new PMTilesPackStorage(PacksDirectory);
+
+        using var pack = await storage.ImportAsync(source, CancellationToken.None);
+
+        pack.Kind.Should().Be(PMTilesPackKind.Raster);
+        pack.TileType.Should().Be(tileType);
+        pack.Path.Should().Be(Path.Combine(PacksDirectory, pack.Id + ".pmtiles"));
+        (await File.ReadAllBytesAsync(pack.Path)).Should().Equal(await File.ReadAllBytesAsync(source));
+        Directory.GetFiles(PacksDirectory).Should().ContainSingle("no temporary file is left behind");
+    }
+
+    [Fact]
+    public async Task ACorruptRasterPack_IsRefused_BeforeAnythingIsCopied()
+    {
+        var bytes = TestRasterTiles.Archive(PMTilesTileType.Png, [new TileAddress(0, 0, 0)]).Build();
+        var source = Path.Combine(_picked.Path, "basemap.pmtiles");
+        await File.WriteAllBytesAsync(source, bytes.AsMemory(0, PMTilesHeader.Size + 2));
+        var storage = new PMTilesPackStorage(PacksDirectory);
+
+        var act = () => storage.ImportAsync(source, CancellationToken.None);
+
+        await act.Should().ThrowAsync<PMTilesFormatException>();
+        Directory.Exists(PacksDirectory).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task APackLargerThanTheThreshold_IsNotCopied_UntilItsIdIsConfirmed()
+    {
+        var source = TestRasterTiles.Archive(PMTilesTileType.Png, [new TileAddress(0, 0, 0)]).WriteTo(_picked.Path);
+        var length = new FileInfo(source).Length;
+        var storage = new PMTilesPackStorage(PacksDirectory, largePackBytes: length - 1);
+
+        var act = () => storage.ImportAsync(source, CancellationToken.None);
+
+        var asked = (await act.Should().ThrowAsync<PMTilesPackSizeConfirmationException>()).Which;
+        asked.PackId.Should().Be(await PMTilesPack.ComputeIdAsync(source, CancellationToken.None));
+        asked.PackBytes.Should().Be(length);
+        asked.LargePackBytes.Should().Be(length - 1);
+        asked.FileName.Should().Be(Path.GetFileName(source));
+        asked.Message.Should().Contain("is a large offline map pack (1 MB)").And.Contain("Press Connect again to import it");
+        Directory.Exists(PacksDirectory).Should().BeFalse("nothing is copied before the user confirms");
+
+        var wrong = () => storage.ImportAsync(source, "0000000000000000", CancellationToken.None);
+        await wrong.Should().ThrowAsync<PMTilesPackSizeConfirmationException>("another pack's confirmation doesn't import this one");
+
+        using var pack = await storage.ImportAsync(source, asked.PackId, CancellationToken.None);
+        File.Exists(pack.Path).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task APackAtTheThreshold_IsCopiedWithoutAsking()
+    {
+        var source = TestPacks.Write(_picked.Path, [new TileAddress(0, 0, 0)]);
+        var storage = new PMTilesPackStorage(PacksDirectory, largePackBytes: new FileInfo(source).Length);
+
+        using var pack = await storage.ImportAsync(source, CancellationToken.None);
+
+        pack.Kind.Should().Be(PMTilesPackKind.Vector);
+        File.Exists(pack.Path).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ALargePackAlreadyStored_IsNotAskedAboutAgain()
+    {
+        var source = TestPacks.Write(_picked.Path, [new TileAddress(0, 0, 0)]);
+        string id;
+        using (var first = await new PMTilesPackStorage(PacksDirectory).ImportAsync(source, CancellationToken.None))
+            id = first.Id;
+        var strict = new PMTilesPackStorage(PacksDirectory, largePackBytes: 1);
+
+        using var again = await strict.ImportAsync(source, CancellationToken.None);
+        using var reopened = await strict.ImportAsync(again.Path, CancellationToken.None);
+
+        again.Id.Should().Be(id);
+        reopened.Path.Should().Be(again.Path);
+    }
+
+    [Fact]
+    public void TheThreshold_DefaultsTo1GiB_AndMustBePositive()
+    {
+        new PMTilesPackStorage(PacksDirectory).LargePackBytes.Should().Be(1024L * 1024 * 1024);
+        FluentActions.Invoking(() => new PMTilesPackStorage(PacksDirectory, 0)).Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(1, "1 MB")]
+    [InlineData(5L * 1024 * 1024, "5 MB")]
+    [InlineData(820L * 1024 * 1024, "820 MB")]
+    [InlineData(1024L * 1024 * 1024, "1 GB")]
+    [InlineData(3_650_722_201L, "3.4 GB")]
+    public void ASize_IsWrittenForAPerson(long bytes, string expected)
+    {
+        PMTilesPackSizeConfirmationException.FormatSize(bytes).Should().Be(expected);
+    }
 }

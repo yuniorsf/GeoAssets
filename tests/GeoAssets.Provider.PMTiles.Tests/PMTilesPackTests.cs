@@ -39,13 +39,59 @@ public sealed class PMTilesPackTests : IDisposable
     }
 
     [Fact]
-    public Task ARasterPack_IsRefused()
+    public async Task AVectorPack_IsAVectorPack()
     {
-        var path = new PMTilesTestArchive { TileType = PMTilesTileType.Png }.Add(new TileAddress(0, 0, 0), [1, 2, 3]).WriteTo(_directory.Path);
+        using var pack = await PMTilesPack.OpenAsync(TestPacks.Write(_directory.Path, [new TileAddress(0, 0, 0)]), CancellationToken.None);
+
+        pack.Kind.Should().Be(PMTilesPackKind.Vector);
+        pack.TileType.Should().Be(PMTilesTileType.Mvt);
+    }
+
+    [Fact]
+    public async Task APackOfAnUndeclaredTileType_IsStillReadAsVector()
+    {
+        var path = new PMTilesTestArchive { TileType = PMTilesTileType.Unknown }.Add(new TileAddress(0, 0, 0), TestPacks.PointTile("a")).WriteTo(_directory.Path);
+
+        using var pack = await PMTilesPack.OpenAsync(path, CancellationToken.None);
+
+        pack.Kind.Should().Be(PMTilesPackKind.Vector);
+    }
+
+    [Theory]
+    [InlineData(PMTilesTileType.Png)]
+    [InlineData(PMTilesTileType.Webp)]
+    [InlineData(PMTilesTileType.Jpeg)]
+    public async Task ARasterPack_Opens_AsARasterPack(PMTilesTileType tileType)
+    {
+        var path = TestRasterTiles.Archive(tileType, [new TileAddress(0, 0, 0)]).WriteTo(_directory.Path);
+
+        using var pack = await PMTilesPack.OpenAsync(path, CancellationToken.None);
+
+        pack.Kind.Should().Be(PMTilesPackKind.Raster);
+        pack.TileType.Should().Be(tileType);
+        pack.Id.Should().MatchRegex("^[0-9a-f]{16}$");
+    }
+
+    [Fact]
+    public Task AnAvifPack_IsRefused()
+    {
+        var path = new PMTilesTestArchive { TileType = PMTilesTileType.Avif }.Add(new TileAddress(0, 0, 0), [1, 2, 3]).WriteTo(_directory.Path);
 
         var act = () => PMTilesPack.OpenAsync(path, CancellationToken.None);
 
-        return act.Should().ThrowAsync<PMTilesFormatException>().WithMessage("*Png tiles*vector tiles*");
+        return act.Should().ThrowAsync<PMTilesFormatException>().WithMessage("*Avif tiles*vector tiles (MVT) or PNG, JPEG or WebP images*");
+    }
+
+    [Theory]
+    [InlineData(9, 4)]
+    [InlineData(25, 26)]
+    public Task ARasterPackWithoutZoomsAMapCanShow_IsRefused(byte minZoom, byte maxZoom)
+    {
+        var path = TestRasterTiles.Archive(PMTilesTileType.Png, [], minZoom, maxZoom).WriteTo(_directory.Path);
+
+        var act = () => PMTilesPack.OpenAsync(path, CancellationToken.None);
+
+        return act.Should().ThrowAsync<PMTilesFormatException>().WithMessage("*zooms*not ones a map can show*");
     }
 
     [Fact]

@@ -25,9 +25,11 @@ namespace GeoAssets.Shared.Services;
 /// <see cref="IAssetProvider.FeatureDeleted"/> and <see cref="IAssetProvider.CollectionChanged"/> schedules a re-read
 /// of the tile style (<see cref="MapTileStyleRefresher"/>), as does its periodic timer. The Leaflet modes do the same for a
 /// map once its kernel tile layer is shown (<see cref="ShowTileLayersAsync"/>, the interim Leaflet split of XD01-436), so a
-/// Leaflet map without one re-reads nothing.
+/// Leaflet map without one re-reads nothing. A local raster tile layer (<see cref="IMapLocalTileLayerInterop"/>, XD01-465)
+/// hands JS a <see cref="DotNetObjectReference{TValue}"/> of a <see cref="LocalRasterTileReader"/> per layer, kept until
+/// the layer is removed or this service is disposed.
 /// </summary>
-public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapTileLayerInterop, IAsyncDisposable
+public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapTileLayerInterop, IMapLocalTileLayerInterop, IAsyncDisposable
 {
     /// <summary>Maximum feature ids sent to <c>GeoAssets.setFeatureStates</c> in one JS call (XD01-309).</summary>
     public const int FeatureStateBatchSize = 2000;
@@ -50,6 +52,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
     private readonly ILogger _logger;
     private MapTileStyleRefresher? _styleRefresher;
     private Task? _mapLibreLoad;
+    private readonly Dictionary<(string DivId, string LayerId), DotNetObjectReference<LocalRasterTileReader>> _localRasterReaders = [];
 
     /// <summary>
     /// Compact (non-indented) options for the JS interop path.
@@ -114,6 +117,12 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
     public Task DestroyMapAsync(string divId)
     {
         _styleRefresher?.Detach(divId);
+        foreach (var key in _localRasterReaders.Keys.Where(k => string.Equals(k.DivId, divId, StringComparison.Ordinal)).ToList())
+        {
+            _localRasterReaders.Remove(key, out var reader);
+            reader?.Dispose();
+        }
+
         return CallAsync("destroyMap", divId);
     }
 
@@ -408,8 +417,67 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
         return _mapLibre ? CallAsync("setHiddenTileFeatures", divId, featureIds) : Task.CompletedTask;
     }
 
+    // ── Local raster tile layers (XD01-465) ───────────────────────────────────
+
+    /// <inheritdoc />
+    /// <remarks>Leaflet modes only: in <see cref="MapRenderMode.MapLibre"/> (the Web, which has no local packs) nothing is drawn.</remarks>
+    public async Task AddLocalRasterTileLayerAsync(string divId, string layerId, IRasterTileSource tiles, LocalRasterTileLayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(tiles);
+        ArgumentNullException.ThrowIfNull(layer);
+        if (_mapLibre) return;
+
+        // Asked again (every bulk render asks), the layer keeps its reader; JS adds it only when the map has none.
+        var added = !_localRasterReaders.TryGetValue((divId, layerId), out var reader);
+        if (added)
+        {
+            reader = DotNetObjectReference.Create(new LocalRasterTileReader(tiles, layer));
+            _localRasterReaders[(divId, layerId)] = reader;
+        }
+
+        try
+        {
+            await CallAsync("addLocalRasterLayer", divId, layerId, reader, new
+            {
+                contentType = layer.ContentType,
+                minZoom = layer.MinZoom,
+                maxZoom = layer.MaxZoom,
+                bounds = layer.Bounds is { } b ? new[] { b.MinLon, b.MinLat, b.MaxLon, b.MaxLat } : null,
+            });
+        }
+        catch
+        {
+            if (added)
+            {
+                _localRasterReaders.Remove((divId, layerId));
+                reader!.Dispose();
+            }
+
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveLocalRasterTileLayerAsync(string divId, string layerId)
+    {
+        if (!_localRasterReaders.Remove((divId, layerId), out var reader)) return;
+
+        try
+        {
+            await CallAsync("removeLocalRasterLayer", divId, layerId);
+        }
+        finally
+        {
+            reader.Dispose();
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
+        foreach (var reader in _localRasterReaders.Values)
+            reader.Dispose();
+        _localRasterReaders.Clear();
+
         if (_styleRefresher is null) return ValueTask.CompletedTask;
 
         _repo.FeatureAdded -= OnFeatureWritten;

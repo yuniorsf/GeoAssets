@@ -530,13 +530,14 @@ window.GeoAssets = (function () {
         const mode = (renderMode || 'leaflet').toLowerCase();
         const map  = L.map(divId, { zoomControl: true }).setView([lat, lon], zoom);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
         }).addTo(map);
 
         _maps[divId] = {
             map,
+            baseLayer,                  // the OpenStreetMap tiles; a local raster basemap goes above them (XD01-465)
             featureLayers:  new Map(),  // featureId → L.Layer (visual or event layer)
             layerGroups:    new Map(),  // assetTypeId → L.LayerGroup (leaflet/canvas only)
             tileLayers:     new Map(),
@@ -1335,6 +1336,85 @@ window.GeoAssets = (function () {
         }
     }
 
+    // ─── Local raster tile layers: offline raster map packs (XD01-465) ────────
+    // Each tile is asked of .NET (the layer's LocalRasterTileReader, GetTileFromJs) and its image bytes shown as a blob:
+    // object URL — read on the device, nothing fetched, and blob: is already in MAUI's img-src. The layer is a basemap: in
+    // the tile pane at z-index 0, with the OpenStreetMap layer moved below it (-1), so it covers OSM inside its bounds and
+    // stays under every other tile layer (WMS, the kernel's raster tiles: z-index 1) and all features (overlay pane).
+    // Past the pack's highest zoom Leaflet scales that zoom's tiles up; below its lowest nothing is drawn.
+
+    const LOCAL_RASTER_Z_INDEX = 0;
+    // A transparent 1×1 GIF: a tile the pack doesn't have still "loads", so Leaflet doesn't count it as an error.
+    const EMPTY_TILE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    function releaseLocalTile(tile) {
+        if (!tile) return;
+        tile._geoCancelled = true;
+        if (tile._geoObjectUrl) { URL.revokeObjectURL(tile._geoObjectUrl); tile._geoObjectUrl = null; }
+    }
+
+    const LocalRasterLayer = L.TileLayer.extend({
+        initialize: function (options, reader, contentType) {
+            L.TileLayer.prototype.initialize.call(this, '', options);
+            this._geoReader      = reader;
+            this._geoContentType = contentType;
+            this.on('tileunload tileabort', e => releaseLocalTile(e.tile));
+        },
+
+        createTile: function (coords, done) {
+            const tile = document.createElement('img');
+            tile.alt = '';
+            tile.setAttribute('role', 'presentation');
+            L.DomEvent.on(tile, 'load', L.Util.bind(this._tileOnLoad, this, done, tile));
+            L.DomEvent.on(tile, 'error', L.Util.bind(this._tileOnError, this, done, tile));
+            L.DomEvent.on(tile, 'load error', () => {
+                if (tile._geoObjectUrl) { URL.revokeObjectURL(tile._geoObjectUrl); tile._geoObjectUrl = null; }
+            });
+
+            this._geoReader.invokeMethodAsync('GetTileFromJs', coords.z, coords.x, coords.y)
+                .then(bytes => {
+                    if (tile._geoCancelled) return;
+                    if (!bytes || bytes.length === 0) { tile.src = EMPTY_TILE; return; }
+                    tile._geoObjectUrl = URL.createObjectURL(new Blob([bytes], { type: this._geoContentType }));
+                    tile.src = tile._geoObjectUrl;
+                })
+                .catch(err => {
+                    if (!tile._geoCancelled) done(err, tile);
+                });
+            return tile;
+        }
+    });
+
+    // options = { contentType, minZoom, maxZoom, bounds: [west, south, east, north] | null } — the pack's.
+    function addLocalRasterLayer(divId, layerId, reader, options) {
+        const state = _maps[divId];
+        if (!state || state.tileLayers.has(layerId)) return; // idempotent
+        const b = options?.bounds;
+        const layer = new LocalRasterLayer({
+            minZoom:       options?.minZoom ?? 0,
+            minNativeZoom: options?.minZoom ?? 0,
+            maxNativeZoom: options?.maxZoom ?? 19,
+            maxZoom:       19,
+            bounds:        b && b.length >= 4 ? L.latLngBounds([b[1], b[0]], [b[3], b[2]]) : undefined,
+            tileSize:      256,
+            zIndex:        LOCAL_RASTER_Z_INDEX,
+            attribution:   ''
+        }, reader, options?.contentType || 'image/png');
+        layer.addTo(state.map);
+        state.baseLayer?.setZIndex(LOCAL_RASTER_Z_INDEX - 1);
+        state.tileLayers.set(layerId, layer);
+    }
+
+    function removeLocalRasterLayer(divId, layerId) {
+        const state = _maps[divId];
+        if (!state) return;
+        const layer = state.tileLayers.get(layerId);
+        if (layer) {
+            state.map.removeLayer(layer);
+            state.tileLayers.delete(layerId);
+        }
+    }
+
     // ─── The kernel's tiles: the interim Leaflet split (XD01-436) ─────────────
     // HybridLodMapLayerRenderer draws the kernel's provider entry in the Leaflet modes (MapInterop:LeafletTileSplit) as
     // the raster tiles of /tiles/style.json (XD01-434) at the zooms of its raster tier, and as features at the others —
@@ -1944,6 +2024,8 @@ window.GeoAssets = (function () {
         removeTileLayer,
         addWmsLayer,
         removeWmsLayer,
+        addLocalRasterLayer,
+        removeLocalRasterLayer,
         showTileLayers,
         hideTileLayers,
         setHiddenTileFeatures,
