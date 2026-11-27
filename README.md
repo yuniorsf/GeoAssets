@@ -158,6 +158,10 @@ cd apps/GeoAssets.Web
 dotnet run
 ```
 
+### Run the MAUI app on a device
+
+Build, install and verify it per platform (Android, iOS, Mac Catalyst) with [`docs/runbooks/maui-device-verification.md`](docs/runbooks/maui-device-verification.md).
+
 ### Run the example projects
 
 ```bash
