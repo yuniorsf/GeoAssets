@@ -177,6 +177,14 @@ startup, before the app starts serving requests — `GeoAssets.Server`'s
 `providers/GeoAssets.Provider.PostgreSQL/PostgresServiceExtensions.cs`), not
 lazily on first resolve (XD01-173).
 
+That is fine for an empty or small database. On a populated one, a migration that rewrites `geo_entity` is different.
+XD01-432's `geom_3857` and XD01-457's `geom_3857_centroid` hold an `ACCESS EXCLUSIVE` lock for about 1 min and 30 s
+per million rows respectively, on native hardware. Under the startup's default 30 s command timeout, such a migration is retried seven times and
+fails the startup after about 4.5 min, without applying anything. Apply those migrations by hand, with writes frozen,
+**before** you roll the new image: see
+[`docs/runbooks/geo-entity-table-rewrites.md`](../../docs/runbooks/geo-entity-table-rewrites.md) (XD01-467) for the
+pre-checks, the window, the command, the verification queries and the rollback.
+
 `ServiceOrderDbContext` (workflow tables) and `ProjectDbContext` (XD01-139
 Project persistence) do **not** auto-migrate — apply each manually once,
 from the repo root, after `postgres` is up:

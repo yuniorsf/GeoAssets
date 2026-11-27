@@ -95,6 +95,13 @@ No `NeutralOperatorDbContext` or `FieldServiceDbContext` chain is needed, becaus
 script can be re-run. After a ticket adds a kernel migration, run it again for every company. A silo started against a
 database with a missing migration crashes at boot with `42703 column … does not exist`.
 
+A new company's database is still empty when the script migrates it, so no migration costs anything. A company that
+was already imported is different. For it, a migration that rewrites `geo_entity` locks the table for the whole
+rewrite. XD01-457's `geom_3857_centroid` is one: about 30 s per million rows on native hardware, longer on the
+emulated amd64 image. Stop the silo first, run the script in a write-frozen window, then start the silo on the new
+image. The runbook [`docs/runbooks/geo-entity-table-rewrites.md`](../../docs/runbooks/geo-entity-table-rewrites.md)
+(XD01-467) has the pre-checks (rows, size, free disk), the timings, the verification queries and the rollback.
+
 ## Start, stop, logs
 
 ```bash
