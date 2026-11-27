@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace GeoAssets.Provider.PostgreSQL;
 
@@ -23,7 +24,9 @@ public static class PostgresOrganizationCatalogServiceExtensions
     /// the host's <see cref="ITileInvalidation"/> when it registers one (XD01-432) — is registered as the host's
     /// <see cref="IOrganizationCatalogFactory"/> (XD01-373). Each request's <see cref="IAssetProvider"/> is the factory's
     /// catalog for the request's <see cref="ITenantContext"/>: that organization's features plus the shared ones; the shared
-    /// ones alone for <see cref="Guid.Empty"/> or when no <see cref="ITenantContext"/> is registered. Each organization's
+    /// ones alone for <see cref="Guid.Empty"/> or when no <see cref="ITenantContext"/> is registered. Which organizations are
+    /// cached whole and how the others are served from PostgreSQL is <see cref="OrganizationCatalogOptions"/> (XD01-449;
+    /// bind <see cref="OrganizationCatalogOptions.SectionName"/> to configure it). Each organization's
     /// provider uses <paramref name="connectionString"/>, which must be the shared catalog's database. A
     /// <see cref="TimeProvider"/> is added when none is registered.
     /// </summary>
@@ -43,12 +46,14 @@ public static class PostgresOrganizationCatalogServiceExtensions
             .Options;
 
         services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<OrganizationCatalogOptions>();
         services.AddSingleton(sp => new PostgresOrganizationAssetCatalogs(
             options,
             sp.GetRequiredKeyedService<IAssetProvider>(SharedCatalogKey),
             sp.GetRequiredService<ILoggerFactory>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetService<ITileInvalidation>()));
+            sp.GetService<ITileInvalidation>(),
+            sp.GetRequiredService<IOptions<OrganizationCatalogOptions>>().Value));
         services.AddSingleton<IOrganizationCatalogFactory>(sp => sp.GetRequiredService<PostgresOrganizationAssetCatalogs>());
         services.AddScoped(sp => sp.GetRequiredService<IOrganizationCatalogFactory>()
             .GetForOrganization(sp.GetService<ITenantContext>()?.CurrentOrganizationId ?? Guid.Empty));

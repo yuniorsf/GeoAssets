@@ -38,10 +38,10 @@ Files:
 - The .NET 10 SDK and the EF Core tool: `dotnet tool install --global dotnet-ef`.
 - `curl` and `jq`, for the organization call below.
 - A CIAM app registration with the kernel API's `GeoAssets.ServiceCaller` app role, for the CLI (see [Credentials](#credentials-the-geoassetsservicecaller-registration)).
-- Disk and memory: every silo is one more .NET process. Until XD01-449, the kernel loads an organization's whole catalog
-  into memory on its first read, about 9.3 KiB per feature (see [Measurements](#measurements-xd01-448)): an organization
-  of 547 k features takes 5.1 GiB, and COELBA's METROPOLITANA (784 k) does not fit in a 6 GiB silo. The database needs
-  about 11 KB per feature (8.5 GB for METROPOLITANA).
+- Disk and memory: every silo is one more .NET process, capped at `SILO_MEMORY_LIMIT` (default `6g`; see
+  [Measurements](#measurements-xd01-448-xd01-449)). An organization with more than 50,000 features is served from PostGIS,
+  not cached whole (XD01-449): COELBA's METROPOLITANA (784 k features) runs in about 200 MiB. The database needs about
+  11 KB per feature (8.5 GB for METROPOLITANA).
 
 ## Provision a company (COELBA)
 
@@ -71,7 +71,9 @@ curl -fsS http://127.0.0.1:8180/healthz
    exist yet.
 3. Applies the four EF Core chains with the design-time settings GeoAssets.Server needs: `ASPNETCORE_ENVIRONMENT=Production`,
    `DOTNET_ENVIRONMENT=Production`, `GeoAssets__Modules__0=` / `__1=` / `__2=` (blank means no module), and
-   `ConnectionStrings__GeoAssets` = the silo database on `localhost:5433`. It runs them in the order the server tests use
+   `ConnectionStrings__GeoAssets` = the silo database on `localhost:5433`, with a 1,800 s command timeout
+   (`MIGRATION_COMMAND_TIMEOUT`; Npgsql's 30 s default is too short for a migration that rewrites `geo_entity` on a large
+   company — XD01-432's `geom_3857` took about 1 min 40 s on COELBA's 784 k features). It runs them in the order the server tests use
    on a fresh database (`tests/GeoAssets.Server.Tests/Routing/ServerHostFixture.cs`, lines 199–214):
 
 ```bash
@@ -364,17 +366,21 @@ docker exec PostgresL psql -U postgres -d postgres -c 'DROP DATABASE "geoassets_
 Never run `docker compose down -v` on `deploy/server` and never `docker volume rm server_geoassets-postgres-data`. Every
 silo's database lives in that volume, next to the shared kernel's.
 
-## Measurements (XD01-448)
+## Measurements (XD01-448, XD01-449)
 
-The scale gate's results and how to re-measure them are in
-[`docs/perf/XD01-448-metropolitana-scale-gate.md`](../../docs/perf/XD01-448-metropolitana-scale-gate.md). In short:
+The scale gate ([`docs/perf/XD01-448-metropolitana-scale-gate.md`](../../docs/perf/XD01-448-metropolitana-scale-gate.md))
+and the bounded organization catalog that fixed it
+([`docs/perf/XD01-449-bounded-organization-catalog.md`](../../docs/perf/XD01-449-bounded-organization-catalog.md)). In short:
 
 - `import` handles METROPOLITANA (783,827 features, 160 chunks) at about 1,100 features/s when inserting and 690/s when
-  upserting, and resumes from its checkpoint. The database then matches the plan exactly.
-- The silo starts in about 3.5 s and loads no organization at boot. The organization's **first read** loads its whole
-  catalog: 9.1 s and 5.1 GiB for 547 k features. For the 784 k features of METROPOLITANA it fails with
-  `OutOfMemoryException` (500) in a 6 GiB silo, retries the load on every request, and `/healthz` stays 200.
-- So until XD01-449 (bounded/lazy organization catalog) ships, a silo can **store** a region of this size but not
-  **serve** it. Cap the silo's memory (`docker update --memory 6g --memory-swap 6g geoasset-server-<company>`, then
-  restart it so the GC sees the cap): an uncapped silo that runs out of memory makes the Docker VM kill a process, and that
-  can be the shared Postgres.
+  upserting, and resumes from its checkpoint. `verify` then passes (2,000 of 2,000 sampled).
+- The silo starts in about 2 s. An organization with more than `GeoAssets__OrganizationCatalogs__FullCacheMaxFeatures`
+  (default 50,000) features is served from PostGIS: its first read answers in a few seconds, later reads by id in 1–3 ms,
+  and the silo stays around 200 MiB. Before XD01-449 the same read loaded the whole catalog and failed with
+  `OutOfMemoryException`.
+- A read that would return more than `GeoAssets__OrganizationCatalogs__EnumerationLimit` (default 10,000) features of
+  such an organization (`GET /api/geoassets/features`, a topology walk, a selection strategy) answers
+  `422 catalog.enumeration-limit`: narrow it with a bounding box, a page (`POST /api/geoassets/features/query`) or a closer
+  seed. WFS GetFeature without BBOX returns at most 10,000 features per page (`COUNT`, `STARTINDEX`).
+- The silo is capped at `SILO_MEMORY_LIMIT` (default `6g`) so the runtime sizes its GC to it: running out of memory fails
+  a request instead of letting the Docker VM kill a process, which can be the shared Postgres.

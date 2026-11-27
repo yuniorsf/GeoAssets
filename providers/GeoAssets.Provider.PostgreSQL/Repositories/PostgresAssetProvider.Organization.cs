@@ -33,15 +33,22 @@ public sealed partial class PostgresAssetProvider
     private readonly ITenantContext? _organization;
 
     /// <summary>A provider for <paramref name="organizationId"/>'s features — see the type's remarks.</summary>
+    /// <param name="catalogOptions">
+    /// When set, the provider caches its features whole only while they are at most
+    /// <see cref="OrganizationCatalogOptions.FullCacheMaxFeatures"/>, and serves them from PostgreSQL otherwise (XD01-449);
+    /// <c>null</c> = always cached whole, as before.
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="organizationId"/> is <see cref="Guid.Empty"/>.</exception>
     internal PostgresAssetProvider(
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         Guid organizationId,
         ILogger<PostgresAssetProvider> logger,
         TimeProvider timeProvider,
-        ITileInvalidation? tileInvalidation = null)
+        ITileInvalidation? tileInvalidation = null,
+        OrganizationCatalogOptions? catalogOptions = null)
         : this(dbOptions, OrganizationOf(organizationId), logger, timeProvider, tileInvalidation)
     {
+        _readLimits = catalogOptions;
     }
 
     private PostgresAssetProvider(

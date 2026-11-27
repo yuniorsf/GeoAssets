@@ -7,7 +7,8 @@ namespace GeoAssets.Tools.NetworkImport;
 
 /// <summary>
 /// <c>verify</c>: reads the first <see cref="NetworkImportOptions.Sample"/> features of a plan's NDJSON and checks
-/// each exists in the kernel, as the organization sees it, with the same asset type. Mismatches are printed and the
+/// each exists in the kernel, as the organization sees it, with the asset type import gave it — the plan's class type, or
+/// the kernel's existing type import reused for it (<see cref="AssetTypeResolution"/>). Mismatches are printed and the
 /// run exits with <see cref="NetworkImportExitCodes.KernelFailure"/>.
 /// </summary>
 internal sealed class VerifyCommand(NetworkImportOptions options, NetworkImportDependencies dependencies, TextWriter stdout)
@@ -20,14 +21,16 @@ internal sealed class VerifyCommand(NetworkImportOptions options, NetworkImportD
 
         using var http = new HttpClient(dependencies.Handler, disposeHandler: false) { BaseAddress = kernelUrl };
         var client = new KernelClient(http, tokens, dependencies.TimeProvider, options.TenantDomain);
+        var kernelTypeOf = AssetTypeResolution.PlannedToKernel(await client.GetAssetTypesAsync(cancellationToken).ConfigureAwait(false));
         var mismatches = new List<string>();
         foreach (var feature in expected)
         {
             var actual = await client.GetFeatureAsync(organizationId, feature.Id, cancellationToken).ConfigureAwait(false);
+            var expectedType = kernelTypeOf(feature.Properties.AssetTypeId);
             if (actual is null)
                 mismatches.Add($"{feature.Id}: missing");
-            else if (!string.Equals(actual.Properties.AssetTypeId, feature.Properties.AssetTypeId, StringComparison.OrdinalIgnoreCase))
-                mismatches.Add($"{feature.Id}: asset type {actual.Properties.AssetTypeId}, expected {feature.Properties.AssetTypeId}");
+            else if (!string.Equals(actual.Properties.AssetTypeId, expectedType, StringComparison.OrdinalIgnoreCase))
+                mismatches.Add($"{feature.Id}: asset type {actual.Properties.AssetTypeId}, expected {expectedType}");
         }
 
         foreach (var mismatch in mismatches)

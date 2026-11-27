@@ -87,6 +87,8 @@ public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchAppli
         var db = new GeoAssetsDbContext(options, tenant);
         var postgres = new PostgresAssetProvider(
             db, options, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider, _tileInvalidation);
+        // Reads by id through the batch's own transaction, never a load of the organization's whole catalog (XD01-449).
+        postgres.ServeFromStoreThroughWriteContext();
         var catalog = new ValidatingAssetProvider(postgres);
         var store = new EFAppliedMutationBatchStore(db);
         await using (db.ConfigureAwait(false))

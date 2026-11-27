@@ -1,5 +1,8 @@
 # COELBA METROPOLITANA scale gate (XD01-448)
 
+> **Fixed by XD01-449** (`docs/perf/XD01-449-bounded-organization-catalog.md`): an organization of more than 50,000
+> features is now served from PostGIS; the same first read answers 200 and the silo stays around 200 MiB.
+
 **Verdict: the gate fails.** The kernel cannot serve the organization that holds METROPOLITANA (783,827 features) in a
 6 GiB container. The first read loads the whole organization catalog into memory (`PostgresAssetProvider.WarmCacheAsync`),
 and that load throws `OutOfMemoryException`. The bounded/lazy catalog (XD01-449) is therefore a prerequisite for

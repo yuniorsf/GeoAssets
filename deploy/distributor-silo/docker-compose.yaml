@@ -45,6 +45,10 @@ services:
       # Blank entries are dropped (KernelAudiences.Resolve).
       AzureAdCiam__AdditionalAudiences__0: ${AzureAdCiam__AdditionalAudiences__0:-}
       AzureAdCiam__AdditionalAudiences__1: ${AzureAdCiam__AdditionalAudiences__1:-}
+    # A hard memory cap (XD01-449): the runtime sizes its GC to it, so running out of memory fails one request with
+    # OutOfMemoryException instead of the Docker VM killing a process — possibly the shared Postgres (XD01-448).
+    mem_limit: ${SILO_MEMORY_LIMIT:-6g}
+    memswap_limit: ${SILO_MEMORY_LIMIT:-6g}
     labels:
       geoassets.silo.company: ${COMPANY}
       geoassets.silo.tenant-domain: ${TENANT_DOMAIN:?set TENANT_DOMAIN in the silo env file}

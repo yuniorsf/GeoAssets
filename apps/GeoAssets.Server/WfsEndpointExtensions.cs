@@ -40,6 +40,11 @@ public static class WfsEndpointExtensions
     private static readonly XNamespace _ows = "http://www.opengis.net/ows/1.1";
     private static readonly XNamespace _xlink = "http://www.w3.org/1999/xlink";
 
+    /// <summary>The most features one GetFeature without BBOX returns, COUNT absent or larger (XD01-449).</summary>
+    public const int MaxFeaturesPerPage = 10_000;
+
+    private const string FeatureTypePrefix = "geoassets:feature:";
+
     private static readonly JsonSerializerOptions _geoOpts = GeoJsonSerializer.CompactOptions;
     private static readonly JsonSerializerOptions _schemaOpts = new()
     {
@@ -184,10 +189,12 @@ public static class WfsEndpointExtensions
         var startIndex = int.TryParse(param("STARTINDEX"), CultureInfo.InvariantCulture, out var si) ? si : 0;
         var bboxRaw    = param("BBOX");
 
+        if (string.IsNullOrEmpty(bboxRaw))
+            return await HandleGetFeaturePageAsync(typeName, count, startIndex, provider, timeProvider).ConfigureAwait(false);
+
         IReadOnlyList<GeoFeature> matched;
 
         // BBOX: minLon,minLat,maxLon,maxLat[,srsName]  (lon/lat, EPSG:4326)
-        if (!string.IsNullOrEmpty(bboxRaw))
         {
             var parts = bboxRaw.Split(',');
             if (parts.Length < 4 ||
@@ -205,17 +212,6 @@ public static class WfsEndpointExtensions
 
             matched = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
         }
-        else if (!string.IsNullOrEmpty(typeName) &&
-                 typeName.StartsWith("geoassets:feature:", StringComparison.OrdinalIgnoreCase))
-        {
-            // Filter by asset type ID encoded in the type name
-            var assetTypeId = typeName["geoassets:feature:".Length..];
-            matched = provider.GetByAssetType(assetTypeId);
-        }
-        else
-        {
-            matched = provider.GetAll();
-        }
 
         // Apply paging
         var page = matched
@@ -228,6 +224,35 @@ public static class WfsEndpointExtensions
             NumberReturned: page.Count,
             TimeStamp:      timeProvider.GetUtcNow().UtcDateTime.ToString("O"),
             Features:       page);
+
+        return Results.Json(response, _geoOpts, contentType: "application/json");
+    }
+
+    /// <summary>
+    /// GetFeature without BBOX (XD01-449): one page in the catalog's store (<see cref="IAssetProvider.GetPageAsync"/>), of the
+    /// type encoded in TYPENAMES (<c>geoassets:feature:{assetTypeId}</c>) or of every type, at most
+    /// <see cref="MaxFeaturesPerPage"/> features (COUNT absent or larger), <c>NumberMatched</c> the store's exact count —
+    /// never the whole catalog in memory.
+    /// </summary>
+    private static async Task<IResult> HandleGetFeaturePageAsync(
+        string typeName, int count, int startIndex, IAssetProvider provider, TimeProvider timeProvider)
+    {
+        var assetTypeId = !string.IsNullOrEmpty(typeName) && typeName.StartsWith(FeatureTypePrefix, StringComparison.OrdinalIgnoreCase)
+            ? typeName[FeatureTypePrefix.Length..]
+            : null;
+
+        var page = await provider.GetPageAsync(new AssetQuery
+        {
+            AssetTypeId = assetTypeId,
+            Skip = Math.Max(0, startIndex),
+            Take = Math.Clamp(count, 0, MaxFeaturesPerPage),
+        }).ConfigureAwait(false);
+
+        var response = new WfsFeatureCollection(
+            NumberMatched:  page.TotalCount,
+            NumberReturned: page.Items.Count,
+            TimeStamp:      timeProvider.GetUtcNow().UtcDateTime.ToString("O"),
+            Features:       page.Items);
 
         return Results.Json(response, _geoOpts, contentType: "application/json");
     }

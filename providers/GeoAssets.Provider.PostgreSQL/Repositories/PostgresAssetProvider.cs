@@ -21,6 +21,8 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// (<see cref="GeoAssets.Core.Services.TopoGraph"/> over <see cref="GetAll"/>) rather
 /// than an explicit override — this provider's <see cref="GetAll"/> already returns the
 /// exact same <see cref="Cache"/> those would have queried directly (XD01-135).
+/// An organization's provider too large to cache whole serves its reads from PostgreSQL instead
+/// (XD01-449, <c>PostgresAssetProvider.StoreReads.cs</c>).
 /// </summary>
 public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvider, IAsyncDisposable
 {
@@ -72,7 +74,15 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         return cache;
     }
 
-    private void InvalidateCache() => _cache = null;
+    /// <summary>Drops the whole cache and the by-id entries of <paramref name="ids"/> (all of them when <c>null</c>).</summary>
+    private void InvalidateCache(IEnumerable<string>? ids = null)
+    {
+        _cache = null;
+        if (ids is null)
+            _byId?.Clear();
+        else
+            _byId?.Remove(ids);
+    }
 
     /// <summary>
     /// Pre-warms <see cref="Cache"/> asynchronously via a short-lived context (mirrors
@@ -102,17 +112,24 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
 
     // ── Read ───────────────────────────────────────────────────────────────────
 
-    public GeoFeature? GetById(string id) =>
-        Cache.TryGetValue(id, out var f) ? f : null;
+    public GeoFeature? GetById(string id)
+    {
+        if (UsesStoreReads()) return StoreGetById(id);
+        return Cache.TryGetValue(id, out var f) ? f : null;
+    }
 
-    public IReadOnlyList<GeoFeature> GetAll() => [.. Cache.Values];
+    public IReadOnlyList<GeoFeature> GetAll() =>
+        UsesStoreReads() ? StoreEnumerate(nameof(GetAll), static (_, rows) => rows) : [.. Cache.Values];
 
     public IReadOnlyList<GeoFeature> GetByAssetType(string assetTypeId) =>
-        [.. Cache.Values.Where(f => string.Equals(f.Properties.AssetTypeId, assetTypeId, StringComparison.Ordinal))];
+        UsesStoreReads()
+            ? StoreEnumerate(nameof(GetByAssetType), (_, rows) => rows.Where(r => r.AssetTypeId == assetTypeId))
+            : [.. Cache.Values.Where(f => string.Equals(f.Properties.AssetTypeId, assetTypeId, StringComparison.Ordinal))];
 
     public IReadOnlyList<GeoFeature> Search(string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return GetAll();
+        if (UsesStoreReads()) return StoreSearch(query);
         return [.. Cache.Values.Where(f =>
             f.Properties.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             f.Properties.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
@@ -123,11 +140,25 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
 
     // ── Spatial ────────────────────────────────────────────────────────────────
 
-    public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds) =>
-        [.. Cache.Values.Where(f => f.Geometry is not null && f.Geometry.Within(bounds))];
+    public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds)
+    {
+        ArgumentNullException.ThrowIfNull(bounds);
+        if (!UsesStoreReads())
+            return [.. Cache.Values.Where(f => f.Geometry is not null && f.Geometry.Within(bounds))];
 
-    public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) =>
-        [.. Cache.Values.Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
+        var area = bounds.NtsGeometry;
+        return StoreEnumerate(nameof(GetWithin), (_, rows) => rows.Where(r => r.Geom != null && r.Geom.Within(area)));
+    }
+
+    public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+        if (!UsesStoreReads())
+            return [.. Cache.Values.Where(f => f.Geometry is not null && f.Geometry.Intersects(geometry))];
+
+        var area = geometry.NtsGeometry;
+        return StoreEnumerate(nameof(GetIntersecting), (_, rows) => rows.Where(r => r.Geom != null && r.Geom.Intersects(area)));
+    }
 
     /// <summary>
     /// Pushes the bbox filter to PostGIS via ST_Intersects — never loads the full table.
@@ -168,9 +199,11 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     }
 
     public IReadOnlyList<GeoFeature> GetNearby(GeoPoint center, double distanceDegrees) =>
-        [.. Cache.Values
-            .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
-            .OrderBy(f => f.Geometry!.Distance(center))];
+        UsesStoreReads()
+            ? StoreNearby(center, distanceDegrees)
+            : [.. Cache.Values
+                .Where(f => f.Geometry is not null && f.Geometry.Distance(center) <= distanceDegrees)
+                .OrderBy(f => f.Geometry!.Distance(center))];
 
     // ── Paged/filtered queries ───────────────────────────────────────────────────
 
@@ -277,7 +310,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         _db.GeoEntityAttributes.AddRange(GeoEntityRowMapper.MapToAttributeRows(feature));
         SaveChanges();
         PublishDirtyTiles([BoundsOf(feature)]);
-        InvalidateCache();
+        InvalidateCache([feature.Id]);
         FeatureAdded?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -297,7 +330,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             _db.GeoEntities.Update(row);
         });
         PublishDirtyTiles([.. before, BoundsOf(feature)]);
-        InvalidateCache();
+        InvalidateCache([feature.Id]);
         FeatureUpdated?.Invoke(this, feature);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -329,7 +362,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             }
         });
         PublishDirtyTiles([.. before, .. list.Select(BoundsOf)]);
-        InvalidateCache();
+        InvalidateCache(ids);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -341,7 +374,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         _db.GeoEntities.Remove(row);
         SaveChanges();
         PublishDirtyTiles([BoundsOf(row)]);
-        InvalidateCache();
+        InvalidateCache([id]);
         FeatureDeleted?.Invoke(this, id);
         CollectionChanged?.Invoke(this, EventArgs.Empty);
     }
