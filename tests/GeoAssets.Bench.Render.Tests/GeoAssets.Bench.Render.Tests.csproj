@@ -31,6 +31,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\tools\GeoAssets.Bench.Render\GeoAssets.Bench.Render.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
+    <!-- XD01-439: the raster tier's opt-in benchmark draws through GeoAssets.Server's SkiaRasterTileSource, which the tool cannot reference. -->
+    <ProjectReference Include="..\..\apps\GeoAssets.Server\GeoAssets.Server.csproj" />
   </ItemGroup>
 
 </Project>

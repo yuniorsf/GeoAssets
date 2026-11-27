@@ -13,17 +13,18 @@ namespace GeoAssets.Bench.Render;
 internal sealed record TileResponse(byte[] Mvt, long WireBytes, TimeSpan Database, TimeSpan Total);
 
 /// <summary>
-/// The kernel's vector tile path (XD01-434), reproduced in-process for an organization-less caller under the default
-/// (vector-only) LOD policy: <c>GET /tiles/assets/{v}/{z}/{x}/{y}.mvt</c> asks <c>PostgresVectorTileSource</c> for the
-/// asset types drawn at the tile's zoom (<see cref="LayersAt"/>: the endpoint's <c>LayerSetAt</c> — types outside their
-/// zoom range are left out before the source is asked; the bench's types have no geometry restriction, so they are in
-/// name order), which runs <see cref="TileSql"/> — a copy of the source's statement, kept equal by
+/// The kernel's vector tile path (XD01-434), reproduced in-process for an organization-less caller under an LOD policy
+/// (the default: vector at every zoom; XD01-439 runs it under the calibrated one): <c>GET /tiles/assets/{v}/{z}/{x}/{y}.mvt</c>
+/// asks <c>PostgresVectorTileSource</c> for the asset types drawn at the tile's zoom whose tier there is vector or aggregate
+/// (<see cref="LayersAt"/>: the endpoint's <c>LayerSetAt</c> — types outside their zoom range, and raster-tier types, which
+/// travel as <c>.png</c> tiles, are left out before the source is asked; the bench's types have no geometry restriction, so
+/// they are in name order), the source aggregating those the policy calls aggregate, which runs <see cref="TileSql"/> — a copy of the source's statement, kept equal by
 /// <c>tests/GeoAssets.Bench.Render.Tests</c>, which compares the bytes — and the endpoint gzip-encodes the tile once at
 /// <see cref="CompressionLevel.Optimal"/> before caching it. The bench cannot call the source or the endpoint itself
 /// (Invariant 1). Not included: Kestrel, authentication/authorization (<c>features:read</c>), the grant lookup of the cache
 /// scope, the gateway hop.
 /// </summary>
-internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProvider timeProvider)
+internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProvider timeProvider, ILodPolicy? lod = null)
 {
     /// <summary><c>PostgresVectorTileSource.Extent</c>.</summary>
     public const int Extent = 4096;
@@ -115,10 +116,17 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
         SELECT string_agg(mvt, ''::bytea ORDER BY ord) FROM layers
         """;
 
-    /// <summary>The layers a vector tile at <paramref name="zoom"/> of the <c>assets</c> set carries: the types drawn there, in the endpoint's order.</summary>
-    public static IReadOnlyList<string> LayersAt(int zoom) =>
+    /// <summary>The policy (vector at every zoom unless one is given).</summary>
+    public ILodPolicy Lod { get; } = lod ?? new LodPolicy(LodThresholds.VectorOnly);
+
+    /// <summary>
+    /// The layers a vector tile at <paramref name="zoom"/> of the <c>assets</c> set carries under <paramref name="lod"/>
+    /// (default: vector at every zoom): the types drawn there as vector features or aggregates, in the endpoint's order.
+    /// </summary>
+    public static IReadOnlyList<string> LayersAt(int zoom, ILodPolicy? lod = null) =>
         [.. DatasetComposition.AssetTypes
             .Where(t => t.IsDrawnAt(zoom))
+            .Where(t => lod is null || lod.Decide(t.Id.ToString("D"), zoom) is TileRenderTier.Vector or TileRenderTier.Aggregate)
             .OrderBy(t => t.Name, StringComparer.Ordinal)
             .ThenBy(t => t.Id)
             .Select(t => t.Id.ToString("D"))];
@@ -126,7 +134,7 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
     public async Task<TileResponse> GetAsync(TileAddress address, CancellationToken cancellationToken)
     {
         var started = timeProvider.GetTimestamp();
-        var layers = LayersAt(address.Z);
+        var layers = LayersAt(address.Z, Lod);
         if (layers.Count == 0) return new TileResponse([], 0, TimeSpan.Zero, timeProvider.GetElapsedTime(started));
 
         byte[] mvt;
@@ -139,7 +147,7 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
                 var command = new NpgsqlCommand(TileSql, connection, transaction);
                 await using (command.ConfigureAwait(false))
                 {
-                    AddParameters(command, address, layers);
+                    AddParameters(command, address, layers, [.. layers.Where(id => Lod.Decide(id, address.Z) == TileRenderTier.Aggregate)]);
                     mvt = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as byte[] ?? [];
                 }
 
@@ -161,7 +169,7 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
         return buffer.ToArray();
     }
 
-    private static void AddParameters(NpgsqlCommand command, TileAddress address, IReadOnlyList<string> layers)
+    private static void AddParameters(NpgsqlCommand command, TileAddress address, IReadOnlyList<string> layers, IReadOnlyList<string> aggregate)
     {
         var tileWidth = address.Envelope3857.Width;
         var parameters = command.Parameters;
@@ -176,8 +184,8 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
         parameters.Add(new NpgsqlParameter("budget", NpgsqlDbType.Integer) { Value = MaxFeaturesPerTile });
         parameters.Add(new NpgsqlParameter("organizations", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = new[] { Guid.Empty } });
         parameters.Add(TextArray("layers", layers));
-        parameters.Add(TextArray("discrete", layers));
-        parameters.Add(TextArray("aggregate", []));
+        parameters.Add(TextArray("discrete", [.. layers.Except(aggregate, StringComparer.Ordinal)]));
+        parameters.Add(TextArray("aggregate", aggregate));
         parameters.Add(TextArray("reserved", ReservedProperties));
     }
 

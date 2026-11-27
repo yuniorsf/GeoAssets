@@ -55,6 +55,9 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // versions, and the ITileInvalidation the PostGIS writers below report their committed writes' dirty tiles to.
         services.AddTileServing(configuration);
 
+        // The LOD calibration's density reads (XD01-439): the PostGIS ITileDensitySampler, scoped to the request's tenant.
+        services.AddPostgresTileDensitySampler(connectionString);
+
         // Reference features (XD01-330): another organization's features, geometry and label only, read under that
         // organization's tenant for the one query.
         services.AddPostgresReferenceFeatureQuery(connectionString);

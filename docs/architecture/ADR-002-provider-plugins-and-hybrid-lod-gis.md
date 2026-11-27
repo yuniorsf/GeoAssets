@@ -134,7 +134,7 @@ flowchart TD
 `apps/GeoAssets.Server/Tiles/` (namespace `GeoAssets.Server.Tiles`), registered (`AddTileServing`) and mapped (`MapTileApi`) by the `postgres-spatial` module; `MemoryTileCache` is in `GeoAssets.Core.Rendering`:
 
 - **Routes** (all `features:read`, as WMS; none loads the caller's organization catalog — `WithoutOrganizationCatalogWarmup()` makes `UseOrganizationAssetCatalogs` skip them, so a tile request never runs `WarmCacheAsync`): `GET /tiles/style.json[?layers={set}]`, `GET /tiles/{set}/{v}/{z}/{x}/{y}.mvt`, `GET /tiles/{set}/{v}/{z}/{x}/{y}.png`. A set (`TileLayerSetDescriptor`) is `assets` — every asset type the caller's organization sees, polygons → lines → any-geometry → points, then name and id — or one visible asset type's id; a layer id is the asset type id. 400 for a set/`{v}` outside `TileKeySegment` or a zoom/column/row outside the pyramid, 401/403 by the policy, 404 for a set the caller does not see, 304 on an `If-None-Match` of the tile's content `ETag`.
-- **Tiers per format**: a `.mvt` tile carries the set's layers that are `Vector` or `Aggregate` at its zoom, a `.png` tile the `Raster` ones (`ILodPolicy` within each type's own zoom range), so each tier travels once; a format with no layer at that zoom answers the empty tile without asking a source. The policy is `GeoAssets:Tiles:Lod` (`RasterFromZoom`/`VectorFromZoom`, per type under `Lod:Layers:{assetTypeId}`), vector at every zoom by default; invalid thresholds fail the startup (D7). A host's own `ILodPolicy` wins.
+- **Tiers per format**: a `.mvt` tile carries the set's layers that are `Vector` or `Aggregate` at its zoom, a `.png` tile the `Raster` ones (`ILodPolicy` within each type's own zoom range), so each tier travels once; a format with no layer at that zoom answers the empty tile without asking a source. The policy is `GeoAssets:Tiles:Lod` (`RasterFromZoom`/`VectorFromZoom`, per type under `Lod:Layers:{assetTypeId}`), vector at every zoom by default; invalid thresholds — and, since XD01-439, unknown keys and non-GUID layer ids — fail the startup (D7). A host's own `ILodPolicy` wins.
 - **Empty tiles**: `.mvt` → `204 No Content` (MapLibre takes it as an empty tile); `.png` → a transparent 256 px PNG (`200`), since a raster source expects an image.
 - **Compression**: a drawn vector tile is gzip-encoded once (`CompressionLevel.Optimal`) and cached encoded; served with `Content-Encoding: gzip` + `Vary: Accept-Encoding` (decoded, under another `ETag`, for a client that refuses gzip). The response compression middleware never touches it (MVT is not in its MIME types, and an encoded response is skipped); PNG is not compressed again; `style.json` is JSON, compressed by the middleware.
 - **`{v}`** (`TileVersions`) is `{style}-{epoch}-{flush}.{generation}`: `{style}` the set's style hash (types' zoom ranges, colors, default layers, geometry; every layer; the types' layer rules; LOD thresholds), `{epoch}` random per process (a restart never reuses a URL), `{flush}` bumped when a write is too large to evict tile by tile, `{generation}` bumped by every committed write's invalidation. `style.json` publishes the current `{v}` in every tile URL and in `metadata."geoassets:version"` (`Cache-Control: private, no-cache` + `ETag`); a client re-reads it (e.g. after its own write) to learn a new `{v}`. A tile under the current cache version at a generation not ahead of the process's is `Cache-Control: private, max-age=31536000, immutable` — a URL only ever answers bytes at least as new as the generation it names; any other `{v}` gets the current tile with `private, no-cache`.
@@ -203,6 +203,67 @@ flowchart TD
 - **Not verified on a device**: the iOS/Android/Mac Catalyst pickers' path-only results (readable temporary copies) and the type filters, the import into app data, and SQLCipher's handling of the new columns were only build-verified for `net10.0-ios`/`net10.0-maccatalyst` (and `net10.0-android` with `/warnaserror`); the logic is tested on .NET (`GeoAssets.MAUI.Tests` links `NativeFilePickerFileTypes` and `SqliteLocalVectorTileCache` over plain SQLite).
 
 ---
+
+### As built — LOD calibration & fail-fast LOD validation (XD01-439)
+
+`core/GeoAssets.Core/Rendering/` (the pure part and the port), `providers/GeoAssets.Provider.PostgreSQL` (the PostGIS
+reads), `apps/GeoAssets.Server/Tiles/` (configuration and endpoint):
+
+- **Fail-fast validation (D7)**: `TileServingOptions.From` — called by `AddTileServing` while the `postgres-spatial`
+  module registers the kernel's services, i.e. before `WebApplicationBuilder.Build()`, so a broken section stops the host
+  before it is built, let alone serves (`TileLodStartupValidationTests` boots the real `Program` and asserts its startup
+  throws and no client can be created) — is strict: besides the numbers and the zoom thresholds (`InvalidLodPolicyException`
+  for an out-of-range zoom or `RasterFromZoom` > `VectorFromZoom` in the default `Lod` or any `Lod:Layers:{id}`, and
+  `MinZoom` > `MaxZoom`), it refuses a key `GeoAssets:Tiles`, `Lod`, `Lod:Layers:{id}` or `Calibration` does not define
+  (a typo such as `Lod:VectorFromZom`, naming the key and the valid ones), a value given children or a section given a
+  value, and a layer id that is not an asset type id (a GUID — read in the lowercase `D` form the tile sources compare, so an
+  upper-case key still applies). Before, a typo was silently ignored (the default applied).
+- **The calibration (pure, Core)**: `ITileDensitySampler` (port: `SampleSeedsAsync`, `MeasureAsync`, in the caller's
+  tenant scope, every read bounded by its arguments), `LodCalibrator` and `LodCalibration` (`SampleTiles`, `FitsVector`,
+  `FitsRaster`, `Recommend`), `LodCalibrationSettings` (`GeoAssets:Tiles:Calibration:*`), `TileDensitySeed`,
+  `TileDensitySample`, `TileDensityAtZoom`, `DensityPercentiles` (nearest rank), `AssetTypeLodCalibration`. Per asset type:
+  sample `SeedFeatures` (512) features' centroids once; from the highest zoom it is drawn at (within `MinZoom`…`MaxZoom`,
+  0–18, and the type's own range) down, measure up to `SampleTiles` (32) of the tiles those seeds fall in — features and
+  `ST_NPoints` per tile, at most `MaxFeaturesPerTile` (20,000) read per tile (a tile reaching it is *saturated*) — and stop
+  at the first zoom whose p95 fits no tier (a lower zoom is denser still). `VectorFromZoom` = the lowest zoom of the unbroken
+  run from the top whose p95 features ≤ `VectorMaxFeaturesPerTile` (2,000) and vertices ≤ `VectorMaxVerticesPerTile`
+  (15,000); `RasterFromZoom` = the lowest of the run below it within `RasterMaxFeaturesPerTile` (2,500 — the raster source's
+  10,000 features per 2 × 2 metatile) and `RasterMaxVerticesPerTile` (15,000); aggregates below; raster from 0 (or vector
+  everywhere) when every measured zoom fits down to the lowest the type is drawn at. Tiles are picked by a fixed hash, so a
+  rerun on unchanged data measures the same tiles; seeding by features leans the percentiles toward the denser tiles (the
+  conservative side). The budgets are per layer: a tile carrying several dense layers costs their sum.
+- **PostGIS reads**: `PostgresTileDensitySampler` (`AddPostgresTileDensitySampler`, scoped, registered by
+  `PostgresSpatialModule`): seeds from a `TABLESAMPLE SYSTEM … REPEATABLE (439)` block sample sized from `pg_class.reltuples`
+  (≈ 16 rows per seed wanted), topped up for a rare type by an index scan, never more than the cap and each feature once;
+  one statement per zoom measuring all its tiles (`ST_TileEnvelope` with the vector source's margin over `geom_3857`, a
+  `LIMIT` per tile); the vector source's tenant scope (transaction stamped by `TenantTransactionInterceptor`, the caller's
+  organization's rows and the shared ones); `statement_timeout` 30 s per statement (`SET LOCAL` via `set_config`) plus a
+  client-side timeout, surfaced as `TimeoutException`; a cancelled token throws before a read.
+- **Surface**: `GET /tiles/lod-calibration[?assetTypes={id},…]` (`TileLodCalibrationEndpoint`, mapped by `MapTileApi`,
+  `features:read` **and** `organizations:edit` — an organization's Administrator; no catalog warm-up): calibrates the caller's
+  organization's visible asset types in tile layer order, at most 32 per request (the rest listed in `omittedAssetTypeIds`),
+  and answers, per type, the measured densities, the current and the recommended thresholds (current visibility bounds kept),
+  whether the recommendation changes a drawn zoom's tier, and the `GeoAssets:Tiles:Lod:Layers:{id}:*` settings that apply
+  the changed ones. 400 for an asset type the caller does not see, 504 past a statement timeout. **Nothing is applied** —
+  served tiles change only when an operator changes the configuration (and the startup validation checks it); since the
+  policy is the host's, an operator calibrating several organizations takes, per type, the most conservative recommendation.
+  Chosen over a periodic `BackgroundService` because the output is a decision for an operator, not a state to keep; the
+  same calibrator runs offline in `GeoAssets.Bench.Render calibrate`. Logged per type (recommended and current thresholds,
+  the lowest measured zoom's p95 vertices) and counted on `geoassets.tiles.lod_calibration.runs` / `.duration`
+  (`outcome=completed|cancelled|timed_out|failed`) and `.recommendations` (`recommendation=changed|unchanged|none`).
+- **Bench** (`tools/GeoAssets.Bench.Render`): `calibrate [--out]` (the kernel's `LodCalibrator` over `BenchTileDensitySampler`,
+  a copy of the provider's statements whose answers `PostgresRenderBenchTests` asserts equal) and `tiles --lod
+  <calibration.json>` (the endpoint's layer set and aggregates under that policy, its bytes asserted equal to the source's);
+  the raster tier is timed by the opt-in `RasterTierBenchmarkTests` (`GEOASSETS_RENDER_BENCH_RASTER_LOD`), which references
+  GeoAssets.Server — the tool cannot. On the benchmark dataset the defaults recommend Rede MT `14/14` and Setor `13/13`
+  (aggregates below, no raster tier; the four other types vector everywhere); measured against the gate (amd64-emulated
+  PostGIS): z8 11.4 kB per viewport (met) at p95 80.6 ms per cold tile (not met — the Setor aggregates' `ST_Centroid` over
+  full-resolution polygons; was 1,002.5 ms), z12 21.7 kB / 11.6 ms (met; was 126.0 ms), z16 76.6 kB / 8.0 ms (met); z13
+  75.3 ms (not met), z14 21.6 ms (met). Raster probes under looser budgets cost as much as vector or more (93–134 ms p95 at
+  z12–13) and 1.1–2.8 MB of PNG per viewport, hence the raster vertex budget equal to the vector one — `docs/perf/render-baseline.md`
+  ("After XD01-439").
+- **Deferred**: a stored centroid column for the aggregate tier (z8's remaining 80 ms); per-tile (all-layers) budgets
+  instead of per-layer ones; calibrating across organizations in one request.
 
 ## Part 4 — Verification Gates
 

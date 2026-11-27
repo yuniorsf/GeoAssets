@@ -108,9 +108,24 @@ public sealed class MeasurementTests
         options.Settings.Should().BeEquivalentTo(new BenchSettings(9, [10, 14], 3, 2, 0, 800, 600));
     }
 
+    [Fact]
+    public void Options_ParseTheCalibrateCommand_AndTheTilesLodFile()
+    {
+        var (calibrate, calibrateError) = BenchOptions.Parse(["calibrate", "--out", "c.json"]);
+        var (tiles, tilesError) = BenchOptions.Parse(["tiles", "--lod", "c.json", "--zooms", "8,13"]);
+
+        calibrateError.Should().BeNull();
+        calibrate!.Command.Should().Be("calibrate");
+        calibrate.OutPath.Should().Be("c.json");
+        calibrate.LodPath.Should().BeNull();
+        tilesError.Should().BeNull();
+        tiles!.LodPath.Should().Be("c.json");
+        tiles.Settings.Zooms.Should().Equal(8, 13);
+    }
+
     [Theory]
-    [InlineData(new string[0], "*'seed', 'bench' or 'tiles'*")]
-    [InlineData(new[] { "run" }, "*'seed', 'bench' or 'tiles'*")]
+    [InlineData(new string[0], "*'seed', 'bench', 'tiles' or 'calibrate'*")]
+    [InlineData(new[] { "run" }, "*'seed', 'bench', 'tiles' or 'calibrate'*")]
     [InlineData(new[] { "bench", "--iterations" }, "*needs a value*")]
     [InlineData(new[] { "bench", "--iterations", "1", "--iterations", "2" }, "*more than once*")]
     [InlineData(new[] { "bench", "--iterations", "0" }, "*must be positive*")]

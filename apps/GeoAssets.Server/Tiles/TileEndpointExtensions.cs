@@ -55,7 +55,7 @@ public static class TileEndpointExtensions
 
     private static readonly Lazy<string> TransparentPngETag = new(() => new TilePayload(TransparentPng.Value, TileFormats.PngContentType).ETag);
 
-    /// <summary>Maps <c>/tiles/style.json</c> and the <c>.mvt</c>/<c>.png</c> tile routes.</summary>
+    /// <summary>Maps <c>/tiles/style.json</c>, the <c>.mvt</c>/<c>.png</c> tile routes and <c>/tiles/lod-calibration</c> (<see cref="TileLodCalibrationEndpoint"/>).</summary>
     public static IEndpointRouteBuilder MapTileApi(this IEndpointRouteBuilder routes)
     {
         ArgumentNullException.ThrowIfNull(routes);
@@ -73,6 +73,9 @@ public static class TileEndpointExtensions
                 ServeTileAsync(http, layer, v, z, x, y, TileFormat.Png))
             .RequireAuthorization("features:read")
             .WithoutOrganizationCatalogWarmup();
+
+        // The on-demand LOD calibration (XD01-439): features:read + organizations:edit, recommendations only.
+        routes.MapTileLodCalibration();
 
         return routes;
     }

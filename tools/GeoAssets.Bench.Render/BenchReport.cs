@@ -108,8 +108,9 @@ internal sealed record BenchReport(BenchEnvironment Environment, BenchSettings S
             : string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000.0:F1} kB");
 }
 
-/// <summary>The tile scenario's full output (XD01-434; written as JSON with <c>--out</c>).</summary>
-internal sealed record TileBenchReport(BenchEnvironment Environment, BenchSettings Settings, IReadOnlyList<TileZoomResult> Zooms)
+/// <summary>The tile scenario's full output (XD01-434; written as JSON with <c>--out</c>), with the LOD policy's per-layer thresholds it ran under (XD01-439; empty: vector at every zoom).</summary>
+internal sealed record TileBenchReport(
+    BenchEnvironment Environment, BenchSettings Settings, IReadOnlyList<TileZoomResult> Zooms, IReadOnlyDictionary<string, GeoAssets.Core.Rendering.LodThresholds>? LodLayers = null)
 {
     /// <summary>The Markdown tables <c>docs/perf/render-baseline.md</c> records for the tiles.</summary>
     public string ToMarkdown()

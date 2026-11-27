@@ -1,0 +1,527 @@
+{
+  "Environment": {
+    "MeasuredAtUtc": "2026-11-27T04:26:58.269732+00:00",
+    "OperatingSystem": "macOS 27.2.1",
+    "Architecture": "Arm64",
+    "ProcessorCount": 10,
+    "Framework": ".NET 10.0.7",
+    "ServerGc": true,
+    "PostgresVersion": "PostgreSQL 16.4 (Debian 16.4-1.pgdg110\u002B2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 10.2.1-6) 10.2.1 20210110, 64-bit",
+    "PostGisVersion": "3.4.3",
+    "DatasetFeatures": 200000,
+    "DatasetVertices": 3366132,
+    "GeoEntityTotalSize": "305 MB"
+  },
+  "Settings": {
+    "MinZoom": 0,
+    "MaxZoom": 18,
+    "SeedFeatures": 512,
+    "SampleTiles": 32,
+    "MaxFeaturesPerTile": 20000,
+    "VectorMaxFeaturesPerTile": 2000,
+    "VectorMaxVerticesPerTile": 15000,
+    "RasterMaxFeaturesPerTile": 2500,
+    "RasterMaxVerticesPerTile": 15000
+  },
+  "AssetTypes": [
+    {
+      "AssetTypeId": "42000000-0000-0000-0000-000000000001",
+      "Name": "Bench \u2014 Poste",
+      "MinZoom": 15,
+      "MaxZoom": null,
+      "Calibration": {
+        "AssetTypeId": "42000000-0000-0000-0000-000000000001",
+        "Seeds": 512,
+        "Densities": [
+          {
+            "Zoom": 18,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 4,
+              "P99": 5
+            },
+            "Vertices": {
+              "P50": 1,
+              "P95": 4,
+              "P99": 5
+            }
+          },
+          {
+            "Zoom": 17,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 2,
+              "P95": 12,
+              "P99": 15
+            },
+            "Vertices": {
+              "P50": 2,
+              "P95": 12,
+              "P99": 15
+            }
+          },
+          {
+            "Zoom": 16,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 3,
+              "P95": 26,
+              "P99": 42
+            },
+            "Vertices": {
+              "P50": 3,
+              "P95": 26,
+              "P99": 42
+            }
+          },
+          {
+            "Zoom": 15,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 11,
+              "P95": 174,
+              "P99": 261
+            },
+            "Vertices": {
+              "P50": 11,
+              "P95": 174,
+              "P99": 261
+            }
+          }
+        ],
+        "Recommended": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      }
+    },
+    {
+      "AssetTypeId": "42000000-0000-0000-0000-000000000002",
+      "Name": "Bench \u2014 Transformador",
+      "MinZoom": 13,
+      "MaxZoom": null,
+      "Calibration": {
+        "AssetTypeId": "42000000-0000-0000-0000-000000000002",
+        "Seeds": 512,
+        "Densities": [
+          {
+            "Zoom": 18,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 2,
+              "P99": 3
+            },
+            "Vertices": {
+              "P50": 1,
+              "P95": 2,
+              "P99": 3
+            }
+          },
+          {
+            "Zoom": 17,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 4,
+              "P99": 4
+            },
+            "Vertices": {
+              "P50": 1,
+              "P95": 4,
+              "P99": 4
+            }
+          },
+          {
+            "Zoom": 16,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 2,
+              "P95": 9,
+              "P99": 10
+            },
+            "Vertices": {
+              "P50": 2,
+              "P95": 9,
+              "P99": 10
+            }
+          },
+          {
+            "Zoom": 15,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 3,
+              "P95": 29,
+              "P99": 29
+            },
+            "Vertices": {
+              "P50": 3,
+              "P95": 29,
+              "P99": 29
+            }
+          },
+          {
+            "Zoom": 14,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 3,
+              "P95": 82,
+              "P99": 134
+            },
+            "Vertices": {
+              "P50": 3,
+              "P95": 82,
+              "P99": 134
+            }
+          },
+          {
+            "Zoom": 13,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 4,
+              "P95": 89,
+              "P99": 113
+            },
+            "Vertices": {
+              "P50": 4,
+              "P95": 89,
+              "P99": 113
+            }
+          }
+        ],
+        "Recommended": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      }
+    },
+    {
+      "AssetTypeId": "42000000-0000-0000-0000-000000000003",
+      "Name": "Bench \u2014 Rede MT",
+      "MinZoom": 10,
+      "MaxZoom": null,
+      "Calibration": {
+        "AssetTypeId": "42000000-0000-0000-0000-000000000003",
+        "Seeds": 512,
+        "Densities": [
+          {
+            "Zoom": 18,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 3,
+              "P95": 21,
+              "P99": 24
+            },
+            "Vertices": {
+              "P50": 301,
+              "P95": 2199,
+              "P99": 2544
+            }
+          },
+          {
+            "Zoom": 17,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 5,
+              "P95": 38,
+              "P99": 39
+            },
+            "Vertices": {
+              "P50": 514,
+              "P95": 4037,
+              "P99": 4323
+            }
+          },
+          {
+            "Zoom": 16,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 4,
+              "P95": 47,
+              "P99": 58
+            },
+            "Vertices": {
+              "P50": 496,
+              "P95": 5210,
+              "P99": 6498
+            }
+          },
+          {
+            "Zoom": 15,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 11,
+              "P95": 78,
+              "P99": 89
+            },
+            "Vertices": {
+              "P50": 1277,
+              "P95": 8916,
+              "P99": 10459
+            }
+          },
+          {
+            "Zoom": 14,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 19,
+              "P95": 121,
+              "P99": 162
+            },
+            "Vertices": {
+              "P50": 2301,
+              "P95": 13716,
+              "P99": 18925
+            }
+          },
+          {
+            "Zoom": 13,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 6,
+              "P95": 144,
+              "P99": 163
+            },
+            "Vertices": {
+              "P50": 575,
+              "P95": 16076,
+              "P99": 18530
+            }
+          }
+        ],
+        "Recommended": {
+          "RasterFromZoom": 14,
+          "VectorFromZoom": 14,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      }
+    },
+    {
+      "AssetTypeId": "42000000-0000-0000-0000-000000000004",
+      "Name": "Bench \u2014 Rede BT",
+      "MinZoom": 14,
+      "MaxZoom": null,
+      "Calibration": {
+        "AssetTypeId": "42000000-0000-0000-0000-000000000004",
+        "Seeds": 512,
+        "Densities": [
+          {
+            "Zoom": 18,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 3,
+              "P99": 5
+            },
+            "Vertices": {
+              "P50": 22,
+              "P95": 59,
+              "P99": 107
+            }
+          },
+          {
+            "Zoom": 17,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 4,
+              "P99": 7
+            },
+            "Vertices": {
+              "P50": 28,
+              "P95": 92,
+              "P99": 138
+            }
+          },
+          {
+            "Zoom": 16,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 2,
+              "P95": 13,
+              "P99": 14
+            },
+            "Vertices": {
+              "P50": 38,
+              "P95": 280,
+              "P99": 282
+            }
+          },
+          {
+            "Zoom": 15,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 3,
+              "P95": 37,
+              "P99": 46
+            },
+            "Vertices": {
+              "P50": 84,
+              "P95": 765,
+              "P99": 980
+            }
+          },
+          {
+            "Zoom": 14,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 5,
+              "P95": 135,
+              "P99": 170
+            },
+            "Vertices": {
+              "P50": 103,
+              "P95": 2711,
+              "P99": 3298
+            }
+          }
+        ],
+        "Recommended": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      }
+    },
+    {
+      "AssetTypeId": "42000000-0000-0000-0000-000000000005",
+      "Name": "Bench \u2014 Lote",
+      "MinZoom": 16,
+      "MaxZoom": null,
+      "Calibration": {
+        "AssetTypeId": "42000000-0000-0000-0000-000000000005",
+        "Seeds": 512,
+        "Densities": [
+          {
+            "Zoom": 18,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 2,
+              "P99": 2
+            },
+            "Vertices": {
+              "P50": 16,
+              "P95": 36,
+              "P99": 37
+            }
+          },
+          {
+            "Zoom": 17,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 3,
+              "P99": 6
+            },
+            "Vertices": {
+              "P50": 20,
+              "P95": 42,
+              "P99": 83
+            }
+          },
+          {
+            "Zoom": 16,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 1,
+              "P95": 6,
+              "P99": 7
+            },
+            "Vertices": {
+              "P50": 24,
+              "P95": 90,
+              "P99": 107
+            }
+          }
+        ],
+        "Recommended": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      }
+    },
+    {
+      "AssetTypeId": "42000000-0000-0000-0000-000000000006",
+      "Name": "Bench \u2014 Setor",
+      "MinZoom": 8,
+      "MaxZoom": 13,
+      "Calibration": {
+        "AssetTypeId": "42000000-0000-0000-0000-000000000006",
+        "Seeds": 512,
+        "Densities": [
+          {
+            "Zoom": 13,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 15,
+              "P95": 89,
+              "P99": 105
+            },
+            "Vertices": {
+              "P50": 2656,
+              "P95": 14147,
+              "P99": 15369
+            }
+          },
+          {
+            "Zoom": 12,
+            "SampledTiles": 32,
+            "SaturatedTiles": 0,
+            "Features": {
+              "P50": 6,
+              "P95": 258,
+              "P99": 290
+            },
+            "Vertices": {
+              "P50": 1027,
+              "P95": 41157,
+              "P99": 48103
+            }
+          }
+        ],
+        "Recommended": {
+          "RasterFromZoom": 13,
+          "VectorFromZoom": 13,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      }
+    }
+  ],
+  "ElapsedMs": 367.5475
+}
