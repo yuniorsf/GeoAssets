@@ -21,6 +21,9 @@ public sealed class KernelOnlyHostTests
     [
         "GET /api/geoassets/wms | policy:features:read",
         "GET /wms | policy:features:read",
+        "GET /tiles/style.json | policy:features:read",
+        "GET /tiles/{layer}/{v}/{z}/{x}/{y}.mvt | policy:features:read",
+        "GET /tiles/{layer}/{v}/{z}/{x}/{y}.png | policy:features:read",
     ];
 
     [Fact]

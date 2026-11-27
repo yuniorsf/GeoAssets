@@ -255,6 +255,121 @@ Each cell is p50 / p95.
 
 </details>
 
+## After XD01-434 — Track 4 vector tiles (2026-11-26)
+
+Same dataset (seed 420, 200,000 rows, 3,366,132 vertices), viewports, settings and machine as the baseline (Apple M5,
+.NET 10.0.7 Release + server GC, `postgis/postgis:16-3.4` **amd64-emulated** on Docker Desktop 29.8.2, run under the
+heavy-run lock), measured on branch `feat/xd01-434-tile-endpoints` (base `develop` @ `a5e3e04c`) with
+`GeoAssets.Bench.Render tiles`. Raw results: `tools/GeoAssets.Bench.Render/after-xd01-434-tiles.json`.
+
+What is measured: for each of the same 12 viewports per zoom, the 256-px tiles covering it (`MapViewport.CoveringTiles`:
+the tiles its 1580 × 1020 pixels overlap — 28 to 40), requested one at a time as MapLibre would request
+`GET /tiles/assets/{v}/{z}/{x}/{y}.mvt` from the kernel's `style.json` (XD01-434), for an organization-less caller under
+the default LOD policy (vector at every zoom):
+
+- **Cold** = the tile drawn and encoded, i.e. a server tile-cache miss: `TileEndpointPipeline` runs the statement of
+  `PostgresVectorTileSource` (`ST_AsMVT`, the endpoint's layer set: the types drawn at that zoom) — a copy whose bytes
+  `PostgresRenderBenchTests.TileRead_AnswersThePostGisSourcesBytes_ForTheMeasuredViewportsTiles` asserts equal to the
+  source's — then gzip (`Optimal`), as the endpoint encodes a tile once before caching it. PostgreSQL's own buffers are
+  warm (one warm-up pass); "cold" is the tile cache, not the database.
+- **Warm** = the same tile served from the server's `MemoryTileCache` (a hit: one lookup of the encoded bytes).
+- **Bytes per viewport** = the tile bodies on the wire, summed over the viewport's tiles: gzip-encoded MVT
+  (`Content-Encoding: gzip`), 0 for an empty tile (`204 No Content`). Headers are not counted (nor were they in the
+  baseline). A browser that already holds a tile under the current `{v}` (`immutable`) does not ask again.
+- Per-tile times are over every tile of every viewport of the 5 measured passes (≈ 2,150 per zoom), nearest rank.
+  Excluded, as in the baseline: Kestrel, authentication and the `features:read` check, the cache scope's grant lookup,
+  the gateway hop.
+
+| Zoom | Tiles per viewport | Non-empty tiles | Bytes per viewport (on the wire, gzip) | Bytes per viewport (MVT, before gzip) | Cold ms per tile (drawn) | ↳ DB ms | Warm ms per tile (cache hit) |
+|---|---|---|---|---|---|---|---|
+| z8 | 35 / 40 | 6 / 6 | 890.6 kB / 890.6 kB | 1.54 MB / 1.54 MB | 1.7 / 1002.5 | 1.7 / 993.8 | 0.0003 / 0.0004 |
+| z12 | 35 / 40 | 35 / 40 | 297.2 kB / 653.1 kB | 418.2 kB / 924.8 kB | 8.8 / 126.0 | 8.7 / 125.0 | 0.0001 / 0.0006 |
+| z16 | 35 / 40 | 30 / 35 | 8.0 kB / 76.6 kB | 12.8 kB / 155.7 kB | 1.9 / 8.2 | 1.8 / 8.1 | 0.0002 / 0.0005 |
+
+Each cell is p50 / p95.
+
+### Against ADR-002's gate
+
+| Zoom | Wire bytes per viewport: baseline (uncompressed) → after XD01-430 (Brotli) → tiles (gzip) | Server ms: baseline per viewport → tiles per tile, cold (p95) | Tiles per tile, warm (p95) |
+|---|---|---|---|
+| z8 | 18.15 MB → 7.38 MB → **890.6 kB** (**20.4×** below the baseline, under the ≤ 1.8 MB target) | 2,388.0 → **1,002.5 ms** | 0.0004 ms |
+| z12 | 20.31 MB (p95) → 3.13 MB → 653.1 kB | 263.2 → 126.0 ms | 0.0006 ms |
+| z16 | 2.72 MB (p95) → 170.9 kB → 76.6 kB | 11.0 → 8.2 ms | 0.0005 ms |
+
+- **Bytes — met.** A z8 viewport now costs 890.6 kB on the wire (1.54 MB of MVT before gzip), 20.4× less than the
+  baseline's 18.15 MB and 8.3× less than Track 3's 7.38 MB. Every z8 viewport covers the whole concession, so all 12
+  cost the same: 6 non-empty tiles of the 35–40, holding the 5,000 `Setor` districts simplified to the tile's resolution
+  (one tile unit, ≈ 38 m at z8), instead of the full-resolution GeoJSON.
+- **p95 < 50 ms per tile — not met cold at z8 and z12 on this machine; met at z16 and for every cached tile.** At z8,
+  83 % of the tiles are empty (≈ 1.7 ms: the index finds nothing), but the 6 that hold the districts take ≈ 0.6 s each on
+  average (3.5–3.9 s for a viewport's tiles in series, p95 1.0 s), nearly all of it in PostgreSQL (DB ms ≈ server ms):
+  `ST_SimplifyPreserveTopology` and `ST_AsMVTGeom` over each tile's share of the 5,000 districts of 64–256 vertices. z12's p95 (126 ms) is its densest viewports'
+  feeder-heavy tiles. These are cold draws on a database **running under amd64 emulation** (DB times inflated, as noted
+  for every run on this page); they are paid once per tile per scope and per `{v}` cache version, after which a tile is
+  a cache hit (≈ 0.4 µs in process — the request then costs authentication, the permission check and the grant lookup,
+  not measured here). Whether the cold z8/z12 draws meet 50 ms on native hardware is unmeasured. The levers, all outside
+  this ticket: an `Aggregate`/`Raster` tier for the districts below ~z10 (`GeoAssets:Tiles:Lod`, density-calibrated by
+  XD01-439), pre-simplified geometry per zoom band, or warming the low-zoom tiles (a handful of tiles cover the
+  concession at z8) after a flush.
+- Raster (`.png`) tiles are not in this scenario: under the default policy no layer has a raster tier, and the Skia
+  source lives in `GeoAssets.Server`, which the tool cannot reference (Invariant 1).
+
+<details>
+<summary>Per-viewport tile results after XD01-434 (first measured pass)</summary>
+
+#### z8 — tiles per viewport (first measured pass)
+
+| # | Center (lon, lat) | Tiles (z/x/y range) | Tiles | Non-empty | On the wire | MVT | Cold ms, all tiles serially |
+|---|---|---|---|---|---|---|---|
+| 1 | -46.7468, -23.5309 | 8/91-97/143-147 | 35 | 6 | 890.6 kB | 1.54 MB | 3491.9 |
+| 2 | -46.7617, -23.4770 | 8/91-97/143-147 | 35 | 6 | 890.6 kB | 1.54 MB | 3794.8 |
+| 3 | -46.3412, -22.5534 | 8/91-98/142-146 | 40 | 6 | 890.6 kB | 1.54 MB | 3744.4 |
+| 4 | -45.6628, -23.3672 | 8/92-98/143-147 | 35 | 6 | 890.6 kB | 1.54 MB | 3541.2 |
+| 5 | -45.5599, -22.1990 | 8/92-98/142-146 | 35 | 6 | 890.6 kB | 1.54 MB | 3541.4 |
+| 6 | -45.4998, -22.2362 | 8/92-98/142-146 | 35 | 6 | 890.6 kB | 1.54 MB | 3465.3 |
+| 7 | -46.6450, -23.0692 | 8/91-97/142-146 | 35 | 6 | 890.6 kB | 1.54 MB | 3494.9 |
+| 8 | -45.0971, -22.5257 | 8/92-99/142-146 | 40 | 6 | 890.6 kB | 1.54 MB | 3671.6 |
+| 9 | -46.1336, -23.0456 | 8/92-98/142-146 | 35 | 6 | 890.6 kB | 1.54 MB | 3883.1 |
+| 10 | -46.6977, -23.4957 | 8/91-97/143-147 | 35 | 6 | 890.6 kB | 1.54 MB | 3710.7 |
+| 11 | -45.3450, -22.2220 | 8/92-98/142-146 | 35 | 6 | 890.6 kB | 1.54 MB | 3805.2 |
+| 12 | -45.6222, -23.2969 | 8/92-98/143-147 | 35 | 6 | 890.6 kB | 1.54 MB | 3760.9 |
+
+#### z12 — tiles per viewport (first measured pass)
+
+| # | Center (lon, lat) | Tiles (z/x/y range) | Tiles | Non-empty | On the wire | MVT | Cold ms, all tiles serially |
+|---|---|---|---|---|---|---|---|
+| 1 | -46.0546, -22.9418 | 12/1520-1527/2314-2318 | 40 | 40 | 370.4 kB | 518.7 kB | 1360.3 |
+| 2 | -45.1899, -23.7373 | 12/1530-1536/2324-2328 | 35 | 35 | 50.8 kB | 68.4 kB | 238.8 |
+| 3 | -46.2892, -23.3176 | 12/1518-1524/2318-2322 | 35 | 35 | 297.2 kB | 418.2 kB | 1048.7 |
+| 4 | -46.4704, -23.1546 | 12/1516-1522/2316-2320 | 35 | 35 | 404.3 kB | 567.2 kB | 1455.9 |
+| 5 | -46.0670, -22.2774 | 12/1520-1526/2306-2310 | 35 | 35 | 322.6 kB | 455.4 kB | 1242.4 |
+| 6 | -47.2049, -22.8610 | 12/1507-1513/2313-2317 | 35 | 35 | 186.2 kB | 258.3 kB | 637.7 |
+| 7 | -46.2796, -23.2883 | 12/1518-1524/2318-2322 | 35 | 35 | 297.2 kB | 418.2 kB | 1031.0 |
+| 8 | -46.3051, -23.3351 | 12/1518-1524/2319-2323 | 35 | 35 | 357.2 kB | 503.3 kB | 1370.1 |
+| 9 | -46.6491, -23.4364 | 12/1514-1520/2320-2324 | 35 | 35 | 653.1 kB | 924.8 kB | 2307.1 |
+| 10 | -46.9668, -22.5645 | 12/1510-1516/2309-2313 | 35 | 35 | 54.7 kB | 74.3 kB | 214.2 |
+| 11 | -45.5262, -22.2781 | 12/1526-1533/2306-2310 | 40 | 40 | 204.5 kB | 287.2 kB | 734.8 |
+| 12 | -46.1278, -22.9329 | 12/1520-1526/2314-2318 | 35 | 35 | 357.7 kB | 501.7 kB | 1264.7 |
+
+#### z16 — tiles per viewport (first measured pass)
+
+| # | Center (lon, lat) | Tiles (z/x/y range) | Tiles | Non-empty | On the wire | MVT | Cold ms, all tiles serially |
+|---|---|---|---|---|---|---|---|
+| 1 | -46.0856, -22.2488 | 16/24375-24381/36922-36926 | 35 | 35 | 28.6 kB | 57.1 kB | 144.0 |
+| 2 | -46.0833, -22.3288 | 16/24375-24381/36937-36941 | 35 | 35 | 76.6 kB | 155.7 kB | 266.0 |
+| 3 | -46.6197, -22.8717 | 16/24278-24284/37044-37048 | 35 | 34 | 11.4 kB | 20.6 kB | 67.3 |
+| 4 | -45.9215, -23.3346 | 16/24405-24411/37136-37140 | 35 | 35 | 59.0 kB | 118.8 kB | 224.4 |
+| 5 | -46.9435, -23.9813 | 16/24219-24225/37265-37269 | 35 | 7 | 1.1 kB | 1.5 kB | 56.7 |
+| 6 | -46.9950, -23.0116 | 16/24209-24215/37072-37076 | 35 | 13 | 2.3 kB | 3.0 kB | 54.3 |
+| 7 | -46.2734, -22.4417 | 16/24341-24347/36960-36964 | 35 | 21 | 3.4 kB | 4.8 kB | 53.7 |
+| 8 | -46.6655, -22.8303 | 16/24269-24275/37036-37040 | 35 | 30 | 8.0 kB | 12.9 kB | 63.9 |
+| 9 | -46.2093, -23.5036 | 16/24352-24358/37170-37173 | 28 | 8 | 1.6 kB | 2.2 kB | 40.9 |
+| 10 | -46.3676, -23.5558 | 16/24323-24330/37180-37184 | 40 | 34 | 8.0 kB | 12.8 kB | 67.0 |
+| 11 | -45.8866, -23.2974 | 16/24411-24417/37129-37133 | 35 | 35 | 48.0 kB | 98.1 kB | 182.7 |
+| 12 | -45.4009, -22.3429 | 16/24499-24506/36940-36944 | 40 | 13 | 2.2 kB | 2.7 kB | 62.7 |
+
+</details>
+
 ## Re-running
 
 From the repository root, against the benchmark's own container (never the dev stack — `seed` empties `geo_entity`, and
@@ -273,6 +388,7 @@ ConnectionStrings__GeoAssets="Host=localhost;Port=5435;Database=geoassets_render
 dotnet build tools/GeoAssets.Bench.Render -c Release
 dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll seed
 dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll bench --out results.json
+dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll tiles --out tiles.json   # XD01-434, ≈ 15 min
 
 docker compose -f tools/GeoAssets.Bench.Render/docker-compose.bench.yaml down
 ```
@@ -291,8 +407,9 @@ baseline (don't overwrite it):
   `BoundsEndpointPipeline` now reproduces `PostgresAssetProvider.GetInViewportAsync` (zoom, `LIMIT`, compact JSON,
   Brotli); when the read changes again, update the pipeline in the same change —
   `PostgresRenderBenchTests.BoundsRead_AnswersTheProvidersBody_ForTheMeasuredViewports` fails until they agree.
-- **Track 4 (XD01-431…XD01-434)** — `ST_AsMVT` vector tiles and Skia raster tiles: add a tile scenario that requests the
-  256-px tiles covering each of these viewports (z8: ~40 tiles at 1580 × 1020) and reports bytes per viewport and server
-  p95 **per tile** — ADR-002's `< 50 ms` gate is per tile, while the baseline's server ms is per viewport request.
+- **Track 4 (XD01-431…XD01-434)** — done: see [After XD01-434](#after-xd01-434--track-4-vector-tiles-2026-11-26).
+  `TileEndpointPipeline` reproduces `PostgresVectorTileSource`'s statement and the endpoint's layer set and gzip; when
+  either changes, update the pipeline in the same change —
+  `PostgresRenderBenchTests.TileRead_AnswersThePostGisSourcesBytes_ForTheMeasuredViewportsTiles` fails until they agree.
 - **Track 5 (XD01-435 / XD01-436)** — MapLibre / hybrid LOD: the simulated SVG client does not model WebGL; measure the
   client side in a real browser and note the method next to the numbers.

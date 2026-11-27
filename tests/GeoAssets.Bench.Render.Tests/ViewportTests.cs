@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Rendering;
 using Xunit;
 
 namespace GeoAssets.Bench.Render.Tests;
@@ -72,5 +73,23 @@ public sealed class ViewportTests
     public void Plan_StandardZooms_AreOverviewMidAndStreet()
     {
         ViewportPlan.StandardZooms.Should().Equal(8, 12, 16);
+    }
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(12)]
+    [InlineData(16)]
+    public void CoveringTiles_AreThe256PxTilesItsPixelsOverlap_AboutFortyAt1580x1020(int zoom)
+    {
+        var viewport = new MapViewport(-46.63, -23.55, zoom, 1580, 1020);
+
+        var tiles = viewport.CoveringTiles();
+
+        tiles.Zoom.Should().Be(zoom);
+        tiles.Width.Should().BeInRange(7, 8, "1580 px is 6.2 tiles wide");
+        tiles.Height.Should().BeInRange(4, 5, "1020 px is 4.0 tiles high");
+        tiles.Contains(TileAddress.Containing(-46.63, -23.55, zoom)).Should().BeTrue();
+        foreach (var corner in new[] { (viewport.Bounds.MinLon + 1e-9, viewport.Bounds.MaxLat - 1e-9), (viewport.Bounds.MaxLon - 1e-9, viewport.Bounds.MinLat + 1e-9) })
+            tiles.Contains(TileAddress.Containing(corner.Item1, corner.Item2, zoom)).Should().BeTrue("the viewport's corners are drawn");
     }
 }

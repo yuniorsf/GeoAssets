@@ -17,8 +17,9 @@ internal sealed record BenchOptions(string Command, int Features, BenchSettings 
 
           seed   [--features 200000] [--seed 420]        replace geo_entity with the deterministic dataset
           bench  [options] [--out <results.json>]          measure the z8/z12/z16 viewports, print Markdown tables
+          tiles  [options] [--out <results.json>]          request the 256-px vector tiles covering the same viewports (XD01-434)
 
-        Bench options (defaults = the recorded baseline):
+        Bench/tiles options (defaults = the recorded baseline):
           --seed 420  --zooms 8,12,16  --viewports 12 (per zoom)  --iterations 5  --warmup 1  --viewport 1580x1020
         The database is read from GEOASSETS_RENDER_BENCH_CONNECTION (default: the docker-compose.bench.yaml container on
         localhost:5435); its schema comes from `dotnet ef database update` (GeoAssetsDbContext).
@@ -27,7 +28,7 @@ internal sealed record BenchOptions(string Command, int Features, BenchSettings 
     public static (BenchOptions? Options, string? Error) Parse(IReadOnlyList<string> args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        if (args.Count == 0 || args[0] is not ("seed" or "bench")) return (null, "The first argument must be 'seed' or 'bench'.");
+        if (args.Count == 0 || args[0] is not ("seed" or "bench" or "tiles")) return (null, "The first argument must be 'seed', 'bench' or 'tiles'.");
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 1; i < args.Count; i += 2)

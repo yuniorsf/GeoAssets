@@ -36,7 +36,8 @@ public static partial class OrganizationAssetCatalogHostExtensions
     /// memory rather than blocking on its first load. Runs for every request whose caller has an organization (asset reads
     /// also happen behind the workflow routes); after the first request it is a lookup. A failed load is logged and the
     /// request goes on: the endpoint then loads the catalog itself and fails there if the store does. Call after
-    /// authentication, so the caller is known. Does nothing when no <see cref="IOrganizationCatalogFactory"/> is registered.
+    /// authentication, so the caller is known. Does nothing when no <see cref="IOrganizationCatalogFactory"/> is registered,
+    /// nor for an endpoint marked <see cref="WithoutOrganizationCatalogWarmup{TBuilder}"/>.
     /// </summary>
     public static IApplicationBuilder UseOrganizationAssetCatalogs(this IApplicationBuilder app)
     {
@@ -44,8 +45,26 @@ public static partial class OrganizationAssetCatalogHostExtensions
         return app.Use(WarmCallersCatalogAsync);
     }
 
+    /// <summary>
+    /// Marks the endpoint as never reading the catalog's in-memory features (XD01-434, ADR-002 D7: the tile endpoints, which
+    /// read PostGIS), so <see cref="UseOrganizationAssetCatalogs"/> does not load the caller's organization catalog — the
+    /// full-catalog <c>WarmCacheAsync</c> — before it.
+    /// </summary>
+    public static TBuilder WithoutOrganizationCatalogWarmup<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return builder.WithMetadata(SkipOrganizationCatalogWarmup.Instance);
+    }
+
     private static async Task WarmCallersCatalogAsync(HttpContext context, RequestDelegate next)
     {
+        if (context.GetEndpoint()?.Metadata.GetMetadata<SkipOrganizationCatalogWarmup>() is not null)
+        {
+            await next(context).ConfigureAwait(false);
+            return;
+        }
+
         var catalogs = context.RequestServices.GetService<IOrganizationCatalogFactory>();
         var organizationId = context.RequestServices.GetService<ITenantContext>()?.CurrentOrganizationId ?? Guid.Empty;
 
@@ -64,6 +83,12 @@ public static partial class OrganizationAssetCatalogHostExtensions
         }
 
         await next(context).ConfigureAwait(false);
+    }
+
+    /// <summary>The endpoint metadata of <see cref="WithoutOrganizationCatalogWarmup{TBuilder}"/>.</summary>
+    private sealed class SkipOrganizationCatalogWarmup
+    {
+        public static readonly SkipOrganizationCatalogWarmup Instance = new();
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Loading the asset catalog of organization {OrganizationId} failed; the request continues without it")]

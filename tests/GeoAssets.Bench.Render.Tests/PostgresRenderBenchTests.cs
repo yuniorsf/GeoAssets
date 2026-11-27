@@ -122,6 +122,43 @@ public sealed class PostgresRenderBenchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TileRead_AnswersThePostGisSourcesBytes_ForTheMeasuredViewportsTiles()
+    {
+        var layout = new DatasetLayout(DatasetGenerator.DefaultSeed);
+        var viewports = ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, 8, 1, 1580, 1020)
+            .Concat(ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, 12, 2, 1580, 1020))
+            .Concat(ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, 16, 2, 1580, 1020))
+            .ToList();
+        var pipeline = new TileEndpointPipeline(DataSource, TimeProvider.System);
+        var source = new PostgresVectorTileSource(PostgresBenchDatabase.CreateOptions(_connectionString), tenantContext: null, lodPolicy: null, TimeProvider.System);
+        var nonEmpty = 0;
+
+        foreach (var tile in viewports.SelectMany(v => v.CoveringTiles().EnumerateTiles()))
+        {
+            var layers = TileEndpointPipeline.LayersAt(tile.Z);
+            var bench = await pipeline.GetAsync(tile, CancellationToken.None);
+            var drawn = await source.GetVectorTileAsync(new TileRequest(new TileLayerSet("assets", layers), tile), CancellationToken.None);
+
+            layers.Should().OnlyContain(id => DatasetComposition.Find(id)!.IsDrawnAt(tile.Z), "the endpoint asks only for the types drawn at the zoom");
+            bench.Mvt.Should().Equal(drawn.Content.ToArray(), "the bench's statement is the source's, at {0}", tile);
+            if (bench.Mvt.Length == 0)
+            {
+                bench.WireBytes.Should().Be(0, "an empty tile is a 204");
+                continue;
+            }
+
+            nonEmpty++;
+            await using var gzip = new GZipStream(new MemoryStream(TileEndpointPipeline.Gzip(bench.Mvt)), CompressionMode.Decompress);
+            using var decoded = new MemoryStream();
+            await gzip.CopyToAsync(decoded);
+            decoded.ToArray().Should().Equal(bench.Mvt);
+            bench.WireBytes.Should().Be(TileEndpointPipeline.Gzip(bench.Mvt).LongLength);
+        }
+
+        nonEmpty.Should().BeGreaterThan(5, "the viewports are drawn where the assets are");
+    }
+
+    [Fact]
     public async Task BoundsRead_ReadsOnlyTheFirstMatchesByOrdinalId_UpToTheEndpointsLimit()
     {
         var extent = DatasetLayout.Extent;

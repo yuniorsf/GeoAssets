@@ -1,3 +1,5 @@
+using GeoAssets.Core.Rendering;
+
 namespace GeoAssets.Bench.Render;
 
 /// <summary>
@@ -43,6 +45,14 @@ internal sealed class MapViewport
     public GeoBounds Bounds { get; }
 
     private double WorldSize => TileSize * Math.Pow(2, Zoom);
+
+    /// <summary>The 256-px tiles a tiled map (MapLibre, Leaflet) requests to fill this viewport: those its pixels overlap (XD01-434).</summary>
+    public TileRange CoveringTiles()
+    {
+        var last = TileAddress.TilesPerAxis(Zoom) - 1;
+        int Index(double pixel) => (int)Math.Clamp(Math.Floor(pixel / TileSize), 0, last);
+        return new TileRange(Zoom, Index(_originX), Index(_originY), Index(_originX + WidthPx - 1), Index(_originY + HeightPx - 1));
+    }
 
     /// <summary>Absolute world pixel coordinates of a lon/lat at this zoom.</summary>
     public (double X, double Y) Project(double lon, double lat)

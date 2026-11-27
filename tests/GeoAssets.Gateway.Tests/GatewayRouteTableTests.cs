@@ -54,7 +54,7 @@ public sealed class GatewayRouteTableTests
     private const string SiloHeader = "X-Tenant-Domain:ExactHeader:";
 
     [Fact]
-    public void WithoutSilos_TheTableIsTheSevenSharedRoutes_AndTheFourSharedClusters()
+    public void WithoutSilos_TheTableIsTheEightSharedRoutes_AndTheFourSharedClusters()
     {
         var (routes, clusters) = GatewayRouteCatalog.Build(Shared("http://k"), Shared("http://ip"), Shared("http://fs"), Shared("http://no"));
 
@@ -65,7 +65,8 @@ public sealed class GatewayRouteTableTests
             Line("neutral-operator-shared-route", 1, "/api/v/neutral-operator/{**catch-all}", "neutral-operator-shared", "", Transforms("PathPattern=/api/{**catch-all}")),
             Line("kernel-api-shared-route", 10000, "/api/{**catch-all}", "geoassets-shared", "", Transforms()),
             Line("kernel-wms-shared-route", 10000, "/wms", "geoassets-shared", "", Transforms()),
-            Line("kernel-wfs-shared-route", 10000, "/wfs", "geoassets-shared", "", Transforms()));
+            Line("kernel-wfs-shared-route", 10000, "/wfs", "geoassets-shared", "", Transforms()),
+            Line("kernel-tiles-shared-route", 10000, "/tiles/{**catch-all}", "geoassets-shared", "", Transforms()));
         clusters.Select(Describe).Should().Equal(
             "geoassets-shared -> destination1=http://k",
             "ip-billing-shared -> destination1=http://ip",
@@ -96,7 +97,9 @@ public sealed class GatewayRouteTableTests
             Line("kernel-wms-silo-route-ACME-EXAMPLE-COM", 10000, "/wms", "geoassets-silo-ACME-EXAMPLE-COM", $"{SiloHeader}acme.example.com:cs=False", Transforms()),
             Line("kernel-wms-shared-route", 10001, "/wms", "geoassets-shared", "", Transforms()),
             Line("kernel-wfs-silo-route-ACME-EXAMPLE-COM", 10000, "/wfs", "geoassets-silo-ACME-EXAMPLE-COM", $"{SiloHeader}acme.example.com:cs=False", Transforms()),
-            Line("kernel-wfs-shared-route", 10001, "/wfs", "geoassets-shared", "", Transforms()));
+            Line("kernel-wfs-shared-route", 10001, "/wfs", "geoassets-shared", "", Transforms()),
+            Line("kernel-tiles-silo-route-ACME-EXAMPLE-COM", 10000, "/tiles/{**catch-all}", "geoassets-silo-ACME-EXAMPLE-COM", $"{SiloHeader}acme.example.com:cs=False", Transforms()),
+            Line("kernel-tiles-shared-route", 10001, "/tiles/{**catch-all}", "geoassets-shared", "", Transforms()));
         clusters.Select(Describe).Should().Equal(
             "geoassets-shared -> destination1=http://k",
             "geoassets-silo-ACME-EXAMPLE-COM -> destination1=http://k-acme",
