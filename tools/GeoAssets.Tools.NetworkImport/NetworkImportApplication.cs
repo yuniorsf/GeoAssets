@@ -1,3 +1,5 @@
+using GeoAssets.Core.VectorFiles;
+
 namespace GeoAssets.Tools.NetworkImport;
 
 /// <summary>
@@ -50,7 +52,7 @@ internal static class NetworkImportApplication
             };
         }
         catch (Exception exception) when (exception is NetworkImportInputException or DirectoryNotFoundException or FileNotFoundException
-            or IOException or UnauthorizedAccessException)
+            or IOException or UnauthorizedAccessException or InvalidDataException or VectorFileFormatUnavailableException)
         {
             await stderr.LineAsync(exception.Message, ct).ConfigureAwait(false);
             return NetworkImportExitCodes.InputError;

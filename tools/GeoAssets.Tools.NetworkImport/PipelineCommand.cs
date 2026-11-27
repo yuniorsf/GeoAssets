@@ -1,36 +1,56 @@
 using System.Globalization;
 using GeoAssets.Core.FeatureImport;
+using GeoAssets.Core.VectorFiles;
 using GeoAssets.Ingestion.Pipeline;
 using GeoAssets.Ingestion.Profiles;
 using GeoAssets.Ingestion.Proj;
 using GeoAssets.Ingestion.Shapefile;
 using GeoAssets.Ingestion.Sources;
+using GeoAssets.Provider.Gdal.VectorFiles;
 
 namespace GeoAssets.Tools.NetworkImport;
 
 /// <summary>
 /// <c>plan</c> and <c>import</c>: inventory the delivery, run the pipeline into <c>features.ndjson</c> (plan) or the
 /// kernel (import), write <c>report.json</c> and print a summary. Chunks never exceed the kernel's
-/// <see cref="FeatureImportLimits.MaxChunkSize"/>.
+/// <see cref="FeatureImportLimits.MaxChunkSize"/>. <c>plan --export</c> then streams <c>features.ndjson</c> into
+/// <c>features.fgb</c> or <c>features.parquet</c> through <see cref="NetworkImportDependencies.VectorFileWriter"/>
+/// (XD01-466).
 /// </summary>
 internal sealed class PipelineCommand(NetworkImportOptions options, NetworkImportDependencies dependencies, TextWriter stdout)
 {
     public const string FeaturesFile = "features.ndjson";
     public const string ReportFile = "report.json";
+    public const string ExportFileName = "features";
 
     public async Task<int> PlanAsync(CancellationToken cancellationToken)
     {
+        var exportFormat = NetworkImportInputs.ExportFormat(options.Export);
         var (profile, inventory, pipeline) = await PrepareAsync(cancellationToken).ConfigureAwait(false);
         var featuresPath = Path.Combine(options.OutputDirectory, FeaturesFile);
         ImportReport report;
+        NdjsonFileFeatureSink sink;
         var stream = File.Create(featuresPath);
         await using (stream.ConfigureAwait(false))
         {
             var request = Request(profile, inventory, Guid.Empty);
-            report = await pipeline.RunAsync(request, new NdjsonFileFeatureSink(stream), cancellationToken).ConfigureAwait(false);
+            sink = new NdjsonFileFeatureSink(stream);
+            report = await pipeline.RunAsync(request, sink, cancellationToken).ConfigureAwait(false);
         }
 
-        return await FinishAsync(report, $"Plan written to {featuresPath}", cancellationToken).ConfigureAwait(false);
+        var headline = $"Plan written to {featuresPath}";
+        if (exportFormat is { } format)
+        {
+            var exportPath = Path.Combine(options.OutputDirectory, ExportFileName + OgrVectorFileWriter.Extension(format));
+            var written = await dependencies.VectorFileWriter.WriteAsync(
+                exportPath,
+                new VectorFileWriteRequest(format) { Attributes = sink.AttributeKeys },
+                NdjsonEncoding.ReadAsync(featuresPath, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            headline += string.Create(CultureInfo.InvariantCulture, $" and exported as {format} to {exportPath} ({written.FeaturesWritten} features)");
+        }
+
+        return await FinishAsync(report, headline, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<int> ImportAsync(IAccessTokenSource tokens, CancellationToken cancellationToken)

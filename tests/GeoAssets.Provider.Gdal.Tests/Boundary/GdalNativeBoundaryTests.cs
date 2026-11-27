@@ -9,7 +9,7 @@ namespace GeoAssets.Provider.Gdal.Tests.Boundary;
 /// ADR-002 D5 (XD01-437) — the single native GDAL boundary: GDAL's managed bindings and native runtime come into the
 /// repository through <c>GeoAssets.Provider.Gdal</c> alone, <c>GdalBase</c> (and its <c>ConfigureAll</c>) is called
 /// nowhere else — every other GDAL user goes through <see cref="GdalNativeInitializer"/> — and every host has one loading
-/// model for the plugin: statically referenced (FieldService.Server, the network import CLI through Ingestion.Proj) or
+/// model for the plugin: statically referenced (FieldService.Server, the network import CLI and its Ingestion.Proj) or
 /// loaded from a plugin directory (a server's <c>ProviderPlugin</c> item), never both.
 /// </summary>
 [Trait("Category", "Architecture")]
@@ -25,6 +25,7 @@ public sealed partial class GdalNativeBoundaryTests
     [
         "apps/GeoAssets.FieldService.Server/GeoAssets.FieldService.Server.csproj",
         "providers/GeoAssets.Ingestion.Proj/GeoAssets.Ingestion.Proj.csproj",
+        "tools/GeoAssets.Tools.NetworkImport/GeoAssets.Tools.NetworkImport.csproj",
         "tests/GeoAssets.Provider.Gdal.Tests/GeoAssets.Provider.Gdal.Tests.csproj",
     ];
 

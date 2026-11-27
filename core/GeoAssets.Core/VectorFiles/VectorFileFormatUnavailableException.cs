@@ -9,14 +9,14 @@ public sealed class VectorFileFormatUnavailableException : NotSupportedException
 {
     /// <summary><paramref name="format"/> can't be read: <paramref name="reason"/>.</summary>
     public VectorFileFormatUnavailableException(VectorFileFormat format, string reason)
-        : base($"{format} files can't be read here: {reason}")
+        : base($"{format} files can't be read or written here: {reason}")
     {
         Format = format;
     }
 
     /// <summary><paramref name="format"/> can't be read because of <paramref name="innerException"/>.</summary>
     public VectorFileFormatUnavailableException(VectorFileFormat format, string reason, Exception innerException)
-        : base($"{format} files can't be read here: {reason}", innerException)
+        : base($"{format} files can't be read or written here: {reason}", innerException)
     {
         Format = format;
     }

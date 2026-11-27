@@ -22,4 +22,5 @@ internal sealed record NetworkImportOptions
     public string? CheckpointPath { get; init; }
     public string? FeaturesPath { get; init; }
     public int Sample { get; init; } = DefaultSample;
+    public string? Export { get; init; }
 }

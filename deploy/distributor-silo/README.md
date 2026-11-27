@@ -316,6 +316,10 @@ $NI verify --kernel-url http://127.0.0.1:8180 --organization "$ORG_ID" \
   --features "$OUT/plan-metro/features.ndjson" --sample 50
 ```
 
+To review a plan in QGIS or another GIS tool, add `--export flatgeobuf` (or `geoparquet`) to step 2: it also writes the
+planned features as `features.fgb` (or `features.parquet`) next to `features.ndjson`, in EPSG:4326 with their `id`,
+`name` and attributes (XD01-466).
+
 `--include-geometry-only` also imports the layers `inventory` reports `geometryOnly` (a `.shp` without its `.dbf`).
 COELBA's METROPOLITANA `REDE_BT` is one: without the flag its 236,659 LV segments are skipped and the import holds no LV
 network at all (547,168 features instead of 783,827). Their ends are then resolved by snapping to the nearest pole, and

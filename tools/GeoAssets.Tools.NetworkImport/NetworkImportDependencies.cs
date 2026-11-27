@@ -1,3 +1,6 @@
+using GeoAssets.Core.VectorFiles;
+using GeoAssets.Provider.Gdal.VectorFiles;
+
 namespace GeoAssets.Tools.NetworkImport;
 
 /// <summary>
@@ -7,4 +10,8 @@ namespace GeoAssets.Tools.NetworkImport;
 internal sealed record NetworkImportDependencies(
     HttpMessageHandler Handler,
     TimeProvider TimeProvider,
-    Func<string, string?> GetEnvironmentVariable);
+    Func<string, string?> GetEnvironmentVariable)
+{
+    /// <summary>Writes <c>plan --export</c>'s file (XD01-466): the GDAL plugin's writer.</summary>
+    public IVectorFileWriter VectorFileWriter { get; init; } = new OgrVectorFileWriter();
+}
