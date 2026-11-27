@@ -1404,12 +1404,18 @@ function removeRasterLayer(divId, layerId) {
 
 /**
  * A WMS layer on the EPSG:3857 grid. This app's own WMS (under the gateway) answers EPSG:4326 only, so it is not
- * drawn — the kernel's features come from its tiles in this mode.
+ * drawn — the kernel's features come from its tiles in this mode — and neither is a distributor silo's (a layer with a
+ * tenant domain, XD01-473).
  */
 function addWmsLayer(divId, layerId, wmsBaseUrl, options) {
     const state = _maps[divId];
     if (!state || state.rasterLayers.has(layerId)) return;
     const url = new URL(wmsBaseUrl, document.baseURI).href;
+    if (options?.tenantDomain) {
+        warnOnce('wms-tenant', 'a WMS layer routed to a distributor silo (tenant domain) is drawn in the Leaflet modes only.');
+        state.rasterLayers.set(layerId, { sourceId: null });
+        return;
+    }
     if (state.gatewayBaseUrl && isUnder(url, state.gatewayBaseUrl)) {
         warnOnce('wms-kernel', 'the kernel\'s WMS (EPSG:4326 only) is not drawn; its features come from /tiles/style.json.');
         state.rasterLayers.set(layerId, { sourceId: null });

@@ -20,4 +20,10 @@ public interface IWmsProvider
 
     /// <summary>MIME type for GetMap responses, typically <c>image/png</c>.</summary>
     string WmsFormat { get; }
+
+    /// <summary>
+    /// The distributor silo the gateway routes this layer's requests to (its <c>X-Tenant-Domain</c>, e.g.
+    /// <c>coelba.local</c>), or <c>null</c> for the gateway's shared kernel or any other WMS server (XD01-473).
+    /// </summary>
+    string? WmsTenantDomain => null;
 }

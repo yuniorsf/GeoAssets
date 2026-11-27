@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 
@@ -12,6 +13,8 @@ namespace GeoAssets.Provider.WMS;
 ///   <item><c>name</c>       — display label for the collection</item>
 ///   <item><c>url</c>        — GeoAssets REST API base URL (same as the REST plugin)</item>
 ///   <item><c>layerName</c>  — OGC LAYERS parameter (default: <c>geoassets:feature</c>)</item>
+///   <item><c>tenantDomain</c> — optional: the distributor silo the gateway routes the tiles to, sent as their
+///   <c>X-Tenant-Domain</c> header (e.g. <c>coelba.local</c>, XD01-473); a host name, or blank for none</item>
 /// </list>
 ///
 /// Because features are rendered server-side as PNG tiles, the connected provider
@@ -19,7 +22,7 @@ namespace GeoAssets.Provider.WMS;
 /// The map's <c>WmsMapLayerRenderer</c> adds a Leaflet WMS tile layer for it instead of
 /// iterating features (XD01-422).
 /// </summary>
-public sealed class WmsProviderPlugin : IProviderPlugin
+public sealed partial class WmsProviderPlugin : IProviderPlugin
 {
     public string Id          => "wms";
     public string DisplayName => "WMS (OGC)";
@@ -38,7 +41,10 @@ public sealed class WmsProviderPlugin : IProviderPlugin
         new("layerName",
             Label:        "OGC layer name",
             Placeholder:  "geoassets:feature",
-            DefaultValue: "geoassets:feature")
+            DefaultValue: "geoassets:feature"),
+        new("tenantDomain",
+            Label:       "Tenant domain (silo, optional)",
+            Placeholder: "coelba.local")
     ];
 
     public Task<IAssetProvider> CreateAsync(
@@ -58,7 +64,15 @@ public sealed class WmsProviderPlugin : IProviderPlugin
         var layerName = config.Get("layerName", "geoassets:feature").Trim();
         if (string.IsNullOrEmpty(layerName)) layerName = "geoassets:feature";
 
-        IAssetProvider provider = new WmsAssetProvider(wmsUrl, layerName);
+        var tenantDomain = config.Get("tenantDomain").Trim();
+        if (tenantDomain.Length > 0 && !TenantDomainPattern().IsMatch(tenantDomain))
+            throw new InvalidOperationException($"Tenant domain '{tenantDomain}' is not a host name (e.g. coelba.local).");
+
+        IAssetProvider provider = new WmsAssetProvider(wmsUrl, layerName, tenantDomain: tenantDomain.Length > 0 ? tenantDomain : null);
         return Task.FromResult(provider);
     }
+
+    // A DNS host name (labels of letters, digits and inner hyphens, dot-separated): it travels as a request header.
+    [GeneratedRegex(@"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex TenantDomainPattern();
 }

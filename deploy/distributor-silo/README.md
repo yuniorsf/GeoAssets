@@ -371,6 +371,19 @@ In QGIS, add a WMS/WMTS connection:
 Each asset type is drawn only from its zoom on, and a tile holds a bounded number of features, so zoom in to a city to
 see poles and segments. `GetFeatureInfo` answers JSON.
 
+In the Web app (XD01-473), add a provider **WMS (OGC)** in the provider pool:
+
+| Field | Value |
+|---|---|
+| GeoAssets REST API URL | the gateway's root, `http://localhost:8090` (the layer requests `<url>/wms`) |
+| OGC layer name | `geoassets:feature` |
+| Tenant domain (silo, optional) | `coelba.local` (or `cemar.local`) |
+
+Every tile request then carries `X-Tenant-Domain`, which the gateway routes to the silo, and the signed-in user's token,
+which the Web app sends to the gateway's origin only. Use the root, not `/api/geoassets`: `/wms` counts against the
+gateway's `tiles` rate limit, `/api/geoassets/wms` against the `Api` one, which a map of tiles exhausts. The layer is drawn
+in the Leaflet render modes only (MapLibre mode skips it, like the kernel's own WMS).
+
 ## Add the next company (CEMAR, CEPISA)
 
 No code or compose change is needed for the silo itself. Use another env file, another database, and one more gateway

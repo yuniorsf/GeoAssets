@@ -8,6 +8,10 @@ namespace GeoAssets.Shared.Interfaces;
 /// <param name="Version">WMS protocol version (default 1.1.1).</param>
 /// <param name="MaxZoom">Maximum native zoom level.</param>
 /// <param name="Opacity">Layer opacity in [0, 1].</param>
+/// <param name="TenantDomain">
+/// The distributor silo the gateway routes the tiles to, sent as their <c>X-Tenant-Domain</c> header (XD01-473); <c>null</c>
+/// for none. Drawn in the Leaflet render modes only.
+/// </param>
 public record WmsLayerOptions(
     string Layers      = "geoassets:feature",
     string Format      = "image/png",
@@ -15,4 +19,5 @@ public record WmsLayerOptions(
     string Attribution = "",
     string Version     = "1.1.1",
     int    MaxZoom     = 19,
-    double Opacity     = 1.0);
+    double Opacity     = 1.0,
+    string? TenantDomain = null);
