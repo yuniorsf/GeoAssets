@@ -37,6 +37,9 @@ services:
       ConnectionStrings__GeoAssets: Host=${POSTGRES_HOST:-postgres};Port=5432;Database=geoassets_${COMPANY};Username=postgres;Password=${POSTGRES_PASSWORD}
       # The asset store only: no NeutralOperator module (appsettings.json lists nothing else; index 1 stays unset).
       GeoAssets__Modules__0: postgres-spatial
+      # Every imported feature belongs to the company's organization: a signed-in user assigned to it (PUT
+      # /api/identity/users/{id}) reads it through WMS, WFS, tiles and the feature routes (XD01-471). See the README.
+      GeoAssets__Tenancy__OrganizationFromMembership: "true"
       # The kernel API's own CIAM registration (the deploy/server .env values), so a token for the kernel API — a
       # GeoAssets.ServiceCaller client-credentials token of tools/GeoAssets.Tools.NetworkImport — is valid on every silo.
       AzureAdCiam__Instance: ${AzureAdCiam__Instance:-}

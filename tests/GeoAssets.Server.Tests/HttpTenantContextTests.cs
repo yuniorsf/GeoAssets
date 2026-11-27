@@ -13,6 +13,7 @@ public sealed class HttpTenantContextTests
 {
     private static readonly Guid Own = new("a0a0a0a0-0000-4000-8000-000000000379");
     private static readonly Guid Scoped = new("b0b0b0b0-0000-4000-8000-000000000379");
+    private static readonly Guid Member = new("c0c0c0c0-0000-4000-8000-000000000471");
 
     private sealed class FakeCurrentUserAccessor(CurrentUser? user) : ICurrentUserAccessor
     {
@@ -20,6 +21,13 @@ public sealed class HttpTenantContextTests
     }
 
     private static CurrentUser User(Guid organization) => new("oid-1", "user@example.com", "User", [], organization);
+
+    private static CallerMembershipOrganization MemberOf(Guid organization)
+    {
+        var membership = new CallerMembershipOrganization();
+        membership.Set(organization);
+        return membership;
+    }
 
     private static TenantOrganizationScope Entered(Guid organization)
     {
@@ -83,5 +91,46 @@ public sealed class HttpTenantContextTests
         scope.Enter(Scoped);
 
         context.CurrentOrganizationId.Should().Be(Scoped);
+    }
+
+    [Fact]
+    public void CurrentOrganizationId_TokenWithoutAnOrganization_IsTheMembershipOne_XD01_471()
+    {
+        var context = new HttpTenantContext(new FakeCurrentUserAccessor(User(Guid.Empty)), new TenantOrganizationScope(), MemberOf(Member));
+
+        context.CurrentOrganizationId.Should().Be(Member);
+    }
+
+    [Fact]
+    public void CurrentOrganizationId_TokenOrganization_WinsOverTheMembershipOne_XD01_471()
+    {
+        var context = new HttpTenantContext(new FakeCurrentUserAccessor(User(Own)), null, MemberOf(Member));
+
+        context.CurrentOrganizationId.Should().Be(Own);
+    }
+
+    [Fact]
+    public void CurrentOrganizationId_MembershipOrganization_WinsOverTheScope_LikeAClaim_XD01_471()
+    {
+        var context = new HttpTenantContext(new FakeCurrentUserAccessor(User(Guid.Empty)), Entered(Scoped), MemberOf(Member));
+
+        context.CurrentOrganizationId.Should().Be(Member);
+    }
+
+    [Fact]
+    public void CurrentOrganizationId_EmptyMembership_FallsBackToTheScope_XD01_471()
+    {
+        var context = new HttpTenantContext(new FakeCurrentUserAccessor(User(Guid.Empty)), Entered(Scoped), new CallerMembershipOrganization());
+
+        context.CurrentOrganizationId.Should().Be(Scoped);
+    }
+
+    [Fact]
+    public void CallerMembershipOrganization_RefusesTheEmptyGuid_XD01_471()
+    {
+        var membership = new CallerMembershipOrganization();
+
+        membership.Invoking(m => m.Set(Guid.Empty)).Should().Throw<ArgumentException>();
+        membership.OrganizationId.Should().BeNull();
     }
 }

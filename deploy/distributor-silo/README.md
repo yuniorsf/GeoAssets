@@ -327,6 +327,46 @@ Through the gateway, add `--tenant-domain coelba.local` and use `--kernel-url ht
 `<scope-prefix>/<region>/<layer>` (for example `coelba/METROPOLITANA/REDE_MT`). Keep one `--scope-prefix` per company.
 Import the other regions one `--regions` value at a time, each with its own `--import-id`.
 
+## View the network: WMS (QGIS) and the map
+
+Every imported feature belongs to the company's organization, and a caller sees only its organization's features plus
+the shared ones. Entra CIAM tokens carry no organization claim, so the silo sets
+`GeoAssets__Tenancy__OrganizationFromMembership=true` (XD01-471): a signed-in user's organization is the one their
+identity record names. A user without one, and the import's service principal, see the shared features only, so their
+WMS tiles stay empty.
+
+Give a user access, once per silo:
+
+1. The user signs in once against the silo (any request with their token, for example through the Web app or QGIS).
+   That creates their identity record.
+2. Their token carries an app role of the kernel API registration whose local role has `features:read`. The kernel
+   reads roles from the token's `roles` claim and matches them by value to the seeded roles `ReadOnly`,
+   `FieldTechnician`, `Supervisor` and `Administrator`. The registration defines only `Administrator` today; add a
+   `ReadOnly` app role (value `ReadOnly`) to give read-only viewers access.
+3. Assign them to the company's organization, with the service caller `$TOKEN` from *Create the company organization*:
+
+```bash
+USER_ID=$(curl -fsS "http://127.0.0.1:8180/api/identity/users/by-external-id/<user oid>" \
+  -H "Authorization: Bearer $TOKEN" | jq -r .id)
+curl -fsS -X PUT "http://127.0.0.1:8180/api/identity/users/$USER_ID" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"displayName\":\"<name>\",\"isActive\":true,\"organizationId\":\"$ORG_ID\"}"
+```
+
+The PUT replaces the display name, the active flag and the organization together. A deactivated user gets no
+organization.
+
+In QGIS, add a WMS/WMTS connection:
+
+| Setting | Value |
+|---|---|
+| URL | `http://127.0.0.1:8180/wms` (CEMAR `:8181`), or the gateway `http://127.0.0.1:8090/wms` with the HTTP header `X-Tenant-Domain: coelba.local` |
+| Authentication | a user token for the kernel API (scope `api://<kernel API client id>/access_as_user`): method *OAuth2* (Authorization Code with PKCE, token URL `https://<tenant subdomain>.ciamlogin.com/<tenant id>/oauth2/v2.0/token`), or *API Header* (`Authorization: Bearer <token>`) for a token obtained elsewhere. OAuth2 needs a public-client (mobile and desktop) app registration with a loopback redirect such as `http://127.0.0.1:7070/`; the Web app's SPA registration cannot redeem a code outside a browser. |
+| Layers | `geoassets:feature` (everything) or `geoassets:feature:<asset type id>` (one class), PNG, EPSG:4326, transparent |
+
+Each asset type is drawn only from its zoom on, and a tile holds a bounded number of features, so zoom in to a city to
+see poles and segments. `GetFeatureInfo` answers JSON.
+
 ## Add the next company (CEMAR, CEPISA)
 
 No code or compose change is needed for the silo itself. Use another env file, another database, and one more gateway

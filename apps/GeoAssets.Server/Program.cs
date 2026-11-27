@@ -175,6 +175,10 @@ builder.Services.AddScoped<ICurrentUserAccessor>(sp =>
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 builder.Services.AddScoped<ITenantOrganizationScope, TenantOrganizationScope>();
 
+// The caller's organization from identity membership when the token carries none (XD01-471); resolved per request only
+// when GeoAssets:Tenancy:OrganizationFromMembership is on (UseCallerMembershipOrganization below).
+builder.Services.AddCallerMembershipOrganization();
+
 // AuthZ bridge (XD01-13) — lets endpoints declare .RequireAuthorization("SomePolicyName")
 // (matching an AppPolicy.Name row) and get evaluated against IGeoAuthorizationService,
 // the same policy engine the Blazor client already uses.
@@ -229,6 +233,9 @@ app.UseResponseCompression();
 app.UseCors();
 
 app.UseGeoAssetsAuthentication();
+
+// After authorization, before the modules' middleware warms the caller's organization catalog (XD01-471).
+app.UseCallerMembershipOrganization(app.Configuration);
 
 // Module middleware, after authentication (XD01-359) — e.g. PostgresSpatialModule loads the
 // caller's organization's asset catalog before its endpoint runs (XD01-338).
