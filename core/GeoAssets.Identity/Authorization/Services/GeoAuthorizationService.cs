@@ -95,18 +95,17 @@ public class GeoAuthorizationService(
             // field-for-field — OrganizationId stays null; org/role assignment happens
             // post-first-login via the existing admin UI (XD01-63), never resolved
             // automatically here (see XD01-49's resolution for why that's permanent, not a gap).
+            // Concurrent first requests (a map's burst of tiles) all get here; the repository keeps one row and hands the
+            // others the stored user (XD01-475).
             var now = timeProvider.GetUtcNow().UtcDateTime;
-            user = new AppUser
+            user = await userRepository.ProvisionAsync(new AppUser
             {
                 ExternalObjectId = current.ExternalObjectId,
                 Email            = current.Email,
                 DisplayName      = current.DisplayName,
                 CreatedAt        = now,
                 LastLoginAt      = now,
-            };
-
-            await userRepository.AddAsync(user, ct).ConfigureAwait(false);
-            await userRepository.SaveChangesAsync(ct).ConfigureAwait(false);
+            }, ct).ConfigureAwait(false);
         }
 
         var claims = await claimRepository.GetByUserIdAsync(user.Id, ct).ConfigureAwait(false);

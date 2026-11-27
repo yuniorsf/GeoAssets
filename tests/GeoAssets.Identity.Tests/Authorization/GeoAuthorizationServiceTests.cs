@@ -84,6 +84,22 @@ public class GeoAuthorizationServiceTests
             SaveChangesCalled = true;
             return Task.CompletedTask;
         }
+
+        /// <summary>A user a concurrent first request stored before this one could (XD01-475), or null for none.</summary>
+        public AppUser? StoredByAConcurrentRequest { get; set; }
+
+        public async Task<AppUser> ProvisionAsync(AppUser user, CancellationToken ct = default)
+        {
+            if (StoredByAConcurrentRequest is { } stored)
+            {
+                _user = stored;
+                return stored;
+            }
+
+            await AddAsync(user, ct);
+            await SaveChangesAsync(ct);
+            return user;
+        }
     }
 
     private sealed class FakeUserClaimRepository(IReadOnlyList<UserClaim> claims) : IUserClaimRepository
@@ -206,6 +222,22 @@ public class GeoAuthorizationServiceTests
         userRepo.Added.Email.Should().Be("a@example.com");
         userRepo.Added.DisplayName.Should().Be("Ada");
         userRepo.SaveChangesCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetAuthorizationContextAsync_ProvisioningLostTheRace_UsesTheStoredUser_XD01_475()
+    {
+        var organization = Guid.NewGuid();
+        var stored = ProvisionedUser("user-1");
+        stored.OrganizationId = organization;
+        var (sut, userRepo) = SutWithUserRepo(new CurrentUser("user-1", "a@example.com", "Ada", []), provisionedUser: null);
+        userRepo.StoredByAConcurrentRequest = stored;
+
+        var ctx = await sut.GetAuthorizationContextAsync();
+
+        ctx.User.Should().BeSameAs(stored);
+        ctx.User.OrganizationId.Should().Be(organization);
+        userRepo.Added.Should().BeNull();
     }
 
     [Fact]
