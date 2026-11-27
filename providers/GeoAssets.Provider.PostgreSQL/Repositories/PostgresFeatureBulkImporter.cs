@@ -76,7 +76,7 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
             var (result, dirty) = await db.Database.CreateExecutionStrategy()
                 .ExecuteAsync(ct => WriteChunkAsync(db, request, ct), cancellationToken)
                 .ConfigureAwait(false);
-            await PublishDirtyTilesAsync(dirty).ConfigureAwait(false);
+            await PublishDirtyTilesAsync(dirty, request.OrganizationId).ConfigureAwait(false);
             return result;
         }
     }
@@ -96,7 +96,7 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
                     .ExecuteAsync(ct => DeleteScopeAsync(db, completion, ct), cancellationToken)
                     .ConfigureAwait(false);
                 removed = removedBounds.Count;
-                await PublishDirtyTilesAsync(removedBounds).ConfigureAwait(false);
+                await PublishDirtyTilesAsync(removedBounds, completion.OrganizationId).ConfigureAwait(false);
             }
         }
 
@@ -168,10 +168,10 @@ public sealed class PostgresFeatureBulkImporter : IFeatureBulkImporter
         }
     }
 
-    private Task PublishDirtyTilesAsync(IReadOnlyList<BoundingBox?> bounds) =>
+    private Task PublishDirtyTilesAsync(IReadOnlyList<BoundingBox?> bounds, Guid organizationId) =>
         _tiles is null || bounds.Count == 0
             ? Task.CompletedTask
-            : _tiles.PublishAsync(DirtyTileRegions.Of(bounds), AfterCommitTileInvalidation.BulkImportWriter);
+            : _tiles.PublishAsync(DirtyTileRegions.Of(bounds), organizationId, AfterCommitTileInvalidation.BulkImportWriter);
 
     /// <summary>The organization's own asset types and the shared ones (<see cref="Guid.Empty"/>), with their allowed geometry.</summary>
     private static async Task<IReadOnlyDictionary<Guid, GeometryType?>> VisibleAssetTypesAsync(

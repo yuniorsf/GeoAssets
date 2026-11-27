@@ -55,14 +55,17 @@ internal sealed partial class AfterCommitTileInvalidation
         return inner is null ? null : new AfterCommitTileInvalidation(inner, logger);
     }
 
-    /// <summary>Hands <paramref name="regions"/> (one committed write's) to the invalidation; nothing when there are none. Never throws.</summary>
-    public async Task PublishAsync(IReadOnlyCollection<DirtyTileRegion> regions, string writer)
+    /// <summary>
+    /// Hands <paramref name="regions"/> (one committed write of <paramref name="organizationId"/>'s features;
+    /// <see cref="Guid.Empty"/> = the shared ones, XD01-458) to the invalidation; nothing when there are none. Never throws.
+    /// </summary>
+    public async Task PublishAsync(IReadOnlyCollection<DirtyTileRegion> regions, Guid organizationId, string writer)
     {
         if (regions.Count == 0) return;
 
         try
         {
-            await _inner.InvalidateAsync(regions, CancellationToken.None).ConfigureAwait(false);
+            await _inner.InvalidateAsync(regions, organizationId, CancellationToken.None).ConfigureAwait(false);
             Count(writer, Published);
         }
         catch (Exception ex)

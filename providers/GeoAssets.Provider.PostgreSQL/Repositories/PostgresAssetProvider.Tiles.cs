@@ -30,7 +30,7 @@ public sealed partial class PostgresAssetProvider
 
         var regions = DirtyTileRegions.Of(_deferredDirtyBounds);
         _deferredDirtyBounds.Clear();
-        return _tiles.PublishAsync(regions, writer);
+        return _tiles.PublishAsync(regions, WriterOrganization, writer);
     }
 
     /// <summary>The stored boxes of those of <paramref name="ids"/> this provider may write (the context's query filter); none when nothing is tracked.</summary>
@@ -44,6 +44,12 @@ public sealed partial class PostgresAssetProvider
             .AsEnumerable()
             .Select(envelope => DirtyTileRegions.BoundsOf(envelope.EnvelopeInternal))];
     }
+
+    /// <summary>
+    /// Whose features this provider writes (XD01-458): its organization's, or — built without one — the organization-less
+    /// (shared) rows its context admits, reported as <see cref="Guid.Empty"/>, which every tile scope sees.
+    /// </summary>
+    private Guid WriterOrganization => _organization?.CurrentOrganizationId ?? Guid.Empty;
 
     private static BoundingBox? BoundsOf(GeoFeature feature) =>
         DirtyTileRegions.BoundsOf(feature.Geometry?.NtsGeometry.EnvelopeInternal);
@@ -65,6 +71,6 @@ public sealed partial class PostgresAssetProvider
             return;
         }
 
-        _ = _tiles.PublishAsync(DirtyTileRegions.Of(bounds), AfterCommitTileInvalidation.ProviderWriter);
+        _ = _tiles.PublishAsync(DirtyTileRegions.Of(bounds), WriterOrganization, AfterCommitTileInvalidation.ProviderWriter);
     }
 }

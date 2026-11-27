@@ -14,6 +14,11 @@ namespace GeoAssets.Server.Tiles;
 ///   <item><c>geoassets.tiles.size</c> — bytes of each tile body sent (as encoded on the wire); tag <c>format</c>.</item>
 ///   <item><c>geoassets.tiles.cache.invalidations</c> — committed writes invalidated; tag <c>outcome</c>
 ///   (<see cref="Evicted"/>|<see cref="Flushed"/>).</item>
+///   <item><c>geoassets.tiles.versions.peer_changes</c> — another replica's changes of the shared tile versions applied here
+///   (XD01-458); tag <c>outcome</c> (<see cref="Evicted"/>: its dirty tiles evicted | <see cref="Flushed"/> | <see cref="Resynchronized"/>:
+///   announced incomplete, so the cache was emptied and the versions re-read).</item>
+///   <item><c>geoassets.tiles.versions.reconnects</c> — subscriptions to the shared tile versions lost and retried (XD01-458);
+///   each is followed, once subscribed again, by an emptied cache and the versions re-read.</item>
 ///   <item><c>geoassets.tiles.lod_calibration.runs</c> / <c>.duration</c> (ms) — <c>GET /tiles/lod-calibration</c> requests
 ///   (XD01-439); tag <c>outcome</c> (<see cref="Completed"/>|<see cref="Cancelled"/>|<see cref="TimedOut"/>|<see cref="Failed"/>).</item>
 ///   <item><c>geoassets.tiles.lod_calibration.recommendations</c> — asset types calibrated; tag <c>recommendation</c>
@@ -42,6 +47,12 @@ public static class TileMetrics
     public const string Evicted = "evicted";
 
     public const string Flushed = "flushed";
+
+    public const string PeerChangesName = "geoassets.tiles.versions.peer_changes";
+
+    public const string ReconnectsName = "geoassets.tiles.versions.reconnects";
+
+    public const string Resynchronized = "resynchronized";
 
     public const string CalibrationRunsName = "geoassets.tiles.lod_calibration.runs";
 
@@ -80,6 +91,12 @@ public static class TileMetrics
     private static readonly Counter<long> Invalidations = Meter.CreateCounter<long>(
         InvalidationsName, unit: "{writes}", description: "Committed writes whose tiles were invalidated (tag: outcome=evicted|flushed).");
 
+    private static readonly Counter<long> PeerChanges = Meter.CreateCounter<long>(
+        PeerChangesName, unit: "{changes}", description: "Other replicas' tile version changes applied (tag: outcome=evicted|flushed|resynchronized).");
+
+    private static readonly Counter<long> Reconnects = Meter.CreateCounter<long>(
+        ReconnectsName, unit: "{reconnects}", description: "Subscriptions to the shared tile versions lost and retried.");
+
     private static readonly Counter<long> CalibrationRuns = Meter.CreateCounter<long>(
         CalibrationRunsName, unit: "{runs}", description: "LOD calibration requests (tag: outcome=completed|cancelled|timed_out|failed).");
 
@@ -100,6 +117,11 @@ public static class TileMetrics
 
     internal static void Invalidated(string outcome) =>
         Invalidations.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
+    internal static void PeerChanged(string outcome) =>
+        PeerChanges.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
+    internal static void Reconnected() => Reconnects.Add(1);
 
     internal static void Calibrated(string outcome, double milliseconds)
     {

@@ -31,7 +31,10 @@ namespace GeoAssets.Server.Tiles;
 /// <para><b>Status codes.</b> 400 for a set or <c>{v}</c> outside <see cref="TileKeySegment"/>, or a zoom/column/row
 /// outside the pyramid; 401 without a caller, 403 without <c>features:read</c>; 404 for a set the caller does not see;
 /// 304 when <c>If-None-Match</c> holds the tile's <c>ETag</c> (content-derived, <see cref="TilePayload.ETag"/>).</para>
-/// <para><b>Caching.</b> A tile whose <c>{v}</c> is current (<see cref="TileVersions.IsCurrent"/>) is
+/// <para><b>Versions.</b> <c>{v}</c> is the caller's organization's (<see cref="TileVersions.GenerationOf"/>, XD01-458): a
+/// write changes it only for the scopes that can see it. Shared across replicas (<see cref="TileServing.Sync"/>), a request
+/// first makes its organization's versions current (<see cref="TileVersionSync.EnsureCurrentAsync"/>: read once).</para>
+/// <para><b>Caching.</b> A tile whose <c>{v}</c> is current (<see cref="TileVersions.IsCurrent(string, string, Guid)"/>) is
 /// <c>Cache-Control: private, max-age=31536000, immutable</c>; any other <c>{v}</c> is answered with the current tile
 /// and <c>private, no-cache</c>. Server side, tiles up to <see cref="TileServingOptions.MaxCachedZoom"/> are kept in the
 /// <see cref="ITileCache"/> under <see cref="TileCacheKey"/>(caller's <see cref="TileScopeResolver">organization + grant
@@ -60,7 +63,7 @@ public static class TileEndpointExtensions
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        routes.MapGet($"{Prefix}/style.json", ServeStyle)
+        routes.MapGet($"{Prefix}/style.json", (Func<HttpContext, Task<IResult>>)ServeStyleAsync)
             .RequireAuthorization("features:read")
             .WithoutOrganizationCatalogWarmup();
 
@@ -80,7 +83,7 @@ public static class TileEndpointExtensions
         return routes;
     }
 
-    private static IResult ServeStyle(HttpContext http)
+    private static async Task<IResult> ServeStyleAsync(HttpContext http)
     {
         var layer = http.Request.Query["layers"].ToString();
         if (layer.Length == 0) layer = TileLayerSetDescriptor.AllAssetTypes;
@@ -92,7 +95,17 @@ public static class TileEndpointExtensions
         var descriptor = TileLayerSetDescriptor.Resolve(layer, catalog, serving.Lod);
         if (descriptor is null) return Results.NotFound();
 
-        var version = serving.Versions.PublishedVersion(descriptor.StyleHash);
+        var organization = OrganizationOf(http);
+        try
+        {
+            if (serving.Sync is { } sync) await sync.EnsureCurrentAsync(organization, http.RequestAborted).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (http.RequestAborted.IsCancellationRequested)
+        {
+            return Results.Empty;
+        }
+
+        var version = serving.Versions.PublishedVersion(descriptor.StyleHash, organization);
         var style = TileStyleDocument.Build(descriptor, version, PublicBaseUrl(http.Request), serving.Options.MaxCachedZoom);
         var body = JsonSerializer.SerializeToUtf8Bytes(style);
         var etag = "\"" + Convert.ToHexStringLower(SHA256.HashData(body).AsSpan(0, 16)) + "\"";
@@ -118,9 +131,11 @@ public static class TileEndpointExtensions
         if (descriptor is null) return Results.NotFound();
 
         var ct = http.RequestAborted;
-        var current = serving.Versions.IsCurrent(v, descriptor.StyleHash);
+        var organization = OrganizationOf(http);
         try
         {
+            if (serving.Sync is { } sync) await sync.EnsureCurrentAsync(organization, ct).ConfigureAwait(false);
+            var current = serving.Versions.IsCurrent(v, descriptor.StyleHash, organization);
             var (payload, cache) = await TileAsync(http, serving, descriptor, address, format, ct).ConfigureAwait(false);
             return new TileResult(payload, format, current, cache);
         }
@@ -197,6 +212,10 @@ public static class TileEndpointExtensions
             },
             ct).ConfigureAwait(false);
     }
+
+    /// <summary>The caller's organization, as <see cref="TileScopeResolver"/> reads it (<see cref="Guid.Empty"/> for an organization-less caller).</summary>
+    private static Guid OrganizationOf(HttpContext http) =>
+        http.RequestServices.GetService<ITenantContext>()?.CurrentOrganizationId ?? Guid.Empty;
 
     /// <summary>One drawing per scope, set, version, metatile and layers drawn.</summary>
     private static string DrawingKey(TileCacheKey key, TileRequest request, int metatileSpan) =>
