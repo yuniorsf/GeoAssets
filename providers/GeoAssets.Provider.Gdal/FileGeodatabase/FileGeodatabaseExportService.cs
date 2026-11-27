@@ -2,11 +2,10 @@ using System.IO.Compression;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using MaxRev.Gdal.Core;
 using OSGeo.OGR;
 using OSGeo.OSR;
 
-namespace GeoAssets.Provider.FileGeodatabase;
+namespace GeoAssets.Provider.Gdal.FileGeodatabase;
 
 /// <summary>
 /// Writes BDGD layers to a real ESRI File Geodatabase via GDAL's OGR "OpenFileGDB" driver (the
@@ -18,9 +17,6 @@ namespace GeoAssets.Provider.FileGeodatabase;
 /// </summary>
 public sealed class FileGeodatabaseExportService : IFileGeodatabaseExportService
 {
-    private static readonly Lock ConfigureLock = new();
-    private static bool _gdalConfigured;
-
     public byte[] ExportToZip(
         IReadOnlyDictionary<string, IReadOnlyList<GeoFeature>> layeredFeatures,
         string targetCrsWkt,
@@ -32,7 +28,7 @@ public sealed class FileGeodatabaseExportService : IFileGeodatabaseExportService
         if (layeredFeatures.Values.All(features => features.Count == 0))
             throw new InvalidOperationException("No features provided for any layer.");
 
-        EnsureGdalConfigured();
+        GdalNativeInitializer.EnsureInitialized();
 
         var tempDir = Path.Combine(Path.GetTempPath(), "fgdb_export_" + Guid.NewGuid().ToString("N"));
         var gdbPath = Path.Combine(tempDir, "export.gdb");
@@ -62,20 +58,6 @@ public sealed class FileGeodatabaseExportService : IFileGeodatabaseExportService
         finally
         {
             try { Directory.Delete(tempDir, recursive: true); } catch (IOException) { }
-        }
-    }
-
-    /// <summary>
-    /// GDAL's native drivers must be configured once per process before any OGR call — safe to
-    /// call repeatedly, guarded the same way <c>GdalBase.ConfigureAll()</c>'s own docs recommend.
-    /// </summary>
-    private static void EnsureGdalConfigured()
-    {
-        lock (ConfigureLock)
-        {
-            if (_gdalConfigured) return;
-            GdalBase.ConfigureAll();
-            _gdalConfigured = true;
         }
     }
 

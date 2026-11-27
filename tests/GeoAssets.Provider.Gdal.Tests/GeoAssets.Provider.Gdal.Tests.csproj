@@ -1,5 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- XD01-437: GeoAssets.Provider.Gdal referenced statically (managed GDAL in the default load context): the formats,
+       tile sources, the initializer and the single-boundary architecture tests. Loading it from a plugin directory in
+       its own PluginLoadContext is GeoAssets.Provider.Gdal.PluginLoading.Tests' job — a host without a static copy. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -13,7 +16,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
-    <PackageReference Include="MaxRev.Gdal.Core" Version="3.13.3.611" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
@@ -24,7 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
-    <ProjectReference Include="..\..\providers\GeoAssets.Provider.FileGeodatabase\GeoAssets.Provider.FileGeodatabase.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,8 +2,9 @@
 
   <!-- PROJ-backed coordinate transformer of the network import pipeline. PROJ picks the most accurate available
        SAD69 → SIRGAS 2000 operation (the IBGE grid br_ibge_SAD69_003.tif when it is on the PROJ search path,
-       a Helmert otherwise — 65.7 m vs 4.9 m vs reference near Salvador). Same GDAL bindings and version as
-       GeoAssets.Provider.FileGeodatabase (XD01-225). -->
+       a Helmert otherwise — 65.7 m vs 4.9 m vs reference near Salvador). Its GDAL bindings, native runtime and the one
+       GdalBase.ConfigureAll() come from GeoAssets.Provider.Gdal, the single native GDAL boundary (ADR-002 D5,
+       XD01-437): GdalEnvironment configures GDAL through GdalNativeInitializer. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -17,12 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Ingestion\GeoAssets.Ingestion.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="MaxRev.Gdal.Core" Version="3.13.3.611" />
-    <PackageReference Include="MaxRev.Gdal.MacosRuntime.Minimal" Version="3.13.3.611" />
-    <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.3.611" />
+    <ProjectReference Include="..\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />
   </ItemGroup>
 
 </Project>

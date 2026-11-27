@@ -115,6 +115,19 @@ public sealed class PluginLoadContextTests : IDisposable
     }
 
     [Fact]
+    public void ANativeLibraryItLoaded_IsListed_WithItsPathInThePluginsFolder()
+    {
+        var context = new PluginLoadContext(PluginFixtures.EntryAssembly(PluginFixtures.Alpha));
+        context.LoadedNativeLibraries.Should().BeEmpty();
+
+        PluginFixtures.InvokeModuleStatic(context, PluginFixtures.Alpha, "NativeLibraryVersion");
+
+        context.LoadedNativeLibraries.Should().ContainSingle()
+            .Which.Should().StartWith(Path.Combine(context.PluginDirectory, "runtimes"))
+            .And.Contain("e_sqlite3");
+    }
+
+    [Fact]
     public void AnUnknownNativeLibrary_IsLeftToTheRuntime()
     {
         var context = new PluginLoadContext(PluginFixtures.EntryAssembly(PluginFixtures.Alpha));

@@ -1,7 +1,9 @@
 using FluentAssertions;
+using GeoAssets.Core.Plugins;
 using GeoAssets.Ingestion.Proj;
 using GeoAssets.Ingestion.Spatial;
 using GeoAssets.Ingestion.Tests.Fakes;
+using GeoAssets.Provider.Gdal;
 using NetTopologySuite.Geometries;
 using Xunit;
 
@@ -35,6 +37,16 @@ public sealed class ProjCoordinateTransformerFactoryTests
         var dx = (a.X - b.X) * metersPerDegree * Math.Cos(a.Y * Math.PI / 180.0);
         var dy = (a.Y - b.Y) * metersPerDegree;
         return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
+    [Fact]
+    public void TheFactory_ConfiguresGdal_ThroughTheSharedNativeInitializer()
+    {
+        Create(Sirgas2000GeographicWkt);
+
+        GdalNativeInitializer.IsInitialized.Should().BeTrue();
+        GdalNativeInitializer.ConfigurationCount.Should().Be(1, "PROJ uses the one native GDAL boundary's configuration (XD01-437)");
+        NativeLibraryOwnership.OwnerOf(GdalNativeInitializer.NativeLibraryName).Should().BeSameAs(typeof(GdalNativeInitializer).Assembly);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ using GeoAssets.Identity.Authorization;
 using GeoAssets.Infrastructure.Observability;
 using GeoAssets.Persistence.Postgres;
 using GeoAssets.Persistence.Postgres.Interceptors;
-using GeoAssets.Provider.FileGeodatabase;
+using GeoAssets.Provider.Gdal;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
 using GeoAssets.Workflow;

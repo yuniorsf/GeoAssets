@@ -159,9 +159,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Gateway", "apps\G
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Gateway.Tests", "tests\GeoAssets.Gateway.Tests\GeoAssets.Gateway.Tests.csproj", "{D0EFCE2A-6F04-4FAB-A794-BB81B71F0593}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.FileGeodatabase", "providers\GeoAssets.Provider.FileGeodatabase\GeoAssets.Provider.FileGeodatabase.csproj", "{C7C71069-8C9A-426A-8D30-F628ACB36573}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Gdal", "providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj", "{C7C71069-8C9A-426A-8D30-F628ACB36573}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.FileGeodatabase.Tests", "tests\GeoAssets.Provider.FileGeodatabase.Tests\GeoAssets.Provider.FileGeodatabase.Tests.csproj", "{3F7B8592-AD41-4335-B238-93297DD4EED5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Gdal.Tests", "tests\GeoAssets.Provider.Gdal.Tests\GeoAssets.Provider.Gdal.Tests.csproj", "{3F7B8592-AD41-4335-B238-93297DD4EED5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Tools.SharedUseImport", "tools\GeoAssets.Tools.SharedUseImport\GeoAssets.Tools.SharedUseImport.csproj", "{597595B9-3AAA-4140-826D-9E8F4C7D932F}"
 EndProject
@@ -240,6 +240,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Ingestion.Tests", "tests\GeoAssets.Ingestion.Tests\GeoAssets.Ingestion.Tests.csproj", "{3357A13B-9091-419D-B680-1742FE0A9E79}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Tools.NetworkImport.Tests", "tests\GeoAssets.Tools.NetworkImport.Tests\GeoAssets.Tools.NetworkImport.Tests.csproj", "{70584A79-2D56-4574-B7C0-A10F25184B97}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoAssets.Provider.Gdal.PluginLoading.Tests", "tests\GeoAssets.Provider.Gdal.PluginLoading.Tests\GeoAssets.Provider.Gdal.PluginLoading.Tests.csproj", "{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -1511,6 +1513,18 @@ Global
 		{70584A79-2D56-4574-B7C0-A10F25184B97}.Release|x64.Build.0 = Release|Any CPU
 		{70584A79-2D56-4574-B7C0-A10F25184B97}.Release|x86.ActiveCfg = Release|Any CPU
 		{70584A79-2D56-4574-B7C0-A10F25184B97}.Release|x86.Build.0 = Release|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Debug|x64.Build.0 = Debug|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Debug|x86.Build.0 = Debug|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Release|x64.ActiveCfg = Release|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Release|x64.Build.0 = Release|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Release|x86.ActiveCfg = Release|Any CPU
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1624,5 +1638,6 @@ Global
 		{F806E178-43EE-4344-9F97-F8E53CC47230} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{3357A13B-9091-419D-B680-1742FE0A9E79} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 		{70584A79-2D56-4574-B7C0-A10F25184B97} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
+		{FB1106A8-7959-4F33-8E6A-E6A2AC1CE380} = {CCD3B5E8-ACE5-4F68-9F12-661D411D8BEB}
 	EndGlobalSection
 EndGlobal
