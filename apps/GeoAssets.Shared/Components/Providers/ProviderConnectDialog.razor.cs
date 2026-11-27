@@ -142,11 +142,7 @@ public partial class ProviderConnectDialog
 
         foreach (var f in _selected.ConfigFields.Where(f => f.Required))
         {
-            var key = f.Type is ProviderFieldType.File or ProviderFieldType.BinaryFile
-                ? f.Key + "_content"
-                : f.Key;
-
-            if (!_config.Has(key))
+            if (!f.IsProvidedIn(_config))
             {
                 _error = L.GetString("pool.fieldRequired", f.Label);
                 return;

@@ -29,6 +29,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PMTiles\GeoAssets.Provider.PMTiles.csproj" />
+  </ItemGroup>
+
+  <!-- XD01-438: the PMTiles reader and its tests moved to GeoAssets.Provider.PMTiles(.Tests); the module tests here still
+       write archives with the same fixture writer. -->
+  <ItemGroup>
+    <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\PMTilesTestArchive.cs" Link="PMTiles\PMTilesTestArchive.cs" />
+    <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestVectorTile.cs" Link="PMTiles\TestVectorTile.cs" />
   </ItemGroup>
 
 </Project>

@@ -58,14 +58,18 @@ public partial class ProviderConfigForm
     /// file's real full path under <c>&lt;key&gt;_path</c>, which survives into
     /// <see cref="ProviderConfig.ToReconnectValues"/> (unlike <c>_content</c>) so a plugin can
     /// reopen the file directly from disk on a later reconnect instead of requiring a re-pick. The
-    /// picker offers the extensions the field declares in <see cref="ProviderConfigField.Accept"/>.
+    /// picker offers the extensions the field declares in <see cref="ProviderConfigField.Accept"/>. A
+    /// <see cref="ProviderConfigField.PathOnly"/> field (an offline <c>.pmtiles</c> pack, XD01-438) is picked for its
+    /// path only and gets no <c>_content</c>, so a multi-gigabyte file is never read into memory here.
     /// </summary>
     private async Task PickNativeBinaryFileAsync(ProviderConfigField f)
     {
-        var result = await NativePicker!.PickBinaryFileAsync(f.GetAcceptedExtensions());
+        var content = f.PathOnly ? NativeFilePickContent.PathOnly : NativeFilePickContent.Bytes;
+        var result = await NativePicker!.PickBinaryFileAsync(f.GetAcceptedExtensions(), content);
         if (result is null) return;
 
-        Config.Set(f.Key + "_content", Convert.ToBase64String(result.Content));
+        if (!f.PathOnly)
+            Config.Set(f.Key + "_content", Convert.ToBase64String(result.Content));
         Config.Set(f.Key + "_name", result.FileName);
         Config.Set(f.Key + "_path", result.FullPath);
     }

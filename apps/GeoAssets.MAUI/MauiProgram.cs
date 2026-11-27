@@ -5,6 +5,7 @@ using GeoAssets.Core.Navigation;
 using GeoAssets.Core.Plugins;
 using GeoAssets.Core.Services;
 using GeoAssets.Core.Providers;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.IpBilling.UI.Navigation;
@@ -17,6 +18,7 @@ using GeoAssets.MAUI.Services.Offline;
 using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.NeutralOperator.UI;
 using GeoAssets.NeutralOperator.UI.Navigation;
+using GeoAssets.Provider.PMTiles;
 using GeoAssets.Provider.Rest;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
@@ -228,12 +230,17 @@ public static class MauiProgram
 
     private static void AddAssetsAndMap(MauiAppBuilder builder)
     {
-        // Provider plugins (XD01-428, ADR-002 D2) — the bundled REST module, named here so the trimmer keeps it, discovered
-        // for the mobile/desktop host, with the plugin registry.
+        // Provider plugins (XD01-428, ADR-002 D2) — the bundled REST and PMTiles (offline map packs, XD01-438) modules,
+        // named here so the trimmer keeps them, discovered for the mobile/desktop host, with the plugin registry. The
+        // packs a user picks are imported into the app's data folder (read offline and across restarts), and their tiles
+        // read through the SQLCipher tile cache registered as ITileCache in AddOfflineSync.
         builder.Services.AddDiscoveredProviderPlugins(
             builder.Configuration,
             ProviderHostTargets.MobileDesktop,
-            new StaticAssemblyPluginSource().Add<RestProviderPluginModule>());
+            new StaticAssemblyPluginSource()
+                .Add<RestProviderPluginModule>()
+                .Add<PMTilesProviderPluginModule>());
+        builder.Services.AddPMTilesPackStorage(Path.Combine(FileSystem.AppDataDirectory, "offline-packs"));
 
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
@@ -274,7 +281,11 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILocalActionOutbox, SqliteLocalActionOutbox>();
         builder.Services.AddSingleton<ILocalSyncCursorStore, SqliteLocalSyncCursorStore>();
         builder.Services.AddSingleton<ILocalMediaStagingStore, SqliteLocalMediaStagingStore>();
-        builder.Services.AddSingleton<ILocalVectorTileCache, SqliteLocalVectorTileCache>();
+        // XD01-438: one SQLCipher tile table — the z/x/y basemap cache and the ITileCache offline map packs read through.
+        builder.Services.AddSingleton(sp => new SqliteLocalVectorTileCache(
+            LocalOfflineDatabase.GetConnectionAsync, sp.GetRequiredService<TimeProvider>()));
+        builder.Services.AddSingleton<ILocalVectorTileCache>(sp => sp.GetRequiredService<SqliteLocalVectorTileCache>());
+        builder.Services.AddSingleton<ITileCache>(sp => sp.GetRequiredService<SqliteLocalVectorTileCache>());
         // XD01-276: offline cache backing NearestAvailableCtoAssigner (XD01-273) with zero connectivity.
         builder.Services.AddSingleton<ILocalCtoPortCacheStore, SqliteLocalCtoPortCacheStore>();
 

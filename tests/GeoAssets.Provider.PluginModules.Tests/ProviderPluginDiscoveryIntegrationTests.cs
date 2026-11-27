@@ -3,6 +3,7 @@ using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Plugins;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.PMTiles;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
@@ -47,6 +48,29 @@ public sealed class ProviderPluginDiscoveryIntegrationTests
 
         provider.GetRequiredService<ProviderPluginRegistry>().All.Select(p => p.Id)
             .Should().Equal("postgres", "rest", "shapefile", "wfs", "wms");
+    }
+
+    /// <summary>MAUI's static plugin set (XD01-438, <c>MauiProgram.AddAssetsAndMap</c>): REST and the offline map packs.</summary>
+    private static StaticAssemblyPluginSource MauiModules() => new StaticAssemblyPluginSource()
+        .Add<RestProviderPluginModule>()
+        .Add<PMTilesProviderPluginModule>();
+
+    [Fact]
+    public void TheMobileDesktopHost_DiscoversTheOfflinePackPlugin_FromItsStaticSource()
+    {
+        using var provider = BuildHost(ProviderHostTargets.MobileDesktop, MauiModules());
+
+        var registry = provider.GetRequiredService<ProviderPluginRegistry>();
+        registry.All.Select(p => p.Id).Should().Equal("pmtiles", "rest");
+        registry.Find("pmtiles").Should().BeOfType<GeoAssets.Provider.PMTiles.Packs.PMTilesPackProviderPlugin>();
+    }
+
+    [Fact]
+    public void TheBrowserHost_SkipsTheOfflinePackPlugin()
+    {
+        using var provider = BuildHost(ProviderHostTargets.Browser, MauiModules());
+
+        provider.GetRequiredService<ProviderPluginRegistry>().All.Select(p => p.Id).Should().Equal("rest");
     }
 
     [Fact]

@@ -21,8 +21,30 @@ public sealed record ProviderConfigField(
     /// Defaults to <c>.geojson,.json</c> for <see cref="ProviderFieldType.File"/>; a
     /// <see cref="ProviderFieldType.BinaryFile"/> field without one accepts any file.
     /// </summary>
-    string? Accept = null)
+    string? Accept = null,
+    /// <summary>
+    /// <see cref="ProviderFieldType.BinaryFile"/> only (XD01-438): the picked file is referenced by its full path
+    /// (<c>&lt;key&gt;_path</c>) and never read into the configuration (<c>&lt;key&gt;_content</c> stays unset) — for a file
+    /// too large to hold in memory, such as an offline <c>.pmtiles</c> map pack. Needs a native file picker
+    /// (<see cref="Interfaces.INativeFilePicker"/>, asked for <see cref="Interfaces.NativeFilePickContent.PathOnly"/>); a
+    /// host without one (the browser) still reads the file into <c>_content</c>.
+    /// </summary>
+    bool PathOnly = false)
 {
+    /// <summary>
+    /// Whether <paramref name="config"/> has a value for this field: a file field's content (<c>&lt;key&gt;_content</c>)
+    /// — or, for a <see cref="PathOnly"/> file, its path (<c>&lt;key&gt;_path</c>) — any other field's own key.
+    /// </summary>
+    public bool IsProvidedIn(ProviderConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        if (Type is not (ProviderFieldType.File or ProviderFieldType.BinaryFile))
+            return config.Has(Key);
+
+        return config.Has(Key + "_content")
+               || (PathOnly && Type == ProviderFieldType.BinaryFile && config.Has(Key + "_path"));
+    }
+
     /// <summary>
     /// The file extensions <see cref="Accept"/> declares, each with a leading dot and de-duplicated
     /// ignoring case, in declaration order — what a native file picker filters by
