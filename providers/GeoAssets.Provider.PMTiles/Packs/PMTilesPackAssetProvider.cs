@@ -18,11 +18,19 @@ namespace GeoAssets.Provider.PMTiles.Packs;
 /// features, and only the part of the view inside the pack's bounds is read. Tiles come through
 /// <see cref="PMTilesPackTiles"/>, i.e. the host's tile cache.
 /// <para>
+/// A feature the tiles cut into pieces is answered once, its pieces joined (XD01-463, <see cref="PMTilesPackFeatureMerger"/>):
+/// a polygon without outlines along the tile seams, a line in one piece across them. The feature bound counts the
+/// pieces decoded, before joining — it bounds the read's work, decoding and joining alike, as before — so a read
+/// answers at most <see cref="MaxFeaturesPerRead"/> features, fewer when features span tiles. Decoding and joining run
+/// on the thread pool, never on the caller's (UI) thread.
+/// </para>
+/// <para>
 /// The provider holds what it read last — its <see cref="LoadOverviewAsync">overview</see> of the whole pack when
 /// connected, then the latest viewport — and answers <see cref="GetAll"/>, <see cref="GetById"/>, search and the
-/// spatial queries over that; it never enumerates the pack. Feature ids are <c>pmtiles:{pack id}:{z}/{x}/{y}:{layer}:{n}</c>
-/// (the n-th feature of the tile's layer), the same on every read of that tile. Writes are ignored and no event is
-/// raised, like the other read-only providers.
+/// spatial queries over that; it never enumerates the pack. A feature with an MVT id is
+/// <c>pmtiles:{pack id}:{z}:{point|line|polygon}:{mvt id}:{layer}</c>, one without (or whose id a tile repeats)
+/// <c>pmtiles:{pack id}:{z}/{x}/{y}:{layer}:{n}</c> (the n-th feature of the tile's layer), each the same on every
+/// read. Writes are ignored and no event is raised, like the other read-only providers.
 /// </para>
 /// </summary>
 public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabilities, IDisposable
@@ -30,7 +38,7 @@ public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabili
     /// <summary>The most tiles one read decodes.</summary>
     public const int MaxTilesPerRead = 64;
 
-    /// <summary>The most features one read answers.</summary>
+    /// <summary>The most features one read decodes, pieces of one feature counted each, and so the most it answers.</summary>
     public const int MaxFeaturesPerRead = 10_000;
 
     /// <summary>The most tiles the overview read when connecting decodes.</summary>
@@ -206,30 +214,28 @@ public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabili
 
     private async Task<IReadOnlyList<GeoFeature>> ReadTilesAsync(IEnumerable<TileAddress> tiles, CancellationToken ct)
     {
-        var features = new List<GeoFeature>();
+        var features = await Task.Run(() => DecodeAsync(tiles, ct), ct).ConfigureAwait(false);
+        return Remember(features, ct);
+    }
+
+    private async Task<List<GeoFeature>> DecodeAsync(IEnumerable<TileAddress> tiles, CancellationToken ct)
+    {
+        var merger = new PMTilesPackFeatureMerger(_pack.Id);
+        var pieces = 0;
         foreach (var tile in tiles)
         {
             ct.ThrowIfCancellationRequested();
-            if (features.Count >= MaxFeaturesPerRead)
+            if (pieces >= MaxFeaturesPerRead)
                 break;
 
             var bytes = await _tiles.GetTileAsync(tile, ct).ConfigureAwait(false);
             if (bytes is null)
                 continue;
 
-            var layers = MvtTileDecoder.Decode(bytes, MaxFeaturesPerRead - features.Count);
-            for (var l = 0; l < layers.Count; l++)
-            {
-                for (var n = 0; n < layers[l].Features.Count; n++)
-                {
-                    var id = $"pmtiles:{_pack.Id}:{tile}:{l}:{n}";
-                    if (MvtFeatureProjector.ToGeoFeature(layers[l].Features[n], layers[l], tile, id) is { } feature)
-                        features.Add(feature);
-                }
-            }
+            pieces += merger.Add(tile, MvtTileDecoder.Decode(bytes, MaxFeaturesPerRead - pieces));
         }
 
-        return Remember(features, ct);
+        return merger.Build(ct);
     }
 
     /// <summary>Keeps <paramref name="features"/> as what the provider holds, unless the read was superseded meanwhile.</summary>

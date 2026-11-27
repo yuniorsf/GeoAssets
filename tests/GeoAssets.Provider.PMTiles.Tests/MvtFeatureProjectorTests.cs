@@ -117,6 +117,27 @@ public sealed class MvtFeatureProjectorTests
             .And.Contain("mvt:id", "7");
     }
 
+    [Fact]
+    public void InTheTileGrid_ATileCoordinateIsItsColumnAndRowPlusTheFraction_AndPlacingItGivesTheSamePointAsProjecting()
+    {
+        var tile = new TileAddress(10, 301, 384);
+        var feature = Feature(MvtGeometryType.LineString, [new MvtPoint(0, 0), new MvtPoint(1024, 3072), new MvtPoint(-64, 4160)]);
+
+        var grid = MvtFeatureProjector.ToTileGrid(feature, Layer(feature), tile)!;
+
+        grid.Coordinates.Select(c => (c.X, c.Y)).Should().Equal((301, 384), (301.25, 384.75), (301 - (64.0 / 4096), 385 + (64.0 / 4096)));
+        var placed = MvtFeatureProjector.FromTileGrid(grid, tile.Z)!;
+        placed.SRID.Should().Be(4326);
+        placed.Coordinates.Should().Equal(MvtFeatureProjector.ToGeoFeature(feature, Layer(feature), tile, "f")!.Geometry!.NtsGeometry.Coordinates);
+    }
+
+    [Fact]
+    public void NothingInTheTileGrid_IsNothingOnTheMap()
+    {
+        MvtFeatureProjector.FromTileGrid(MvtFeatureProjector.TileGrid.CreatePolygon(), 3).Should().BeNull();
+        MvtFeatureProjector.ToTileGrid(Feature(MvtGeometryType.Unknown, [new MvtPoint(1, 1)]), Layer(), World).Should().BeNull();
+    }
+
     [Theory]
     [InlineData((int)MvtGeometryType.Point, "00000000-0000-0000-0000-000000000001")]
     [InlineData((int)MvtGeometryType.LineString, "00000000-0000-0000-0000-000000000002")]
