@@ -51,6 +51,26 @@ public sealed partial class PostgresAssetProvider
         _readLimits = catalogOptions;
     }
 
+    /// <summary>
+    /// A provider for <paramref name="organization"/>'s features that writes through <paramref name="db"/>, a context the
+    /// caller built for that organization and whose transaction it owns (XD01-453): an asset mutation batch's
+    /// provider. It stamps that organization on every feature it writes, so a feature the batch creates is the
+    /// organization's — never an organization-less (shared) row — and the batch's later items find it.
+    /// </summary>
+    /// <exception cref="ArgumentException">The organization is <see cref="Guid.Empty"/>.</exception>
+    internal PostgresAssetProvider(
+        GeoAssetsDbContext db,
+        DbContextOptions<GeoAssetsDbContext> dbOptions,
+        ITenantContext organization,
+        ILogger<PostgresAssetProvider> logger,
+        TimeProvider timeProvider,
+        ITileInvalidation? tileInvalidation = null)
+        : this(db, dbOptions, logger, timeProvider, tileInvalidation)
+    {
+        ArgumentNullException.ThrowIfNull(organization);
+        _organization = OrganizationOf(organization.CurrentOrganizationId);
+    }
+
     private PostgresAssetProvider(
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         ITenantContext organization,
