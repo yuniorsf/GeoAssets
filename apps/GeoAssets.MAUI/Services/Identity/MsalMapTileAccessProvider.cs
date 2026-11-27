@@ -11,7 +11,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// signed-in account, as <see cref="MsalAuthorizationHandler"/> does; a layer on any other host gets no token. With no
 /// account, or when MSAL needs user interaction, the token is reported unavailable.
 /// </summary>
-public sealed partial class MsalMapTileAccessProvider(
+internal sealed partial class MsalMapTileAccessProvider(
     IPublicClientApplication app,
     ApiScopeRoutes routes,
     ILogger<MsalMapTileAccessProvider> logger) : IMapTileAccessProvider

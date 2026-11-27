@@ -9,6 +9,9 @@
     offline pack deleted through the catalog the Offline maps panel uses, and that panel's menu item.
     XD01-460: the MapLibre render mode's registrations and the host page they rewrite (the real wwwroot/index.html, copied
     as content).
+    XD01-461: the SQLCipher provider and plaintext-to-encrypted upgrade of the app's local database, over the same
+    SQLCipher package the app ships (every test that opens SQLite selects it first, as the app does), and the
+    pre-XD01-438 tile table's additive migration on an existing database with data.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -27,6 +30,7 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -50,6 +54,7 @@
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\NativeFilePickerPlatform.cs" Link="Linked\NativeFilePickerPlatform.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\SqliteLocalVectorTileCache.cs" Link="Linked\SqliteLocalVectorTileCache.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\LocalVectorTileRow.cs" Link="Linked\LocalVectorTileRow.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\SqlCipherDatabase.cs" Link="Linked\SqlCipherDatabase.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Navigation\OfflinePacksMenuItem.cs" Link="Linked\OfflinePacksMenuItem.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Extensions\MauiMainLayoutServiceExtensions.cs" Link="Linked\MauiMainLayoutServiceExtensions.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Projects\NoProjectClient.cs" Link="Linked\NoProjectClient.cs" />

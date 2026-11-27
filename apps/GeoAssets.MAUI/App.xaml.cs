@@ -4,11 +4,11 @@ using GeoAssets.MAUI.Services.Offline;
 
 namespace GeoAssets.MAUI;
 
-public partial class App : Application
+internal sealed partial class App : Application
 {
     private readonly MauiHostPage _hostPage;
 
-    internal App(ConnectivitySyncTrigger connectivitySyncTrigger, OrderTypeCatalogLoader orderTypeCatalogLoader, MauiHostPage hostPage)
+    public App(ConnectivitySyncTrigger connectivitySyncTrigger, OrderTypeCatalogLoader orderTypeCatalogLoader, MauiHostPage hostPage)
     {
         InitializeComponent();
         _hostPage = hostPage;

@@ -1,5 +1,4 @@
 using SQLite;
-using SQLitePCL;
 
 namespace GeoAssets.MAUI.Services.Offline;
 
@@ -13,9 +12,12 @@ namespace GeoAssets.MAUI.Services.Offline;
 /// Package choice caveat (flagged, not silently assumed): <c>SQLitePCLRaw.bundle_e_sqlcipher</c>
 /// is the de-facto community package for SQLCipher-via-sqlite-net-pcl on MAUI — there is no
 /// first-party Microsoft package for this. NuGet's own metadata flags the package as having had
-/// no recent release; it is still the functional, widely-used option. This could not be
-/// runtime-verified on a device/simulator in this environment (same caveat as XD01-52/121) — only
-/// build-verified across the android/ios/maccatalyst TFMs.
+/// no recent release; it is still the functional, widely-used option.
+///
+/// XD01-461: until then the file was written in plaintext — sqlite-net-pcl replaced the SQLCipher
+/// provider with its own plain SQLite, which ignores the key. <see cref="SqlCipherDatabase"/> now
+/// selects SQLCipher after sqlite-net, encrypts a plaintext file an earlier build left (in place,
+/// once, before it is opened) and refuses a connection that isn't SQLCipher's.
 ///
 /// Schema migration path for future columns (XD01-276's AC): <c>CreateTableAsync&lt;T&gt;</c>
 /// is sqlite-net-pcl's own additive migration — called again against an existing table, it runs
@@ -35,9 +37,7 @@ internal static class LocalOfflineDatabase
 
     static LocalOfflineDatabase()
     {
-        // Registers the e_sqlcipher native provider bundled with SQLitePCLRaw.bundle_e_sqlcipher —
-        // the one, standard init call every SQLitePCLRaw bundle package documents.
-        Batteries_V2.Init();
+        SqlCipherDatabase.EnsureProvider();
     }
 
     public static async Task<SQLiteAsyncConnection> GetConnectionAsync()
@@ -49,8 +49,10 @@ internal static class LocalOfflineDatabase
 
             var key = await GetOrCreateKeyAsync().ConfigureAwait(false);
             var path = Path.Combine(FileSystem.AppDataDirectory, DatabaseFileName);
+            SqlCipherDatabase.EncryptIfPlaintext(path, key);
             var connectionString = new SQLiteConnectionString(path, storeDateTimeAsTicks: true, key: key);
             var connection = new SQLiteAsyncConnection(connectionString);
+            await SqlCipherDatabase.RequireEncryptionAsync(connection).ConfigureAwait(false);
 
             await connection.CreateTableAsync<LocalServiceOrderRow>().ConfigureAwait(false);
             await connection.CreateTableAsync<LocalBaseSnapshotRow>().ConfigureAwait(false);

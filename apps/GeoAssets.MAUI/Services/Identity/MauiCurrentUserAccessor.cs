@@ -9,7 +9,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// <see cref="AuthenticationStateProvider"/> (here, <see cref="MauiMsalAuthenticationStateProvider"/>)
 /// via <see cref="ClaimMapping"/> rather than hardcoding Entra's claim shape.
 /// </summary>
-public sealed class MauiCurrentUserAccessor(
+internal sealed class MauiCurrentUserAccessor(
     AuthenticationStateProvider authStateProvider, ClaimMapping? claimMapping = null) : ICurrentUserAccessor
 {
     private readonly ClaimMapping _claimMapping = claimMapping ?? ClaimMapping.EntraDefault;

@@ -19,7 +19,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// <see cref="AuthenticationResult.ClaimsPrincipal"/> already builds a <see cref="ClaimsPrincipal"/>
 /// from the ID token's claims, so no manual JWT parsing is needed here.
 /// </summary>
-public sealed class MauiMsalAuthenticationStateProvider(
+internal sealed class MauiMsalAuthenticationStateProvider(
     IPublicClientApplication app, IConfiguration configuration, ApiScopeRoutes routes) : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));

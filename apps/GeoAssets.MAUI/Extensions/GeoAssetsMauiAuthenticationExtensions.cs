@@ -13,7 +13,7 @@ namespace GeoAssets.MAUI.Extensions;
 /// <c>GeoAssetsAuthenticationExtensions</c> (Server): swapping CIAM vendors is a DI argument here
 /// too, not a call to a vendor SDK at the composition root.
 /// </summary>
-public static class GeoAssetsMauiAuthenticationExtensions
+internal static class GeoAssetsMauiAuthenticationExtensions
 {
     public static IServiceCollection AddGeoAssetsMauiAuthentication(
         this IServiceCollection services,

@@ -354,6 +354,34 @@ renderer changes.
   still drawn from the bundle; with MAUI's original CSP, the worker and `style.json` refused. **Not verified on a
   device**: XD01-460 stays In Review with a device checklist (iOS, Android, Mac Catalyst).
 
+### As built — MAUI made installable, its database encrypted (XD01-461)
+
+`apps/GeoAssets.MAUI` and `tests/GeoAssets.MAUI.Tests`. Preparing the device run of the sections above found the app
+could never have run on one; these are fixed, and the run itself is
+[`docs/runbooks/maui-device-verification.md`](../runbooks/maui-device-verification.md):
+
+- **Installable**: the project built a library (no `OutputType=Exe`, no Android `MainApplication`/`MainActivity`, no
+  iOS/Mac Catalyst `Main`), so no `.apk`/`.app` existed. It is an `Exe` for Android, iOS and Mac Catalyst (Windows, built
+  only on Windows and with no `Platforms/Windows` entry point, stays a library); its types became `internal` (CA1515 in
+  an `Exe`), which also gave `App` the public constructor MAUI's container needs. `ValidateXcodeVersion` defaults to
+  `false`, since the installed workload (26.4) predates the dev Mac's Xcode (27.2). On Android, Magick.NET's native
+  assets (from `GeoAssets.Core`, no Android runtime) are excluded from the APK.
+- **UIScene life cycle**: apps built with the 27 SDKs don't launch without it (observed on Mac Catalyst), so iOS and Mac
+  Catalyst declare `UIApplicationSceneManifest` with MAUI's default configuration and a `SceneDelegate`; on iOS the
+  MSAL.NET callback is also taken from the scene's `SceneOpenUrl` (XD01-52's `AppDelegate.OpenUrl` isn't called under scenes).
+- **SQLCipher**: sqlite-net-pcl 1.11 sets its own plain SQLite provider in `SQLiteConnection`'s static constructor,
+  after `Batteries_V2.Init()` had chosen SQLCipher, so the key was an ignored `PRAGMA key` and `geoassets-offline.db3`
+  was plaintext since XD01-243 (seen on .NET and on the Mac Catalyst runtime: header `SQLite format 3`).
+  `SqlCipherDatabase` runs that constructor first and then selects SQLCipher (`EnsureProvider`), encrypts a plaintext
+  file in place before it is opened (`EncryptIfPlaintext`: `ATTACH … KEY` + `sqlcipher_export` into
+  `<file>.encrypting`, renamed over it; nothing changed on failure), and `LocalOfflineDatabase` refuses a connection
+  without a `cipher_version` (`RequireEncryptionAsync`). XD01-438's additive `ContentType`/`ContentEncoding` migration
+  then runs on the encrypted file. `GeoAssets.MAUI.Tests` now uses the app's SQLCipher package (`SqlCipherDatabaseTests`,
+  including a pre-XD01-438 database with data).
+- **Still owed**: the device run (that runbook). SecureStorage needs a keychain access group, i.e. a provisioning
+  profile, on the iOS simulator, iOS devices and Mac Catalyst (ad-hoc: `MissingEntitlement`); Mac Catalyst's app data is
+  `~/Library` itself because the app isn't sandboxed.
+
 ---
 
 ### As built — LOD calibration & fail-fast LOD validation (XD01-439)
@@ -625,7 +653,7 @@ every zoom. Zero full-map clears on pan was checked in headless Chrome against a
   export are, wired only into the network import CLI's `plan --export`. The PMTiles writer doesn't expose GDAL's per-tile
   size/feature limits.
 - MAUI's MapLibre mode (XD01-460) and its offline packs, the MAUI pickers and the SQLCipher migration are unverified on a
-  device (XD01-460's device checklist).
+  device: XD01-461's runbook (`docs/runbooks/maui-device-verification.md`) and XD01-460's checklist A–G.
 - XD01-467 measured the `geom_3857` and `geom_3857_centroid` table rewrites on 1 M bench rows (native arm64:
   `ACCESS EXCLUSIVE` 55.5 s and 28.5 s, peak extra disk 2.2× and 1.05× the table; at the kernel's startup with the
   default 30 s command timeout the migration is retried seven times and fails after 4 min 29 s, applying nothing).

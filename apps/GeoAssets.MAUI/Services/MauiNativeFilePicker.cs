@@ -11,7 +11,7 @@ namespace GeoAssets.MAUI.Services;
 /// filters by Uniform Type Identifier like iOS. <see cref="NativeFilePickContent.PathOnly"/> answers the
 /// picked file's path without opening it, so a multi-gigabyte offline map pack is never read into memory.
 /// </summary>
-public sealed class MauiNativeFilePicker : INativeFilePicker
+internal sealed class MauiNativeFilePicker : INativeFilePicker
 {
     public async Task<NativeFilePickResult?> PickBinaryFileAsync(
         IReadOnlyList<string>? acceptedExtensions = null,

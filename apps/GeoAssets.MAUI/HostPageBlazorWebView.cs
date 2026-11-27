@@ -9,7 +9,7 @@ namespace GeoAssets.MAUI;
 /// by <see cref="HostPageRewrite"/>'s transform when it has one (MapLibre mode, <see cref="MauiHostPage"/>) — set before the
 /// view is shown. Without one (the Leaflet modes) it is a plain <see cref="BlazorWebView"/>.
 /// </summary>
-public sealed class HostPageBlazorWebView : BlazorWebView
+internal sealed class HostPageBlazorWebView : BlazorWebView
 {
     /// <summary>How the host page is served; <see cref="MauiHostPage.Unchanged"/> until set.</summary>
     internal MauiHostPage HostPageRewrite { get; set; } = MauiHostPage.Unchanged;

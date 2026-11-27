@@ -52,5 +52,23 @@
 	<string>GeoAssets uses the camera to capture signed field-work evidence photos.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>GeoAssets uses your location to geotag field-work evidence photos.</string>
+	<!-- XD01-461: the UIScene life cycle — apps built with the 27 SDKs fail to launch without it. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>__MAUI_DEFAULT_SCENE_CONFIGURATION__</string>
+					<key>UISceneDelegateClassName</key>
+					<string>SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>

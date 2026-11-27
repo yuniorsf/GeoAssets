@@ -18,7 +18,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// error message — this implementation exists for the shared <see cref="IAuthNavigationService"/>
 /// contract (e.g. TopBar's sign-out button), where no such UI feedback is expected.
 /// </summary>
-public sealed partial class MauiAuthNavigationService(
+internal sealed partial class MauiAuthNavigationService(
     MauiMsalAuthenticationStateProvider authStateProvider,
     NavigationManager navigationManager,
     ILogger<MauiAuthNavigationService> logger) : IAuthNavigationService
