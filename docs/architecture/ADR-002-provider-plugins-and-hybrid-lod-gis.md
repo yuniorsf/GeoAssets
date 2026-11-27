@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Accepted (2026-11-26) — tracked by Jira epics **XD01-413 … XD01-419** (child tasks **XD01-420 … XD01-439**, labels `adr-002`, `provider-plugins-lod`). |
+| **Status** | Implemented (2026-11-27; accepted 2026-11-26). All 7 Jira epics **XD01-413 … XD01-419** and their 20 children **XD01-420 … XD01-439** (labels `adr-002`, `provider-plugins-lod`) are merged into `develop` and Done. See [*As built — summary*](#as-built--summary) for one commit per ticket, the gate results and the open follow-ups. |
 | **Scope** | `core/GeoAssets.Core`, `core/GeoAssets.Hosting.Abstractions`, `providers/GeoAssets.Provider.*`, `apps/GeoAssets.Server`, `apps/GeoAssets.Web`, `apps/GeoAssets.MAUI`, `apps/GeoAssets.Shared`, `apps/GeoAssets.FieldService.Server`, `apps/GeoAssets.IpBilling.Server`, `tools/GeoAssets.Bench.Render` |
 | **Extends** | [ADR-001 — GeoAssets.Server Domain Decoupling](ADR-001-server-domain-decoupling.md) (Phase 4 Spatial Plane & Provider Pool) |
 | **Supersedes** | — |
@@ -264,6 +264,61 @@ reads), `apps/GeoAssets.Server/Tiles/` (configuration and endpoint):
   ("After XD01-439").
 - **Deferred**: a stored centroid column for the aggregate tier (z8's remaining 80 ms); per-tile (all-layers) budgets
   instead of per-layer ones; calibrating across organizations in one request.
+
+### As built — summary
+
+Each ticket was merged into `develop` as one squash commit, after the oracle passed (`verify-agent-worktree.sh`,
+`verify-solid-contracts.py`) and the full `dotnet test` run had no failures. Each wave also passed a gate on the
+combined `develop` before the next wave started: the oracle, the full suite, a Docker redeploy of `deploy/server` +
+`deploy/web`, `/healthz` and `run-agentic-qa.py --scope all`.
+
+| Track | Ticket | PR | Commit |
+|---|---|---|---|
+| 0 | XD01-420 render benchmark & baseline | #156 | `ebf17f92` |
+| 1 | XD01-421 `IProviderPluginModule`, `ProviderHostTargets` | #155 | `3700d886` |
+| 1 | XD01-422 `IProviderCapabilities` + renderer chain | #157 | `29b5985a` |
+| 1 | XD01-423 `IWorkbookReader` to Core, binary-file picker | #158 | `b23a3b56` |
+| 1 | XD01-424 Shapefile split + IpBilling guard | #159 | `b4646a9f` |
+| 2 | XD01-425 provider plugin modules | #160 | `abcf8b07` |
+| 2 | XD01-426 `StaticAssemblyPluginSource` | #161 | `86ed088b` |
+| 2 | XD01-427 `PluginLoadContext` + directory source | #164 | `c5a10363` |
+| 2 | XD01-428 host composition through discovery | #167 | `1683d8c2` |
+| 3 | XD01-429 client viewport quick wins | #163 | `fdbc8df8` |
+| 3 | XD01-430 server render query quick wins | #168 | `34eb90cf` |
+| 4 | XD01-431 tile/LOD/cache contracts | #170 | `ca265ae2` |
+| 4 | XD01-432 `geom_3857` + `PostgresVectorTileSource` | #171 | `ef4c31cc` |
+| 4 | XD01-433 `SkiaRasterTileSource` | #173 | `a5e3e04c` |
+| 4 | XD01-434 `/tiles` endpoints + caching | #175 | `823fd854` |
+| 5 | XD01-435 `MapRenderMode.MapLibre` | #176 | `b708809d` |
+| 5 | XD01-436 `HybridLodMapLayerRenderer` | #177 | `454e1a7a` |
+| 6 | XD01-437 `GeoAssets.Provider.Gdal` | #181 | `3cd49de3` |
+| 6 | XD01-438 MAUI offline PMTiles | #182 | `f46c6568` |
+| 6 | XD01-439 LOD calibration + fail-fast validation | #183 | `bd792175` |
+
+**Performance gate** (bench, 200k features, PostGIS amd64 under emulation on an arm64 host, which inflates database
+times; `docs/perf/render-baseline.md`):
+
+| Zoom | Viewport bytes: baseline → XD01-434 → XD01-439 | Cold p95 per tile: XD01-434 → XD01-439 | Gate |
+|---|---|---|---|
+| z8 | 18.15 MB → 890.6 kB → 11.4 kB | 1,002.5 → 80.6 ms | bytes met (≥ 10×); time **not met** |
+| z12 | → 653.1 kB → 21.7 kB | 126.0 → 11.6 ms | met |
+| z13 (switch zoom) | → — → 478 kB | — → 75.3 ms | time **not met** |
+| z14 (switch zoom) | → — → 189.8 kB | — → 21.6 ms | met |
+| z16 | → 76.6 kB → 76.6 kB | 8.2 → 8.0 ms | met |
+
+Cached tiles answer in under 1 ms at every zoom. Zero full-map clears on pan was checked in headless Chrome against a fake
+kernel for MapLibre mode (XD01-435/436). Leaflet's diff rendering on pan (XD01-429) is covered by unit tests only, not by
+a browser run. The < 50 ms target is unmeasured on native hardware.
+
+**Open follow-ups** (outside ADR-002's tickets):
+- z8 and z13 cold-tile time: a stored centroid column for the aggregate tier, and per-tile budgets.
+- The tile cache and `{v}` versions are per process, and the generation is global (one kernel replica; any write changes
+  every client's tile URLs).
+- The kernel doesn't ship the `gdal-cloud-native` plugin yet, and no route serves its keyed PMTiles/COG sources.
+- MAUI stays on Leaflet: MapLibre needs MAUI CSP and parity work. MAUI pickers and the SQLCipher migration are unverified
+  on a device.
+- A Docker deploy against a real-sized catalog has to plan for the `geom_3857` table rewrite (local 44-row database:
+  instant).
 
 ## Part 4 — Verification Gates
 
