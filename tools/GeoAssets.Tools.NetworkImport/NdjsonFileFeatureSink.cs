@@ -4,10 +4,19 @@ using GeoAssets.Ingestion.Pipeline;
 
 namespace GeoAssets.Tools.NetworkImport;
 
-/// <summary>The <c>plan</c> sink: every feature appended to an NDJSON stream; asset types are the classes' own ids.</summary>
+/// <summary>
+/// The <c>plan</c> sink: every feature appended to an NDJSON stream; asset types are the classes' own ids. It also
+/// notes every attribute key the features carry (<see cref="AttributeKeys"/>, first-seen order), so <c>--export</c>
+/// can declare its columns and write the file in one pass.
+/// </summary>
 internal sealed class NdjsonFileFeatureSink(Stream output) : IFeatureSink
 {
     private readonly Dictionary<string, string> _assetTypeIds = new(StringComparer.Ordinal);
+    private readonly List<string> _attributeKeys = [];
+    private readonly HashSet<string> _seenAttributeKeys = new(StringComparer.Ordinal);
+
+    /// <summary>Every attribute key of the features written so far, in first-seen order.</summary>
+    public IReadOnlyList<string> AttributeKeys => _attributeKeys;
 
     public Task EnsureAssetTypesAsync(IReadOnlyList<AssetClassDefinition> classes, CancellationToken cancellationToken)
     {
@@ -25,6 +34,12 @@ internal sealed class NdjsonFileFeatureSink(Stream output) : IFeatureSink
     public async Task<SinkChunkResult> WriteChunkAsync(int sequence, IReadOnlyList<GeoFeature> features, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(features);
+        foreach (var key in features.SelectMany(feature => feature.Properties.CustomAttributes.Keys))
+        {
+            if (_seenAttributeKeys.Add(key))
+                _attributeKeys.Add(key);
+        }
+
         await NdjsonEncoding.WriteAsync(output, features, cancellationToken).ConfigureAwait(false);
         return new SinkChunkResult(features.Count, []);
     }

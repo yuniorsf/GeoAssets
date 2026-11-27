@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using GeoAssets.Core.FeatureImport;
+using GeoAssets.Core.VectorFiles;
 using GeoAssets.Ingestion.Profiles;
 
 namespace GeoAssets.Tools.NetworkImport;
@@ -52,6 +53,15 @@ internal static partial class NetworkImportInputs
         !string.IsNullOrWhiteSpace(path) && File.Exists(path)
             ? path
             : throw new NetworkImportInputException($"The features file '{path}' does not exist.");
+
+    /// <summary>The <c>--export</c> format; <see langword="null"/> when none is asked for.</summary>
+    public static VectorFileFormat? ExportFormat(string? export) => export?.ToUpperInvariant() switch
+    {
+        null => null,
+        "FLATGEOBUF" => VectorFileFormat.FlatGeobuf,
+        "GEOPARQUET" => VectorFileFormat.GeoParquet,
+        _ => throw new NetworkImportInputException($"--export must be flatgeobuf or geoparquet, not '{export}'."),
+    };
 
     [GeneratedRegex("^[A-Za-z0-9._-]{1,64}$", RegexOptions.CultureInvariant, 1000)]
     private static partial Regex ImportIdPattern();

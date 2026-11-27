@@ -29,6 +29,8 @@ public sealed class NetworkImportCommandLineTests
         new[] { "verify", "--kernel-url", "http://kernel", "--organization", Organization },
         new[] { "verify", "--features", "f.ndjson", "--organization", Organization },
         new[] { "verify", "--features", "f.ndjson", "--kernel-url", "http://kernel" },
+        new[] { "import", "--root", "somewhere", "--profile", Profile, "--scope-prefix", "coelba", "--kernel-url", "http://kernel", "--organization", Organization, "--export", "geoparquet" },
+        new[] { "plan", "--root", "somewhere", "--profile", Profile, "--scope-prefix", "coelba", "--export" },
     };
 
     [Theory]

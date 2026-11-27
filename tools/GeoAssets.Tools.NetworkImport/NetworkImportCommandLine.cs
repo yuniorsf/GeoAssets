@@ -16,8 +16,9 @@ internal static class NetworkImportCommandLine
           inventory --root <dir> --profile <id> [--out <dir>]
               Checks a delivery folder; writes inventory.json and data-request.md.
           plan      --root <dir> --profile <id> --scope-prefix <prefix> [--regions a,b] [--layers x,y]
-                    [--include-geometry-only] [--proj-data <dir>] [--out <dir>]
-              Runs the pipeline into features.ndjson; writes report.json.
+                    [--include-geometry-only] [--proj-data <dir>] [--out <dir>] [--export flatgeobuf|geoparquet]
+              Runs the pipeline into features.ndjson; writes report.json. --export also writes the plan as
+              features.fgb (FlatGeobuf) or features.parquet (GeoParquet) for a GIS tool.
           import    <plan options> --kernel-url <url> --organization <guid> [--tenant-domain <domain>]
                     [--import-id <id>] [--replace-scope] [--checkpoint <file>]
               Runs the pipeline into the kernel's bulk feature import; writes report.json.
@@ -48,9 +49,11 @@ internal static class NetworkImportCommandLine
     private const string Checkpoint = "--checkpoint";
     private const string Features = "--features";
     private const string Sample = "--sample";
+    private const string Export = "--export";
 
     private static readonly string[] InventoryValues = [Root, Profile, Out];
     private static readonly string[] PlanValues = [Root, Profile, Out, ScopePrefix, Regions, Layers, ProjData];
+    private static readonly string[] PlanOnlyValues = [.. PlanValues, Export];
     private static readonly string[] ImportValues = [.. PlanValues, KernelUrl, Organization, TenantDomain, ImportId, Checkpoint];
     private static readonly string[] VerifyValues = [KernelUrl, Organization, Features, Sample, TenantDomain];
 
@@ -74,7 +77,7 @@ internal static class NetworkImportCommandLine
                 (verb, valueOptions, flags, required) = (NetworkImportVerb.Inventory, InventoryValues, [], [Root, Profile]);
                 break;
             case "plan":
-                (verb, valueOptions, flags, required) = (NetworkImportVerb.Plan, PlanValues, [IncludeGeometryOnly], [Root, Profile, ScopePrefix]);
+                (verb, valueOptions, flags, required) = (NetworkImportVerb.Plan, PlanOnlyValues, [IncludeGeometryOnly], [Root, Profile, ScopePrefix]);
                 break;
             case "import":
                 (verb, valueOptions, flags, required) = (NetworkImportVerb.Import, ImportValues, [IncludeGeometryOnly, ReplaceScope],
@@ -134,6 +137,7 @@ internal static class NetworkImportCommandLine
             CheckpointPath = values.GetValueOrDefault(Checkpoint),
             FeaturesPath = values.GetValueOrDefault(Features),
             Sample = sample,
+            Export = values.GetValueOrDefault(Export),
         }, null);
     }
 

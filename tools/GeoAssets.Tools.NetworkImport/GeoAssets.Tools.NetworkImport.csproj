@@ -23,6 +23,9 @@
     <ProjectReference Include="..\..\core\GeoAssets.Ingestion\GeoAssets.Ingestion.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Ingestion.Shapefile\GeoAssets.Ingestion.Shapefile.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Ingestion.Proj\GeoAssets.Ingestion.Proj.csproj" />
+    <!-- XD01-466: the plan verb's export option writes the plan as FlatGeobuf/GeoParquet with the GDAL plugin's IVectorFileWriter
+         (statically referenced, like Ingestion.Proj's GDAL; this host never reads a plugin directory). -->
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />
     <ProjectReference Include="..\..\plugins\ingestion\GeoAssets.Ingestion.Profiles\GeoAssets.Ingestion.Profiles.csproj" />
   </ItemGroup>
 
