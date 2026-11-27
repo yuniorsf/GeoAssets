@@ -39,6 +39,8 @@ public class GeoAssetsDbContext(
     public DbSet<LayerRuleRow> LayerRules => Set<LayerRuleRow>();
     public DbSet<LayerRuleConditionRow> LayerRuleConditions => Set<LayerRuleConditionRow>();
     public DbSet<AppliedMutationBatchRow> AppliedMutationBatches => Set<AppliedMutationBatchRow>();
+    public DbSet<TileGenerationRow> TileGenerations => Set<TileGenerationRow>();
+    public DbSet<TileVersionStateRow> TileVersionState => Set<TileVersionStateRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

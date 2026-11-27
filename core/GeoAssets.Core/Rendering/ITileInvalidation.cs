@@ -14,4 +14,15 @@ public interface ITileInvalidation
     /// <summary>Marks the tiles of every region in <paramref name="regions"/> dirty (one committed write's regions). An empty collection is a no-op.</summary>
     /// <exception cref="ArgumentNullException"><paramref name="regions"/> is <c>null</c>.</exception>
     Task InvalidateAsync(IReadOnlyCollection<DirtyTileRegion> regions, CancellationToken ct);
+
+    /// <summary>
+    /// Marks the tiles of every region in <paramref name="regions"/> dirty for one committed write of
+    /// <paramref name="organizationId"/>'s features (XD01-458): an implementation that versions tiles per scope need only
+    /// change the versions of the scopes that can see that organization's features. <see cref="Guid.Empty"/> is the
+    /// organization-less (shared) features, which every scope sees. The default treats it as
+    /// <see cref="InvalidateAsync(IReadOnlyCollection{DirtyTileRegion}, CancellationToken)"/>: every scope's tiles.
+    /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="regions"/> is <c>null</c>.</exception>
+    Task InvalidateAsync(IReadOnlyCollection<DirtyTileRegion> regions, Guid organizationId, CancellationToken ct) =>
+        InvalidateAsync(regions, ct);
 }

@@ -5,14 +5,15 @@ namespace GeoAssets.Server.Tiles;
 
 /// <summary>
 /// The tile endpoints' process-wide state (XD01-434): the settings, the level-of-detail policy, the server tile cache, the
-/// layer versions, and the raster metatiles being drawn (so the tiles of one metatile, which a map requests together,
-/// cost one drawing). Singleton.
+/// layer versions (and, shared across replicas, their <see cref="Sync"/> — XD01-458), and the raster metatiles being drawn
+/// (so the tiles of one metatile, which a map requests together, cost one drawing). Singleton.
 /// </summary>
 public sealed class TileServing
 {
     private readonly ConcurrentDictionary<string, Task<TileDrawing>> _drawing = new(StringComparer.Ordinal);
 
-    public TileServing(TileServingOptions options, ILodPolicy lod, ITileCache cache, TileVersions versions, TimeProvider timeProvider)
+    public TileServing(
+        TileServingOptions options, ILodPolicy lod, ITileCache cache, TileVersions versions, TimeProvider timeProvider, TileVersionSync? sync = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(lod);
@@ -25,6 +26,7 @@ public sealed class TileServing
         Cache = cache;
         Versions = versions;
         TimeProvider = timeProvider;
+        Sync = sync;
     }
 
     public TileServingOptions Options { get; }
@@ -36,6 +38,9 @@ public sealed class TileServing
     public TileVersions Versions { get; }
 
     public TimeProvider TimeProvider { get; }
+
+    /// <summary>The versions' sharing with the other replicas over the database; <c>null</c> = this process's alone.</summary>
+    public TileVersionSync? Sync { get; }
 
     /// <summary>
     /// The drawing of the metatile <paramref name="key"/> names: the one already under way when there is one (shared by

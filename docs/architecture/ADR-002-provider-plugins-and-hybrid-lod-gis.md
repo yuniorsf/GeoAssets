@@ -139,7 +139,7 @@ flowchart TD
 - **Compression**: a drawn vector tile is gzip-encoded once (`CompressionLevel.Optimal`) and cached encoded; served with `Content-Encoding: gzip` + `Vary: Accept-Encoding` (decoded, under another `ETag`, for a client that refuses gzip). The response compression middleware never touches it (MVT is not in its MIME types, and an encoded response is skipped); PNG is not compressed again; `style.json` is JSON, compressed by the middleware.
 - **`{v}`** (`TileVersions`) is `{style}-{epoch}-{flush}.{generation}`: `{style}` the set's style hash (types' zoom ranges, colors, default layers, geometry; every layer; the types' layer rules; LOD thresholds), `{epoch}` random per process (a restart never reuses a URL), `{flush}` bumped when a write is too large to evict tile by tile, `{generation}` bumped by every committed write's invalidation. `style.json` publishes the current `{v}` in every tile URL and in `metadata."geoassets:version"` (`Cache-Control: private, no-cache` + `ETag`); a client re-reads it (e.g. after its own write) to learn a new `{v}`. A tile under the current cache version at a generation not ahead of the process's is `Cache-Control: private, max-age=31536000, immutable` — a URL only ever answers bytes at least as new as the generation it names; any other `{v}` gets the current tile with `private, no-cache`.
 - **Server cache**: `MemoryTileCache` (`ITileCache` unless a host registers one; `GeoAssets:Tiles:CacheMaxMegabytes`, default 256): LRU by bytes, one lock, every entry indexed by tile so `RemoveAsync(range)` walks the smaller of the range and what is cached at its zoom. Keys are `TileCacheKey(scope, set, cacheVersion = {style}-{epoch}-{flush}, tile, format)` with the scope (`TileScopeResolver`) = the caller's organization (`N` form; all zeros for an organization-less caller) and the hash of its organization's active grants (resource organization, type, scope, actions) — two callers whose rows could differ never share an entry. Only zooms up to `GeoAssets:Tiles:MaxCachedZoom` (default 18) are cached; deeper tiles are drawn per request. A raster tile is drawn with its whole 2 × 2 metatile (`IRasterMetatileSource`, implemented by `SkiaRasterTileSource`), every tile of which is cached, and concurrent requests for one metatile share one drawing.
-- **Invalidation** (`TileInvalidation`, the host's `ITileInvalidation` — what the PostGIS writers call after each commit): advances the generation first, then evicts each region's `TileRanges(1/32 tile)` (a raster tile's 8 px symbol buffer, which covers the MVT's 64/4096) at the zooms up to `MaxCachedZoom`; a write whose ranges hold more than `GeoAssets:Tiles:MaxEvictedTilesPerWrite` (default 65,536) tiles flushes instead (`{flush}` + 1, every old entry orphaned and aged out by the LRU). A tile drawn while a write was invalidated is removed again right after it is cached (the generation moved), so a pre-commit drawing never outlives the eviction. A rolled-back batch is never invalidated (XD01-432). Process-local: a second kernel replica has its own cache and epoch and would not see the first one's invalidations.
+- **Invalidation** (`TileInvalidation`, the host's `ITileInvalidation` — what the PostGIS writers call after each commit): advances the generation first, then evicts each region's `TileRanges(1/32 tile)` (a raster tile's 8 px symbol buffer, which covers the MVT's 64/4096) at the zooms up to `MaxCachedZoom`; a write whose ranges hold more than `GeoAssets:Tiles:MaxEvictedTilesPerWrite` (default 65,536) tiles flushes instead (`{flush}` + 1, every old entry orphaned and aged out by the LRU). A tile drawn while a write was invalidated is removed again right after it is cached (the generation moved), so a pre-commit drawing never outlives the eviction. A rolled-back batch is never invalidated (XD01-432). Process-local as built here: a second kernel replica had its own cache and epoch and did not see the first one's invalidations, and every write advanced every client's `{v}` — both fixed by XD01-458 (below).
 - **`style.json`** (`TileStyleDocument`): MapLibre style v8; source `geoassets` (`type: vector`, `tiles: ["{origin}/tiles/{set}/{v}/{z}/{x}/{y}.mvt"]`, `scheme: xyz`, `minzoom` 0, `maxzoom` = `MaxCachedZoom` raised to the highest first zoom of a layer, `promoteId: "id"`) and, when a layer has a raster tier, `geoassets-raster` (`type: raster`, `tileSize` 256, `.png`). `{origin}` is the gateway's `X-Forwarded-Proto`/`Host`/`Prefix` when present, else the request's. Layers bottom first: the raster layer over the raster zooms, then per type (`source-layer` = its id) fills, polygon outlines, lines, points (geometry-type filtered; a type restricted to one geometry gets only its layers) over its vector zooms and aggregate circles (sized by `count`) over its aggregate zooms (`maxzoom` exclusive = last zoom + 1). Colors are `LayerResolver` as an expression over the properties the vector tiles carry (`layerId` override → first matching rule by priority → default layer → type color), so a feature is the color the raster tiles and WMS paint it; paint follows `SkiaFeaturePainter` (5 px points, 2 px lines, 35 % fills, 1.5 px outlines). No `glyphs`/`sprite`.
 - **Metrics** (meter `GeoAssets`): `geoassets.tiles.requests` (`format`, `cache=hit|miss|uncached`), `geoassets.tiles.render.duration` (ms, `format`), `geoassets.tiles.size` (bytes sent, `format`), `geoassets.tiles.cache.invalidations` (`outcome=evicted|flushed`).
 - **Gateway**: `/tiles/**` is a kernel catch-all route (with its silo routes) and is limited by `RateLimiting:Tiles`, with `/wms` and `/wfs`.
@@ -267,6 +267,60 @@ reads), `apps/GeoAssets.Server/Tiles/` (configuration and endpoint):
 - **Deferred**: a stored centroid column for the aggregate tier (z8's remaining 80 ms) and per-layer budgets inside a
   tile — both done by XD01-457 (below); calibrating across organizations in one request.
 
+### As built — shared, per-organization tile versions (XD01-458)
+
+`apps/GeoAssets.Server/Tiles/` (`TileVersions`, `TileInvalidation`, `TileVersionSync`, `TileVersionListener`),
+`core/GeoAssets.Core/Rendering/` (the port `ITileVersionStore`, `TileVersionSnapshot`, `TileVersionChange`; an
+`ITileInvalidation.InvalidateAsync(regions, organizationId, ct)` overload whose default is the organization-less one),
+`providers/GeoAssets.Provider.PostgreSQL` (`PostgresTileVersionStore`, migration `AddTileVersions`):
+
+- **Per-scope generation**: `{v}` is still `{style}-{epoch}-{flush}.{generation}`, but `{generation}` is the caller's
+  organization's — the shared (organization-less) features' generation plus the organization's own
+  (`TileVersions.GenerationOf`); an organization-less caller gets the shared one alone. The writers now name whose features
+  they wrote (`PostgresAssetProvider` its organization, or `Guid.Empty` when built without one; the batch applier its
+  batch's; the bulk importer the import's), and `TileInvalidation` advances that organization and every organization
+  holding an active, unexpired grant on it (`TileScopeResolver.GranteesAsync` → `GetActiveGrantsIssuedByAsync`) — the
+  tile sources read only own + shared rows today, so the grantees are conservative. A shared-feature write, a writer that
+  names no organization, or grantees that can't be read advance the shared generation, which every scope includes. The key
+  is the organization, not the full `TileCacheScope` (organization + grant hash): a grant hash is not enumerable from a
+  write, and over-advancing is always safe. Eviction is unchanged (every scope's tiles in the dirty ranges); the endpoint's
+  "drawn while a write was invalidated" check uses `TileVersions.Generation`, now a count of every invalidation applied.
+- **Sharing (PostgreSQL `LISTEN/NOTIFY` + a durable table)**, chosen over a distributed cache because the kernel already
+  owns the database — no new infrastructure — and over bumping a counter inside every writer's transaction because the
+  invalidation stays after-commit (XD01-432) and per-organization row locks stay out of the write path. `tile_generations`
+  (`Scope uuid` PK, `Generation bigint`; one row per scope ever advanced) and the one-row `tile_version_state` (`Epoch`,
+  `Flushes`) are counters only — no tenant data, so no RLS; `geoassets_app` is granted `SELECT, INSERT, UPDATE`.
+  `PostgresTileVersionStore.AdvanceAsync` bumps the scopes (sorted, so two writers never lock them in opposite orders) and,
+  for a flush, the flush count with `INSERT … ON CONFLICT DO UPDATE … RETURNING`, then `pg_notify('geoassets_tile_versions',
+  payload)` in the **same short transaction** (its own, never the writer's): a listener only hears committed values. The
+  payload (`TileVersionNotification`, < 7,900 bytes) carries the origin, the new generations, the new flush count and the
+  dirty regions; too large, the regions are merged into their union (min/max zoom); still too large, it is sent incomplete.
+- **Only stored values are published**: in shared mode `TileInvalidation` moves `Generation` and evicts its own cache
+  first, then publishes what the store answers; a peer's change (`TileVersionSync.ApplyAsync`) is applied in the same order —
+  evict the dirty tiles (or empty the cache when they are too many), then adopt — so a new `{v}` never serves a stale cached
+  tile, and every adoption keeps the larger of the held and the received value: no scope's `{v}` goes backwards. The
+  replica's own notifications are skipped by origin.
+- **Startup, restart, reconnect**: before the first `{v}` is published (`EnsureReadyAsync`, awaited by `style.json` and the
+  tile routes) a replica reads the shared epoch (chosen at random by the first reader, `INSERT … ON CONFLICT DO NOTHING` —
+  a re-created database starts a new one), flush count and shared generation, then **flushes once** (every replica's cache
+  versions change, as a restart's random epoch did before): a crash between a write's commit and its announcement can't
+  leave a stale tile cached anywhere. An organization's generation is read on its first request and kept up to date by the
+  notifications. `TileVersionListener` (hosted, `TimeProvider` delays) holds one unpooled `LISTEN` connection with a 10 s
+  keepalive; when it is lost it logs, counts `geoassets.tiles.versions.reconnects`, retries after 1 s doubling to 30 s
+  (`TileVersionSyncOptions`), and on every (re)subscription treats the gap as unknown — empties the cache and re-reads every
+  known scope — as it does for an incomplete notification. A change the store refuses (database down after the write's
+  commit) has already been evicted locally; the listener retries flushing every replica every 5 s until it succeeds.
+  Stopping the host cancels both loops and closes the connection. Peer changes are counted on
+  `geoassets.tiles.versions.peer_changes` (`outcome=evicted|flushed|resynchronized`).
+- **Bounded delay**: `TileVersionSharingTests` (two in-process kernel hosts over one Testcontainers PostGIS) asserts that a
+  write through instance 1 evicts instance 2's cached tile and changes instance 2's `{v}` for the writer's organization
+  within 5 s, while another organization's `{v}` stays on both; measured 42.7 ms (polling `style.json` every 5 ms; the NOTIFY itself is delivered on commit). A restarted instance keeps the epoch and
+  the generation and has a higher flush. Single-process hosts (no `AddTileVersionSharing`) behave as before, except that
+  the generation is per organization.
+- **Known limits**: `{v}` does not include the grant hash, so a grant change alone does not change a grantee's URLs (the
+  tile sources don't read granted rows yet); while a replica is unsubscribed it may serve its last-known `{v}` (bounded by
+  the reconnect); a replica start busts every client's tile cache once (as a restart always did).
+
 ### As built — summary
 
 Each ticket was merged into `develop` as one squash commit, after the oracle passed (`verify-agent-worktree.sh`,
@@ -319,8 +373,8 @@ every zoom. Zero full-map clears on pan was checked in headless Chrome against a
 (XD01-435/436). Leaflet's diff rendering on pan (XD01-429) is covered by unit tests only, not by a browser run.
 
 **Open follow-ups** (outside ADR-002's tickets):
-- The tile cache and `{v}` versions are per process, and the generation is global (one kernel replica; any write changes
-  every client's tile URLs).
+- The tile cache is per replica (each evicts on every replica's writes since XD01-458, which also made `{v}` per
+  organization and shared through PostgreSQL); a shared cache (e.g. HybridCache over Redis) would also share the drawings.
 - The kernel doesn't ship the `gdal-cloud-native` plugin yet, and no route serves its keyed PMTiles/COG sources.
 - COG *export* is not built (no raster catalog to export from); FlatGeobuf/GeoParquet (XD01-466) and PMTiles (XD01-472)
   export are, wired only into the network import CLI's `plan --export`. The PMTiles writer doesn't expose GDAL's per-tile

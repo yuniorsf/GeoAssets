@@ -31,4 +31,21 @@ public static class TileScopeResolver
             g.ScopeId ?? string.Empty,
             string.Join(',', g.AllowedActions.Order(StringComparer.Ordinal)))));
     }
+
+    /// <summary>
+    /// The organizations other than <paramref name="organizationId"/> whose scope may show its features (XD01-458): the
+    /// grantees of its active grants unexpired at <paramref name="utcNow"/>, read from <paramref name="grants"/>
+    /// (<c>null</c> = none) — the scopes a write of its features dirties besides its own.
+    /// </summary>
+    public static async Task<IReadOnlyCollection<Guid>> GranteesAsync(
+        Guid organizationId, IOrganizationGrantRepository? grants, DateTime utcNow, CancellationToken ct)
+    {
+        if (organizationId == Guid.Empty || grants is null) return [];
+
+        var issued = await grants.GetActiveGrantsIssuedByAsync(organizationId, utcNow, ct).ConfigureAwait(false);
+        return [.. issued
+            .Select(g => g.GranteeOrganizationId)
+            .Where(id => id != organizationId && id != Guid.Empty)
+            .Distinct()];
+    }
 }

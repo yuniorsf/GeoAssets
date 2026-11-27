@@ -688,6 +688,40 @@ namespace GeoAssets.Provider.PostgreSQL.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.TileGenerationRow", b =>
+                {
+                    b.Property<Guid>("Scope")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Generation")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Scope");
+
+                    b.ToTable("tile_generations", (string)null);
+                });
+
+            modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.TileVersionStateRow", b =>
+                {
+                    b.Property<short>("Id")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Epoch")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("Flushes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("tile_version_state", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tile_version_state_singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("GeoAssets.Provider.PostgreSQL.Entities.AssetTypeRow", b =>
                 {
                     b.HasOne("GeoAssets.Provider.PostgreSQL.Entities.LayerRow", "DefaultLayer")

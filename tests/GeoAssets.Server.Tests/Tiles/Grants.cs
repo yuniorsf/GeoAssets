@@ -30,6 +30,9 @@ internal sealed class Grants : IOrganizationGrantRepository
     public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsForGranteeAsync(Guid granteeOrganizationId, CancellationToken ct = default) =>
         Task.FromResult(ByGrantee.TryGetValue(granteeOrganizationId, out var grants) ? grants : []);
 
+    public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsIssuedByAsync(Guid resourceOrganizationId, DateTime utcNow, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OrganizationGrant>>([.. ByGrantee.Values.SelectMany(g => g).Where(g => g.ResourceOrganizationId == resourceOrganizationId)]);
+
     public Task<IReadOnlyList<OrganizationGrant>> GetActiveGrantsAsync(Guid granteeOrganizationId, Guid resourceOrganizationId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<OrganizationGrant>>([]);
 

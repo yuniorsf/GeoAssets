@@ -55,6 +55,12 @@ public sealed class PostgresSpatialModule : IGeoAssetsModule, IModuleMiddleware
         // versions, and the ITileInvalidation the PostGIS writers below report their committed writes' dirty tiles to.
         services.AddTileServing(configuration);
 
+        // The tile versions shared with every kernel replica over this database (XD01-458): durable per-organization
+        // generations, epoch and flush count in PostgreSQL, announced on LISTEN/NOTIFY, and the listener that applies the
+        // other replicas' changes.
+        services.AddPostgresTileVersionStore(connectionString);
+        services.AddTileVersionSharing();
+
         // The LOD calibration's density reads (XD01-439): the PostGIS ITileDensitySampler, scoped to the request's tenant.
         services.AddPostgresTileDensitySampler(connectionString);
 
