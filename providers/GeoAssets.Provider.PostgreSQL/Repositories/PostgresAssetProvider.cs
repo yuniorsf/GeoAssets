@@ -37,6 +37,10 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     private List<Layer>? _layerCache;
     private List<LayerRule>? _layerRuleCache;
 
+    // Fills and clears the three catalog caches above (XD01-474): concurrent readers of a cold cache would otherwise all
+    // query the long-lived _db at once, which a DbContext does not allow and which corrupts it for good.
+    private readonly Lock _catalogCacheLock = new();
+
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
 
     public event EventHandler<GeoFeature>? FeatureAdded;
@@ -410,9 +414,10 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
 
     // ── Asset types ────────────────────────────────────────────────────────────
 
-    public IReadOnlyList<AssetType> GetAssetTypes()
-    {
-        _typeCache ??= _db.AssetTypes.AsNoTracking()
+    public IReadOnlyList<AssetType> GetAssetTypes() => [.. CachedCatalog(ref _typeCache, ReadAssetTypes)];
+
+    private static List<AssetType> ReadAssetTypes(GeoAssetsDbContext db) =>
+        db.AssetTypes.AsNoTracking()
             .Select(r => new AssetType
             {
                 Id        = r.Id,
@@ -429,8 +434,6 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                 Roles = r.Roles,
                 OrganizationId = r.OrganizationId
             }).ToList();
-        return [.. _typeCache];
-    }
 
     public void AddAssetType(AssetType assetType)
     {
@@ -453,7 +456,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             OrganizationId = assetType.OrganizationId
         });
         SaveChanges();
-        _typeCache = null;
+        ClearCatalogCache(ref _typeCache);
     }
 
     public void DeleteAssetType(Guid id)
@@ -462,14 +465,15 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         if (row is null || row.IsBuiltIn) return;
         _db.AssetTypes.Remove(row);
         SaveChanges();
-        _typeCache = null;
+        ClearCatalogCache(ref _typeCache);
     }
 
     // ── Layers ─────────────────────────────────────────────────────────────────
 
-    public IReadOnlyList<Layer> GetLayers()
-    {
-        _layerCache ??= _db.Layers.AsNoTracking()
+    public IReadOnlyList<Layer> GetLayers() => [.. CachedCatalog(ref _layerCache, ReadLayers)];
+
+    private static List<Layer> ReadLayers(GeoAssetsDbContext db) =>
+        db.Layers.AsNoTracking()
             .Select(r => new Layer
             {
                 Id          = r.Id,
@@ -483,8 +487,6 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                 FillColor   = r.FillColor,
                 FillOpacity = r.FillOpacity
             }).ToList();
-        return [.. _layerCache];
-    }
 
     public void AddLayer(Layer layer)
     {
@@ -504,7 +506,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             FillOpacity = layer.FillOpacity
         });
         SaveChanges();
-        _layerCache = null;
+        ClearCatalogCache(ref _layerCache);
     }
 
     public void DeleteLayer(Guid id)
@@ -513,14 +515,16 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         if (row is null) return;
         _db.Layers.Remove(row);
         SaveChanges();
-        _layerCache = null;
+        ClearCatalogCache(ref _layerCache);
     }
 
     // ── Layer rules ────────────────────────────────────────────────────────────
 
-    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId)
-    {
-        _layerRuleCache ??= _db.LayerRules.AsNoTracking()
+    public IReadOnlyList<LayerRule> GetLayerRules(Guid assetTypeId) =>
+        [.. CachedCatalog(ref _layerRuleCache, ReadLayerRules).Where(r => r.AssetTypeId == assetTypeId)];
+
+    private static List<LayerRule> ReadLayerRules(GeoAssetsDbContext db) =>
+        db.LayerRules.AsNoTracking()
             .Include(r => r.Conditions)
             .ToList()
             .Select(r => new LayerRule
@@ -536,8 +540,6 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                     Value     = c.Value
                 })]
             }).ToList();
-        return [.. _layerRuleCache.Where(r => r.AssetTypeId == assetTypeId)];
-    }
 
     public void AddLayerRule(LayerRule layerRule)
     {
@@ -557,7 +559,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             })]
         });
         SaveChanges();
-        _layerRuleCache = null;
+        ClearCatalogCache(ref _layerRuleCache);
     }
 
     public void DeleteLayerRule(Guid id)
@@ -566,7 +568,39 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         if (row is null) return;
         _db.LayerRules.Remove(row);
         SaveChanges();
-        _layerRuleCache = null;
+        ClearCatalogCache(ref _layerRuleCache);
+    }
+
+    /// <summary>
+    /// The cached catalog list, read once through a short-lived context of this provider's tenant (XD01-474): under
+    /// <see cref="_catalogCacheLock"/>, so concurrent readers of a cold cache wait for one read instead of all querying
+    /// the long-lived context. The returned list is never changed afterwards; callers copy it.
+    /// </summary>
+    private List<T> CachedCatalog<T>(ref List<T>? cache, Func<GeoAssetsDbContext, List<T>> read)
+    {
+        if (Volatile.Read(ref cache) is { } cached)
+            return cached;
+
+        lock (_catalogCacheLock)
+        {
+            if (cache is { } filled)
+                return filled;
+
+            using var db = NewContext();
+            var loaded = read(db);
+            Volatile.Write(ref cache, loaded);
+            return loaded;
+        }
+    }
+
+    /// <summary>
+    /// Drops a catalog cache after a write, under the same lock as <see cref="CachedCatalog{T}"/>, so a fill that read the
+    /// rows before the write cannot publish them after it.
+    /// </summary>
+    private void ClearCatalogCache<T>(ref List<T>? cache)
+    {
+        lock (_catalogCacheLock)
+            Volatile.Write(ref cache, null);
     }
 
     // ── Mapping ────────────────────────────────────────────────────────────────
