@@ -143,4 +143,61 @@ public sealed class CogRasterTileSourceTests : IDisposable
 
         act.Should().Throw<ArgumentException>();
     }
+
+    // ── DescribeAsync (XD01-459) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Describe_IsItsOneLayer_FromZoom0ToItsNativeZoom_OverItsWarpedExtent()
+    {
+        var source = new CogRasterTileSource("ortho", TestRasters.WriteCog(_directory.Path, (200, 30, 10)));
+
+        var description = await source.DescribeAsync(CancellationToken.None);
+
+        description.LayerIds.Should().Equal("ortho");
+        description.MinZoom.Should().Be(0);
+        description.MaxZoom.Should().Be(4, "0.1° pixels are about 11 km at the equator: zoom 4's 256 px tiles are about 9.8 km");
+        var bounds = description.Bounds!.Value;
+        bounds.MinLon.Should().BeApproximately(-10, 0.15);
+        bounds.MaxLon.Should().BeApproximately(10, 0.15);
+        bounds.MinLat.Should().BeApproximately(-10, 0.15);
+        bounds.MaxLat.Should().BeApproximately(10, 0.15);
+        description.Version.Should().MatchRegex("^[0-9a-f]{16}$");
+        (await source.DescribeAsync(CancellationToken.None)).Should().BeSameAs(description, "nothing changed: read with GDAL once");
+    }
+
+    [Fact]
+    public async Task Describe_AReplacedFile_IsANewVersion()
+    {
+        var path = TestRasters.WriteCog(_directory.Path, (1, 2, 3));
+        var source = new CogRasterTileSource("ortho", path);
+        var before = await source.DescribeAsync(CancellationToken.None);
+
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(1));
+        var after = await source.DescribeAsync(CancellationToken.None);
+
+        after.Version.Should().NotBe(before.Version);
+        after.MaxZoom.Should().Be(before.MaxZoom);
+    }
+
+    [Fact]
+    public Task Describe_AMissingFile_FailsWithFileNotFound()
+    {
+        var source = new CogRasterTileSource("ortho", Path.Combine(_directory.Path, "gone.tif"));
+
+        var describe = () => source.DescribeAsync(CancellationToken.None);
+
+        return describe.Should().ThrowAsync<FileNotFoundException>();
+    }
+
+    [Theory]
+    [InlineData(156_543.03392804097, 0)]
+    [InlineData(156_543.0, 1)]
+    [InlineData(11_132.0, 4)]
+    [InlineData(0.15, 20)]
+    [InlineData(0.000_001, TileAddress.MaxZoom)]
+    [InlineData(10_000_000.0, 0)]
+    [InlineData(0.0, TileAddress.MaxZoom)]
+    [InlineData(double.NaN, TileAddress.MaxZoom)]
+    public void NativeZoom_IsTheFirstZoomAsFineAsThePixels_WithinThePyramid(double pixelSize, int zoom) =>
+        CogRasterTileSource.NativeZoom(pixelSize).Should().Be(zoom);
 }

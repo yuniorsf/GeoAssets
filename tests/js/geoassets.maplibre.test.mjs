@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
     planStyleUpdate, tileVersionOf, tokenScopeOf, isUnder, stateGroups, stateExpression, dashArrayOf, effectiveStyle,
     toSourceFeature, wmsTileUrl, expandSubdomains, boundsOf, nearestVertex, featureIdOf, roundGeometry, toMapLibreZoom,
-    fromMapLibreZoom, LIBRARIES, rasterTierOf, tileStyleInfo, withoutHiddenIds, tileBoundsOf, tileVertices
+    fromMapLibreZoom, LIBRARIES, rasterTierOf, tileStyleInfo, withoutHiddenIds, tileBoundsOf, tileVertices, isTileSource
 } from '../../apps/GeoAssets.Shared/wwwroot/js/geoassets.maplibre.js';
 
 const style = (v, layers = [{ id: 't-point', type: 'circle', source: 'geoassets', 'source-layer': 't' }], raster = false) => ({
@@ -212,4 +212,14 @@ test('a tile feature\'s snap vertices are the ones inside its own tile (not its 
     assert.deepEqual(tileVertices(onTheEdge), [[0, 10]]);
     const noTile = { geometry: { type: 'LineString', coordinates: [[-0.5, 10], [10, 10]] } };
     assert.deepEqual(tileVertices(noTile), [[-0.5, 10], [10, 10]], 'a feature without its tile keeps every position');
+});
+
+test('the tile style\'s sources are the kernel\'s own and its keyed ones (XD01-459), never the features\' overlay', () => {
+    assert.equal(isTileSource('geoassets'), true);
+    assert.equal(isTileSource('geoassets-raster'), true);
+    assert.equal(isTileSource('geoassets-source-mvt-basemap'), true);
+    assert.equal(isTileSource('geoassets-source-png-ortho'), true);
+    assert.equal(isTileSource('geoassets-features'), false);
+    assert.equal(isTileSource('osm'), false);
+    assert.equal(isTileSource(undefined), false);
 });

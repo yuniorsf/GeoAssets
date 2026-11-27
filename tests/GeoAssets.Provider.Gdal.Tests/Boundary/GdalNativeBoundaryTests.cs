@@ -99,6 +99,8 @@ public sealed partial class GdalNativeBoundaryTests
             "a host loads managed GDAL once: statically or from its plugin directory, never both");
         staticReferrers.Should().NotContain("apps/GeoAssets.Server/GeoAssets.Server.csproj",
             "the kernel composes provider plugins from its plugin directory (AddProviderPluginsFromDirectory) — GDAL is a drop-in there");
+        pluginShippers.Should().Contain("apps/GeoAssets.Server/GeoAssets.Server.csproj",
+            "the kernel ships the GDAL plugin in its plugins/providers/ (XD01-459)");
     }
 
     [Fact]

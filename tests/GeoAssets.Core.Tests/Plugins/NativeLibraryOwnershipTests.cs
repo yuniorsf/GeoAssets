@@ -22,6 +22,19 @@ public sealed class NativeLibraryOwnershipTests
     }
 
     [Fact]
+    public void Claims_ListsEveryClaimedLibraryWithItsOwner_AsASnapshot()
+    {
+        var library = UniqueLibrary();
+        var owner = typeof(NativeLibraryOwnershipTests).Assembly;
+        var before = NativeLibraryOwnership.Claims;
+        NativeLibraryOwnership.Claim(library, owner);
+
+        NativeLibraryOwnership.Claims.Should().ContainKey(library).WhoseValue.Should().BeSameAs(owner);
+        NativeLibraryOwnership.Claims.Should().ContainKey(library.ToUpperInvariant(), "names are case-insensitive");
+        before.Should().NotContainKey(library, "a snapshot doesn't change with later claims");
+    }
+
+    [Fact]
     public void AnotherAssembly_IsRefused_NamingBothCopies()
     {
         var library = UniqueLibrary();

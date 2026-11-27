@@ -16,6 +16,8 @@ public sealed class GatewayRateLimitPoliciesTests
     [InlineData("/wfs/layer/1")]
     [InlineData("/tiles/style.json")]
     [InlineData("/tiles/assets/0123abcd-0-0.0/8/94/146.mvt")]
+    [InlineData("/tiles/sources/basemap/b45e00010a1b2c3d/8/94/146.mvt")]
+    [InlineData("/tiles/sources/ortho/0e7a00010a1b2c3d/12/1515/2335.png")]
     [InlineData("/TILES/assets/v/12/1/2.png")]
     public void Classify_AWmsWfsOrTilesPath_IsTiles(string path)
     {

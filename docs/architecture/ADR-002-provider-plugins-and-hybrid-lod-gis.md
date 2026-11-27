@@ -177,7 +177,7 @@ flowchart TD
 - **FlatGeobuf / GeoParquet** (`OgrVectorFileReader : IVectorFileReader`, new Core contracts in `GeoAssets.Core.VectorFiles`): OGR drivers `FlatGeobuf` and `Parquet`, **both present in the shipped Minimal runtime** (it bundles Arrow/Parquet). Pages of at most 10,000 features (`VectorFileReadRequest`, default 1,000, `SetNextByIndex`), in file order (a spatially indexed FlatGeobuf is Hilbert-sorted), reprojected to EPSG:4326 longitude-first, `name`/`id` fields mapped, every field as text. A missing driver or runtime is `VectorFileFormatUnavailableException` at use, never at startup. Writers (XD01-466): `OgrVectorFileWriter : IVectorFileWriter` streams an `IAsyncEnumerable<GeoFeature>` into a FlatGeobuf (`SPATIAL_INDEX=YES`, so every feature needs a geometry) or GeoParquet file (row groups of `VectorFileWriteRequest.BatchSize`, default 1,000) at a path (built under a temporary name, moved into place only when complete) or onto a stream: one layer in EPSG:4326 longitude-first, text columns `id`, `name` and the attributes — declared up front (`VectorFileWriteRequest.Attributes`, one pass) or learned by spooling the input to an NDJSON file on disk first (both formats fix their columns before the first row), never the whole input in memory; read back by `OgrVectorFileReader` with the same geometry, id, name and attributes. Its one host surface is the network import CLI's `plan --export flatgeobuf|geoparquet` (`features.fgb`/`features.parquet` next to `features.ndjson`). No COG *writer* yet (no raster catalog to export from).
 - **PMTiles export** (XD01-472): `OgrPMTilesArchiveWriter : IVectorTileArchiveWriter` (Core contracts `IVectorTileArchiveWriter`, `VectorTileArchiveWriteRequest`/`Result`, `VectorTileArchiveUnavailableException` in `GeoAssets.Core.VectorFiles`) streams an `IAsyncEnumerable<GeoFeature>` into a PMTiles v3 archive of MVT through OGR's `PMTiles` driver, **which the shipped Minimal runtime can create** (`DCAP_CREATE=YES`; it tiles with GDAL's MVT writer into a temporary `<archive>.tmp.mbtiles` and assembles the archive, gzip tiles and `vector_layers` metadata, on close). The request: zooms `MinZoom`…`MaxZoom` (default 0–14, at most 22), the MVT layer of each asset type id (`LayerNames`, else the id itself; `features` for a blank one), the attributes (all by default — tags are per feature, so one pass without spooling), and the driver's `EXTENT` (power of two, default 4096), `BUFFER` (default 80) and `SIMPLIFICATION`/`SIMPLIFICATION_MAX_ZOOM`. Each feature's OGR FID is its 1-based position in the input, which GDAL's MVT writer writes as the **MVT feature id**: unique across the archive and the same in every tile and zoom, so offline packs join a feature's pieces by it (XD01-463); the `GeoFeature.Id` travels in the `id` tag, the name in `name`, the attributes as text tags (`id`/`name` keys in any case left to those two). A feature without geometry is skipped and counted (`FeaturesSkipped`); an input with nothing to tile fails with `InvalidDataException` before the driver is reached (GDAL can't close an archive without tiles, and the OGR bindings would raise that error on the next call). The archive is built under a temporary name and moved into place (or copied onto a stream) only once complete; a failed or cancelled write deletes it and the driver's MBTiles file. GDAL's per-tile limits apply as they are (`MAX_SIZE` 500 KB, `MAX_FEATURES` 200,000; past them the driver simplifies that tile and then leaves features out of it) — not exposed yet. Read back by `PMTilesVectorTileSource`/`PMTilesArchive` and accepted by `PMTilesPackStorage`. Its one host surface is the network import CLI's `plan --export pmtiles [--min-zoom z] [--max-zoom z]` (`features.pmtiles`, one layer per asset class name).
 - **Loading model per host**:
-  - **GeoAssets.Server**: directory plugin only, never a static reference (`GdalNativeBoundaryTests`). It is not listed as a `<ProviderPlugin>` yet: no kernel route serves the keyed PMTiles/COG sources, and the Linux runtime adds about 150 MB to the image. Shipping it is one `<ProviderPlugin Include="..\..\providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />` item.
+  - **GeoAssets.Server**: directory plugin only, never a static reference (`GdalNativeBoundaryTests`). Not listed as a `<ProviderPlugin>` by XD01-437; since XD01-459 it is, and its keyed sources are served under `/tiles/sources/` (below).
   - **GeoAssets.FieldService.Server**: static reference + `AddGeoAssetsFileGeodatabaseExport()`, and no plugin directory.
   - **tools/GeoAssets.Tools.NetworkImport**: static, through `GeoAssets.Ingestion.Proj` and, since XD01-466, directly (`plan --export` composes `OgrVectorFileWriter` and, since XD01-472, `OgrPMTilesArchiveWriter`). Its `GdalEnvironment` now calls `GdalNativeInitializer` and keeps only its own PROJ search-path prepending (base paths = `InitialProjSearchPaths`). It has no MaxRev package reference of its own.
   - **GeoAssets.MAUI**: not in its static plugin set (no native runtime for iOS/Android). Its offline PMTiles packs come from the GDAL-free `GeoAssets.Provider.PMTiles` instead (XD01-438, below).
@@ -408,6 +408,88 @@ reads), `apps/GeoAssets.Server/Tiles/` (configuration and endpoint):
   tile sources don't read granted rows yet); while a replica is unsubscribed it may serve its last-known `{v}` (bounded by
   the reconnect); a replica start busts every client's tile cache once (as a restart always did).
 
+### As built — the GDAL plugin in the kernel & keyed tile source routes (XD01-459)
+
+`apps/GeoAssets.Server` (`GeoAssets.Server.csproj`, `Dockerfile`, `Tiles/KeyedTileSources`, `KeyedTileSource`,
+`PublishedTileSource`, `KeyedTileSourceReport`, `TileEndpointExtensions`, `TileStyleDocument`), `build/GeoAssets.ProviderPlugins.targets`,
+`core/GeoAssets.Core/Rendering/` (`IDescribedTileSource`, `TileSourceDescription`), `core/GeoAssets.Core/Plugins/NativeLibraryOwnership.Claims`,
+`PMTilesVectorTileSource` and `CogRasterTileSource` (both now `IDescribedTileSource`):
+
+- **Packaging**: the kernel lists `<ProviderPlugin Include="..\..\providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />`
+  (condition `'$(IncludeGdalPlugin)' != 'false'`), so its build and publish output carry
+  `plugins/providers/GeoAssets.Provider.Gdal/` (the folder is named after the entry assembly, as
+  `DirectoryPluginAssemblySource` requires — not `plugins/providers/Gdal/`). The plugin is built for no runtime, so its
+  `runtimes/` holds all four MaxRev RIDs (≈150 MB each); the packaging targets now copy only the RID folders that can run
+  — the host's `RuntimeIdentifier` (the image's `linux-arm64`/`linux-x64` publish), a less specific one it starts with,
+  `unix` (not on Windows) and `any` (`gdal-data`); in a build for no runtime, the SDK's own RID
+  (`NETCoreSdkRuntimeIdentifier`, so a developer's kernel `bin/` gets `osx-arm64` + `any`, 117 MB, not 560 MB); a
+  publish for no runtime is portable and keeps them all. The kernel's assets file, `deps.json` and output root have no
+  MaxRev or Gdal assembly (`KernelGdalPluginPackagingTests`), so `GdalNativeBoundaryTests` stays green and now also
+  requires the kernel to be a plugin shipper. A Linux publish fails the build (`VerifyGdalProviderPluginPublished`) when
+  the plugin's entry assembly or `runtimes/<rid>/native/libgdal_wrap.so` is missing or another RID's natives are present.
+- **Image size** (arm64, `docker image inspect`, same commit): **376.9 MB without the plugin, 550.4 MB with it (+173.6 MB,
+  +46 %)**; the plugin folder is 154 MB of `linux-arm64` natives plus `gdal-data` and the managed bindings. **Decision:
+  ship it by default** — Docker build arg `INCLUDE_GDAL_PLUGIN` (default `true`; `false` passes
+  `-p:IncludeGdalPlugin=false` to restore and publish). Default on, because the acceptance of this ticket is the stock
+  image serving PMTiles/COG, one image per release avoids a second tag to build, scan and promote, and the cost is disk
+  and one pull per node, not memory or startup (registering runs no native code; GDAL loads on the first COG
+  description or tile). A deployment that serves no keyed source and wants the smaller image builds with
+  `INCLUDE_GDAL_PLUGIN=false`: no plugin folder, so `AddProviderPluginsFromDirectory` skips the absent default
+  directory and the kernel starts exactly as before (`/tiles/sources/*` is then 404).
+- **Routes**: `GET /tiles/sources/{id}/{v}/{z}/{x}/{y}.mvt` and `.png`, `RequireAuthorization("features:read")`,
+  `WithoutOrganizationCatalogWarmup()`, answered by the same `TileResult` as the layer-set tiles (gzip once for MVT,
+  `204` for an empty MVT, a transparent PNG for an empty raster, content `ETag`/`304`). One generic `sources` segment
+  instead of `pmtiles`/`cog`: the kernel knows only the Core contracts, and the extension already says vector or raster
+  (as for the layer sets); the six-segment shape never collides with `/tiles/{set}/{v}/{z}/{x}/{y}`. `{id}` is the key of
+  a keyed `IVectorTileSource` (`.mvt`) or `IRasterTileSource` (`.png`) that is also an **`IDescribedTileSource`** — the
+  new Core port by which a source says its version, the layers to request, its zooms and bounds
+  (`TileSourceDescription`, validated). `KeyedTileSources` lists those keys from the service collection at its first
+  resolution (after every module and plugin registered), and resolves them with `GetKeyedService` — the kernel never
+  names the plugin. Anything else is 404 (unknown id, wrong format, an undescribed keyed source); bad segments or
+  addresses 400; anonymous 401, without `features:read` 403.
+- **Versioning**: `{v}` is the source's own `TileSourceDescription.Version`, not the layer sets' `{style}-{epoch}-{flush}.{generation}`:
+  a deployment file changes with no write and no organization. PMTiles: a hash (16 hex) of the file's length and
+  modification time when the archive is opened — the archive stays open, so the bytes always come from that file and a
+  replaced file takes a restart. COG: the same hash, re-checked on every call (the raster is opened per tile, so a
+  replaced file is served at once under a new `{v}`); a `/vsi…` path hashes the path (a remote raster is taken to be
+  immutable under its URL). A tile is `immutable` only while `{v}` equals the current version, `private, no-cache`
+  otherwise. Cached through the host `ITileCache` up to `MaxCachedZoom` under `TileCacheKey(deployment/sources scope, id,
+  version, tile, format)` — a new version is a new key, so nothing stale is served; writes' range evictions and resyncs
+  also evict these entries (harmless misses).
+- **Scoping decision**: a keyed source is a file of the deployment, not an organization's data. Any caller with
+  `features:read`, of any organization or none, reads all of it, and its tiles are cached **once for every caller**
+  (`TileEndpointExtensions.DeploymentScope`, `deployment/sources` — an organization scope is 32 hex digits, so it can't
+  collide). An operator who configures `GeoAssets:Gdal:PMTiles|Cog` on the kernel publishes those files to every
+  organization; one organization's data belongs in its catalog, never in a keyed source.
+- **`style.json`** (additive — with no keyed source the body, and so the `ETag`, is byte-for-byte the previous one):
+  each source the kernel serves becomes a source `geoassets-source-{mvt|png}-{id}` (`tiles` under its `{v}`, its own
+  `minzoom`/`maxzoom`, `bounds` when known, `tileSize` 256 for rasters), drawn below every kernel layer: a raster's one
+  raster layer, then per MVT layer of a vector source a fill, a line (lines and polygon outlines) and a circle layer in
+  `RenderStyle.DefaultColor`; rasters first. PMTiles describes its metadata's `vector_layers` that are tile key segments
+  (none → it fails to describe), the header's zooms (clamped to the pyramid) and bounds; COG its one layer, zooms 0 to the
+  first zoom whose 256 px tiles are at least as fine as its pixels once warped to EPSG:3857 (`gdalwarp -of VRT`), and
+  that warped extent. A source that fails to describe itself is logged and left out, never failing the style. The
+  MapLibre client (`geoassets.maplibre.js` `isTileSource`) now adds the layers of `geoassets-source-*` sources with the
+  kernel's own (they follow `hideTileLayers`, `{v}` swaps and the 401 re-point like them); the token scope (`/tiles/`)
+  already covers their URLs.
+- **Startup report**: `KeyedTileSourceReport` (hosted, in the background) describes every keyed source once and logs it
+  (a broken file is a warning at startup, the host keeps running), then each plugin loaded from the plugin directory with
+  its load context and the native libraries `LoadUnmanagedDll` resolved from its folder, then every
+  `NativeLibraryOwnership.Claims` entry with its owner and load context.
+- **Gateway**: unchanged. `/tiles/sources/**` is under the kernel catch-all `/tiles/{**catch-all}` and classified
+  `RateLimiting:Tiles` (`GatewayProxyBehaviourTests`, `GatewayRateLimitPoliciesTests` extended).
+- **Container proof** (arm64 image of this branch, throwaway PostGIS, `basemap.pmtiles` from `ogr2ogr -f PMTiles` and a
+  COG from `gdal_translate -of COG` mounted read-only): the startup report logged `ortho` (png, layers `ortho`, zooms 0–9) and `basemap`
+  (mvt, layers `roads`, zooms 0–10) under their file versions, the plugin `GeoAssets.Provider.Gdal` loaded from
+  `/app/plugins/providers/GeoAssets.Provider.Gdal` in load context `GeoAssets.ProviderPlugin:GeoAssets.Provider.Gdal`
+  with `libgdal_wrap.so`, `libogr_wrap.so` and `libosr_wrap.so` resolved by its `LoadUnmanagedDll` from
+  `runtimes/linux-arm64/native/`, and one claim: native library `gdal` owned by `GeoAssets.Provider.Gdal` in that load
+  context. `/app` has no MaxRev assembly. Anonymous `style.json`, `/tiles/sources/basemap/{v}/8/97/135.mvt`,
+  `/tiles/sources/ortho/{v}/9/201/270.png` and an unknown id are all `401` (an invalid bearer too, `invalid_token`),
+  `/healthz` `200`. No CIAM token for a throwaway host could be minted, so the `200`/`404`/cache-header answers are
+  proven on the TestServer (`KeyedTileSourceEndpointTests`, with keyed test sources registered as the plugin registers
+  its own). The `INCLUDE_GDAL_PLUGIN=false` image started on the same database with no `/app/plugins`, `/healthz` `200`.
+
 ### As built — summary
 
 Each ticket was merged into `develop` as one squash commit, after the oracle passed (`verify-agent-worktree.sh`,
@@ -462,7 +544,9 @@ every zoom. Zero full-map clears on pan was checked in headless Chrome against a
 **Open follow-ups** (outside ADR-002's tickets):
 - The tile cache is per replica (each evicts on every replica's writes since XD01-458, which also made `{v}` per
   organization and shared through PostgreSQL); a shared cache (e.g. HybridCache over Redis) would also share the drawings.
-- The kernel doesn't ship the `gdal-cloud-native` plugin yet, and no route serves its keyed PMTiles/COG sources.
+- The kernel's keyed PMTiles/COG sources (XD01-459) are deployment-wide only: no per-organization keyed source, no
+  `{v}` change for a remote COG replaced under the same URL, and the generic `style.json` layers of a keyed vector
+  source paint every MVT layer in one default color.
 - COG *export* is not built (no raster catalog to export from); FlatGeobuf/GeoParquet (XD01-466) and PMTiles (XD01-472)
   export are, wired only into the network import CLI's `plan --export`. The PMTiles writer doesn't expose GDAL's per-tile
   size/feature limits.

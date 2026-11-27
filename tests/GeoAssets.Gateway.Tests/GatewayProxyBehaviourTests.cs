@@ -101,6 +101,8 @@ public sealed class GatewayProxyBehaviourTests : IAsyncLifetime
     [InlineData("/tiles/style.json")]
     [InlineData("/tiles/assets/0123456789ab-0a1b2c3d-0.7/8/94/146.mvt")]
     [InlineData("/tiles/assets/0123456789ab-0a1b2c3d-0.7/12/1515/2335.png")]
+    [InlineData("/tiles/sources/basemap/b45e00010a1b2c3d/8/94/146.mvt")]
+    [InlineData("/tiles/sources/ortho/0e7a00010a1b2c3d/12/1515/2335.png")]
     public async Task TheTileEndpoints_ReachTheKernel_AsTheyAre_WithTheCallersBearerAndAcceptEncoding(string path)
     {
         await using var factory = Gateway();

@@ -55,6 +55,8 @@ export const LIBRARIES = Object.freeze({
 
 export const TILE_VECTOR_SOURCE = 'geoassets';
 export const TILE_RASTER_SOURCE = 'geoassets-raster';
+// The deployment-wide keyed sources style.json lists below the kernel's tiles (XD01-459): geoassets-source-{mvt|png}-{id}.
+export const TILE_KEYED_SOURCE_PREFIX = 'geoassets-source-';
 export const STYLE_VERSION_KEY  = 'geoassets:version';
 
 export const FEATURE_SOURCE = 'geoassets-features';
@@ -533,7 +535,10 @@ async function fetchStyle(state) {
 
 // ─── The kernel's tile style ─────────────────────────────────────────────────────────────────────────────────────────
 
-function isTileSource(id) { return id === TILE_VECTOR_SOURCE || id === TILE_RASTER_SOURCE; }
+/** Whether `id` is a source of the kernel's tile style: its own vector/raster tiles or a keyed source (XD01-459). */
+export function isTileSource(id) {
+    return id === TILE_VECTOR_SOURCE || id === TILE_RASTER_SOURCE || (typeof id === 'string' && id.startsWith(TILE_KEYED_SOURCE_PREFIX));
+}
 
 function removeTileStyle(state) {
     const map = state.map;

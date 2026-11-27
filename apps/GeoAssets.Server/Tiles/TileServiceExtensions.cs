@@ -14,7 +14,8 @@ public static class TileServiceExtensions
     /// <see cref="ITileInvalidation"/> — the one the PostGIS writers report their committed writes to, which reads the writer's
     /// organization's grantees through an <c>IOrganizationGrantRepository</c> of a service scope of its own (XD01-458). Both use
     /// <see cref="TileVersionSync"/> when <see cref="AddTileVersionSharing"/> registered it; without it the versions are this
-    /// process's alone, as before.
+    /// process's alone, as before. <see cref="KeyedTileSources"/> (XD01-459) lists the plugins' keyed tile sources from these
+    /// services once they are complete, its first resolution, and <see cref="KeyedTileSourceReport"/> logs them once the host starts.
     /// </summary>
     public static IServiceCollection AddTileServing(this IServiceCollection services, IConfiguration configuration)
     {
@@ -28,6 +29,8 @@ public static class TileServiceExtensions
         services.TryAddSingleton(options.Budget);
         services.TryAddSingleton<ITileCache>(new MemoryTileCache(options.CacheMaxBytes));
         services.TryAddSingleton(_ => new TileVersions());
+        services.TryAddSingleton(_ => KeyedTileSources.From(services));
+        services.AddHostedService<KeyedTileSourceReport>();
         services.AddSingleton(sp => new TileServing(
             options,
             sp.GetRequiredService<ILodPolicy>(),

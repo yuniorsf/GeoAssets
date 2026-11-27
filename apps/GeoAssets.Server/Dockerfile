@@ -3,6 +3,11 @@
 # projects under core/, providers/, workflow/) — see deploy/server/docker-compose.yaml.
 FROM mcr.microsoft.com/dotnet/sdk:10.0.404@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4 AS build
 ARG TARGETARCH
+# XD01-459: the GDAL plugin (module gdal-cloud-native: keyed PMTiles/COG tile sources under /tiles/sources/, configured by
+# GeoAssets:Gdal:PMTiles|Cog:{id}:Path) ships in plugins/providers/GeoAssets.Provider.Gdal/ with the target RID's MaxRev
+# native GDAL — about 150 MB (see ADR-002, XD01-459). INCLUDE_GDAL_PLUGIN=false builds the image without it; the kernel
+# then starts as before, with no plugin directory.
+ARG INCLUDE_GDAL_PLUGIN=true
 # The protoc that Grpc.Tools 2.71.0 bundles for linux-arm64 (libprotoc 29.0) segfaults (exit 139) whenever it reads its
 # arguments from a response file — which is how Grpc.Tools' ProtoCompile task always invokes it — on current Docker
 # Desktop VM kernels, failing GeoAssets.Workflow.Messaging.Protobuf's build. Compile the .proto files with the distro's
@@ -30,7 +35,7 @@ RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages,sharing=locked \
       arm64) RID=linux-arm64 ;; \
       *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
     esac && \
-    dotnet restore apps/GeoAssets.Server/GeoAssets.Server.csproj -r $RID
+    dotnet restore apps/GeoAssets.Server/GeoAssets.Server.csproj -r $RID -p:IncludeGdalPlugin=$INCLUDE_GDAL_PLUGIN
 COPY . .
 RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages,sharing=locked \
     case "$TARGETARCH" in \
@@ -40,7 +45,7 @@ RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages,sharing=locked \
     esac && \
     dotnet publish apps/GeoAssets.Server/GeoAssets.Server.csproj \
       -c Release -o /app/publish -r $RID --self-contained false \
-      -p:Protobuf_ProtocFullPath=/usr/bin/protoc
+      -p:Protobuf_ProtocFullPath=/usr/bin/protoc -p:IncludeGdalPlugin=$INCLUDE_GDAL_PLUGIN
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.15@sha256:12b1135f5f8b3c0a214f2a680ff2033dff4f684f445d6c697d9524ceeb303586 AS runtime
 WORKDIR /app

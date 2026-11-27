@@ -75,8 +75,38 @@
 
   <!-- Drop-in provider plugins (ADR-002 D2, XD01-428): a <ProviderPlugin Include="…csproj" /> item here is built and
        copied, with its dependencies, to plugins/providers/<Name>/ of the build and publish output (and so of the Docker
-       image), where AddProviderPluginsFromDirectory loads it. None yet: the kernel's own provider, PostgreSQL, is
-       composed statically by the postgres-spatial module. -->
+       image), where AddProviderPluginsFromDirectory loads it. The kernel's own provider, PostgreSQL, is composed
+       statically by the postgres-spatial module instead.
+       XD01-459: the single native GDAL boundary (module gdal-cloud-native) ships as plugins/providers/GeoAssets.Provider.Gdal/,
+       never as a static reference (GdalNativeBoundaryTests); its keyed PMTiles/COG sources are served under
+       /tiles/sources/. A RID-specific publish (the Docker image: linux-x64/linux-arm64) keeps only that RID's natives.
+       -p:IncludeGdalPlugin=false (Docker build arg INCLUDE_GDAL_PLUGIN=false) leaves it out: about 150 MB less, no
+       /tiles/sources/ to serve, and the kernel starts as before (no plugin directory, none loaded). -->
+  <ItemGroup Condition="'$(IncludeGdalPlugin)' != 'false'">
+    <ProviderPlugin Include="..\..\providers\GeoAssets.Provider.Gdal\GeoAssets.Provider.Gdal.csproj" />
+  </ItemGroup>
   <Import Project="..\..\build\GeoAssets.ProviderPlugins.targets" />
+
+  <!-- XD01-459: a Linux publish that ships the GDAL plugin must carry its managed entry assembly and its RID's native
+       GDAL (libgdal_wrap.so, which PluginLoadContext.LoadUnmanagedDll resolves from the plugin folder), and no other RID's. -->
+  <Target Name="VerifyGdalProviderPluginPublished"
+          AfterTargets="Publish"
+          Condition="'$(IncludeGdalPlugin)' != 'false' and $(RuntimeIdentifier.StartsWith('linux-'))">
+    <PropertyGroup>
+      <_GdalPluginPublishDir>$(PublishDir)$(ProviderPluginsDirectory)/GeoAssets.Provider.Gdal/</_GdalPluginPublishDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_GdalPluginForeignRuntime Include="$([System.IO.Directory]::GetDirectories('$(_GdalPluginPublishDir)runtimes'))"
+                                 Condition="Exists('$(_GdalPluginPublishDir)runtimes')" />
+      <_GdalPluginForeignRuntime Remove="@(_GdalPluginForeignRuntime)"
+                                 Condition="'%(Filename)%(Extension)' == '$(RuntimeIdentifier)' or '%(Filename)%(Extension)' == 'any'" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(_GdalPluginPublishDir)GeoAssets.Provider.Gdal.dll')"
+           Text="The kernel's publish output has no $(_GdalPluginPublishDir)GeoAssets.Provider.Gdal.dll (XD01-459)." />
+    <Error Condition="!Exists('$(_GdalPluginPublishDir)runtimes/$(RuntimeIdentifier)/native/libgdal_wrap.so')"
+           Text="The kernel's publish output has no native GDAL for $(RuntimeIdentifier) in $(_GdalPluginPublishDir)runtimes/$(RuntimeIdentifier)/native/ (XD01-459)." />
+    <Error Condition="'@(_GdalPluginForeignRuntime)' != ''"
+           Text="The kernel's $(RuntimeIdentifier) publish output carries other runtimes' natives in the GDAL plugin: @(_GdalPluginForeignRuntime) (XD01-459)." />
+  </Target>
 
 </Project>
