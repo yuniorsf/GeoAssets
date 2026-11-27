@@ -22,7 +22,11 @@ namespace GeoAssets.Server.Tiles;
 /// sources' behaviour without a policy.</param>
 /// <param name="Calibration">The LOD calibration's sampling and budgets (<c>Calibration:*</c>, named as
 /// <see cref="LodCalibrationSettings"/>'s properties, XD01-439).</param>
-public sealed record TileServingOptions(int MaxCachedZoom, int MaxEvictedTilesPerWrite, long CacheMaxBytes, LodPolicy Lod, LodCalibrationSettings Calibration)
+/// <param name="Budget">The vector tiles' discrete-feature budget (XD01-457): <c>Budget:MaxFeaturesPerTile</c> (default
+/// 10,000, across a tile's layers), <c>Budget:MaxFeaturesPerLayer</c> (each layer's within a tile; default: the tile's, no
+/// layer cap) and <c>Budget:Layers:{assetTypeId}</c> (a layer's own); no layer's may exceed the tile's.</param>
+public sealed record TileServingOptions(
+    int MaxCachedZoom, int MaxEvictedTilesPerWrite, long CacheMaxBytes, LodPolicy Lod, LodCalibrationSettings Calibration, TileFeatureBudget Budget)
 {
     /// <summary>The configuration section.</summary>
     public const string SectionKey = "GeoAssets:Tiles";
@@ -39,7 +43,15 @@ public sealed record TileServingOptions(int MaxCachedZoom, int MaxEvictedTilesPe
 
     private const string CalibrationKey = "Calibration";
 
-    private static readonly string[] SectionKeys = ["MaxCachedZoom", "MaxEvictedTilesPerWrite", "CacheMaxMegabytes", LodKey, CalibrationKey];
+    private const string BudgetKey = "Budget";
+
+    private const string MaxFeaturesPerTileKey = "MaxFeaturesPerTile";
+
+    private const string MaxFeaturesPerLayerKey = "MaxFeaturesPerLayer";
+
+    private static readonly string[] SectionKeys = ["MaxCachedZoom", "MaxEvictedTilesPerWrite", "CacheMaxMegabytes", LodKey, CalibrationKey, BudgetKey];
+
+    private static readonly string[] BudgetKeys = [MaxFeaturesPerTileKey, MaxFeaturesPerLayerKey, LayersKey];
 
     private static readonly string[] ThresholdKeys = ["RasterFromZoom", "VectorFromZoom", "MinZoom", "MaxZoom"];
 
@@ -56,11 +68,11 @@ public sealed record TileServingOptions(int MaxCachedZoom, int MaxEvictedTilesPe
     /// <summary>The defaults.</summary>
     public static TileServingOptions Default { get; } = new(
         DefaultMaxCachedZoom, DefaultMaxEvictedTilesPerWrite, DefaultCacheMaxMegabytes * 1024 * 1024, new LodPolicy(LodThresholds.VectorOnly),
-        LodCalibrationSettings.Default);
+        LodCalibrationSettings.Default, TileFeatureBudget.Default);
 
     /// <summary>The options of <paramref name="configuration"/>'s <see cref="SectionKey"/> section, defaults for what it leaves out.</summary>
     /// <exception cref="InvalidOperationException">A key is unknown, a value is not a number or is out of range, a layer id is
-    /// not an asset type id, or the calibration settings are invalid.</exception>
+    /// not an asset type id, or the calibration settings or the feature budget are invalid.</exception>
     /// <exception cref="InvalidLodPolicyException">The LOD thresholds are invalid.</exception>
     public static TileServingOptions From(IConfiguration configuration)
     {
@@ -81,7 +93,37 @@ public sealed record TileServingOptions(int MaxCachedZoom, int MaxEvictedTilesPe
             throw Invalid(section, "CacheMaxMegabytes", "a positive number of megabytes");
 
         return new TileServingOptions(
-            maxCachedZoom, maxEvicted, cacheMegabytes * 1024 * 1024, Policy(Section(section, LodKey)), CalibrationSettings(Section(section, CalibrationKey)));
+            maxCachedZoom, maxEvicted, cacheMegabytes * 1024 * 1024, Policy(Section(section, LodKey)), CalibrationSettings(Section(section, CalibrationKey)),
+            FeatureBudget(Section(section, BudgetKey)));
+    }
+
+    private static TileFeatureBudget FeatureBudget(IConfigurationSection budget)
+    {
+        EnsureKnownKeys(budget, BudgetKeys);
+
+        var perTile = Read(budget, MaxFeaturesPerTileKey, TileFeatureBudget.DefaultMaxFeaturesPerTile);
+        if (perTile is < 1 or > TileFeatureBudget.Limit)
+            throw Invalid(budget, MaxFeaturesPerTileKey, string.Create(CultureInfo.InvariantCulture, $"a number of features in [1, {TileFeatureBudget.Limit}]"));
+
+        var layerRange = string.Create(CultureInfo.InvariantCulture, $"a number of features in [1, {perTile}] (at most {MaxFeaturesPerTileKey})");
+        var perLayer = ReadOptional(budget, MaxFeaturesPerLayerKey);
+        if (perLayer is { } cap && (cap < 1 || cap > perTile))
+            throw Invalid(budget, MaxFeaturesPerLayerKey, layerRange);
+
+        var layers = new Dictionary<string, int>(StringComparer.Ordinal);
+        var layersSection = Section(budget, LayersKey);
+        foreach (var layer in layersSection.GetChildren())
+        {
+            if (!Guid.TryParseExact(layer.Key, "D", out var assetTypeId))
+                throw new InvalidOperationException($"'{layer.Path}' must be named by an asset type id (a GUID such as 00000000-0000-0000-0000-000000000000); '{layer.Key}' is not one.");
+
+            var layerBudget = ReadOptional(layersSection, layer.Key);
+            if (layerBudget is not { } own || own < 1 || own > perTile)
+                throw Invalid(layersSection, layer.Key, layerRange);
+            layers.Add(assetTypeId.ToString("D", CultureInfo.InvariantCulture), own);
+        }
+
+        return new TileFeatureBudget(perTile, perLayer, layers);
     }
 
     private static LodPolicy Policy(IConfigurationSection lod)

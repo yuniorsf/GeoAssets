@@ -24,7 +24,7 @@ internal sealed record TileResponse(byte[] Mvt, long WireBytes, TimeSpan Databas
 /// (Invariant 1). Not included: Kestrel, authentication/authorization (<c>features:read</c>), the grant lookup of the cache
 /// scope, the gateway hop.
 /// </summary>
-internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProvider timeProvider, ILodPolicy? lod = null)
+internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProvider timeProvider, ILodPolicy? lod = null, TileFeatureBudget? budget = null)
 {
     /// <summary><c>PostgresVectorTileSource.Extent</c>.</summary>
     public const int Extent = 4096;
@@ -35,9 +35,6 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
     /// <summary><c>PostgresVectorTileSource.AggregateGridSize</c>.</summary>
     public const int AggregateGridSize = 64;
 
-    /// <summary><c>PostgresVectorTileSource.DefaultMaxFeaturesPerTile</c>.</summary>
-    public const int MaxFeaturesPerTile = 10_000;
-
     private static readonly string[] ReservedProperties = ["id", "name", "assetTypeId", "layerId"];
 
     internal const string TileSql = """
@@ -47,6 +44,11 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
                    ST_TileEnvelope(@z, @x, @y, margin => @margin) AS clip
             FROM (SELECT ST_TileEnvelope(@z, @x, @y) AS envelope) AS t
         ),
+        hidden AS (
+            SELECT coalesce(array_agg(t."Id"::text), '{}') AS layers
+            FROM asset_type t
+            WHERE t."Id"::text = ANY(@layers) AND (t."MinZoom" > @z OR t."MaxZoom" < @z)
+        ),
         rule_keys AS (
             SELECT r."AssetTypeId"::text AS layer, array_agg(DISTINCT c."Attribute") AS keys
             FROM layer_rule r
@@ -55,44 +57,46 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
             GROUP BY r."AssetTypeId"
         ),
         discrete AS (
-            SELECT array_position(@layers, e."AssetTypeId") AS ord, e."AssetTypeId" AS layer,
-                   e."Id", e."Name", e."LayerId", e.custom_attributes, e.geom_3857
-            FROM geo_entity e
-            CROSS JOIN tile
-            WHERE e."AssetTypeId" = ANY(@discrete)
-              AND e."OrganizationId" = ANY(@organizations)
-              AND e.geom_3857 && tile.clip
-              AND NOT EXISTS (
-                  SELECT 1 FROM asset_type t
-                  WHERE t."Id"::text = e."AssetTypeId" AND (t."MinZoom" > @z OR t."MaxZoom" < @z))
-            ORDER BY ord, e."Id" COLLATE "C"
+            SELECT c.ord, c.layer, c."Id", c."Name", c."LayerId", c.custom_attributes, c.geom_3857
+            FROM (
+                SELECT array_position(@layers, e."AssetTypeId") AS ord, e."AssetTypeId" AS layer,
+                       e."Id", e."Name", e."LayerId", e.custom_attributes, e.geom_3857,
+                       row_number() OVER (PARTITION BY e."AssetTypeId" ORDER BY e."Id" COLLATE "C") AS rank
+                FROM geo_entity e
+                CROSS JOIN tile
+                CROSS JOIN hidden
+                WHERE e."AssetTypeId" = ANY(@discrete)
+                  AND e."AssetTypeId" <> ALL(hidden.layers)
+                  AND e."OrganizationId" = ANY(@organizations)
+                  AND e.geom_3857 && tile.clip
+            ) AS c
+            WHERE c.rank <= (@layerBudgets)[array_position(@discrete, c.layer)]
+            ORDER BY c.ord, c."Id" COLLATE "C"
             LIMIT @budget
         ),
-        discrete_features AS (
+        discrete_features AS MATERIALIZED (
             SELECT d.ord, d.layer, d."Id" AS id, d."Name" AS name, d.layer AS "assetTypeId", d."LayerId"::text AS "layerId",
                    (SELECT jsonb_object_agg(kv.key, kv.value)
                     FROM jsonb_each_text(d.custom_attributes) AS kv
                     WHERE kv.key = ANY(rk.keys) AND kv.key <> ALL(@reserved)) AS attributes,
-                   ST_AsMVTGeom(ST_SimplifyPreserveTopology(d.geom_3857, @tolerance), tile.envelope, @extent, @buffer, true) AS geom
+                   ST_AsMVTGeom(ST_Simplify(d.geom_3857, @tolerance, true), tile.envelope, @extent, @buffer, true) AS geom
             FROM discrete d
             CROSS JOIN tile
             LEFT JOIN rule_keys rk ON rk.layer = d.layer
         ),
         aggregate_cells AS (
             SELECT array_position(@layers, e."AssetTypeId") AS ord, e."AssetTypeId" AS layer, count(*)::int AS count,
-                   avg(ST_X(p.point)) AS x, avg(ST_Y(p.point)) AS y
+                   avg(ST_X(e.geom_3857_centroid)) AS x, avg(ST_Y(e.geom_3857_centroid)) AS y
             FROM geo_entity e
             CROSS JOIN tile
-            CROSS JOIN LATERAL (SELECT ST_Centroid(e.geom_3857) AS point) AS p
+            CROSS JOIN hidden
             WHERE e."AssetTypeId" = ANY(@aggregate)
+              AND e."AssetTypeId" <> ALL(hidden.layers)
               AND e."OrganizationId" = ANY(@organizations)
-              AND e.geom_3857 && tile.envelope
-              AND NOT EXISTS (
-                  SELECT 1 FROM asset_type t
-                  WHERE t."Id"::text = e."AssetTypeId" AND (t."MinZoom" > @z OR t."MaxZoom" < @z))
-              AND ST_X(p.point) >= tile.xmin AND ST_X(p.point) < tile.xmax
-              AND ST_Y(p.point) >= tile.ymin AND ST_Y(p.point) < tile.ymax
-            GROUP BY e."AssetTypeId", floor((ST_X(p.point) - tile.xmin) / @cell), floor((ST_Y(p.point) - tile.ymin) / @cell)
+              AND e.geom_3857_centroid && tile.envelope
+              AND ST_X(e.geom_3857_centroid) >= tile.xmin AND ST_X(e.geom_3857_centroid) < tile.xmax
+              AND ST_Y(e.geom_3857_centroid) >= tile.ymin AND ST_Y(e.geom_3857_centroid) < tile.ymax
+            GROUP BY e."AssetTypeId", floor((ST_X(e.geom_3857_centroid) - tile.xmin) / @cell), floor((ST_Y(e.geom_3857_centroid) - tile.ymin) / @cell)
         ),
         aggregate_features AS (
             SELECT a.ord, a.layer, a.layer AS "assetTypeId", a.count,
@@ -101,7 +105,7 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
             CROSS JOIN tile
         ),
         layers AS (
-            SELECT f.ord, ST_AsMVT(p, f.layer, @extent, 'geom') AS mvt
+            SELECT f.ord, ST_AsMVT(p, f.layer, @extent, 'geom' ORDER BY f.id COLLATE "C") AS mvt
             FROM discrete_features f
             CROSS JOIN LATERAL (SELECT f.id, f.name, f."assetTypeId", f."layerId", f.attributes, f.geom) AS p
             WHERE f.geom IS NOT NULL
@@ -118,6 +122,9 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
 
     /// <summary>The policy (vector at every zoom unless one is given).</summary>
     public ILodPolicy Lod { get; } = lod ?? new LodPolicy(LodThresholds.VectorOnly);
+
+    /// <summary>The discrete-feature budget (the source's default unless one is given: <c>GeoAssets:Tiles:Budget</c>, XD01-457).</summary>
+    public TileFeatureBudget Budget { get; } = budget ?? TileFeatureBudget.Default;
 
     /// <summary>
     /// The layers a vector tile at <paramref name="zoom"/> of the <c>assets</c> set carries under <paramref name="lod"/>
@@ -169,7 +176,7 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
         return buffer.ToArray();
     }
 
-    private static void AddParameters(NpgsqlCommand command, TileAddress address, IReadOnlyList<string> layers, IReadOnlyList<string> aggregate)
+    private void AddParameters(NpgsqlCommand command, TileAddress address, IReadOnlyList<string> layers, IReadOnlyList<string> aggregate)
     {
         var tileWidth = address.Envelope3857.Width;
         var parameters = command.Parameters;
@@ -181,10 +188,12 @@ internal sealed class TileEndpointPipeline(NpgsqlDataSource dataSource, TimeProv
         parameters.Add(new NpgsqlParameter("buffer", NpgsqlDbType.Integer) { Value = Buffer });
         parameters.Add(new NpgsqlParameter("tolerance", NpgsqlDbType.Double) { Value = tileWidth / Extent });
         parameters.Add(new NpgsqlParameter("cell", NpgsqlDbType.Double) { Value = tileWidth / AggregateGridSize });
-        parameters.Add(new NpgsqlParameter("budget", NpgsqlDbType.Integer) { Value = MaxFeaturesPerTile });
+        parameters.Add(new NpgsqlParameter("budget", NpgsqlDbType.Integer) { Value = Budget.MaxFeaturesPerTile });
         parameters.Add(new NpgsqlParameter("organizations", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = new[] { Guid.Empty } });
         parameters.Add(TextArray("layers", layers));
-        parameters.Add(TextArray("discrete", [.. layers.Except(aggregate, StringComparer.Ordinal)]));
+        string[] discrete = [.. layers.Except(aggregate, StringComparer.Ordinal)];
+        parameters.Add(TextArray("discrete", discrete));
+        parameters.Add(new NpgsqlParameter("layerBudgets", NpgsqlDbType.Array | NpgsqlDbType.Integer) { Value = discrete.Select(Budget.ForLayer).ToArray() });
         parameters.Add(TextArray("aggregate", aggregate));
         parameters.Add(TextArray("reserved", ReservedProperties));
     }

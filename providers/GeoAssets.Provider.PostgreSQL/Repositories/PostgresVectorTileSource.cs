@@ -22,8 +22,11 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// own zoom range (<c>MinZoom</c>/<c>MaxZoom</c>) excludes that zoom, filtered in the SQL as
 /// <see cref="ZoomRangeQueries"/> does. A <see cref="TileRenderTier.Aggregate"/> layer is a grid of
 /// <see cref="AggregateGridSize"/>² cells per tile: one point per non-empty cell, at the mean of its features' centroids,
-/// counting the features whose centroid falls in it (each feature counts in one tile per zoom). Any other tier draws the
-/// features themselves, simplified first (<c>ST_SimplifyPreserveTopology</c>, one tile unit at the tile's zoom).</para>
+/// counting the features whose centroid falls in it (each feature counts in one tile per zoom); the centroids are the
+/// stored, GiST-indexed <c>geom_3857_centroid</c> column (XD01-457), so an aggregate never reads a feature's geometry.
+/// Any other tier draws the features themselves, simplified first (Douglas–Peucker, <c>ST_Simplify</c> keeping collapsed
+/// geometries, one tile unit at the tile's zoom — <c>ST_AsMVTGeom</c> then snaps them to the tile grid and repairs an
+/// invalid polygon), each geometry computed once (XD01-457).</para>
 ///
 /// <para><b>Properties.</b> A feature carries <c>id</c> (its id — the MVT feature id is numeric, so a map client
 /// promotes this property instead), <c>name</c>, <c>assetTypeId</c>, <c>layerId</c> (its style override, when set),
@@ -31,8 +34,10 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// can resolve the same layer) except one named like those four. An aggregate point carries <c>assetTypeId</c> and
 /// <c>count</c>.</para>
 ///
-/// <para><b>Budget.</b> A tile holds at most <see cref="MaxFeaturesPerTile"/> discrete features: the first by layer, then
-/// ordinal id (<c>COLLATE "C"</c>), as every other bounded read of this provider orders them.</para>
+/// <para><b>Budget.</b> A tile holds at most <see cref="Budget"/>'s <see cref="TileFeatureBudget.ForLayer"/> discrete
+/// features of each layer — the first by ordinal id (<c>COLLATE "C"</c>), as every other bounded read of this provider
+/// orders them — and at most its <see cref="TileFeatureBudget.MaxFeaturesPerTile"/> in all: the first of those by layer,
+/// then ordinal id (XD01-457).</para>
 ///
 /// <para><b>Scope.</b> Like <see cref="PostgresAssetRenderQuery"/>: the read runs in a transaction stamped by
 /// <see cref="TenantTransactionInterceptor"/> for the Row-Level Security policy, on a context built for the request's
@@ -56,7 +61,7 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
     public const int AggregateGridSize = 64;
 
     /// <summary>The default <see cref="MaxFeaturesPerTile"/>.</summary>
-    public const int DefaultMaxFeaturesPerTile = 10_000;
+    public const int DefaultMaxFeaturesPerTile = TileFeatureBudget.DefaultMaxFeaturesPerTile;
 
     /// <summary>The longest a tile query may run.</summary>
     public static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(30);
@@ -73,6 +78,11 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
                    ST_TileEnvelope(@z, @x, @y, margin => @margin) AS clip
             FROM (SELECT ST_TileEnvelope(@z, @x, @y) AS envelope) AS t
         ),
+        hidden AS (
+            SELECT coalesce(array_agg(t."Id"::text), '{}') AS layers
+            FROM asset_type t
+            WHERE t."Id"::text = ANY(@layers) AND (t."MinZoom" > @z OR t."MaxZoom" < @z)
+        ),
         rule_keys AS (
             SELECT r."AssetTypeId"::text AS layer, array_agg(DISTINCT c."Attribute") AS keys
             FROM layer_rule r
@@ -81,44 +91,46 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
             GROUP BY r."AssetTypeId"
         ),
         discrete AS (
-            SELECT array_position(@layers, e."AssetTypeId") AS ord, e."AssetTypeId" AS layer,
-                   e."Id", e."Name", e."LayerId", e.custom_attributes, e.geom_3857
-            FROM geo_entity e
-            CROSS JOIN tile
-            WHERE e."AssetTypeId" = ANY(@discrete)
-              AND e."OrganizationId" = ANY(@organizations)
-              AND e.geom_3857 && tile.clip
-              AND NOT EXISTS (
-                  SELECT 1 FROM asset_type t
-                  WHERE t."Id"::text = e."AssetTypeId" AND (t."MinZoom" > @z OR t."MaxZoom" < @z))
-            ORDER BY ord, e."Id" COLLATE "C"
+            SELECT c.ord, c.layer, c."Id", c."Name", c."LayerId", c.custom_attributes, c.geom_3857
+            FROM (
+                SELECT array_position(@layers, e."AssetTypeId") AS ord, e."AssetTypeId" AS layer,
+                       e."Id", e."Name", e."LayerId", e.custom_attributes, e.geom_3857,
+                       row_number() OVER (PARTITION BY e."AssetTypeId" ORDER BY e."Id" COLLATE "C") AS rank
+                FROM geo_entity e
+                CROSS JOIN tile
+                CROSS JOIN hidden
+                WHERE e."AssetTypeId" = ANY(@discrete)
+                  AND e."AssetTypeId" <> ALL(hidden.layers)
+                  AND e."OrganizationId" = ANY(@organizations)
+                  AND e.geom_3857 && tile.clip
+            ) AS c
+            WHERE c.rank <= (@layerBudgets)[array_position(@discrete, c.layer)]
+            ORDER BY c.ord, c."Id" COLLATE "C"
             LIMIT @budget
         ),
-        discrete_features AS (
+        discrete_features AS MATERIALIZED (
             SELECT d.ord, d.layer, d."Id" AS id, d."Name" AS name, d.layer AS "assetTypeId", d."LayerId"::text AS "layerId",
                    (SELECT jsonb_object_agg(kv.key, kv.value)
                     FROM jsonb_each_text(d.custom_attributes) AS kv
                     WHERE kv.key = ANY(rk.keys) AND kv.key <> ALL(@reserved)) AS attributes,
-                   ST_AsMVTGeom(ST_SimplifyPreserveTopology(d.geom_3857, @tolerance), tile.envelope, @extent, @buffer, true) AS geom
+                   ST_AsMVTGeom(ST_Simplify(d.geom_3857, @tolerance, true), tile.envelope, @extent, @buffer, true) AS geom
             FROM discrete d
             CROSS JOIN tile
             LEFT JOIN rule_keys rk ON rk.layer = d.layer
         ),
         aggregate_cells AS (
             SELECT array_position(@layers, e."AssetTypeId") AS ord, e."AssetTypeId" AS layer, count(*)::int AS count,
-                   avg(ST_X(p.point)) AS x, avg(ST_Y(p.point)) AS y
+                   avg(ST_X(e.geom_3857_centroid)) AS x, avg(ST_Y(e.geom_3857_centroid)) AS y
             FROM geo_entity e
             CROSS JOIN tile
-            CROSS JOIN LATERAL (SELECT ST_Centroid(e.geom_3857) AS point) AS p
+            CROSS JOIN hidden
             WHERE e."AssetTypeId" = ANY(@aggregate)
+              AND e."AssetTypeId" <> ALL(hidden.layers)
               AND e."OrganizationId" = ANY(@organizations)
-              AND e.geom_3857 && tile.envelope
-              AND NOT EXISTS (
-                  SELECT 1 FROM asset_type t
-                  WHERE t."Id"::text = e."AssetTypeId" AND (t."MinZoom" > @z OR t."MaxZoom" < @z))
-              AND ST_X(p.point) >= tile.xmin AND ST_X(p.point) < tile.xmax
-              AND ST_Y(p.point) >= tile.ymin AND ST_Y(p.point) < tile.ymax
-            GROUP BY e."AssetTypeId", floor((ST_X(p.point) - tile.xmin) / @cell), floor((ST_Y(p.point) - tile.ymin) / @cell)
+              AND e.geom_3857_centroid && tile.envelope
+              AND ST_X(e.geom_3857_centroid) >= tile.xmin AND ST_X(e.geom_3857_centroid) < tile.xmax
+              AND ST_Y(e.geom_3857_centroid) >= tile.ymin AND ST_Y(e.geom_3857_centroid) < tile.ymax
+            GROUP BY e."AssetTypeId", floor((ST_X(e.geom_3857_centroid) - tile.xmin) / @cell), floor((ST_Y(e.geom_3857_centroid) - tile.ymin) / @cell)
         ),
         aggregate_features AS (
             SELECT a.ord, a.layer, a.layer AS "assetTypeId", a.count,
@@ -127,7 +139,7 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
             CROSS JOIN tile
         ),
         layers AS (
-            SELECT f.ord, ST_AsMVT(p, f.layer, @extent, 'geom') AS mvt
+            SELECT f.ord, ST_AsMVT(p, f.layer, @extent, 'geom' ORDER BY f.id COLLATE "C") AS mvt
             FROM discrete_features f
             CROSS JOIN LATERAL (SELECT f.id, f.name, f."assetTypeId", f."layerId", f.attributes, f.geom) AS p
             WHERE f.geom IS NOT NULL
@@ -151,18 +163,16 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
     /// <param name="tenantContext">The request's tenant; <c>null</c> = none (the shared features only).</param>
     /// <param name="lodPolicy">Which tier each layer is drawn as; <c>null</c> = every layer as vector features at every zoom.</param>
     /// <param name="timeProvider">The query timeout's clock.</param>
-    /// <param name="maxFeaturesPerTile">The tile's discrete-feature budget (<see cref="MaxFeaturesPerTile"/>).</param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxFeaturesPerTile"/> is not positive.</exception>
+    /// <param name="budget">The tile's discrete-feature budget (<see cref="Budget"/>); <c>null</c> = <see cref="TileFeatureBudget.Default"/>.</param>
     public PostgresVectorTileSource(
         DbContextOptions<GeoAssetsDbContext> dbOptions,
         ITenantContext? tenantContext,
         ILodPolicy? lodPolicy,
         TimeProvider timeProvider,
-        int maxFeaturesPerTile = DefaultMaxFeaturesPerTile)
+        TileFeatureBudget? budget = null)
     {
         ArgumentNullException.ThrowIfNull(dbOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxFeaturesPerTile);
 
         _tenantContext = tenantContext ?? NullTenantContext.Instance;
         _dbOptions = new DbContextOptionsBuilder<GeoAssetsDbContext>(dbOptions)
@@ -170,11 +180,14 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
             .Options;
         _lodPolicy = lodPolicy ?? VectorEverywhere;
         _timeProvider = timeProvider;
-        MaxFeaturesPerTile = maxFeaturesPerTile;
+        Budget = budget ?? TileFeatureBudget.Default;
     }
 
+    /// <summary>How many discrete features one tile holds, in all and per layer.</summary>
+    public TileFeatureBudget Budget { get; }
+
     /// <summary>The most discrete features one tile holds.</summary>
-    public int MaxFeaturesPerTile { get; }
+    public int MaxFeaturesPerTile => Budget.MaxFeaturesPerTile;
 
     public async Task<TilePayload> GetVectorTileAsync(TileRequest request, CancellationToken ct)
     {
@@ -244,6 +257,7 @@ public sealed class PostgresVectorTileSource : IVectorTileSource
         parameters.Add(new NpgsqlParameter("organizations", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = organizations });
         parameters.Add(TextArray("layers", layers));
         parameters.Add(TextArray("discrete", discrete));
+        parameters.Add(new NpgsqlParameter("layerBudgets", NpgsqlDbType.Array | NpgsqlDbType.Integer) { Value = discrete.Select(Budget.ForLayer).ToArray() });
         parameters.Add(TextArray("aggregate", aggregate));
         parameters.Add(TextArray("reserved", ReservedProperties));
     }

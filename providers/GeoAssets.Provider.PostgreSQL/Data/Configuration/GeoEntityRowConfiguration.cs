@@ -22,8 +22,9 @@ internal sealed class GeoEntityRowConfiguration : IEntityTypeConfiguration<GeoEn
         e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
 
         // SRID 4326, any geometry type (XD01-432): another SRID is refused, none (0) takes the column's. Its stored generated
-        // Web Mercator copy geom_3857 (GiST-indexed, AddGeoEntityGeom3857) is not mapped: only PostgresVectorTileSource's
-        // SQL reads it, and mapping it would load it with every entity.
+        // Web Mercator copy geom_3857 (GiST-indexed, AddGeoEntityGeom3857) and that copy's centroid geom_3857_centroid
+        // (GiST-indexed, AddGeoEntityGeom3857Centroid, XD01-457) are not mapped: only the tile SQL reads them, and mapping
+        // them would load them with every entity.
         e.Property(x => x.Geom)
          .HasColumnType("geometry(Geometry,4326)")
          .HasColumnName("geom");

@@ -30,6 +30,64 @@ public sealed class TileServingOptionsTests
         options.CacheMaxBytes.Should().Be(256L * 1024 * 1024);
         options.Lod.Default.Should().Be(LodThresholds.VectorOnly);
         options.Lod.Layers.Should().BeEmpty();
+        options.Budget.MaxFeaturesPerTile.Should().Be(10_000);
+        options.Budget.MaxFeaturesPerLayer.Should().Be(10_000, "unset, a layer may spend the tile's budget — the behaviour before XD01-457");
+        options.Budget.Layers.Should().BeEmpty();
+    }
+
+    // ── Budget (XD01-457) ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void TheFeatureBudget_IsRead_IncludingPerLayerBudgets()
+    {
+        var options = TileServingOptions.From(Config(
+            ("Budget:MaxFeaturesPerTile", "8000"),
+            ("Budget:MaxFeaturesPerLayer", "3000"),
+            ($"Budget:Layers:{Poles.ToUpperInvariant()}", "1500")));
+
+        options.Budget.MaxFeaturesPerTile.Should().Be(8_000);
+        options.Budget.MaxFeaturesPerLayer.Should().Be(3_000);
+        options.Budget.Layers.Keys.Should().Equal(Poles);
+        options.Budget.ForLayer(Poles).Should().Be(1_500);
+        options.Budget.ForLayer("other").Should().Be(3_000);
+    }
+
+    [Fact]
+    public void ALayerBudget_WithoutALayerCap_IsReadAgainstTheTilesBudget()
+    {
+        var options = TileServingOptions.From(Config(($"Budget:Layers:{Poles}", "10000")));
+
+        options.Budget.ForLayer(Poles).Should().Be(10_000);
+        options.Budget.MaxFeaturesPerLayer.Should().Be(10_000);
+    }
+
+    [Theory]
+    [InlineData("Budget:MaxFeaturesPerTile", "0", "'GeoAssets:Tiles:Budget:MaxFeaturesPerTile' must be a number of features in [1, 1000000]")]
+    [InlineData("Budget:MaxFeaturesPerTile", "1000001", "'GeoAssets:Tiles:Budget:MaxFeaturesPerTile' must be")]
+    [InlineData("Budget:MaxFeaturesPerTile", "lots", "'GeoAssets:Tiles:Budget:MaxFeaturesPerTile' must be a whole number")]
+    [InlineData("Budget:MaxFeaturesPerLayer", "0", "'GeoAssets:Tiles:Budget:MaxFeaturesPerLayer' must be a number of features in [1, 10000]")]
+    [InlineData("Budget:MaxFeaturesPerLayer", "10001", "'GeoAssets:Tiles:Budget:MaxFeaturesPerLayer' must be a number of features in [1, 10000] (at most MaxFeaturesPerTile)")]
+    [InlineData("Budget:Layers:" + Poles, "0", "'GeoAssets:Tiles:Budget:Layers:" + Poles + "' must be a number of features in [1, 10000]")]
+    [InlineData("Budget:Layers:" + Poles, "20000", "(at most MaxFeaturesPerTile)")]
+    [InlineData("Budget:Layers:" + Poles, "many", "must be a whole number")]
+    [InlineData("Budget:Layers:" + Poles + ":MaxFeaturesPerTile", "10", "'GeoAssets:Tiles:Budget:Layers:" + Poles + "' must be a value, not a section")]
+    [InlineData("Budget:Layers:poles", "10", "'GeoAssets:Tiles:Budget:Layers:poles' must be named by an asset type id")]
+    [InlineData("Budget:MaxFeaturesPerLayr", "10", "'GeoAssets:Tiles:Budget:MaxFeaturesPerLayr' is not a setting of 'GeoAssets:Tiles:Budget'")]
+    [InlineData("Budget", "10", "'GeoAssets:Tiles:Budget' must be a section")]
+    [InlineData("Budget:Layers", "10", "'GeoAssets:Tiles:Budget:Layers' must be a section")]
+    public void AnInvalidFeatureBudget_FailsTheStartup_NamingTheKey(string key, string value, string message)
+    {
+        var act = () => TileServingOptions.From(Config((key, value)));
+
+        act.Should().Throw<InvalidOperationException>().Which.Message.Should().Contain(message);
+    }
+
+    [Fact]
+    public void ALayerBudget_IsCheckedAgainstAConfiguredTileBudget()
+    {
+        var act = () => TileServingOptions.From(Config(("Budget:MaxFeaturesPerTile", "500"), ("Budget:MaxFeaturesPerLayer", "600")));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*MaxFeaturesPerLayer*[1, 500]*");
     }
 
     [Fact]

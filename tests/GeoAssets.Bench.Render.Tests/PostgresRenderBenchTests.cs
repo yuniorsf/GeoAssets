@@ -196,6 +196,34 @@ public sealed class PostgresRenderBenchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TileRead_UnderALayerBudget_AnswersTheSourcesBytes_CappingTheDenseLayers()
+    {
+        // XD01-457: the bench's per-layer budget is the source's.
+        var budget = new TileFeatureBudget(TileFeatureBudget.DefaultMaxFeaturesPerTile, maxFeaturesPerLayer: 3);
+        var layout = new DatasetLayout(DatasetGenerator.DefaultSeed);
+        var tiles = new[] { 13, 14, 16 }
+            .SelectMany(z => ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, z, 1, 1580, 1020))
+            .SelectMany(v => v.CoveringTiles().EnumerateTiles())
+            .ToList();
+        var pipeline = new TileEndpointPipeline(DataSource, TimeProvider.System, budget: budget);
+        var uncapped = new TileEndpointPipeline(DataSource, TimeProvider.System);
+        var source = new PostgresVectorTileSource(PostgresBenchDatabase.CreateOptions(_connectionString), tenantContext: null, lodPolicy: null, TimeProvider.System, budget);
+        var smaller = 0;
+
+        foreach (var tile in tiles)
+        {
+            var layers = TileEndpointPipeline.LayersAt(tile.Z);
+            var bench = await pipeline.GetAsync(tile, CancellationToken.None);
+            var drawn = await source.GetVectorTileAsync(new TileRequest(new TileLayerSet("assets", layers), tile), CancellationToken.None);
+
+            bench.Mvt.Should().Equal(drawn.Content.ToArray(), "the bench's statement is the source's, at {0}", tile);
+            if (bench.Mvt.Length < (await uncapped.GetAsync(tile, CancellationToken.None)).Mvt.Length) smaller++;
+        }
+
+        smaller.Should().BeGreaterThan(0, "a 3-feature layer cap trims the dense tiles");
+    }
+
+    [Fact]
     public async Task CalibrationReads_AnswerWhatThePostGisSamplerAnswers()
     {
         // XD01-439: the bench's copies of PostgresTileDensitySampler's statements read the same rows.
