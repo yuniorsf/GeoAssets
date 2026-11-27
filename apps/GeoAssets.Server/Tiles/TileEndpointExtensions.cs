@@ -27,7 +27,17 @@ namespace GeoAssets.Server.Tiles;
 ///   <item><c>GET /tiles/{set}/{v}/{z}/{x}/{y}.png</c> — a 256 px PNG of the set's raster-tier layers
 ///   (<see cref="IRasterTileSource"/>; a metatile source's whole block is drawn once and cached). An empty tile is a
 ///   transparent 256 px PNG (<c>200</c>): MapLibre's raster sources expect an image.</item>
+///   <item><c>GET /tiles/sources/{id}/{v}/{z}/{x}/{y}.mvt</c> and <c>.png</c> (XD01-459) — a tile of the deployment-wide
+///   source registered under <c>{id}</c> (<see cref="KeyedTileSources"/>: a plugin's keyed <see cref="IVectorTileSource"/>
+///   or <see cref="IRasterTileSource"/>, e.g. a PMTiles archive or a COG), as the tiles above are answered — the same
+///   encoding, empty tiles, <c>ETag</c>s and cache headers. Its <c>{v}</c> is the source's own
+///   (<see cref="TileSourceDescription.Version"/>, derived from its file), and it is current only while equal to it; an
+///   <c>{id}</c> no keyed source of that format has is 404. <c>style.json</c> lists every such source.</item>
 /// </list>
+/// <para><b>Who reads a keyed source.</b> It is a file of the deployment, not an organization's data: any caller with
+/// <c>features:read</c> reads all of it, whatever its organization, and its tiles are cached once for every caller (scope
+/// <see cref="DeploymentScope"/>). An operator who configures one on the kernel publishes it to every organization; data
+/// that belongs to one organization goes in its catalog, never in a keyed source.</para>
 /// <para><b>Status codes.</b> 400 for a set or <c>{v}</c> outside <see cref="TileKeySegment"/>, or a zoom/column/row
 /// outside the pyramid; 401 without a caller, 403 without <c>features:read</c>; 404 for a set the caller does not see;
 /// 304 when <c>If-None-Match</c> holds the tile's <c>ETag</c> (content-derived, <see cref="TilePayload.ETag"/>).</para>
@@ -52,7 +62,18 @@ public static class TileEndpointExtensions
     /// <summary>A tile under another <c>{v}</c>, and <c>style.json</c>: per caller, revalidated on every use.</summary>
     public const string RevalidateCacheControl = "private, no-cache";
 
+    /// <summary>The route segment of the deployment-wide keyed sources' tiles (XD01-459): <c>/tiles/sources/{id}/…</c>.</summary>
+    public const string SourcesSegment = "sources";
+
+    /// <summary>The cache scope of the keyed sources' tiles: one for every caller (an organization's scope is its 32 hex digits).</summary>
+    public static readonly TileCacheScope DeploymentScope = new("deployment", SourcesSegment);
+
     private const string Gzip = "gzip";
+
+    private static readonly Action<ILogger, string, string, Exception?> SourceLeftOut = LoggerMessage.Define<string, string>(
+        LogLevel.Warning,
+        new EventId(4590, "KeyedTileSourceLeftOut"),
+        "The {Format} tile source '{SourceId}' can't describe itself; style.json leaves it out.");
 
     private static readonly Lazy<byte[]> TransparentPng = new(DrawTransparentPng);
 
@@ -77,6 +98,16 @@ public static class TileEndpointExtensions
             .RequireAuthorization("features:read")
             .WithoutOrganizationCatalogWarmup();
 
+        routes.MapGet($"{Prefix}/{SourcesSegment}/{{id}}/{{v}}/{{z}}/{{x}}/{{y}}.mvt", (HttpContext http, string id, string v, string z, string x, string y) =>
+                ServeSourceTileAsync(http, id, v, z, x, y, TileFormat.Mvt))
+            .RequireAuthorization("features:read")
+            .WithoutOrganizationCatalogWarmup();
+
+        routes.MapGet($"{Prefix}/{SourcesSegment}/{{id}}/{{v}}/{{z}}/{{x}}/{{y}}.png", (HttpContext http, string id, string v, string z, string x, string y) =>
+                ServeSourceTileAsync(http, id, v, z, x, y, TileFormat.Png))
+            .RequireAuthorization("features:read")
+            .WithoutOrganizationCatalogWarmup();
+
         // The on-demand LOD calibration (XD01-439): features:read + organizations:edit, recommendations only.
         routes.MapTileLodCalibration();
 
@@ -96,9 +127,11 @@ public static class TileEndpointExtensions
         if (descriptor is null) return Results.NotFound();
 
         var organization = OrganizationOf(http);
+        IReadOnlyList<PublishedTileSource> sources;
         try
         {
             if (serving.Sync is { } sync) await sync.EnsureCurrentAsync(organization, http.RequestAborted).ConfigureAwait(false);
+            sources = await PublishedSourcesAsync(http.RequestServices, http.RequestAborted).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (http.RequestAborted.IsCancellationRequested)
         {
@@ -106,7 +139,7 @@ public static class TileEndpointExtensions
         }
 
         var version = serving.Versions.PublishedVersion(descriptor.StyleHash, organization);
-        var style = TileStyleDocument.Build(descriptor, version, PublicBaseUrl(http.Request), serving.Options.MaxCachedZoom);
+        var style = TileStyleDocument.Build(descriptor, version, PublicBaseUrl(http.Request), serving.Options.MaxCachedZoom, sources);
         var body = JsonSerializer.SerializeToUtf8Bytes(style);
         var etag = "\"" + Convert.ToHexStringLower(SHA256.HashData(body).AsSpan(0, 16)) + "\"";
 
@@ -143,6 +176,78 @@ public static class TileEndpointExtensions
         {
             return Results.Empty;
         }
+    }
+
+    /// <summary>
+    /// The keyed sources <c>style.json</c> lists, each as it describes itself now. One that fails to describe itself (a
+    /// broken or vanished file) is left out and logged, so it never takes the style of the kernel's own tiles down.
+    /// </summary>
+    private static async Task<IReadOnlyList<PublishedTileSource>> PublishedSourcesAsync(IServiceProvider services, CancellationToken ct)
+    {
+        var keyed = services.GetRequiredService<KeyedTileSources>().ResolveAll(services);
+        if (keyed.Count == 0) return [];
+
+        var published = new List<PublishedTileSource>(keyed.Count);
+        foreach (var source in keyed)
+        {
+            try
+            {
+                published.Add(new PublishedTileSource(source.Id, source.Format, await source.Described.DescribeAsync(ct).ConfigureAwait(false)));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                if (services.GetService<ILoggerFactory>() is { } loggers)
+                    SourceLeftOut(loggers.CreateLogger(typeof(TileEndpointExtensions)), source.Format.FileExtension(), source.Id, ex);
+            }
+        }
+
+        return published;
+    }
+
+    private static async Task<IResult> ServeSourceTileAsync(HttpContext http, string id, string v, string z, string x, string y, TileFormat format)
+    {
+        if (!TileKeySegment.IsValid(id) || !TileKeySegment.IsValid(v))
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid tile URL", detail: "The source id and version must be tile key segments.");
+        if (!TryParseAddress(z, x, y, out var address))
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid tile address", detail: "The zoom, column and row must name a tile of the pyramid.");
+
+        var services = http.RequestServices;
+        if (services.GetRequiredService<KeyedTileSources>().Resolve(services, id, format) is not { } source) return Results.NotFound();
+
+        var ct = http.RequestAborted;
+        try
+        {
+            var serving = services.GetRequiredService<TileServing>();
+            var description = await source.Described.DescribeAsync(ct).ConfigureAwait(false);
+            var current = string.Equals(v, description.Version, StringComparison.Ordinal);
+            var (payload, cache) = await SourceTileAsync(serving, source, description, address, ct).ConfigureAwait(false);
+            return new TileResult(payload, format, current, cache);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return Results.Empty;
+        }
+    }
+
+    /// <summary>A keyed source's tile: from the <see cref="ITileCache"/> (up to <see cref="TileServingOptions.MaxCachedZoom"/>, under <see cref="DeploymentScope"/> and the source's version), else drawn.</summary>
+    private static async Task<(TilePayload Payload, string Cache)> SourceTileAsync(
+        TileServing serving, KeyedTileSource source, TileSourceDescription description, TileAddress address, CancellationToken ct)
+    {
+        var key = new TileCacheKey(DeploymentScope, source.Id, description.Version, address, source.Format);
+        var cacheable = address.Z <= serving.Options.MaxCachedZoom;
+        if (cacheable && await serving.Cache.GetAsync(key, ct).ConfigureAwait(false) is { } cached)
+            return (cached, TileMetrics.Hit);
+
+        var started = serving.TimeProvider.GetTimestamp();
+        var tile = await source.GetTileAsync(new TileRequest(new TileLayerSet(source.Id, description.LayerIds), address), ct).ConfigureAwait(false);
+        if (source.Format == TileFormat.Mvt) tile = Encode(tile);
+        TileMetrics.Rendered(source.Format.FileExtension(), serving.TimeProvider.GetElapsedTime(started).TotalMilliseconds);
+
+        if (!cacheable) return (tile, TileMetrics.Uncached);
+
+        // Bookkeeping of finished work: never cut short by the caller going away.
+        await serving.Cache.SetAsync(key, tile, CancellationToken.None).ConfigureAwait(false);
+        return (tile, TileMetrics.Miss);
     }
 
     private static async Task<(TilePayload Payload, string Cache)> TileAsync(

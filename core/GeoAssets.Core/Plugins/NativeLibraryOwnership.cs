@@ -33,6 +33,10 @@ public static class NativeLibraryOwnership
             throw new NativeLibraryOwnershipException(libraryName, owner, existing);
     }
 
+    /// <summary>Every library claimed so far and the assembly that owns it, by name (XD01-459: what a host reports once its plugins have run).</summary>
+    public static IReadOnlyDictionary<string, Assembly> Claims =>
+        new SortedDictionary<string, Assembly>(Owners, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The assembly that owns <paramref name="libraryName"/>, or <see langword="null"/> when none claimed it.</summary>
     /// <exception cref="ArgumentException"><paramref name="libraryName"/> is blank.</exception>
     public static Assembly? OwnerOf(string libraryName)

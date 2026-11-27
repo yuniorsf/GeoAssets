@@ -1,5 +1,8 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using GeoAssets.Core.Rendering;
 using OSGeo.GDAL;
 
@@ -18,12 +21,13 @@ namespace GeoAssets.Provider.Gdal.Cog;
 /// URL.
 /// </para>
 /// </summary>
-public sealed class CogRasterTileSource : IRasterTileSource
+public sealed class CogRasterTileSource : IRasterTileSource, IDescribedTileSource
 {
     /// <summary>A tile's width and height in pixels.</summary>
     public const int TileSize = 256;
 
     private readonly Lazy<double[][]?> _byteScale;
+    private volatile TileSourceDescription? _description;
 
     /// <summary>A source serving the raster at <paramref name="path"/> as layer <paramref name="layerId"/>.</summary>
     /// <exception cref="ArgumentException"><paramref name="layerId"/> breaks <see cref="TileKeySegment"/>, or <paramref name="path"/> is blank.</exception>
@@ -64,6 +68,86 @@ public sealed class CogRasterTileSource : IRasterTileSource
         {
             throw new InvalidDataException($"GDAL can't render tile {request.Address} of raster '{Path}': {ex.Message}", ex);
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// XD01-459: the version hashes a local file's length and modification time, checked on every call (the raster is
+    /// opened per tile, so a replaced file is served at once, under a new version), or a <c>/vsi…</c> path itself — a
+    /// remote raster is taken to be immutable under its URL. The one layer is <see cref="LayerId"/>; the zooms run from 0
+    /// to the first zoom whose tiles are at least as fine as the raster's pixels once warped to EPSG:3857, and the bounds
+    /// are its warped extent — both read with GDAL once per version.
+    /// </remarks>
+    /// <exception cref="FileNotFoundException">The local raster does not exist.</exception>
+    /// <exception cref="InvalidDataException">GDAL can't open or warp the raster.</exception>
+    public Task<TileSourceDescription> DescribeAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var version = CurrentVersion();
+        if (_description is { } known && string.Equals(known.Version, version, StringComparison.Ordinal))
+            return Task.FromResult(known);
+
+        GdalNativeInitializer.EnsureInitialized();
+        try
+        {
+            var described = Describe(version);
+            _description = described;
+            return Task.FromResult(described);
+        }
+        catch (ApplicationException ex)
+        {
+            throw new InvalidDataException($"GDAL can't describe raster '{Path}': {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>The first zoom whose 256 px tiles are at least as fine as <paramref name="pixelSize"/> EPSG:3857 metres, within the pyramid.</summary>
+    internal static int NativeZoom(double pixelSize)
+    {
+        if (!double.IsFinite(pixelSize) || pixelSize <= 0)
+            return TileAddress.MaxZoom;
+
+        var zoom = Math.Ceiling(Math.Log2(2 * WebMercator.HalfWorldSize / (TileSize * pixelSize)) - 1e-9);
+        return (int)Math.Clamp(zoom, TileAddress.MinZoom, TileAddress.MaxZoom);
+    }
+
+    private string CurrentVersion()
+    {
+        if (Path.StartsWith("/vsi", StringComparison.Ordinal))
+            return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Path)).AsSpan(0, 8));
+
+        var file = new FileInfo(Path);
+        if (!file.Exists)
+            throw new FileNotFoundException($"Raster '{Path}' does not exist.", Path);
+
+        Span<byte> stamp = stackalloc byte[2 * sizeof(long)];
+        BinaryPrimitives.WriteInt64LittleEndian(stamp, file.Length);
+        BinaryPrimitives.WriteInt64LittleEndian(stamp[sizeof(long)..], file.LastWriteTimeUtc.Ticks);
+        return Convert.ToHexStringLower(SHA256.HashData(stamp).AsSpan(0, 8));
+    }
+
+    private TileSourceDescription Describe(string version)
+    {
+        using var source = OpenSource();
+        using var options = new GDALWarpAppOptions(["-of", "VRT", "-t_srs", "EPSG:3857"]);
+        using var warped = OSGeo.GDAL.Gdal.Warp(string.Empty, [source], options, null, null) ?? throw Failure("warp");
+
+        var transform = new double[6];
+        warped.GetGeoTransform(transform);
+        var minX = transform[0];
+        var maxY = transform[3];
+        var maxX = minX + (transform[1] * warped.RasterXSize);
+        var minY = maxY + (transform[5] * warped.RasterYSize);
+
+        BoundingBox? bounds = null;
+        if (double.IsFinite(minX) && double.IsFinite(minY) && double.IsFinite(maxX) && double.IsFinite(maxY))
+        {
+            var box = WebMercator.Unproject(new MercatorBounds(Math.Min(minX, maxX), Math.Min(minY, maxY), Math.Max(minX, maxX), Math.Max(minY, maxY)));
+            if (box.MinLon < box.MaxLon && box.MinLat < box.MaxLat)
+                bounds = box;
+        }
+
+        return new TileSourceDescription(version, [LayerId], TileAddress.MinZoom, NativeZoom(Math.Abs(transform[1])), bounds);
     }
 
     private TilePayload Render(TileAddress address, CancellationToken ct)

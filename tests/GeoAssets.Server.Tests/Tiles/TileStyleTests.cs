@@ -253,6 +253,63 @@ public sealed class TileStyleTests
         paint["line-width"]!.GetValue<double>().Should().Be(2);
     }
 
+    // ── Keyed sources (XD01-459) ──────────────────────────────────────────────
+
+    [Fact]
+    public void Style_WithoutKeyedSources_IsExactlyTheStyleOfTheKernelsOwnTiles()
+    {
+        var set = TileLayerSetDescriptor.Resolve("assets", Catalog(), new LodPolicy(new LodThresholds(RasterFromZoom: 6, VectorFromZoom: 12)))!;
+
+        var none = TileStyleDocument.Build(set, Version, Base, 18, keyedSources: []);
+
+        none.ToJsonString().Should().Be(TileStyleDocument.Build(set, Version, Base, 18).ToJsonString());
+        none["sources"]!.AsObject().Select(s => s.Key).Should().Equal(TileStyleDocument.VectorSourceId, TileStyleDocument.RasterSourceId);
+    }
+
+    [Fact]
+    public void Style_ListsEachKeyedSource_WithItsOwnVersionZoomsAndBounds_DrawnBelowTheKernelsLayers_RastersFirst()
+    {
+        var set = TileLayerSetDescriptor.Resolve("assets", Catalog(), VectorOnly)!;
+        var own = Layers(TileStyleDocument.Build(set, Version, Base, 18)).Select(l => (string)l["id"]!).ToList();
+        PublishedTileSource[] keyed =
+        [
+            new("basemap", TileFormat.Mvt, new TileSourceDescription("b45e", ["roads", "water"], 0, 14, new BoundingBox(-50, -30, -30, -10))),
+            new("ortho", TileFormat.Png, new TileSourceDescription("0e7a", ["ortho"], 0, 19)),
+        ];
+
+        var style = TileStyleDocument.Build(set, Version, Base, 18, keyed);
+
+        var sources = style["sources"]!.AsObject();
+        sources.Select(s => s.Key).Should().Equal(TileStyleDocument.VectorSourceId, "geoassets-source-png-ortho", "geoassets-source-mvt-basemap");
+        var basemap = sources["geoassets-source-mvt-basemap"]!;
+        basemap["type"]!.GetValue<string>().Should().Be("vector");
+        basemap["tiles"]!.AsArray().Select(t => t!.GetValue<string>()).Should().Equal($"{Base}/tiles/sources/basemap/b45e/{{z}}/{{x}}/{{y}}.mvt");
+        (basemap["minzoom"]!.GetValue<int>(), basemap["maxzoom"]!.GetValue<int>()).Should().Be((0, 14));
+        basemap["bounds"]!.AsArray().Select(b => b!.GetValue<double>()).Should().Equal(-50, -30, -30, -10);
+        basemap["promoteId"].Should().BeNull();
+        var ortho = sources["geoassets-source-png-ortho"]!;
+        ortho["type"]!.GetValue<string>().Should().Be("raster");
+        ortho["tiles"]![0]!.GetValue<string>().Should().Be($"{Base}/tiles/sources/ortho/0e7a/{{z}}/{{x}}/{{y}}.png");
+        ortho["tileSize"]!.GetValue<int>().Should().Be(256);
+        ortho["maxzoom"]!.GetValue<int>().Should().Be(19);
+        ortho["bounds"].Should().BeNull("its bounds are unknown");
+
+        var layers = Layers(style);
+        layers.Select(l => (string)l["id"]!).Should().Equal(
+            [
+                "geoassets-source-png-ortho",
+                "geoassets-source-mvt-basemap-roads-fill", "geoassets-source-mvt-basemap-roads-line", "geoassets-source-mvt-basemap-roads-point",
+                "geoassets-source-mvt-basemap-water-fill", "geoassets-source-mvt-basemap-water-line", "geoassets-source-mvt-basemap-water-point",
+                .. own,
+            ]);
+        var roads = LayerNamed(layers, "geoassets-source-mvt-basemap-roads-line");
+        roads["source"]!.GetValue<string>().Should().Be("geoassets-source-mvt-basemap");
+        roads["source-layer"]!.GetValue<string>().Should().Be("roads");
+        roads["paint"]!["line-color"]!.GetValue<string>().Should().Be(RenderStyle.DefaultColor);
+        LayerNamed(layers, "geoassets-source-png-ortho")["source"]!.GetValue<string>().Should().Be("geoassets-source-png-ortho");
+        style["metadata"]!["geoassets:version"]!.GetValue<string>().Should().Be(Version, "the kernel's own {v} is unchanged");
+    }
+
     private static JsonObject Build(ILodPolicy lod) =>
         TileStyleDocument.Build(TileLayerSetDescriptor.Resolve("assets", Catalog(), lod)!, Version, Base, maxCachedZoom: 18);
 

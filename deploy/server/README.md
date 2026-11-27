@@ -98,6 +98,17 @@ every `GrantSync__PruneInterval` (`01:00:00`, first run soon after start) — ne
 sequential scan: at 5,570 municípios, a backlog batch took about 0.5 ms and a run with nothing due about 2 ms (XD01-405,
 plans in `docs/perf/XD01-405-grant-sync-prune-plan.md`).
 
+## PMTiles and COG tile sources (XD01-459)
+
+The kernel image carries the GDAL plugin (`plugins/providers/GeoAssets.Provider.Gdal/`, module `gdal-cloud-native`,
+about 150 MB of native GDAL for the image's RID; build with `--build-arg INCLUDE_GDAL_PLUGIN=false` to leave it out).
+Nothing is served until a file is configured: mount it read-only into the `server` service and name it under an id
+(a tile key segment), e.g. `GeoAssets__Gdal__PMTiles__basemap__Path=/data/basemap.pmtiles` and
+`GeoAssets__Gdal__Cog__ortho__Path=/data/ortho.tif` (a missing file fails the startup). Each is served at
+`/tiles/sources/{id}/{v}/{z}/{x}/{y}.mvt|.png` and listed in `/tiles/style.json` (`features:read`, through the gateway's
+`/tiles/**` route and tile rate limit). They are deployment-wide: every caller with `features:read`, of any organization,
+reads all of them, so never configure one organization's data here.
+
 ## Token audiences of the vertical hosts (XD01-390)
 
 `GeoAssets.IpBilling.Server` and `GeoAssets.NeutralOperator.Server` validate the caller's bearer token against **their own**

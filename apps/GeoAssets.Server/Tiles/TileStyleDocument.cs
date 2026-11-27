@@ -31,6 +31,12 @@ namespace GeoAssets.Server.Tiles;
 ///   string-to-number reads hexadecimal too, the resolver does not). Paint follows <c>SkiaFeaturePainter</c>: 5 px points,
 ///   2 px lines, polygons filled at 35 % with a 1.5 px outline.</item>
 ///   <item><c>metadata</c>: <c>geoassets:layerSet</c> and <c>geoassets:version</c> (the <c>{v}</c> in every URL).</item>
+///   <item><b>Keyed sources</b> (XD01-459, additive — with none the style is exactly the above): each deployment-wide
+///   <see cref="PublishedTileSource"/> is one more source, <see cref="KeyedSourceId"/> (<c>tiles:
+///   [".../tiles/sources/{id}/{its v}/{z}/{x}/{y}.mvt|.png"]</c>, its own <c>minzoom</c>/<c>maxzoom</c> and, when known,
+///   <c>bounds</c>), drawn below every layer above: a raster's one raster layer, then for each MVT layer of a vector one
+///   a fill (polygons), a line (lines and polygon outlines) and a circle (points) layer in <see cref="RenderStyle.DefaultColor"/>
+///   — rasters first, each kind in the order the sources are given.</item>
 /// </list>
 /// No <c>glyphs</c>/<c>sprite</c>: no layer draws text or icons.
 /// </summary>
@@ -41,6 +47,9 @@ public static class TileStyleDocument
     public const string RasterSourceId = "geoassets-raster";
 
     public const string RasterLayerId = "geoassets-raster";
+
+    /// <summary>The prefix of a keyed source's id in the style (XD01-459).</summary>
+    public const string KeyedSourcePrefix = "geoassets-source-";
 
     /// <summary>The feature property MapLibre promotes to the feature id.</summary>
     public const string PromotedId = "id";
@@ -57,8 +66,12 @@ public static class TileStyleDocument
     private static readonly string[] LineTypes = ["LineString", "MultiLineString"];
     private static readonly string[] PointTypes = ["Point", "MultiPoint"];
 
-    /// <summary>The style of <paramref name="layerSet"/> at <c>{v}</c> = <paramref name="version"/>, its tile URLs under <paramref name="baseUrl"/> (no trailing slash).</summary>
-    public static JsonObject Build(TileLayerSetDescriptor layerSet, string version, string baseUrl, int maxCachedZoom)
+    /// <summary>
+    /// The style of <paramref name="layerSet"/> at <c>{v}</c> = <paramref name="version"/>, its tile URLs under
+    /// <paramref name="baseUrl"/> (no trailing slash), over the deployment-wide <paramref name="keyedSources"/> (none by default).
+    /// </summary>
+    public static JsonObject Build(
+        TileLayerSetDescriptor layerSet, string version, string baseUrl, int maxCachedZoom, IReadOnlyList<PublishedTileSource>? keyedSources = null)
     {
         ArgumentNullException.ThrowIfNull(layerSet);
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
@@ -93,6 +106,9 @@ public static class TileStyleDocument
         foreach (var layer in byKind.SelectMany(kind => kind))
             layers.Add(layer);
 
+        if (keyedSources is { Count: > 0 })
+            layers = WithKeyedSources(sources, layers, keyedSources, baseUrl);
+
         return new JsonObject
         {
             ["version"] = 8,
@@ -106,6 +122,75 @@ public static class TileStyleDocument
             ["layers"] = layers,
         };
     }
+
+    /// <summary>The style id of the keyed source <paramref name="id"/> of <paramref name="format"/>: e.g. <c>geoassets-source-png-ortho</c>.</summary>
+    public static string KeyedSourceId(string id, TileFormat format) => $"{KeyedSourcePrefix}{format.FileExtension()}-{id}";
+
+    /// <summary>Adds <paramref name="keyedSources"/> to <paramref name="sources"/>, and their layers below <paramref name="layers"/>.</summary>
+    private static JsonArray WithKeyedSources(JsonObject sources, JsonArray layers, IReadOnlyList<PublishedTileSource> keyedSources, string baseUrl)
+    {
+        var below = new JsonArray();
+        foreach (var keyed in keyedSources.OrderBy(k => k.Format == TileFormat.Png ? 0 : 1))
+        {
+            var sourceId = KeyedSourceId(keyed.Id, keyed.Format);
+            var described = keyed.Description;
+            var source = new JsonObject
+            {
+                ["type"] = keyed.Format == TileFormat.Png ? "raster" : "vector",
+                ["tiles"] = new JsonArray($"{baseUrl}/tiles/{TileEndpointExtensions.SourcesSegment}/{keyed.Id}/{described.Version}/{{z}}/{{x}}/{{y}}.{keyed.Format.FileExtension()}"),
+                ["scheme"] = "xyz",
+                ["minzoom"] = described.MinZoom,
+                ["maxzoom"] = described.MaxZoom,
+            };
+            if (described.Bounds is { } b) source["bounds"] = new JsonArray(b.MinLon, b.MinLat, b.MaxLon, b.MaxLat);
+            if (keyed.Format == TileFormat.Png) source["tileSize"] = 256;
+            sources[sourceId] = source;
+
+            if (keyed.Format == TileFormat.Png)
+            {
+                below.Add(new JsonObject { ["id"] = sourceId, ["type"] = "raster", ["source"] = sourceId });
+                continue;
+            }
+
+            foreach (var layer in described.LayerIds)
+            {
+                below.Add(KeyedVectorLayer($"{sourceId}-{layer}-fill", "fill", sourceId, layer, PolygonTypes, new JsonObject
+                {
+                    ["fill-color"] = RenderStyle.DefaultColor,
+                    ["fill-opacity"] = FillOpacity,
+                }));
+                below.Add(KeyedVectorLayer($"{sourceId}-{layer}-line", "line", sourceId, layer, [.. LineTypes, .. PolygonTypes], new JsonObject
+                {
+                    ["line-color"] = RenderStyle.DefaultColor,
+                    ["line-width"] = OutlineWidth,
+                }));
+                below.Add(KeyedVectorLayer($"{sourceId}-{layer}-point", "circle", sourceId, layer, PointTypes, new JsonObject
+                {
+                    ["circle-radius"] = PointRadius,
+                    ["circle-color"] = RenderStyle.DefaultColor,
+                    ["circle-opacity"] = PointOpacity,
+                }));
+            }
+        }
+
+        foreach (var layer in layers.ToList())
+        {
+            layers.Remove(layer);
+            below.Add(layer);
+        }
+
+        return below;
+    }
+
+    private static JsonObject KeyedVectorLayer(string id, string kind, string source, string sourceLayer, string[] geometryTypes, JsonObject paint) => new()
+    {
+        ["id"] = id,
+        ["type"] = kind,
+        ["source"] = source,
+        ["source-layer"] = sourceLayer,
+        ["filter"] = new JsonArray("in", new JsonArray("geometry-type"), new JsonArray("literal", new JsonArray([.. geometryTypes.Select(t => JsonValue.Create(t))]))),
+        ["paint"] = paint,
+    };
 
     private static JsonObject Source(string type, string tiles, int maxZoom) => new()
     {

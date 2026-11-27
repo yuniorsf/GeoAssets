@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using GeoAssets.Core.Rendering;
 
 namespace GeoAssets.Provider.PMTiles;
@@ -15,10 +17,12 @@ namespace GeoAssets.Provider.PMTiles;
 /// a host serves one only to callers who may see all of it.
 /// </para>
 /// </summary>
-public sealed class PMTilesVectorTileSource : IVectorTileSource, IDisposable
+public sealed class PMTilesVectorTileSource : IVectorTileSource, IDescribedTileSource, IDisposable
 {
     private readonly Lazy<Task<PMTilesArchive>> _archive;
     private PMTilesArchive? _opened;
+    private string? _fileVersion;
+    private TileSourceDescription? _description;
 
     /// <summary>A source over the archive at <paramref name="path"/>, opened on first use.</summary>
     /// <exception cref="ArgumentException"><paramref name="path"/> is blank.</exception>
@@ -62,6 +66,21 @@ public sealed class PMTilesVectorTileSource : IVectorTileSource, IDisposable
             : Payload(PMTilesCodec.Compress(filtered, compression), compression);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Read once, when the archive is opened (XD01-459): the version hashes the file's length and modification time then
+    /// — the archive stays open, so every tile comes from that file and replacing it takes a restart; the layers are the
+    /// metadata's <c>vector_layers</c> that are tile key segments; the zooms and bounds are the header's.
+    /// </remarks>
+    /// <exception cref="PMTilesFormatException">The file is not a PMTiles v3 archive of vector tiles, is corrupt, or its metadata names no layer a tile request can carry.</exception>
+    public async Task<TileSourceDescription> DescribeAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var archive = await _archive.Value.WaitAsync(ct).ConfigureAwait(false);
+        return _description ??= Describe(archive, _fileVersion!);
+    }
+
     public void Dispose() => Interlocked.Exchange(ref _opened, null)?.Dispose();
 
     private static TilePayload Payload(byte[] bytes, PMTilesCompression compression) =>
@@ -76,7 +95,34 @@ public sealed class PMTilesVectorTileSource : IVectorTileSource, IDisposable
             throw new PMTilesFormatException($"PMTiles archive '{path}' holds {archive.Header.TileType} tiles, not vector tiles.");
         }
 
+        var file = new FileInfo(archive.Path);
+        _fileVersion = FileVersion(file.Length, file.LastWriteTimeUtc.Ticks);
         _opened = archive;
         return archive;
+    }
+
+    internal static string FileVersion(long length, long lastWriteTicks)
+    {
+        Span<byte> stamp = stackalloc byte[2 * sizeof(long)];
+        BinaryPrimitives.WriteInt64LittleEndian(stamp, length);
+        BinaryPrimitives.WriteInt64LittleEndian(stamp[sizeof(long)..], lastWriteTicks);
+        return Convert.ToHexStringLower(SHA256.HashData(stamp).AsSpan(0, 8));
+    }
+
+    private TileSourceDescription Describe(PMTilesArchive archive, string version)
+    {
+        var layers = archive.VectorLayerIds.Where(TileKeySegment.IsValid).Distinct(StringComparer.Ordinal).ToArray();
+        if (layers.Length == 0)
+            throw new PMTilesFormatException($"PMTiles archive '{Path}' names no vector layer (metadata 'vector_layers') a tile request can carry.");
+
+        var header = archive.Header;
+        var maxZoom = Math.Min((int)header.MaxZoom, TileAddress.MaxZoom);
+        var minZoom = Math.Min((int)header.MinZoom, maxZoom);
+        var (west, south, east, north) = header.Bounds;
+        BoundingBox? bounds = west is >= -180 and <= 180 && east is >= -180 and <= 180 && south is >= -90 and <= 90 && north is >= -90 and <= 90
+                              && west < east && south < north
+            ? new BoundingBox(west, south, east, north)
+            : null;
+        return new TileSourceDescription(version, layers, minZoom, maxZoom, bounds);
     }
 }

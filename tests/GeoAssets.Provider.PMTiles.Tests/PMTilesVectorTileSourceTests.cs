@@ -230,4 +230,78 @@ public sealed class PMTilesVectorTileSourceTests : IDisposable
 
         payloads.Should().AllSatisfy(p => p.Content.ToArray().Should().Equal(stored));
     }
+
+    // ── DescribeAsync (XD01-459) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Describe_IsTheMetadatasLayers_TheHeadersZoomsAndBounds_UnderAVersionOfTheFile()
+    {
+        var path = new PMTilesTestArchive { MinZoom = 2, MaxZoom = 12, Bounds = (-50, -30, -30, -10) }
+            .Add(new TileAddress(2, 0, 0), PMTilesTestArchive.Gzip(TestVectorTile.Encode("roads")))
+            .WriteTo(_directory.Path);
+        using var source = new PMTilesVectorTileSource(path);
+
+        var description = await source.DescribeAsync(CancellationToken.None);
+
+        description.LayerIds.Should().Equal("roads", "water");
+        (description.MinZoom, description.MaxZoom).Should().Be((2, 12));
+        description.Bounds.Should().Be(new BoundingBox(-50, -30, -30, -10));
+        var file = new FileInfo(path);
+        description.Version.Should().Be(PMTilesVectorTileSource.FileVersion(file.Length, file.LastWriteTimeUtc.Ticks));
+        description.Version.Should().MatchRegex("^[0-9a-f]{16}$");
+        (await source.DescribeAsync(CancellationToken.None)).Should().BeSameAs(description, "it is read once, when the archive is opened");
+    }
+
+    [Fact]
+    public void TheFileVersion_ChangesWithTheFilesLengthOrModificationTime()
+    {
+        var version = PMTilesVectorTileSource.FileVersion(1000, 638_000_000_000_000_000);
+
+        PMTilesVectorTileSource.FileVersion(1000, 638_000_000_000_000_000).Should().Be(version);
+        PMTilesVectorTileSource.FileVersion(1001, 638_000_000_000_000_000).Should().NotBe(version);
+        PMTilesVectorTileSource.FileVersion(1000, 638_000_000_000_000_001).Should().NotBe(version);
+    }
+
+    [Fact]
+    public async Task Describe_LeavesOutLayersATileRequestCannotCarry_ClampsTheZooms_AndDropsBoundsThatAreNoExtent()
+    {
+        var path = new PMTilesTestArchive
+            {
+                MetadataJson = """{"vector_layers":[{"id":"roads"},{"id":"bad name"},{"id":"roads"}]}""",
+                MinZoom = 30,
+                MaxZoom = 40,
+                Bounds = (10, 0, -10, 5),
+            }
+            .Add(new TileAddress(0, 0, 0), PMTilesTestArchive.Gzip(TestVectorTile.Encode("roads")))
+            .WriteTo(_directory.Path);
+        using var source = new PMTilesVectorTileSource(path);
+
+        var description = await source.DescribeAsync(CancellationToken.None);
+
+        description.LayerIds.Should().Equal("roads");
+        (description.MinZoom, description.MaxZoom).Should().Be((TileAddress.MaxZoom, TileAddress.MaxZoom));
+        description.Bounds.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Describe_AnArchiveNamingNoUsableLayer_FailsWithAFormatError()
+    {
+        var path = new PMTilesTestArchive { MetadataJson = """{"vector_layers":[{"id":"bad name"}]}""" }.Add(new TileAddress(0, 0, 0), PMTilesTestArchive.Gzip(TestVectorTile.Encode("roads"))).WriteTo(_directory.Path);
+        using var source = new PMTilesVectorTileSource(path);
+
+        var describe = () => source.DescribeAsync(CancellationToken.None);
+
+        await describe.Should().ThrowAsync<PMTilesFormatException>().WithMessage("*names no vector layer*");
+    }
+
+    [Fact]
+    public async Task Describe_HonoursCancellation()
+    {
+        var path = new PMTilesTestArchive().Add(new TileAddress(0, 0, 0), PMTilesTestArchive.Gzip(TestVectorTile.Encode("roads"))).WriteTo(_directory.Path);
+        using var source = new PMTilesVectorTileSource(path);
+
+        var describe = () => source.DescribeAsync(new CancellationToken(canceled: true));
+
+        await describe.Should().ThrowAsync<OperationCanceledException>();
+    }
 }

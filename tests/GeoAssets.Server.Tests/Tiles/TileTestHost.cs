@@ -48,6 +48,8 @@ internal sealed class TileTestHost : IAsyncDisposable
 
     public TestAssetProvider Catalog { get; }
 
+    public IServiceProvider Services => _web.Services;
+
     public RecordingVectorSource Vector => _web.Services.GetRequiredService<RecordingVectorSource>();
 
     public RecordingRasterSource Raster => _web.Services.GetRequiredService<RecordingRasterSource>();
@@ -66,7 +68,12 @@ internal sealed class TileTestHost : IAsyncDisposable
 
     public MemoryTileCache Cache => (MemoryTileCache)_web.Services.GetRequiredService<ITileCache>();
 
-    public static async Task<TileTestHost> StartAsync(IEnumerable<AssetType> assetTypes, params (string Key, string Value)[] settings)
+    public static Task<TileTestHost> StartAsync(IEnumerable<AssetType> assetTypes, params (string Key, string Value)[] settings) =>
+        StartAsync(assetTypes, _ => { }, settings);
+
+    /// <summary>A host whose services <paramref name="configure"/> adds to (e.g. keyed tile sources, XD01-459) before the tiles' own.</summary>
+    public static async Task<TileTestHost> StartAsync(
+        IEnumerable<AssetType> assetTypes, Action<IServiceCollection> configure, params (string Key, string Value)[] settings)
     {
         var catalog = new TestAssetProvider(assetTypes);
         var builder = WebApplication.CreateSlimBuilder();
@@ -88,6 +95,7 @@ internal sealed class TileTestHost : IAsyncDisposable
         services.AddSingleton<IRasterTileSource>(sp => sp.GetRequiredService<RecordingRasterSource>());
         services.AddSingleton<ScriptedDensitySampler>();
         services.AddSingleton<ITileDensitySampler>(sp => sp.GetRequiredService<ScriptedDensitySampler>());
+        configure(services);
         services.AddSingleton(new TileVersions(Epoch));
         services.AddTileServing(builder.Configuration);
         services.AddKernelResponseCompression();

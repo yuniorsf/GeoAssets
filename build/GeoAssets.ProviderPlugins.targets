@@ -14,6 +14,13 @@
     $(ProviderPluginsDirectory)/<EntryAssemblyName>/ in the host's build output and in its publish output, the layout
     DirectoryPluginAssemblySource reads (GeoAssets:ProviderPlugins:Directory, default plugins/providers).
 
+    Native assets (XD01-459): a plugin is built for no runtime, so its runtimes/ holds every RID its packages ship (the GDAL
+    plugin's MaxRev runtimes: about 150 MB each for linux-arm64, linux-x64, osx-arm64 and osx-x64). Only the ones that can
+    run are copied: those of the host's RuntimeIdentifier (the Docker image's linux-x64/linux-arm64 publish) and, in the
+    build output of a host built for no runtime, the SDK's own (NETCoreSdkRuntimeIdentifier) - a folder named after that
+    RID, a less specific one it starts with (linux for linux-arm64), unix (not for Windows) and any. A publish for no
+    runtime is portable and keeps them all.
+
     A plugin project must build as a drop-in plugin, or the packaging fails:
       - <EnableDynamicLoading>true</EnableDynamicLoading> (its NuGet dependencies copied, a .runtimeconfig.json written);
       - its references to the shared contracts (GeoAssets.Core, GeoAssets.Identity, GeoAssets.Hosting.Abstractions) with
@@ -41,6 +48,20 @@
       <_ProviderPluginFile Include="%(_ProviderPluginTargetPath.PluginDirectory)**\*"
                            PluginName="%(_ProviderPluginTargetPath.PluginName)" />
       <_ProviderPluginFile PluginRelativePath="$(ProviderPluginsDirectory)/%(PluginName)/%(RecursiveDir)%(Filename)%(Extension)" />
+      <_ProviderPluginFile RuntimeFolder="$([System.Text.RegularExpressions.Regex]::Replace('%(RecursiveDir)', '^(?:runtimes[\\/]([^\\/]+)[\\/].*|.*)$', '$1'))" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_ProviderPluginPublishRuntime>$(RuntimeIdentifier)</_ProviderPluginPublishRuntime>
+      <_ProviderPluginOutputRuntime>$(RuntimeIdentifier)</_ProviderPluginOutputRuntime>
+      <_ProviderPluginOutputRuntime Condition="'$(_ProviderPluginOutputRuntime)' == ''">$(NETCoreSdkRuntimeIdentifier)</_ProviderPluginOutputRuntime>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_ProviderPluginPublishFile Include="@(_ProviderPluginFile)"
+                                  Condition="'%(RuntimeFolder)' == '' or '$(_ProviderPluginPublishRuntime)' == '' or '%(RuntimeFolder)' == 'any' or ('%(RuntimeFolder)' == 'unix' and !$(_ProviderPluginPublishRuntime.StartsWith('win'))) or '%(RuntimeFolder)' == '$(_ProviderPluginPublishRuntime)' or $(_ProviderPluginPublishRuntime.StartsWith('%(RuntimeFolder)-'))" />
+      <_ProviderPluginOutputFile Include="@(_ProviderPluginFile)"
+                                 Condition="'%(RuntimeFolder)' == '' or '$(_ProviderPluginOutputRuntime)' == '' or '%(RuntimeFolder)' == 'any' or ('%(RuntimeFolder)' == 'unix' and !$(_ProviderPluginOutputRuntime.StartsWith('win'))) or '%(RuntimeFolder)' == '$(_ProviderPluginOutputRuntime)' or $(_ProviderPluginOutputRuntime.StartsWith('%(RuntimeFolder)-'))" />
     </ItemGroup>
 
     <Error Condition="!Exists('%(_ProviderPluginTargetPath.PluginDirectory)%(_ProviderPluginTargetPath.PluginName).runtimeconfig.json')"
@@ -55,8 +76,8 @@
           AfterTargets="CopyFilesToOutputDirectory"
           DependsOnTargets="_ResolveProviderPluginFiles"
           Condition="'@(ProviderPlugin)' != ''">
-    <Copy SourceFiles="@(_ProviderPluginFile)"
-          DestinationFiles="@(_ProviderPluginFile->'$(OutDir)%(PluginRelativePath)')"
+    <Copy SourceFiles="@(_ProviderPluginOutputFile)"
+          DestinationFiles="@(_ProviderPluginOutputFile->'$(OutDir)%(PluginRelativePath)')"
           SkipUnchangedFiles="true">
       <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
     </Copy>
@@ -67,8 +88,8 @@
           DependsOnTargets="_ResolveProviderPluginFiles"
           Condition="'@(ProviderPlugin)' != ''">
     <ItemGroup>
-      <ResolvedFileToPublish Include="@(_ProviderPluginFile)"
-                             RelativePath="%(_ProviderPluginFile.PluginRelativePath)"
+      <ResolvedFileToPublish Include="@(_ProviderPluginPublishFile)"
+                             RelativePath="%(_ProviderPluginPublishFile.PluginRelativePath)"
                              CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
