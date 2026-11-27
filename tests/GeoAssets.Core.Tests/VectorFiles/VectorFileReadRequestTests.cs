@@ -53,7 +53,7 @@ public sealed class VectorFileReadRequestTests
         var error = new VectorFileFormatUnavailableException(VectorFileFormat.GeoParquet, "no Parquet driver.");
 
         error.Format.Should().Be(VectorFileFormat.GeoParquet);
-        error.Message.Should().Be("GeoParquet files can't be read here: no Parquet driver.");
+        error.Message.Should().Be("GeoParquet files can't be read or written here: no Parquet driver.");
         error.Should().BeAssignableTo<NotSupportedException>();
     }
 }

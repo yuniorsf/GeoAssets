@@ -6,7 +6,7 @@
     beside the pure .NET PMTiles reader of GeoAssets.Provider.PMTiles (referenced, XD01-438). Built as a drop-in server plugin (EnableDynamicLoading, the shared contracts
     referenced but not copied), so a server can load it from plugins/providers/GeoAssets.Provider.Gdal/ in its own
     PluginLoadContext; a host that references it statically instead (GeoAssets.FieldService.Server, and the network
-    import CLI through GeoAssets.Ingestion.Proj) never also loads it from a plugin directory.
+    import CLI directly and through GeoAssets.Ingestion.Proj) never also loads it from a plugin directory.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
