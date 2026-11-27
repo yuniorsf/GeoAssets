@@ -52,7 +52,8 @@ internal static class NetworkImportApplication
             };
         }
         catch (Exception exception) when (exception is NetworkImportInputException or DirectoryNotFoundException or FileNotFoundException
-            or IOException or UnauthorizedAccessException or InvalidDataException or VectorFileFormatUnavailableException)
+            or IOException or UnauthorizedAccessException or InvalidDataException or VectorFileFormatUnavailableException
+            or VectorTileArchiveUnavailableException)
         {
             await stderr.LineAsync(exception.Message, ct).ConfigureAwait(false);
             return NetworkImportExitCodes.InputError;
