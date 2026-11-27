@@ -1,0 +1,510 @@
+{
+  "Environment": {
+    "MeasuredAtUtc": "2026-11-27T00:10:52.645242+00:00",
+    "OperatingSystem": "macOS 27.2.1",
+    "Architecture": "Arm64",
+    "ProcessorCount": 10,
+    "Framework": ".NET 10.0.7",
+    "ServerGc": true,
+    "PostgresVersion": "PostgreSQL 16.4 (Debian 16.4-1.pgdg110\u002B2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 10.2.1-6) 10.2.1 20210110, 64-bit",
+    "PostGisVersion": "3.4.3",
+    "DatasetFeatures": 200000,
+    "DatasetVertices": 3366132,
+    "GeoEntityTotalSize": "301 MB"
+  },
+  "Settings": {
+    "Seed": 420,
+    "Zooms": [
+      8,
+      12,
+      16
+    ],
+    "ViewportsPerZoom": 12,
+    "Iterations": 5,
+    "WarmupIterations": 1,
+    "WidthPx": 1580,
+    "HeightPx": 1020
+  },
+  "Zooms": [
+    {
+      "Zoom": 8,
+      "TilesPerViewport": {
+        "P50": 35,
+        "P95": 40,
+        "Count": 12
+      },
+      "NonEmptyTilesPerViewport": {
+        "P50": 6,
+        "P95": 6,
+        "Count": 12
+      },
+      "WireBytesPerViewport": {
+        "P50": 890647,
+        "P95": 890647,
+        "Count": 12
+      },
+      "MvtBytesPerViewport": {
+        "P50": 1538173,
+        "P95": 1538173,
+        "Count": 12
+      },
+      "ColdTileMs": {
+        "P50": 1.6849,
+        "P95": 1002.481,
+        "Count": 2150
+      },
+      "ColdTileDatabaseMs": {
+        "P50": 1.6847,
+        "P95": 993.7809,
+        "Count": 2150
+      },
+      "WarmTileMs": {
+        "P50": 0.0003,
+        "P95": 0.0004,
+        "Count": 2150
+      },
+      "Viewports": [
+        {
+          "CenterLon": -46.746784165046975,
+          "CenterLat": -23.530949020847864,
+          "Range": "8/91-97/143-147",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3491.8557
+        },
+        {
+          "CenterLon": -46.76169239502608,
+          "CenterLat": -23.477046799479098,
+          "Range": "8/91-97/143-147",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3794.836100000001
+        },
+        {
+          "CenterLon": -46.34116010842667,
+          "CenterLat": -22.55344688487227,
+          "Range": "8/91-98/142-146",
+          "Tiles": 40,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3744.4402000000005
+        },
+        {
+          "CenterLon": -45.6627755571691,
+          "CenterLat": -23.3671545657286,
+          "Range": "8/92-98/143-147",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3541.2349999999988
+        },
+        {
+          "CenterLon": -45.559896111379636,
+          "CenterLat": -22.198997042033856,
+          "Range": "8/92-98/142-146",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3541.3708000000006
+        },
+        {
+          "CenterLon": -45.49982062631272,
+          "CenterLat": -22.236204733977367,
+          "Range": "8/92-98/142-146",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3465.3061999999995
+        },
+        {
+          "CenterLon": -46.64495923191622,
+          "CenterLat": -23.069228409337605,
+          "Range": "8/91-97/142-146",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3494.8847
+        },
+        {
+          "CenterLon": -45.09705417208935,
+          "CenterLat": -22.525665721283346,
+          "Range": "8/92-99/142-146",
+          "Tiles": 40,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3671.5818999999997
+        },
+        {
+          "CenterLon": -46.13363129232215,
+          "CenterLat": -23.045583118312113,
+          "Range": "8/92-98/142-146",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3883.105600000001
+        },
+        {
+          "CenterLon": -46.69774050813851,
+          "CenterLat": -23.495685712146575,
+          "Range": "8/91-97/143-147",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3710.6671000000006
+        },
+        {
+          "CenterLon": -45.34504042876353,
+          "CenterLat": -22.221957308640203,
+          "Range": "8/92-98/142-146",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3805.2044
+        },
+        {
+          "CenterLon": -45.62215667040887,
+          "CenterLat": -23.296896691867918,
+          "Range": "8/92-98/143-147",
+          "Tiles": 35,
+          "NonEmptyTiles": 6,
+          "WireBytes": 890647,
+          "MvtBytes": 1538173,
+          "ColdMsTotal": 3760.9125
+        }
+      ]
+    },
+    {
+      "Zoom": 12,
+      "TilesPerViewport": {
+        "P50": 35,
+        "P95": 40,
+        "Count": 12
+      },
+      "NonEmptyTilesPerViewport": {
+        "P50": 35,
+        "P95": 40,
+        "Count": 12
+      },
+      "WireBytesPerViewport": {
+        "P50": 297214,
+        "P95": 653118,
+        "Count": 12
+      },
+      "MvtBytesPerViewport": {
+        "P50": 418152,
+        "P95": 924844,
+        "Count": 12
+      },
+      "ColdTileMs": {
+        "P50": 8.7866,
+        "P95": 125.9603,
+        "Count": 2150
+      },
+      "ColdTileDatabaseMs": {
+        "P50": 8.7061,
+        "P95": 124.9796,
+        "Count": 2150
+      },
+      "WarmTileMs": {
+        "P50": 0.0001,
+        "P95": 0.0006,
+        "Count": 2150
+      },
+      "Viewports": [
+        {
+          "CenterLon": -46.05461767763883,
+          "CenterLat": -22.94182611738644,
+          "Range": "12/1520-1527/2314-2318",
+          "Tiles": 40,
+          "NonEmptyTiles": 40,
+          "WireBytes": 370392,
+          "MvtBytes": 518700,
+          "ColdMsTotal": 1360.3400999999997
+        },
+        {
+          "CenterLon": -45.189890337352274,
+          "CenterLat": -23.73732254103383,
+          "Range": "12/1530-1536/2324-2328",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 50751,
+          "MvtBytes": 68353,
+          "ColdMsTotal": 238.77310000000003
+        },
+        {
+          "CenterLon": -46.28920950116755,
+          "CenterLat": -23.31761080283671,
+          "Range": "12/1518-1524/2318-2322",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 297214,
+          "MvtBytes": 418152,
+          "ColdMsTotal": 1048.7201000000002
+        },
+        {
+          "CenterLon": -46.47041410271692,
+          "CenterLat": -23.1546194462339,
+          "Range": "12/1516-1522/2316-2320",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 404286,
+          "MvtBytes": 567220,
+          "ColdMsTotal": 1455.9419999999998
+        },
+        {
+          "CenterLon": -46.06695677719562,
+          "CenterLat": -22.27736469331732,
+          "Range": "12/1520-1526/2306-2310",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 322605,
+          "MvtBytes": 455420,
+          "ColdMsTotal": 1242.4125
+        },
+        {
+          "CenterLon": -47.20491342944254,
+          "CenterLat": -22.86101854800909,
+          "Range": "12/1507-1513/2313-2317",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 186237,
+          "MvtBytes": 258303,
+          "ColdMsTotal": 637.7069
+        },
+        {
+          "CenterLon": -46.27958193610471,
+          "CenterLat": -23.28834472044057,
+          "Range": "12/1518-1524/2318-2322",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 297214,
+          "MvtBytes": 418152,
+          "ColdMsTotal": 1030.9794
+        },
+        {
+          "CenterLon": -46.3050675252995,
+          "CenterLat": -23.335090540037573,
+          "Range": "12/1518-1524/2319-2323",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 357171,
+          "MvtBytes": 503255,
+          "ColdMsTotal": 1370.0619999999997
+        },
+        {
+          "CenterLon": -46.64907977256171,
+          "CenterLat": -23.436382716497242,
+          "Range": "12/1514-1520/2320-2324",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 653118,
+          "MvtBytes": 924844,
+          "ColdMsTotal": 2307.0552
+        },
+        {
+          "CenterLon": -46.966767152325765,
+          "CenterLat": -22.564461718031932,
+          "Range": "12/1510-1516/2309-2313",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 54652,
+          "MvtBytes": 74326,
+          "ColdMsTotal": 214.18650000000002
+        },
+        {
+          "CenterLon": -45.526154544055835,
+          "CenterLat": -22.27810239104001,
+          "Range": "12/1526-1533/2306-2310",
+          "Tiles": 40,
+          "NonEmptyTiles": 40,
+          "WireBytes": 204534,
+          "MvtBytes": 287225,
+          "ColdMsTotal": 734.7821
+        },
+        {
+          "CenterLon": -46.12781136189604,
+          "CenterLat": -22.932860522544242,
+          "Range": "12/1520-1526/2314-2318",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 357687,
+          "MvtBytes": 501743,
+          "ColdMsTotal": 1264.7230000000002
+        }
+      ]
+    },
+    {
+      "Zoom": 16,
+      "TilesPerViewport": {
+        "P50": 35,
+        "P95": 40,
+        "Count": 12
+      },
+      "NonEmptyTilesPerViewport": {
+        "P50": 30,
+        "P95": 35,
+        "Count": 12
+      },
+      "WireBytesPerViewport": {
+        "P50": 7995,
+        "P95": 76592,
+        "Count": 12
+      },
+      "MvtBytesPerViewport": {
+        "P50": 12818,
+        "P95": 155723,
+        "Count": 12
+      },
+      "ColdTileMs": {
+        "P50": 1.8681,
+        "P95": 8.229,
+        "Count": 2115
+      },
+      "ColdTileDatabaseMs": {
+        "P50": 1.8461,
+        "P95": 8.1117,
+        "Count": 2115
+      },
+      "WarmTileMs": {
+        "P50": 0.0002,
+        "P95": 0.0005,
+        "Count": 2115
+      },
+      "Viewports": [
+        {
+          "CenterLon": -46.08559387045111,
+          "CenterLat": -22.248752079551615,
+          "Range": "16/24375-24381/36922-36926",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 28646,
+          "MvtBytes": 57133,
+          "ColdMsTotal": 144.00279999999998
+        },
+        {
+          "CenterLon": -46.083332362682434,
+          "CenterLat": -22.328769367403314,
+          "Range": "16/24375-24381/36937-36941",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 76592,
+          "MvtBytes": 155723,
+          "ColdMsTotal": 265.98280000000005
+        },
+        {
+          "CenterLon": -46.619692656082606,
+          "CenterLat": -22.87167122961008,
+          "Range": "16/24278-24284/37044-37048",
+          "Tiles": 35,
+          "NonEmptyTiles": 34,
+          "WireBytes": 11430,
+          "MvtBytes": 20619,
+          "ColdMsTotal": 67.2659
+        },
+        {
+          "CenterLon": -45.92147242151888,
+          "CenterLat": -23.334554852232035,
+          "Range": "16/24405-24411/37136-37140",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 59049,
+          "MvtBytes": 118777,
+          "ColdMsTotal": 224.40709999999999
+        },
+        {
+          "CenterLon": -46.94354063006406,
+          "CenterLat": -23.981338403269206,
+          "Range": "16/24219-24225/37265-37269",
+          "Tiles": 35,
+          "NonEmptyTiles": 7,
+          "WireBytes": 1085,
+          "MvtBytes": 1508,
+          "ColdMsTotal": 56.65510000000001
+        },
+        {
+          "CenterLon": -46.995009787962125,
+          "CenterLat": -23.0115769638435,
+          "Range": "16/24209-24215/37072-37076",
+          "Tiles": 35,
+          "NonEmptyTiles": 13,
+          "WireBytes": 2339,
+          "MvtBytes": 3019,
+          "ColdMsTotal": 54.3381
+        },
+        {
+          "CenterLon": -46.27335311619869,
+          "CenterLat": -22.44170217513572,
+          "Range": "16/24341-24347/36960-36964",
+          "Tiles": 35,
+          "NonEmptyTiles": 21,
+          "WireBytes": 3410,
+          "MvtBytes": 4822,
+          "ColdMsTotal": 53.6544
+        },
+        {
+          "CenterLon": -46.66547988806274,
+          "CenterLat": -22.83034611601313,
+          "Range": "16/24269-24275/37036-37040",
+          "Tiles": 35,
+          "NonEmptyTiles": 30,
+          "WireBytes": 7995,
+          "MvtBytes": 12874,
+          "ColdMsTotal": 63.869999999999976
+        },
+        {
+          "CenterLon": -46.20930691015672,
+          "CenterLat": -23.503553427148088,
+          "Range": "16/24352-24358/37170-37173",
+          "Tiles": 28,
+          "NonEmptyTiles": 8,
+          "WireBytes": 1621,
+          "MvtBytes": 2204,
+          "ColdMsTotal": 40.92859999999999
+        },
+        {
+          "CenterLon": -46.367622269248926,
+          "CenterLat": -23.55577199250176,
+          "Range": "16/24323-24330/37180-37184",
+          "Tiles": 40,
+          "NonEmptyTiles": 34,
+          "WireBytes": 7995,
+          "MvtBytes": 12818,
+          "ColdMsTotal": 66.9958
+        },
+        {
+          "CenterLon": -45.886634878148136,
+          "CenterLat": -23.297391629444128,
+          "Range": "16/24411-24417/37129-37133",
+          "Tiles": 35,
+          "NonEmptyTiles": 35,
+          "WireBytes": 47997,
+          "MvtBytes": 98106,
+          "ColdMsTotal": 182.66739999999996
+        },
+        {
+          "CenterLon": -45.400948180534364,
+          "CenterLat": -22.34289413287618,
+          "Range": "16/24499-24506/36940-36944",
+          "Tiles": 40,
+          "NonEmptyTiles": 13,
+          "WireBytes": 2169,
+          "MvtBytes": 2708,
+          "ColdMsTotal": 62.7295
+        }
+      ]
+    }
+  ]
+}
