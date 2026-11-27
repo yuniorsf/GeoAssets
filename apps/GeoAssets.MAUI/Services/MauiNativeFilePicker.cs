@@ -3,28 +3,20 @@ using GeoAssets.Core.Interfaces;
 namespace GeoAssets.MAUI.Services;
 
 /// <summary>
-/// INativeFilePicker implementation for MAUI (Android, iOS, Windows, macOS) — uses
+/// INativeFilePicker implementation for MAUI (Android, iOS, Mac Catalyst, Windows) — uses
 /// Microsoft.Maui.Storage.FilePicker, whose FileResult exposes a real FullPath unlike a browser
 /// file input, so the picked file can be reopened directly from disk on a later reconnect.
-/// Windows and macOS filter by extension; iOS and Android filter by content type, so an extension
-/// without a known one there (e.g. <c>.pmtiles</c>) offers any file.
+/// Each platform's filter for the accepted extensions is <see cref="NativeFilePickerFileTypes"/>'s —
+/// including Mac Catalyst (XD01-438), which the system picker looks up by its own platform and which
+/// filters by Uniform Type Identifier like iOS. <see cref="NativeFilePickContent.PathOnly"/> answers the
+/// picked file's path without opening it, so a multi-gigabyte offline map pack is never read into memory.
 /// </summary>
 public sealed class MauiNativeFilePicker : INativeFilePicker
 {
-    private const string AnyAppleType = "public.data";
-    private const string AnyAndroidType = "*/*";
-
-    private static readonly Dictionary<string, string[]> AppleTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [".zip"] = ["com.pkware.zip-archive"],
-    };
-
-    private static readonly Dictionary<string, string[]> AndroidTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [".zip"] = ["application/zip", "application/x-zip-compressed"],
-    };
-
-    public async Task<NativeFilePickResult?> PickBinaryFileAsync(IReadOnlyList<string>? acceptedExtensions = null, CancellationToken ct = default)
+    public async Task<NativeFilePickResult?> PickBinaryFileAsync(
+        IReadOnlyList<string>? acceptedExtensions = null,
+        NativeFilePickContent content = NativeFilePickContent.Bytes,
+        CancellationToken ct = default)
     {
         var extensions = acceptedExtensions?.Where(e => !string.IsNullOrWhiteSpace(e)).ToArray() ?? [];
         var result = await FilePicker.Default.PickAsync(new PickOptions
@@ -33,6 +25,7 @@ public sealed class MauiNativeFilePicker : INativeFilePicker
             FileTypes = extensions.Length == 0 ? null : FileTypesFor(extensions)
         });
         if (result is null) return null;
+        if (content == NativeFilePickContent.PathOnly) return new NativeFilePickResult([], result.FileName, result.FullPath);
 
         using var stream = await result.OpenReadAsync();
         using var ms = new MemoryStream();
@@ -41,26 +34,17 @@ public sealed class MauiNativeFilePicker : INativeFilePicker
     }
 
     private static FilePickerFileType FileTypesFor(string[] extensions) =>
-        new(new Dictionary<DevicePlatform, IEnumerable<string>>
-        {
-            { DevicePlatform.iOS,     [.. ContentTypesFor(extensions, AppleTypes, AnyAppleType, alwaysIncludeFallback: true)] },
-            { DevicePlatform.Android, [.. ContentTypesFor(extensions, AndroidTypes, AnyAndroidType, alwaysIncludeFallback: false)] },
-            { DevicePlatform.WinUI,   extensions },
-            { DevicePlatform.macOS,   [.. extensions.Select(e => e.TrimStart('.'))] }
-        });
+        new(NativeFilePickerFileTypes.For(extensions).ToDictionary(
+            kv => DevicePlatformOf(kv.Key),
+            kv => (IEnumerable<string>)kv.Value));
 
-    private static IEnumerable<string> ContentTypesFor(
-        string[] extensions, Dictionary<string, string[]> known, string fallback, bool alwaysIncludeFallback)
+    private static DevicePlatform DevicePlatformOf(NativeFilePickerPlatform platform) => platform switch
     {
-        var types = new List<string>();
-        var anyUnknown = false;
-        foreach (var extension in extensions)
-        {
-            if (known.TryGetValue(extension, out var mapped)) types.AddRange(mapped);
-            else anyUnknown = true;
-        }
-
-        if (anyUnknown || alwaysIncludeFallback) types.Add(fallback);
-        return types.Distinct(StringComparer.Ordinal);
-    }
+        NativeFilePickerPlatform.IOS => DevicePlatform.iOS,
+        NativeFilePickerPlatform.MacCatalyst => DevicePlatform.MacCatalyst,
+        NativeFilePickerPlatform.Android => DevicePlatform.Android,
+        NativeFilePickerPlatform.WinUI => DevicePlatform.WinUI,
+        NativeFilePickerPlatform.MacOS => DevicePlatform.macOS,
+        _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unknown file picker platform."),
+    };
 }

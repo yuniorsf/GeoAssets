@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    XD01-438: the plain-.NET parts of GeoAssets.MAUI, tested without a device. GeoAssets.MAUI targets the MAUI platforms
+    only (no net10.0 TFM to reference), so the files that use no MAUI type are compiled in here as links: the native
+    picker's per-platform file-type filters (Mac Catalyst included) and the SQLite tile cache offline map packs read
+    through (over a plain SQLite file — the app opens the same table through its SQLCipher LocalOfflineDatabase).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
+    <ProjectReference Include="..\..\apps\GeoAssets.Shared\GeoAssets.Shared.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PMTiles\GeoAssets.Provider.PMTiles.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\NativeFilePickerFileTypes.cs" Link="Linked\NativeFilePickerFileTypes.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\NativeFilePickerPlatform.cs" Link="Linked\NativeFilePickerPlatform.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\SqliteLocalVectorTileCache.cs" Link="Linked\SqliteLocalVectorTileCache.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\LocalVectorTileRow.cs" Link="Linked\LocalVectorTileRow.cs" />
+    <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\PMTilesTestArchive.cs" Link="Linked\PMTilesTestArchive.cs" />
+    <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestMvt.cs" Link="Linked\TestMvt.cs" />
+  </ItemGroup>
+
+</Project>

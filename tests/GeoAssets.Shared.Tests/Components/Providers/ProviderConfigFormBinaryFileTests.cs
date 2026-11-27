@@ -69,6 +69,35 @@ public sealed class ProviderConfigFormBinaryFileTests : BunitContext
     }
 
     [Fact]
+    public async Task AFieldWithItsContent_IsPickedForItsBytes()
+    {
+        var form = RenderForm(BinaryField(".zip"), new ProviderConfig(), withNativePicker: true);
+
+        await form.Find("button.pcf-file").ClickAsync(new());
+
+        _picker.Contents.Should().Equal(NativeFilePickContent.Bytes);
+    }
+
+    [Fact]
+    public async Task APathOnlyField_IsPickedForItsPathOnly_AndStoresNoContent()
+    {
+        var config = new ProviderConfig();
+        _picker.Result = new NativeFilePickResult([], "city.pmtiles", "/tmp/Inbox/city.pmtiles");
+        var form = RenderForm(
+            new ProviderConfigField("pack", "Pack", ProviderFieldType.BinaryFile, Accept: ".pmtiles", PathOnly: true),
+            config,
+            withNativePicker: true);
+
+        await form.Find("button.pcf-file").ClickAsync(new());
+
+        _picker.Calls.Should().ContainSingle().Which.Should().Equal(".pmtiles");
+        _picker.Contents.Should().Equal(NativeFilePickContent.PathOnly);
+        config.Has("pack_content").Should().BeFalse("a multi-gigabyte pack is never read into the configuration");
+        config.Get("pack_path").Should().Be("/tmp/Inbox/city.pmtiles");
+        config.Get("pack_name").Should().Be("city.pmtiles");
+    }
+
+    [Fact]
     public async Task ACancelledPick_StoresNothing()
     {
         var config = new ProviderConfig();
@@ -108,11 +137,16 @@ public sealed class ProviderConfigFormBinaryFileTests : BunitContext
     private sealed class RecordingFilePicker : INativeFilePicker
     {
         public List<IReadOnlyList<string>?> Calls { get; } = [];
+        public List<NativeFilePickContent> Contents { get; } = [];
         public NativeFilePickResult? Result { get; set; }
 
-        public Task<NativeFilePickResult?> PickBinaryFileAsync(IReadOnlyList<string>? acceptedExtensions = null, CancellationToken ct = default)
+        public Task<NativeFilePickResult?> PickBinaryFileAsync(
+            IReadOnlyList<string>? acceptedExtensions = null,
+            NativeFilePickContent content = NativeFilePickContent.Bytes,
+            CancellationToken ct = default)
         {
             Calls.Add(acceptedExtensions);
+            Contents.Add(content);
             return Task.FromResult(Result);
         }
     }

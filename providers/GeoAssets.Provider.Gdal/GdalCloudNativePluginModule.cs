@@ -2,7 +2,7 @@ using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Core.VectorFiles;
 using GeoAssets.Provider.Gdal.Cog;
-using GeoAssets.Provider.Gdal.PMTiles;
+using GeoAssets.Provider.PMTiles;
 using GeoAssets.Provider.Gdal.VectorFiles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

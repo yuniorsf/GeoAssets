@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    XD01-438 (ADR-002 Track 6): the one PMTiles v3 reader, pure .NET (no native code, no GDAL), so every host can bundle
+    it — MAUI's static plugin set included (offline .pmtiles packs, module `pmtiles`), where the GDAL plugin can't go
+    (no MaxRev runtime for iOS/Android). GeoAssets.Provider.Gdal references this project for its keyed
+    PMTilesVectorTileSource and ships its assembly in its own plugin folder. The shared contracts are referenced but not
+    copied (as a drop-in plugin references them), so a plugin folder that carries this assembly never carries
+    GeoAssets.Core; a host gets Core from its own reference.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Provider.PMTiles</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Provider.PMTiles.Tests" />
+  </ItemGroup>
+
+</Project>

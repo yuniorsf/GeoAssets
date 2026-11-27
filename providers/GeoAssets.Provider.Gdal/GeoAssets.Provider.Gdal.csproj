@@ -3,7 +3,7 @@
   <!--
     ADR-002 D5 (XD01-437): the single native GDAL boundary. Every GDAL-backed format (File Geodatabase export, COG raster
     tiles, FlatGeobuf/GeoParquet readers) and the one GdalBase.ConfigureAll() call (GdalNativeInitializer) live here,
-    beside the pure .NET PMTiles reader. Built as a drop-in server plugin (EnableDynamicLoading, the shared contracts
+    beside the pure .NET PMTiles reader of GeoAssets.Provider.PMTiles (referenced, XD01-438). Built as a drop-in server plugin (EnableDynamicLoading, the shared contracts
     referenced but not copied), so a server can load it from plugins/providers/GeoAssets.Provider.Gdal/ in its own
     PluginLoadContext; a host that references it statically instead (GeoAssets.FieldService.Server, and the network
     import CLI through GeoAssets.Ingestion.Proj) never also loads it from a plugin directory.
@@ -21,6 +21,8 @@
       <Private>false</Private>
       <ExcludeAssets>runtime;native</ExcludeAssets>
     </ProjectReference>
+    <!-- XD01-438: the PMTiles reader lives in its own GDAL-free assembly (MAUI bundles it); copied into this plugin's folder. -->
+    <ProjectReference Include="..\GeoAssets.Provider.PMTiles\GeoAssets.Provider.PMTiles.csproj" />
   </ItemGroup>
 
   <ItemGroup>

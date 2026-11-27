@@ -34,6 +34,7 @@
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.WMS\GeoAssets.Provider.WMS.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.Shapefile\GeoAssets.Provider.Shapefile.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PostgreSQL\GeoAssets.Provider.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.PMTiles\GeoAssets.Provider.PMTiles.csproj" />
   </ItemGroup>
 
 </Project>

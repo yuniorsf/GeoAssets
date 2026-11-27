@@ -21,6 +21,14 @@ public interface INativeFilePicker
     /// extension offers the closest type it has, so callers must not assume the picked file has one
     /// of these extensions.
     /// </param>
+    /// <param name="content">
+    /// Whether the picked file's bytes are read (<see cref="NativeFilePickContent.Bytes"/>, the default) or only its path
+    /// is answered (<see cref="NativeFilePickContent.PathOnly"/>, XD01-438) — what
+    /// <see cref="Models.ProviderConfigField.PathOnly"/> asks for.
+    /// </param>
     /// <param name="ct">Cancels reading the picked file's content.</param>
-    Task<NativeFilePickResult?> PickBinaryFileAsync(IReadOnlyList<string>? acceptedExtensions = null, CancellationToken ct = default);
+    Task<NativeFilePickResult?> PickBinaryFileAsync(
+        IReadOnlyList<string>? acceptedExtensions = null,
+        NativeFilePickContent content = NativeFilePickContent.Bytes,
+        CancellationToken ct = default);
 }

@@ -1,4 +1,6 @@
 using GeoAssets.Core.Interfaces;
+using GeoAssets.Provider.PMTiles;
+using GeoAssets.Provider.PMTiles.Packs;
 using GeoAssets.Provider.PostgreSQL;
 using GeoAssets.Provider.Rest;
 using GeoAssets.Provider.Shapefile;
@@ -9,7 +11,7 @@ using Xunit;
 
 namespace GeoAssets.Provider.PluginModules.Tests;
 
-/// <summary>The five spatial providers' modules (XD01-425), keyed by plugin id.</summary>
+/// <summary>The spatial providers' modules (XD01-425; <c>pmtiles</c>, XD01-438), keyed by plugin id.</summary>
 internal static class ProviderModuleCases
 {
     public static readonly IReadOnlyDictionary<string, ProviderModuleCase> ById =
@@ -25,6 +27,8 @@ internal static class ProviderModuleCases
                 s => s.AddGeoAssetsShapefilePlugin(), typeof(ShapefileProviderPlugin)),
             new ProviderModuleCase(typeof(PostgresProviderPluginModule), "postgres", ProviderHostTargets.Server,
                 s => s.AddGeoAssetsPostgres(), typeof(PostgresProviderPlugin)),
+            new ProviderModuleCase(typeof(PMTilesProviderPluginModule), "pmtiles", ProviderHostTargets.MobileDesktop | ProviderHostTargets.Server,
+                s => s.AddGeoAssetsPMTilesPacks(), typeof(PMTilesPackProviderPlugin)),
         }.ToDictionary(c => c.PluginId, StringComparer.Ordinal);
 
     public static TheoryData<string> Ids => [.. ById.Keys];
