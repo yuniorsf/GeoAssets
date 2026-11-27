@@ -13,7 +13,8 @@ public static class PostgresVectorTileServiceExtensions
     /// <summary>
     /// Registers <see cref="PostgresVectorTileSource"/> as the host's <see cref="IVectorTileSource"/> (XD01-432), replacing
     /// any earlier registration: scoped, so each request's <see cref="ITenantContext"/> scopes its tiles, with the host's
-    /// <see cref="ILodPolicy"/> when it registers one (else every layer is drawn as vector features at every zoom).
+    /// <see cref="ILodPolicy"/> when it registers one (else every layer is drawn as vector features at every zoom) and its
+    /// <see cref="TileFeatureBudget"/> when it registers one (else <see cref="TileFeatureBudget.Default"/>, XD01-457).
     /// </summary>
     public static IServiceCollection AddPostgresVectorTileSource(this IServiceCollection services, string connectionString)
     {
@@ -30,7 +31,8 @@ public static class PostgresVectorTileServiceExtensions
             options,
             sp.GetService<ITenantContext>(),
             sp.GetService<ILodPolicy>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetService<TileFeatureBudget>()));
         return services;
     }
 }

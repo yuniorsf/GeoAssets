@@ -510,6 +510,106 @@ z13, z14 and z16: `after-xd01-439-tiles.json` (z16's tiles are byte-for-byte XD0
 
 </details>
 
+## After XD01-457 — cold tiles under 50 ms at z8 and z13 (2026-11-27)
+
+Same dataset (seed 420, 200,000 rows, 3,366,132 vertices), viewports, tile scenario, settings and calibrated policy
+(`tiles --zooms 8,12,13,14,16 --lod after-xd01-439-calibration.json`) as
+[After XD01-439](#after-xd01-439--track-6-density-calibrated-lod-2026-11-27), measured on branch
+`perf/xd01-457-cold-tile-p95` (base `develop` @ `67b55532`). Apple M5 (10 cores), macOS 27.2.1, .NET 10.0.7 Release +
+server GC, Docker Desktop 29.8.2 (8 vCPU / 7.7 GB VM), every run under the heavy-run lock. Two databases this time:
+
+- **amd64, emulated** — `postgis/postgis:16-3.4` (PostgreSQL 16.4, PostGIS 3.4.3, GEOS 3.9) under emulation, the image
+  every earlier section used;
+- **arm64, native** — `imresamu/postgis:16-3.4` (PostgreSQL 16.4, PostGIS 3.4.3, GEOS 3.11), a multi-arch build of the
+  same PostGIS release that runs natively on this host (`postgis/postgis` publishes no arm64 tag). The bench needs nothing
+  else: same schema (`dotnet ef database update`), same seed, same bytes per viewport.
+
+**Paired runs.** Other sessions shared the machine (load averages of 30–140 outside the lock), so a single run does not
+compare with one taken minutes earlier. Each container held two copies of the seeded table — `geoassets_render_bench`
+at `develop`'s schema and `geoassets_render_bench_after` (`CREATE DATABASE … TEMPLATE`, then this branch's migration) —
+and each zoom ran the `develop` build against the first and this branch's build against the second back to back, the
+order alternating per zoom. Two such rounds; their p95s agree within 3 ms, except `develop`'s native z8 (41.0 and 33.8 ms) — the table shows the second. Raw results:
+`tools/GeoAssets.Bench.Render/after-xd01-457-tiles.json` (amd64), `after-xd01-457-tiles-arm64.json` and
+`before-xd01-457-tiles-arm64.json` (arm64; the amd64 "before" reproduces `after-xd01-439-tiles.json` within 3 ms).
+
+### What changed in the tile statement
+
+Measured first with `EXPLAIN (ANALYZE, BUFFERS)` on the slowest tiles (z8 `8/95/144`, 1,479 districts; z13
+`13/3056/4642`, 274 districts with 45,851 vertices plus 443 transformers and 468 feeders):
+
+1. **Stored centroid** (`AddGeoEntityGeom3857Centroid`): `geom_3857_centroid geometry(Point,3857)`, a stored generated
+   `ST_Centroid` of `geom_3857`, GiST-indexed. The aggregate tier read every polygon's and line's full geometry
+   (TOASTed) and took its `ST_Centroid` up to eight times per row (once per reference in the filter, the grouping and the
+   averages); it now reads one point per row through its own index. The stored point is `ST_Centroid(geom_3857)` bit for
+   bit (checked on all 200,000 rows), so the aggregates' counts and positions are unchanged.
+2. **Simplification once, and cheaper.** `ST_AsMVTGeom(ST_SimplifyPreserveTopology(…))` was evaluated twice per discrete
+   feature: once for the `geom IS NOT NULL` filter the planner pushed into the inlined CTE, once for the output —
+   `discrete_features` is now `MATERIALIZED`, and `ST_AsMVT` orders a layer's features by ordinal id explicitly instead of
+   relying on the plan. And `ST_SimplifyPreserveTopology` (GEOS) cost ~50 ms for the 274 districts of the z13 tile above
+   while removing < 1 % of their vertices at one tile unit; Douglas–Peucker (`ST_Simplify(geom, tolerance, true)`, which
+   keeps collapsed geometries) costs ~2 ms there, and `ST_AsMVTGeom` still snaps to the grid and repairs an invalid
+   polygon. Over every tile of the scenario's viewports (2,907 tiles: the calibrated policy at z8–z16, vector at every zoom
+   at z8–z13, and every type requested at z13/z14) the new statement returns the same bytes as the old one except two
+   tiles, both vector-only Setor/Rede MT tiles where a self-crossing feeder keeps one vertex fewer — a difference inside
+   one tile unit. Under the calibrated policy every measured tile is byte-identical (same bytes per viewport below).
+3. **Zoom ranges per layer, not per row.** The asset types' `MinZoom`/`MaxZoom` were checked with a `NOT EXISTS` per row
+   (a nested-loop anti join over `asset_type`); the statement now resolves the hidden layers once.
+4. **Per-layer budgets** (`GeoAssets:Tiles:Budget`, below). They do not move this dataset's numbers: at the switch zoom
+   z13 a tile's cost is its districts' vertices, not its feature count (the densest z13 tile of the dataset holds 743 discrete
+   features, far below the 10,000 budget).
+   With the default (no layer cap) every tile is byte-identical to before.
+
+Also measured and **not** kept: preparing the statement (server-side prepared statements, so a tile skips the ~5 ms
+plan) — on the native database it changed no p95 by more than 0.5 ms, so the statement stays unprepared.
+
+### Tiles after XD01-457 (calibrated policy)
+
+| Zoom | Bytes per viewport (wire, gzip; p50 / p95) | MVT p95 | Cold ms per tile, amd64 emulated: before → **after** (p50 / p95) | ↳ DB ms p95 | Cold ms per tile, arm64 native: before → **after** (p50 / p95) | Warm ms (p95) |
+|---|---|---|---|---|---|---|
+| z8 | 11.4 kB / 11.4 kB | 37.0 kB | 1.5 / 78.0 → **1.4 / 10.1** | 10.0 | 1.0 / 33.8 → **1.0 / 7.0** | 0.0003 |
+| z12 | 11.1 kB / 21.7 kB | 66.6 kB | 2.2 / 12.1 → **1.7 / 4.9** | 4.9 | 1.5 / 7.0 → **1.1 / 3.8** | 0.0003 |
+| z13 *(switch zoom)* | 218.4 kB / 478.0 kB | 747.1 kB | 13.7 / 74.5 → **3.8 / 16.8** | 16.3 | 8.2 / 46.1 → **2.5 / 10.5** | 0.0004 |
+| z14 *(switch zoom)* | 30.2 kB / 189.8 kB | 337.8 kB | 4.1 / 21.5 → **1.9 / 3.7** | 3.6 | 2.6 / 13.2 → **1.5 / 3.4** | 0.0005 |
+| z16 | 8.0 kB / 76.6 kB | 155.7 kB | 1.9 / 8.0 → **1.6 / 2.5** | 2.5 | 1.3 / 4.8 → **1.1 / 1.7** | 0.0004 |
+
+Bytes are the same before and after, on both databases. Per-tile times over every tile of every viewport of 5 passes,
+nearest rank (2,115–2,150 per zoom).
+
+### Against ADR-002's gate (z8 ≤ ~1.8 MB per viewport, p95 < 50 ms per tile)
+
+| Zoom | Cold p95 per tile (amd64 emulated): XD01-434 → XD01-439 → **XD01-457** | arm64 native: before → **XD01-457** | Gate |
+|---|---|---|---|
+| z8 | 1,002.5 → 80.6 → **10.1 ms** | 33.8 → **7.0 ms** | **met** (bytes 11.4 kB, 1,592× below the 18.15 MB baseline) |
+| z12 | 126.0 → 11.6 → **4.9 ms** | 7.0 → **3.8 ms** | met |
+| z13 *(switch zoom)* | — → 75.3 → **16.8 ms** | 46.1 → **10.5 ms** | **met** |
+| z14 *(switch zoom)* | — → 21.6 → **3.7 ms** | 13.2 → **3.4 ms** | met |
+| z16 | 8.2 → 8.0 → **2.5 ms** | 4.8 → **1.7 ms** | met |
+
+- **Native hardware alone already met the gate** at `develop` (z8 33.8 ms, z13 46.1 ms on arm64): the earlier misses were
+  mostly emulation. z13 had little margin there (45.7 and 46.1 ms in the two rounds), and the changes above make every zoom
+  meet it on the emulated database too, with ≥ 3× margin at z13 and ≥ 5× at z8.
+- Every cached tile (warm) is still ≈ 0.3 µs.
+
+### The migration
+
+`AddGeoEntityGeom3857Centroid` adds a stored generated column, so PostgreSQL rewrites `geo_entity` (and its indexes) once,
+under an `ACCESS EXCLUSIVE` lock: ~11 s for the 200,000 rows here on the native database, and more than Npgsql's default
+30 s command timeout on the emulated one (the `dotnet ef database update` needed `Command Timeout=600`). A large catalog
+needs the longer timeout `deploy/distributor-silo/provision-database.sh` already sets (`MIGRATION_COMMAND_TIMEOUT`,
+default 1,800 s) and a write freeze — the runbook is XD01-467.
+
+### `GeoAssets:Tiles:Budget` (XD01-457)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Budget:MaxFeaturesPerTile` | 10,000 | Discrete features one vector tile holds across its layers (1 … 1,000,000) — the old fixed `MaxFeaturesPerTile`. |
+| `Budget:MaxFeaturesPerLayer` | unset = `MaxFeaturesPerTile` | Discrete features of one layer a tile holds (1 … `MaxFeaturesPerTile`): the first of each layer by ordinal id, then the tile's budget over all of them, by layer then id. |
+| `Budget:Layers:{assetTypeId}` | — | One layer's own budget, instead of `MaxFeaturesPerLayer` (1 … `MaxFeaturesPerTile`). |
+
+Unset, a tile is what it was before. A value out of range, a key the section does not define, a layer named by anything
+but an asset type id, or a value given children fails the kernel's startup, naming the key (as `Lod` and `Calibration`
+do). Aggregate layers are not counted: an aggregate is at most a 64 × 64 grid of points.
+
 ## Re-running
 
 From the repository root, against the benchmark's own container (never the dev stack — `seed` empties `geo_entity`, and
@@ -519,8 +619,9 @@ refuses a database whose name lacks `bench`):
 # 1. PostGIS on localhost:5435, database geoassets_render_bench
 docker compose -f tools/GeoAssets.Bench.Render/docker-compose.bench.yaml up -d --wait
 
-# 2. The kernel schema (the tool cannot reference GeoAssets.Provider.PostgreSQL — Invariant 1)
-ConnectionStrings__GeoAssets="Host=localhost;Port=5435;Database=geoassets_render_bench;Username=postgres;Password=postgres" \
+# 2. The kernel schema (the tool cannot reference GeoAssets.Provider.PostgreSQL — Invariant 1); the migrations that
+#    rewrite geo_entity (AddGeoEntityGeom3857, AddGeoEntityGeom3857Centroid) can outlast the default 30 s on emulation
+ConnectionStrings__GeoAssets="Host=localhost;Port=5435;Database=geoassets_render_bench;Username=postgres;Password=postgres;Command Timeout=600" \
   dotnet ef database update --project providers/GeoAssets.Provider.PostgreSQL \
     --startup-project providers/GeoAssets.Provider.PostgreSQL --context GeoAssetsDbContext
 
@@ -562,5 +663,9 @@ baseline (don't overwrite it):
   `BenchTileDensitySampler` copies `PostgresTileDensitySampler`'s statements and `calibrate` runs the kernel's
   `LodCalibrator`; when either changes, update the copy in the same change —
   `PostgresRenderBenchTests.CalibrationReads_AnswerWhatThePostGisSamplerAnswers` fails until they agree.
+- **XD01-457** — done: see [After XD01-457](#after-xd01-457--cold-tiles-under-50-ms-at-z8-and-z13-2026-11-27).
+  `TileEndpointPipeline` copies the new statement (stored centroid, per-layer budgets) and takes a `TileFeatureBudget`;
+  `PostgresRenderBenchTests.TileRead_UnderALayerBudget_AnswersTheSourcesBytes_CappingTheDenseLayers` asserts the budgets
+  agree. On a machine others share, compare builds in paired runs (two databases in one container, arms back to back).
 - **Track 5 (XD01-435 / XD01-436)** — MapLibre / hybrid LOD: the simulated SVG client does not model WebGL; measure the
   client side in a real browser and note the method next to the numbers.

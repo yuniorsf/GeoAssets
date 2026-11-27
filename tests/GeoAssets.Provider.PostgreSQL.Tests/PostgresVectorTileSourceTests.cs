@@ -19,7 +19,7 @@ namespace GeoAssets.Provider.PostgreSQL.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class PostgresVectorTileSourceTests(PostgresContainerFixture fixture)
 {
-    private PostgresVectorTileSource NewSut(Guid? organization, ILodPolicy? policy = null, int budget = PostgresVectorTileSource.DefaultMaxFeaturesPerTile) =>
+    private PostgresVectorTileSource NewSut(Guid? organization, ILodPolicy? policy = null, TileFeatureBudget? budget = null) =>
         new(fixture.CreateOptions(), organization is { } id ? new FakeTenantContext(id) : null, policy, TimeProvider.System, budget);
 
     /// <summary>A source whose database is unreachable: any statement it sends fails, so a result proves none was sent.</summary>
@@ -177,6 +177,21 @@ public sealed class PostgresVectorTileSourceTests(PostgresContainerFixture fixtu
         tile[world.Lines].Ids.Should().ContainSingle().Which.Should().Be(world.LineA, "the other layer is still drawn as features");
     }
 
+    [Fact]
+    public async Task ATypesZoomRange_HidesItsAggregatesOutsideIt_AndCountsThemInside()
+    {
+        await using var world = await VectorTileWorld.SeedAsync(fixture);
+        var policy = new LodPolicy(
+            LodThresholds.VectorOnly,
+            new Dictionary<string, LodThresholds>(StringComparer.Ordinal) { [world.Late] = new(20, 20) });
+        var sut = NewSut(world.OrgA, policy);
+        var inside = TileAddress.Containing(world.LateAPosition.Lon, world.LateAPosition.Lat, VectorTileWorld.LateMinZoom);
+
+        (await TileAsync(sut, world.Request(world.Late, world.Lines))).LayerNames.Should().Equal(world.Lines);
+        var cells = (await TileAsync(sut, VectorTileWorld.Request(inside, world.Late)))[world.Late].Features;
+        Convert.ToInt64(cells.Should().ContainSingle().Subject.Properties["count"], System.Globalization.CultureInfo.InvariantCulture).Should().Be(1);
+    }
+
     // ── Budget ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -184,18 +199,59 @@ public sealed class PostgresVectorTileSourceTests(PostgresContainerFixture fixtu
     {
         await using var world = await VectorTileWorld.SeedAsync(fixture);
 
-        var tile = await TileAsync(NewSut(world.OrgA, budget: 2), world.Request(world.Poles, world.Lines));
+        var tile = await TileAsync(NewSut(world.OrgA, budget: new TileFeatureBudget(2)), world.Request(world.Poles, world.Lines));
 
         tile.LayerNames.Should().Equal(world.Poles);
         tile[world.Poles].Ids.Should().Equal(new[] { world.PoleA, world.PoleA2, world.SharedPole }.Order(StringComparer.Ordinal).Take(2));
     }
 
     [Fact]
-    public void TheBudget_MustBePositive()
+    public async Task ALayerBudget_CapsADenseLayer_SoASparseLayerStillGetsItsFeatures()
     {
-        var act = () => NewSut(null, budget: 0);
+        // XD01-457: without a layer cap the poles spend a 3-feature tile budget and the line is left out; capped at 2 per
+        // layer, the poles keep their first two by ordinal id and the line is drawn.
+        await using var world = await VectorTileWorld.SeedAsync(fixture);
+        var poles = new[] { world.PoleA, world.PoleA2, world.SharedPole }.Order(StringComparer.Ordinal).ToArray();
 
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        var uncapped = await TileAsync(NewSut(world.OrgA, budget: new TileFeatureBudget(3)), world.Request(world.Poles, world.Lines));
+        var capped = await TileAsync(NewSut(world.OrgA, budget: new TileFeatureBudget(3, maxFeaturesPerLayer: 2)), world.Request(world.Poles, world.Lines));
+
+        uncapped.LayerNames.Should().Equal(world.Poles);
+        uncapped[world.Poles].Ids.Should().Equal(poles);
+        capped.LayerNames.Should().Equal(world.Poles, world.Lines);
+        capped[world.Poles].Ids.Should().Equal(poles.Take(2));
+        capped[world.Lines].Ids.Should().Equal(world.LineA);
+    }
+
+    [Fact]
+    public async Task ALayersOwnBudget_OverridesTheLayerCap()
+    {
+        await using var world = await VectorTileWorld.SeedAsync(fixture);
+        var budget = new TileFeatureBudget(10, maxFeaturesPerLayer: 3, new Dictionary<string, int>(StringComparer.Ordinal) { [world.Poles] = 1 });
+
+        var tile = await TileAsync(NewSut(world.OrgA, budget: budget), world.Request(world.Poles, world.Lines));
+
+        tile[world.Poles].Ids.Should().Equal(new[] { world.PoleA, world.PoleA2, world.SharedPole }.Order(StringComparer.Ordinal).Take(1));
+        tile[world.Lines].Ids.Should().Equal(world.LineA);
+    }
+
+    [Fact]
+    public async Task TheTilesBudget_StillBoundsTheLayersTogether_FirstByLayer()
+    {
+        await using var world = await VectorTileWorld.SeedAsync(fixture);
+
+        var tile = await TileAsync(NewSut(world.OrgA, budget: new TileFeatureBudget(2, maxFeaturesPerLayer: 2)), world.Request(world.Lines, world.Poles));
+
+        tile.LayerNames.Should().Equal(world.Lines, world.Poles);
+        tile[world.Lines].Ids.Should().Equal(world.LineA);
+        tile[world.Poles].Ids.Should().Equal(new[] { world.PoleA, world.PoleA2, world.SharedPole }.Order(StringComparer.Ordinal).Take(1));
+    }
+
+    [Fact]
+    public void WithoutABudget_TheSourceUsesTheDefault()
+    {
+        NewSut(null).Budget.Should().BeSameAs(TileFeatureBudget.Default);
+        NewSut(null).MaxFeaturesPerTile.Should().Be(PostgresVectorTileSource.DefaultMaxFeaturesPerTile);
     }
 
     // ── Short-circuits ────────────────────────────────────────────────────────
@@ -239,7 +295,23 @@ public sealed class PostgresVectorTileSourceTests(PostgresContainerFixture fixtu
             .Which.Lifetime.Should().Be(ServiceLifetime.Scoped);
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
-        scope.ServiceProvider.GetRequiredService<IVectorTileSource>().Should().BeOfType<PostgresVectorTileSource>();
+        scope.ServiceProvider.GetRequiredService<IVectorTileSource>().Should().BeOfType<PostgresVectorTileSource>()
+            .Which.Budget.Should().BeSameAs(TileFeatureBudget.Default, "the host registers no budget");
+    }
+
+    [Fact]
+    public void AddPostgresVectorTileSource_CutsTilesByTheHostsFeatureBudget()
+    {
+        var services = new ServiceCollection();
+        var budget = new TileFeatureBudget(5_000, 1_000);
+        services.AddSingleton(budget);
+
+        services.AddPostgresVectorTileSource(fixture.ConnectionString);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IVectorTileSource>().Should().BeOfType<PostgresVectorTileSource>()
+            .Which.Budget.Should().BeSameAs(budget);
     }
 
     private sealed class UnusedVectorTileSource : IVectorTileSource

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using GeoAssets.Core.Rendering;
+using GeoAssets.Provider.PostgreSQL.Repositories;
 using GeoAssets.Server.Tests.Routing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -25,6 +26,9 @@ public sealed class TileLodStartupValidationTests
     [InlineData("GeoAssets:Tiles:Lod:VectorFromZom", "12", "GeoAssets:Tiles:Lod:RasterFromZoom", "0", "'GeoAssets:Tiles:Lod:VectorFromZom' is not a setting")]
     [InlineData("GeoAssets:Tiles:Lod:Layers:feeders:VectorFromZoom", "12", "GeoAssets:Tiles:Lod:RasterFromZoom", "0", "must be named by an asset type id")]
     [InlineData("GeoAssets:Tiles:Calibration:MinZoom", "12", "GeoAssets:Tiles:Calibration:MaxZoom", "8", "Calibration")]
+    [InlineData("GeoAssets:Tiles:Budget:MaxFeaturesPerTile", "5000", "GeoAssets:Tiles:Budget:MaxFeaturesPerLayer", "6000", "'GeoAssets:Tiles:Budget:MaxFeaturesPerLayer' must be")]
+    [InlineData("GeoAssets:Tiles:Budget:Layers:" + Feeders, "0", "GeoAssets:Tiles:Budget:MaxFeaturesPerTile", "5000", "'GeoAssets:Tiles:Budget:Layers:" + Feeders + "' must be")]
+    [InlineData("GeoAssets:Tiles:Budget:MaxFeaturesPerLayr", "100", "GeoAssets:Tiles:Budget:MaxFeaturesPerTile", "5000", "'GeoAssets:Tiles:Budget:MaxFeaturesPerLayr' is not a setting")]
     public async Task AnInvalidLodConfiguration_StopsTheKernelBeforeItServes(string key, string value, string otherKey, string otherValue, string named)
     {
         await using var unstarted = await ServerHostFixture.CreateUnstartedFactoryAsync("postgres-spatial");
@@ -58,6 +62,27 @@ public sealed class TileLodStartupValidationTests
         policy.Decide(Feeders, 13).Should().Be(TileRenderTier.Raster);
         policy.Decide(Feeders, 14).Should().Be(TileRenderTier.Vector);
         policy.Decide("00000000-0000-0000-0000-000000000001", 12).Should().Be(TileRenderTier.Vector);
+    }
+
+    [Fact]
+    public async Task AValidFeatureBudget_IsTheOneTheVectorTilesAreCutBy()
+    {
+        // XD01-457: the per-layer budget reaches the PostGIS vector tile source.
+        await using var unstarted = await ServerHostFixture.CreateUnstartedFactoryAsync("postgres-spatial");
+        await using var factory = unstarted.WithWebHostBuilder(host =>
+        {
+            host.UseSetting("GeoAssets:Tiles:Budget:MaxFeaturesPerLayer", "2500");
+            host.UseSetting($"GeoAssets:Tiles:Budget:Layers:{Feeders}", "400");
+        });
+
+        var budget = factory.Services.GetRequiredService<TileFeatureBudget>();
+        using var scope = factory.Services.CreateScope();
+        var source = scope.ServiceProvider.GetRequiredService<IVectorTileSource>().Should().BeOfType<PostgresVectorTileSource>().Subject;
+
+        source.Budget.Should().BeSameAs(budget);
+        budget.MaxFeaturesPerTile.Should().Be(TileFeatureBudget.DefaultMaxFeaturesPerTile);
+        budget.ForLayer(Feeders).Should().Be(400);
+        budget.ForLayer("00000000-0000-0000-0000-000000000001").Should().Be(2_500);
     }
 
     private static IEnumerable<Exception> Flatten(Exception exception)

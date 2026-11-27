@@ -118,7 +118,7 @@ flowchart TD
 `providers/GeoAssets.Provider.PostgreSQL`:
 
 - **Migration `AddGeoEntityGeom3857`** (`GeoAssetsDbContext`, applied by the kernel at startup like the rest of its chain): `geom` becomes `geometry(Geometry,4326)` — existing rows without an SRID take 4326, rows of another SRID are reprojected; from then on PostGIS refuses a write of another SRID and gives an SRID-less one 4326. `geom_3857 geometry(Geometry,3857)` is a stored generated `ST_Transform(geom, 3857)` (clipped to ±85.0511287798066° first; a geometry wholly beyond is empty), backfilled by the migration and kept by PostgreSQL on every write, with the GiST index `IX_geo_entity_geom_3857`. EF Core does not map `geom_3857`.
-- **`PostgresVectorTileSource : IVectorTileSource`** (scoped, `AddPostgresVectorTileSource`, registered by the kernel's `PostgresSpatialModule`): one statement per tile — `ST_TileEnvelope` (margin = buffer) over `geom_3857`, `ST_SimplifyPreserveTopology` (one tile unit), `ST_AsMVTGeom` (extent 4096, buffer 64), `ST_AsMVT` per layer concatenated in the request's order. A layer id is an asset type id. A layer the `ILodPolicy` (the host's, else vector everywhere) calls `Hidden` is left out, and the asset types' own `MinZoom`/`MaxZoom` hide their features in the SQL; an `Aggregate` layer is a 64×64 grid of points with `count` (each feature counted once per zoom, at its centroid). Properties: `id`, `name`, `assetTypeId`, `layerId` (override, when set) and the custom attributes the type's layer rules read (never shadowing those four); aggregates carry `assetTypeId` and `count`. At most `MaxFeaturesPerTile` (default 10 000) discrete features, by layer then ordinal id. Scoped like `PostgresAssetRenderQuery` (tenant-stamped transaction, the caller's organization's rows and the shared ones). A cancelled request throws before the database; a started read runs under its own 30 s timeout.
+- **`PostgresVectorTileSource : IVectorTileSource`** (scoped, `AddPostgresVectorTileSource`, registered by the kernel's `PostgresSpatialModule`): one statement per tile — `ST_TileEnvelope` (margin = buffer) over `geom_3857`, `ST_SimplifyPreserveTopology` (one tile unit; `ST_Simplify` keeping collapsed geometries since XD01-457), `ST_AsMVTGeom` (extent 4096, buffer 64), `ST_AsMVT` per layer concatenated in the request's order. A layer id is an asset type id. A layer the `ILodPolicy` (the host's, else vector everywhere) calls `Hidden` is left out, and the asset types' own `MinZoom`/`MaxZoom` hide their features in the SQL; an `Aggregate` layer is a 64×64 grid of points with `count` (each feature counted once per zoom, at its centroid — since XD01-457 the stored, GiST-indexed `geom_3857_centroid` of migration `AddGeoEntityGeom3857Centroid`). Properties: `id`, `name`, `assetTypeId`, `layerId` (override, when set) and the custom attributes the type's layer rules read (never shadowing those four); aggregates carry `assetTypeId` and `count`. At most `MaxFeaturesPerTile` (default 10 000) discrete features, by layer then ordinal id — and, since XD01-457, at most a layer's own budget of each layer (`TileFeatureBudget` in Core, from `GeoAssets:Tiles:Budget`; unset = the tile's, as before). Scoped like `PostgresAssetRenderQuery` (tenant-stamped transaction, the caller's organization's rows and the shared ones). A cancelled request throws before the database; a started read runs under its own 30 s timeout.
 - **After-commit invalidation**: with an `ITileInvalidation` (resolved from the container; none registered = nothing tracked), `PostgresAssetProvider`'s writes (`Add`, `Update`, `AddRange`, `Delete`, `Clear`, `LoadAll`), `PostgresAssetMutationBatchApplier`'s batches and `PostgresFeatureBulkImporter`'s chunks and replacing completions hand it, once and only after their commit, a `DirtyTileRegion` per distinct box the written features had before or have after the write (one region of their union beyond 256). Inside a caller's transaction the provider keeps the regions and the batch applier publishes them after its commit — never for a batch that rolled back or was already applied. A failing invalidation is logged and counted (`geoassets.tiles.invalidations`, tags `writer`, `outcome=published|failed`), never thrown; the provider's synchronous writes don't wait for it.
 
 ### As built — SkiaSharp raster tiles (XD01-433)
@@ -215,7 +215,7 @@ reads), `apps/GeoAssets.Server/Tiles/` (configuration and endpoint):
   before it is built, let alone serves (`TileLodStartupValidationTests` boots the real `Program` and asserts its startup
   throws and no client can be created) — is strict: besides the numbers and the zoom thresholds (`InvalidLodPolicyException`
   for an out-of-range zoom or `RasterFromZoom` > `VectorFromZoom` in the default `Lod` or any `Lod:Layers:{id}`, and
-  `MinZoom` > `MaxZoom`), it refuses a key `GeoAssets:Tiles`, `Lod`, `Lod:Layers:{id}` or `Calibration` does not define
+  `MinZoom` > `MaxZoom`), it refuses a key `GeoAssets:Tiles`, `Lod`, `Lod:Layers:{id}`, `Calibration` or `Budget` (XD01-457) does not define
   (a typo such as `Lod:VectorFromZom`, naming the key and the valid ones), a value given children or a section given a
   value, and a layer id that is not an asset type id (a GUID — read in the lowercase `D` form the tile sources compare, so an
   upper-case key still applies). Before, a typo was silently ignored (the default applied).
@@ -263,8 +263,8 @@ reads), `apps/GeoAssets.Server/Tiles/` (configuration and endpoint):
   75.3 ms (not met), z14 21.6 ms (met). Raster probes under looser budgets cost as much as vector or more (93–134 ms p95 at
   z12–13) and 1.1–2.8 MB of PNG per viewport, hence the raster vertex budget equal to the vector one — `docs/perf/render-baseline.md`
   ("After XD01-439").
-- **Deferred**: a stored centroid column for the aggregate tier (z8's remaining 80 ms); per-tile (all-layers) budgets
-  instead of per-layer ones; calibrating across organizations in one request.
+- **Deferred**: a stored centroid column for the aggregate tier (z8's remaining 80 ms) and per-layer budgets inside a
+  tile — both done by XD01-457 (below); calibrating across organizations in one request.
 
 ### As built — summary
 
@@ -296,23 +296,28 @@ combined `develop` before the next wave started: the oracle, the full suite, a D
 | 6 | XD01-438 MAUI offline PMTiles | #182 | `f46c6568` |
 | 6 | XD01-439 LOD calibration + fail-fast validation | #183 | `bd792175` |
 
-**Performance gate** (bench, 200k features, PostGIS amd64 under emulation on an arm64 host, which inflates database
-times; `docs/perf/render-baseline.md`):
+**Performance gate** (bench, 200k features, Apple M5; `docs/perf/render-baseline.md`). Through XD01-439 PostGIS ran
+amd64 under emulation on the arm64 host, which inflates database times; XD01-457 measured that image and a native arm64
+build of the same PostgreSQL 16.4 / PostGIS 3.4.3 (`imresamu/postgis:16-3.4`), in paired runs:
 
-| Zoom | Viewport bytes: baseline → XD01-434 → XD01-439 | Cold p95 per tile: XD01-434 → XD01-439 | Gate |
-|---|---|---|---|
-| z8 | 18.15 MB → 890.6 kB → 11.4 kB | 1,002.5 → 80.6 ms | bytes met (≥ 10×); time **not met** |
-| z12 | → 653.1 kB → 21.7 kB | 126.0 → 11.6 ms | met |
-| z13 (switch zoom) | → — → 478 kB | — → 75.3 ms | time **not met** |
-| z14 (switch zoom) | → — → 189.8 kB | — → 21.6 ms | met |
-| z16 | → 76.6 kB → 76.6 kB | 8.2 → 8.0 ms | met |
+| Zoom | Viewport bytes: baseline → XD01-434 → XD01-439 (= XD01-457) | Cold p95 per tile, emulated: XD01-434 → XD01-439 → XD01-457 | Native: before → XD01-457 | Gate |
+|---|---|---|---|---|
+| z8 | 18.15 MB → 890.6 kB → 11.4 kB | 1,002.5 → 80.6 → **10.1 ms** | 33.8 → **7.0 ms** | **met** (bytes ≥ 10×, time) |
+| z12 | → 653.1 kB → 21.7 kB | 126.0 → 11.6 → **4.9 ms** | 7.0 → **3.8 ms** | met |
+| z13 (switch zoom) | → — → 478 kB | — → 75.3 → **16.8 ms** | 46.1 → **10.5 ms** | **met** |
+| z14 (switch zoom) | → — → 189.8 kB | — → 21.6 → **3.7 ms** | 13.2 → **3.4 ms** | met |
+| z16 | → 76.6 kB → 76.6 kB | 8.2 → 8.0 → **2.5 ms** | 4.8 → **1.7 ms** | met |
 
-Cached tiles answer in under 1 ms at every zoom. Zero full-map clears on pan was checked in headless Chrome against a fake
-kernel for MapLibre mode (XD01-435/436). Leaflet's diff rendering on pan (XD01-429) is covered by unit tests only, not by
-a browser run. The < 50 ms target is unmeasured on native hardware.
+XD01-457: the aggregate tier reads the stored, GiST-indexed `geom_3857_centroid` (migration `AddGeoEntityGeom3857Centroid`,
+a table rewrite) instead of an `ST_Centroid` per row; each discrete feature's `ST_AsMVTGeom` is computed once (it was
+computed twice) after a Douglas–Peucker `ST_Simplify` instead of `ST_SimplifyPreserveTopology`; the asset types' zoom
+ranges are resolved per layer, not per row; and `GeoAssets:Tiles:Budget` (`MaxFeaturesPerTile` 10,000,
+`MaxFeaturesPerLayer` unset = the tile's, `Layers:{assetTypeId}`, strictly validated) caps a dense layer inside a tile.
+Native hardware alone already met the gate at `develop`, z13 with little margin. Cached tiles answer in under 1 ms at
+every zoom. Zero full-map clears on pan was checked in headless Chrome against a fake kernel for MapLibre mode
+(XD01-435/436). Leaflet's diff rendering on pan (XD01-429) is covered by unit tests only, not by a browser run.
 
 **Open follow-ups** (outside ADR-002's tickets):
-- z8 and z13 cold-tile time: a stored centroid column for the aggregate tier, and per-tile budgets.
 - The tile cache and `{v}` versions are per process, and the generation is global (one kernel replica; any write changes
   every client's tile URLs).
 - The kernel doesn't ship the `gdal-cloud-native` plugin yet, and no route serves its keyed PMTiles/COG sources.
@@ -320,8 +325,8 @@ a browser run. The < 50 ms target is unmeasured on native hardware.
   the network import CLI's `plan --export`.
 - MAUI stays on Leaflet: MapLibre needs MAUI CSP and parity work. MAUI pickers and the SQLCipher migration are unverified
   on a device.
-- A Docker deploy against a real-sized catalog has to plan for the `geom_3857` table rewrite (local 44-row database:
-  instant).
+- A Docker deploy against a real-sized catalog has to plan for the `geom_3857` and `geom_3857_centroid` table rewrites
+  (local 44-row database: instant; 200k rows: ~11 s natively) — XD01-467.
 
 ## Part 4 — Verification Gates
 
