@@ -55,8 +55,9 @@ same `container_name`s.
 **Distributor silos (XD01-447).** `deploy/distributor-silo` runs one more `GeoAssets.Server` per distribution company
 (container `geoasset-server-<company>`, its own Compose project `geoassets-silo-<company>`) on this stack's network and
 Postgres container, with its own database `geoassets_<company>` (`provision-database.sh <company>` creates it and applies
-the migrations below). `gateway.override.yaml` adds `X-Tenant-Domain` silo routes to this stack's gateway without editing
-this file. See `deploy/distributor-silo/README.md`.
+the migrations below). This stack's gateway reads their `X-Tenant-Domain` routes from the git-ignored
+`deploy/distributor-silo/gateway-silos.env` when it exists, so a redeploy keeps them (XD01-454). See
+`deploy/distributor-silo/README.md`.
 
 ## The gateway (XD01-384)
 

@@ -26,7 +26,7 @@ Files:
 | `docker-compose.yaml` | The silo service, parameterised by the env file (`COMPANY`, `TENANT_DOMAIN`, `SILO_PORT`, `POSTGRES_PASSWORD`, `AzureAdCiam__*`) |
 | `.env.example` | Every variable; copy it to `<company>.env` |
 | `provision-database.sh <company>` | Creates `geoassets_<company>` (idempotent) and applies the kernel's migration chains |
-| `gateway.override.yaml` + `gateway-silos.env.example` | Adds the silo routes to the deploy/server gateway without editing its compose file |
+| `gateway-silos.env.example` | The silo routes of the deploy/server gateway, which reads `gateway-silos.env` on every `up` |
 | `.gitignore` | Keeps `.env`, `*.env` (the company files and `gateway-silos.env`) out of git |
 
 ## Prerequisites
@@ -237,24 +237,27 @@ error="invalid_token", error_description="The issuer '(null)' is invalid"`. A `4
 The gateway (`apps/GeoAssets.Gateway`) sends a request whose `X-Tenant-Domain` header names a configured silo to that silo:
 `Destinations:GeoAssets:Silos:<tenant domain>` = its base address (`appsettings.json`; XD01-289). This covers
 `/api/geoassets/**`, the kernel catch-all `/api/**`, `/wms` and `/wfs`. Any other request (no header, or an unlisted
-domain) goes to the shared kernel, never to a silo. To add the silos without editing `deploy/server/docker-compose.yaml`:
+domain) goes to the shared kernel, never to a silo. The deploy/server gateway reads the silos from the git-ignored
+`deploy/distributor-silo/gateway-silos.env` (its `env_file`, optional):
 
 ```bash
 cp deploy/distributor-silo/gateway-silos.env.example deploy/distributor-silo/gateway-silos.env
 #   Destinations__GeoAssets__Silos__coelba.local=http://geoasset-server-coelba:8080   (one line per silo)
 
 # Recreate only the gateway (kernel and Postgres untouched):
-docker compose -f deploy/server/docker-compose.yaml -f deploy/distributor-silo/gateway.override.yaml up -d --no-deps gateway
+docker compose -f deploy/server/docker-compose.yaml up -d --no-deps gateway
 # or, when you run the whole stack from deploy/docker-compose.yaml:
-docker compose -f deploy/docker-compose.yaml -f deploy/distributor-silo/gateway.override.yaml up -d --no-deps gateway
+docker compose -f deploy/docker-compose.yaml up -d --no-deps gateway
 
 # Check: the silo answers through the gateway.
 curl -fsS -H 'X-Tenant-Domain: coelba.local' http://127.0.0.1:8090/api/identity/organizations -H "Authorization: Bearer $TOKEN" | jq length
 ```
 
-Keep passing the override while silos exist. An `up` of deploy/server without it recreates the gateway without the silo
-routes. The repo `appsettings.json` keeps its placeholder silo `acme.example.com`, which points at a host that does not
-exist. It answers 502 and is harmless. Without `gateway-silos.env` the override adds nothing.
+Every `up` of deploy/server, or of `deploy/docker-compose.yaml`, reads the file again, so a redeploy keeps the silo routes
+(XD01-454; before, they lived in an override file that every `up` had to pass, and a plain redeploy dropped them).
+Compose recreates the gateway when the file changes. The repo `appsettings.json` keeps its placeholder silo
+`acme.example.com`, which points at a host that does not exist. It answers 502 and is harmless. Without
+`gateway-silos.env` the gateway has no other silo route.
 
 **Rate limits and the CLI.** Through the gateway, the CLI's service-principal token gets one `Api` bucket (token subject,
 since `OrganizationIdClaimType` is unset): 500 requests, refilled 10/s (`GATEWAY_RATE_LIMIT_API_TOKENS`,
@@ -335,7 +338,7 @@ cp deploy/distributor-silo/.env.example deploy/distributor-silo/cemar.env
 deploy/distributor-silo/provision-database.sh cemar
 docker compose -f deploy/distributor-silo/docker-compose.yaml --env-file deploy/distributor-silo/cemar.env up -d
 echo 'Destinations__GeoAssets__Silos__cemar.local=http://geoasset-server-cemar:8080' >> deploy/distributor-silo/gateway-silos.env
-docker compose -f deploy/server/docker-compose.yaml -f deploy/distributor-silo/gateway.override.yaml up -d --no-deps gateway
+docker compose -f deploy/server/docker-compose.yaml up -d --no-deps gateway
 # then the organization (slug cemar) on http://127.0.0.1:8181, and the CLI with that port and organization id
 ```
 
@@ -355,7 +358,7 @@ SILO="docker compose -f deploy/distributor-silo/docker-compose.yaml --env-file d
 $SILO down                                     # the container only; never -v (a silo has no volume anyway)
 
 # Remove its gateway line from deploy/distributor-silo/gateway-silos.env, then recreate the gateway:
-docker compose -f deploy/server/docker-compose.yaml -f deploy/distributor-silo/gateway.override.yaml up -d --no-deps gateway
+docker compose -f deploy/server/docker-compose.yaml up -d --no-deps gateway
 
 # Only to delete the company's data for good (irreversible). The shared volume and the other databases stay:
 docker exec PostgresL psql -U postgres -d postgres -c 'DROP DATABASE "geoassets_coelba"'
