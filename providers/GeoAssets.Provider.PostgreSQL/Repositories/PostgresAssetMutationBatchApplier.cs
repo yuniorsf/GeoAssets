@@ -23,7 +23,9 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 /// transaction stamped by <see cref="TenantTransactionInterceptor"/> for the
 /// <c>geo_entity</c>/<c>geo_entity_attribute</c>/<c>applied_mutation_batches</c> Row-Level
 /// Security policies, and the batch record carrying that organization. A batch without an
-/// organization is refused: there is no tenant to write it under.</para>
+/// organization is refused: there is no tenant to write it under. The per-batch provider is built for that
+/// organization too, so it stamps it on every feature it writes: an upsert that creates a feature stores it as the
+/// organization's, never as an organization-less (shared) row, and the batch's later items find it (XD01-453).</para>
 ///
 /// <para><b>Once per batch.</b> The idempotency check, every mutation and the batch record commit
 /// together. A redelivered batch finds its record and changes nothing; two deliveries racing each
@@ -85,8 +87,9 @@ public sealed class PostgresAssetMutationBatchApplier : IAssetMutationBatchAppli
         // The provider, its validating decorator and the batch store all share — and on disposal
         // dispose — the one context, so the batch and its record go through one transaction.
         var db = new GeoAssetsDbContext(options, tenant);
+        // The batch's organization, so a feature an upsert creates is stamped with it (XD01-453).
         var postgres = new PostgresAssetProvider(
-            db, options, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider, _tileInvalidation);
+            db, options, tenant, _loggerFactory.CreateLogger<PostgresAssetProvider>(), _timeProvider, _tileInvalidation);
         // Reads by id through the batch's own transaction, never a load of the organization's whole catalog (XD01-449).
         postgres.ServeFromStoreThroughWriteContext();
         var catalog = new ValidatingAssetProvider(postgres);
