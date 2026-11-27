@@ -13,17 +13,27 @@ internal sealed class EntraCiamServiceAuthTokenProvider : IServiceAuthTokenProvi
     private readonly IConfidentialClientApplication _app;
     private readonly string[] _scopes;
 
-    public EntraCiamServiceAuthTokenProvider(ServiceAuthOptions options)
+    /// <param name="options">The <c>"ServiceAuth"</c> section.</param>
+    /// <param name="authority">
+    /// The CIAM authority (<see cref="CiamAuthority"/>, XD01-452): the kernel accepts only its CIAM instance's issuer, so
+    /// the token is never asked from <c>login.microsoftonline.com</c>.
+    /// </param>
+    public EntraCiamServiceAuthTokenProvider(ServiceAuthOptions options, Uri authority)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(authority);
 
+        Authority = authority;
         _app = ConfidentialClientApplicationBuilder
             .Create(options.ClientId)
             .WithClientSecret(options.ClientSecret)
-            .WithTenantId(options.TenantId)
+            .WithAuthority(authority)
             .Build();
         _scopes = [options.Scope];
     }
+
+    /// <summary>The authority tokens are asked from: the CIAM instance followed by the tenant id.</summary>
+    internal Uri Authority { get; }
 
     public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {

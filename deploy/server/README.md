@@ -77,8 +77,9 @@ The kernel's default `GeoAssets:Modules` is `[ "postgres-spatial" ]` (XD01-385);
 grant sync/revoke endpoints are `GeoAssets.IpBilling.Server`'s (`POST /api/ip-billing/municipio-grants/sync|revoke`, through
 the gateway's `/api/ip-billing/**` route, `IPBILLING_DESTINATION`); that host is not part of this stack. It needs
 `GeoCoreServer__BaseUrl` = the kernel's **root** (e.g. `http://server:8080`, no `/api/geoassets` suffix) and its
-`GeoAssets.ServiceCaller` credentials (`ServiceAuth__Enabled=true`, `ServiceAuth__TenantId`, `ServiceAuth__ClientId`,
-`ServiceAuth__ClientSecret`, `ServiceAuth__Scope`): it provisions the grants through the kernel's generic
+`GeoAssets.ServiceCaller` credentials (`ServiceAuth__Enabled=true`, `ServiceAuth__Instance`, `ServiceAuth__TenantId`,
+`ServiceAuth__ClientId`, `ServiceAuth__ClientSecret`, `ServiceAuth__Scope`; `ServiceAuth__Instance` is the kernel's CIAM
+instance, `https://<tenant>.ciamlogin.com/`, and defaults to `AzureAdCiam__Instance` — XD01-452): it provisions the grants through the kernel's generic
 `/api/identity/organization-grants` API and publishes its `ip-billing:*` permissions
 (`PUT /api/identity/verticals/ip-billing/permissions`) — until it has, its `/readyz` answers 503. Município saves queue
 their grant change in its `MunicipioGrantSyncRequests` outbox and a dispatcher sends it (`GrantSync__*`, XD01-395); a pruner

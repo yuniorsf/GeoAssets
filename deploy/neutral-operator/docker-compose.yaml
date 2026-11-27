@@ -50,6 +50,9 @@ services:
       # GeoAssets.ServiceCaller client credentials (XD01-299). Empty/false locally: the kernel's machine-to-machine routes
       # answer 401, the vertical-registration check stays Degraded — /healthz is still 200, /readyz 503.
       ServiceAuth__Enabled: ${SERVICE_AUTH_ENABLED:-false}
+      # The CIAM instance tokens are asked from (XD01-452); empty = AzureAdCiam__Instance. Never login.microsoftonline.com:
+      # the kernel accepts only its CIAM instance's issuer.
+      ServiceAuth__Instance: ${SERVICE_AUTH_INSTANCE:-}
       ServiceAuth__TenantId: ${SERVICE_AUTH_TENANT_ID:-}
       ServiceAuth__ClientId: ${SERVICE_AUTH_CLIENT_ID:-}
       ServiceAuth__ClientSecret: ${SERVICE_AUTH_CLIENT_SECRET:-}

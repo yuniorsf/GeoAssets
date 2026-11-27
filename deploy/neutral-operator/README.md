@@ -85,6 +85,12 @@ keeps retrying until it succeeds, then republishes every 5 minutes (the kernel's
 restarted kernel learns the vertical again on its own). Without `ServiceAuth` credentials the kernel answers 401: the
 check stays Degraded, `/readyz` 503, and target reservations answer `503 targets.ledger-unavailable`.
 
+The host asks its token from the CIAM authority, `ServiceAuth__Instance` + `ServiceAuth__TenantId` (XD01-452;
+`SERVICE_AUTH_INSTANCE`, empty = `AzureAdCiam__Instance`, e.g. `https://<tenant>.ciamlogin.com/`). The kernel accepts only
+the issuer of its CIAM instance (`https://<tenant id>.ciamlogin.com/<tenant id>/v2.0`): a token from
+`login.microsoftonline.com` is refused with 401, and the kernel's log says `IDX40001: Issuer … does not match`. With
+`ServiceAuth__Enabled=true` and no usable instance (absent, not https) or tenant id, the host refuses to start.
+
 ## First-run database setup (manual, like the kernel's)
 
 Apply, from the repo root and in this order, after the `neutral-operator-db` service has created the database:

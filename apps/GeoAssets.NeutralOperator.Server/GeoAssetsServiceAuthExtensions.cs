@@ -18,7 +18,14 @@ internal static class GeoAssetsServiceAuthExtensions
         var options = configuration.GetSection("ServiceAuth").Get<ServiceAuthOptions>() ?? new ServiceAuthOptions();
         if (!options.Enabled) return services;
 
-        services.AddSingleton<IServiceAuthTokenProvider>(new EntraCiamServiceAuthTokenProvider(options));
+        var instance = string.IsNullOrWhiteSpace(options.Instance) ? configuration["AzureAdCiam:Instance"] : options.Instance;
+        if (!CiamAuthority.TryCreate(instance, options.TenantId, out var authority))
+            throw new InvalidOperationException(
+                "ServiceAuth:Enabled is true but ServiceAuth has no CIAM authority: set ServiceAuth:TenantId and "
+                + "ServiceAuth:Instance (or AzureAdCiam:Instance) to the CIAM instance, an absolute https URL such as "
+                + "https://<tenant>.ciamlogin.com/ (XD01-452).");
+
+        services.AddSingleton<IServiceAuthTokenProvider>(new EntraCiamServiceAuthTokenProvider(options, authority));
         return services;
     }
 }
