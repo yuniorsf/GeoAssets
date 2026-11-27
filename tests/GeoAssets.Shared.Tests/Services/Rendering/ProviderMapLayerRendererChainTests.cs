@@ -6,6 +6,7 @@ using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 using GeoAssets.Provider.WMS;
 using GeoAssets.Shared.Interfaces;
+using GeoAssets.Shared.Services;
 using GeoAssets.Shared.Services.Rendering;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -98,7 +99,32 @@ public sealed class ProviderMapLayerRendererChainTests
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetServices<IProviderMapLayerRenderer>().Select(r => r.GetType())
-            .Should().Equal(typeof(WmsMapLayerRenderer), typeof(VectorFeatureMapLayerRenderer));
+            .Should().Equal(typeof(WmsMapLayerRenderer), typeof(VectorFeatureMapLayerRenderer), typeof(HybridLodMapLayerRenderer));
+    }
+
+    [Fact]
+    public void Registered_TheHybridRendererIsAskedFirst_AndTakesTheKernelOnceTheHostRegistersTheTileInterop()
+    {
+        // XD01-436: registered last, asked first (its precedence) — and a kernel provider falls back to the vector
+        // renderer while the host has no tile interop.
+        var services = Services();
+        services.Configure<MapInteropOptions>(o => o.MapLibre.StyleUrl = "https://gw.example/tiles/style.json");
+        services.Configure<MapInteropOptions>(o => o.RenderMode = MapRenderMode.MapLibre);
+        using (var withoutTiles = services.BuildServiceProvider())
+        using (var scope = withoutTiles.CreateScope())
+        {
+            var chain = scope.ServiceProvider.GetRequiredService<ProviderMapLayerRendererChain>();
+            chain.Renderers[0].Should().BeOfType<HybridLodMapLayerRenderer>();
+            chain.Resolve(new KernelLayerProvider()).Should().BeOfType<VectorFeatureMapLayerRenderer>();
+        }
+
+        services.AddSingleton<IMapTileLayerInterop>(sp => new FakeTileLayerInterop(new LayerRecordingMapInterop()));
+        using var withTiles = services.BuildServiceProvider();
+        using var tilesScope = withTiles.CreateScope();
+        var tiled = tilesScope.ServiceProvider.GetRequiredService<ProviderMapLayerRendererChain>();
+        tiled.Resolve(new KernelLayerProvider()).Should().BeOfType<HybridLodMapLayerRenderer>();
+        tiled.Resolve(new FakeLayerProvider()).Should().BeOfType<VectorFeatureMapLayerRenderer>();
+        tiled.Resolve(new FakeWmsLayerProvider()).Should().BeOfType<WmsMapLayerRenderer>();
     }
 
     [Fact]

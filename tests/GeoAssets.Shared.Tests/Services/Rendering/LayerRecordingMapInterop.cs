@@ -9,7 +9,8 @@ namespace GeoAssets.Shared.Tests.Services.Rendering;
 
 /// <summary>
 /// <see cref="IMapInterop"/> double for the provider layer renderers (XD01-422): records the WMS
-/// layer calls, the feature batch renders (all three overloads), the feature removals and the
+/// layer calls, the feature batch renders (all three overloads), the single-feature renders and removals (also in
+/// <see cref="Calls"/>, in order, with what <see cref="FakeTileLayerInterop"/> appends there — XD01-436) and the
 /// view fits; every other member throws, so a test that completes proves nothing else on the map
 /// was touched. Thread-safe — the vector renderer's reads run on <see cref="Core.Services.FeatureRenderPipeline"/>'s
 /// background producer, and its awaits may resume off the test's thread.
@@ -26,6 +27,11 @@ internal sealed class LayerRecordingMapInterop : IMapInterop
     public List<(string DivId, string Json)> RawJsonBatches { get; } = [];
     public List<(string DivId, string FeatureId)> RemovedFeatures { get; } = [];
     public List<(string DivId, double[] Bbox)> FitCalls { get; } = [];
+    public List<(string DivId, GeoFeature Feature)> RenderedFeatures { get; } = [];
+
+    /// <summary>The single-feature renders (<c>render:{id}</c>) and removals (<c>remove:{id}</c>) in order, interleaved
+    /// with the tile calls a <see cref="FakeTileLayerInterop"/> sharing this log appends.</summary>
+    public List<string> Calls { get; } = [];
 
     /// <summary>Every viewport pass call, in order: <c>("begin", divId, generation)</c> / <c>("end", divId, generation)</c>.</summary>
     public List<(string Call, string DivId, int Generation)> ViewportPasses { get; } = [];
@@ -95,8 +101,28 @@ internal sealed class LayerRecordingMapInterop : IMapInterop
 
     public Task RemoveFeatureAsync(string divId, string featureId)
     {
-        lock (_gate) RemovedFeatures.Add((divId, featureId));
+        lock (_gate)
+        {
+            RemovedFeatures.Add((divId, featureId));
+            Calls.Add("remove:" + featureId);
+        }
         return Task.CompletedTask;
+    }
+
+    public Task RenderFeatureAsync(string divId, GeoFeature feature)
+    {
+        lock (_gate)
+        {
+            RenderedFeatures.Add((divId, feature));
+            Calls.Add("render:" + feature.Id);
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Appends <paramref name="call"/> to <see cref="Calls"/>.</summary>
+    public void Record(string call)
+    {
+        lock (_gate) Calls.Add(call);
     }
 
     public Task FitBoundsAsync(string divId, double[] bbox)
@@ -110,7 +136,6 @@ internal sealed class LayerRecordingMapInterop : IMapInterop
     public Task DestroyMapAsync(string divId) => throw new NotSupportedException();
     public Task InvalidateSizeAsync(string divId) => throw new NotSupportedException();
     public Task SetViewAsync(string divId, double lat, double lon, int zoom) => throw new NotSupportedException();
-    public Task RenderFeatureAsync(string divId, GeoFeature feature) => throw new NotSupportedException();
     public Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features) => throw new NotSupportedException();
     public Task RenderAllFeaturesAsync(string divId, IReadOnlyList<JsonElement> features) => throw new NotSupportedException();
     public Task RenderAllFeaturesRawJsonAsync(string divId, string rawFeaturesJson) => throw new NotSupportedException();

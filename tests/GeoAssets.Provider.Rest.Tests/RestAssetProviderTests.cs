@@ -5,6 +5,7 @@ using System.Threading;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
 using Xunit;
 
@@ -37,6 +38,20 @@ public class RestAssetProviderTests
         var sut = CreateSut(handler);
 
         sut.Should().BeAssignableTo<ISyncProvider>();
+    }
+
+    [Fact]
+    public void RestAssetProvider_DeclaresTheVectorCapabilitiesPlusTiles_AndNamesItsServer()
+    {
+        // XD01-436: a GeoAssets server also serves its features as /tiles — the map's hybrid LOD renderer takes the
+        // provider when its server is the tile style's.
+        var sut = CreateSut(new FakeHttpMessageHandler(_ => JsonResponse("[]")));
+
+        sut.GetRenderCapabilities().Should().Be(
+            AssetProviderExtensions.DefaultVectorCapabilities
+            | ProviderRenderCapabilities.VectorTiles
+            | ProviderRenderCapabilities.HybridLod);
+        ((IRemoteAssetProvider)sut).BaseAddress.Should().Be(new Uri("http://localhost/api/geoassets/"));
     }
 
     // ── Layers / layer rules (XD01-153) ──────────────────────────────────────

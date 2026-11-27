@@ -26,6 +26,17 @@ public sealed class MapInteropOptions
     /// </summary>
     public MapRenderMode RenderMode { get; set; } = MapRenderMode.Leaflet;
 
-    /// <summary>The <see cref="MapRenderMode.MapLibre"/> settings (XD01-435); ignored by the other modes.</summary>
+    /// <summary>The <see cref="MapRenderMode.MapLibre"/> settings (XD01-435); the Leaflet modes read only its
+    /// <see cref="MapLibreOptions.StyleUrl"/>, <see cref="MapLibreOptions.StyleRefreshInterval"/> and
+    /// <see cref="MapLibreOptions.WriteRefreshDelay"/>, and only with <see cref="LeafletTileSplit"/>.</summary>
     public MapLibreOptions MapLibre { get; set; } = new();
+
+    /// <summary>
+    /// The interim Leaflet split (XD01-436) in the Leaflet modes (<see cref="MapRenderMode.Leaflet"/>,
+    /// <see cref="MapRenderMode.Canvas"/>, <see cref="MapRenderMode.WebGL"/>): the kernel's provider entry is drawn by
+    /// <see cref="Rendering.HybridLodMapLayerRenderer"/> — the style's raster tiles at the zooms of its raster tier, the
+    /// discrete features at every other zoom; a style without a raster tier keeps the features at every zoom, as before.
+    /// Off by default, so a host that doesn't turn it on (MAUI) draws exactly as before.
+    /// </summary>
+    public bool LeafletTileSplit { get; set; }
 }

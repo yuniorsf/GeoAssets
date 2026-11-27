@@ -14,11 +14,13 @@ namespace GeoAssets.Shared.Services;
 ///   <item>A resolved style's <c>IconUrl</c> is drawn as the circle of its color (no sprite or image is loaded).</item>
 ///   <item>Feature states and the highlight change color, opacity and width only, as in WebGL mode.</item>
 ///   <item>Reference layers draw no labels (the style has no glyphs).</item>
-///   <item>Editing is terra-draw's select mode, started by a double-click on a feature the providers rendered (not on a
-///   tile-only one, whose geometry is clipped and simplified); a multi-geometry is not editable.</item>
-///   <item>Features the providers render are drawn over the kernel's tiles, so a kernel feature currently shows in both
-///   (hiding the tile copy is XD01-436's hybrid LOD renderer).</item>
+///   <item>Editing is terra-draw's select mode, started by a double-click on a feature the providers rendered; a
+///   double-click on a tile-only one selects it and edits its GeoJSON overlay once that arrives (XD01-436) — never the
+///   tile's clipped geometry. A multi-geometry is not editable.</item>
 /// </list>
+/// The kernel's own provider entry is drawn by <see cref="Rendering.HybridLodMapLayerRenderer"/> (XD01-436): from its
+/// tiles, with only the selected and just-written features as GeoJSON over tile copies hidden by id — no feature is
+/// drawn twice. Another provider's features are drawn over the tiles as before.
 /// Zooms cross the contract in Leaflet's 256 px scale (MapLibre's zoom + 1), so the initial zoom, <c>SetViewAsync</c>,
 /// zoom ranges and the zoom reported to <c>OnViewportChangedFromJs</c> mean the same ground resolution in every mode.
 /// </para>

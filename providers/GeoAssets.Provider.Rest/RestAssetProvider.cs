@@ -19,9 +19,20 @@ namespace GeoAssets.Provider.Rest;
 ///
 /// Spatial and topology queries run against the local cache using NTS / TopoGraph,
 /// so they reflect the last snapshot loaded from the server.
+///
+/// A GeoAssets server also serves its features as tiles (<c>/tiles</c>, XD01-434), so the provider declares
+/// <see cref="ProviderRenderCapabilities.VectorTiles"/> and <see cref="ProviderRenderCapabilities.HybridLod"/> on top of
+/// the vector capabilities, and names its server (<see cref="IRemoteAssetProvider"/>) for the map to match against its
+/// tile style (XD01-436).
 /// </summary>
-public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposable
+public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IProviderCapabilities, IRemoteAssetProvider, IDisposable
 {
+    /// <summary>What a GeoAssets server's features can be drawn as and do (XD01-436).</summary>
+    public const ProviderRenderCapabilities Capabilities =
+        Core.Providers.AssetProviderExtensions.DefaultVectorCapabilities
+        | ProviderRenderCapabilities.VectorTiles
+        | ProviderRenderCapabilities.HybridLod;
+
     private static readonly JsonSerializerOptions _opts = GeoJsonSerializer.Options;
 
     /// <summary>Bboxes at or below this area (in decimal-degrees²) are fetched as a single
@@ -39,6 +50,10 @@ public sealed class RestAssetProvider : IAssetProvider, ISyncProvider, IDisposab
     private readonly SemaphoreSlim _boundsFetchThrottle = new(MaxConcurrentBoundsFetches, MaxConcurrentBoundsFetches);
 
     public RestAssetProvider(HttpClient http) => _http = http;
+
+    public ProviderRenderCapabilities RenderCapabilities => Capabilities;
+
+    public Uri? BaseAddress => _http.BaseAddress;
 
     // ── Events — forwarded from the cache ─────────────────────────────────
 

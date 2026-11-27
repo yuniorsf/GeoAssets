@@ -203,6 +203,9 @@ builder.Services.AddScoped(sp => new ObservableMapInterop(
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<IMapInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
 builder.Services.AddScoped<IMapSelectionInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
+// The kernel's tile layers (XD01-436) HybridLodMapLayerRenderer draws the kernel's provider entry from — in MapLibre mode,
+// and in the Leaflet modes with MapInterop:LeafletTileSplit.
+builder.Services.AddScoped<IMapTileLayerInterop>(sp => sp.GetRequiredService<MapInteropService>());
 
 builder.Services.AddScoped<AssetService>();
 builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
