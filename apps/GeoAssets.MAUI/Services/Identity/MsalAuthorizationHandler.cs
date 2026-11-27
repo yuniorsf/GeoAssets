@@ -19,7 +19,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// The token's one scope is <see cref="ApiScopeRoutes.ScopeFor"/>'s for the request (XD01-397): a
 /// <c>GeoAssetsServer:RouteScopes</c> entry's under that route on the gateway, else <c>GeoAssetsServer:ApiScope</c>.
 /// </summary>
-public sealed partial class MsalAuthorizationHandler(
+internal sealed partial class MsalAuthorizationHandler(
     IPublicClientApplication app,
     ApiScopeRoutes routes,
     ILogger<MsalAuthorizationHandler> logger) : DelegatingHandler

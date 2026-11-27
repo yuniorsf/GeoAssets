@@ -6,6 +6,12 @@
          /warnaserror — not a toggle for ordinary builds, which always include both Apple TFMs. -->
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx')) AND '$(GeoAssetsOracleSkipAppleTfms)' != 'true'">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!-- XD01-461: an app, not a library — without it no .apk/.app is produced and nothing can be launched. Windows
+         stays a library: it has no Platforms/Windows entry point, and its TFM builds only on Windows. -->
+    <OutputType Condition="!$(TargetFramework.Contains('-windows'))">Exe</OutputType>
+    <!-- XD01-461: the installed .NET for iOS/Mac Catalyst workload (26.4) refuses a newer Xcode than its own (27.x
+         here) for an app build; the app builds and launches with it. Pass -p:ValidateXcodeVersion=true to check. -->
+    <ValidateXcodeVersion Condition="'$(ValidateXcodeVersion)' == ''">false</ValidateXcodeVersion>
     <RootNamespace>GeoAssets.MAUI</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -40,6 +46,9 @@
          in a second, less mature per-platform handler/view package on top of SkiaSharp, and
          reuses the exact capture pattern MauiEvidenceCaptureGateway (XD01-244) already does. -->
     <PackageReference Include="ZXing.Net" Version="0.16.9" />
+    <!-- XD01-461: Magick.NET comes in through GeoAssets.Core (for NeutralOperator's FieldPhotoWatermarker) and has no
+         Android runtime; without this its linux-x64 library is packed into the APK (XA0141), where it can never load. -->
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.0.0" ExcludeAssets="native" Condition="$(TargetFramework.Contains('-android'))" />
   </ItemGroup>
 
   <PropertyGroup>

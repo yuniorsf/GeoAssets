@@ -22,7 +22,7 @@ namespace GeoAssets.MAUI.Services.Identity;
 /// <c>BlazorWebView</c> session). There is no cache-invalidation/refresh here — role or
 /// permission changes on the server take effect on the next app restart.
 /// </summary>
-public sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthorizationService
+internal sealed class RestGeoAuthorizationService(HttpClient http) : IGeoAuthorizationService
 {
     private Task<AuthorizationContext>?          _context;
     private Task<IReadOnlyList<AppPolicy>>?      _policies;

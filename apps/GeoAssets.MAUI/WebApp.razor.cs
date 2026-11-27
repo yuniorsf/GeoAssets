@@ -1,3 +1,3 @@
 namespace GeoAssets.MAUI;
 
-public partial class WebApp { }
+internal sealed partial class WebApp { }

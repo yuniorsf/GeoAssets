@@ -37,10 +37,13 @@ using GeoAssets.Workflow.Rest;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+#if IOS
+using Microsoft.Maui.LifecycleEvents;
+#endif
 
 namespace GeoAssets.MAUI;
 
-public static class MauiProgram
+internal static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
@@ -78,6 +81,10 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
 #endif
 
+#if IOS
+        AddSceneSignInCallback(builder);
+#endif
+
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
@@ -98,6 +105,17 @@ public static class MauiProgram
         return builder.Build();
     }
 
+#if IOS
+    // XD01-461: under the UIScene life cycle the sign-in callback URL reaches the scene, not AppDelegate.OpenUrl (XD01-52).
+    private static void AddSceneSignInCallback(MauiAppBuilder builder) =>
+        builder.ConfigureLifecycleEvents(events => events.AddiOS(ios => ios.SceneOpenUrl((_, urlContexts) =>
+        {
+            foreach (var context in urlContexts)
+                Microsoft.Identity.Client.AuthenticationContinuationHelper.SetAuthenticationContinuationEventArgs(context.Url);
+            return false;
+        })));
+
+#endif
     /// <summary>
     /// Observability (XD01-43): wrapped with the same Observable* decorators as
     /// apps/GeoAssets.Web/Program.cs, giving MAUI the same import/render/repository-timing

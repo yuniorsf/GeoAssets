@@ -12,14 +12,16 @@ namespace GeoAssets.MAUI.Services.Localization;
 /// they render in MAUI instead of throwing on a missing <see cref="IJsonStringLocalizer"/>
 /// registration, at the cost of showing raw i18n keys instead of translated text.
 /// </summary>
-public sealed class NoOpJsonStringLocalizer : IJsonStringLocalizer
+internal sealed class NoOpJsonStringLocalizer : IJsonStringLocalizer
 {
     public string this[string key] => key;
 
     public string GetString(string key, params object[] args) => key;
 
     // Never fires — this no-op localizer's output never changes, so no subscriber is ever notified.
-#pragma warning disable CS0067
-    public event EventHandler? LocalizationChanged;
-#pragma warning restore CS0067
+    public event EventHandler? LocalizationChanged
+    {
+        add { }
+        remove { }
+    }
 }

@@ -8,7 +8,7 @@ namespace GeoAssets.MAUI.Services;
 /// IStorageService implementation for MAUI (Android, iOS, Windows, macOS).
 /// Uses System.IO with FileSystem.AppDataDirectory.
 /// </summary>
-public sealed class FileStorageService : IStorageService
+internal sealed class FileStorageService : IStorageService
 {
     private static string GetFilePath(string key) =>
         Path.Combine(FileSystem.AppDataDirectory, $"{key}.geojson");
