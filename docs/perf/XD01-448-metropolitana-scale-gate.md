@@ -98,7 +98,7 @@ The kernel could not answer `verify`, so the import was checked against the plan
 - **CIAM issuer.** A token asked from `login.microsoftonline.com` (MSAL `WithTenantId`) carries that host as its issuer.
   The kernel accepts only its CIAM instance's issuer (`https://<tenant id>.ciamlogin.com/<tenant id>/v2.0`) and answers
   401. The CLI now requires `GEOASSETS_SERVICEAUTH_INSTANCE` and asks `<instance><tenant id>`. The runbook's `curl` was
-  fixed the same way. The vertical hosts' `EntraCiamServiceAuthTokenProvider`s have the same bug: XD01-452.
+  fixed the same way. The vertical hosts' `EntraCiamServiceAuthTokenProvider`s had the same bug, fixed by XD01-452.
 - **No LV without `--include-geometry-only`.** METROPOLITANA's `REDE_BT` has no `.dbf` (`geometryOnly`). The runbook's
   `plan`/`import` commands left out the flag, so following it imported no LV network (run 1). They pass it now.
 - **The silo's `ConnectionStrings__GeoAssets`** no longer carries the `:?…` error text that GitGuardian took for a password.

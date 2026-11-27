@@ -12,6 +12,13 @@ internal sealed record ServiceAuthOptions
 {
     public bool Enabled { get; init; }
 
+    /// <summary>
+    /// The CIAM instance tokens are asked from, e.g. <c>"https://&lt;tenant&gt;.ciamlogin.com/"</c> (XD01-452); blank means
+    /// <c>AzureAdCiam:Instance</c>. The authority is this instance followed by <see cref="TenantId"/>: the kernel accepts
+    /// only its CIAM instance's issuer.
+    /// </summary>
+    public string Instance { get; init; } = string.Empty;
+
     public string TenantId { get; init; } = string.Empty;
 
     public string ClientId { get; init; } = string.Empty;
