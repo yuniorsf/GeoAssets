@@ -81,6 +81,8 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
 
     public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query) => Queried.GetPageAsync(query);
 
+    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query, CancellationToken ct) => Queried.GetPageAsync(query, ct);
+
     public IReadOnlyList<GeoFeature> GetWithin(GeoGeometry bounds) => Combine(p => p.GetWithin(bounds));
 
     public IReadOnlyList<GeoFeature> GetIntersecting(GeoGeometry geometry) => Combine(p => p.GetIntersecting(geometry));

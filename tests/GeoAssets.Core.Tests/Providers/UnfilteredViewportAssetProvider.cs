@@ -15,6 +15,15 @@ internal sealed class UnfilteredViewportAssetProvider(TestAssetProvider inner) :
 {
     public int ViewportCalls { get; private set; }
 
+    /// <summary>The token the last cancellable <see cref="GetPageAsync(AssetQuery, CancellationToken)"/> got (XD01-478).</summary>
+    public CancellationToken? PageToken { get; private set; }
+
+    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query, CancellationToken ct)
+    {
+        PageToken = ct;
+        return ((IAssetProvider)inner).GetPageAsync(query, CancellationToken.None);
+    }
+
     public Task<IReadOnlyList<GeoFeature>> GetInViewportAsync(ViewportQuery viewport, int maxCount, CancellationToken ct = default)
     {
         ViewportCalls++;

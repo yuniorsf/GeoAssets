@@ -203,6 +203,71 @@ public class IAssetProviderDefaultsTests
         result.Should().BeFalse();
     }
 
+    // ── GetPageAsync: Bounds, CountLimit, cancellation (XD01-478) ───────────
+
+    private static TestAssetProvider PageWorld()
+    {
+        var provider = new TestAssetProvider();
+        provider.AddRange(Enumerable.Range(0, 5).Select(i => Feature($"in-{i}", null, lon: 0.1 * (i + 1), lat: 0.5, assetTypeId: "pole")));
+        provider.Add(Feature("edge", null, lon: 1, lat: 1, assetTypeId: "pole"));
+        provider.Add(Feature("outside", null, lon: 5, lat: 5, assetTypeId: "pole"));
+        provider.Add(new GeoFeature { Id = "no-geometry", Geometry = null, Properties = new GeoFeatureProperties { AssetTypeId = "pole" } });
+        return provider;
+    }
+
+    [Fact]
+    public async Task GetPageAsync_Bounds_KeepsTheFeaturesIntersectingTheBox_EdgesInclusive_AndCountsOnlyThem()
+    {
+        var page = await ((IAssetProvider)PageWorld()).GetPageAsync(new AssetQuery { Bounds = new BoundingBox(0, 0, 1, 1), Skip = 1, Take = 3 });
+
+        page.TotalCount.Should().Be(6);
+        page.Items.Select(f => f.Id).Should().Equal("in-0", "in-1", "in-2");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_NoBounds_StillMatchesEveryFeature()
+    {
+        var page = await ((IAssetProvider)PageWorld()).GetPageAsync(new AssetQuery { Take = 100 });
+
+        page.TotalCount.Should().Be(8);
+    }
+
+    [Theory]
+    [InlineData(null, 6)]
+    [InlineData(10, 6)]
+    [InlineData(6, 6)]
+    [InlineData(5, 6)]
+    [InlineData(3, 4)]
+    [InlineData(0, 1)]
+    [InlineData(-4, 1)]
+    [InlineData(int.MaxValue, 6)]
+    public async Task GetPageAsync_CountLimit_CountsExactlyUpToTheLimit_AndLimitPlusOneBeyond(int? countLimit, int expectedTotal)
+    {
+        var page = await ((IAssetProvider)PageWorld()).GetPageAsync(new AssetQuery { Bounds = new BoundingBox(0, 0, 1, 1), CountLimit = countLimit, Take = 2 });
+
+        page.TotalCount.Should().Be(expectedTotal);
+        page.Items.Should().HaveCount(2, "the limit bounds the count, never the page");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_WithALiveToken_AnswersAsWithout()
+    {
+        var page = await ((IAssetProvider)PageWorld()).GetPageAsync(new AssetQuery { Bounds = new BoundingBox(0, 0, 1, 1) }, CancellationToken.None);
+
+        page.TotalCount.Should().Be(6);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_WithACancelledToken_RefusesToStart()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => ((IAssetProvider)PageWorld()).GetPageAsync(new AssetQuery(), cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
     [Fact]
     public async Task IsWithinDistanceAsync_FeatureWithNoGeometry_ReturnsFalse()
     {

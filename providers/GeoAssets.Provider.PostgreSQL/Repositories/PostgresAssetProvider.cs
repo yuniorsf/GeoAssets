@@ -221,15 +221,31 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     /// <see cref="Search"/> matches — for parity across <see cref="IAssetProvider"/>
     /// implementers (XD01-123).
     /// </summary>
-    public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query)
+    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query) => GetPageAsync(query, CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="GetPageAsync(AssetQuery)"/>, cancellable (XD01-478). <see cref="AssetQuery.Bounds"/> is an
+    /// <c>ST_Intersects</c> against the box's envelope (the GiST index on <c>geom</c>) in the same query as the page's
+    /// <c>LIMIT</c>/<c>OFFSET</c>, and <see cref="AssetQuery.CountLimit"/> counts over a <c>LIMIT</c>ed subquery, so neither
+    /// reads a large box whole — whether this provider caches its features whole or serves them from PostgreSQL. The
+    /// connection is opened without <paramref name="ct"/> (an abort mid-handshake can spoil a pooled connection, see
+    /// <see cref="PostgresAssetRenderQuery"/>); every command takes it, so a cancellation mid-query makes Npgsql cancel
+    /// the command on the server and throws <see cref="OperationCanceledException"/>.
+    /// </summary>
+    public async Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ct.ThrowIfCancellationRequested();
 
         var db = NewContext();
         try
         {
-            var rows = await ApplyPageQueryFiltersAsync(db, query).ConfigureAwait(false);
-            var totalCount = await rows.CountAsync().ConfigureAwait(false);
+            await db.Database.OpenConnectionAsync(CancellationToken.None).ConfigureAwait(false);
+
+            var rows = await ApplyPageQueryFiltersAsync(db, query, ct).ConfigureAwait(false);
+            var totalCount = query.CountLimit is { } limit
+                ? await rows.Take(limit >= int.MaxValue - 1 ? int.MaxValue : Math.Max(0, limit) + 1).CountAsync(ct).ConfigureAwait(false)
+                : await rows.CountAsync(ct).ConfigureAwait(false);
 
             rows = query.SortBy switch
             {
@@ -242,7 +258,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
             // OFFSET still walks past skipped rows even with a perfect index, so deep pages degrade
             // linearly regardless of indexing — keyset pagination would be the real fix if that
             // becomes a problem (XD01-171).
-            var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync().ConfigureAwait(false);
+            var page = await rows.Skip(query.Skip).Take(query.Take).ToListAsync(ct).ConfigureAwait(false);
             return new PagedResult<GeoFeature> { Items = page.Select(MapToFeature).ToList(), TotalCount = totalCount };
         }
         finally
@@ -252,7 +268,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     }
 
     private async Task<IQueryable<GeoEntityRow>> ApplyPageQueryFiltersAsync(
-        GeoAssetsDbContext db, AssetQuery query)
+        GeoAssetsDbContext db, AssetQuery query, CancellationToken ct)
     {
         var rows = QueryableRows(db).AsNoTracking();
 
@@ -265,6 +281,12 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
         if (query.FeatureIds is { Count: > 0 } featureIds)
             rows = rows.Where(r => featureIds.Contains(r.Id));
 
+        if (query.Bounds is { } bounds)
+        {
+            var envelope = Envelope(bounds);
+            rows = rows.Where(r => r.Geom != null && r.Geom.Intersects(envelope));
+        }
+
         if (query.AttributeFilters is { Count: > 0 } attrFilters)
         {
             foreach (var (key, value) in attrFilters)
@@ -273,7 +295,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                     .Where(a => a.Key == key && a.Value == value)
                     .Select(a => a.EntityId)
                     .Distinct()
-                    .ToListAsync()
+                    .ToListAsync(ct)
                     .ConfigureAwait(false);
 
                 rows = rows.Where(r => matchingIdsForKey.Contains(r.Id));
@@ -291,7 +313,7 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
                 .Where(a => EF.Functions.ILike(a.Key, pattern) || EF.Functions.ILike(a.Value, pattern))
                 .Select(a => a.EntityId)
                 .Distinct()
-                .ToListAsync()
+                .ToListAsync(ct)
                 .ConfigureAwait(false);
 
             rows = rows.Where(r =>

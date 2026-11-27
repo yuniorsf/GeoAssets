@@ -91,10 +91,12 @@ public sealed class ObservableAssetProvider(
                     viewport.Zoom, inner.GetType().FullName);
             });
 
-    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query) =>
+    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query) => GetPageAsync(query, CancellationToken.None);
+
+    public Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query, CancellationToken ct) =>
         TrackAsync(
             "repository.get_page",
-            async () => await inner.GetPageAsync(query),
+            async () => await inner.GetPageAsync(query, ct),
             after: (span, result, elapsedMs) =>
             {
                 span?.SetTag("feature.count", result.Items.Count)

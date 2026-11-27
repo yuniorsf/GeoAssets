@@ -58,6 +58,23 @@ public class ActiveAssetProviderTests
     }
 
     [Fact]
+    public async Task GetPageAsync_WithAToken_ForwardsTheTokenToCurrentsOwnRead()
+    {
+        var pool = new ProviderPool();
+        var sut = new ActiveAssetProvider(pool);
+        var store = new TestAssetProvider();
+        store.Add(Feature("f1", AssetType.Point.Id.ToString()));
+        var inner = new UnfilteredViewportAssetProvider(store);
+        pool.SetActive(pool.Add("A", inner).Id);
+        using var cts = new CancellationTokenSource();
+
+        var page = await sut.GetPageAsync(new AssetQuery(), cts.Token);
+
+        page.Items.Select(f => f.Id).Should().Equal("f1");
+        inner.PageToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
     public void GetById_DelegatesToCurrent()
     {
         var (sut, inner) = CreateActive();

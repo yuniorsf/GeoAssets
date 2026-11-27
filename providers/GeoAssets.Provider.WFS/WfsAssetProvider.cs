@@ -1,7 +1,9 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
+using GeoAssets.Core.Rendering;
 using Microsoft.Extensions.Logging;
 
 namespace GeoAssets.Provider.WFS;
@@ -111,6 +113,34 @@ public sealed partial class WfsAssetProvider : IAssetProvider, ISyncProvider
     {
         return await _wfs.GetFeatureInBoundsAsync(
             _typeName, minLon, minLat, maxLon, maxLat, _maxFeatures).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A map viewport's features (XD01-429) as JSON elements, the GetFeature request handed <paramref name="ct"/>
+    /// (XD01-478): the map cancels a superseded viewport's pass, which aborts this request instead of leaving it to run
+    /// on the server. Each caller cancels only its own request.
+    /// </summary>
+    public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(ViewportQuery viewport, CancellationToken ct = default)
+    {
+        var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
+        var features = await _wfs.GetFeatureInBoundsAsync(
+            _typeName, minLon, minLat, maxLon, maxLat, _maxFeatures, ct).ConfigureAwait(false);
+        return [.. features.Select(f =>
+            JsonSerializer.SerializeToElement(f, GeoAssets.Core.Services.GeoJsonSerializer.Options))];
+    }
+
+    /// <summary>
+    /// The viewport's raw JSON as one chunk, the GetFeature request handed <paramref name="ct"/> (XD01-478) — the read
+    /// a map's viewport pass prefers (<see cref="IAssetProvider.GetInBoundsRawJsonChunksAsync(ViewportQuery, CancellationToken)"/>
+    /// reaches it), so a superseded pass aborts its request. Each caller cancels only its own request.
+    /// </summary>
+    public async IAsyncEnumerable<string> GetInBoundsRawJsonChunksAsync(
+        double minLon, double minLat, double maxLon, double maxLat,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var features = await _wfs.GetFeatureInBoundsAsync(
+            _typeName, minLon, minLat, maxLon, maxLat, _maxFeatures, ct).ConfigureAwait(false);
+        yield return JsonSerializer.Serialize(features, GeoAssets.Core.Services.GeoJsonSerializer.Options);
     }
 
     public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(
