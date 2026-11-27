@@ -4,6 +4,10 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
+using GeoAssets.Identity.Authentication;
+using GeoAssets.Shared.Services.MapTiles;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using System.Text;
@@ -14,17 +18,33 @@ namespace GeoAssets.Shared.Services;
 
 /// <summary>
 /// Implements IMapInterop and IMapSelectionInterop by delegating every call to window.GeoAssets.*
-/// functions defined in geoassets.js.
+/// functions defined in geoassets.js — or, in <see cref="MapRenderMode.MapLibre"/> (XD01-435), to the same functions of
+/// window.GeoAssetsMapLibre, defined by geoassets.maplibre.js, which this service imports before its first call so a
+/// Leaflet map never loads it. In that mode it also keeps the map's tiles current: every
+/// <see cref="IAssetProvider.FeatureAdded"/>, <see cref="IAssetProvider.FeatureUpdated"/>,
+/// <see cref="IAssetProvider.FeatureDeleted"/> and <see cref="IAssetProvider.CollectionChanged"/> schedules a re-read
+/// of the tile style (<see cref="MapTileStyleRefresher"/>), as does its periodic timer.
 /// </summary>
 public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyncDisposable
 {
     /// <summary>Maximum feature ids sent to <c>GeoAssets.setFeatureStates</c> in one JS call (XD01-309).</summary>
     public const int FeatureStateBatchSize = 2000;
 
+    /// <summary>The JS namespace of the Leaflet render modes (<c>geoassets.js</c>).</summary>
+    public const string LeafletNamespace = "GeoAssets";
+
+    /// <summary>The JS namespace of <see cref="MapRenderMode.MapLibre"/> (<c>geoassets.maplibre.js</c>).</summary>
+    public const string MapLibreNamespace = "GeoAssetsMapLibre";
+
+    /// <summary>Where <c>geoassets.maplibre.js</c> is imported from (the RCL's static web assets).</summary>
+    public const string MapLibreModuleUrl = "./_content/GeoAssets.Shared/js/geoassets.maplibre.js";
+
     private readonly IJSRuntime _js;
     private readonly IAssetProvider _repo;
     private readonly MapInteropOptions _options;
-    private const string Ns = "GeoAssets"; // window.GeoAssets
+    private readonly bool _mapLibre;
+    private readonly MapTileStyleRefresher? _styleRefresher;
+    private Task? _mapLibreLoad;
 
     /// <summary>
     /// Compact (non-indented) options for the JS interop path.
@@ -38,26 +58,66 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         Converters = { new GeoGeometryConverter() }
     };
 
-    public MapInteropService(IJSRuntime js, IAssetProvider repo, IOptions<MapInteropOptions> options)
+    /// <param name="timeProvider">The MapLibre mode's refresh clock; the system clock when none is registered.</param>
+    /// <param name="routes">The gateway a relative <see cref="MapLibreOptions.StyleUrl"/> is under; the page's base URI
+    /// when none is registered.</param>
+    /// <param name="logger">Where the MapLibre mode reports a failing style refresh.</param>
+    public MapInteropService(
+        IJSRuntime js,
+        IAssetProvider repo,
+        IOptions<MapInteropOptions> options,
+        TimeProvider? timeProvider = null,
+        ApiScopeRoutes? routes = null,
+        ILogger<MapInteropService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         _js = js;
         _repo = repo;
         _options = options.Value;
+        _mapLibre = _options.RenderMode == MapRenderMode.MapLibre;
+        if (!_mapLibre) return;
+
+        var mapLibre = _options.MapLibre ?? new MapLibreOptions();
+        MapLibreMap = new MapLibreMapOptions(
+            MapLibreOptions.ResolveStyleUrl(mapLibre.StyleUrl, routes?.BaseUrl),
+            routes?.BaseUrl.AbsoluteUri);
+        _styleRefresher = new MapTileStyleRefresher(
+            RefreshTileStyleAsync, mapLibre, timeProvider ?? TimeProvider.System,
+            (ILogger?)logger ?? NullLogger.Instance);
+
+        _repo.FeatureAdded += OnFeatureWritten;
+        _repo.FeatureUpdated += OnFeatureWritten;
+        _repo.FeatureDeleted += OnFeatureDeleted;
+        _repo.CollectionChanged += OnCollectionChanged;
     }
 
-    public Task InitializeMapAsync(string divId, double lat, double lon, int zoom) =>
-        _js.InvokeVoidAsync($"{Ns}.initializeMap", divId, lat, lon, zoom,
-            _options.RenderMode.ToString().ToUpperInvariant()).AsTask();
+    /// <summary>What a MapLibre map is initialized with; <c>null</c> in the other modes.</summary>
+    public MapLibreMapOptions? MapLibreMap { get; }
 
-    public Task DestroyMapAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.destroyMap", divId).AsTask();
+    public async Task InitializeMapAsync(string divId, double lat, double lon, int zoom)
+    {
+        var mode = _options.RenderMode.ToString().ToUpperInvariant();
+        if (!_mapLibre)
+        {
+            await CallAsync("initializeMap", divId, lat, lon, zoom, mode);
+            return;
+        }
+
+        await CallAsync("initializeMap", divId, lat, lon, zoom, mode, MapLibreMap);
+        _styleRefresher!.Attach(divId);
+    }
+
+    public Task DestroyMapAsync(string divId)
+    {
+        _styleRefresher?.Detach(divId);
+        return CallAsync("destroyMap", divId);
+    }
 
     public Task InvalidateSizeAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.invalidateSize", divId).AsTask();
+        CallAsync("invalidateSize", divId);
 
     public Task SetViewAsync(string divId, double lat, double lon, int zoom) =>
-        _js.InvokeVoidAsync($"{Ns}.setView", divId, lat, lon, zoom).AsTask();
+        CallAsync("setView", divId, lat, lon, zoom);
 
     public Task RenderFeatureAsync(string divId, GeoFeature feature)
     {
@@ -65,7 +125,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         var json = JsonSerializer.Serialize(feature, _interopOptions);
         var colorMap = BuildColorMap();
         var style = BuildStyleMap(_repo, [feature]).GetValueOrDefault(feature.Id);
-        return _js.InvokeVoidAsync($"{Ns}.renderFeature", divId, json, colorMap, style).AsTask();
+        return CallAsync("renderFeature", divId, json, colorMap, style);
     }
 
     public async Task RenderAllFeaturesAsync(string divId, IEnumerable<GeoFeature> features)
@@ -73,7 +133,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         var featureList = features as IReadOnlyList<GeoFeature> ?? [.. features];
         var styleMap = BuildStyleMap(_repo, featureList);
         var featuresAsJsonString = featureList.Select(f => JsonSerializer.Serialize(f, _interopOptions)).ToList();
-        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        await CallAsync("clearAllFeatures", divId);
         await RenderFeatureBatchesAsync(divId, featuresAsJsonString, featureList.Select(f => f.Id).ToList(), styleMap);
     }
 
@@ -96,7 +156,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         ArgumentNullException.ThrowIfNull(features);
         var featuresAsJsonString = features.Select(f => f.GetRawText()).ToList();
         var keys = StyleKeys(() => [.. features.Select(FeatureStyleKeys.Read)]);
-        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        await CallAsync("clearAllFeatures", divId);
         await RenderFeatureBatchesAsync(divId, featuresAsJsonString, keys?.Select(f => f.Id).ToList(), StyleMapOf(keys));
     }
 
@@ -112,9 +172,9 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     {
         var colorMap = BuildColorMap();
         var styleMap = RawStyleMap(rawFeaturesJson);
-        await _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId);
+        await CallAsync("clearAllFeatures", divId);
         // Pass the raw JSON string directly — JS parses it natively via JSON.parse, avoiding WASM parsing entirely.
-        await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap, styleMap);
+        await CallAsync("renderFeatureBatch", divId, rawFeaturesJson, colorMap, styleMap);
     }
 
     /// <summary>
@@ -129,14 +189,14 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
     {
         var colorMap = BuildColorMap();
         var styleMap = RawStyleMap(rawFeaturesJson);
-        return _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, rawFeaturesJson, colorMap, styleMap).AsTask();
+        return CallAsync("renderFeatureBatch", divId, rawFeaturesJson, colorMap, styleMap);
     }
 
-    public async Task<int> BeginViewportRenderAsync(string divId) =>
-        await _js.InvokeAsync<int>($"{Ns}.beginViewportRender", divId);
+    public Task<int> BeginViewportRenderAsync(string divId) =>
+        CallAsync<int>("beginViewportRender", divId);
 
     public Task EndViewportRenderAsync(string divId, int generation) =>
-        _js.InvokeVoidAsync($"{Ns}.endViewportRender", divId, generation).AsTask();
+        CallAsync("endViewportRender", divId, generation);
 
     /// <summary>
     /// Sends the features to JS, in one call (<see cref="MapInteropOptions.SinglePass"/>) or in
@@ -162,7 +222,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
                 sb.Append(featuresAsJsonString[i]);
             }
             sb.Append(']');
-            await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap,
+            await CallAsync("renderFeatureBatch", divId, sb.ToString(), colorMap,
                 StylesFor(styleMap, featureIds, 0, featuresAsJsonString.Count));
         }
         else
@@ -178,7 +238,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
                     sb.Append(featuresAsJsonString[i + j]);
                 }
                 sb.Append(']');
-                await _js.InvokeVoidAsync($"{Ns}.renderFeatureBatch", divId, sb.ToString(), colorMap,
+                await CallAsync("renderFeatureBatch", divId, sb.ToString(), colorMap,
                     StylesFor(styleMap, featureIds, i, count));
                 await Task.Delay(1); // yield to the browser event loop between batches
             }
@@ -222,42 +282,42 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         map.Count == 0 ? null : map;
 
     public Task RemoveFeatureAsync(string divId, string featureId) =>
-        _js.InvokeVoidAsync($"{Ns}.removeFeature", divId, featureId).AsTask();
+        CallAsync("removeFeature", divId, featureId);
 
     public Task ClearAllFeaturesAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.clearAllFeatures", divId).AsTask();
+        CallAsync("clearAllFeatures", divId);
 
     public Task EnableDrawModeAsync(string divId, GeometryType mode) =>
-        _js.InvokeVoidAsync($"{Ns}.enableDraw", divId, mode.ToString()).AsTask();
+        CallAsync("enableDraw", divId, mode.ToString());
 
     public Task DisableDrawModeAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.disableDraw", divId).AsTask();
+        CallAsync("disableDraw", divId);
 
     public Task SetSnapTargetLayerAsync(string divId, IReadOnlyCollection<string> allowedTargetAssetTypeIds) =>
-        _js.InvokeVoidAsync($"{Ns}.setSnapTargetLayer", divId, allowedTargetAssetTypeIds).AsTask();
+        CallAsync("setSnapTargetLayer", divId, allowedTargetAssetTypeIds);
 
     public Task ClearSnapTargetScopeAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.clearSnapTargetScope", divId).AsTask();
+        CallAsync("clearSnapTargetScope", divId);
 
     public Task AddTileLayerAsync(string divId, string layerId, string url, TileLayerOptions? options = null) =>
-        _js.InvokeVoidAsync($"{Ns}.addTileLayer", divId, layerId, url, options).AsTask();
+        CallAsync("addTileLayer", divId, layerId, url, options);
 
     public Task RemoveTileLayerAsync(string divId, string layerId) =>
-        _js.InvokeVoidAsync($"{Ns}.removeTileLayer", divId, layerId).AsTask();
+        CallAsync("removeTileLayer", divId, layerId);
 
     public Task AddWmsLayerAsync(string divId, string layerId, string wmsBaseUrl, WmsLayerOptions options) =>
-        _js.InvokeVoidAsync($"{Ns}.addWmsLayer", divId, layerId, wmsBaseUrl, options).AsTask();
+        CallAsync("addWmsLayer", divId, layerId, wmsBaseUrl, options);
 
     public Task RemoveWmsLayerAsync(string divId, string layerId) =>
-        _js.InvokeVoidAsync($"{Ns}.removeWmsLayer", divId, layerId).AsTask();
+        CallAsync("removeWmsLayer", divId, layerId);
 
     public Task SetLayerVisibilityAsync(string divId, string assetTypeId, bool visible) =>
-        _js.InvokeVoidAsync($"{Ns}.setLayerVisibility", divId, assetTypeId, visible).AsTask();
+        CallAsync("setLayerVisibility", divId, assetTypeId, visible);
 
     public Task SetLayerZoomRangeAsync(string divId, string assetTypeId, int? minZoom, int? maxZoom)
     {
         AssetTypeZoomRange.EnsureValid(minZoom, maxZoom);
-        return _js.InvokeVoidAsync($"{Ns}.setLayerZoomRange", divId, assetTypeId, minZoom, maxZoom).AsTask();
+        return CallAsync("setLayerZoomRange", divId, assetTypeId, minZoom, maxZoom);
     }
 
     public Task SetReferenceLayerAsync(string divId, string layerId, string rawFeaturesJson, ReferenceLayerOptions options)
@@ -266,32 +326,32 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
         ArgumentNullException.ThrowIfNull(rawFeaturesJson);
         ReferenceLayerOptions.EnsureValid(options);
         // Forwarded as-is, like the raw viewport path: JS parses it natively.
-        return _js.InvokeVoidAsync($"{Ns}.setReferenceLayer", divId, layerId, rawFeaturesJson, options).AsTask();
+        return CallAsync("setReferenceLayer", divId, layerId, rawFeaturesJson, options);
     }
 
     public Task ClearReferenceLayerAsync(string divId, string layerId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(layerId);
-        return _js.InvokeVoidAsync($"{Ns}.clearReferenceLayer", divId, layerId).AsTask();
+        return CallAsync("clearReferenceLayer", divId, layerId);
     }
 
     public async Task<BoundingBox?> GetViewBoundsAsync(string divId)
     {
-        var bounds = await _js.InvokeAsync<double[]?>($"{Ns}.getViewBounds", divId);
+        var bounds = await CallAsync<double[]?>("getViewBounds", divId);
         return bounds is { Length: 4 } ? new BoundingBox(bounds[0], bounds[1], bounds[2], bounds[3]) : null;
     }
 
     public Task FitBoundsAsync(string divId, double[] bbox) =>
-        _js.InvokeVoidAsync($"{Ns}.fitBounds", divId, bbox).AsTask();
+        CallAsync("fitBounds", divId, bbox);
 
     public Task PanToFeatureAsync(string divId, string featureId) =>
-        _js.InvokeVoidAsync($"{Ns}.panToFeature", divId, featureId).AsTask();
+        CallAsync("panToFeature", divId, featureId);
 
     public Task HighlightFeatureAsync(string divId, string featureId) =>
-        _js.InvokeVoidAsync($"{Ns}.highlightFeature", divId, featureId).AsTask();
+        CallAsync("highlightFeature", divId, featureId);
 
     public Task ClearHighlightAsync(string divId, string featureId) =>
-        _js.InvokeVoidAsync($"{Ns}.clearHighlight", divId, featureId).AsTask();
+        CallAsync("clearHighlight", divId, featureId);
 
     public async Task SetFeatureStatesAsync(string divId, IReadOnlyCollection<string> featureIds, MapFeatureState state)
     {
@@ -300,28 +360,89 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IAsyn
 
         var stateName = state.ToJsName();
         foreach (var batch in featureIds.Chunk(FeatureStateBatchSize))
-            await _js.InvokeVoidAsync($"{Ns}.setFeatureStates", divId, batch, stateName);
+            await CallAsync("setFeatureStates", divId, batch, stateName);
     }
 
     public Task ClearFeatureStatesAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.clearFeatureStates", divId).AsTask();
+        CallAsync("clearFeatureStates", divId);
 
     public Task SetSelectionToolAsync(string divId, MapSelectionTool tool) =>
-        _js.InvokeVoidAsync($"{Ns}.setSelectionTool", divId, tool.ToJsName()).AsTask();
+        CallAsync("setSelectionTool", divId, tool.ToJsName());
 
     public Task ShowSelectionOutlineAsync(string divId, double[][][] rings)
     {
         ArgumentNullException.ThrowIfNull(rings);
-        return _js.InvokeVoidAsync($"{Ns}.showSelectionOutline", divId, rings).AsTask();
+        return CallAsync("showSelectionOutline", divId, rings);
     }
 
     public Task ClearSelectionOutlineAsync(string divId) =>
-        _js.InvokeVoidAsync($"{Ns}.clearSelectionOutline", divId).AsTask();
+        CallAsync("clearSelectionOutline", divId);
 
     public Task RegisterEventHandlersAsync(string divId, DotNetObjectReference<object> handlerRef) =>
-        _js.InvokeVoidAsync($"{Ns}.registerHandlers", divId, handlerRef).AsTask();
+        CallAsync("registerHandlers", divId, handlerRef);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        if (_styleRefresher is null) return ValueTask.CompletedTask;
+
+        _repo.FeatureAdded -= OnFeatureWritten;
+        _repo.FeatureUpdated -= OnFeatureWritten;
+        _repo.FeatureDeleted -= OnFeatureDeleted;
+        _repo.CollectionChanged -= OnCollectionChanged;
+        _styleRefresher.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    // ── JS dispatch ───────────────────────────────────────────────────────────
+
+    /// <summary>Calls <paramref name="function"/> of the render mode's JS namespace — in MapLibre mode once
+    /// <c>geoassets.maplibre.js</c> is loaded.</summary>
+    private Task CallAsync(string function, params object?[] args) =>
+        _mapLibre
+            ? CallMapLibreAsync(function, args)
+            : _js.InvokeVoidAsync($"{LeafletNamespace}.{function}", args).AsTask();
+
+    private async Task CallMapLibreAsync(string function, object?[] args)
+    {
+        await EnsureMapLibreLoadedAsync();
+        await _js.InvokeVoidAsync($"{MapLibreNamespace}.{function}", args);
+    }
+
+    private async Task<TValue> CallAsync<TValue>(string function, params object?[] args)
+    {
+        if (!_mapLibre)
+            return await _js.InvokeAsync<TValue>($"{LeafletNamespace}.{function}", args);
+
+        await EnsureMapLibreLoadedAsync();
+        return await _js.InvokeAsync<TValue>($"{MapLibreNamespace}.{function}", args);
+    }
+
+    /// <summary>Imports <see cref="MapLibreModuleUrl"/> once; a failed import is retried by the next call.</summary>
+    private async Task EnsureMapLibreLoadedAsync()
+    {
+        var load = _mapLibreLoad ??= _js.InvokeVoidAsync("import", MapLibreModuleUrl).AsTask();
+        try
+        {
+            await load;
+        }
+        catch
+        {
+            if (ReferenceEquals(_mapLibreLoad, load)) _mapLibreLoad = null;
+            throw;
+        }
+    }
+
+    private async Task RefreshTileStyleAsync(string divId, CancellationToken cancellationToken)
+    {
+        await EnsureMapLibreLoadedAsync();
+        await _js.InvokeAsync<string?>($"{MapLibreNamespace}.refreshTileStyle", cancellationToken, [divId]);
+    }
+
+    private void OnFeatureWritten(object? sender, GeoFeature feature) => _styleRefresher?.NotifyWrite();
+
+    private void OnFeatureDeleted(object? sender, string featureId) => _styleRefresher?.NotifyWrite();
+
+    private void OnCollectionChanged(object? sender, EventArgs e) => _styleRefresher?.NotifyWrite();
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

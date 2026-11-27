@@ -43,6 +43,7 @@ public sealed class ObservableMapInterop(
     {
         MapRenderMode.Canvas => "canvas",
         MapRenderMode.WebGL => "webgl",
+        MapRenderMode.MapLibre => "maplibre",
         _ => "leaflet"
     };
 
