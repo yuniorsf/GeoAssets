@@ -21,7 +21,12 @@
  *     GeoJSON ([lon, lat]), through OnFeatureDrawnFromJs / OnFeatureEditedFromJs as in Leaflet mode.
  *
  * Loaded lazily: MapInteropService imports this module only in MapLibre mode, and initializeMap loads MapLibre GL JS
- * and terra-draw from the CDN (pinned, with SRI) only then — a Leaflet map pays nothing.
+ * and terra-draw from the CDN (pinned, with SRI) only then — a Leaflet map pays nothing. With options.libraryBaseUrl
+ * (MAUI, XD01-460) they come from the app's own copies instead — MapLibre's CSP build, its worker read (SRI-checked)
+ * into a blob: URL — so the map starts offline and the page names no script origin.
+ *   • offline map packs (XD01-460): a raster pack is a raster source and a vector pack a vector source whose tiles are
+ *     asked of .NET (the layer's LocalRasterTileReader / LocalVectorTileReader, GetTileFromJs) through the
+ *     geoassets-pack:// protocol — read on the device, nothing fetched.
  *
  * Zooms cross the contract in Leaflet's 256 px scale (this map's zoom + 1). What this mode does not do as Leaflet does
  * is listed on MapLibreOptions (C#) and logged once by warnOnce when it is asked for; nothing throws for it.
@@ -47,6 +52,28 @@ export const LIBRARIES = Object.freeze({
     terraDrawAdapter: {
         src: 'https://unpkg.com/terra-draw-maplibre-gl-adapter@1.5.0/dist/terra-draw-maplibre-gl-adapter.umd.js',
         integrity: 'sha384-tE70KbU/wTkvNmGjc6IWlRU5lZSL/JyIw8ok1AB90T4SEjwYPgspmMzw4JWEOCCu',
+        global: 'terraDrawMaplibreGlAdapter'
+    }
+});
+
+// The same libraries as the app's own copies (options.libraryBaseUrl, XD01-460), each at its unpkg path under that base:
+// MapLibre's CSP build — its worker a file of its own instead of a blob built from the bundle — and the same files of
+// terra-draw and its adapter as LIBRARIES (same SRI).
+export const LOCAL_LIBRARIES = Object.freeze({
+    maplibreCss: { path: 'maplibre-gl@5.24.0/dist/maplibre-gl.css', integrity: LIBRARIES.maplibreCss.integrity },
+    maplibre: {
+        path: 'maplibre-gl@5.24.0/dist/maplibre-gl-csp.js',
+        integrity: 'sha384-+lDFpEYaS5ofD0qW/5dA+duOMWMSGs+utCY+wx9H/lS1i0WZ0bQH31giSmqYsxqR',
+        global: 'maplibregl'
+    },
+    maplibreWorker: {
+        path: 'maplibre-gl@5.24.0/dist/maplibre-gl-csp-worker.js',
+        integrity: 'sha384-wBzwLUk46fiEnNOOlHXeylfQrL/SzyNqSD0gYdQJskF9cbBaNcRDYn6ZmSBW4l0z'
+    },
+    terraDraw: { path: 'terra-draw@1.37.0/dist/terra-draw.umd.js', integrity: LIBRARIES.terraDraw.integrity, global: 'terraDraw' },
+    terraDrawAdapter: {
+        path: 'terra-draw-maplibre-gl-adapter@1.5.0/dist/terra-draw-maplibre-gl-adapter.umd.js',
+        integrity: LIBRARIES.terraDrawAdapter.integrity,
         global: 'terraDrawMaplibreGlAdapter'
     }
 });
@@ -118,6 +145,18 @@ const PAINT_DEFAULTS = Object.freeze({
     'circle-stroke-width': 0, 'line-color': '#000000', 'line-opacity': 1, 'line-width': 1, 'fill-color': '#000000',
     'fill-opacity': 1
 });
+
+// Offline map packs (XD01-460): the protocol their tiles are read through, and the image a raster tile the pack doesn't
+// have is drawn as (a transparent 1×1 GIF, as geoassets.js draws it).
+export const PACK_PROTOCOL = 'geoassets-pack';
+const PACK_PREFIX = 'geoassets-pack-';
+const EMPTY_IMAGE_BASE64 = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const PACK_COLORS = Object.freeze({ point: '#e74c3c', line: '#3498db', polygon: '#2ecc71' });   // AssetType.Point/Line/Area
+
+// A long press that opens a feature's context menu (options.longPressContextMenu, XD01-460).
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_PX = 10;
+const CONTEXT_MENU_REPEAT_MS = 800;   // a platform contextmenu this close to a long press is the same gesture
 
 const SELECTION_TOOLS = ['none', 'click', 'box', 'fence'];
 const DRAW_MODES = Object.freeze({ Point: 'point', LineString: 'linestring', Polygon: 'polygon' });
@@ -384,6 +423,131 @@ export function roundGeometry(geometry, digits = 9) {
     return { type: geometry.type, coordinates: round(geometry.coordinates) };
 }
 
+/**
+ * The libraries initializeMap loads: LIBRARIES (the CDN) without `baseUrl`; with it, LOCAL_LIBRARIES resolved under it
+ * (relative = under `documentBase`) — { maplibreCss: { href, integrity }, maplibre / terraDraw / terraDrawAdapter:
+ * { src, integrity, global }, maplibreWorker: { src, integrity } }.
+ */
+export function librariesFor(baseUrl, documentBase) {
+    if (typeof baseUrl !== 'string' || baseUrl.trim() === '') return LIBRARIES;
+    const trimmed = baseUrl.trim();
+    const base = new URL(trimmed.endsWith('/') ? trimmed : trimmed + '/', documentBase).href;
+    const at = lib => new URL(lib.path, base).href;
+    const script = lib => Object.freeze({ src: at(lib), integrity: lib.integrity, global: lib.global });
+    return Object.freeze({
+        maplibreCss: Object.freeze({ href: at(LOCAL_LIBRARIES.maplibreCss), integrity: LOCAL_LIBRARIES.maplibreCss.integrity }),
+        maplibre: script(LOCAL_LIBRARIES.maplibre),
+        maplibreWorker: Object.freeze({ src: at(LOCAL_LIBRARIES.maplibreWorker), integrity: LOCAL_LIBRARIES.maplibreWorker.integrity }),
+        terraDraw: script(LOCAL_LIBRARIES.terraDraw),
+        terraDrawAdapter: script(LOCAL_LIBRARIES.terraDrawAdapter)
+    });
+}
+
+/** The tile URL template of the pack layer `key` (XD01-460): `geoassets-pack://{key}/{z}/{x}/{y}`. */
+export function packTileTemplate(key) {
+    return PACK_PROTOCOL + '://' + encodeURIComponent(String(key)) + '/{z}/{x}/{y}';
+}
+
+/** { key, z, x, y } of a pack tile URL, or null when it isn't one or names a tile outside the pyramid. */
+export function parsePackTileUrl(url) {
+    const m = /^geoassets-pack:\/\/([^/?#]+)\/(\d{1,2})\/(\d{1,10})\/(\d{1,10})$/.exec(String(url ?? ''));
+    if (!m) return null;
+    const [z, x, y] = [m[2], m[3], m[4]].map(Number);
+    if (z > MAX_STYLE_ZOOM || x >= 2 ** z || y >= 2 ** z) return null;
+    try {
+        return { key: decodeURIComponent(m[1]), z, x, y };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The names of the layers of a (decompressed) Mapbox Vector Tile, each once, in tile order — read from its protobuf
+ * (tile field 3 = layer, layer field 1 = name), everything else skipped. A malformed tile answers what was read before.
+ */
+export function mvtLayerNames(bytes) {
+    const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes ?? []);
+    const names = [];
+    const varint = cursor => {
+        let result = 0, shift = 0, b;
+        do {
+            if (cursor.pos >= cursor.end || shift > 49) throw new RangeError('bad varint');
+            b = buf[cursor.pos++];
+            result += (b & 0x7f) * 2 ** shift;
+            shift += 7;
+        } while (b & 0x80);
+        return result;
+    };
+    const skip = (cursor, wire) => {
+        if (wire === 0) varint(cursor);
+        else if (wire === 1) cursor.pos += 8;
+        else if (wire === 2) cursor.pos += varint(cursor);
+        else if (wire === 5) cursor.pos += 4;
+        else throw new RangeError('unsupported wire type ' + wire);
+        if (cursor.pos > cursor.end) throw new RangeError('truncated field');
+    };
+    try {
+        const tile = { pos: 0, end: buf.length };
+        while (tile.pos < tile.end) {
+            const key = varint(tile);
+            if (key !== ((3 << 3) | 2)) { skip(tile, key & 7); continue; }
+            const length = varint(tile);
+            const layer = { pos: tile.pos, end: tile.pos + length };
+            if (layer.end > buf.length) break;
+            tile.pos = layer.end;
+            while (layer.pos < layer.end) {
+                const field = varint(layer);
+                if (field === ((1 << 3) | 2)) {
+                    const n = varint(layer);
+                    if (layer.pos + n > layer.end) break;
+                    const name = new TextDecoder().decode(buf.subarray(layer.pos, layer.pos + n));
+                    if (!names.includes(name)) names.push(name);
+                    break;
+                }
+                skip(layer, field & 7);
+            }
+        }
+    } catch {
+        // A malformed tile: the names read before the fault.
+    }
+    return names;
+}
+
+/**
+ * The style layers that draw the MVT layer `sourceLayer` of the pack source `sourceId` (XD01-460): polygons filled and
+ * outlined, lines, and points as circles, in `colors` ({ point, line, polygon }, else PACK_COLORS) with the defaults a
+ * provider's features are drawn with — ids `${prefix}${n}-fill|outline|line|point`.
+ */
+export function packVectorLayers(prefix, sourceId, sourceLayer, n, colors) {
+    const c = Object.assign({}, PACK_COLORS, colors || {});
+    const base = { source: sourceId, 'source-layer': sourceLayer };
+    return [
+        Object.assign({ id: prefix + n + '-fill', type: 'fill', filter: GEOMETRY.polygon,
+            paint: { 'fill-color': c.polygon, 'fill-opacity': 0.35 } }, base),
+        Object.assign({ id: prefix + n + '-outline', type: 'line', filter: GEOMETRY.polygon,
+            paint: { 'line-color': c.polygon, 'line-width': 3, 'line-opacity': 0.9 } }, base),
+        Object.assign({ id: prefix + n + '-line', type: 'line', filter: GEOMETRY.line,
+            paint: { 'line-color': c.line, 'line-width': 3, 'line-opacity': 0.9 } }, base),
+        Object.assign({ id: prefix + n + '-point', type: 'circle', filter: GEOMETRY.point,
+            paint: { 'circle-radius': 8, 'circle-color': c.point, 'circle-opacity': 0.35, 'circle-stroke-color': c.point,
+                     'circle-stroke-width': 3, 'circle-stroke-opacity': 0.9 } }, base)
+    ];
+}
+
+/** The bytes .NET answered for a tile (a Uint8Array over JS interop) as an ArrayBuffer of their own; null when none. */
+export function toArrayBuffer(bytes) {
+    if (!bytes) return null;
+    if (bytes instanceof ArrayBuffer) return bytes.byteLength ? bytes : null;
+    if (ArrayBuffer.isView(bytes))
+        return bytes.byteLength ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) : null;
+    return Array.isArray(bytes) && bytes.length ? new Uint8Array(bytes).buffer : null;
+}
+
+/** Whether a context menu at `now` is the one opened at `last` again (a long press and the platform's own, XD01-460). */
+export function isRepeatedContextMenu(last, now) {
+    return Number.isFinite(last) && now - last >= 0 && now - last < CONTEXT_MENU_REPEAT_MS;
+}
+
 // ─── Browser-only helpers ────────────────────────────────────────────────────────────────────────────────────────────
 
 const _warned = new Set();
@@ -433,12 +597,30 @@ function loadStylesheet(lib) {
     document.head.appendChild(link);
 }
 
-/** MapLibre GL JS, terra-draw and its adapter — from the CDN once, unless the page already has them. */
-function ensureLibraries() {
+/**
+ * MapLibre's worker (the CSP build's, XD01-460) as a blob: URL of the SRI-checked file — a same-origin worker script
+ * isn't served alike by every WebView, a blob: worker is what MapLibre's default build makes everywhere.
+ */
+let _workerSet = false;
+async function useWorker(lib) {
+    if (!lib || _workerSet) return;
+    const response = await fetch(lib.src, { integrity: lib.integrity, credentials: 'same-origin' });
+    if (!response.ok) throw new Error('GeoAssets: could not load ' + lib.src + ' (HTTP ' + response.status + ')');
+    const blob = new Blob([await response.arrayBuffer()], { type: 'text/javascript' });
+    window.maplibregl.setWorkerUrl(URL.createObjectURL(blob));
+    _workerSet = true;
+}
+
+/**
+ * MapLibre GL JS, terra-draw and its adapter — from the CDN, or the app's own copies (librariesFor), once, unless the
+ * page already has them.
+ */
+function ensureLibraries(libs = LIBRARIES) {
     if (!_libraries) {
-        loadStylesheet(LIBRARIES.maplibreCss);
-        _libraries = Promise.all([loadScript(LIBRARIES.maplibre), loadScript(LIBRARIES.terraDraw)])
-            .then(() => loadScript(LIBRARIES.terraDrawAdapter))
+        loadStylesheet(libs.maplibreCss);
+        _libraries = Promise.all([loadScript(libs.maplibre), loadScript(libs.terraDraw)])
+            .then(() => useWorker(libs.maplibreWorker))
+            .then(() => loadScript(libs.terraDrawAdapter))
             .catch(err => { _libraries = null; throw err; });
     }
     return _libraries;
@@ -862,7 +1044,7 @@ function bindPointerEvents(state) {
         if (!hit) return;
         e.preventDefault();
         e.originalEvent?.preventDefault();
-        invoke(state, 'OnFeatureContextMenuFromJs', hit.id, e.originalEvent.clientX, e.originalEvent.clientY);
+        openContextMenu(state, hit, e.originalEvent.clientX, e.originalEvent.clientY);
     });
 
     // A double-click on a feature the providers rendered edits it (terra-draw select mode) instead of zooming. On a
@@ -895,6 +1077,50 @@ function bindPointerEvents(state) {
         });
     });
     map.on('mouseout', () => { hoverQueued = null; hover(state, null); });
+}
+
+function openContextMenu(state, hit, clientX, clientY) {
+    const now = Date.now();
+    if (state.longPressContextMenu && isRepeatedContextMenu(state.lastContextMenuAt, now)) return;
+    state.lastContextMenuAt = now;
+    invoke(state, 'OnFeatureContextMenuFromJs', hit.id, clientX, clientY);
+}
+
+/**
+ * A finger held still on a feature for LONG_PRESS_MS opens its context menu (XD01-460): WKWebView (iOS, Mac Catalyst)
+ * fires no contextmenu for a long press, Android's WebView does — the two are one gesture (isRepeatedContextMenu). The
+ * press is dropped by a second finger, a move past LONG_PRESS_MOVE_PX, a lift, or while drawing, editing or selecting
+ * an area; the lift after one that opened the menu makes no click.
+ */
+function bindLongPress(state) {
+    const map = state.map;
+    let press = null;
+    const cancel = () => { if (press) clearTimeout(press.timer); press = null; };
+    map.on('touchstart', e => {
+        cancel();
+        const touches = e.originalEvent?.touches;
+        if (!touches || touches.length !== 1 || isBusy(state)) return;
+        const { clientX, clientY } = touches[0];
+        const point = e.point;
+        press = {
+            point, opened: false,
+            timer: setTimeout(() => {
+                if (!press || _maps[state.divId] !== state) return;
+                const hit = hitTest(state, point);
+                if (!hit) { press = null; return; }
+                press.opened = true;
+                openContextMenu(state, hit, clientX, clientY);
+            }, LONG_PRESS_MS)
+        };
+    });
+    map.on('touchmove', e => {
+        if (press && !press.opened && Math.hypot(e.point.x - press.point.x, e.point.y - press.point.y) > LONG_PRESS_MOVE_PX) cancel();
+    });
+    map.on('touchend', e => {
+        if (press?.opened && e.originalEvent?.cancelable) e.originalEvent.preventDefault();
+        cancel();
+    });
+    map.on('touchcancel', cancel);
 }
 
 function hover(state, e) {
@@ -1055,7 +1281,8 @@ function baseStyle(options) {
 }
 
 /**
- * Creates the map in the element `divId` (idempotent). `options`: { styleUrl, gatewayBaseUrl } (MapLibreMapOptions);
+ * Creates the map in the element `divId` (idempotent). `options`: { styleUrl, gatewayBaseUrl, libraryBaseUrl,
+ * longPressContextMenu } (MapLibreMapOptions);
  * a page may add `basemapTiles` (XYZ templates; [] = none). The tile style itself is read once registerHandlers gave
  * the map its .NET reference, which the token is asked of.
  */
@@ -1064,7 +1291,8 @@ async function initializeMap(divId, lat, lon, zoom, _renderMode, options) {
     if (_initializing.has(divId)) return _initializing.get(divId);
 
     const pending = (async () => {
-        await ensureLibraries();
+        await ensureLibraries(librariesFor(options?.libraryBaseUrl, document.baseURI));
+        ensurePackProtocol();
         const maplibregl = window.maplibregl;
         const ctx = { state: null };
         const map = new maplibregl.Map({
@@ -1119,7 +1347,10 @@ async function initializeMap(divId, lat, lon, zoom, _renderMode, options) {
             rasterLayers: new Map(),    // layerId → { sourceId, layerId } of addTileLayer / addWmsLayer
             referenceLayers: new Map(), // layerId → [mapLayerId…]
             tooltip: null,
-            hoverFrame: false
+            hoverFrame: false,
+            packLayers: new Map(),      // layerId → { key, sourceId, layerIds, sourceLayers? } of the offline packs (XD01-460)
+            longPressContextMenu: !!options?.longPressContextMenu,
+            lastContextMenuAt: null
         };
         ctx.state = state;
         state.tileAccess = styleUrl ? createTileAccess(state, styleUrl) : null;
@@ -1128,6 +1359,7 @@ async function initializeMap(divId, lat, lon, zoom, _renderMode, options) {
         startDraw(state);
         bindPointerEvents(state);
         bindSelectionInput(state);
+        if (state.longPressContextMenu) bindLongPress(state);
         map.on('zoomend', () => { if (state.zoomRanges.size > 0) applyVisibility(state); });
         map.on('error', e => {
             if (e?.error?.status === 401 && isTileSource(e.sourceId)) onTileUnauthorized(state, e.error.url);
@@ -1144,6 +1376,7 @@ function destroyMap(divId) {
     if (!state) return;
     delete _maps[divId];
     unbindSelectionInput(state);
+    state.packLayers.forEach(entry => _packTiles.delete(entry.key));
     state.tooltip?.remove();
     try { state.draw?.stop(); } catch (e) { console.warn('GeoAssets (MapLibre): terra-draw did not stop cleanly', e); }
     state.map.remove();
@@ -1429,6 +1662,120 @@ function addWmsLayer(divId, layerId, wmsBaseUrl, options) {
     addRasterLayer(state, layerId, [wmsTileUrl(url, options)], { maxZoom: options?.maxZoom, opacity: options?.opacity, attribution: options?.attribution });
 }
 
+// ─── Public API: offline map packs (XD01-460) ────────────────────────────────────────────────────────────────────────
+// Each pack layer's tiles are asked of .NET (its reader's GetTileFromJs) through the geoassets-pack:// protocol, one key
+// per layer on a map: read on the device, nothing fetched, so the page's CSP names nothing for them. MapLibre asks only
+// the tiles of the view, within the pack's zooms (overzooming past its highest) and bounds.
+
+const _packTiles = new Map();   // key → { state, reader, kind: 'raster' | 'vector', entry }
+let _packSequence = 0;
+let _packProtocol = false;
+let _emptyImage = null;
+
+function emptyImage() {
+    if (!_emptyImage) _emptyImage = Uint8Array.from(atob(EMPTY_IMAGE_BASE64), ch => ch.charCodeAt(0)).buffer;
+    return _emptyImage.slice(0);
+}
+
+async function loadPackTile(params) {
+    const tile = parsePackTileUrl(params.url);
+    const pack = tile && _packTiles.get(tile.key);
+    if (!pack) throw new Error('GeoAssets (MapLibre): no offline pack serves ' + params.url);
+    const data = toArrayBuffer(await pack.reader.invokeMethodAsync('GetTileFromJs', tile.z, tile.x, tile.y));
+    if (pack.kind === 'raster') return { data: data ?? emptyImage() };
+    if (data) discoverPackLayers(pack, data);
+    return { data: data ?? new ArrayBuffer(0) };
+}
+
+function ensurePackProtocol() {
+    if (_packProtocol) return;
+    window.maplibregl.addProtocol(PACK_PROTOCOL, loadPackTile);
+    _packProtocol = true;
+}
+
+function packBounds(bounds) {
+    return Array.isArray(bounds) && bounds.length >= 4 && bounds.every(Number.isFinite) ? bounds.slice(0, 4) : undefined;
+}
+
+function packZoom(value, fallback) { return Number.isInteger(value) ? value : fallback; }
+
+/** The first layer above the basemap: a raster pack goes over OpenStreetMap and the packs before it, under the rest. */
+function aboveBasemap(state) {
+    const layers = state.map.getStyle().layers || [];
+    const first = layers.find(l => l.id !== 'osm' && !(l.id.startsWith(PACK_PREFIX) && l.type === 'raster'));
+    return first ? first.id : undefined;
+}
+
+/** options = { contentType, minZoom, maxZoom, bounds: [west, south, east, north] | null } — the pack's. */
+function addLocalRasterLayer(divId, layerId, reader, options) {
+    const state = _maps[divId];
+    if (!state || state.packLayers.has(layerId)) return;
+    const key = 'p' + (++_packSequence);
+    const sourceId = PACK_PREFIX + key;
+    state.map.addSource(sourceId, {
+        type: 'raster', tiles: [packTileTemplate(key)], tileSize: 256,
+        minzoom: packZoom(options?.minZoom, 0), maxzoom: packZoom(options?.maxZoom, 19), bounds: packBounds(options?.bounds)
+    });
+    state.map.addLayer({ id: sourceId, type: 'raster', source: sourceId }, aboveBasemap(state));
+    const entry = { key, sourceId, layerIds: [sourceId] };
+    _packTiles.set(key, { state, reader, kind: 'raster', entry });
+    state.packLayers.set(layerId, entry);
+}
+
+function addPackVectorLayers(pack, sourceLayer) {
+    const { state, entry } = pack;
+    if (_maps[state.divId] !== state || entry.sourceLayers.has(sourceLayer) || !state.map.getSource(entry.sourceId)) return;
+    entry.sourceLayers.add(sourceLayer);
+    packVectorLayers(entry.sourceId + '-', entry.sourceId, sourceLayer, entry.sourceLayers.size - 1, entry.colors).forEach(layer => {
+        state.map.addLayer(layer, firstOverlayLayer());
+        entry.layerIds.push(layer.id);
+    });
+}
+
+/** A tile's MVT layers the pack's metadata didn't name are drawn too, once the tile is read. */
+function discoverPackLayers(pack, data) {
+    const unknown = mvtLayerNames(new Uint8Array(data)).filter(name => !pack.entry.sourceLayers.has(name));
+    if (unknown.length) setTimeout(() => unknown.forEach(name => addPackVectorLayers(pack, name)), 0);
+}
+
+/** options = { minZoom, maxZoom, bounds: [west, south, east, north] | null, sourceLayers: [name…], colors } — the pack's. */
+function addLocalVectorLayer(divId, layerId, reader, options) {
+    const state = _maps[divId];
+    if (!state || state.packLayers.has(layerId)) return;
+    const key = 'p' + (++_packSequence);
+    const sourceId = PACK_PREFIX + key;
+    state.map.addSource(sourceId, {
+        type: 'vector', tiles: [packTileTemplate(key)],
+        minzoom: packZoom(options?.minZoom, 0), maxzoom: packZoom(options?.maxZoom, 14), bounds: packBounds(options?.bounds)
+    });
+    const entry = { key, sourceId, layerIds: [], sourceLayers: new Set(), colors: options?.colors || null };
+    const pack = { state, reader, kind: 'vector', entry };
+    _packTiles.set(key, pack);
+    state.packLayers.set(layerId, entry);
+    (Array.isArray(options?.sourceLayers) ? options.sourceLayers : []).forEach(name => addPackVectorLayers(pack, String(name)));
+    // MapLibre reads no tile of a source no layer draws: a pack whose metadata names no layer gets an invisible one, so
+    // its tiles are read and their layers found (discoverPackLayers).
+    if (entry.layerIds.length === 0) {
+        const probe = { id: sourceId + '-probe', type: 'circle', source: sourceId, 'source-layer': sourceId + '-probe', paint: { 'circle-radius': 0 } };
+        state.map.addLayer(probe, firstOverlayLayer());
+        entry.layerIds.push(probe.id);
+    }
+}
+
+function removePackEntry(state, entry) {
+    _packTiles.delete(entry.key);
+    entry.layerIds.forEach(id => { if (state.map.getLayer(id)) state.map.removeLayer(id); });
+    if (state.map.getSource(entry.sourceId)) state.map.removeSource(entry.sourceId);
+}
+
+function removeLocalLayer(divId, layerId) {
+    const state = _maps[divId];
+    const entry = state?.packLayers.get(layerId);
+    if (!entry) return;
+    state.packLayers.delete(layerId);
+    removePackEntry(state, entry);
+}
+
 // ─── Public API: visibility & zoom ranges ────────────────────────────────────────────────────────────────────────────
 
 function setLayerVisibility(divId, assetTypeId, visible) {
@@ -1612,6 +1959,10 @@ const api = Object.freeze({
     removeTileLayer: removeRasterLayer,
     addWmsLayer,
     removeWmsLayer: removeRasterLayer,
+    addLocalRasterLayer,
+    removeLocalRasterLayer: removeLocalLayer,
+    addLocalVectorLayer,
+    removeLocalVectorLayer: removeLocalLayer,
     setLayerVisibility,
     setLayerZoomRange,
     showSelectionOutline,

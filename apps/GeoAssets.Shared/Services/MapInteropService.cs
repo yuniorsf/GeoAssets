@@ -27,9 +27,11 @@ namespace GeoAssets.Shared.Services;
 /// map once its kernel tile layer is shown (<see cref="ShowTileLayersAsync"/>, the interim Leaflet split of XD01-436), so a
 /// Leaflet map without one re-reads nothing. A local raster tile layer (<see cref="IMapLocalTileLayerInterop"/>, XD01-465)
 /// hands JS a <see cref="DotNetObjectReference{TValue}"/> of a <see cref="LocalRasterTileReader"/> per layer, kept until
-/// the layer is removed or this service is disposed.
+/// the layer is removed or this service is disposed — in every mode; a local vector tile layer
+/// (<see cref="IMapLocalVectorTileLayerInterop"/>, XD01-460) likewise one of a <see cref="LocalVectorTileReader"/>, in
+/// MapLibre mode only.
 /// </summary>
-public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapTileLayerInterop, IMapLocalTileLayerInterop, IAsyncDisposable
+public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapTileLayerInterop, IMapLocalTileLayerInterop, IMapLocalVectorTileLayerInterop, IAsyncDisposable
 {
     /// <summary>Maximum feature ids sent to <c>GeoAssets.setFeatureStates</c> in one JS call (XD01-309).</summary>
     public const int FeatureStateBatchSize = 2000;
@@ -53,6 +55,7 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
     private MapTileStyleRefresher? _styleRefresher;
     private Task? _mapLibreLoad;
     private readonly Dictionary<(string DivId, string LayerId), DotNetObjectReference<LocalRasterTileReader>> _localRasterReaders = [];
+    private readonly Dictionary<(string DivId, string LayerId), DotNetObjectReference<LocalVectorTileReader>> _localVectorReaders = [];
 
     /// <summary>
     /// Compact (non-indented) options for the JS interop path.
@@ -89,7 +92,9 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
         TileStyleUrl = MapLibreOptions.ResolveStyleUrl(_mapLibreOptions.StyleUrl, routes?.BaseUrl);
         if (!_mapLibre) return;
 
-        MapLibreMap = new MapLibreMapOptions(TileStyleUrl, routes?.BaseUrl.AbsoluteUri);
+        MapLibreMap = new MapLibreMapOptions(TileStyleUrl, routes?.BaseUrl.AbsoluteUri,
+            string.IsNullOrWhiteSpace(_mapLibreOptions.LibraryBaseUrl) ? null : _mapLibreOptions.LibraryBaseUrl.Trim(),
+            _mapLibreOptions.LongPressContextMenu);
         EnsureStyleRefresher();
     }
 
@@ -117,12 +122,8 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
     public Task DestroyMapAsync(string divId)
     {
         _styleRefresher?.Detach(divId);
-        foreach (var key in _localRasterReaders.Keys.Where(k => string.Equals(k.DivId, divId, StringComparison.Ordinal)).ToList())
-        {
-            _localRasterReaders.Remove(key, out var reader);
-            reader?.Dispose();
-        }
-
+        Release(_localRasterReaders, divId);
+        Release(_localVectorReaders, divId);
         return CallAsync("destroyMap", divId);
     }
 
@@ -420,12 +421,12 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
     // ── Local raster tile layers (XD01-465) ───────────────────────────────────
 
     /// <inheritdoc />
-    /// <remarks>Leaflet modes only: in <see cref="MapRenderMode.MapLibre"/> (the Web, which has no local packs) nothing is drawn.</remarks>
+    /// <remarks>In every mode: <see cref="MapRenderMode.MapLibre"/> draws it as a raster source read through the
+    /// <c>geoassets-pack://</c> protocol (XD01-460).</remarks>
     public async Task AddLocalRasterTileLayerAsync(string divId, string layerId, IRasterTileSource tiles, LocalRasterTileLayer layer)
     {
         ArgumentNullException.ThrowIfNull(tiles);
         ArgumentNullException.ThrowIfNull(layer);
-        if (_mapLibre) return;
 
         // Asked again (every bulk render asks), the layer keeps its reader; JS adds it only when the map has none.
         var added = !_localRasterReaders.TryGetValue((divId, layerId), out var reader);
@@ -472,11 +473,77 @@ public sealed class MapInteropService : IMapInterop, IMapSelectionInterop, IMapT
         }
     }
 
+    // ── Local vector tile layers (XD01-460) ───────────────────────────────────
+
+    /// <inheritdoc />
+    /// <remarks><see cref="MapRenderMode.MapLibre"/> only: a Leaflet map can't draw vector tiles, so nothing is drawn there
+    /// (a host registers this interface only for a MapLibre map).</remarks>
+    public async Task AddLocalVectorTileLayerAsync(string divId, string layerId, IVectorTileSource tiles, LocalVectorTileLayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(tiles);
+        ArgumentNullException.ThrowIfNull(layer);
+        if (!_mapLibre) return;
+
+        // Asked again (every bulk render asks), the layer keeps its reader; JS adds it only when the map has none.
+        var added = !_localVectorReaders.TryGetValue((divId, layerId), out var reader);
+        if (added)
+        {
+            reader = DotNetObjectReference.Create(new LocalVectorTileReader(tiles, layer));
+            _localVectorReaders[(divId, layerId)] = reader;
+        }
+
+        try
+        {
+            await CallAsync("addLocalVectorLayer", divId, layerId, reader, new
+            {
+                minZoom = layer.MinZoom,
+                maxZoom = layer.MaxZoom,
+                bounds = layer.Bounds is { } b ? new[] { b.MinLon, b.MinLat, b.MaxLon, b.MaxLat } : null,
+                sourceLayers = layer.SourceLayers,
+                colors = new { point = AssetType.Point.Color, line = AssetType.Line.Color, polygon = AssetType.Area.Color },
+            });
+        }
+        catch
+        {
+            if (added)
+            {
+                _localVectorReaders.Remove((divId, layerId));
+                reader!.Dispose();
+            }
+
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveLocalVectorTileLayerAsync(string divId, string layerId)
+    {
+        if (!_localVectorReaders.Remove((divId, layerId), out var reader)) return;
+
+        try
+        {
+            await CallAsync("removeLocalVectorLayer", divId, layerId);
+        }
+        finally
+        {
+            reader.Dispose();
+        }
+    }
+
+    private static void Release<TReader>(Dictionary<(string DivId, string LayerId), DotNetObjectReference<TReader>> readers, string? divId)
+        where TReader : class
+    {
+        foreach (var key in readers.Keys.Where(k => divId is null || string.Equals(k.DivId, divId, StringComparison.Ordinal)).ToList())
+        {
+            readers.Remove(key, out var reader);
+            reader?.Dispose();
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
-        foreach (var reader in _localRasterReaders.Values)
-            reader.Dispose();
-        _localRasterReaders.Clear();
+        Release(_localRasterReaders, divId: null);
+        Release(_localVectorReaders, divId: null);
 
         if (_styleRefresher is null) return ValueTask.CompletedTask;
 

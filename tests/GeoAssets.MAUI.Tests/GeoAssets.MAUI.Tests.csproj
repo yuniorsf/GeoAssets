@@ -7,6 +7,8 @@
     through (over a plain SQLite file — the app opens the same table through its SQLCipher LocalOfflineDatabase). XD01-465:
     an offline raster pack connected as the app connects it and taken by the map's local raster renderer. XD01-464: an
     offline pack deleted through the catalog the Offline maps panel uses, and that panel's menu item.
+    XD01-460: the MapLibre render mode's registrations and the host page they rewrite (the real wwwroot/index.html, copied
+    as content).
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -53,10 +55,18 @@
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Projects\NoProjectClient.cs" Link="Linked\NoProjectClient.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Projects\NoProjectSessionService.cs" Link="Linked\NoProjectSessionService.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\NoAnalyticsService.cs" Link="Linked\NoAnalyticsService.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Map\MapLibreHostPage.cs" Link="Linked\MapLibreHostPage.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Map\HostPageFileProvider.cs" Link="Linked\HostPageFileProvider.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Map\MauiHostPage.cs" Link="Linked\MauiHostPage.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Extensions\MauiMapLibreServiceCollectionExtensions.cs" Link="Linked\MauiMapLibreServiceCollectionExtensions.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\PMTilesTestArchive.cs" Link="Linked\PMTilesTestArchive.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestMvt.cs" Link="Linked\TestMvt.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestPacks.cs" Link="Linked\TestPacks.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestRasterTiles.cs" Link="Linked\TestRasterTiles.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\apps\GeoAssets.MAUI\wwwroot\index.html" Link="HostPage\index.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

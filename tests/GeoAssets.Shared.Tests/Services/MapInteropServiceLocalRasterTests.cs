@@ -13,7 +13,7 @@ namespace GeoAssets.Shared.Tests.Services;
 /// XD01-465 — <see cref="MapInteropService"/> as <see cref="Interfaces.IMapLocalTileLayerInterop"/>: a local raster layer
 /// reaches <c>GeoAssets.addLocalRasterLayer</c> with a reference to its <see cref="LocalRasterTileReader"/> and the pack's
 /// media type, zooms and bounds; the reference is kept while the layer is on the map and released when it is removed,
-/// when its map is destroyed, or with the service; MapLibre mode draws none. And the reader answers JS the tile images.
+/// when its map is destroyed, or with the service; MapLibre mode draws it too (XD01-460). And the reader answers JS the tile images.
 /// </summary>
 public sealed class MapInteropServiceLocalRasterTests
 {
@@ -144,15 +144,20 @@ public sealed class MapInteropServiceLocalRasterTests
     }
 
     [Fact]
-    public async Task MapLibreMode_DrawsNoLocalRasterLayer()
+    public async Task MapLibreMode_DrawsTheLocalRasterLayer_ThroughTheMapLibreModule()
     {
+        // XD01-460: MAUI in MapLibre mode draws a raster pack as a raster source read through geoassets-pack://.
         var js = new RecordingJsRuntime();
         await using var sut = Sut(js, MapRenderMode.MapLibre);
 
         await sut.AddLocalRasterTileLayerAsync(Div, "layer-1", new StubRasterTiles(), Layer);
+        var reader = ReaderOf(js.Calls[^1]);
         await sut.RemoveLocalRasterTileLayerAsync(Div, "layer-1");
 
-        js.Calls.Should().BeEmpty();
+        js.Calls.Select(c => c.Identifier).Should().Equal(
+            "import", "GeoAssetsMapLibre.addLocalRasterLayer", "GeoAssetsMapLibre.removeLocalRasterLayer");
+        js.Calls[1].Args[3].Should().BeEquivalentTo(new { contentType = "image/webp", minZoom = 2, maxZoom = 12, bounds = new[] { -9.5, 38.6, -9.0, 38.9 } });
+        FluentActions.Invoking(() => reader.Value).Should().Throw<ObjectDisposedException>();
     }
 
     [Fact]

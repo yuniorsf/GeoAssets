@@ -10,7 +10,7 @@ namespace GeoAssets.Provider.PMTiles.Packs;
 
 /// <summary>
 /// A read-only <see cref="IAssetProvider"/> over an offline map pack (XD01-438), drawn by the map's existing vector path
-/// (<see cref="ProviderRenderCapabilities.VectorFeatures"/> — Leaflet can't draw vector tiles, and MAUI stays on
+/// (<see cref="ProviderRenderCapabilities.VectorFeatures"/> — Leaflet can't draw vector tiles, and MAUI defaults to
 /// Leaflet): each viewport read decodes the pack's tiles under the view into <see cref="GeoFeature"/>s
 /// (<see cref="MvtFeatureProjector"/>), at the tile zoom MapLibre would read for it — one below the map's 256 px zoom,
 /// within the pack's zoom range. Every read is bounded: at most <see cref="MaxTilesPerRead"/> tiles (a wide view steps
@@ -32,9 +32,17 @@ namespace GeoAssets.Provider.PMTiles.Packs;
 /// <c>pmtiles:{pack id}:{z}/{x}/{y}:{layer}:{n}</c> (the n-th feature of the tile's layer), each the same on every
 /// read. Writes are ignored and no event is raised, like the other read-only providers.
 /// </para>
+/// <para>
+/// A map that draws vector tiles itself (MapLibre, XD01-460) reads the pack's tiles instead, through
+/// <see cref="ILocalVectorTileProvider"/>: <see cref="VectorTiles"/> answers each tile whole and uncompressed from the
+/// same tile cache, over the <see cref="VectorTileLayer"/> of the pack's zooms, bounds and <c>vector_layers</c>.
+/// </para>
 /// </summary>
-public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabilities, IDisposable
+public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabilities, ILocalVectorTileProvider, IDisposable
 {
+    /// <summary>The layer set every tile of a vector pack is asked for (the pack is read whole).</summary>
+    public static readonly TileLayerSet LayerSet = new("pmtiles", ["pmtiles"]);
+
     /// <summary>The most tiles one read decodes.</summary>
     public const int MaxTilesPerRead = 64;
 
@@ -54,12 +62,18 @@ public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabili
         ArgumentNullException.ThrowIfNull(pack);
         _pack = pack;
         _tiles = new PMTilesPackTiles(pack, cache);
+        VectorTiles = new PMTilesPackVectorTileSource(_tiles);
+        VectorTileLayer = LayerOf(pack);
     }
 
     /// <summary>The pack this provider reads.</summary>
     public PMTilesPack Pack => _pack;
 
     public ProviderRenderCapabilities RenderCapabilities => ProviderRenderCapabilities.VectorFeatures;
+
+    public IVectorTileSource VectorTiles { get; }
+
+    public LocalVectorTileLayer VectorTileLayer { get; }
 
     private Snapshot Current => Volatile.Read(ref _current);
 
@@ -202,6 +216,17 @@ public sealed class PMTilesPackAssetProvider : IAssetProvider, IProviderCapabili
         }
 
         return null;
+    }
+
+    private static LocalVectorTileLayer LayerOf(PMTilesPack pack)
+    {
+        var header = pack.Header;
+        var (west, south, east, north) = header.Bounds;
+        BoundingBox? bounds = west < east && south < north
+            ? new BoundingBox(Math.Max(west, -180), Math.Max(south, -WebMercator.MaxLatitude), Math.Min(east, 180), Math.Min(north, WebMercator.MaxLatitude))
+            : null;
+        var maxZoom = Math.Min((int)header.MaxZoom, TileAddress.MaxZoom);
+        return new LocalVectorTileLayer(LayerSet, pack.Archive.VectorLayerIds, Math.Min((int)header.MinZoom, maxZoom), maxZoom, bounds);
     }
 
     private BoundingBox PackBounds()

@@ -17,6 +17,11 @@ namespace GeoAssets.Shared.Services;
 ///   <item>Editing is terra-draw's select mode, started by a double-click on a feature the providers rendered; a
 ///   double-click on a tile-only one selects it and edits its GeoJSON overlay once that arrives (XD01-436) — never the
 ///   tile's clipped geometry. A multi-geometry is not editable.</item>
+///   <item>An offline vector map pack (<see cref="Core.Interfaces.ILocalVectorTileProvider"/>, XD01-460) is drawn from its
+///   tiles, read on the device through the <c>geoassets-pack://</c> protocol: its features are shown, not clicked, hovered,
+///   selected or snapped to. An offline raster pack is a basemap under every other layer, as in the Leaflet modes.</item>
+///   <item>On a touch screen a feature's context menu opens on a long press only where the platform fires
+///   <c>contextmenu</c> for one (Android) — unless <see cref="LongPressContextMenu"/> is on (MAUI turns it on).</item>
 /// </list>
 /// The kernel's own provider entry is drawn by <see cref="Rendering.HybridLodMapLayerRenderer"/> (XD01-436): from its
 /// tiles, with only the selected and just-written features as GeoJSON over tile copies hidden by id — no feature is
@@ -68,6 +73,22 @@ public sealed class MapLibreOptions
         var root = gatewayBaseUrl.AbsoluteUri.EndsWith('/') ? gatewayBaseUrl : new Uri(gatewayBaseUrl.AbsoluteUri + "/");
         return new Uri(root, "./" + url.TrimStart('/')).AbsoluteUri;
     }
+
+    /// <summary>
+    /// Where MapLibre GL JS (its CSP build, <c>maplibre-gl-csp.js</c> with its worker), its stylesheet, terra-draw and its
+    /// adapter are loaded from (XD01-460): a URL (relative = under the page's base URI) under which each sits at its
+    /// unpkg path, e.g. <c>maplibre-gl@5.24.0/dist/maplibre-gl-csp.js</c> — the same pinned versions and SRI hashes as
+    /// the CDN's. <c>null</c> (the default, the Web) = the pinned unpkg URLs. MAUI points it at the copies it bundles, so
+    /// the map starts offline and the page needs no script origin.
+    /// </summary>
+    public string? LibraryBaseUrl { get; set; }
+
+    /// <summary>
+    /// Whether a long press (500 ms, a finger held within 10 px) on a feature opens its context menu, as a right-click
+    /// does (XD01-460) — for WebViews that fire no <c>contextmenu</c> for one (iOS, Mac Catalyst); the platform's own is
+    /// used where it fires one, never both. Off by default (the Web); MAUI turns it on.
+    /// </summary>
+    public bool LongPressContextMenu { get; set; }
 
     /// <summary>Throws when an interval is negative.</summary>
     public static void EnsureValid(MapLibreOptions options)

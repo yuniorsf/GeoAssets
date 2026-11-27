@@ -153,7 +153,7 @@ flowchart TD
 - **Tiles**: `MapInterop:MapLibre:StyleUrl` (default `tiles/style.json`, relative to `GeoAssetsServer:BaseUrl` — the gateway, via `ApiScopeRoutes`) is merged over an OpenStreetMap basemap, its layers below the providers' features. `transformRequest` adds `Authorization: Bearer` to every request under the style's directory only, with the latest answer of `MapContainer.GetTileAccessFromJs` (`IMapTileAccessProvider`, the same token source and scopes as the WMS layers): read per request, refreshed a minute before it expires, after a 401 on `style.json` and after a 401 on a tile (the tiles refused are asked again with the new token; at most one refresh per 10 s for a server that refuses every token).
 - **`{v}`**: `MapTileStyleRefresher` (`TimeProvider`) calls `GeoAssetsMapLibre.refreshTileStyle` `WriteRefreshDelay` (1.5 s, debounced) after the provider's `FeatureAdded`/`FeatureUpdated`/`FeatureDeleted`/`CollectionChanged` and every `StyleRefreshInterval` (1 min; `0` = only after writes). The module re-reads `style.json` (`cache: no-cache` — the browser revalidates with its `ETag`, a `304` when nothing moved); a new `{v}` with the same sources and layers only re-points the sources' tile URLs (`setTiles`: the old tiles stay drawn until their replacements arrive — no reload, no clear); a changed `{style}` replaces the tile layers.
 - **Interaction**: click, hover (name tooltip, a text node), context menu, snapping candidates and `panToFeature` of a tile-only feature are `queryRenderedFeatures` over the feature and tile layers (the tiles' promoted `id`); feature states and the highlight are `match` expressions on the layers' paint (colour, opacity, width), layer visibility and zoom ranges are filters/visibility. terra-draw draws points, lines and polygons (one shape per `enableDraw`, snapped to rendered vertices within 15 px, in the snap scope), the box (rectangle) and fence (polygon) selection tools, and edits a feature the providers rendered (double-click → select mode → `OnFeatureEditedFromJs`).
-- **Degrades** (documented on `MapLibreOptions`, logged once, never thrown): the kernel's own WMS (EPSG:4326 only) is not drawn and other WMS servers are asked on EPSG:3857; icon styles are circles; reference layers have no labels; a multi-geometry is not editable; another provider's features are drawn over the kernel's tiles (the kernel's own no longer twice — XD01-436 below). MAUI's Content-Security-Policy (no gateway `connect-src`, no `blob:` workers) blocks this mode there.
+- **Degrades** (documented on `MapLibreOptions`, logged once, never thrown): the kernel's own WMS (EPSG:4326 only) is not drawn and other WMS servers are asked on EPSG:3857; icon styles are circles; reference layers have no labels; a multi-geometry is not editable; another provider's features are drawn over the kernel's tiles (the kernel's own no longer twice — XD01-436 below). MAUI's Content-Security-Policy (no gateway `connect-src`, no `blob:` workers) blocked this mode there until XD01-460 (below).
 
 ### As built — hybrid LOD renderer & editing coexistence (XD01-436)
 
@@ -199,7 +199,7 @@ flowchart TD
 - **Picking** (Track 1C): the plugin's `pack` field is a `BinaryFile` with `Accept: ".pmtiles"` and the new `ProviderConfigField.PathOnly`. `ProviderConfigForm` then calls `INativeFilePicker.PickBinaryFileAsync([".pmtiles"], NativeFilePickContent.PathOnly)` (new Core enum; default `Bytes`, as before) and stores only `pack_name`/`pack_path` — a multi-gigabyte pack is never read into memory or base64'd into the configuration. The connect dialog checks a required field with `ProviderConfigField.IsProvidedIn` (a path-only file by its path). `MauiNativeFilePicker`'s filters are `NativeFilePickerFileTypes` (plain .NET, unit-tested): Mac Catalyst now has an entry (UTTypes, like iOS — before, a Mac Catalyst pick found no filter for its platform), `.pmtiles` is `application/vnd.pmtiles` + `application/octet-stream` on Android and `public.data` on Apple (no system UTType exists).
 - **Storage / import**: `PMTilesPackStorage` (MAUI: `AddPMTilesPackStorage(<AppDataDirectory>/offline-packs)`). On connect the plugin validates the picked file (`PMTilesPack.OpenAsync`: PMTiles v3, MVT or undeclared tiles, uncompressed/gzip/Brotli — raster or Zstandard packs are refused with the file's name), then streams it in 1 MiB blocks to `<id>.pmtiles` through a `.partial` file renamed when complete (nothing left on failure or cancel); `<id>` is 16 hex digits of the SHA-256 of the first 16 KiB and the length, so the same pack is never copied twice. `pack_path` is set to the stored copy, which the pool entry's reconnect values and the boot loader's auto-boot reopen offline. Without a storage (a server) the pack is read where it is. Copying the file rather than its tiles row by row keeps import time and space linear in one sequential copy, whatever the pack's size; the picked file's own path can't be kept because iOS/Android hand the app a temporary copy.
 - **Read-through `SqliteLocalVectorTileCache`**: it now also implements Core's `ITileCache` (MAUI registers the one singleton as both). `PMTilesPackTiles` looks every pack tile up there first — key `tile/offline-pack/pmtiles/pmtiles/{pack id}/{z}/{x}/{y}.mvt` — and on a miss reads the pack (one directory lookup, one positional read) and caches the tile as stored (bytes, media type, encoding; an absent tile as empty, so its directories aren't walked again). Rows sit in the same SQLCipher table as the z/x/y basemap entries (new nullable `ContentType`/`ContentEncoding` columns, added by sqlite-net's additive migration), whose keys never collide. Bounded: past 20,000 `tile/…` rows (checked every 256 writes) the oldest written are deleted; `RemoveAsync(range)` evicts a range's `tile/…` rows.
-- **To the map in Leaflet mode**: MAUI stays on Leaflet (MapLibre is Web-only, XD01-435), which can't draw vector tiles, so a pack is an `IAssetProvider` (`PMTilesPackAssetProvider`, `VectorFeatures` only, read-only — writes ignored, no events) drawn by the existing `VectorFeatureMapLayerRenderer`. A viewport read (`GetInBoundsJsonAsync(ViewportQuery)`) decodes the tiles under the padded view at the zoom MapLibre would read — Leaflet zoom − 1, clamped to the pack's zooms; none below its lowest — inside the pack's bounds only, stepping a zoom down while more than 64 tiles cover it, at most 10,000 features (`MvtTileDecoder`, MVT 2.1; `MvtFeatureProjector`: tile units → EPSG:3857 envelope → EPSG:4326, 7 decimals; points in a tile's buffer dropped; ring winding decides shells and holes; asset type `Point`/`Line`/`Area` by geometry; properties = the tags plus `mvt:layer`/`mvt:id`). Feature ids are `pmtiles:{pack id}:{z}/{x}/{y}:{layer}:{n}`, stable across reads, so the viewport diff keeps them (a feature with an MVT id: see XD01-463 below). On connect it reads an overview (the whole pack at the highest zoom of at most 16 tiles), so the map fits to the pack. `GetAll`/`GetById`/search/spatial queries answer the last read — the pack is never enumerated. Raster packs: see XD01-465 below.
+- **To the map in Leaflet mode**: MAUI defaults to Leaflet (MapLibre was Web-only until XD01-460, which draws a pack from its tiles instead), which can't draw vector tiles, so a pack is an `IAssetProvider` (`PMTilesPackAssetProvider`, `VectorFeatures` only, read-only — writes ignored, no events) drawn by the existing `VectorFeatureMapLayerRenderer`. A viewport read (`GetInBoundsJsonAsync(ViewportQuery)`) decodes the tiles under the padded view at the zoom MapLibre would read — Leaflet zoom − 1, clamped to the pack's zooms; none below its lowest — inside the pack's bounds only, stepping a zoom down while more than 64 tiles cover it, at most 10,000 features (`MvtTileDecoder`, MVT 2.1; `MvtFeatureProjector`: tile units → EPSG:3857 envelope → EPSG:4326, 7 decimals; points in a tile's buffer dropped; ring winding decides shells and holes; asset type `Point`/`Line`/`Area` by geometry; properties = the tags plus `mvt:layer`/`mvt:id`). Feature ids are `pmtiles:{pack id}:{z}/{x}/{y}:{layer}:{n}`, stable across reads, so the viewport diff keeps them (a feature with an MVT id: see XD01-463 below). On connect it reads an overview (the whole pack at the highest zoom of at most 16 tiles), so the map fits to the pack. `GetAll`/`GetById`/search/spatial queries answer the last read — the pack is never enumerated. Raster packs: see XD01-465 below.
 - **Pieces joined across tiles (XD01-463)**: `PMTilesPackFeatureMerger` turns a read's pieces of one feature back into one `GeoFeature`, so no polygon outline runs along a tile seam and no feature is drawn once per tile. Identity is the MVT feature id within its layer name and geometry type (MVT 2.1 §4.2; an `id` tag is only a property); the joined feature is `pmtiles:{pack id}:{z}:{point|line|polygon}:{mvt id}:{layer}`, the same whichever tiles a read covers. A feature without an id, or whose id a tile's layer repeats (some tilers give merged features id 0), keeps the per-tile behaviour and ids above. A piece whose envelope covers all the others' is the whole feature (a tile only clips away what lies beyond its box, which another piece would reach), so a small polygon or short line across a seam is that piece, no overlay. Otherwise pieces are joined in the read's tile grid, where every tile's vertices sit on one exact `1/extent` grid, not in EPSG:4326, and placed on the map once: polygons by `UnaryUnionNG` with that grid as fixed precision model (snap-rounding; the pieces overlap by twice the tile buffer, so each piece's clip edges lie inside its neighbour and dissolve without slivers), lines cut to their own tile without the buffer, their seam ends welded within 2 tile units and merged end to end (`LineMerger`), points de-duplicated. The 10,000 bound counts decoded pieces, before joining (it bounds decoding and joining alike), so a read answers at most 10,000 features, fewer when features span tiles; decoding and joining run on the thread pool (`Task.Run`), not on the caller's UI thread. Cost, 64-tile viewport (z14, tiles from the cache, interleaved old/new runs on a 10-core dev Mac under heavy load, so the ratios count rather than the times): `ReadAsync` median 26 → 47 ms for building/road-heavy content (7,509 pieces → 6,320 features), 9 → 46 ms with 150 large multi-tile polygons (4,489 → 2,950), 19 → 99 ms dense (10,000 decoded → 6,807); the map's JSON read (`GetInBoundsJsonAsync`, serialization included) 134 → 168, 27 → 50 and 61 → 126 ms. The union of large multi-tile polygons is most of the added time. Not run on a device.
 - **Known limits**: a line or polygon without an MVT id (or with an id its tile repeats) is still drawn as one piece per tile, buffer included (a polygon's outline shows at tile seams); Leaflet draws every decoded feature as SVG/canvas, so a dense pack is capped by the 10,000-feature read rather than tiled; styling is the three default asset types' colours; a stored pack is listed and deleted in MAUI's *Offline maps* panel since XD01-464 (below).
 - **Not verified on a device**: the iOS/Android/Mac Catalyst pickers' path-only results (readable temporary copies) and the type filters, the import into app data, and SQLCipher's handling of the new columns were only build-verified for `net10.0-ios`/`net10.0-maccatalyst` (and `net10.0-android` with `/warnaserror`); the logic is tested on .NET (`GeoAssets.MAUI.Tests` links `NativeFilePickerFileTypes` and `SqliteLocalVectorTileCache` over plain SQLite).
@@ -290,6 +290,69 @@ flowchart TD
   covered by bUnit, the deletion end to end over plain SQLite in `GeoAssets.MAUI.Tests`. MAUI's localizer is still the
   key-echoing `NoOpJsonStringLocalizer` (XD01-24), so on a device the panel shows its keys, like every other shared
   panel there.
+
+### As built — MapLibre in MAUI (XD01-460)
+
+`apps/GeoAssets.MAUI` (composition, host page, bundled libraries), `apps/GeoAssets.Shared` (interop, renderer, JS) and
+`core/GeoAssets.Core` (the contract). `MapInterop:RenderMode = MapLibre` now works in MAUI; **Leaflet stays the default**
+and MAUI's default composition is unchanged — `AddMauiMapLibreMode` (one call in `MauiProgram.AddAssetsAndMap`) adds only
+`MauiHostPage.Unchanged` in a Leaflet mode, so the bundled `index.html` is served byte for byte, no option changes and no
+renderer changes.
+
+- **Content-Security-Policy**: `wwwroot/index.html` is not edited. In MapLibre mode `HostPageBlazorWebView` (the page's
+  `BlazorWebView`, overriding `CreateFileProvider`) serves it through `HostPageFileProvider`, rewritten once by
+  `MapLibreHostPage.WidenContentSecurityPolicy`, which adds exactly two things: `worker-src blob:` (MapLibre's worker
+  runs from a `blob:` URL; without the directive a worker falls back to `script-src`, which has no `blob:`) and the tile
+  style's origin — `GeoAssetsServer:BaseUrl`'s, or an absolute `MapInterop:MapLibre:StyleUrl`'s — in `connect-src`
+  (`style.json` and the vector and raster tiles are `fetch`ed with the bearer header; nothing is an `<img>`). No script,
+  style or image origin is added; `'unsafe-eval'` stays only because Leaflet/Blazor's page already had it — MapLibre
+  doesn't need it (checked headless without it).
+- **Libraries, bundled**: `wwwroot/lib/maplibre/` holds MapLibre GL JS 5.24.0's CSP build (`maplibre-gl-csp.js` +
+  `maplibre-gl-csp-worker.js`; BSD-3-Clause), its stylesheet, terra-draw 1.37.0 and terra-draw-maplibre-gl-adapter 1.5.0
+  (MIT), at their unpkg paths, with their licences. `MapInterop:MapLibre:LibraryBaseUrl` (MAUI defaults it to
+  `lib/maplibre/`; null — the Web — keeps the CDN) makes `geoassets.maplibre.js` load `LOCAL_LIBRARIES` from there with
+  SRI, read the worker with an SRI-checked `fetch` into a `blob:` URL and `setWorkerUrl` it. The CSP build is the one
+  MapLibre ships for strict CSPs, and the default `maplibre-gl.js` carries an `/* eslint-disable */` header the oracle
+  refuses. Bundled because an offline start-up needs them; `node --test` checks every bundled file's SHA-384 against its pin.
+- **Kernel tiles**: MapLibre mode also registers `MapInteropService` as `IMapTileLayerInterop`, so the kernel's REST entry
+  is drawn from `/tiles` by `HybridLodMapLayerRenderer` (as on the Web) with `MsalMapTileAccessProvider`'s token.
+- **Offline packs, no network**: a raster pack (XD01-465) is now drawn in MapLibre mode too —
+  `GeoAssetsMapLibre.addLocalRasterLayer`, a `raster` source above OpenStreetMap and under every other layer. A vector
+  pack is drawn from its tiles: `PMTilesPackAssetProvider` implements Core's new `ILocalVectorTileProvider`
+  (`IVectorTileSource VectorTiles` — through `PMTilesPackTiles`, i.e. the host's `ITileCache` = `SqliteLocalVectorTileCache`,
+  answered uncompressed — and `LocalVectorTileLayer VectorTileLayer`: the pack's zooms clamped to 0–24, bounds clamped to
+  Web Mercator, `vector_layers`), and `LocalVectorTileMapLayerRenderer` (`Refining`, before the vector renderer) draws it
+  through `IMapLocalVectorTileLayerInterop`, which MAUI registers only in MapLibre mode — elsewhere the pack's features
+  are drawn as before. Both readers (`LocalRasterTileReader`, `LocalVectorTileReader` — gzip inflated, at most 16 MiB) go
+  to JS as `DotNetObjectReference`s; `maplibregl.addProtocol('geoassets-pack', …)` answers
+  `geoassets-pack://{key}/{z}/{x}/{y}` from them (an absent raster tile = a transparent GIF). MapLibre asks only the
+  tiles of the view inside the pack's bounds and zooms (overzooming past its highest). Vector layers are found in the
+  metadata and in the tiles themselves (`mvtLayerNames`), drawn in the Leaflet defaults' colours of
+  `AssetType.Point`/`Line`/`Area`.
+- **Long press**: `MapLibreOptions.LongPressContextMenu` (MAUI: on) opens a feature's context menu after 500 ms held
+  within 10 px — WKWebView (iOS, Mac Catalyst) fires no `contextmenu` for a long press; Android's, deduplicated with it.
+- **Parity** (the MAUI field-work pages — `FieldWorkExecution`, `PoleCensusInspection`, `FieldWorkChecklist` — host no
+  map; the map a field user opens is the shared `MapWorkspace`, so nothing is blocked per page):
+
+  | `MapLibreOptions` degrade | In MAUI |
+  |---|---|
+  | WMS on EPSG:3857 only, the kernel's WMS not drawn | Not applicable — MAUI composes no WMS provider (Rest + PMTiles); the kernel comes from `/tiles` |
+  | Icon styles drawn as circles | Degraded, as on the Web |
+  | Feature states: colour, opacity, width only | Degraded, as on the Web |
+  | Reference layers without labels | Degraded, as on the Web |
+  | terra-draw select-mode editing by double-click; a tile-only feature edits its overlay; no multi-geometry edit | Degraded, as on the Web; double-tap on a touch screen is on the device checklist |
+  | Context menu on touch | **Fixed**: long press (`LongPressContextMenu`) |
+  | Offline packs | **Fixed**: raster and vector packs drawn from their tiles; a vector pack's features are shown, not clicked, selected or snapped to (new degrade, on `MapLibreOptions`) |
+  | Offline start-up | **Fixed**: libraries bundled |
+
+- **Verified**: unit tests (composition in both modes, the CSP rewrite on the real `index.html`, the file provider, the
+  readers, the renderer, the interop), `node --test` (library pins, protocol URLs, MVT layer names, pack layers), and
+  headless Chrome (SwiftShader) on a page with MAUI's CSP as rewritten by the C# code, the bundled libraries served from
+  the page's origin and a fake kernel on another origin: no CSP violation; the kernel's MVT feature drawn and hit and its
+  raster tier drawn, every request with the bearer; a raster pack and a vector pack (layer found in the tile) drawn
+  through `geoassets-pack://`; the long press opening the menu and a tap not; with the kernel unreachable, both packs
+  still drawn from the bundle; with MAUI's original CSP, the worker and `style.json` refused. **Not verified on a
+  device**: XD01-460 stays In Review with a device checklist (iOS, Android, Mac Catalyst).
 
 ---
 
@@ -550,8 +613,8 @@ every zoom. Zero full-map clears on pan was checked in headless Chrome against a
 - COG *export* is not built (no raster catalog to export from); FlatGeobuf/GeoParquet (XD01-466) and PMTiles (XD01-472)
   export are, wired only into the network import CLI's `plan --export`. The PMTiles writer doesn't expose GDAL's per-tile
   size/feature limits.
-- MAUI stays on Leaflet: MapLibre needs MAUI CSP and parity work. MAUI pickers and the SQLCipher migration are unverified
-  on a device.
+- MAUI's MapLibre mode (XD01-460) and its offline packs, the MAUI pickers and the SQLCipher migration are unverified on a
+  device (XD01-460's device checklist).
 - XD01-467 measured the `geom_3857` and `geom_3857_centroid` table rewrites on 1 M bench rows (native arm64:
   `ACCESS EXCLUSIVE` 55.5 s and 28.5 s, peak extra disk 2.2× and 1.05× the table; at the kernel's startup with the
   default 30 s command timeout the migration is retried seven times and fails after 4 min 29 s, applying nothing).

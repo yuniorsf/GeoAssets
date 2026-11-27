@@ -4,10 +4,10 @@
              xmlns:local="clr-namespace:GeoAssets.MAUI"
              x:Class="GeoAssets.MAUI.MainPage">
 
-    <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
-        <BlazorWebView.RootComponents>
+    <local:HostPageBlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
+        <local:HostPageBlazorWebView.RootComponents>
             <RootComponent Selector="#app" ComponentType="{x:Type local:WebApp}" />
-        </BlazorWebView.RootComponents>
-    </BlazorWebView>
+        </local:HostPageBlazorWebView.RootComponents>
+    </local:HostPageBlazorWebView>
 
 </ContentPage>

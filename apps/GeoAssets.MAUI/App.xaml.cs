@@ -1,13 +1,17 @@
 using GeoAssets.MAUI.Services;
+using GeoAssets.MAUI.Services.Map;
 using GeoAssets.MAUI.Services.Offline;
 
 namespace GeoAssets.MAUI;
 
 public partial class App : Application
 {
-    internal App(ConnectivitySyncTrigger connectivitySyncTrigger, OrderTypeCatalogLoader orderTypeCatalogLoader)
+    private readonly MauiHostPage _hostPage;
+
+    internal App(ConnectivitySyncTrigger connectivitySyncTrigger, OrderTypeCatalogLoader orderTypeCatalogLoader, MauiHostPage hostPage)
     {
         InitializeComponent();
+        _hostPage = hostPage;
 
         // XD01-276: starts the outbox flush-on-reconnect trigger once for the app's lifetime.
         connectivitySyncTrigger.Start();
@@ -17,5 +21,5 @@ public partial class App : Application
     }
 
     protected override Window CreateWindow(IActivationState? activationState)
-        => new(new MainPage());
+        => new(new MainPage(_hostPage));
 }
