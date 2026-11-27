@@ -2,12 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using FluentAssertions;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Services;
+using GeoAssets.Provider.Rest;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -17,6 +19,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace GeoAssets.Server.Tests;
 
@@ -26,7 +29,7 @@ namespace GeoAssets.Server.Tests;
 /// <see cref="FilteringOrganizationCatalogFactory"/> over an in-memory catalog, so cross-organization
 /// invisibility is the production filtering, not a stub.
 /// </summary>
-public sealed class OrganizationScopedFeaturesEndpointTests
+public sealed class OrganizationScopedFeaturesEndpointTests(ITestOutputHelper output)
 {
     private const string RolesHeader = "X-Test-Roles";
     private const string EdgeKind = "feeds";
@@ -51,6 +54,7 @@ public sealed class OrganizationScopedFeaturesEndpointTests
     private sealed class Harness : IAsyncDisposable
     {
         private IHost? _host;
+        private HttpClient? _coreHttp;
 
         public TestAssetProvider Catalog { get; } = new();
 
@@ -88,8 +92,19 @@ public sealed class OrganizationScopedFeaturesEndpointTests
             return await Client.SendAsync(request);
         }
 
+        public RestOrganizationScopedGeoCoreClient CreateCoreClient()
+        {
+            _coreHttp = new HttpClient(_host!.GetTestServer().CreateHandler())
+            {
+                BaseAddress = new Uri(Client.BaseAddress!, "api/geoassets/"),
+            };
+            _coreHttp.DefaultRequestHeaders.Add(RolesHeader, GeoAuthorizationHandler.ServiceCallerAppRole);
+            return new RestOrganizationScopedGeoCoreClient(_coreHttp);
+        }
+
         public async ValueTask DisposeAsync()
         {
+            _coreHttp?.Dispose();
             Client?.Dispose();
             if (_host is not null)
             {
@@ -377,5 +392,83 @@ public sealed class OrganizationScopedFeaturesEndpointTests
         using var response = await harness.GetAsync(DescendantsUrl(OrgB, "shared-root"));
 
         (await ReadPageAsync(response)).Items.Select(f => f.Id).Should().Equal("shared-child");
+    }
+
+    // ── Wire format (XD01-468) ─────────────────────────────────────────────────
+
+    private static string Compact(GeoFeature feature) => JsonSerializer.Serialize(feature, GeoJsonSerializer.CompactOptions);
+
+    [Fact]
+    public async Task GetFeature_AnswersCompactJsonThatRoundTripsToTheSameFeature()
+    {
+        await using var harness = new Harness();
+        await harness.StartAsync();
+        var pole = Feature("a-pole", OrgA, "a-child");
+        harness.Catalog.Add(pole);
+
+        using var response = await harness.GetAsync(FeatureUrl(OrgA, "a-pole"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().NotContain("\n").And.NotContain("\r");
+        Compact(JsonSerializer.Deserialize<GeoFeature>(body, GeoJsonSerializer.Options)!).Should().Be(Compact(pole));
+    }
+
+    [Fact]
+    public async Task GetDescendants_AnswersACompactPageThatRoundTripsToTheSameFeatures()
+    {
+        await using var harness = new Harness();
+        await harness.StartAsync();
+        var children = new[] { Feature("c", OrgA), Feature("a", OrgA, "b"), Feature("b", OrgA) };
+        harness.Catalog.Add(Feature("root", OrgA, "c", "a"));
+        foreach (var child in children) harness.Catalog.Add(child);
+
+        using var response = await harness.GetAsync(DescendantsUrl(OrgA, "root"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().NotContain("\n").And.NotContain("\r");
+        var page = JsonSerializer.Deserialize<PagedResult<GeoFeature>>(body, GeoJsonSerializer.Options)!;
+        page.TotalCount.Should().Be(3);
+        page.Items.Select(Compact).Should().Equal(children.OrderBy(f => f.Id, StringComparer.Ordinal).Select(Compact));
+    }
+
+    [Fact]
+    public async Task GetDescendants_ThousandFeaturePage_IsSmallerThanTheIndentedEncoding()
+    {
+        await using var harness = new Harness();
+        await harness.StartAsync();
+        var ids = Enumerable.Range(0, 1_000).Select(i => $"d-{i:D4}").ToArray();
+        harness.Catalog.Add(Feature("root", OrgA, [.. ids]));
+        foreach (var id in ids) harness.Catalog.Add(Feature(id, OrgA, $"{id}-next"));
+
+        using var response = await harness.GetAsync(DescendantsUrl(OrgA, "root", "&take=1000"));
+        var body = await response.Content.ReadAsByteArrayAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var page = JsonSerializer.Deserialize<PagedResult<GeoFeature>>(body, GeoJsonSerializer.Options)!;
+        page.Items.Should().HaveCount(1_000);
+        var indented = JsonSerializer.SerializeToUtf8Bytes(page, GeoJsonSerializer.Options).Length;
+        body.Length.Should().Be(JsonSerializer.SerializeToUtf8Bytes(page, GeoJsonSerializer.CompactOptions).Length);
+        body.Length.Should().BeLessThan(indented);
+        output.WriteLine($"1,000-feature descendants page: indented {indented} bytes, compact {body.Length} bytes ({100.0 * (indented - body.Length) / indented:F1}% smaller).");
+    }
+
+    [Fact]
+    public async Task RestOrganizationScopedGeoCoreClient_DeserializesTheCompactResponses()
+    {
+        await using var harness = new Harness();
+        await harness.StartAsync();
+        var ids = Enumerable.Range(0, RestOrganizationScopedGeoCoreClient.PageSize + 3).Select(i => $"d-{i:D4}").ToArray();
+        var root = Feature("root", OrgA, [.. ids]);
+        harness.Catalog.Add(root);
+        foreach (var id in ids) harness.Catalog.Add(Feature(id, OrgA));
+        var client = harness.CreateCoreClient();
+
+        var feature = await client.GetFeatureAsync(OrgA, "root");
+        var descendants = await client.GetDescendantsAsync(OrgA, "root", EdgeKind);
+
+        Compact(feature!).Should().Be(Compact(root));
+        descendants.Select(f => f.Id).Should().Equal(ids);
     }
 }
