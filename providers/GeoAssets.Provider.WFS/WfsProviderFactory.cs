@@ -23,6 +23,16 @@ public sealed class WfsProviderFactory
     private const string DefaultTypeName   = "geoassets:feature";
     private const int    DefaultMaxFeatures = 10_000;
 
+    /// <summary>
+    /// The named client every WFS request goes through — the REST provider's (XD01-17), to which a host attaches the
+    /// signed-in user's bearer token scoped to its configured GeoAssets origin only (XD01-477): a WFS server anywhere
+    /// else is called anonymously.
+    /// </summary>
+    public const string HttpClientName = "GeoAssetsServer";
+
+    /// <summary>The header that routes a request on the gateway to a distributor silo (XD01-473, XD01-477).</summary>
+    public const string TenantDomainHeader = "X-Tenant-Domain";
+
     private readonly IHttpClientFactory           _httpFactory;
     private readonly ILogger<WfsAssetProvider>    _providerLogger;
 
@@ -64,9 +74,10 @@ public sealed class WfsProviderFactory
         string            baseUrl,
         string            typeName,
         int               maxFeatures,
+        string?           tenantDomain,
         CancellationToken ct = default)
     {
-        var wfs      = new WfsClient(BuildHttpClient(baseUrl));
+        var wfs      = new WfsClient(BuildHttpClient(baseUrl, tenantDomain));
         var provider = new WfsAssetProvider(wfs, typeName, maxFeatures, _providerLogger);
         await provider.InitializeAsync(ct).ConfigureAwait(false);
         return provider;
@@ -88,12 +99,15 @@ public sealed class WfsProviderFactory
         return (baseUrl, typeName, maxFeatures);
     }
 
-    private HttpClient BuildHttpClient(string baseUrl)
+    private HttpClient BuildHttpClient(string baseUrl, string? tenantDomain = null)
     {
-        var client = _httpFactory.CreateClient();
-        // The user provides the REST API base URL (e.g. https://server/api/geoassets).
+        var client = _httpFactory.CreateClient(HttpClientName);
+        if (tenantDomain is not null)
+            client.DefaultRequestHeaders.Add(TenantDomainHeader, tenantDomain);
+
+        // The user provides the server or gateway base URL (e.g. https://gateway or https://gateway/api/geoassets).
         // WfsClient uses relative URLs like "?SERVICE=WFS...", so BaseAddress must end
-        // at the WFS path so they resolve to …/api/geoassets/wfs?SERVICE=WFS…
+        // at the WFS path so they resolve to …/wfs?SERVICE=WFS…
         var trimmed = baseUrl.TrimEnd('/');
         var wfsBase = trimmed.EndsWith("/wfs", StringComparison.OrdinalIgnoreCase)
             ? trimmed           // user already gave the full WFS path
