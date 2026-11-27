@@ -1,0 +1,78 @@
+@inherits GeoAssets.Shared.Components.Localization.LocalizedComponentBase
+@using GeoAssets.Core.OfflinePacks
+
+<div class="sidebar-section offline-packs">
+    <div class="section-header-row">
+        <h6>@L["offlinePacks.title"]</h6>
+        <button class="btn-icon offline-packs-refresh" title="@L["offlinePacks.refresh"]"
+                disabled="@_busy" @onclick="LoadAsync">⟳</button>
+    </div>
+
+    @if (_listing is not null)
+    {
+        <p class="offline-packs-total">@L.GetString("offlinePacks.totalUsed", SizeText(_listing.TotalBytes))</p>
+    }
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <p class="offline-packs-msg offline-packs-msg--@ToneClass(_tone)" role="status">@_message</p>
+    }
+
+    @if (_listing is null)
+    {
+        <p class="offline-packs-note">@L["offlinePacks.loading"]</p>
+    }
+    else if (_listing.Packs.Count == 0)
+    {
+        <p class="offline-packs-note offline-packs-empty">@L["offlinePacks.empty"]</p>
+    }
+    else
+    {
+        <ul class="list-group offline-packs-list">
+            @foreach (var pack in _listing.Packs)
+            {
+                var p = pack;
+                var active = IsDrawnByActiveEntry(p);
+
+                <li class="list-group-item offline-pack" data-pack-id="@p.Id">
+                    <div class="d-flex align-items-start gap-2">
+                        <div class="flex-grow-1 offline-pack-heading">
+                            <div class="offline-pack-name text-truncate" title="@p.DisplayName">@p.DisplayName</div>
+                            <div class="offline-pack-summary">
+                                <span class="badge offline-pack-kind">@KindLabel(p.Kind)</span>
+                                <span class="offline-pack-size">@SizeText(p.SizeBytes)</span>
+                            </div>
+                        </div>
+                        <button class="btn-icon btn-icon--danger offline-pack-delete"
+                                title="@(active ? L["offlinePacks.activeHint"] : L["offlinePacks.delete"])"
+                                disabled="@(_busy || active)"
+                                @onclick="() => AskDelete(p)">🗑</button>
+                    </div>
+
+                    <dl class="offline-pack-details">
+                        <dt>@L["offlinePacks.added"]</dt>
+                        <dd class="offline-pack-added">@FormatDate(p.ImportedAt)</dd>
+                        <dt>@L["offlinePacks.zoom"]</dt>
+                        <dd class="offline-pack-zoom">@ZoomText(p)</dd>
+                        <dt>@L["offlinePacks.area"]</dt>
+                        <dd class="offline-pack-area">@AreaText(p)</dd>
+                        <dt>@L["offlinePacks.shownIn"]</dt>
+                        <dd class="offline-pack-used-by">@UsedByText(p)</dd>
+                    </dl>
+
+                    @if (active)
+                    {
+                        <p class="offline-packs-note offline-pack-active-hint">@L["offlinePacks.activeHint"]</p>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+<ConfirmDialog Visible="@(_pendingDelete is not null)"
+               Title="@L["offlinePacks.confirmTitle"]"
+               Message="@ConfirmMessage"
+               ConfirmLabel="@L["offlinePacks.confirm"]"
+               OnConfirm="ConfirmDeleteAsync"
+               OnCancel="CancelDelete" />

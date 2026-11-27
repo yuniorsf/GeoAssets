@@ -69,6 +69,22 @@ public readonly record struct TileCacheKey
     /// <summary>The eviction tag shared by every cached entry of the tile at <paramref name="address"/>: <c>tile-at/{z}/{x}/{y}</c>.</summary>
     public static string AddressTagFor(TileAddress address) => AddressTagPrefix + "/" + address.ToString();
 
+    /// <summary>
+    /// The start shared by the <see cref="Value"/> of every tile of <paramref name="layerSetId"/> at
+    /// <paramref name="layerVersion"/> for <paramref name="scope"/>, whatever its address or format:
+    /// <c>tile/{orgScope}/{grantScopeHash}/{layerSetId}/{layerVersion}/</c> (XD01-464, <see cref="ITileLayerVersionEviction"/>).
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="scope"/> is <c>default</c>, or <paramref name="layerSetId"/>/<paramref name="layerVersion"/> breaks <see cref="TileKeySegment"/>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="layerSetId"/> or <paramref name="layerVersion"/> is <c>null</c>.</exception>
+    public static string LayerVersionPrefix(TileCacheScope scope, string layerSetId, string layerVersion)
+    {
+        if (!scope.IsSpecified)
+            throw new ArgumentException("A tile cache key needs the caller's scope.", nameof(scope));
+        TileKeySegment.EnsureValid(layerSetId, nameof(layerSetId));
+        TileKeySegment.EnsureValid(layerVersion, nameof(layerVersion));
+        return $"{KeyPrefix}/{scope.OrganizationScope}/{scope.GrantScopeHash}/{layerSetId}/{layerVersion}/";
+    }
+
     /// <summary>The key string (<see cref="Value"/>).</summary>
     public override string ToString() => Value;
 }

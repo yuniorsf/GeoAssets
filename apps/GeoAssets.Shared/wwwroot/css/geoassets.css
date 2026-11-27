@@ -891,6 +891,75 @@ textarea.form-control { resize: vertical; min-height: 70px; }
     margin: 8px 8px 0;
 }
 
+/* ─── Offline maps panel (XD01-464) ────────────────────────────────────────── */
+
+.offline-packs-total {
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    margin: 0 0 8px;
+}
+
+.offline-packs-note {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 4px 0 0;
+}
+
+.offline-packs-msg {
+    font-size: 0.75rem;
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin: 0 0 8px;
+}
+
+.offline-packs-msg--success { color: var(--success); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.offline-packs-msg--warning { color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.offline-packs-msg--error   { color: var(--danger);  background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
+.offline-packs-list {
+    --bs-list-group-bg: var(--surface-tint-weak);
+    --bs-list-group-color: var(--text-primary);
+    --bs-list-group-border-color: var(--panel-border);
+}
+
+.offline-packs-list .list-group-item { padding: 6px 8px; }
+
+.offline-pack-heading { min-width: 0; }
+
+.offline-pack-name {
+    font-size: 0.87rem;
+    font-weight: 600;
+}
+
+.offline-pack-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.offline-pack-kind {
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--surface-tint-strong);
+    border: 1px solid var(--panel-border);
+}
+
+.offline-pack-details {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    row-gap: 1px;
+    font-size: 0.75rem;
+    margin: 6px 0 0;
+}
+
+.offline-pack-details dt { font-weight: 400; color: var(--text-secondary); }
+.offline-pack-details dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+
+.offline-pack-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* ─── Capability-aware gating & scope-override display (XD01-148) ──────────── */
 
 .btn-icon-hinted { opacity: 0.5; }

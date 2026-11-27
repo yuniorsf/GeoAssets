@@ -109,6 +109,33 @@ public sealed class SqliteLocalVectorTileCacheTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RemovingALayerVersion_EvictsExactlyItsTiles()
+    {
+        // XD01-464: a deleted offline map pack's tiles (version = the pack's id) go; another version's, even one the
+        // version is a prefix of or matches as a LIKE pattern ('_'), and the basemap entries stay.
+        var cache = Cache();
+        var basemap = cache;
+        await basemap.PutAsync(new LocalVectorTile(4, 5, 5, [7], _clock.GetUtcNow().UtcDateTime));
+        foreach (var version in new[] { "a_c", "abc", "a_cd" })
+        {
+            await cache.SetAsync(Key(4, 5, 5, version), new TilePayload(new byte[] { 1 }, TileFormats.MapboxVectorTileContentType), CancellationToken.None);
+            await cache.SetAsync(Key(9, 3, 1, version), new TilePayload(new byte[] { 2 }, TileFormats.MapboxVectorTileContentType), CancellationToken.None);
+        }
+
+        await cache.RemoveLayerVersionAsync(Scope, "pmtiles", "a_c", CancellationToken.None);
+
+        (await cache.GetAsync(Key(4, 5, 5, "a_c"), CancellationToken.None)).Should().BeNull();
+        (await cache.GetAsync(Key(9, 3, 1, "a_c"), CancellationToken.None)).Should().BeNull();
+        (await cache.GetAsync(Key(4, 5, 5, "abc"), CancellationToken.None)).Should().NotBeNull();
+        (await cache.GetAsync(Key(4, 5, 5, "a_cd"), CancellationToken.None)).Should().NotBeNull();
+        (await cache.GetAsync(Key(9, 3, 1, "abc"), CancellationToken.None)).Should().NotBeNull();
+        (await basemap.GetAsync(4, 5, 5)).Should().NotBeNull("a basemap entry is not a tile cache entry");
+
+        await cache.RemoveLayerVersionAsync(Scope, "pmtiles", "a_c", CancellationToken.None);
+        (await cache.GetAsync(Key(4, 5, 5, "abc"), CancellationToken.None)).Should().NotBeNull("evicting again is a no-op");
+    }
+
+    [Fact]
     public async Task PastItsLimit_TheOldestWrittenTileEntriesArePruned_BasemapEntriesKept()
     {
         var cache = Cache(maxTileEntries: 2, pruneInterval: 1);
