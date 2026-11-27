@@ -19,7 +19,8 @@ namespace GeoAssets.Provider.Gdal;
 /// configured PMTiles archive;</item>
 /// <item>where the native GDAL runtime exists (<see cref="GdalNativeRuntime.IsSupportedPlatform"/> — macOS and Linux,
 /// x64/arm64): <see cref="IFileGeodatabaseExportService"/>, <see cref="IVectorFileReader"/> and
-/// <see cref="IVectorFileWriter"/> (FlatGeobuf, GeoParquet; the writer since XD01-466) and
+/// <see cref="IVectorFileWriter"/> (FlatGeobuf, GeoParquet; the writer since XD01-466),
+/// <see cref="IVectorTileArchiveWriter"/> (PMTiles, XD01-472) and
 /// a keyed <see cref="IRasterTileSource"/> (<see cref="CogRasterTileSource"/>) per configured COG. Elsewhere (iOS,
 /// Android, Windows) they are left out, and a configured COG fails the startup instead of every tile.</item>
 /// </list>
@@ -69,6 +70,7 @@ public sealed class GdalCloudNativePluginModule : IProviderPluginModule
         services.AddGeoAssetsFileGeodatabaseExport();
         services.TryAddSingleton<IVectorFileReader, OgrVectorFileReader>();
         services.TryAddSingleton<IVectorFileWriter, OgrVectorFileWriter>();
+        services.TryAddSingleton<IVectorTileArchiveWriter, OgrPMTilesArchiveWriter>();
         foreach (var raster in options.CogRasters)
             services.AddKeyedSingleton<IRasterTileSource>(raster.Id, (_, _) => new CogRasterTileSource(raster.Id, raster.Path));
     }

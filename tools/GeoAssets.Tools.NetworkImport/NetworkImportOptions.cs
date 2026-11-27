@@ -23,4 +23,6 @@ internal sealed record NetworkImportOptions
     public string? FeaturesPath { get; init; }
     public int Sample { get; init; } = DefaultSample;
     public string? Export { get; init; }
+    public string? MinZoom { get; init; }
+    public string? MaxZoom { get; init; }
 }

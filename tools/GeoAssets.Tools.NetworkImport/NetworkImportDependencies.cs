@@ -14,4 +14,7 @@ internal sealed record NetworkImportDependencies(
 {
     /// <summary>Writes <c>plan --export</c>'s file (XD01-466): the GDAL plugin's writer.</summary>
     public IVectorFileWriter VectorFileWriter { get; init; } = new OgrVectorFileWriter();
+
+    /// <summary>Writes <c>plan --export pmtiles</c>'s archive (XD01-472): the GDAL plugin's writer.</summary>
+    public IVectorTileArchiveWriter VectorTileArchiveWriter { get; init; } = new OgrPMTilesArchiveWriter();
 }

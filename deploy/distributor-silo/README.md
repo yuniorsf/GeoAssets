@@ -318,7 +318,9 @@ $NI verify --kernel-url http://127.0.0.1:8180 --organization "$ORG_ID" \
 
 To review a plan in QGIS or another GIS tool, add `--export flatgeobuf` (or `geoparquet`) to step 2: it also writes the
 planned features as `features.fgb` (or `features.parquet`) next to `features.ndjson`, in EPSG:4326 with their `id`,
-`name` and attributes (XD01-466).
+`name` and attributes (XD01-466). `--export pmtiles` writes them as the vector tile archive `features.pmtiles` instead
+(zooms `--min-zoom` to `--max-zoom`, default 0 to 14; one layer per asset class), which a static host can serve and the
+MAUI app loads as an offline map pack (XD01-472).
 
 `--include-geometry-only` also imports the layers `inventory` reports `geometryOnly` (a `.shp` without its `.dbf`).
 COELBA's METROPOLITANA `REDE_BT` is one: without the flag its 236,659 LV segments are skipped and the import holds no LV

@@ -15,7 +15,8 @@ namespace GeoAssets.Tools.NetworkImport;
 /// kernel (import), write <c>report.json</c> and print a summary. Chunks never exceed the kernel's
 /// <see cref="FeatureImportLimits.MaxChunkSize"/>. <c>plan --export</c> then streams <c>features.ndjson</c> into
 /// <c>features.fgb</c> or <c>features.parquet</c> through <see cref="NetworkImportDependencies.VectorFileWriter"/>
-/// (XD01-466).
+/// (XD01-466), or into the PMTiles archive <c>features.pmtiles</c> — one MVT layer per asset class — through
+/// <see cref="NetworkImportDependencies.VectorTileArchiveWriter"/> (XD01-472).
 /// </summary>
 internal sealed class PipelineCommand(NetworkImportOptions options, NetworkImportDependencies dependencies, TextWriter stdout)
 {
@@ -26,6 +27,7 @@ internal sealed class PipelineCommand(NetworkImportOptions options, NetworkImpor
     public async Task<int> PlanAsync(CancellationToken cancellationToken)
     {
         var exportFormat = NetworkImportInputs.ExportFormat(options.Export);
+        var tileExport = NetworkImportInputs.TileExport(options.Export, options.MinZoom, options.MaxZoom);
         var (profile, inventory, pipeline) = await PrepareAsync(cancellationToken).ConfigureAwait(false);
         var featuresPath = Path.Combine(options.OutputDirectory, FeaturesFile);
         ImportReport report;
@@ -48,6 +50,20 @@ internal sealed class PipelineCommand(NetworkImportOptions options, NetworkImpor
                 NdjsonEncoding.ReadAsync(featuresPath, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
             headline += string.Create(CultureInfo.InvariantCulture, $" and exported as {format} to {exportPath} ({written.FeaturesWritten} features)");
+        }
+
+        if (tileExport is { } zooms)
+        {
+            var exportPath = Path.Combine(options.OutputDirectory, ExportFileName + OgrPMTilesArchiveWriter.Extension);
+            var written = await dependencies.VectorTileArchiveWriter.WriteAsync(
+                exportPath,
+                new VectorTileArchiveWriteRequest(zooms.MinZoom, zooms.MaxZoom) { LayerNames = sink.AssetClassNames },
+                NdjsonEncoding.ReadAsync(featuresPath, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            var skipped = written.FeaturesSkipped == 0 ? string.Empty : string.Create(CultureInfo.InvariantCulture, $", {written.FeaturesSkipped} without geometry skipped");
+            headline += string.Create(
+                CultureInfo.InvariantCulture,
+                $" and exported as PMTiles (zooms {written.MinZoom}-{written.MaxZoom}, layers {string.Join(", ", written.Layers)}) to {exportPath} ({written.FeaturesWritten} features{skipped})");
         }
 
         return await FinishAsync(report, headline, cancellationToken).ConfigureAwait(false);

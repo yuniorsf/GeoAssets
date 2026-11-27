@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using GeoAssets.Core.FeatureImport;
 using GeoAssets.Core.VectorFiles;
@@ -8,6 +9,8 @@ namespace GeoAssets.Tools.NetworkImport;
 /// <summary>Validates option values; an unusable value throws <see cref="NetworkImportInputException"/>.</summary>
 internal static partial class NetworkImportInputs
 {
+    private const string PMTilesExport = "PMTILES";
+
     public static ISourceProfile Profile(string? profileId)
     {
         var registry = BuiltInProfiles.CreateRegistry();
@@ -54,14 +57,49 @@ internal static partial class NetworkImportInputs
             ? path
             : throw new NetworkImportInputException($"The features file '{path}' does not exist.");
 
-    /// <summary>The <c>--export</c> format; <see langword="null"/> when none is asked for.</summary>
+    /// <summary>
+    /// The <c>--export</c> vector file format; <see langword="null"/> when none is asked for, or a PMTiles archive is
+    /// (<see cref="TileExport"/>).
+    /// </summary>
     public static VectorFileFormat? ExportFormat(string? export) => export?.ToUpperInvariant() switch
     {
-        null => null,
+        null or PMTilesExport => null,
         "FLATGEOBUF" => VectorFileFormat.FlatGeobuf,
         "GEOPARQUET" => VectorFileFormat.GeoParquet,
-        _ => throw new NetworkImportInputException($"--export must be flatgeobuf or geoparquet, not '{export}'."),
+        _ => throw new NetworkImportInputException($"--export must be flatgeobuf, geoparquet or pmtiles, not '{export}'."),
     };
+
+    /// <summary>
+    /// The <c>--export pmtiles</c> archive's zoom range (XD01-472): <c>--min-zoom</c> … <c>--max-zoom</c>, by default
+    /// <see cref="VectorTileArchiveWriteRequest.DefaultMinZoom"/> … <see cref="VectorTileArchiveWriteRequest.DefaultMaxZoom"/>;
+    /// <see langword="null"/> when no archive is asked for (and then neither option may be given).
+    /// </summary>
+    public static (int MinZoom, int MaxZoom)? TileExport(string? export, string? minZoom, string? maxZoom)
+    {
+        if (!string.Equals(export, PMTilesExport, StringComparison.OrdinalIgnoreCase))
+        {
+            return minZoom is null && maxZoom is null
+                ? null
+                : throw new NetworkImportInputException("--min-zoom and --max-zoom go with --export pmtiles.");
+        }
+
+        var min = Zoom("--min-zoom", minZoom, VectorTileArchiveWriteRequest.DefaultMinZoom);
+        var max = Zoom("--max-zoom", maxZoom, VectorTileArchiveWriteRequest.DefaultMaxZoom);
+        return min <= max
+            ? (min, max)
+            : throw new NetworkImportInputException(
+                string.Create(CultureInfo.InvariantCulture, $"--min-zoom ({min}) must not be above --max-zoom ({max})."));
+    }
+
+    private static int Zoom(string option, string? value, int defaultZoom)
+    {
+        if (value is null)
+            return defaultZoom;
+        return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var zoom) && zoom <= VectorTileArchiveWriteRequest.MaxSupportedZoom
+            ? zoom
+            : throw new NetworkImportInputException(
+                string.Create(CultureInfo.InvariantCulture, $"{option} must be a zoom from 0 to {VectorTileArchiveWriteRequest.MaxSupportedZoom}, not '{value}'."));
+    }
 
     [GeneratedRegex("^[A-Za-z0-9._-]{1,64}$", RegexOptions.CultureInvariant, 1000)]
     private static partial Regex ImportIdPattern();
