@@ -46,6 +46,7 @@ public sealed class PluginLoadContext : AssemblyLoadContext
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly AssemblyDependencyResolver _resolver;
+    private readonly ConcurrentQueue<string> _loadedNativeLibraries = new();
 
     /// <param name="pluginMainAssemblyPath">The plugin's entry assembly; its folder is the plugin's folder.</param>
     /// <exception cref="ArgumentException"><paramref name="pluginMainAssemblyPath"/> is blank.</exception>
@@ -74,6 +75,13 @@ public sealed class PluginLoadContext : AssemblyLoadContext
 
     /// <summary>The plugin's folder: where its private dependencies and native libraries are resolved from.</summary>
     public string PluginDirectory { get; }
+
+    /// <summary>
+    /// The native libraries this context resolved from the plugin's folder and loaded (<see cref="LoadUnmanagedDll"/>),
+    /// full paths in load order — what a native plugin (e.g. GDAL, XD01-437) actually runs; a library left to the
+    /// runtime's default probing is not listed.
+    /// </summary>
+    public IReadOnlyCollection<string> LoadedNativeLibraries => [.. _loadedNativeLibraries];
 
     /// <summary>Whether <paramref name="assemblyName"/> is a shared contract — always taken from the host.</summary>
     public static bool IsSharedContract(AssemblyName assemblyName)
@@ -104,7 +112,12 @@ public sealed class PluginLoadContext : AssemblyLoadContext
     protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
     {
         var path = ResolveUnmanagedDllPath(unmanagedDllName);
-        return path is null ? IntPtr.Zero : LoadUnmanagedDllFromPath(path);
+        if (path is null)
+            return IntPtr.Zero;
+
+        var handle = LoadUnmanagedDllFromPath(path);
+        _loadedNativeLibraries.Enqueue(path);
+        return handle;
     }
 
     /// <summary>Where <see cref="LoadUnmanagedDll"/> finds <paramref name="unmanagedDllName"/>, or <see langword="null"/>.</summary>

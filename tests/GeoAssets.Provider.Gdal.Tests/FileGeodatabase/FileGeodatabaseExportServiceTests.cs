@@ -2,11 +2,11 @@ using System.IO.Compression;
 using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
-using MaxRev.Gdal.Core;
+using GeoAssets.Provider.Gdal.FileGeodatabase;
 using OSGeo.OGR;
 using Xunit;
 
-namespace GeoAssets.Provider.FileGeodatabase.Tests;
+namespace GeoAssets.Provider.Gdal.Tests.FileGeodatabase;
 
 /// <summary>
 /// Covers <see cref="FileGeodatabaseExportService"/> as a real integration test against the
@@ -56,7 +56,7 @@ public sealed class FileGeodatabaseExportServiceTests
 
     private static List<string> ReadLayerNames(string gdbPath)
     {
-        GdalBase.ConfigureAll();
+        GdalNativeInitializer.EnsureInitialized();
         using var dataSource = Ogr.Open(gdbPath, 0);
         var names = new List<string>();
         for (var i = 0; i < dataSource.GetLayerCount(); i++)
@@ -150,7 +150,7 @@ public sealed class FileGeodatabaseExportServiceTests
         var parentDir = Path.GetDirectoryName(gdbPath)!;
         try
         {
-            GdalBase.ConfigureAll();
+            GdalNativeInitializer.EnsureInitialized();
             using var dataSource = Ogr.Open(gdbPath, 0);
             using var layer = dataSource.GetLayerByName("PONNOT");
             layer.GetFeatureCount(1).Should().Be(1);
@@ -219,7 +219,7 @@ public sealed class FileGeodatabaseExportServiceTests
         var parentDir = Path.GetDirectoryName(gdbPath)!;
         try
         {
-            GdalBase.ConfigureAll();
+            GdalNativeInitializer.EnsureInitialized();
             using var dataSource = Ogr.Open(gdbPath, 0);
             using var layer = dataSource.GetLayerByName("PONNOT");
             using var layerDefn = layer.GetLayerDefn();

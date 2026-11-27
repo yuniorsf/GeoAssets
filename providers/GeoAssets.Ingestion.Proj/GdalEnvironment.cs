@@ -1,17 +1,16 @@
-using MaxRev.Gdal.Core;
+using GeoAssets.Provider.Gdal;
 using OSGeo.OSR;
 
 namespace GeoAssets.Ingestion.Proj;
 
 /// <summary>
-/// Process-wide GDAL/PROJ set-up: <c>GdalBase.ConfigureAll()</c> once (guarded like
-/// <c>FileGeodatabaseExportService</c>), and PROJ search-path changes, which are global to the process.
+/// Process-wide GDAL/PROJ set-up: native GDAL through the one shared <see cref="GdalNativeInitializer"/> of
+/// <c>GeoAssets.Provider.Gdal</c> (ADR-002 D5, XD01-437 — never a second <c>ConfigureAll</c> of its own), and PROJ
+/// search-path changes, which are global to the process.
 /// </summary>
 internal static class GdalEnvironment
 {
     private static readonly Lock ConfigureLock = new();
-    private static bool _configured;
-    private static string[] _basePaths = [];
 
     public static Lock SyncRoot => ConfigureLock;
 
@@ -22,15 +21,9 @@ internal static class GdalEnvironment
     /// </summary>
     public static IReadOnlyList<string> EnsureConfigured(string? directory)
     {
+        GdalNativeInitializer.EnsureInitialized();
         lock (ConfigureLock)
         {
-            if (!_configured)
-            {
-                GdalBase.ConfigureAll();
-                _basePaths = Osr.GetPROJSearchPaths() ?? [];
-                _configured = true;
-            }
-
             var paths = (Osr.GetPROJSearchPaths() ?? []).ToList();
             if (!string.IsNullOrWhiteSpace(directory))
             {
@@ -42,7 +35,7 @@ internal static class GdalEnvironment
                 }
             }
 
-            return _basePaths;
+            return GdalNativeInitializer.InitialProjSearchPaths;
         }
     }
 }

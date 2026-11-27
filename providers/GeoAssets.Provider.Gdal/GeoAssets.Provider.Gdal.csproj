@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ADR-002 D5 (XD01-437): the single native GDAL boundary. Every GDAL-backed format (File Geodatabase export, COG raster
+    tiles, FlatGeobuf/GeoParquet readers) and the one GdalBase.ConfigureAll() call (GdalNativeInitializer) live here,
+    beside the pure .NET PMTiles reader. Built as a drop-in server plugin (EnableDynamicLoading, the shared contracts
+    referenced but not copied), so a server can load it from plugins/providers/GeoAssets.Provider.Gdal/ in its own
+    PluginLoadContext; a host that references it statically instead (GeoAssets.FieldService.Server, and the network
+    import CLI through GeoAssets.Ingestion.Proj) never also loads it from a plugin directory.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GeoAssets.Provider.Gdal</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GeoAssets.Provider.Gdal.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      XD01-225: MaxRev.Gdal.Core bundles the official GDAL/OGR/OSR bindings plus GdalBase; the Minimal runtimes carry the
+      native GDAL 3.13 (PROJ, GEOS, Arrow/Parquet, …) for osx-arm64/x64 and linux-arm64/x64 — no Windows, iOS or Android
+      runtime (GdalNativeRuntime reports that). Referenced by this project only (GdalNativeBoundaryTests).
+    -->
+    <PackageReference Include="MaxRev.Gdal.Core" Version="3.13.3.611" />
+    <PackageReference Include="MaxRev.Gdal.MacosRuntime.Minimal" Version="3.13.3.611" />
+    <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.3.611" />
+  </ItemGroup>
+
+</Project>
