@@ -107,3 +107,59 @@ internal sealed record BenchReport(BenchEnvironment Environment, BenchSettings S
             ? string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000_000.0:F2} MB")
             : string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000.0:F1} kB");
 }
+
+/// <summary>The tile scenario's full output (XD01-434; written as JSON with <c>--out</c>).</summary>
+internal sealed record TileBenchReport(BenchEnvironment Environment, BenchSettings Settings, IReadOnlyList<TileZoomResult> Zooms)
+{
+    /// <summary>The Markdown tables <c>docs/perf/render-baseline.md</c> records for the tiles.</summary>
+    public string ToMarkdown()
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var md = new StringBuilder();
+
+        md.AppendLine("| Zoom | Tiles per viewport | Non-empty tiles | Bytes per viewport (on the wire, gzip) | Bytes per viewport (MVT, before gzip) | Cold ms per tile (drawn) | ↳ DB ms | Warm ms per tile (cache hit) |");
+        md.AppendLine("|---|---|---|---|---|---|---|---|");
+        foreach (var z in Zooms)
+        {
+            md.Append(inv, $"| z{z.Zoom} | {Count(z.TilesPerViewport)} | {Count(z.NonEmptyTilesPerViewport)} | {Bytes(z.WireBytesPerViewport)} | {Bytes(z.MvtBytesPerViewport)} | ")
+              .Append(inv, $"{Ms(z.ColdTileMs)} | {Ms(z.ColdTileDatabaseMs)} | {Micro(z.WarmTileMs)} |")
+              .AppendLine();
+        }
+
+        md.AppendLine();
+        md.AppendLine("Each cell is p50 / p95.");
+        md.AppendLine();
+
+        foreach (var z in Zooms)
+        {
+            md.AppendLine(inv, $"#### z{z.Zoom} — tiles per viewport (first measured pass)");
+            md.AppendLine();
+            md.AppendLine("| # | Center (lon, lat) | Tiles (z/x/y range) | Tiles | Non-empty | On the wire | MVT | Cold ms, all tiles serially |");
+            md.AppendLine("|---|---|---|---|---|---|---|---|");
+            for (var i = 0; i < z.Viewports.Count; i++)
+            {
+                var v = z.Viewports[i];
+                md.Append(inv, $"| {i + 1} | {v.CenterLon:F4}, {v.CenterLat:F4} | {v.Range} | {v.Tiles} | {v.NonEmptyTiles} | ")
+                  .Append(inv, $"{Megabytes(v.WireBytes)} | {Megabytes(v.MvtBytes)} | {v.ColdMsTotal:F1} |")
+                  .AppendLine();
+            }
+
+            md.AppendLine();
+        }
+
+        return md.ToString();
+    }
+
+    private static string Count(PercentileSummary s) => string.Create(CultureInfo.InvariantCulture, $"{s.P50:N0} / {s.P95:N0}");
+
+    private static string Ms(PercentileSummary s) => string.Create(CultureInfo.InvariantCulture, $"{s.P50:F1} / {s.P95:F1}");
+
+    private static string Micro(PercentileSummary s) => string.Create(CultureInfo.InvariantCulture, $"{s.P50:F4} / {s.P95:F4}");
+
+    private static string Bytes(PercentileSummary s) => $"{Megabytes((long)s.P50)} / {Megabytes((long)s.P95)}";
+
+    private static string Megabytes(long bytes) =>
+        bytes >= 1_000_000
+            ? string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000_000.0:F2} MB")
+            : string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000.0:F1} kB");
+}

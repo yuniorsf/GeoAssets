@@ -52,6 +52,22 @@ internal static class Program
             var environment = await BenchEnvironment.CaptureAsync(dataSource, time, cancellation.Token);
             await Console.Out.WriteLineAsync($"Dataset: {environment.DatasetFeatures:N0} features, {environment.DatasetVertices:N0} vertices, geo_entity {environment.GeoEntityTotalSize}.");
 
+            if (string.Equals(options.Command, "tiles", StringComparison.Ordinal))
+            {
+                var tiles = await new TileBenchmark(new TileEndpointPipeline(dataSource, time), time, Console.Out)
+                    .RunAsync(options.Settings, new DatasetLayout(options.Settings.Seed), cancellation.Token);
+                var tileReport = new TileBenchReport(environment, options.Settings, tiles);
+                if (options.OutPath is not null)
+                {
+                    await File.WriteAllTextAsync(options.OutPath, JsonSerializer.Serialize(tileReport, ReportJson), cancellation.Token);
+                    await Console.Out.WriteLineAsync($"Wrote {options.OutPath}");
+                }
+
+                await Console.Out.WriteLineAsync();
+                await Console.Out.WriteLineAsync(tileReport.ToMarkdown());
+                return 0;
+            }
+
             var benchmark = new RenderBenchmark(new BoundsEndpointPipeline(dataSource, time), new SimulatedClientRenderer(time), Console.Out);
             var zooms = await benchmark.RunAsync(options.Settings, new DatasetLayout(options.Settings.Seed), cancellation.Token);
             var report = new BenchReport(environment, options.Settings, zooms);

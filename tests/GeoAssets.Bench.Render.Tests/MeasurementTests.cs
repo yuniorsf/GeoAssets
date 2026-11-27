@@ -109,8 +109,8 @@ public sealed class MeasurementTests
     }
 
     [Theory]
-    [InlineData(new string[0], "*'seed' or 'bench'*")]
-    [InlineData(new[] { "run" }, "*'seed' or 'bench'*")]
+    [InlineData(new string[0], "*'seed', 'bench' or 'tiles'*")]
+    [InlineData(new[] { "run" }, "*'seed', 'bench' or 'tiles'*")]
     [InlineData(new[] { "bench", "--iterations" }, "*needs a value*")]
     [InlineData(new[] { "bench", "--iterations", "1", "--iterations", "2" }, "*more than once*")]
     [InlineData(new[] { "bench", "--iterations", "0" }, "*must be positive*")]
