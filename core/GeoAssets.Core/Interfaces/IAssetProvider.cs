@@ -50,6 +50,16 @@ public interface IAssetProvider
                 string.Equals(val?.ToString(), kv.Value, StringComparison.Ordinal)));
         }
 
+        if (query.Bounds is { } bounds)
+        {
+            var box = new GeoPolygon(
+            [
+                (bounds.MinLon, bounds.MinLat), (bounds.MaxLon, bounds.MinLat), (bounds.MaxLon, bounds.MaxLat),
+                (bounds.MinLon, bounds.MaxLat), (bounds.MinLon, bounds.MinLat),
+            ]);
+            filtered = filtered.Where(f => f.Geometry is not null && f.Geometry.Intersects(box));
+        }
+
         filtered = query.SortBy switch
         {
             "name" => query.SortDescending ? filtered.OrderByDescending(f => f.Properties.Name, StringComparer.Ordinal) : filtered.OrderBy(f => f.Properties.Name, StringComparer.Ordinal),
@@ -60,7 +70,22 @@ public interface IAssetProvider
 
         var matching = filtered.ToList();
         var page = matching.Skip(query.Skip).Take(query.Take).ToList();
-        return Task.FromResult(new PagedResult<GeoFeature> { Items = page, TotalCount = matching.Count });
+        var totalCount = query.CountLimit is { } limit
+            ? Math.Min(matching.Count, limit >= int.MaxValue - 1 ? int.MaxValue : Math.Max(0, limit) + 1)
+            : matching.Count;
+        return Task.FromResult(new PagedResult<GeoFeature> { Items = page, TotalCount = totalCount });
+    }
+
+    /// <summary>
+    /// <see cref="GetPageAsync(AssetQuery)"/>, cancellable (XD01-478): a provider backed by a queryable store overrides it
+    /// to hand <paramref name="ct"/> to its query, so a caller that goes away (a WFS client disconnecting) cancels the
+    /// database command; a decorator that forwards its reads forwards this too. The default can only refuse to start once
+    /// <paramref name="ct"/> is cancelled.
+    /// </summary>
+    Task<PagedResult<GeoFeature>> GetPageAsync(AssetQuery query, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return GetPageAsync(query);
     }
 
     // ── Spatial queries (NTS-backed) ──────────────────────────────────────────

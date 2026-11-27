@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Xml.Linq;
 using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
+using GeoAssets.Core.Rendering;
 using GeoAssets.Core.Services;
 
 namespace GeoAssets.Server;
@@ -17,7 +18,7 @@ namespace GeoAssets.Server;
 /// Supported operations:
 /// <list type="bullet">
 ///   <item><term>GetCapabilities</term><description>Returns a WFS 2.0 capabilities XML document.</description></item>
-///   <item><term>GetFeature</term><description>Returns a GeoJSON FeatureCollection. Supports <c>TYPENAMES</c>, <c>COUNT</c>, <c>STARTINDEX</c>, and <c>BBOX</c>.</description></item>
+///   <item><term>GetFeature</term><description>Returns a GeoJSON FeatureCollection. Supports <c>TYPENAMES</c>, <c>COUNT</c>, <c>STARTINDEX</c>, and <c>BBOX</c>, paged in the store with or without BBOX (XD01-449, XD01-478).</description></item>
 ///   <item><term>DescribeFeatureType</term><description>Returns a JSON schema for the GeoFeature type.</description></item>
 /// </list>
 ///
@@ -40,8 +41,14 @@ public static class WfsEndpointExtensions
     private static readonly XNamespace _ows = "http://www.opengis.net/ows/1.1";
     private static readonly XNamespace _xlink = "http://www.w3.org/1999/xlink";
 
-    /// <summary>The most features one GetFeature without BBOX returns, COUNT absent or larger (XD01-449).</summary>
+    /// <summary>The most features one GetFeature returns, COUNT absent or larger — without BBOX (XD01-449) and with it (XD01-478).</summary>
     public const int MaxFeaturesPerPage = 10_000;
+
+    /// <summary>
+    /// The most features a GetFeature with BBOX counts (XD01-478): beyond it, <c>numberMatched</c> is <c>"unknown"</c>
+    /// rather than the store counting a whole large box.
+    /// </summary>
+    public const int MaxNumberMatched = 100_000;
 
     private const string FeatureTypePrefix = "geoassets:feature:";
 
@@ -57,7 +64,7 @@ public static class WfsEndpointExtensions
         this IEndpointRouteBuilder routes,
         string route = "/wfs")
     {
-        routes.MapGet(route, async (HttpRequest req, IAssetProvider provider, TimeProvider timeProvider) =>
+        routes.MapGet(route, async (HttpRequest req, IAssetProvider provider, TimeProvider timeProvider, CancellationToken cancellationToken) =>
         {
             // WFS uses case-insensitive query params (KVP binding)
             var qs = req.Query;
@@ -72,7 +79,7 @@ public static class WfsEndpointExtensions
             return operation.ToUpperInvariant() switch
             {
                 "GETCAPABILITIES"     => HandleGetCapabilities(req, provider),
-                "GETFEATURE"          => await HandleGetFeatureAsync(Param, provider, timeProvider).ConfigureAwait(false),
+                "GETFEATURE"          => await HandleGetFeatureAsync(Param, provider, timeProvider, cancellationToken).ConfigureAwait(false),
                 "DESCRIBEFEATURETYPE" => HandleDescribeFeatureType(),
                 _ => Results.BadRequest(
                     $"Unsupported or missing REQUEST parameter: '{operation}'. " +
@@ -179,7 +186,8 @@ public static class WfsEndpointExtensions
     private static async Task<IResult> HandleGetFeatureAsync(
         Func<string, string> param,
         IAssetProvider       provider,
-        TimeProvider         timeProvider)
+        TimeProvider         timeProvider,
+        CancellationToken    cancellationToken)
     {
         // TYPENAMES (WFS 2.0) / TYPENAME (WFS 1.x legacy)
         var typeName = param("TYPENAMES") is { Length: > 0 } tn ? tn
@@ -190,52 +198,34 @@ public static class WfsEndpointExtensions
         var bboxRaw    = param("BBOX");
 
         if (string.IsNullOrEmpty(bboxRaw))
-            return await HandleGetFeaturePageAsync(typeName, count, startIndex, provider, timeProvider).ConfigureAwait(false);
-
-        IReadOnlyList<GeoFeature> matched;
+            return await HandleGetFeaturePageAsync(typeName, count, startIndex, bounds: null, provider, timeProvider, cancellationToken).ConfigureAwait(false);
 
         // BBOX: minLon,minLat,maxLon,maxLat[,srsName]  (lon/lat, EPSG:4326)
+        var parts = bboxRaw.Split(',');
+        if (parts.Length < 4 ||
+            !double.TryParse(parts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var minLon) ||
+            !double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var minLat) ||
+            !double.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out var maxLon) ||
+            !double.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out var maxLat))
         {
-            var parts = bboxRaw.Split(',');
-            if (parts.Length < 4 ||
-                !double.TryParse(parts[0], System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var minLon) ||
-                !double.TryParse(parts[1], System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var minLat) ||
-                !double.TryParse(parts[2], System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var maxLon) ||
-                !double.TryParse(parts[3], System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var maxLat))
-            {
-                return Results.BadRequest("Invalid BBOX. Expected: minLon,minLat,maxLon,maxLat[,srsName]");
-            }
-
-            matched = await provider.GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+            return Results.BadRequest("Invalid BBOX. Expected: minLon,minLat,maxLon,maxLat[,srsName]");
         }
 
-        // Apply paging
-        var page = matched
-            .Skip(startIndex)
-            .Take(count)
-            .ToList();
-
-        var response = new WfsFeatureCollection(
-            NumberMatched:  matched.Count,
-            NumberReturned: page.Count,
-            TimeStamp:      timeProvider.GetUtcNow().UtcDateTime.ToString("O"),
-            Features:       page);
-
-        return Results.Json(response, _geoOpts, contentType: "application/json");
+        var bounds = new BoundingBox(minLon, minLat, maxLon, maxLat);
+        return await HandleGetFeaturePageAsync(typeName, count, startIndex, bounds, provider, timeProvider, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// GetFeature without BBOX (XD01-449): one page in the catalog's store (<see cref="IAssetProvider.GetPageAsync"/>), of the
-    /// type encoded in TYPENAMES (<c>geoassets:feature:{assetTypeId}</c>) or of every type, at most
-    /// <see cref="MaxFeaturesPerPage"/> features (COUNT absent or larger), <c>NumberMatched</c> the store's exact count —
-    /// never the whole catalog in memory.
+    /// GetFeature as one page in the catalog's store (<see cref="IAssetProvider.GetPageAsync(AssetQuery, CancellationToken)"/>),
+    /// without BBOX (XD01-449) or with it (XD01-478, <see cref="AssetQuery.Bounds"/>): of the type encoded in TYPENAMES
+    /// (<c>geoassets:feature:{assetTypeId}</c>) or of every type, at most <see cref="MaxFeaturesPerPage"/> features (COUNT
+    /// absent or larger) from STARTINDEX — never the whole catalog or box in memory. <c>numberMatched</c> is the store's
+    /// exact count without BBOX; with BBOX it is exact up to <see cref="MaxNumberMatched"/> and <c>"unknown"</c> (WFS 2.0)
+    /// beyond, so a box over a large catalog isn't counted whole. The request's abort token reaches the store's query.
     /// </summary>
     private static async Task<IResult> HandleGetFeaturePageAsync(
-        string typeName, int count, int startIndex, IAssetProvider provider, TimeProvider timeProvider)
+        string typeName, int count, int startIndex, BoundingBox? bounds, IAssetProvider provider, TimeProvider timeProvider,
+        CancellationToken cancellationToken)
     {
         var assetTypeId = !string.IsNullOrEmpty(typeName) && typeName.StartsWith(FeatureTypePrefix, StringComparison.OrdinalIgnoreCase)
             ? typeName[FeatureTypePrefix.Length..]
@@ -244,12 +234,14 @@ public static class WfsEndpointExtensions
         var page = await provider.GetPageAsync(new AssetQuery
         {
             AssetTypeId = assetTypeId,
+            Bounds = bounds,
+            CountLimit = bounds is null ? null : MaxNumberMatched,
             Skip = Math.Max(0, startIndex),
             Take = Math.Clamp(count, 0, MaxFeaturesPerPage),
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
 
         var response = new WfsFeatureCollection(
-            NumberMatched:  page.TotalCount,
+            NumberMatched:  bounds is not null && page.TotalCount > MaxNumberMatched ? null : page.TotalCount,
             NumberReturned: page.Items.Count,
             TimeStamp:      timeProvider.GetUtcNow().UtcDateTime.ToString("O"),
             Features:       page.Items);
@@ -306,16 +298,17 @@ public static class WfsEndpointExtensions
     /// <summary>
     /// OGC WFS 2.0 GeoJSON FeatureCollection response envelope.
     /// Extends the RFC 7946 FeatureCollection with <c>numberMatched</c>,
-    /// <c>numberReturned</c>, and <c>timeStamp</c> as required by the WFS spec.
+    /// <c>numberReturned</c>, and <c>timeStamp</c> as required by the WFS spec;
+    /// a <c>null</c> <paramref name="NumberMatched"/> is written as WFS 2.0's <c>"unknown"</c>.
     /// </summary>
     private sealed class WfsFeatureCollection(
-        int                      NumberMatched,
+        int?                     NumberMatched,
         int                      NumberReturned,
         string                   TimeStamp,
         IReadOnlyList<GeoFeature> Features)
     {
         [JsonPropertyName("type")]           public string                   Type           => "FeatureCollection";
-        [JsonPropertyName("numberMatched")]  public int                      NumberMatchedV => NumberMatched;
+        [JsonPropertyName("numberMatched")]  public object                   NumberMatchedV => NumberMatched is { } matched ? matched : "unknown";
         [JsonPropertyName("numberReturned")] public int                      NumberReturnedV => NumberReturned;
         [JsonPropertyName("timeStamp")]      public string                   TimeStampV     => TimeStamp;
         [JsonPropertyName("features")]       public IReadOnlyList<GeoFeature> FeaturesV     => Features;
