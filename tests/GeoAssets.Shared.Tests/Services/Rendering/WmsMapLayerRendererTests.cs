@@ -4,6 +4,7 @@ using GeoAssets.Core.Models;
 using GeoAssets.Core.Providers;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.WMS;
+using GeoAssets.Shared.Interfaces;
 using GeoAssets.Shared.Services.Rendering;
 using Xunit;
 
@@ -17,6 +18,8 @@ namespace GeoAssets.Shared.Tests.Services.Rendering;
 public sealed class WmsMapLayerRendererTests
 {
     private const string Div = "geoassets-map";
+
+    private static readonly System.Text.Json.JsonSerializerOptions WebJson = new(System.Text.Json.JsonSerializerDefaults.Web);
 
     private readonly LayerRecordingMapInterop _map = new();
 
@@ -94,6 +97,38 @@ public sealed class WmsMapLayerRendererTests
         call.Options.Layers.Should().Be("geoassets:feature");
         call.Options.Format.Should().Be("image/jpeg");
         _map.FeatureBatches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RenderAsync_PassesTheProvidersTenantDomain_XD01_473()
+    {
+        var entry = new ProviderEntry
+        {
+            Name = "COELBA", Provider = new WmsAssetProvider("http://localhost:8090/wms", "geoassets:feature", tenantDomain: "coelba.local"),
+        };
+
+        await Renderer().RenderAsync(MapLayerRenderRequest.For(Div, entry));
+
+        _map.WmsAdds.Should().ContainSingle().Which.Options.TenantDomain.Should().Be("coelba.local");
+    }
+
+    [Fact]
+    public async Task RenderAsync_AProviderWithoutTenantDomain_PassesNone_XD01_473()
+    {
+        var entry = new ProviderEntry { Name = "WMS", Provider = new FakeWmsLayerProvider() };
+
+        await Renderer().RenderAsync(MapLayerRenderRequest.For(Div, entry));
+
+        _map.WmsAdds.Should().ContainSingle().Which.Options.TenantDomain.Should().BeNull();
+    }
+
+    [Fact]
+    public void WmsLayerOptions_CrossToJsAsTenantDomain_XD01_473()
+    {
+        // Blazor's JS interop serializes with the web defaults (camelCase): geoassets.js reads options.tenantDomain.
+        var json = System.Text.Json.JsonSerializer.Serialize(new WmsLayerOptions(TenantDomain: "coelba.local"), WebJson);
+
+        json.Should().Contain("\"tenantDomain\":\"coelba.local\"");
     }
 
     [Fact]

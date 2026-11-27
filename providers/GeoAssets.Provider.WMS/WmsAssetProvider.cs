@@ -21,14 +21,16 @@ public sealed class WmsAssetProvider : IAssetProvider, IWmsProvider, IProviderCa
     public string WmsBaseUrl   { get; }
     public string WmsLayerName { get; }
     public string WmsFormat    { get; }
+    public string? WmsTenantDomain { get; }
 
     public ProviderRenderCapabilities RenderCapabilities => ProviderRenderCapabilities.RasterTiles;
 
-    public WmsAssetProvider(string wmsBaseUrl, string layerName, string format = "image/png")
+    public WmsAssetProvider(string wmsBaseUrl, string layerName, string format = "image/png", string? tenantDomain = null)
     {
-        WmsBaseUrl   = wmsBaseUrl;
-        WmsLayerName = layerName;
-        WmsFormat    = format;
+        WmsBaseUrl      = wmsBaseUrl;
+        WmsLayerName    = layerName;
+        WmsFormat       = format;
+        WmsTenantDomain = tenantDomain;
     }
 
     // ── Events — never fire (no features are held locally), so no subscriber is kept ──

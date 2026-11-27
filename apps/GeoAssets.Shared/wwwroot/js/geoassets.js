@@ -1170,6 +1170,8 @@ window.GeoAssets = (function () {
     // token never appears in a URL. Whether a layer needs a token, and which one, is asked of MapContainer's
     // GetTileAccessFromJs (IMapTileAccessProvider): a layer on any other WMS server gets no token and loads its tiles
     // with plain image requests, as before. A layer that needs a token none is available for shows nothing.
+    // XD01-473: a layer routed to a distributor silo also sends its X-Tenant-Domain header on every tile request, so its
+    // tiles are always fetched — with or without a token — since an <img src> request can't carry a header either.
 
     // Ask for a fresh token this long before the current one expires.
     const TILE_TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
@@ -1224,22 +1226,21 @@ window.GeoAssets = (function () {
         if (tile._geoObjectUrl) { URL.revokeObjectURL(tile._geoObjectUrl); tile._geoObjectUrl = null; }
     }
 
-    async function fetchWmsTile(tileAccess, url, signal) {
+    // extraHeaders: the layer's own request headers (XD01-473: X-Tenant-Domain), or null.
+    async function fetchWmsTile(tileAccess, url, signal, extraHeaders) {
         let access = await tileAccess.get();
         for (let attempt = 0; ; attempt++) {
-            if (!access.requiresToken) return { direct: true };
-            if (!access.accessToken) return { error: 'No access token is available for this map layer.' };
+            if (!access.requiresToken && !extraHeaders) return { direct: true };
+            if (access.requiresToken && !access.accessToken) return { error: 'No access token is available for this map layer.' };
 
-            const response = await fetch(url, {
-                headers:     { Authorization: 'Bearer ' + access.accessToken },
-                credentials: 'omit',
-                signal
-            });
-            if (response.status === 401 && attempt === 0) {
+            const headers = Object.assign({}, extraHeaders);
+            if (access.requiresToken) headers.Authorization = 'Bearer ' + access.accessToken;
+            const response = await fetch(url, { headers, credentials: 'omit', signal });
+            if (response.status === 401 && access.requiresToken && attempt === 0) {
                 access = await tileAccess.get(access);
                 continue;
             }
-            if (response.status === 401) tileAccess.reject(access);
+            if (response.status === 401 && access.requiresToken) tileAccess.reject(access);
             if (!response.ok) return { error: 'The tile request failed with HTTP ' + response.status + '.' };
             return { blob: await response.blob() };
         }
@@ -1262,7 +1263,7 @@ window.GeoAssets = (function () {
         const url        = this.getTileUrl(coords);
         const controller = new AbortController();
         tile._geoAbort = controller;
-        fetchWmsTile(this._geoTileAccess, url, controller.signal)
+        fetchWmsTile(this._geoTileAccess, url, controller.signal, this._geoTileHeaders)
             .then(result => {
                 if (controller.signal.aborted) return;
                 tile._geoAbort = null;
@@ -1280,9 +1281,11 @@ window.GeoAssets = (function () {
     }
 
     const AuthenticatedWmsLayer = L.TileLayer.WMS.extend({
-        initialize: function (url, options, tileAccess) {
+        // tileHeaders are kept off the options: L.TileLayer.WMS sends every unknown option as a query parameter.
+        initialize: function (url, options, tileAccess, tileHeaders) {
             L.TileLayer.WMS.prototype.initialize.call(this, url, options);
             this._geoTileAccess = tileAccess;
+            this._geoTileHeaders = tileHeaders || null;
             // Leaflet discards a tile it no longer needs (pan/zoom/removal): cancel its request, free its object URL.
             this.on('tileunload tileabort', e => releaseWmsTile(e.tile));
         },
@@ -1305,6 +1308,7 @@ window.GeoAssets = (function () {
         const state = _maps[divId];
         if (!state || state.tileLayers.has(layerId)) return; // idempotent
         const tileAccess = createWmsTileAccess(state, new URL(wmsBaseUrl, document.baseURI).href);
+        const tileHeaders = options?.tenantDomain ? { 'X-Tenant-Domain': options.tenantDomain } : null;
         const layer = new AuthenticatedWmsLayer(wmsBaseUrl, {
             layers:      options?.layers      ?? 'geoassets:feature',
             format:      options?.format      ?? 'image/png',
@@ -1316,7 +1320,7 @@ window.GeoAssets = (function () {
             // Force geographic CRS so Leaflet sends BBOX in degrees (EPSG:4326),
             // matching the coordinate system of the PostGIS data on the server.
             crs:         L.CRS.EPSG4326
-        }, tileAccess);
+        }, tileAccess, tileHeaders);
         layer.addTo(state.map);
         state.tileLayers.set(layerId, layer);
     }

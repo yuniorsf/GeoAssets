@@ -28,7 +28,7 @@ public sealed class WmsMapLayerRenderer(IMapInterop mapInterop) : IProviderMapLa
         ArgumentNullException.ThrowIfNull(request);
         var wms = Wms(request);
         await mapInterop.AddWmsLayerAsync(request.MapDivId, request.LayerId, wms.WmsBaseUrl,
-            new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat));
+            new WmsLayerOptions(Layers: wms.WmsLayerName, Format: wms.WmsFormat, TenantDomain: wms.WmsTenantDomain));
         return 0;
     }
 
