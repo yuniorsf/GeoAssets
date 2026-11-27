@@ -25,6 +25,7 @@ public sealed class SqliteLocalVectorTileCacheTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
+        SqlCipherDatabase.EnsureProvider();
         Directory.CreateDirectory(_directory);
         _db = new SQLiteAsyncConnection(Path.Combine(_directory, "offline.db3"), storeDateTimeAsTicks: true);
         return _db.CreateTableAsync<LocalVectorTileRow>();
