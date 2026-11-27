@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="bunit" Version="2.15.2" />
     <PackageReference Include="coverlet.collector" Version="6.0.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -35,6 +36,11 @@
     <ProjectReference Include="..\..\core\GeoAssets.Core\GeoAssets.Core.csproj" />
     <ProjectReference Include="..\..\apps\GeoAssets.Shared\GeoAssets.Shared.csproj" />
     <ProjectReference Include="..\..\providers\GeoAssets.Provider.PMTiles\GeoAssets.Provider.PMTiles.csproj" />
+    <ProjectReference Include="..\..\providers\GeoAssets.Provider.Rest\GeoAssets.Provider.Rest.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.UI\GeoAssets.NeutralOperator.UI.csproj" />
+    <ProjectReference Include="..\..\ipbilling\GeoAssets.IpBilling.UI\GeoAssets.IpBilling.UI.csproj" />
+    <ProjectReference Include="..\..\verticals\NeutralOperator\GeoAssets.NeutralOperator.Rest\GeoAssets.NeutralOperator.Rest.csproj" />
+    <ProjectReference Include="..\..\workflow\GeoAssets.Workflow.Rest\GeoAssets.Workflow.Rest.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,6 +49,10 @@
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\SqliteLocalVectorTileCache.cs" Link="Linked\SqliteLocalVectorTileCache.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\LocalVectorTileRow.cs" Link="Linked\LocalVectorTileRow.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Navigation\OfflinePacksMenuItem.cs" Link="Linked\OfflinePacksMenuItem.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Extensions\MauiMainLayoutServiceExtensions.cs" Link="Linked\MauiMainLayoutServiceExtensions.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Projects\NoProjectClient.cs" Link="Linked\NoProjectClient.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Projects\NoProjectSessionService.cs" Link="Linked\NoProjectSessionService.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Services\NoAnalyticsService.cs" Link="Linked\NoAnalyticsService.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\PMTilesTestArchive.cs" Link="Linked\PMTilesTestArchive.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestMvt.cs" Link="Linked\TestMvt.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestPacks.cs" Link="Linked\TestPacks.cs" />

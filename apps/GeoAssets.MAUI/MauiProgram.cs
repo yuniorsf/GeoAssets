@@ -92,6 +92,9 @@ public static class MauiProgram
         AddEvidenceCapture(builder);
         AddPoleCensus(builder);
 
+        // XD01-476: what the shared MainLayout (the map page's), its top bar and its sidebar panels inject beyond the above.
+        builder.Services.AddMauiMainLayoutServices();
+
         return builder.Build();
     }
 

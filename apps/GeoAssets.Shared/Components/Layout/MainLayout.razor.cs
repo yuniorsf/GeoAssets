@@ -108,7 +108,11 @@ public partial class MainLayout
             // Resolved optionally so a host that doesn't register IOrganizationRepository for
             // some reason just shows the topbar without an org name instead of failing to render.
             var organizationRepo = ServiceProvider.GetService<IOrganizationRepository>();
-            _organizationName = await ResolveOrganizationNameAsync(currentUser, organizationRepo, UserRepository);
+            // XD01-476: likewise IUserRepository — the mobile/desktop app registers neither.
+            var userRepository = ServiceProvider.GetService<IUserRepository>();
+            _organizationName = userRepository is null
+                ? null
+                : await ResolveOrganizationNameAsync(currentUser, organizationRepo, userRepository);
         }
         catch (Exception ex)
         {
