@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using GeoAssets.Core.Rendering;
 using Npgsql;
 
 namespace GeoAssets.Bench.Render;
@@ -52,11 +53,29 @@ internal static class Program
             var environment = await BenchEnvironment.CaptureAsync(dataSource, time, cancellation.Token);
             await Console.Out.WriteLineAsync($"Dataset: {environment.DatasetFeatures:N0} features, {environment.DatasetVertices:N0} vertices, geo_entity {environment.GeoEntityTotalSize}.");
 
+            if (string.Equals(options.Command, "calibrate", StringComparison.Ordinal))
+            {
+                var calibration = await LodCalibrationReport.RunAsync(
+                    environment, new BenchTileDensitySampler(dataSource), LodCalibrationSettings.Default, time, cancellation.Token);
+                if (options.OutPath is not null)
+                {
+                    await File.WriteAllTextAsync(options.OutPath, JsonSerializer.Serialize(calibration, ReportJson), cancellation.Token);
+                    await Console.Out.WriteLineAsync($"Wrote {options.OutPath}");
+                }
+
+                await Console.Out.WriteLineAsync();
+                await Console.Out.WriteLineAsync(calibration.ToMarkdown());
+                return 0;
+            }
+
             if (string.Equals(options.Command, "tiles", StringComparison.Ordinal))
             {
-                var tiles = await new TileBenchmark(new TileEndpointPipeline(dataSource, time), time, Console.Out)
+                var lod = options.LodPath is null
+                    ? null
+                    : LodCalibrationReport.ReadPolicy(await File.ReadAllTextAsync(options.LodPath, cancellation.Token));
+                var tiles = await new TileBenchmark(new TileEndpointPipeline(dataSource, time, lod), time, Console.Out)
                     .RunAsync(options.Settings, new DatasetLayout(options.Settings.Seed), cancellation.Token);
-                var tileReport = new TileBenchReport(environment, options.Settings, tiles);
+                var tileReport = new TileBenchReport(environment, options.Settings, tiles, lod?.Layers);
                 if (options.OutPath is not null)
                 {
                     await File.WriteAllTextAsync(options.OutPath, JsonSerializer.Serialize(tileReport, ReportJson), cancellation.Token);

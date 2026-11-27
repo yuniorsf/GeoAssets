@@ -14,6 +14,11 @@ namespace GeoAssets.Server.Tiles;
 ///   <item><c>geoassets.tiles.size</c> — bytes of each tile body sent (as encoded on the wire); tag <c>format</c>.</item>
 ///   <item><c>geoassets.tiles.cache.invalidations</c> — committed writes invalidated; tag <c>outcome</c>
 ///   (<see cref="Evicted"/>|<see cref="Flushed"/>).</item>
+///   <item><c>geoassets.tiles.lod_calibration.runs</c> / <c>.duration</c> (ms) — <c>GET /tiles/lod-calibration</c> requests
+///   (XD01-439); tag <c>outcome</c> (<see cref="Completed"/>|<see cref="Cancelled"/>|<see cref="TimedOut"/>|<see cref="Failed"/>).</item>
+///   <item><c>geoassets.tiles.lod_calibration.recommendations</c> — asset types calibrated; tag <c>recommendation</c>
+///   (<see cref="Changed"/>|<see cref="Unchanged"/>|<see cref="NoRecommendation"/>). The thresholds themselves, per asset type,
+///   are logged, not tagged.</item>
 /// </list>
 /// </summary>
 public static class TileMetrics
@@ -38,6 +43,29 @@ public static class TileMetrics
 
     public const string Flushed = "flushed";
 
+    public const string CalibrationRunsName = "geoassets.tiles.lod_calibration.runs";
+
+    public const string CalibrationDurationName = "geoassets.tiles.lod_calibration.duration";
+
+    public const string CalibrationRecommendationsName = "geoassets.tiles.lod_calibration.recommendations";
+
+    public const string Completed = "completed";
+
+    public const string Cancelled = "cancelled";
+
+    public const string TimedOut = "timed_out";
+
+    public const string Failed = "failed";
+
+    /// <summary>A recommendation that would change the tiers the asset type is drawn as.</summary>
+    public const string Changed = "changed";
+
+    /// <summary>A recommendation that keeps the tiers the asset type is drawn as.</summary>
+    public const string Unchanged = "unchanged";
+
+    /// <summary>No recommendation: nothing in scope to measure.</summary>
+    public const string NoRecommendation = "none";
+
     private static readonly Meter Meter = new(MeterName);
 
     private static readonly Counter<long> Requests = Meter.CreateCounter<long>(
@@ -52,6 +80,15 @@ public static class TileMetrics
     private static readonly Counter<long> Invalidations = Meter.CreateCounter<long>(
         InvalidationsName, unit: "{writes}", description: "Committed writes whose tiles were invalidated (tag: outcome=evicted|flushed).");
 
+    private static readonly Counter<long> CalibrationRuns = Meter.CreateCounter<long>(
+        CalibrationRunsName, unit: "{runs}", description: "LOD calibration requests (tag: outcome=completed|cancelled|timed_out|failed).");
+
+    private static readonly Histogram<double> CalibrationDuration = Meter.CreateHistogram<double>(
+        CalibrationDurationName, unit: "ms", description: "Time a LOD calibration request took (tag: outcome).");
+
+    private static readonly Counter<long> CalibrationRecommendations = Meter.CreateCounter<long>(
+        CalibrationRecommendationsName, unit: "{asset_types}", description: "Asset types calibrated (tag: recommendation=changed|unchanged|none).");
+
     internal static void Served(string format, string cache, long bytes)
     {
         Requests.Add(1, new KeyValuePair<string, object?>("format", format), new KeyValuePair<string, object?>("cache", cache));
@@ -63,4 +100,14 @@ public static class TileMetrics
 
     internal static void Invalidated(string outcome) =>
         Invalidations.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
+    internal static void Calibrated(string outcome, double milliseconds)
+    {
+        var tag = new KeyValuePair<string, object?>("outcome", outcome);
+        CalibrationRuns.Add(1, tag);
+        CalibrationDuration.Record(milliseconds, tag);
+    }
+
+    internal static void Recommended(string recommendation) =>
+        CalibrationRecommendations.Add(1, new KeyValuePair<string, object?>("recommendation", recommendation));
 }

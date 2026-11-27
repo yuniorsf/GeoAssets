@@ -27,12 +27,14 @@ namespace GeoAssets.Server.Tests.Tiles;
 /// <c>AddTileServing</c>, response compression, authentication/authorization (<c>features:read</c> through the policy
 /// bridge), the organization catalog warm-up middleware, <c>MapTileApi</c> — over recording tile sources, a catalog, and a
 /// caller named by headers: <see cref="OrganizationHeader"/> (its organization; none = anonymous, <see cref="NoOrganization"/>
-/// = an organization-less user) and <see cref="DenyHeader"/> (without <c>features:read</c>).
+/// = an organization-less user), <see cref="DenyHeader"/> (without <c>features:read</c>) and <see cref="AdminHeader"/> (with
+/// <c>organizations:edit</c>, XD01-439) — and a <see cref="ScriptedDensitySampler"/> as the LOD calibration's sampler.
 /// </summary>
 internal sealed class TileTestHost : IAsyncDisposable
 {
     public const string OrganizationHeader = "X-Test-Organization";
     public const string DenyHeader = "X-Test-Deny";
+    public const string AdminHeader = "X-Test-Admin";
     public const string NoOrganization = "none";
     public const string Epoch = "cafe0001";
 
@@ -53,6 +55,10 @@ internal sealed class TileTestHost : IAsyncDisposable
     public CountingCatalogFactory Catalogs => _web.Services.GetRequiredService<CountingCatalogFactory>();
 
     public Grants Grants => _web.Services.GetRequiredService<Grants>();
+
+    public ScriptedDensitySampler Sampler => _web.Services.GetRequiredService<ScriptedDensitySampler>();
+
+    public TileServing Serving => _web.Services.GetRequiredService<TileServing>();
 
     public TileVersions Versions => _web.Services.GetRequiredService<TileVersions>();
 
@@ -80,6 +86,8 @@ internal sealed class TileTestHost : IAsyncDisposable
         services.AddSingleton<IVectorTileSource>(sp => sp.GetRequiredService<RecordingVectorSource>());
         services.AddSingleton<RecordingRasterSource>();
         services.AddSingleton<IRasterTileSource>(sp => sp.GetRequiredService<RecordingRasterSource>());
+        services.AddSingleton<ScriptedDensitySampler>();
+        services.AddSingleton<ITileDensitySampler>(sp => sp.GetRequiredService<ScriptedDensitySampler>());
         services.AddSingleton(new TileVersions(Epoch));
         services.AddTileServing(builder.Configuration);
         services.AddKernelResponseCompression();
@@ -100,9 +108,10 @@ internal sealed class TileTestHost : IAsyncDisposable
     }
 
     /// <summary>A client calling as a user of <paramref name="organization"/> (<c>null</c> = anonymous).</summary>
-    public HttpClient ClientFor(Guid? organization, bool withFeaturesRead = true, bool organizationLess = false)
+    public HttpClient ClientFor(Guid? organization, bool withFeaturesRead = true, bool organizationLess = false, bool admin = false)
     {
         var client = _web.GetTestClient();
+        if (admin) client.DefaultRequestHeaders.Add(AdminHeader, "1");
         if (organizationLess) client.DefaultRequestHeaders.Add(OrganizationHeader, NoOrganization);
         else if (organization is { } id) client.DefaultRequestHeaders.Add(OrganizationHeader, id.ToString());
         if (!withFeaturesRead) client.DefaultRequestHeaders.Add(DenyHeader, "1");
@@ -137,6 +146,8 @@ internal sealed class TileTestHost : IAsyncDisposable
                 claims.Add(new Claim("test_org", organization.ToString()));
             if (Request.Headers.ContainsKey(DenyHeader))
                 claims.Add(new Claim("test_deny", "1"));
+            if (Request.Headers.ContainsKey(AdminHeader))
+                claims.Add(new Claim("test_admin", "1"));
 
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
@@ -148,9 +159,16 @@ internal sealed class TileTestHost : IAsyncDisposable
         public Task<bool> IsInRoleAsync(string roleName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> HasClaimAsync(string claimType, string? claimValue = null, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default) =>
-            Task.FromResult(string.Equals(permissionCode, "features:read", StringComparison.Ordinal)
-                && accessor.HttpContext?.User.FindFirst("test_deny") is null);
+        public Task<bool> HasPermissionAsync(string permissionCode, CancellationToken ct = default)
+        {
+            var user = accessor.HttpContext?.User;
+            return Task.FromResult(permissionCode switch
+            {
+                "features:read" => user?.FindFirst("test_deny") is null,
+                TileLodCalibrationEndpoint.AdminPermission => user?.FindFirst("test_admin") is not null,
+                _ => false,
+            });
+        }
 
         public Task<bool> EvaluatePolicyAsync(string policyName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> EvaluatePolicyAsync(AppPolicy policy, CancellationToken ct = default) => throw new NotSupportedException();

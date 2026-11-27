@@ -3,7 +3,7 @@ using System.Globalization;
 namespace GeoAssets.Bench.Render;
 
 /// <summary>The tool's command line (XD01-420).</summary>
-internal sealed record BenchOptions(string Command, int Features, BenchSettings Settings, string? OutPath)
+internal sealed record BenchOptions(string Command, int Features, BenchSettings Settings, string? OutPath, string? LodPath = null)
 {
     /// <summary>The environment variable naming the benchmark database (never the kernel's — the seed empties <c>geo_entity</c>).</summary>
     public const string ConnectionVariable = "GEOASSETS_RENDER_BENCH_CONNECTION";
@@ -17,7 +17,10 @@ internal sealed record BenchOptions(string Command, int Features, BenchSettings 
 
           seed   [--features 200000] [--seed 420]        replace geo_entity with the deterministic dataset
           bench  [options] [--out <results.json>]          measure the z8/z12/z16 viewports, print Markdown tables
-          tiles  [options] [--out <results.json>]          request the 256-px vector tiles covering the same viewports (XD01-434)
+          tiles  [options] [--out <results.json>] [--lod <calibration.json>]
+                                                    request the 256-px vector tiles covering the same viewports (XD01-434),
+                                                    under the LOD policy a calibrate --out file recommends (XD01-439)
+          calibrate [--out <calibration.json>]             the kernel's LOD calibration of every type (XD01-439)
 
         Bench/tiles options (defaults = the recorded baseline):
           --seed 420  --zooms 8,12,16  --viewports 12 (per zoom)  --iterations 5  --warmup 1  --viewport 1580x1020
@@ -28,7 +31,7 @@ internal sealed record BenchOptions(string Command, int Features, BenchSettings 
     public static (BenchOptions? Options, string? Error) Parse(IReadOnlyList<string> args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        if (args.Count == 0 || args[0] is not ("seed" or "bench" or "tiles")) return (null, "The first argument must be 'seed', 'bench' or 'tiles'.");
+        if (args.Count == 0 || args[0] is not ("seed" or "bench" or "tiles" or "calibrate")) return (null, "The first argument must be 'seed', 'bench', 'tiles' or 'calibrate'.");
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 1; i < args.Count; i += 2)
@@ -50,11 +53,11 @@ internal sealed record BenchOptions(string Command, int Features, BenchSettings 
                 WidthPx: width,
                 HeightPx: height);
             var unknown = values.Keys.Except(
-                ["--seed", "--zooms", "--viewports", "--iterations", "--warmup", "--viewport", "--features", "--out"],
+                ["--seed", "--zooms", "--viewports", "--iterations", "--warmup", "--viewport", "--features", "--out", "--lod"],
                 StringComparer.Ordinal).FirstOrDefault();
             if (unknown is not null) return (null, $"Unknown option {unknown}.");
 
-            return (new BenchOptions(args[0], Positive(values, "--features", DatasetComposition.DefaultFeatureCount), settings, values.GetValueOrDefault("--out")), null);
+            return (new BenchOptions(args[0], Positive(values, "--features", DatasetComposition.DefaultFeatureCount), settings, values.GetValueOrDefault("--out"), values.GetValueOrDefault("--lod")), null);
         }
         catch (FormatException ex)
         {

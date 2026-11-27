@@ -20,6 +20,8 @@ namespace GeoAssets.Bench.Render.Tests;
 /// </summary>
 public sealed class PostgresRenderBenchTests : IAsyncLifetime
 {
+    private static readonly JsonSerializerOptions ReportJson = new() { WriteIndented = true };
+
     private string _connectionString = "";
     private NpgsqlDataSource? _dataSource;
 
@@ -156,6 +158,89 @@ public sealed class PostgresRenderBenchTests : IAsyncLifetime
         }
 
         nonEmpty.Should().BeGreaterThan(5, "the viewports are drawn where the assets are");
+    }
+
+    [Fact]
+    public async Task TileRead_UnderACalibratedPolicy_AnswersTheSourcesBytes_LeavingRasterLayersOut()
+    {
+        // XD01-439: the bench's policy-aware layer set and aggregates are the endpoint's and the source's.
+        var setor = DatasetComposition.AssetTypes.Single(t => string.Equals(t.Code, "SETOR", StringComparison.Ordinal)).Id.ToString("D");
+        var redeMt = DatasetComposition.AssetTypes.Single(t => string.Equals(t.Code, "REDE-MT", StringComparison.Ordinal)).Id.ToString("D");
+        var policy = new LodPolicy(LodThresholds.VectorOnly, new Dictionary<string, LodThresholds>(StringComparer.Ordinal)
+        {
+            [setor] = new(13, 13),
+            [redeMt] = new(12, 14),
+        });
+        var layout = new DatasetLayout(DatasetGenerator.DefaultSeed);
+        var tiles = new[] { 8, 12, 13 }
+            .SelectMany(z => ViewportPlan.For(layout, DatasetGenerator.DefaultSeed, z, 1, 1580, 1020))
+            .SelectMany(v => v.CoveringTiles().EnumerateTiles())
+            .ToList();
+        var pipeline = new TileEndpointPipeline(DataSource, TimeProvider.System, policy);
+        var source = new PostgresVectorTileSource(PostgresBenchDatabase.CreateOptions(_connectionString), tenantContext: null, policy, TimeProvider.System);
+        var nonEmpty = 0;
+
+        foreach (var tile in tiles)
+        {
+            var layers = TileEndpointPipeline.LayersAt(tile.Z, policy);
+            var bench = await pipeline.GetAsync(tile, CancellationToken.None);
+            var drawn = await source.GetVectorTileAsync(new TileRequest(new TileLayerSet("assets", layers), tile), CancellationToken.None);
+
+            layers.Should().NotContain(id => policy.Decide(id, tile.Z) == TileRenderTier.Raster, "a raster layer travels as .png tiles");
+            bench.Mvt.Should().Equal(drawn.Content.ToArray(), "the bench's statement is the source's, at {0}", tile);
+            if (bench.Mvt.Length > 0) nonEmpty++;
+        }
+
+        TileEndpointPipeline.LayersAt(12, policy).Should().Equal(new[] { setor }, "Rede MT is raster at z12, Setor aggregated");
+        nonEmpty.Should().BeGreaterThan(5);
+    }
+
+    [Fact]
+    public async Task CalibrationReads_AnswerWhatThePostGisSamplerAnswers()
+    {
+        // XD01-439: the bench's copies of PostgresTileDensitySampler's statements read the same rows.
+        var bench = new BenchTileDensitySampler(DataSource);
+        var kernel = new PostgresTileDensitySampler(PostgresBenchDatabase.CreateOptions(_connectionString), tenantContext: null, TimeProvider.System);
+
+        foreach (var type in DatasetComposition.AssetTypes)
+        {
+            var id = type.Id.ToString("D");
+            var seeds = await bench.SampleSeedsAsync(id, 64, CancellationToken.None);
+            (await kernel.SampleSeedsAsync(id, 64, CancellationToken.None)).Should().Equal(seeds, "the seeds of {0}", type.Name);
+            seeds.Should().HaveCount(64);
+
+            foreach (var zoom in new[] { 8, 12, 16 })
+            {
+                var tiles = LodCalibration.SampleTiles(seeds, zoom, 8);
+                var measured = await bench.MeasureAsync(id, tiles, 500, CancellationToken.None);
+                (await kernel.MeasureAsync(id, tiles, 500, CancellationToken.None)).Should().Equal(measured, "{0} at z{1}", type.Name, zoom);
+                measured.Should().OnlyContain(s => s.Features >= 1, "every measured tile holds the seed it came from");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Calibrate_RunsTheKernelsCalibrator_AndItsPolicyRoundTripsThroughItsJson()
+    {
+        var environment = await BenchEnvironment.CaptureAsync(DataSource, TimeProvider.System, CancellationToken.None);
+
+        var report = await LodCalibrationReport.RunAsync(
+            environment, new BenchTileDensitySampler(DataSource), LodCalibrationSettings.Default, TimeProvider.System, CancellationToken.None);
+        var json = JsonSerializer.Serialize(report, ReportJson);
+        var policy = LodCalibrationReport.ReadPolicy(json);
+
+        report.AssetTypes.Select(t => t.Name).Should().Equal(DatasetComposition.AssetTypes.Select(t => t.Name));
+        report.AssetTypes.Should().OnlyContain(t => t.Calibration.Recommended != null && t.Calibration.Densities.Count > 0);
+        policy.Layers.Should().BeEquivalentTo(report.Policy().Layers);
+        report.ToMarkdown().Should().Contain("| Bench — Setor |").And.Contain("#### Bench — Rede MT — per zoom");
+    }
+
+    [Fact]
+    public void ReadPolicy_RefusesAFileThatIsNotACalibration()
+    {
+        var act = () => LodCalibrationReport.ReadPolicy("{\"Zooms\": []}");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*calibrate --out*");
     }
 
     [Fact]
