@@ -47,6 +47,12 @@ bound to `127.0.0.1` only: Postgres **5433**, the kernel **8080**, the gateway *
 `/dev/tcp`; the images ship no curl), and the gateway starts once the kernel is healthy. The containers run as the
 image's unprivileged `app` user (uid 1654).
 
+The PostgreSQL hosts' images (the kernel, `GeoAssets.NeutralOperator.Server`, `GeoAssets.FieldService.Server`) set
+`PGGSSENCMODE=disable` (XD01-469): GeoAssets never reaches PostgreSQL over Kerberos and the images ship no
+`libgssapi_krb5.so.2`, so Npgsql's default GSS encryption probe only logged `Cannot load library libgssapi_krb5.so.2` at
+startup. It applies to every connection string the container uses, `.env` and Key Vault ones included; a connection
+string's own `GSS Encryption Mode=…` still overrides it.
+
 A machine that ran this stack before the `geoassets` project name keeps its data: the volume is still
 `server_geoassets-postgres-data` (the old `server` project's), now declared `external`. Stop the old projects first
 (`docker compose -p server down`, likewise `-p neutral-operator` and `-p web`, without `-v`) — their containers carry the
