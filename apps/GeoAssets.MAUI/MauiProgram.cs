@@ -276,6 +276,8 @@ public static class MauiProgram
         builder.Services.AddScoped<IMapSelectionInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
         // XD01-465: raster offline map packs drawn as a basemap, their tiles read from the pack as blob: URLs.
         builder.Services.AddScoped<IMapLocalTileLayerInterop>(sp => sp.GetRequiredService<MapInteropService>());
+        // XD01-460: MapInterop:RenderMode = MapLibre (Leaflet stays the default, unchanged).
+        builder.Services.AddMauiMapLibreMode(builder.Configuration);
         builder.Services.AddScoped<AssetService>();
         builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
             sp.GetRequiredService<AssetService>(),

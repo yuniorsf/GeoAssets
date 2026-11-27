@@ -228,6 +228,53 @@ public sealed class PMTilesPackAssetProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task ItsVectorTiles_AreThePacksTilesUncompressed_ThroughTheTileCache()
+    {
+        var cache = new RecordingTileCache();
+        using var provider = await ProviderAsync(AllTiles(1), maxZoom: 1, cache: cache);
+        var request = new TileRequest(provider.VectorTileLayer.LayerSet, new TileAddress(1, 1, 0));
+
+        var first = await provider.VectorTiles.GetVectorTileAsync(request, CancellationToken.None);
+        var again = await provider.VectorTiles.GetVectorTileAsync(request, CancellationToken.None);
+        var absent = await provider.VectorTiles.GetVectorTileAsync(new TileRequest(provider.VectorTileLayer.LayerSet, new TileAddress(0, 0, 0)), CancellationToken.None);
+
+        first.ContentType.Should().Be(TileFormats.MapboxVectorTileContentType);
+        first.ContentEncoding.Should().BeNull("a map engine reads the tile as it comes");
+        MvtTileDecoder.Decode(first.Content.ToArray(), 10).Should().ContainSingle().Which.Name.Should().Be("pois");
+        again.Content.ToArray().Should().Equal(first.Content.ToArray());
+        absent.IsEmpty.Should().BeTrue("the pack has no tile at zoom 0");
+        cache.Sets.Should().HaveCount(2, "each tile is read from the pack once, an absent one too");
+        cache.Gets.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task ItsVectorTileLayer_IsThePacksZoomsBoundsAndVectorLayers()
+    {
+        using var provider = await ProviderAsync([new TileAddress(6, 0, 0)], maxZoom: 9, minZoom: 6, bounds: (-10, -95, 200, 40));
+
+        var layer = provider.VectorTileLayer;
+
+        provider.Should().BeAssignableTo<ILocalVectorTileProvider>();
+        layer.LayerSet.Should().BeSameAs(PMTilesPackAssetProvider.LayerSet);
+        layer.SourceLayers.Should().Equal("pois");
+        layer.MinZoom.Should().Be(6);
+        layer.MaxZoom.Should().Be(9);
+        layer.Bounds.Should().Be(new BoundingBox(-10, -WebMercator.MaxLatitude, 180, 40));
+    }
+
+    [Fact]
+    public async Task APackOfNoBoundsOrZoomsPastThePyramid_HasALayerAnyway()
+    {
+        using var provider = await ProviderAsync([new TileAddress(0, 0, 0)], maxZoom: 40, minZoom: 35, bounds: (0, 0, 0, 0));
+
+        var layer = provider.VectorTileLayer;
+
+        layer.Bounds.Should().BeNull();
+        layer.MaxZoom.Should().Be(TileAddress.MaxZoom);
+        layer.MinZoom.Should().Be(TileAddress.MaxZoom);
+    }
+
+    [Fact]
     public async Task Writes_AreIgnored_AndTheTypesAreTheDefaults()
     {
         using var provider = await ProviderAsync(AllTiles(1), maxZoom: 1);

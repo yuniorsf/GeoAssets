@@ -5,8 +5,12 @@ import assert from 'node:assert/strict';
 import {
     planStyleUpdate, tileVersionOf, tokenScopeOf, isUnder, stateGroups, stateExpression, dashArrayOf, effectiveStyle,
     toSourceFeature, wmsTileUrl, expandSubdomains, boundsOf, nearestVertex, featureIdOf, roundGeometry, toMapLibreZoom,
-    fromMapLibreZoom, LIBRARIES, rasterTierOf, tileStyleInfo, withoutHiddenIds, tileBoundsOf, tileVertices, isTileSource
+    fromMapLibreZoom, LIBRARIES, rasterTierOf, tileStyleInfo, withoutHiddenIds, tileBoundsOf, tileVertices, isTileSource,
+    LOCAL_LIBRARIES, librariesFor, PACK_PROTOCOL, packTileTemplate, parsePackTileUrl, mvtLayerNames, packVectorLayers,
+    toArrayBuffer, isRepeatedContextMenu
 } from '../../apps/GeoAssets.Shared/wwwroot/js/geoassets.maplibre.js';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const style = (v, layers = [{ id: 't-point', type: 'circle', source: 'geoassets', 'source-layer': 't' }], raster = false) => ({
     version: 8,
@@ -222,4 +226,104 @@ test('the tile style\'s sources are the kernel\'s own and its keyed ones (XD01-4
     assert.equal(isTileSource('geoassets-features'), false);
     assert.equal(isTileSource('osm'), false);
     assert.equal(isTileSource(undefined), false);
+});
+
+// ─── XD01-460: MAUI's bundled libraries and offline map packs ────────────────────────────────────────────────────────
+
+const MAUI_LIBRARIES = new URL('../../apps/GeoAssets.MAUI/wwwroot/lib/maplibre/', import.meta.url);
+
+test('the libraries MAUI bundles are the pinned files, byte for byte (their SRI)', () => {
+    for (const lib of Object.values(LOCAL_LIBRARIES)) {
+        const bytes = readFileSync(new URL(lib.path, MAUI_LIBRARIES));
+        assert.equal('sha384-' + createHash('sha384').update(bytes).digest('base64'), lib.integrity, lib.path);
+        assert.match(lib.path, /^[a-z-]+@\d+\.\d+\.\d+\/dist\//);
+    }
+    assert.equal(LOCAL_LIBRARIES.maplibreCss.integrity, LIBRARIES.maplibreCss.integrity);
+    assert.equal(LOCAL_LIBRARIES.terraDraw.integrity, LIBRARIES.terraDraw.integrity);
+    assert.equal(LOCAL_LIBRARIES.terraDrawAdapter.integrity, LIBRARIES.terraDrawAdapter.integrity);
+    assert.ok(LIBRARIES.maplibre.src.includes('maplibre-gl@5.24.0/') && LOCAL_LIBRARIES.maplibre.path.startsWith('maplibre-gl@5.24.0/'),
+        'the same MapLibre version as the CDN\'s');
+});
+
+test('without a library base the CDN is used, as on the Web', () => {
+    assert.equal(librariesFor(null, 'https://0.0.0.1/'), LIBRARIES);
+    assert.equal(librariesFor('  ', 'https://0.0.0.1/'), LIBRARIES);
+    assert.equal(librariesFor(undefined, 'https://0.0.0.1/'), LIBRARIES);
+});
+
+test('a relative library base is the page\'s own origin — no script origin in the CSP', () => {
+    for (const origin of ['https://0.0.0.1/', 'app://0.0.0.1/']) {
+        const libs = librariesFor('lib/maplibre', origin);
+        assert.equal(libs.maplibre.src, new URL('lib/maplibre/maplibre-gl@5.24.0/dist/maplibre-gl-csp.js', origin).href);
+        assert.equal(libs.maplibreWorker.src, new URL('lib/maplibre/maplibre-gl@5.24.0/dist/maplibre-gl-csp-worker.js', origin).href);
+        assert.equal(libs.maplibreCss.href, new URL('lib/maplibre/maplibre-gl@5.24.0/dist/maplibre-gl.css', origin).href);
+        assert.equal(libs.terraDraw.src, new URL('lib/maplibre/terra-draw@1.37.0/dist/terra-draw.umd.js', origin).href);
+        for (const lib of Object.values(libs)) assert.equal(new URL(lib.src || lib.href).origin, new URL(origin).origin);
+        assert.equal(libs.maplibre.global, 'maplibregl');
+        assert.equal(libs.terraDrawAdapter.global, 'terraDrawMaplibreGlAdapter');
+        assert.equal(libs.maplibre.integrity, LOCAL_LIBRARIES.maplibre.integrity);
+    }
+    assert.equal(librariesFor('lib/maplibre/', 'https://0.0.0.1/').maplibre.src, librariesFor('lib/maplibre', 'https://0.0.0.1/').maplibre.src);
+});
+
+test('a pack tile URL round-trips its key and tile, and nothing else parses', () => {
+    const template = packTileTemplate('p 7/ä');
+    assert.ok(template.startsWith(PACK_PROTOCOL + '://'));
+    const url = template.replace('{z}', '12').replace('{x}', '2045').replace('{y}', '1500');
+    assert.deepEqual(parsePackTileUrl(url), { key: 'p 7/ä', z: 12, x: 2045, y: 1500 });
+    assert.deepEqual(parsePackTileUrl('geoassets-pack://p1/0/0/0'), { key: 'p1', z: 0, x: 0, y: 0 });
+    for (const bad of [
+        'geoassets-pack://p1/1/2/0', 'geoassets-pack://p1/1/0/2', 'geoassets-pack://p1/25/0/0', 'geoassets-pack://p1/a/0/0',
+        'geoassets-pack://p1/1/0', 'geoassets-pack://p1/1/0/0?x', 'https://gw/tiles/1/0/0', 'geoassets-pack://%E0%A4%A/1/0/0',
+        'geoassets-pack:///1/0/0', null, undefined
+    ]) assert.equal(parsePackTileUrl(bad), null, String(bad));
+});
+
+// A hand-encoded MVT: layers "poles" (one feature, extent), "lines", "poles" again.
+const varint = n => { const out = []; do { let b = n & 0x7f; n >>>= 7; if (n) b |= 0x80; out.push(b); } while (n); return out; };
+const field = (number, bytes) => [...varint((number << 3) | 2), ...varint(bytes.length), ...bytes];
+const text = s => [...new TextEncoder().encode(s)];
+const mvtLayer = (name, extra = []) => field(3, [...varint((15 << 3) | 0), 2, ...field(1, text(name)), ...extra]);
+
+test('the layer names of a vector tile are read from its protobuf, each once', () => {
+    const feature = field(2, [...varint((1 << 3) | 0), 7, ...varint((3 << 3) | 0), 1]);
+    const tile = new Uint8Array([...mvtLayer('poles', [...feature, ...varint((5 << 3) | 0), ...varint(4096)]), ...mvtLayer('Áreas'), ...mvtLayer('poles')]);
+    assert.deepEqual(mvtLayerNames(tile), ['poles', 'Áreas']);
+    assert.deepEqual(mvtLayerNames(tile.buffer), ['poles', 'Áreas']);
+    assert.deepEqual(mvtLayerNames(new Uint8Array(0)), []);
+    assert.deepEqual(mvtLayerNames(null), []);
+    assert.deepEqual(mvtLayerNames(tile.subarray(0, tile.length - 3)), ['poles', 'Áreas'], 'a truncated tile answers what was read');
+    assert.deepEqual(mvtLayerNames(new Uint8Array([0xff, 0xff])), []);
+});
+
+test('a pack\'s vector layers draw each geometry of one MVT layer in the pack colours', () => {
+    const layers = packVectorLayers('geoassets-pack-p1-', 'geoassets-pack-p1', 'poles', 0, { point: '#ff0000' });
+    assert.deepEqual(layers.map(l => [l.id, l.type]), [
+        ['geoassets-pack-p1-0-fill', 'fill'], ['geoassets-pack-p1-0-outline', 'line'],
+        ['geoassets-pack-p1-0-line', 'line'], ['geoassets-pack-p1-0-point', 'circle']]);
+    for (const l of layers) {
+        assert.equal(l.source, 'geoassets-pack-p1');
+        assert.equal(l['source-layer'], 'poles');
+    }
+    assert.equal(layers[3].paint['circle-color'], '#ff0000');
+    assert.equal(layers[2].paint['line-color'], '#3498db', 'a colour not given is the default line type\'s');
+    assert.equal(layers[0].paint['fill-color'], '#2ecc71');
+    assert.deepEqual(layers[3].filter, ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false]);
+});
+
+test('tile bytes from .NET become an ArrayBuffer of their own; none is null', () => {
+    const backing = new Uint8Array([9, 1, 2, 3, 9]);
+    const view = backing.subarray(1, 4);
+    assert.deepEqual([...new Uint8Array(toArrayBuffer(view))], [1, 2, 3]);
+    assert.deepEqual([...new Uint8Array(toArrayBuffer([4, 5]))], [4, 5]);
+    const own = new Uint8Array([6]).buffer;
+    assert.equal(toArrayBuffer(own), own);
+    for (const none of [null, undefined, new Uint8Array(0), new ArrayBuffer(0), [], 'AQI=']) assert.equal(toArrayBuffer(none), null);
+});
+
+test('a context menu within 800 ms of the last one is the same gesture', () => {
+    assert.equal(isRepeatedContextMenu(null, 1000), false);
+    assert.equal(isRepeatedContextMenu(1000, 1500), true);
+    assert.equal(isRepeatedContextMenu(1000, 1800), false);
+    assert.equal(isRepeatedContextMenu(2000, 1000), false);
 });

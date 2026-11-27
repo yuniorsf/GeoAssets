@@ -1,6 +1,12 @@
+using GeoAssets.MAUI.Services.Map;
+
 namespace GeoAssets.MAUI;
 
 public partial class MainPage : ContentPage
 {
-    public MainPage() => InitializeComponent();
+    internal MainPage(MauiHostPage hostPage)
+    {
+        InitializeComponent();
+        blazorWebView.HostPageRewrite = hostPage;
+    }
 }

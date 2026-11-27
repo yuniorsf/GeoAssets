@@ -99,7 +99,8 @@ public sealed class ProviderMapLayerRendererChainTests
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetServices<IProviderMapLayerRenderer>().Select(r => r.GetType())
-            .Should().Equal(typeof(WmsMapLayerRenderer), typeof(VectorFeatureMapLayerRenderer), typeof(HybridLodMapLayerRenderer), typeof(LocalRasterTileMapLayerRenderer));
+            .Should().Equal(typeof(WmsMapLayerRenderer), typeof(VectorFeatureMapLayerRenderer), typeof(HybridLodMapLayerRenderer), typeof(LocalRasterTileMapLayerRenderer),
+                typeof(LocalVectorTileMapLayerRenderer));
     }
 
     [Fact]
@@ -121,6 +122,27 @@ public sealed class ProviderMapLayerRendererChainTests
         local.Resolve(new FakeLocalRasterLayerProvider()).Should().BeOfType<LocalRasterTileMapLayerRenderer>();
         local.Resolve(new ValidatingAssetProvider(new FakeLocalRasterLayerProvider())).Should().BeOfType<LocalRasterTileMapLayerRenderer>();
         local.Resolve(new FakeWmsLayerProvider()).Should().BeOfType<WmsMapLayerRenderer>();
+        local.Resolve(new FakeLayerProvider()).Should().BeOfType<VectorFeatureMapLayerRenderer>();
+    }
+
+    [Fact]
+    public void Registered_ALocalVectorProvider_GoesToTheLocalVectorRenderer_OnlyWhereTheHostRegistersItsInterop()
+    {
+        // XD01-460: without the interop (the Web, MAUI in a Leaflet mode) a vector pack's features are drawn, as before.
+        using (var leaflet = Services().BuildServiceProvider())
+        using (var scope = leaflet.CreateScope())
+        {
+            var chain = scope.ServiceProvider.GetRequiredService<ProviderMapLayerRendererChain>();
+            chain.Resolve(new FakeLocalVectorLayerProvider()).Should().BeOfType<VectorFeatureMapLayerRenderer>();
+        }
+
+        var services = Services();
+        services.AddScoped<IMapLocalVectorTileLayerInterop, RecordingLocalVectorTileLayerInterop>();
+        using var mapLibre = services.BuildServiceProvider();
+        using var mapLibreScope = mapLibre.CreateScope();
+        var local = mapLibreScope.ServiceProvider.GetRequiredService<ProviderMapLayerRendererChain>();
+        local.Resolve(new FakeLocalVectorLayerProvider()).Should().BeOfType<LocalVectorTileMapLayerRenderer>();
+        local.Resolve(new ValidatingAssetProvider(new FakeLocalVectorLayerProvider())).Should().BeOfType<LocalVectorTileMapLayerRenderer>();
         local.Resolve(new FakeLayerProvider()).Should().BeOfType<VectorFeatureMapLayerRenderer>();
     }
 
