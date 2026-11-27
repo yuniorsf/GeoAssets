@@ -22,6 +22,8 @@ services:
       dockerfile: apps/GeoAssets.Server/Dockerfile
     # One image for every company's silo (built from the same checkout); deploy/server's own kernel image is untouched.
     image: ${SILO_IMAGE:-geoassets-server-silo:local}
+    # Back after a Docker Desktop or host restart, like any long-lived silo; `docker compose stop`/`down` still stops it.
+    restart: unless-stopped
     # The same Key Vault-backed vendor credentials as deploy/server (NEW_RELIC_LICENSE_KEY, …), when present.
     env_file:
       - path: ../otel/.env
