@@ -602,7 +602,18 @@ ranges are resolved per layer, not per row; and `GeoAssets:Tiles:Budget` (`MaxFe
 `MaxFeaturesPerLayer` unset = the tile's, `Layers:{assetTypeId}`, strictly validated) caps a dense layer inside a tile.
 Native hardware alone already met the gate at `develop`, z13 with little margin. Cached tiles answer in under 1 ms at
 every zoom. Zero full-map clears on pan was checked in headless Chrome against a fake kernel for MapLibre mode
-(XD01-435/436). Leaflet's diff rendering on pan (XD01-429) is covered by unit tests only, not by a browser run.
+(XD01-435/436), then in a real signed-in Chrome against the local `deploy/server` + `deploy/web` stack (XD01-462,
+2026-11-27, 44 features):
+- **Leaflet** (Canvas, `LeafletTileSplit` on): `L.Map`/`L.LayerGroup` were instrumented. A zoom and two pans, each
+  reloading the viewport, added and removed nothing. A pan that moved every feature out of view removed them one by
+  one (44 removes), with `clearLayers` never called.
+- **MapLibre**:
+  - `style.json` was read through the gateway, and the kernel's `.mvt` tiles were drawn with the bearer.
+  - A jump and several zooms made no `addSource`/`removeSource`/`removeLayer`/`setStyle` call. All rendered features
+    came from the `geoassets` tile source and none from the GeoJSON overlay.
+  - Selecting a feature hid its tile copy by id and drew it from the overlay, so it was not drawn twice.
+- **Not exercised in the browser:** a write refreshing `{v}` (no data was written), the 401 → new token → retry path,
+  and snapping.
 
 **Open follow-ups** (outside ADR-002's tickets):
 - The tile cache is per replica (each evicts on every replica's writes since XD01-458, which also made `{v}` per
