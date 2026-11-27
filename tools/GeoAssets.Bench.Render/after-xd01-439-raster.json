@@ -1,0 +1,259 @@
+{
+  "Note": "XD01-439 raster-tier probes (RasterTierBenchmarkTests, Release, 1 warm-up + 3 passes, 12 viewports per zoom, 2x2 metatiles) under the policies three candidate budget sets recommended for the benchmark dataset; the shipped defaults (15,000/15,000 vertices) recommend no raster tier for it. Same machine and amd64-emulated postgis/postgis:16-3.4 as after-xd01-439-tiles.json.",
+  "Runs": [
+    {
+      "Policy": {
+        "42000000-0000-0000-0000-000000000003": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 13,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000004": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000005": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000006": {
+          "RasterFromZoom": 9,
+          "VectorFromZoom": 13,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000001": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000002": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      },
+      "Passes": 3,
+      "Zooms": [
+        {
+          "Zoom": 12,
+          "Layers": [
+            "42000000-0000-0000-0000-000000000003",
+            "42000000-0000-0000-0000-000000000006"
+          ],
+          "TileMs": {
+            "P50": 18.2684,
+            "P95": 109.119,
+            "Count": 1290
+          },
+          "PngBytesPerViewport": {
+            "P50": 1139456,
+            "P95": 2442562,
+            "Count": 12
+          },
+          "MetatilesPerViewport": {
+            "P50": 12,
+            "P95": 12,
+            "Count": 36
+          }
+        }
+      ],
+      "CalibrationBudgets": {
+        "VectorMaxVerticesPerTile": 20000,
+        "RasterMaxVerticesPerTile": 250000,
+        "VectorMaxFeaturesPerTile": 2000,
+        "RasterMaxFeaturesPerTile": 2500
+      }
+    },
+    {
+      "Policy": {
+        "42000000-0000-0000-0000-000000000003": {
+          "RasterFromZoom": 13,
+          "VectorFromZoom": 15,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000004": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000005": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000006": {
+          "RasterFromZoom": 13,
+          "VectorFromZoom": 14,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000001": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000002": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      },
+      "Passes": 3,
+      "Zooms": [
+        {
+          "Zoom": 13,
+          "Layers": [
+            "42000000-0000-0000-0000-000000000003",
+            "42000000-0000-0000-0000-000000000006"
+          ],
+          "TileMs": {
+            "P50": 35.4196,
+            "P95": 133.776,
+            "Count": 1284
+          },
+          "PngBytesPerViewport": {
+            "P50": 1730588,
+            "P95": 2812540,
+            "Count": 12
+          },
+          "MetatilesPerViewport": {
+            "P50": 12,
+            "P95": 15,
+            "Count": 36
+          }
+        },
+        {
+          "Zoom": 14,
+          "Layers": [
+            "42000000-0000-0000-0000-000000000003"
+          ],
+          "TileMs": {
+            "P50": 9.5408,
+            "P95": 21.5624,
+            "Count": 1284
+          },
+          "PngBytesPerViewport": {
+            "P50": 162614,
+            "P95": 810279,
+            "Count": 12
+          },
+          "MetatilesPerViewport": {
+            "P50": 12,
+            "P95": 15,
+            "Count": 36
+          }
+        }
+      ],
+      "CalibrationBudgets": {
+        "VectorMaxVerticesPerTile": 10000,
+        "RasterMaxVerticesPerTile": 25000,
+        "VectorMaxFeaturesPerTile": 2000,
+        "RasterMaxFeaturesPerTile": 2500
+      }
+    },
+    {
+      "Policy": {
+        "42000000-0000-0000-0000-000000000003": {
+          "RasterFromZoom": 14,
+          "VectorFromZoom": 15,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000004": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000005": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000006": {
+          "RasterFromZoom": 13,
+          "VectorFromZoom": 14,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000001": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        },
+        "42000000-0000-0000-0000-000000000002": {
+          "RasterFromZoom": 0,
+          "VectorFromZoom": 0,
+          "MinZoom": null,
+          "MaxZoom": null
+        }
+      },
+      "Passes": 3,
+      "Zooms": [
+        {
+          "Zoom": 13,
+          "Layers": [
+            "42000000-0000-0000-0000-000000000006"
+          ],
+          "TileMs": {
+            "P50": 25.3727,
+            "P95": 93.0749,
+            "Count": 1284
+          },
+          "PngBytesPerViewport": {
+            "P50": 1490412,
+            "P95": 2358018,
+            "Count": 12
+          },
+          "MetatilesPerViewport": {
+            "P50": 12,
+            "P95": 15,
+            "Count": 36
+          }
+        },
+        {
+          "Zoom": 14,
+          "Layers": [
+            "42000000-0000-0000-0000-000000000003"
+          ],
+          "TileMs": {
+            "P50": 9.6746,
+            "P95": 21.7688,
+            "Count": 1284
+          },
+          "PngBytesPerViewport": {
+            "P50": 162614,
+            "P95": 810279,
+            "Count": 12
+          },
+          "MetatilesPerViewport": {
+            "P50": 12,
+            "P95": 15,
+            "Count": 36
+          }
+        }
+      ],
+      "CalibrationBudgets": {
+        "VectorMaxVerticesPerTile": 10000,
+        "RasterMaxVerticesPerTile": 15000,
+        "VectorMaxFeaturesPerTile": 2000,
+        "RasterMaxFeaturesPerTile": 2500
+      }
+    }
+  ]
+}

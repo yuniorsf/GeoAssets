@@ -370,6 +370,146 @@ Each cell is p50 / p95.
 
 </details>
 
+## After XD01-439 — Track 6 density-calibrated LOD (2026-11-27)
+
+Same dataset (seed 420, 200,000 rows, 3,366,132 vertices), viewports, tile scenario, settings and machine as
+[After XD01-434](#after-xd01-434--track-4-vector-tiles-2026-11-26) (Apple M5, .NET 10.0.7 Release + server GC,
+`postgis/postgis:16-3.4` **amd64-emulated** on Docker Desktop, every run under the heavy-run lock), measured on branch
+`feat/xd01-439-lod-calibration` (base `develop` @ `f46c6568`), with the only change the LOD policy: the one the kernel's
+calibration recommends for this dataset, instead of vector at every zoom. Raw results, next to this page's others:
+`tools/GeoAssets.Bench.Render/after-xd01-439-calibration.json` (the calibration),
+`after-xd01-439-tiles.json` (the tiles under its policy) and `after-xd01-439-raster.json` (the raster-tier probes below).
+
+### The calibration (`GeoAssets.Bench.Render calibrate`)
+
+The kernel's `LodCalibrator` (GeoAssets.Core) over a copy of `PostgresTileDensitySampler`'s statements (the tool cannot
+reference the provider — Invariant 1; `PostgresRenderBenchTests.CalibrationReads_AnswerWhatThePostGisSamplerAnswers`
+asserts both read the same rows), organization-less, with the shipped defaults (`GeoAssets:Tiles:Calibration`): 512
+sampled features per type, up to 32 of their tiles per zoom, from z18 down, stopping at the first zoom that fits no tier;
+budgets at p95 per tile and per layer — vector ≤ 2,000 features and ≤ 15,000 vertices, raster ≤ 2,500 features and
+≤ 15,000 vertices. It took 0.4 s.
+
+| Asset type | Zooms drawn | Recommended `RasterFromZoom` | Recommended `VectorFromZoom` | Why (p95 per measured tile) |
+|---|---|---|---|---|
+| Poste, Transformador, Rede BT, Lote | 15+, 13+, 14+, 16+ | 0 | 0 (vector everywhere — unchanged) | ≤ 174 features, ≤ 2,711 vertices at every drawn zoom |
+| Rede MT | 10+ | 14 | 14 | z14: 13,716 vertices fits; z13: 16,076 fits neither tier → aggregates at z10–13 |
+| Setor | 8–13 | 13 | 13 | z13: 14,147 vertices fits; z12: 41,157 fits neither → aggregates at z8–12 |
+
+```text
+GeoAssets__Tiles__Lod__Layers__42000000-0000-0000-0000-000000000003__RasterFromZoom=14
+GeoAssets__Tiles__Lod__Layers__42000000-0000-0000-0000-000000000003__VectorFromZoom=14
+GeoAssets__Tiles__Lod__Layers__42000000-0000-0000-0000-000000000006__RasterFromZoom=13
+GeoAssets__Tiles__Lod__Layers__42000000-0000-0000-0000-000000000006__VectorFromZoom=13
+```
+
+No raster tier: with these budgets no type of this dataset has a zoom where it fits the raster budgets but not the
+vector ones. That is deliberate, and measured — see *The raster tier* below.
+
+### Tiles under the calibrated policy (`GeoAssets.Bench.Render tiles --lod after-xd01-439-calibration.json`)
+
+Same method as XD01-434 (`.mvt` tiles only, drawn = a server tile-cache miss, warm = a hit, per-tile times over every
+tile of every viewport of 5 passes, nearest rank). The pipeline now asks the source for the layers that are vector or
+aggregate at the tile's zoom, aggregating those the policy calls aggregate (`PostgresRenderBenchTests.TileRead_UnderACalibratedPolicy_AnswersTheSourcesBytes_LeavingRasterLayersOut`
+asserts its bytes are the source's). z13 and z14 are added because the policy switches tiers there.
+
+| Zoom | Tiles per viewport | Non-empty tiles | Bytes per viewport (on the wire, gzip) | Bytes per viewport (MVT, before gzip) | Cold ms per tile (drawn) | ↳ DB ms | Warm ms per tile (cache hit) |
+|---|---|---|---|---|---|---|---|
+| z8 | 35 / 40 | 4 / 4 | 11.4 kB / 11.4 kB | 37.0 kB / 37.0 kB | 1.6 / 80.6 | 1.6 / 80.5 | 0.0002 / 0.0003 |
+| z12 | 35 / 40 | 35 / 40 | 11.1 kB / 21.7 kB | 32.2 kB / 66.6 kB | 2.2 / 11.6 | 2.1 / 11.6 | 0.0001 / 0.0002 |
+| z13 | 35 / 40 | 35 / 40 | 218.4 kB / 478.0 kB | 339.5 kB / 747.1 kB | 13.3 / 75.3 | 13.2 / 75.0 | 0.0001 / 0.0002 |
+| z14 | 35 / 40 | 35 / 40 | 30.2 kB / 189.8 kB | 51.7 kB / 337.8 kB | 4.4 / 21.6 | 4.3 / 21.5 | 0.0001 / 0.0002 |
+| z16 | 35 / 40 | 30 / 35 | 8.0 kB / 76.6 kB | 12.8 kB / 155.7 kB | 1.9 / 8.0 | 1.9 / 8.0 | 0.0001 / 0.0002 |
+
+Each cell is p50 / p95. z8 holds Setor's aggregates; z12 Rede MT's and Setor's aggregates; z13 Setor's districts and the
+transformers as vector features plus Rede MT's aggregates; z14 everything drawn there as vector features.
+
+### Against ADR-002's gate (z8 ≤ ~1.8 MB per viewport, p95 < 50 ms per tile)
+
+| Zoom | Wire bytes per viewport (p95): baseline → XD01-434 → **XD01-439** | Cold ms per tile (p95): XD01-434 → **XD01-439** | Gate |
+|---|---|---|---|
+| z8 | 18.15 MB → 890.6 kB → **11.4 kB** | 1,002.5 → **80.6** | bytes **met** (1,592× below the baseline); time **not met** cold (12× faster than XD01-434) |
+| z12 | 20.31 MB → 653.1 kB → **21.7 kB** | 126.0 → **11.6** | **met** |
+| z16 | 2.72 MB → 76.6 kB → **76.6 kB** | 8.2 → **8.0** | **met** (policy unchanged there) |
+| z13 *(switch zoom)* | — → — → 478.0 kB | — → 75.3 | time **not met** cold |
+| z14 *(switch zoom)* | — → — → 189.8 kB | — → 21.6 | **met** |
+
+Every cached tile (warm) is ≈ 0.3 µs at every zoom, as before.
+
+- **z8 — not met cold.** The four non-empty tiles of a z8 viewport (≈ 11 % of its tiles, so they are its p95) aggregate
+  Setor's 5,000 districts into ≤ 64 × 64 points each, ≈ 80 ms, nearly all in PostgreSQL: the aggregate reads every
+  district's full-resolution geometry and takes its `ST_Centroid` per request. The lever is outside this ticket — a stored
+  centroid (or point-on-surface) column next to `geom_3857`, so an aggregate never detoasts a polygon — as is whether 80 ms
+  meets 50 ms on native hardware (unmeasured: PostgreSQL runs under amd64 emulation here).
+- **z13 — not met cold.** Setor is vector at z13 (its p95 measured tile, 14,147 vertices, is inside the 15,000 budget),
+  and a viewport's densest tiles carry those districts plus the transformers; ≈ 5 µs per polygon vertex makes them
+  ≈ 75 ms. A tighter vector budget would aggregate Setor at z13 too (it is never vector below its z13 maximum then); 15,000
+  keeps the districts clickable at the one zoom where they and the network meet. The budget is configuration
+  (`GeoAssets:Tiles:Calibration:VectorMaxVerticesPerTile`); this is the trade-off it sets.
+- **z12 and z14–z16 — met**, cold and warm.
+
+### The raster tier (`RasterTierBenchmarkTests`, opt-in)
+
+The tool cannot draw `.png` tiles (`SkiaRasterTileSource` is in GeoAssets.Server — Invariant 1), so the raster tier is
+timed by an opt-in test in `tests/GeoAssets.Bench.Render.Tests` that references the server: `SkiaRasterTileSource` over
+`PostgresAssetRenderQuery` on the benchmark database, the layers a policy calls raster at a zoom, one 2 × 2 metatile
+drawing per metatile a viewport touches (every tile of it waits for that drawing, so a tile's cold time is its
+metatile's), the same 12 viewports per zoom, one warm-up and three passes, Release. It ran against the policies looser
+raster budgets recommend for this dataset — the evidence for the shipped raster budget:
+
+| Raster budget behind the policy (vector / raster vertices) | Zoom | Raster layers | PNG bytes per viewport (p50 / p95) | Cold ms per tile = its metatile's (p50 / p95) |
+|---|---|---|---|---|
+| 20,000 / 250,000 | z12 | Rede MT, Setor | 1.14 MB / 2.44 MB | 18.3 / 109.1 |
+| 10,000 / 25,000 | z13 | Rede MT, Setor | 1.73 MB / 2.81 MB | 35.4 / 133.8 |
+| 10,000 / 25,000 | z14 | Rede MT | 162.6 kB / 810.3 kB | 9.5 / 21.6 |
+| 10,000 / 15,000 | z13 | Setor | 1.49 MB / 2.36 MB | 25.4 / 93.1 |
+| 10,000 / 15,000 | z14 | Rede MT | 162.6 kB / 810.3 kB | 9.7 / 21.8 |
+
+A raster tile of dense lines or filled districts costs as much as their vector tile or more (at z13, Setor's raster metatiles alone: 93 ms;
+the whole z13 vector tile, districts included: 75 ms) and weighs far more on the wire (z13: 1.5–2.8 MB of PNG per viewport against 0.2–0.5 MB of MVT), so the
+shipped raster vertex budget is the vector one: the raster tier is left for layers whose *features* (bytes), not
+vertices, exceed the vector budget — dense point layers — and the calibration aggregates the rest.
+
+<details>
+<summary>Per-viewport tile results after XD01-439 (first measured pass)</summary>
+
+#### z8 — tiles per viewport (first measured pass)
+
+| # | Center (lon, lat) | Tiles (z/x/y range) | Tiles | Non-empty | On the wire | MVT | Cold ms, all tiles serially |
+|---|---|---|---|---|---|---|---|
+| 1 | -46.7468, -23.5309 | 8/91-97/143-147 | 35 | 4 | 11.4 kB | 37.0 kB | 338.0 |
+| 2 | -46.7617, -23.4770 | 8/91-97/143-147 | 35 | 4 | 11.4 kB | 37.0 kB | 332.8 |
+| 3 | -46.3412, -22.5534 | 8/91-98/142-146 | 40 | 4 | 11.4 kB | 37.0 kB | 347.7 |
+| 4 | -45.6628, -23.3672 | 8/92-98/143-147 | 35 | 4 | 11.4 kB | 37.0 kB | 330.2 |
+| 5 | -45.5599, -22.1990 | 8/92-98/142-146 | 35 | 4 | 11.4 kB | 37.0 kB | 336.5 |
+| 6 | -45.4998, -22.2362 | 8/92-98/142-146 | 35 | 4 | 11.4 kB | 37.0 kB | 342.8 |
+| 7 | -46.6450, -23.0692 | 8/91-97/142-146 | 35 | 4 | 11.4 kB | 37.0 kB | 340.3 |
+| 8 | -45.0971, -22.5257 | 8/92-99/142-146 | 40 | 4 | 11.4 kB | 37.0 kB | 353.2 |
+| 9 | -46.1336, -23.0456 | 8/92-98/142-146 | 35 | 4 | 11.4 kB | 37.0 kB | 336.4 |
+| 10 | -46.6977, -23.4957 | 8/91-97/143-147 | 35 | 4 | 11.4 kB | 37.0 kB | 331.7 |
+| 11 | -45.3450, -22.2220 | 8/92-98/142-146 | 35 | 4 | 11.4 kB | 37.0 kB | 331.3 |
+| 12 | -45.6222, -23.2969 | 8/92-98/143-147 | 35 | 4 | 11.4 kB | 37.0 kB | 332.3 |
+
+#### z12 — tiles per viewport (first measured pass)
+
+| # | Center (lon, lat) | Tiles (z/x/y range) | Tiles | Non-empty | On the wire | MVT | Cold ms, all tiles serially |
+|---|---|---|---|---|---|---|---|
+| 1 | -46.0546, -22.9418 | 12/1520-1527/2314-2318 | 40 | 40 | 13.5 kB | 40.1 kB | 166.4 |
+| 2 | -45.1899, -23.7373 | 12/1530-1536/2324-2328 | 35 | 32 | 4.2 kB | 10.1 kB | 71.5 |
+| 3 | -46.2892, -23.3176 | 12/1518-1524/2318-2322 | 35 | 35 | 11.1 kB | 32.2 kB | 142.7 |
+| 4 | -46.4704, -23.1546 | 12/1516-1522/2316-2320 | 35 | 35 | 14.5 kB | 43.6 kB | 172.9 |
+| 5 | -46.0670, -22.2774 | 12/1520-1526/2306-2310 | 35 | 35 | 11.9 kB | 35.5 kB | 141.6 |
+| 6 | -47.2049, -22.8610 | 12/1507-1513/2313-2317 | 35 | 35 | 8.1 kB | 23.2 kB | 107.2 |
+| 7 | -46.2796, -23.2883 | 12/1518-1524/2318-2322 | 35 | 35 | 11.1 kB | 32.2 kB | 129.2 |
+| 8 | -46.3051, -23.3351 | 12/1518-1524/2319-2323 | 35 | 35 | 12.9 kB | 38.1 kB | 154.7 |
+| 9 | -46.6491, -23.4364 | 12/1514-1520/2320-2324 | 35 | 35 | 21.7 kB | 66.6 kB | 231.4 |
+| 10 | -46.9668, -22.5645 | 12/1510-1516/2309-2313 | 35 | 35 | 4.8 kB | 11.6 kB | 65.9 |
+| 11 | -45.5262, -22.2781 | 12/1526-1533/2306-2310 | 40 | 40 | 9.2 kB | 26.1 kB | 120.0 |
+| 12 | -46.1278, -22.9329 | 12/1520-1526/2314-2318 | 35 | 35 | 12.7 kB | 38.1 kB | 166.3 |
+
+z13, z14 and z16: `after-xd01-439-tiles.json` (z16's tiles are byte-for-byte XD01-434's — the policy is vector there).
+
+</details>
+
 ## Re-running
 
 From the repository root, against the benchmark's own container (never the dev stack — `seed` empties `geo_entity`, and
@@ -389,6 +529,13 @@ dotnet build tools/GeoAssets.Bench.Render -c Release
 dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll seed
 dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll bench --out results.json
 dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll tiles --out tiles.json   # XD01-434, ≈ 15 min
+dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll calibrate --out calibration.json   # XD01-439, < 1 s
+dotnet tools/GeoAssets.Bench.Render/bin/Release/net10.0/GeoAssets.Bench.Render.dll tiles --zooms 8,12,13,14,16 \
+  --lod calibration.json --out tiles-calibrated.json                                                    # ≈ 10 min
+# The raster tier under a calibration's policy (opt-in test; skipped unless the variable is set):
+GEOASSETS_RENDER_BENCH_RASTER_LOD=$PWD/calibration.json GEOASSETS_RENDER_BENCH_RASTER_ZOOMS=12,13,14 \
+  GEOASSETS_RENDER_BENCH_RASTER_OUT=$PWD/raster.json \
+  dotnet test tests/GeoAssets.Bench.Render.Tests -c Release --filter FullyQualifiedName~RasterTierBenchmarkTests
 
 docker compose -f tools/GeoAssets.Bench.Render/docker-compose.bench.yaml down
 ```
@@ -411,5 +558,9 @@ baseline (don't overwrite it):
   `TileEndpointPipeline` reproduces `PostgresVectorTileSource`'s statement and the endpoint's layer set and gzip; when
   either changes, update the pipeline in the same change —
   `PostgresRenderBenchTests.TileRead_AnswersThePostGisSourcesBytes_ForTheMeasuredViewportsTiles` fails until they agree.
+- **Track 6 (XD01-439)** — done: see [After XD01-439](#after-xd01-439--track-6-density-calibrated-lod-2026-11-27).
+  `BenchTileDensitySampler` copies `PostgresTileDensitySampler`'s statements and `calibrate` runs the kernel's
+  `LodCalibrator`; when either changes, update the copy in the same change —
+  `PostgresRenderBenchTests.CalibrationReads_AnswerWhatThePostGisSamplerAnswers` fails until they agree.
 - **Track 5 (XD01-435 / XD01-436)** — MapLibre / hybrid LOD: the simulated SVG client does not model WebGL; measure the
   client side in a real browser and note the method next to the numbers.
