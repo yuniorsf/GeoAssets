@@ -18,7 +18,7 @@ namespace GeoAssets.Server;
 /// a user token, whatever its permissions, is refused (403). The caller's own token organization,
 /// if any, plays no part.
 ///
-/// Routes (under <c>/api/geoassets</c> by default, same JSON options as the other asset routes):
+/// Routes (under <c>/api/geoassets</c> by default, same compact JSON options as the other asset routes):
 /// <list type="bullet">
 ///   <item><c>GET organizations/{organizationId}/features/{id}</c> — the feature as that
 ///   organization sees it; 404 when it is not visible to it.</item>
@@ -39,7 +39,7 @@ public static class OrganizationScopedFeaturesRestApiExtensions
         this IEndpointRouteBuilder routes,
         string prefix = "/api/geoassets")
     {
-        var opts = GeoJsonSerializer.Options;
+        var opts = GeoJsonSerializer.CompactOptions;
         var group = $"{prefix}/organizations/{{organizationId:guid}}/features/{{id}}";
 
         routes.MapGet(group, async (
