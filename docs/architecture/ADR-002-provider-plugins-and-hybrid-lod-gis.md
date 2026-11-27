@@ -201,7 +201,7 @@ flowchart TD
 - **Read-through `SqliteLocalVectorTileCache`**: it now also implements Core's `ITileCache` (MAUI registers the one singleton as both). `PMTilesPackTiles` looks every pack tile up there first — key `tile/offline-pack/pmtiles/pmtiles/{pack id}/{z}/{x}/{y}.mvt` — and on a miss reads the pack (one directory lookup, one positional read) and caches the tile as stored (bytes, media type, encoding; an absent tile as empty, so its directories aren't walked again). Rows sit in the same SQLCipher table as the z/x/y basemap entries (new nullable `ContentType`/`ContentEncoding` columns, added by sqlite-net's additive migration), whose keys never collide. Bounded: past 20,000 `tile/…` rows (checked every 256 writes) the oldest written are deleted; `RemoveAsync(range)` evicts a range's `tile/…` rows.
 - **To the map in Leaflet mode**: MAUI stays on Leaflet (MapLibre is Web-only, XD01-435), which can't draw vector tiles, so a pack is an `IAssetProvider` (`PMTilesPackAssetProvider`, `VectorFeatures` only, read-only — writes ignored, no events) drawn by the existing `VectorFeatureMapLayerRenderer`. A viewport read (`GetInBoundsJsonAsync(ViewportQuery)`) decodes the tiles under the padded view at the zoom MapLibre would read — Leaflet zoom − 1, clamped to the pack's zooms; none below its lowest — inside the pack's bounds only, stepping a zoom down while more than 64 tiles cover it, at most 10,000 features (`MvtTileDecoder`, MVT 2.1; `MvtFeatureProjector`: tile units → EPSG:3857 envelope → EPSG:4326, 7 decimals; points in a tile's buffer dropped; ring winding decides shells and holes; asset type `Point`/`Line`/`Area` by geometry; properties = the tags plus `mvt:layer`/`mvt:id`). Feature ids are `pmtiles:{pack id}:{z}/{x}/{y}:{layer}:{n}`, stable across reads, so the viewport diff keeps them (a feature with an MVT id: see XD01-463 below). On connect it reads an overview (the whole pack at the highest zoom of at most 16 tiles), so the map fits to the pack. `GetAll`/`GetById`/search/spatial queries answer the last read — the pack is never enumerated. Raster packs: see XD01-465 below.
 - **Pieces joined across tiles (XD01-463)**: `PMTilesPackFeatureMerger` turns a read's pieces of one feature back into one `GeoFeature`, so no polygon outline runs along a tile seam and no feature is drawn once per tile. Identity is the MVT feature id within its layer name and geometry type (MVT 2.1 §4.2; an `id` tag is only a property); the joined feature is `pmtiles:{pack id}:{z}:{point|line|polygon}:{mvt id}:{layer}`, the same whichever tiles a read covers. A feature without an id, or whose id a tile's layer repeats (some tilers give merged features id 0), keeps the per-tile behaviour and ids above. A piece whose envelope covers all the others' is the whole feature (a tile only clips away what lies beyond its box, which another piece would reach), so a small polygon or short line across a seam is that piece, no overlay. Otherwise pieces are joined in the read's tile grid, where every tile's vertices sit on one exact `1/extent` grid, not in EPSG:4326, and placed on the map once: polygons by `UnaryUnionNG` with that grid as fixed precision model (snap-rounding; the pieces overlap by twice the tile buffer, so each piece's clip edges lie inside its neighbour and dissolve without slivers), lines cut to their own tile without the buffer, their seam ends welded within 2 tile units and merged end to end (`LineMerger`), points de-duplicated. The 10,000 bound counts decoded pieces, before joining (it bounds decoding and joining alike), so a read answers at most 10,000 features, fewer when features span tiles; decoding and joining run on the thread pool (`Task.Run`), not on the caller's UI thread. Cost, 64-tile viewport (z14, tiles from the cache, interleaved old/new runs on a 10-core dev Mac under heavy load, so the ratios count rather than the times): `ReadAsync` median 26 → 47 ms for building/road-heavy content (7,509 pieces → 6,320 features), 9 → 46 ms with 150 large multi-tile polygons (4,489 → 2,950), 19 → 99 ms dense (10,000 decoded → 6,807); the map's JSON read (`GetInBoundsJsonAsync`, serialization included) 134 → 168, 27 → 50 and 61 → 126 ms. The union of large multi-tile polygons is most of the added time. Not run on a device.
-- **Known limits**: a line or polygon without an MVT id (or with an id its tile repeats) is still drawn as one piece per tile, buffer included (a polygon's outline shows at tile seams); Leaflet draws every decoded feature as SVG/canvas, so a dense pack is capped by the 10,000-feature read rather than tiled; styling is the three default asset types' colours; no pack management UI yet (an imported pack stays in app data until the app's data is cleared).
+- **Known limits**: a line or polygon without an MVT id (or with an id its tile repeats) is still drawn as one piece per tile, buffer included (a polygon's outline shows at tile seams); Leaflet draws every decoded feature as SVG/canvas, so a dense pack is capped by the 10,000-feature read rather than tiled; styling is the three default asset types' colours; a stored pack is listed and deleted in MAUI's *Offline maps* panel since XD01-464 (below).
 - **Not verified on a device**: the iOS/Android/Mac Catalyst pickers' path-only results (readable temporary copies) and the type filters, the import into app data, and SQLCipher's handling of the new columns were only build-verified for `net10.0-ios`/`net10.0-maccatalyst` (and `net10.0-android` with `/warnaserror`); the logic is tested on .NET (`GeoAssets.MAUI.Tests` links `NativeFilePickerFileTypes` and `SqliteLocalVectorTileCache` over plain SQLite).
 
 
@@ -245,6 +245,51 @@ flowchart TD
   (`img-src` already allows `blob:` and `data:`).
 - **Not verified on a device**: the MAUI app was built for `net10.0-maccatalyst`/`net10.0-ios` but not run; the JS layer
   was syntax-checked, not exercised in a WebView.
+
+### As built — managing offline packs in MAUI (XD01-464)
+
+`core/GeoAssets.Core` (the contracts), `providers/GeoAssets.Provider.PMTiles` (storage and catalog), `apps/GeoAssets.Shared`
+(the panel) and `apps/GeoAssets.MAUI` (composition, menu item, cache eviction):
+
+- **Storage**: an import that copies a pack records the picked file's name and the import time (the host's
+  `TimeProvider`, new optional `PMTilesPackStorage` constructor argument) in `offline-packs/pack-info/<id>.json`, best
+  effort, never overwritten when the same pack is picked again. `ListAsync` answers every `<id>.pmtiles` (16 hex digits;
+  `.partial` files and other names aren't packs) as `PMTilesStoredPack` — id, path, recorded file name, size, import time
+  (else the file's last write) and the 127-byte header read alone (`null` for a damaged file, which stays deletable),
+  newest first; `GetUsedBytesAsync` sums them; `Delete(id)` removes the file and its record. `PathOf`/`Delete` refuse
+  anything but a pack id (`IsPackId`), so no path leaves the folder.
+- **Open readers**: `PMTilesArchive` (and `PMTilesPack.ComputeIdAsync`) open the file with
+  `FileShare.Read | FileShare.Delete`, so a pack can be deleted while open on every MAUI platform (Windows included);
+  the open handle keeps reading the deleted file until disposed, a positional read under way when it is disposed
+  completes, a later one throws `ObjectDisposedException`.
+- **Catalog** (Core `IOfflineMapPackCatalog`: `ListAsync` → `OfflineMapPackListing` of `OfflineMapPack` + total bytes;
+  `DeleteAsync(id, removeFromMap)` → `OfflineMapPackDeletion`), implemented by `PMTilesOfflinePackCatalog` and registered
+  (scoped) by `AddPMTilesPackStorage`. A pack is drawn by a pool entry whose provider, through the decorator chain, is a
+  `PMTilesPackAssetProvider`/`PMTilesRasterPackAssetProvider` over the stored file, or a `pmtiles` entry whose
+  `pack_path` is that file. Its display name is the first such entry's name, else the picked file's name, else its id;
+  kind, bounds and zooms come from the header. Deleting refuses a pack the active entry draws
+  (`InUseByActiveEntry`, nothing changed — the pool keeps its active entry). Otherwise, for each drawing entry, it awaits
+  the caller's `removeFromMap` on the caller's context (`ConfigureAwait(true)`: the map and the pool are the UI's), removes
+  it from the pool and disposes its concrete provider (closing the pack); then it deletes the file and record, and
+  evicts the pack's tiles through Core's new narrow `ITileLayerVersionEviction` (`RemoveLayerVersionAsync(scope,
+  layerSetId, layerVersion)` over `TileCacheKey.LayerVersionPrefix`; for a pack `tile/offline-pack/pmtiles/pmtiles/{id}/`).
+  `SqliteLocalVectorTileCache` implements it with an exact prefix match (`substr`, not `LIKE`, since `_` is a valid key
+  character), leaving other packs' rows and the z/x/y basemap rows; MAUI registers it. A raster pack has no cached
+  tiles. The pool isn't persisted on MAUI (no `IBootLoader`/`IProjectSessionService` there), so the entry's removal is
+  the whole disconnection.
+- **UI**: `OfflinePacksPanel` (`.razor` + `.razor.cs` in `GeoAssets.Shared/Components/OfflinePacks/`, host-agnostic; needs
+  the catalog) lists each pack's name, kind (map features / basemap / damaged file), size, date added, zoom levels, area
+  (south-west → north-east, latitude first) and the collections drawing it, with the total storage; delete is behind
+  `ConfirmDialog`, takes the drawing collections off the map through their `IProviderMapLayerRenderer` (as the
+  Collections panel does), and is disabled with a hint for the active collection's pack. It reloads on
+  `IProviderPool.Changed`. Styling is Bootstrap's list group and badge with the Catppuccin tokens (`geoassets.css`,
+  *Offline maps panel*), so it follows both themes. Text is in `en`/`es`/`pt` (`offlinePacks.*`). MAUI reaches it from the
+  left nav through `OfflinePacksMenuItem` (`Offline maps`, after Collections), which lives in the MAUI assembly — now
+  passed to `AddGeoAssetsNavigation` — so the Web, which stores no packs, has no such item.
+- **Not verified on a device**: built for `net10.0-ios`/`net10.0-maccatalyst`/`net10.0-android` but not run; the panel is
+  covered by bUnit, the deletion end to end over plain SQLite in `GeoAssets.MAUI.Tests`. MAUI's localizer is still the
+  key-echoing `NoOpJsonStringLocalizer` (XD01-24), so on a device the panel shows its keys, like every other shared
+  panel there.
 
 ---
 
