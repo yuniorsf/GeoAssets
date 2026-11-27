@@ -35,6 +35,31 @@ public class TileCacheKeyTests
     }
 
     [Fact]
+    public void LayerVersionPrefix_StartsEveryKeyOfThatLayerVersion_AndNoOther()
+    {
+        var scope = new TileCacheScope(OrgA, "abc123");
+
+        var prefix = TileCacheKey.LayerVersionPrefix(scope, "assets", "v7");
+
+        prefix.Should().Be($"tile/{OrgA}/abc123/assets/v7/");
+        new TileCacheKey(scope, "assets", "v7", Tile, TileFormat.Png).Value.Should().StartWith(prefix);
+        new TileCacheKey(scope, "assets", "v7", new TileAddress(0, 0, 0), TileFormat.Mvt).Value.Should().StartWith(prefix);
+        new TileCacheKey(scope, "assets", "v77", Tile, TileFormat.Mvt).Value.Should().NotStartWith(prefix, "the prefix ends at the segment");
+        new TileCacheKey(scope, "assets", "v8", Tile, TileFormat.Mvt).Value.Should().NotStartWith(prefix);
+        new TileCacheKey(new TileCacheScope(OrgB, "abc123"), "assets", "v7", Tile, TileFormat.Mvt).Value.Should().NotStartWith(prefix);
+    }
+
+    [Fact]
+    public void LayerVersionPrefix_RefusesWhatAKeyRefuses()
+    {
+        var scope = new TileCacheScope(OrgA, "abc123");
+
+        FluentActions.Invoking(() => TileCacheKey.LayerVersionPrefix(default, "assets", "v7")).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => TileCacheKey.LayerVersionPrefix(scope, "a/b", "v7")).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => TileCacheKey.LayerVersionPrefix(scope, "assets", null!)).Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
     public void Keys_DifferWhenAnyPartDiffers()
     {
         var keys = new[]

@@ -10,7 +10,10 @@ namespace GeoAssets.Provider.PMTiles;
 /// A local PMTiles v3 archive (XD01-437), read with positional reads (<see cref="RandomAccess"/>), so concurrent
 /// lookups share one handle. The header, root directory and metadata are read once by <see cref="OpenAsync"/>; leaf
 /// directories are read on demand and kept in a bounded cache. Every read is bounded: a directory or the metadata may
-/// not exceed <see cref="MaxSectionBytes"/> (compressed or not), a tile <see cref="MaxTileBytes"/>.
+/// not exceed <see cref="MaxSectionBytes"/> (compressed or not), a tile <see cref="MaxTileBytes"/>. The file is shared
+/// for reading and deleting (XD01-464): deleting it while the archive is open succeeds on every platform, and the open
+/// handle keeps reading the deleted file until the archive is disposed; a positional read under way then completes, a
+/// later one throws <see cref="ObjectDisposedException"/>.
 /// </summary>
 public sealed class PMTilesArchive : IDisposable
 {
@@ -59,7 +62,7 @@ public sealed class PMTilesArchive : IDisposable
         if (!File.Exists(fullPath))
             throw new FileNotFoundException($"PMTiles archive '{fullPath}' does not exist.", fullPath);
 
-        var file = File.OpenHandle(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous | FileOptions.RandomAccess);
+        var file = File.OpenHandle(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, FileOptions.Asynchronous | FileOptions.RandomAccess);
         try
         {
             var length = RandomAccess.GetLength(file);

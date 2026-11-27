@@ -15,11 +15,12 @@ namespace GeoAssets.MAUI.Services.Offline;
 /// z/x/y basemap entries (whose keys, <c>z:x:y</c>, never collide with a <c>tile/…</c> key). Bounded: once more than
 /// <c>maxTileEntries</c> (<see cref="MaxTileEntries"/> by default) <c>tile/…</c> entries are kept, checked every
 /// <c>pruneInterval</c> writes, the oldest written are deleted down to it. <see cref="RemoveAsync"/> evicts the
-/// <c>tile/…</c> entries of a tile range. sqlite-net takes no <see cref="CancellationToken"/>, so a cancelled call stops
+/// <c>tile/…</c> entries of a tile range, <see cref="RemoveLayerVersionAsync"/> (XD01-464) those of one layer version —
+/// a deleted offline map pack's. sqlite-net takes no <see cref="CancellationToken"/>, so a cancelled call stops
 /// before its statement.
 /// </para>
 /// </summary>
-internal sealed class SqliteLocalVectorTileCache : ILocalVectorTileCache, ITileCache
+internal sealed class SqliteLocalVectorTileCache : ILocalVectorTileCache, ITileCache, ITileLayerVersionEviction
 {
     /// <summary>How many <see cref="ITileCache"/> entries are kept by default.</summary>
     public const int MaxTileEntries = 20_000;
@@ -120,6 +121,15 @@ internal sealed class SqliteLocalVectorTileCache : ILocalVectorTileCache, ITileC
         await db.ExecuteAsync(
             $"DELETE FROM {Table} WHERE Key LIKE ? AND Z = ? AND X >= ? AND X <= ? AND Y >= ? AND Y <= ?",
             TileKeyPattern, range.Zoom, range.MinX, range.MaxX, range.MinY, range.MaxY).ConfigureAwait(false);
+    }
+
+    public async Task RemoveLayerVersionAsync(TileCacheScope scope, string layerSetId, string layerVersion, CancellationToken ct)
+    {
+        var prefix = TileCacheKey.LayerVersionPrefix(scope, layerSetId, layerVersion);
+        var db = await OpenAsync(ct).ConfigureAwait(false);
+        await db.ExecuteAsync(
+            $"DELETE FROM {Table} WHERE substr(Key, 1, ?) = ?",
+            prefix.Length, prefix).ConfigureAwait(false);
     }
 
     private async Task PruneAsync(SQLiteAsyncConnection db)

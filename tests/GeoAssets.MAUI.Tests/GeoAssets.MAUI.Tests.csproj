@@ -5,7 +5,8 @@
     only (no net10.0 TFM to reference), so the files that use no MAUI type are compiled in here as links: the native
     picker's per-platform file-type filters (Mac Catalyst included) and the SQLite tile cache offline map packs read
     through (over a plain SQLite file — the app opens the same table through its SQLCipher LocalOfflineDatabase). XD01-465:
-    an offline raster pack connected as the app connects it and taken by the map's local raster renderer.
+    an offline raster pack connected as the app connects it and taken by the map's local raster renderer. XD01-464: an
+    offline pack deleted through the catalog the Offline maps panel uses, and that panel's menu item.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -41,6 +42,7 @@
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\NativeFilePickerPlatform.cs" Link="Linked\NativeFilePickerPlatform.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\SqliteLocalVectorTileCache.cs" Link="Linked\SqliteLocalVectorTileCache.cs" />
     <Compile Include="..\..\apps\GeoAssets.MAUI\Services\Offline\LocalVectorTileRow.cs" Link="Linked\LocalVectorTileRow.cs" />
+    <Compile Include="..\..\apps\GeoAssets.MAUI\Navigation\OfflinePacksMenuItem.cs" Link="Linked\OfflinePacksMenuItem.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\PMTilesTestArchive.cs" Link="Linked\PMTilesTestArchive.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestMvt.cs" Link="Linked\TestMvt.cs" />
     <Compile Include="..\GeoAssets.Provider.PMTiles.Tests\TestPacks.cs" Link="Linked\TestPacks.cs" />

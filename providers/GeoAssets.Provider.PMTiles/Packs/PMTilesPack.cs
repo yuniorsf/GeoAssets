@@ -68,7 +68,7 @@ public sealed class PMTilesPack : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        using var file = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous);
+        using var file = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, FileOptions.Asynchronous);
         var length = RandomAccess.GetLength(file);
         var head = new byte[(int)Math.Min(FingerprintBytes, length)];
         var filled = 0;

@@ -10,6 +10,7 @@ using GeoAssets.Identity.Authentication;
 using GeoAssets.Identity.Authorization.Services;
 using GeoAssets.IpBilling.UI.Navigation;
 using GeoAssets.MAUI.Extensions;
+using GeoAssets.MAUI.Navigation;
 using GeoAssets.MAUI.Services.Identity;
 using GeoAssets.MAUI.Services.Localization;
 using GeoAssets.MAUI.Services.Evidence;
@@ -126,10 +127,12 @@ public static class MauiProgram
         // UI libraries' items included (XD01-378). NavMenu tolerates the absence of
         // IGeoAuthorizationService (not registered here), so this alone is enough for MAUI to render
         // the same items minus anything permission-gated.
+        // XD01-464: this app's own items too — Offline maps (OfflinePacksMenuItem), the stored packs' manager.
         builder.Services.AddGeoAssetsNavigation(
             typeof(OverviewMenuItem).Assembly,
             typeof(IspTenantPortalMenuItem).Assembly,
-            typeof(AdminIpBillingMunicipiosMenuItem).Assembly);
+            typeof(AdminIpBillingMunicipiosMenuItem).Assembly,
+            typeof(OfflinePacksMenuItem).Assembly);
     }
 
     /// <summary>
@@ -295,6 +298,8 @@ public static class MauiProgram
             LocalOfflineDatabase.GetConnectionAsync, sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton<ILocalVectorTileCache>(sp => sp.GetRequiredService<SqliteLocalVectorTileCache>());
         builder.Services.AddSingleton<ITileCache>(sp => sp.GetRequiredService<SqliteLocalVectorTileCache>());
+        // XD01-464: deleting an offline map pack (Offline maps panel) evicts its cached tiles from that table.
+        builder.Services.AddSingleton<ITileLayerVersionEviction>(sp => sp.GetRequiredService<SqliteLocalVectorTileCache>());
         // XD01-276: offline cache backing NearestAvailableCtoAssigner (XD01-273) with zero connectivity.
         builder.Services.AddSingleton<ILocalCtoPortCacheStore, SqliteLocalCtoPortCacheStore>();
 
