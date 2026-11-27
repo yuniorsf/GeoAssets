@@ -21,13 +21,15 @@ public static class PMTilesServiceExtensions
 
     /// <summary>
     /// Keeps the offline map packs the <c>pmtiles</c> plugin imports in <paramref name="directory"/>
-    /// (<see cref="PMTilesPackStorage"/>) — a host's composition root names its own folder (MAUI: under its app data).
-    /// Without it, a pack is read where it was picked.
+    /// (<see cref="PMTilesPackStorage"/>) — a host's composition root names its own folder (MAUI: under its app data) —
+    /// asking the user before it copies a pack larger than <paramref name="largePackBytes"/> (XD01-465). Without it, a
+    /// pack is read where it was picked.
     /// </summary>
-    public static IServiceCollection AddPMTilesPackStorage(this IServiceCollection services, string directory)
+    public static IServiceCollection AddPMTilesPackStorage(
+        this IServiceCollection services, string directory, long largePackBytes = PMTilesPackStorage.DefaultLargePackBytes)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.TryAddSingleton(new PMTilesPackStorage(directory));
+        services.TryAddSingleton(new PMTilesPackStorage(directory, largePackBytes));
         return services;
     }
 }

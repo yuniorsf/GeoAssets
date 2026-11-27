@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GeoAssets.Core.Interfaces;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Rendering;
 using GeoAssets.Provider.PMTiles.Packs;
@@ -31,10 +32,10 @@ public sealed class PMTilesPackProviderPluginTests : IDisposable
         ["pack_name"] = Path.GetFileName(path),
     });
 
-    private ServiceProvider Host(bool withStorage, ITileCache? cache = null)
+    private ServiceProvider Host(bool withStorage, ITileCache? cache = null, long largePackBytes = PMTilesPackStorage.DefaultLargePackBytes)
     {
         var services = new ServiceCollection();
-        if (withStorage) services.AddPMTilesPackStorage(Path.Combine(_appData.Path, "offline-packs"));
+        if (withStorage) services.AddPMTilesPackStorage(Path.Combine(_appData.Path, "offline-packs"), largePackBytes);
         if (cache is not null) services.AddSingleton(cache);
         return services.BuildServiceProvider();
     }
@@ -107,6 +108,83 @@ public sealed class PMTilesPackProviderPluginTests : IDisposable
 
         cache.Count.Should().Be(1);
         (await cache.GetAsync(PMTilesPackTiles.KeyOf(provider.Pack.Id, new TileAddress(0, 0, 0)), CancellationToken.None)).Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData(PMTilesTileType.Png, "image/png")]
+    [InlineData(PMTilesTileType.Webp, "image/webp")]
+    public async Task ARasterPack_ConnectsAsABasemapTileLayer_ReadFromTheStoredPack(PMTilesTileType tileType, string contentType)
+    {
+        var tile = new TileAddress(4, 7, 6);
+        var source = TestRasterTiles.Archive(tileType, [tile], minZoom: 4, maxZoom: 12, bounds: (-9.5, 38.6, -9.0, 38.9)).WriteTo(_picked.Path);
+        var config = Picked(source);
+        var cache = new RecordingTileCache();
+        using var host = Host(withStorage: true, cache);
+
+        using var provider = (PMTilesRasterPackAssetProvider)await _plugin.CreateAsync(config, host);
+
+        provider.RenderCapabilities.Should().Be(ProviderRenderCapabilities.RasterTiles);
+        provider.GetAll().Should().BeEmpty("a raster pack has no features");
+        var stored = config.Get(PMTilesPackProviderPlugin.PackPathKey);
+        stored.Should().Be(Path.Combine(_appData.Path, "offline-packs", provider.Pack.Id + ".pmtiles"));
+        provider.RasterTileLayer.ContentType.Should().Be(contentType);
+        provider.RasterTileLayer.MinZoom.Should().Be(4);
+        provider.RasterTileLayer.MaxZoom.Should().Be(12);
+        provider.RasterTileLayer.Bounds.Should().Be(new BoundingBox(-9.5, 38.6, -9.0, 38.9));
+        var payload = await provider.RasterTiles.GetRasterTileAsync(new TileRequest(provider.RasterTileLayer.LayerSet, tile), CancellationToken.None);
+        payload.Content.ToArray().Should().Equal(TestRasterTiles.ImageOf(tileType));
+        cache.Gets.Should().BeEmpty("raster images aren't copied into the tile cache: the pack is the on-device store");
+        cache.Sets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ARasterPack_ReconnectsFromTheStoredPath_WithThePickedFileGone()
+    {
+        var source = TestRasterTiles.Archive(PMTilesTileType.Png, [new TileAddress(0, 0, 0)]).WriteTo(_picked.Path);
+        var config = Picked(source);
+        using var host = Host(withStorage: true);
+        ((PMTilesRasterPackAssetProvider)await _plugin.CreateAsync(config, host)).Dispose();
+        File.Delete(source);
+
+        using var provider = (PMTilesRasterPackAssetProvider)await _plugin.CreateAsync(new ProviderConfig(config.ToReconnectValues(_plugin.ConfigFields)), host);
+
+        (await provider.RasterTiles.GetRasterTileAsync(new TileRequest(provider.RasterTileLayer.LayerSet, new TileAddress(0, 0, 0)), CancellationToken.None))
+            .IsEmpty.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ALargePack_IsNotImportedOnTheFirstConnect_ButOnTheNextOne()
+    {
+        var source = TestRasterTiles.Archive(PMTilesTileType.Png, [new TileAddress(0, 0, 0)]).WriteTo(_picked.Path);
+        var config = Picked(source);
+        using var host = Host(withStorage: true, largePackBytes: 64);
+        var packs = Path.Combine(_appData.Path, "offline-packs");
+
+        var first = () => _plugin.CreateAsync(config, host);
+
+        (await first.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage($"'{Path.GetFileName(source)}' is a large offline map pack (1 MB). Importing it copies it onto this device*Press Connect again to import it."))
+            .WithInnerException<PMTilesPackSizeConfirmationException>();
+        Directory.Exists(packs).Should().BeFalse("nothing is copied before the user confirms");
+        config.Get(PMTilesPackProviderPlugin.ConfirmedLargePackKey).Should().MatchRegex("^[0-9a-f]{16}$");
+
+        using var provider = (PMTilesRasterPackAssetProvider)await _plugin.CreateAsync(config, host);
+
+        Directory.GetFiles(packs).Should().ContainSingle();
+        config.Get(PMTilesPackProviderPlugin.PackPathKey).Should().Be(provider.Pack.Path);
+    }
+
+    [Fact]
+    public async Task ALargePackConfirmed_DoesNotConfirmAnotherOne()
+    {
+        var config = Picked(TestRasterTiles.Archive(PMTilesTileType.Png, [new TileAddress(0, 0, 0)]).WriteTo(_picked.Path));
+        using var host = Host(withStorage: true, largePackBytes: 64);
+        await FluentActions.Invoking(() => _plugin.CreateAsync(config, host)).Should().ThrowAsync<InvalidOperationException>();
+
+        config.Set(PMTilesPackProviderPlugin.PackPathKey, TestRasterTiles.Archive(PMTilesTileType.Webp, [new TileAddress(0, 0, 0)]).WriteTo(_picked.Path));
+
+        await FluentActions.Invoking(() => _plugin.CreateAsync(config, host)).Should().ThrowAsync<InvalidOperationException>()
+            .WithInnerException(typeof(PMTilesPackSizeConfirmationException));
     }
 
     [Fact]

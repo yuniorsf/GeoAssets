@@ -99,7 +99,29 @@ public sealed class ProviderMapLayerRendererChainTests
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetServices<IProviderMapLayerRenderer>().Select(r => r.GetType())
-            .Should().Equal(typeof(WmsMapLayerRenderer), typeof(VectorFeatureMapLayerRenderer), typeof(HybridLodMapLayerRenderer));
+            .Should().Equal(typeof(WmsMapLayerRenderer), typeof(VectorFeatureMapLayerRenderer), typeof(HybridLodMapLayerRenderer), typeof(LocalRasterTileMapLayerRenderer));
+    }
+
+    [Fact]
+    public void Registered_ALocalRasterProvider_GoesToTheLocalRasterRenderer_OnlyWhereTheHostRegistersItsInterop()
+    {
+        // XD01-465: chosen by capability; the Web (no IMapLocalTileLayerInterop) draws none, nor sends it anywhere else.
+        using (var web = Services().BuildServiceProvider())
+        using (var scope = web.CreateScope())
+        {
+            var chain = scope.ServiceProvider.GetRequiredService<ProviderMapLayerRendererChain>();
+            chain.Resolve(new FakeLocalRasterLayerProvider()).Should().BeNull();
+        }
+
+        var services = Services();
+        services.AddScoped<IMapLocalTileLayerInterop, RecordingLocalTileLayerInterop>();
+        using var maui = services.BuildServiceProvider();
+        using var mauiScope = maui.CreateScope();
+        var local = mauiScope.ServiceProvider.GetRequiredService<ProviderMapLayerRendererChain>();
+        local.Resolve(new FakeLocalRasterLayerProvider()).Should().BeOfType<LocalRasterTileMapLayerRenderer>();
+        local.Resolve(new ValidatingAssetProvider(new FakeLocalRasterLayerProvider())).Should().BeOfType<LocalRasterTileMapLayerRenderer>();
+        local.Resolve(new FakeWmsLayerProvider()).Should().BeOfType<WmsMapLayerRenderer>();
+        local.Resolve(new FakeLayerProvider()).Should().BeOfType<VectorFeatureMapLayerRenderer>();
     }
 
     [Fact]

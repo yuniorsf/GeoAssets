@@ -19,6 +19,7 @@ using GeoAssets.NeutralOperator.Rest;
 using GeoAssets.NeutralOperator.UI;
 using GeoAssets.NeutralOperator.UI.Navigation;
 using GeoAssets.Provider.PMTiles;
+using GeoAssets.Provider.PMTiles.Packs;
 using GeoAssets.Provider.Rest;
 using GeoAssets.MAUI.Services;
 using GeoAssets.Shared.Interfaces;
@@ -240,7 +241,13 @@ public static class MauiProgram
             new StaticAssemblyPluginSource()
                 .Add<RestProviderPluginModule>()
                 .Add<PMTilesProviderPluginModule>());
-        builder.Services.AddPMTilesPackStorage(Path.Combine(FileSystem.AppDataDirectory, "offline-packs"));
+        // XD01-465: a pack larger than OfflinePacks:LargePackWarningMegabytes (1024 by default) is imported only once the
+        // user, warned of its size, presses Connect again.
+        builder.Services.AddPMTilesPackStorage(
+            Path.Combine(FileSystem.AppDataDirectory, "offline-packs"),
+            builder.Configuration.GetValue<long?>("OfflinePacks:LargePackWarningMegabytes") is { } megabytes
+                ? megabytes * 1024 * 1024
+                : PMTilesPackStorage.DefaultLargePackBytes);
 
         builder.Services.AddSingleton<ActiveAssetProvider>();
         builder.Services.AddSingleton<IAssetProvider>(sp => new ObservableAssetProvider(
@@ -261,6 +268,8 @@ public static class MauiProgram
             sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddScoped<IMapInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
         builder.Services.AddScoped<IMapSelectionInterop>(sp => sp.GetRequiredService<ObservableMapInterop>());
+        // XD01-465: raster offline map packs drawn as a basemap, their tiles read from the pack as blob: URLs.
+        builder.Services.AddScoped<IMapLocalTileLayerInterop>(sp => sp.GetRequiredService<MapInteropService>());
         builder.Services.AddScoped<AssetService>();
         builder.Services.AddScoped<IAssetService>(sp => new ObservableAssetService(
             sp.GetRequiredService<AssetService>(),
