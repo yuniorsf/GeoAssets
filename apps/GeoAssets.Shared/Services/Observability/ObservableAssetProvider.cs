@@ -39,9 +39,12 @@ public sealed class ObservableAssetProvider(
             });
 
     public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat) =>
+        GetInBoundsAsync(minLon, minLat, maxLon, maxLat, CancellationToken.None);
+
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct) =>
         TrackAsync(
             "repository.get_in_bounds",
-            async () => await inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat),
+            async () => await inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, ct),
             after: (span, result, elapsedMs) =>
             {
                 span?.SetTag("feature.count", result.Count);

@@ -17,7 +17,7 @@ public sealed class AssetProviderRenderQuery(IAssetProvider catalog) : IAssetRen
         ct.ThrowIfCancellationRequested();
         if (options.MaxCount <= 0) return [];
 
-        var features = await catalog.GetInBoundsAsync(bbox.MinLon, bbox.MinLat, bbox.MaxLon, bbox.MaxLat).ConfigureAwait(false);
+        var features = await catalog.GetInBoundsAsync(bbox.MinLon, bbox.MinLat, bbox.MaxLon, bbox.MaxLat, ct).ConfigureAwait(false);
         var hidden = options.Zoom is { } zoom ? AssetTypeZoomRange.TypeIdsHiddenAt(catalog.GetAssetTypes(), zoom) : null;
         var style = RenderStyle.Of(catalog);
         return
@@ -38,7 +38,7 @@ public sealed class AssetProviderRenderQuery(IAssetProvider catalog) : IAssetRen
         ct.ThrowIfCancellationRequested();
         if (maxCount <= 0) return [];
 
-        var features = await catalog.GetInBoundsAsync(bbox.MinLon, bbox.MinLat, bbox.MaxLon, bbox.MaxLat).ConfigureAwait(false);
+        var features = await catalog.GetInBoundsAsync(bbox.MinLon, bbox.MinLat, bbox.MaxLon, bbox.MaxLat, ct).ConfigureAwait(false);
         return
         [
             .. features

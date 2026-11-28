@@ -117,6 +117,31 @@ public sealed class OrganizationFilteredAssetProviderTests
     }
 
     [Fact]
+    public async Task GetInBoundsAsync_WithAToken_ForwardsItToTheInner_AndExcludesForeign()
+    {
+        var inner = new UnfilteredViewportAssetProvider(_inner);
+        var sut = new OrganizationFilteredAssetProvider(OrgA, inner);
+        using var cts = new CancellationTokenSource();
+
+        var features = await sut.GetInBoundsAsync(-1, -1, 1, 1, cts.Token);
+
+        Ids(features).Should().Equal("a1", "s1");
+        inner.BoundsToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
+    public async Task GetInViewportAsync_HandsItsTokenToTheInnersBoundsRead()
+    {
+        var inner = new UnfilteredViewportAssetProvider(_inner);
+        IAssetProvider sut = new OrganizationFilteredAssetProvider(OrgA, inner);
+        using var cts = new CancellationTokenSource();
+
+        await sut.GetInViewportAsync(new ViewportQuery(new BoundingBox(-1, -1, 1, 1), 12), 100, cts.Token);
+
+        inner.BoundsToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
     public async Task GetInBoundsRawJsonAsync_IsNullEvenWhenTheInnerOffersIt()
     {
         _inner.RawJsonResult = "[{\"id\":\"b1\"}]";

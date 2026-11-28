@@ -77,6 +77,7 @@ public sealed class ActiveAssetProvider : IAssetProvider, IProviderDecorator
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                    => _current.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)            => _current.GetIntersecting(geometry);
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => _current.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct) => _current.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, ct);
     public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)    => _current.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
     public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => _current.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default)

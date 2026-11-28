@@ -57,6 +57,7 @@ public sealed class ValidatingAssetProvider(IAssetProvider inner) : IAssetProvid
     public IReadOnlyList<GeoFeature>                GetWithin(GeoGeometry bounds)                      => inner.GetWithin(bounds);
     public IReadOnlyList<GeoFeature>                GetIntersecting(GeoGeometry geometry)              => inner.GetIntersecting(geometry);
     public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat)        => inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+    public Task<IReadOnlyList<GeoFeature>>          GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct) => inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, ct);
     public Task<IReadOnlyList<JsonElement>>         GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)    => inner.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
     public Task<string?>                            GetInBoundsRawJsonAsync(double minLon, double minLat, double maxLon, double maxLat) => inner.GetInBoundsRawJsonAsync(minLon, minLat, maxLon, maxLat);
     public IAsyncEnumerable<string>                 GetInBoundsRawJsonChunksAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct = default)

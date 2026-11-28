@@ -75,6 +75,23 @@ public class ActiveAssetProviderTests
     }
 
     [Fact]
+    public async Task GetInBoundsAsync_WithAToken_ForwardsTheTokenToCurrentsOwnRead()
+    {
+        var pool = new ProviderPool();
+        var sut = new ActiveAssetProvider(pool);
+        var store = new TestAssetProvider();
+        store.Add(new GeoFeature { Id = "f1", Geometry = new GeoPoint(0.5, 0.5) });
+        var inner = new UnfilteredViewportAssetProvider(store);
+        pool.SetActive(pool.Add("A", inner).Id);
+        using var cts = new CancellationTokenSource();
+
+        var features = await sut.GetInBoundsAsync(0, 0, 1, 1, cts.Token);
+
+        features.Select(f => f.Id).Should().Equal("f1");
+        inner.BoundsToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
     public void GetById_DelegatesToCurrent()
     {
         var (sut, inner) = CreateActive();

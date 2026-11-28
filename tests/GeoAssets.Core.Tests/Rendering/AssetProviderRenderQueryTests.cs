@@ -2,6 +2,7 @@ using FluentAssertions;
 using GeoAssets.Core.Models;
 using GeoAssets.Core.Models.Geometry;
 using GeoAssets.Core.Rendering;
+using GeoAssets.Core.Tests.Providers;
 using Xunit;
 
 namespace GeoAssets.Core.Tests.Rendering;
@@ -222,5 +223,33 @@ public class AssetProviderRenderQueryTests
         var act = () => NewSut().GetFeatureInfoAsync(Whole, 10, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    // ── The catalog's read takes the token (XD01-481) ─────────────────────────
+
+    [Fact]
+    public async Task GetRenderableAsync_HandsTheTokenToTheCatalogsBoundsRead()
+    {
+        Seed("in", _poles, new GeoPoint(1, 1));
+        var catalog = new UnfilteredViewportAssetProvider(_catalog);
+        using var cts = new CancellationTokenSource();
+
+        var result = await new AssetProviderRenderQuery(catalog).GetRenderableAsync(Whole, new RenderQueryOptions(), cts.Token);
+
+        result.Should().ContainSingle();
+        catalog.BoundsToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
+    public async Task GetFeatureInfoAsync_HandsTheTokenToTheCatalogsBoundsRead()
+    {
+        Seed("in", _poles, new GeoPoint(1, 1));
+        var catalog = new UnfilteredViewportAssetProvider(_catalog);
+        using var cts = new CancellationTokenSource();
+
+        var result = await new AssetProviderRenderQuery(catalog).GetFeatureInfoAsync(Whole, 10, cts.Token);
+
+        result.Should().ContainSingle();
+        catalog.BoundsToken.Should().Be(cts.Token);
     }
 }

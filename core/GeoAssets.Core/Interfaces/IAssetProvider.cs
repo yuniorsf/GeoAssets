@@ -104,6 +104,19 @@ public interface IAssetProvider
     Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat);
 
     /// <summary>
+    /// <see cref="GetInBoundsAsync(double, double, double, double)"/>, cancellable (XD01-481): a provider backed by a
+    /// queryable store overrides it to hand <paramref name="ct"/> to its query, and a decorator that forwards its reads
+    /// forwards this too. The default can only refuse to start once <paramref name="ct"/> is cancelled. Like the other
+    /// enumerating reads, a catalog too large to hold whole may refuse a box over more features than it enumerates
+    /// (<see cref="CatalogEnumerationLimitException"/>).
+    /// </summary>
+    Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+    }
+
+    /// <summary>
     /// Returns the same features as <see cref="GetInBoundsAsync"/> but already serialized
     /// as <see cref="JsonElement"/> objects, avoiding a round-trip deserialize → re-serialize
     /// before the data is forwarded to the JavaScript map.
@@ -179,7 +192,7 @@ public interface IAssetProvider
         if (maxCount <= 0) return [];
 
         var (minLon, minLat, maxLon, maxLat) = viewport.Bounds;
-        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);
+        var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat, ct).ConfigureAwait(false);
         var hidden = viewport.Zoom is { } zoom ? AssetTypeZoomRange.TypeIdsHiddenAt(GetAssetTypes(), zoom) : null;
         return
         [
