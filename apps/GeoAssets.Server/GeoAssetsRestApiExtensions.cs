@@ -55,6 +55,21 @@ public static class GeoAssetsRestApiExtensions
     internal const int MaxBoundsFeatureCount = 10_000;
 
     /// <summary>
+    /// The most features one <c>POST /features/query</c> returns (XD01-479), a larger <c>take</c> clamped to it: WFS
+    /// GetFeature's page cap (<see cref="WfsEndpointExtensions.MaxFeaturesPerPage"/>), so the kernel's paged reads share
+    /// one ceiling.
+    /// </summary>
+    public const int MaxQueryTake = WfsEndpointExtensions.MaxFeaturesPerPage;
+
+    /// <summary>
+    /// The most features one <c>POST /features/query</c> counts (XD01-479): the request's <c>countLimit</c> is clamped to it
+    /// and applied when absent, so a client never forces an exact count over a whole large catalog — WFS GetFeature's
+    /// <c>numberMatched</c> bound (<see cref="WfsEndpointExtensions.MaxNumberMatched"/>). When more match, the response's
+    /// <see cref="PagedResult{T}.TotalCountCapped"/> is <c>true</c> and its <c>totalCount</c> the limit + 1.
+    /// </summary>
+    public const int MaxQueryCountLimit = WfsEndpointExtensions.MaxNumberMatched;
+
+    /// <summary>
     /// The kernel's asset endpoints under <paramref name="prefix"/>, with the WFS alias. The WMS alias
     /// (<c>{prefix}/wms</c>) renders straight from PostGIS, so the PostgreSQL spatial module maps it (XD01-359); the GIS
     /// export (<c>{prefix}/export/gis/v1</c>) projects through a vertical's projector, so the NeutralOperator module maps it
@@ -94,11 +109,13 @@ public static class GeoAssetsRestApiExtensions
             Results.Json(provider.GetAll(), opts))
             .RequireAuthorization("features:read");
 
-        routes.MapPost($"{prefix}/features/query", async (HttpRequest req, IAssetProvider provider) =>
+        // XD01-479: one bounded page (take ≤ MaxQueryTake, counted up to MaxQueryCountLimit), and the request's abort token
+        // reaches the store's query.
+        routes.MapPost($"{prefix}/features/query", async (HttpRequest req, IAssetProvider provider, CancellationToken ct) =>
         {
-            var query = await JsonSerializer.DeserializeAsync<AssetQuery>(req.Body, opts).ConfigureAwait(false);
+            var query = await JsonSerializer.DeserializeAsync<AssetQuery>(req.Body, opts, ct).ConfigureAwait(false);
             if (query is null) return Results.BadRequest("Invalid query.");
-            var page = await provider.GetPageAsync(query).ConfigureAwait(false);
+            var page = await QueryBoundedPageAsync(provider, query, ct).ConfigureAwait(false);
             return Results.Json(page, opts);
         })
             .RequireAuthorization("features:read");
@@ -128,6 +145,26 @@ public static class GeoAssetsRestApiExtensions
             return Results.Json(f, opts);
         })
             .RequireAuthorization("features:read");
+    }
+
+    /// <summary>
+    /// <paramref name="query"/> as one page of at most <see cref="MaxQueryTake"/> features from a non-negative skip, counted
+    /// up to <see cref="MaxQueryCountLimit"/> or the client's lower <c>countLimit</c>: the total is exact while at most that
+    /// many match, and beyond it the limit + 1 with <see cref="PagedResult{T}.TotalCountCapped"/> set.
+    /// </summary>
+    private static async Task<PagedResult<GeoFeature>> QueryBoundedPageAsync(IAssetProvider provider, AssetQuery query, CancellationToken ct)
+    {
+        var countLimit = Math.Clamp(query.CountLimit ?? MaxQueryCountLimit, 0, MaxQueryCountLimit);
+        var page = await provider.GetPageAsync(query with
+        {
+            CountLimit = countLimit,
+            Skip = Math.Max(0, query.Skip),
+            Take = Math.Clamp(query.Take, 0, MaxQueryTake),
+        }, ct).ConfigureAwait(false);
+
+        return page.TotalCount > countLimit
+            ? page with { TotalCount = countLimit + 1, TotalCountCapped = true }
+            : page;
     }
 
     private static void MapFeatureTopologyReads(IEndpointRouteBuilder routes, string prefix, JsonSerializerOptions opts)
