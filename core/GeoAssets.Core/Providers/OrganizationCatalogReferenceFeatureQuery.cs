@@ -20,7 +20,7 @@ public sealed class OrganizationCatalogReferenceFeatureQuery(IOrganizationCatalo
         ct.ThrowIfCancellationRequested();
 
         var catalog = await catalogs.GetForOrganizationAsync(organizationId, ct).ConfigureAwait(false);
-        var features = await catalog.GetInBoundsAsync(bbox.MinLon, bbox.MinLat, bbox.MaxLon, bbox.MaxLat).ConfigureAwait(false);
+        var features = await catalog.GetInBoundsAsync(bbox.MinLon, bbox.MinLat, bbox.MaxLon, bbox.MaxLat, ct).ConfigureAwait(false);
         var scopes = filter.ScopeIds is null ? null : new HashSet<string>(filter.ScopeIds, StringComparer.Ordinal);
         var typeNames = catalog.GetAssetTypes()
             .Where(t => t.OrganizationId == organizationId || t.OrganizationId == Guid.Empty)

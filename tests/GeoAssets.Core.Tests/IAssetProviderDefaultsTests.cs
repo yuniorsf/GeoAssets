@@ -257,6 +257,30 @@ public class IAssetProviderDefaultsTests
         page.TotalCount.Should().Be(6);
     }
 
+    // ── GetInBoundsAsync with a token (XD01-481) ────────────────────────────
+
+    [Fact]
+    public async Task GetInBoundsAsync_WithALiveToken_AnswersAsWithout()
+    {
+        IAssetProvider sut = PageWorld();
+
+        var features = await sut.GetInBoundsAsync(0, 0, 1, 1, CancellationToken.None);
+
+        features.Select(f => f.Id).Should().BeEquivalentTo((await sut.GetInBoundsAsync(0, 0, 1, 1)).Select(f => f.Id));
+        features.Should().HaveCount(6);
+    }
+
+    [Fact]
+    public async Task GetInBoundsAsync_WithACancelledToken_RefusesToStart()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => ((IAssetProvider)PageWorld()).GetInBoundsAsync(0, 0, 1, 1, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
     [Fact]
     public async Task GetPageAsync_WithACancelledToken_RefusesToStart()
     {

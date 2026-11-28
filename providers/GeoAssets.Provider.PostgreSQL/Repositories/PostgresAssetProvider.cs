@@ -168,25 +168,40 @@ public sealed partial class PostgresAssetProvider : IAssetProvider, ISyncProvide
     /// Pushes the bbox filter to PostGIS via ST_Intersects — never loads the full table.
     /// EF Core + Npgsql translates <c>.Intersects()</c> to <c>ST_Intersects</c> in SQL.
     /// </summary>
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(
+        double minLon, double minLat, double maxLon, double maxLat) =>
+        GetInBoundsAsync(minLon, minLat, maxLon, maxLat, CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="GetInBoundsAsync(double, double, double, double)"/>, cancellable and bounded (XD01-481). Cached whole,
+    /// the provider reads the whole box, as before. Served from PostgreSQL (XD01-449), it reads at most
+    /// <see cref="OrganizationCatalogOptions.EnumerationLimit"/> + 1 rows and refuses a box over more than the limit with
+    /// <see cref="CatalogEnumerationLimitException"/>, like its other enumerating reads — a large box is never read whole.
+    /// As <see cref="GetPageAsync(AssetQuery, CancellationToken)"/>, the connection is opened without
+    /// <paramref name="ct"/> and every command takes it, so a cancellation mid-query cancels the command on the server.
+    /// </summary>
     public async Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(
-        double minLon, double minLat, double maxLon, double maxLat)
+        double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct)
     {
-        var factory = new GeometryFactory(new PrecisionModel(), 4326);
-        var bbox    = factory.ToGeometry(new Envelope(minLon, maxLon, minLat, maxLat));
-        bbox.SRID   = 4326;
+        ct.ThrowIfCancellationRequested();
+        var bbox = Envelope(new BoundingBox(minLon, minLat, maxLon, maxLat));
+        var bounded = await UsesStoreReadsAsync(ct).ConfigureAwait(false);
 
         // Use a dedicated short-lived context so concurrent viewport requests
         // never share the same DbContext instance (which would cause a concurrency exception).
         var db = NewContext();
         try
         {
-            var rows = await QueryableRows(db)
+            await db.Database.OpenConnectionAsync(CancellationToken.None).ConfigureAwait(false);
+            var rows = QueryableRows(db)
                 .AsNoTracking()
-                .Where(e => e.Geom != null && e.Geom.Intersects(bbox))
-                .ToListAsync()
-                .ConfigureAwait(false);
+                .Where(e => e.Geom != null && e.Geom.Intersects(bbox));
 
-            return rows.Select(MapToFeature).ToList();
+            if (!bounded)
+                return (await rows.ToListAsync(ct).ConfigureAwait(false)).ConvertAll(MapToFeature);
+
+            var limit = _readLimits!.EffectiveEnumerationLimit;
+            return Bounded(nameof(GetInBoundsAsync), limit, await rows.Take(limit + 1).ToListAsync(ct).ConfigureAwait(false));
         }
         finally
         {

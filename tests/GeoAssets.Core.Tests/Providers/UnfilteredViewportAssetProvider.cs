@@ -24,6 +24,15 @@ internal sealed class UnfilteredViewportAssetProvider(TestAssetProvider inner) :
         return ((IAssetProvider)inner).GetPageAsync(query, CancellationToken.None);
     }
 
+    /// <summary>The token the last cancellable <see cref="GetInBoundsAsync(double, double, double, double, CancellationToken)"/> got (XD01-481).</summary>
+    public CancellationToken? BoundsToken { get; private set; }
+
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct)
+    {
+        BoundsToken = ct;
+        return inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+    }
+
     public Task<IReadOnlyList<GeoFeature>> GetInViewportAsync(ViewportQuery viewport, int maxCount, CancellationToken ct = default)
     {
         ViewportCalls++;

@@ -60,9 +60,9 @@ Measured on 2026-11-26 on the same `coelba` silo and database as XD01-448 (Docke
 
 - `Clear()` and `LoadAll()` still read every row of the organization before deleting them. Nothing in the kernel calls
   them on an organization catalog today.
-- WFS GetFeature **with** a BBOX reads every feature in the box (`GetInBoundsAsync`) and pages in memory. A box covering
-  a whole region of a large distributor is still unbounded. The map's own reads (`/features/bounds`, WMS) are capped in
-  SQL.
+- `GetInBoundsAsync` on a PostgreSQL-served organization reads at most `EnumerationLimit` + 1 rows and refuses a larger
+  box (XD01-481), as the other enumerating reads. WFS GetFeature with a BBOX no longer uses it (one `LIMIT`ed page,
+  XD01-478), and the map's own reads (`/features/bounds`, WMS, tiles) are capped in SQL.
 - `FindPath`, `FindShortestPath`, `GetConnectedComponents`, `HasCycles` and `TopologicalSort` still run over `GetAll()`.
   For a PostgreSQL-served organization they are therefore refused beyond the limit. The kernel has no caller for them.
 - The 30 s Npgsql command timeout is too short for XD01-432's `geom_3857` migration on 784 k features (it rewrites

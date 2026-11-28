@@ -74,6 +74,21 @@ public class ValidatingAssetProviderTests
     }
 
     [Fact]
+    public async Task GetInBoundsAsync_WithAToken_ForwardsTheTokenToTheInnersOwnRead()
+    {
+        var store = new TestAssetProvider();
+        store.Add(new GeoFeature { Id = "f1", Geometry = new GeoPoint(0.5, 0.5) });
+        var inner = new UnfilteredViewportAssetProvider(store);
+        var sut = new ValidatingAssetProvider(inner);
+        using var cts = new CancellationTokenSource();
+
+        var features = await sut.GetInBoundsAsync(0, 0, 1, 1, cts.Token);
+
+        features.Select(f => f.Id).Should().Equal("f1");
+        inner.BoundsToken.Should().Be(cts.Token);
+    }
+
+    [Fact]
     public void GetById_DelegatesToInner()
     {
         var inner = new TestAssetProvider();

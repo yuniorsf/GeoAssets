@@ -125,4 +125,18 @@ public sealed class OrganizationCatalogReferenceFeatureQueryTests
         await sut.Invoking(s => s.GetInBoundsAsync(Coelba, Box, Everything, cancelled.Token))
             .Should().ThrowAsync<OperationCanceledException>();
     }
+
+    [Fact]
+    public async Task Hands_the_token_to_the_catalogs_bounds_read()
+    {
+        Seed("a", Coelba, new GeoPoint(1, 1));
+        var catalog = new UnfilteredViewportAssetProvider(_catalog);
+        using var cts = new CancellationTokenSource();
+
+        var result = await new OrganizationCatalogReferenceFeatureQuery(new FilteringOrganizationCatalogFactory(catalog))
+            .GetInBoundsAsync(Coelba, Box, Everything, cts.Token);
+
+        result.Select(f => f.Id).Should().Equal("a");
+        catalog.BoundsToken.Should().Be(cts.Token);
+    }
 }

@@ -58,6 +58,9 @@ public sealed class OrganizationFilteredAssetProvider : IAssetProvider, IProvide
     public async Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat) =>
         Visible(await _inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false));
 
+    public async Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct) =>
+        Visible(await _inner.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, ct).ConfigureAwait(false));
+
     public async Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat)
     {
         var features = await GetInBoundsAsync(minLon, minLat, maxLon, maxLat).ConfigureAwait(false);

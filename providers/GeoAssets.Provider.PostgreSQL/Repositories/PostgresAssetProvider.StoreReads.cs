@@ -94,6 +94,26 @@ public sealed partial class PostgresAssetProvider
         }
     }
 
+    /// <summary><see cref="UsesStoreReads"/> for an asynchronous read: decides the mode, when nothing decided it yet, with an asynchronous count.</summary>
+    private async ValueTask<bool> UsesStoreReadsAsync(CancellationToken ct)
+    {
+        if (_readLimits is null) return false;
+        if (_storeReads) return true;
+        if (_cache is not null) return false;
+
+        var count = await CountRowsAsync(ct).ConfigureAwait(false);
+        if (count <= _readLimits.EffectiveFullCacheMaxFeatures)
+            return false;
+
+        lock (_modeGate)
+        {
+            if (!_storeReads)
+                EnterStoreReads(count);
+        }
+
+        return true;
+    }
+
     private void EnterStoreReads(int count)
     {
         lock (_modeGate)

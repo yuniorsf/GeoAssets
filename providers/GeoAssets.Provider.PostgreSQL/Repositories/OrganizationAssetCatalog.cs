@@ -37,7 +37,7 @@ namespace GeoAssets.Provider.PostgreSQL.Repositories;
 ///
 /// <para><b>A large organization (XD01-449).</b> When the organization's own provider serves its features from
 /// PostgreSQL rather than from a whole cache, the reads above still combine both parts (its enumerating ones refused beyond
-/// its enumeration limit), and the topology queries (<see cref="GetNeighbors(string)"/>, <see cref="GetDescendants(string)"/>,
+/// its enumeration limit, <see cref="GetInBoundsAsync(double, double, double, double)"/>'s box too — XD01-481), and the topology queries (<see cref="GetNeighbors(string)"/>, <see cref="GetDescendants(string)"/>,
 /// <see cref="GetAncestors"/>) run in SQL over the organization's and the shared rows instead of over
 /// <see cref="GetAll"/>, with the same answers.</para>
 ///
@@ -89,6 +89,9 @@ public sealed class OrganizationAssetCatalog : IAssetProvider
 
     public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat) =>
         Queried.GetInBoundsAsync(minLon, minLat, maxLon, maxLat);
+
+    public Task<IReadOnlyList<GeoFeature>> GetInBoundsAsync(double minLon, double minLat, double maxLon, double maxLat, CancellationToken ct) =>
+        Queried.GetInBoundsAsync(minLon, minLat, maxLon, maxLat, ct);
 
     public Task<IReadOnlyList<JsonElement>> GetInBoundsJsonAsync(double minLon, double minLat, double maxLon, double maxLat) =>
         Queried.GetInBoundsJsonAsync(minLon, minLat, maxLon, maxLat);
