@@ -72,4 +72,21 @@ public sealed class RestGeoCoreClientTests
         handler.Requests[1].Headers.Authorization!.Parameter.Should().Be("token-2");
         tokenProvider.CallCount.Should().Be(2);
     }
+
+    [Theory]
+    [InlineData("""{"items":[],"totalCount":100001,"totalCountCapped":true}""", 100_001, true)]
+    [InlineData("""{"items":[],"totalCount":42}""", 42, false)]
+    public async Task QueryFeaturesAsync_ReadsTheServersTotal_CappedOrExact(string body, int expectedTotal, bool expectedCapped)
+    {
+        // XD01-479: the kernel's features/query counts up to a limit and marks a capped total; an exact one carries no flag.
+        using var handler = new FakeHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://core.geoassets.internal/") };
+        var sut = new RestGeoCoreClient(http);
+
+        var page = await sut.QueryFeaturesAsync(new AssetQuery());
+
+        page.TotalCount.Should().Be(expectedTotal);
+        page.TotalCountCapped.Should().Be(expectedCapped);
+    }
 }
