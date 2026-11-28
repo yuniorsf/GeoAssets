@@ -45,8 +45,8 @@ public static class WfsEndpointExtensions
     public const int MaxFeaturesPerPage = 10_000;
 
     /// <summary>
-    /// The most features a GetFeature with BBOX counts (XD01-478): beyond it, <c>numberMatched</c> is <c>"unknown"</c>
-    /// rather than the store counting a whole large box.
+    /// The most features a GetFeature counts, with BBOX (XD01-478) and without it (XD01-480): beyond it,
+    /// <c>numberMatched</c> is <c>"unknown"</c> rather than the store counting a whole large box or catalog.
     /// </summary>
     public const int MaxNumberMatched = 100_000;
 
@@ -220,8 +220,8 @@ public static class WfsEndpointExtensions
     /// without BBOX (XD01-449) or with it (XD01-478, <see cref="AssetQuery.Bounds"/>): of the type encoded in TYPENAMES
     /// (<c>geoassets:feature:{assetTypeId}</c>) or of every type, at most <see cref="MaxFeaturesPerPage"/> features (COUNT
     /// absent or larger) from STARTINDEX — never the whole catalog or box in memory. <c>numberMatched</c> is the store's
-    /// exact count without BBOX; with BBOX it is exact up to <see cref="MaxNumberMatched"/> and <c>"unknown"</c> (WFS 2.0)
-    /// beyond, so a box over a large catalog isn't counted whole. The request's abort token reaches the store's query.
+    /// count, exact up to <see cref="MaxNumberMatched"/> and <c>"unknown"</c> (WFS 2.0) beyond, with or without BBOX
+    /// (XD01-480), so neither a box nor a large catalog is counted whole. The request's abort token reaches the store's query.
     /// </summary>
     private static async Task<IResult> HandleGetFeaturePageAsync(
         string typeName, int count, int startIndex, BoundingBox? bounds, IAssetProvider provider, TimeProvider timeProvider,
@@ -235,13 +235,13 @@ public static class WfsEndpointExtensions
         {
             AssetTypeId = assetTypeId,
             Bounds = bounds,
-            CountLimit = bounds is null ? null : MaxNumberMatched,
+            CountLimit = MaxNumberMatched,
             Skip = Math.Max(0, startIndex),
             Take = Math.Clamp(count, 0, MaxFeaturesPerPage),
         }, cancellationToken).ConfigureAwait(false);
 
         var response = new WfsFeatureCollection(
-            NumberMatched:  bounds is not null && page.TotalCount > MaxNumberMatched ? null : page.TotalCount,
+            NumberMatched:  page.TotalCount > MaxNumberMatched ? null : page.TotalCount,
             NumberReturned: page.Items.Count,
             TimeStamp:      timeProvider.GetUtcNow().UtcDateTime.ToString("O"),
             Features:       page.Items);

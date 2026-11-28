@@ -16,7 +16,8 @@ namespace GeoAssets.Server.Tests.FeatureCatalogs;
 /// <summary>
 /// XD01-449: WFS GetFeature without BBOX is one page of the catalog's store (<see cref="IAssetProvider.GetPageAsync"/>) —
 /// at most <see cref="WfsEndpointExtensions.MaxFeaturesPerPage"/> features, STARTINDEX/COUNT applied, NumberMatched the
-/// exact count — never the whole catalog enumerated in memory.
+/// exact count up to <see cref="WfsEndpointExtensions.MaxNumberMatched"/> (XD01-480) — never the whole catalog enumerated
+/// in memory.
 /// </summary>
 public sealed class WfsGetFeaturePagingTests : IAsyncLifetime
 {
@@ -81,6 +82,9 @@ public sealed class WfsGetFeaturePagingTests : IAsyncLifetime
 
     [Fact]
     public void ThePageCap_IsTenThousand() => WfsEndpointExtensions.MaxFeaturesPerPage.Should().Be(10_000);
+
+    [Fact]
+    public void TheCountLimit_IsAHundredThousand() => WfsEndpointExtensions.MaxNumberMatched.Should().Be(100_000);
 
     [Fact]
     public async Task WithoutCount_ReturnsAtMostThePageCap_AndTheExactNumberMatched()
