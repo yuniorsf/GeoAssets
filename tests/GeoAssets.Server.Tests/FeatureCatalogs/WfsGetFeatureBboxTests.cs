@@ -182,7 +182,7 @@ public sealed class WfsGetFeatureBboxTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WithoutABox_TheStoreStillCountsExactly()
+    public async Task WithoutABox_TheStoresCountIsBoundedToo()
     {
         Seed(1, Pole, "p");
 
@@ -190,7 +190,29 @@ public sealed class WfsGetFeatureBboxTests : IAsyncLifetime
 
         var query = _catalog.Queries.Should().ContainSingle().Subject;
         query.Bounds.Should().BeNull();
-        query.CountLimit.Should().BeNull();
+        query.CountLimit.Should().Be(WfsEndpointExtensions.MaxNumberMatched);
+    }
+
+    [Fact]
+    public async Task WithoutABox_ACatalogAboveTheCountLimit_ReportsNumberMatchedAsUnknown()
+    {
+        _catalog.Reported = new PagedResult<GeoFeature> { Items = [], TotalCount = WfsEndpointExtensions.MaxNumberMatched + 1 };
+
+        var (matched, returned, _) = await GetFeatureAsync("&COUNT=0");
+
+        matched.ValueKind.Should().Be(JsonValueKind.String);
+        matched.GetString().Should().Be("unknown");
+        returned.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task WithoutABox_ACatalogOfExactlyTheCountLimit_ReportsItsNumber()
+    {
+        _catalog.Reported = new PagedResult<GeoFeature> { Items = [], TotalCount = WfsEndpointExtensions.MaxNumberMatched };
+
+        var (matched, _, _) = await GetFeatureAsync("&COUNT=0");
+
+        matched.GetInt32().Should().Be(WfsEndpointExtensions.MaxNumberMatched);
     }
 
     [Fact]

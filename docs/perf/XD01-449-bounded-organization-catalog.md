@@ -42,7 +42,8 @@ Measured on 2026-11-26 on the same `coelba` silo and database as XD01-448 (Docke
 - **Mutation batches.** The per-batch provider of `PostgresAssetMutationBatchApplier` always reads by id through its own
   transaction, never loading the organization's catalog.
 - **WFS GetFeature without BBOX** is one page in PostgreSQL (`GetPageAsync`): at most 10,000 features (`COUNT` absent or
-  larger), and `numberMatched` is the exact count.
+  larger), and `numberMatched` is the exact count up to 100,000 (`MaxNumberMatched`) and `"unknown"` beyond it
+  (XD01-480): the count runs over a `LIMIT 100001` subquery, never over the whole catalog.
 - **Small organizations keep the whole cache**, and so does the shared (organization-less) catalog.
 
 ## Configuration
